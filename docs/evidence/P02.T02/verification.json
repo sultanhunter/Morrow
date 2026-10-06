@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-06T14:53:48.560Z",
+  "generated_at": "2026-10-06T15:05:16.998Z",
   "scope": "Candidate artifact integrity, JavaScript syntax and specified contrast pairs; browser receipt is retained evidence, not rerun by this command. Not full accessibility or usability qualification.",
   "contrasts": [
     {
@@ -61,7 +61,7 @@
   "baseline_qualification": "pending_real_participants_and_reviewer",
   "input_digests": {
     "docs/design/prototype.html": "4f9e5abaef48c4ff4a9094335f57f8dde70ec06ad2827a3f17cb40accb78feeb",
-    "docs/design/tokens.json": "06ccdc4cf34c667c56d8301504a1a6f577155569d36a8237eb4671b22aed6deb",
+    "docs/design/tokens.json": "76e655968c1a065da50fa8496fb5b314b07cb5f7ca0c7d00aba97c1165608fad",
     "docs/design/component-baseline.md": "dd43701476d5584420050df291780fd146654794136ecb9678ae6753431428ed",
     "docs/design/prototype-guide.md": "0ab5b259c2c8ecc262c74ff6dbd6ad85c6797f833427abab916623d65ec79416",
     "docs/acceptance/P02.md": "078c25236d3bb7010f9fd70625c21e275bc0e275320e49285e952d79a056ee2b",

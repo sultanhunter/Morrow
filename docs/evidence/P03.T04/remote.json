@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/sultanhunter/Morrow",
+  "private": true,
+  "pull_request": "https://github.com/sultanhunter/Morrow/pull/1",
+  "draft": true,
+  "qualified_ci_commit": "8fdf84fbf29c988d33855367e531f0c2d1d1b625",
+  "ci_run": "https://github.com/sultanhunter/Morrow/actions/runs/37483812792",
+  "ci_conclusion": "success",
+  "ci_checks": [
+    "locked_install",
+    "format_type_contracts_boundaries_secret_migrations_tests_build_lab",
+    "scaffold_guards"
+  ],
+  "main_protection": {
+    "status": "rejected",
+    "http_status": 403,
+    "reason": "GitHub requires Pro or public visibility for this private repository feature",
+    "upgrade_purchased": false,
+    "privacy_preserved": true
+  },
+  "package_gate": "In review; actual protection pending",
+  "qualification_scope": "Hosted foundation CI only, not merchant/provider/production qualification"
+}
