@@ -1,0 +1,233 @@
+{
+  "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
+  "plan_sequence": 27,
+  "plan_digest": "5bb9196b7e624dbb16352655da20b29ef2b52006864fa3f25f6a21b7fb311f7a",
+  "tasks": [
+    {
+      "id": "P01.T01",
+      "status": "Verified"
+    },
+    {
+      "id": "P01.T02",
+      "status": "Verified"
+    },
+    {
+      "id": "P01.T03",
+      "status": "Verified"
+    },
+    {
+      "id": "P01.T04",
+      "status": "Verified"
+    },
+    {
+      "id": "P02.T01",
+      "status": "Verified"
+    },
+    {
+      "id": "P02.T02",
+      "status": "In review"
+    },
+    {
+      "id": "P02.T03",
+      "status": "In review"
+    },
+    {
+      "id": "P02.T04",
+      "status": "In progress"
+    },
+    {
+      "id": "P03.T01",
+      "status": "Verified"
+    },
+    {
+      "id": "P03.T02",
+      "status": "Verified"
+    },
+    {
+      "id": "P03.T03",
+      "status": "Verified"
+    },
+    {
+      "id": "P03.T04",
+      "status": "In review"
+    }
+  ],
+  "entries": [
+    {
+      "path": "docs/evidence/P01.T01/review.md",
+      "sha256": "d5a17f784b593fde1f6cdf598a2830de3f11bc4d84e0fab30289306d66e0dbae"
+    },
+    {
+      "path": "docs/evidence/P01.T01/tests.txt",
+      "sha256": "de08cb652af609ec52e7dfde35b5156c71104a5587ae225501282e3056971261"
+    },
+    {
+      "path": "docs/evidence/P01.T01/verification.json",
+      "sha256": "b192f8551dfdba0fc1c2cda4e8d7f670a2a890ab35ebb1b73ca754ec64089658"
+    },
+    {
+      "path": "docs/evidence/P01.T02/review.md",
+      "sha256": "efdd33027593c99a898d733f8396627989d0c90ee710d53d0de1827c7c52d737"
+    },
+    {
+      "path": "docs/evidence/P01.T02/tests.txt",
+      "sha256": "de08cb652af609ec52e7dfde35b5156c71104a5587ae225501282e3056971261"
+    },
+    {
+      "path": "docs/evidence/P01.T02/verification.json",
+      "sha256": "ef15b008d542d096b8cb3058b955f7b3332acfa8558c5654ffbcbe2dc159184f"
+    },
+    {
+      "path": "docs/evidence/P01.T03/review.md",
+      "sha256": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2"
+    },
+    {
+      "path": "docs/evidence/P01.T03/tests.txt",
+      "sha256": "de08cb652af609ec52e7dfde35b5156c71104a5587ae225501282e3056971261"
+    },
+    {
+      "path": "docs/evidence/P01.T03/verification.json",
+      "sha256": "14cb9a2da299d891c35f004f0dc9cd9c59338566ac3a4a2c04d9118b37f90053"
+    },
+    {
+      "path": "docs/evidence/P01.T04/review.md",
+      "sha256": "21a7a96df938565a73ffefca5769b55e039b93829c8881898595958de865f65d"
+    },
+    {
+      "path": "docs/evidence/P01.T04/tests.txt",
+      "sha256": "de08cb652af609ec52e7dfde35b5156c71104a5587ae225501282e3056971261"
+    },
+    {
+      "path": "docs/evidence/P01.T04/verification.json",
+      "sha256": "3325c4f41912d7558e462c6c24e59f89035a0ceccbfa4403502b19beb135d501"
+    },
+    {
+      "path": "docs/evidence/P02.T01/review.md",
+      "sha256": "49a3b65a6fea6db571a5d8ab8caa64b684e76eaafbf290a852d90a146d885c1b"
+    },
+    {
+      "path": "docs/evidence/P02.T02/frames/agent-setup.jpg",
+      "sha256": "4f194e0cf52f34ed4c17ddd4a278dea0800a75a824251dd7c037f83f9384f033"
+    },
+    {
+      "path": "docs/evidence/P02.T02/frames/connector.jpg",
+      "sha256": "732132c4c1bd60b8ee0cf083616ca4c682d20ee1ffc039e2ac4657a2ef904e8a"
+    },
+    {
+      "path": "docs/evidence/P02.T02/frames/desktop.jpg",
+      "sha256": "58068a591ac5ceec8fd0c79585d803fa1336f1ef0bcef01db8a1aadff40d6e78"
+    },
+    {
+      "path": "docs/evidence/P02.T02/frames/mobile-review.jpg",
+      "sha256": "067e7385f31ffea8fce7438cd8f19b7b78e7a76827f98c3c58b1595060887d72"
+    },
+    {
+      "path": "docs/evidence/P02.T02/frames/mobile.jpg",
+      "sha256": "5f5f568e7de52517e5402bc3b9e3ff89e97fdac3424cc7c2fb9317d93b472d1c"
+    },
+    {
+      "path": "docs/evidence/P02.T02/frames/review.jpg",
+      "sha256": "84c69b8775dd2b15ad258551cd1014ff185cf3de18864fd52a678b097a7c07c8"
+    },
+    {
+      "path": "docs/evidence/P02.T02/frames/tablet.jpg",
+      "sha256": "92d7286f05ee757c0cf46f4e8d674515d4cf01520aef577c69785dc5f92be3d9"
+    },
+    {
+      "path": "docs/evidence/P02.T02/frames.json",
+      "sha256": "3f4c7c15e2cbfd625cd8f842ad3fb3ab9edb218e23ec4814e28dff1b5d075dbc"
+    },
+    {
+      "path": "docs/evidence/P02.T02/review.md",
+      "sha256": "f169d0712bdf138eb2f3c585f5f270a51b94db6b8ddd27eec718e7ea5b51b03a"
+    },
+    {
+      "path": "docs/evidence/P02.T02/verification.json",
+      "sha256": "9c4b5d150c624df0478a83f6812246104e0a07e63349ec62b98755326295c8ad"
+    },
+    {
+      "path": "docs/evidence/P02.T03/browser-checks.json",
+      "sha256": "5bdd7fc6d328f8c586371efae07ca9a6e5a28445c4b8c12cd28fe5d11eecbbcc"
+    },
+    {
+      "path": "docs/evidence/P02.T03/review.md",
+      "sha256": "4113548ffda92a963873f0b94bbf1877c68593f3ff61b27ecf0025cda42dfbf7"
+    },
+    {
+      "path": "docs/evidence/P03.T01/clean-build.txt",
+      "sha256": "72b3547dbee3fdc03a9966d29df923d0ab388868fc01c086f49d05ae87a3e28d"
+    },
+    {
+      "path": "docs/evidence/P03.T01/clean-install.txt",
+      "sha256": "5589aaaa9c076082fde70d8cc010c94adc9e10895580780c4848caa707578383"
+    },
+    {
+      "path": "docs/evidence/P03.T01/clean-typecheck.txt",
+      "sha256": "cd5e40927f23f640db8c07410b556c8800d5fd7e0110a0a92842eeb00bb21889"
+    },
+    {
+      "path": "docs/evidence/P03.T01/final-smoke.txt",
+      "sha256": "bcc2234352824df18b4011b56963c5e0c56c7252b7147d213f31299191f48afa"
+    },
+    {
+      "path": "docs/evidence/P03.T01/review.md",
+      "sha256": "d0b562624af3a5c4082133755e77275308d20599901e829ca1dcec5ddefbfb34"
+    },
+    {
+      "path": "docs/evidence/P03.T01/smoke.json",
+      "sha256": "3ff1f7db083d20888c72ab16b0afbe5ead0bbcb38276c3453b7188f40a71c6ad"
+    },
+    {
+      "path": "docs/evidence/P03.T02/boundaries.json",
+      "sha256": "f33cd808332a93393621302e1b4d20051134dfcaf0d49e2883185372901fef84"
+    },
+    {
+      "path": "docs/evidence/P03.T02/review.md",
+      "sha256": "549fc57ba50ff492aba537656081ec0f2cfd0cbfb2eec2b6b7affa4b7fae187a"
+    },
+    {
+      "path": "docs/evidence/P03.T02/tests.txt",
+      "sha256": "212e0c705c20b6e768d96d8f249ac17f264784c197c20556802505b3d8235666"
+    },
+    {
+      "path": "docs/evidence/P03.T02/typecheck.txt",
+      "sha256": "cd5e40927f23f640db8c07410b556c8800d5fd7e0110a0a92842eeb00bb21889"
+    },
+    {
+      "path": "docs/evidence/P03.T03/example.json",
+      "sha256": "e001773426e5222702639fc851c1326628bd1bdcb8da02a1c331e605ae1e7453"
+    },
+    {
+      "path": "docs/evidence/P03.T03/review.md",
+      "sha256": "a64e08137ec7a09b0083b02c83f166eaeb49999f5dfbf59b6b28f4eac7da3ae7"
+    },
+    {
+      "path": "docs/evidence/P03.T04/ci.txt",
+      "sha256": "c21d63802d98fa5d0a69574394c0783148803e1e06f15f8aaae1f637e9f99e40"
+    },
+    {
+      "path": "docs/evidence/P03.T04/clean-ci.txt",
+      "sha256": "3bae464b368b9a099512053e774b070d8e5a01f040cc6d9298f6bb6bffb4788d"
+    },
+    {
+      "path": "docs/evidence/P03.T04/clean-install.txt",
+      "sha256": "5589aaaa9c076082fde70d8cc010c94adc9e10895580780c4848caa707578383"
+    },
+    {
+      "path": "docs/evidence/P03.T04/delivery.json",
+      "sha256": "a0db4d6052ac58a62b056bbfa2da8ba54d348c87a0f8d503c57bef8b68b06f7c"
+    },
+    {
+      "path": "docs/evidence/P03.T04/dependency-audit.json",
+      "sha256": "8ea8da762d0890e1e9136dcd737880e03e50965a6d293e1c8ebe7d7ac447d896"
+    },
+    {
+      "path": "docs/evidence/P03.T04/reproducible-build.json",
+      "sha256": "fc2195e234729b74886c2ef3c7153e437a5209d8a9a767e4cc95bf91607ce8b9"
+    },
+    {
+      "path": "docs/evidence/P03.T04/review.md",
+      "sha256": "c4ea5a0c0835d0f7f79a557456b318040fb9b6f7b36299f57f1327c313de083c"
+    }
+  ]
+}

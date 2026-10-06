@@ -1,0 +1,17 @@
+{
+  "name": "@morrow/workspace-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "@morrow/workspace-ui": "0.0.0",
+    "@morrow/contracts": "0.0.0"
+  }
+}

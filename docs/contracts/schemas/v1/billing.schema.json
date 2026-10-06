@@ -1,0 +1,572 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://morrow.local/contracts/v1/billing.schema.json",
+  "title": "Morrow work credits and billing draft contracts",
+  "$defs": {
+    "CreditUnits": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,17})$"
+    },
+    "BillingMoney": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,15})(\\.[0-9]{1,9})?$"
+        },
+        "currency": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Currency"
+        }
+      },
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "additionalProperties": false
+    },
+    "BillingAccount": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "provider": {
+          "const": "shopify_app_pricing"
+        },
+        "currency": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Currency"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "active",
+            "suspended",
+            "cancelled",
+            "uninstalled"
+          ]
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "installationId",
+        "storeId",
+        "provider",
+        "currency",
+        "status",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "EntitlementSnapshot": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "billingAccountId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "subscriptionId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "pending",
+            "past_due",
+            "suspended",
+            "cancelled",
+            "uninstalled"
+          ]
+        },
+        "providerEvidenceRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "verifiedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "validUntil": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "billingAccountId",
+        "installationId",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "subscriptionId",
+        "status",
+        "providerEvidenceRef",
+        "verifiedAt",
+        "validUntil",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "CreditWallet": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "billingAccountId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "available": {
+          "$ref": "#/$defs/CreditUnits"
+        },
+        "reserved": {
+          "$ref": "#/$defs/CreditUnits"
+        },
+        "consumed": {
+          "$ref": "#/$defs/CreditUnits"
+        },
+        "rateRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "termsRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "billingAccountId",
+        "available",
+        "reserved",
+        "consumed",
+        "rateRevision",
+        "termsRevision",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "AllocationShare": {
+      "type": "object",
+      "properties": {
+        "billingAccountId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "entitlementRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "maximumCredits": {
+          "$ref": "#/$defs/CreditUnits"
+        },
+        "maximumLiability": {
+          "$ref": "#/$defs/BillingMoney"
+        }
+      },
+      "required": [
+        "billingAccountId",
+        "installationId",
+        "storeId",
+        "entitlementRevision",
+        "maximumCredits",
+        "maximumLiability"
+      ],
+      "additionalProperties": false
+    },
+    "CostAllocation": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "taskId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "rootRunId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "rateRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "meterKey": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "maximumCredits": {
+          "$ref": "#/$defs/CreditUnits"
+        },
+        "shares": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AllocationShare"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "allocationDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "taskId",
+        "rootRunId",
+        "revision",
+        "rateRevision",
+        "meterKey",
+        "maximumCredits",
+        "shares",
+        "allocationDigest"
+      ],
+      "additionalProperties": false
+    },
+    "CreditReservation": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "allocationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "allocationDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "rootRunId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "status": {
+          "enum": [
+            "reserved",
+            "dispatched",
+            "uncertain",
+            "settled",
+            "released"
+          ]
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "settledUsageDigest": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "allocationId",
+        "allocationDigest",
+        "rootRunId",
+        "status",
+        "createdAt",
+        "settledUsageDigest"
+      ],
+      "additionalProperties": false
+    },
+    "UsageLiability": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "reservationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "operationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "billingAccountId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "merchantCredits": {
+          "$ref": "#/$defs/CreditUnits"
+        },
+        "merchantLiability": {
+          "$ref": "#/$defs/BillingMoney"
+        },
+        "providerCost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BillingMoney"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "providerCostStatus": {
+          "enum": [
+            "known",
+            "uncertain"
+          ]
+        },
+        "rateRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "observedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "status": {
+          "enum": [
+            "incurred",
+            "uncertain",
+            "reconciled"
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "reservationId",
+        "operationId",
+        "billingAccountId",
+        "merchantCredits",
+        "merchantLiability",
+        "providerCost",
+        "providerCostStatus",
+        "rateRevision",
+        "observedAt",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "MeterEvent": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "usageLiabilityId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "billingAccountId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "subscriptionId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "meterKey": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "merchantCredits": {
+          "$ref": "#/$defs/CreditUnits"
+        },
+        "merchantLiability": {
+          "$ref": "#/$defs/BillingMoney"
+        },
+        "rateRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "payloadDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "submitted",
+            "uncertain",
+            "accepted",
+            "rejected"
+          ]
+        },
+        "attemptCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "providerReceiptRef": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "usageLiabilityId",
+        "billingAccountId",
+        "subscriptionId",
+        "meterKey",
+        "merchantCredits",
+        "merchantLiability",
+        "rateRevision",
+        "payloadDigest",
+        "status",
+        "attemptCount",
+        "providerReceiptRef"
+      ],
+      "additionalProperties": false
+    },
+    "CreditGrant": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "billingAccountId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "enum": [
+            "included",
+            "purchased"
+          ]
+        },
+        "creditUnits": {
+          "$ref": "#/$defs/CreditUnits"
+        },
+        "termsRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "purchaseEvidenceRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "effectiveAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "billingAccountId",
+        "kind",
+        "creditUnits",
+        "termsRevision",
+        "purchaseEvidenceRef",
+        "effectiveAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "VendorCostReservation": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "rootRunId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "vendorId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "costScheduleRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "maximumCost": {
+          "$ref": "#/$defs/BillingMoney"
+        },
+        "status": {
+          "enum": [
+            "reserved",
+            "dispatched",
+            "uncertain",
+            "settled",
+            "released"
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "rootRunId",
+        "vendorId",
+        "costScheduleRevision",
+        "maximumCost",
+        "status"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

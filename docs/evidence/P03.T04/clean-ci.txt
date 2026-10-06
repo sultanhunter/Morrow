@@ -1,0 +1,727 @@
+
+> morrow@0.0.0 ci
+> npm run format:check && npm run typecheck && npm run verify && npm test && npm run build && npm run lab
+
+
+> morrow@0.0.0 format:check
+> prettier --check apps packages scripts/generate-contracts.mjs scripts/boundary-checks.mjs scripts/verify-boundaries.mjs scripts/lab.mjs scripts/smoke-scaffold.mjs scripts/delivery-checks.mjs tests/typed-boundaries.test.mjs tests/lab.test.mjs tests/delivery.test.mjs
+
+Checking formatting...
+All matched files use Prettier code style!
+
+> morrow@0.0.0 typecheck
+> npm run typecheck --workspaces --if-present
+
+
+> @morrow/api@0.0.0 typecheck
+> tsc -p tsconfig.json
+
+
+> @morrow/shopify-connector@0.0.0 typecheck
+> react-router typegen && tsc -p tsconfig.json
+
+
+> @morrow/workers@0.0.0 typecheck
+> tsc -p tsconfig.json
+
+
+> @morrow/workspace-web@0.0.0 typecheck
+> tsc -p tsconfig.json
+
+
+> @morrow/contracts@0.0.0 typecheck
+> tsc -p tsconfig.json
+
+
+> @morrow/entry-ports@0.0.0 typecheck
+> tsc -p tsconfig.json
+
+
+> @morrow/workspace-ui@0.0.0 typecheck
+> tsc -p tsconfig.json
+
+
+> morrow@0.0.0 verify
+> npm run verify:foundation && npm run verify:contracts && npm run verify:providers && npm run verify:billing && npm run verify:design && npm run verify:boundaries && npm run verify:delivery
+
+
+> morrow@0.0.0 verify:foundation
+> node scripts/verify-foundation.mjs
+
+PASS: 103 capabilities, 14 domains, 80 tasks, 70 synthetic walkthrough cases. Production gates remain pending.
+
+> morrow@0.0.0 verify:contracts
+> node scripts/verify-contracts.mjs
+
+PASS: 116 schema definitions, 206 capability bodies, 94 transitions, 219 contract cases.
+
+> morrow@0.0.0 verify:providers
+> node scripts/verify-providers.mjs
+
+PASS: 12 selected provider boundaries and 103 capability bindings. All production activation gates remain blocked.
+
+> morrow@0.0.0 verify:billing
+> node scripts/verify-billing.mjs
+
+PASS: 12 billing definitions and 7 billing/readiness walkthroughs. Billing activation remains blocked.
+
+> morrow@0.0.0 verify:design
+> node scripts/verify-design.mjs
+
+PASS: 9 specified contrasts, syntax and 54 recorded browser checks. Human qualification remains pending.
+
+> morrow@0.0.0 verify:boundaries
+> node scripts/generate-contracts.mjs --check && node scripts/verify-boundaries.mjs
+
+PASS: 334 generated definitions and 103 capability pairs.
+PASS: 22 typed sources, 7 deliberate boundary/schema failures detected.
+
+> morrow@0.0.0 verify:delivery
+> node scripts/delivery-checks.mjs
+
+PASS: 190 text files, locked dependencies and 3 deliberate failures detected. Remote review/engine qualification pending.
+
+> morrow@0.0.0 test
+> node --import tsx --test tests/*.test.mjs
+
+✔ credits remain exact above JavaScript safe integer range (0.781917ms)
+✔ monetary arithmetic preserves nanounits without floating point (0.206541ms)
+✔ deny malformed credit units 1 (0.159ms)
+✔ deny malformed credit units 1.5 (0.029333ms)
+✔ deny malformed credit units -1 (0.028875ms)
+✔ deny malformed credit units "-1" (0.02675ms)
+✔ deny malformed credit units "1.0" (0.0325ms)
+✔ deny malformed credit units "01" (0.024708ms)
+✔ deny malformed credit units "1e3" (0.032667ms)
+✔ deny malformed credit units "1000000000000000000" (0.061083ms)
+✔ deny malformed credit units "NaN" (0.034958ms)
+✔ deny malformed money 0.1 (0.040208ms)
+✔ deny malformed money "-0.01" (0.0225ms)
+✔ deny malformed money "1e2" (0.022167ms)
+✔ deny malformed money "0.0000000001" (0.02225ms)
+✔ deny malformed money "01" (0.024208ms)
+✔ deny malformed money "Infinity" (0.035708ms)
+✔ allocation denies missing spending grant (2.151667ms)
+✔ allocation denies revoked membership (0.2735ms)
+✔ allocation denies unqualified provider (0.228417ms)
+✔ allocation denies unqualified prices (0.237791ms)
+✔ allocation denies failed low-token margin admission (0.236ms)
+✔ allocation denies wrong workspace (0.221375ms)
+✔ allocation denies wrong root run (0.201834ms)
+✔ allocation denies unapproved split (0.194167ms)
+✔ allocation denies rate revision change (0.197125ms)
+✔ allocation denies duplicate payer (0.193375ms)
+✔ allocation denies incorrect share total (0.183625ms)
+✔ allocation denies store outside grant (0.20975ms)
+✔ allocation denies replaced installation (0.181667ms)
+✔ allocation denies uninstalled account (0.171541ms)
+✔ allocation denies past due entitlement (0.181834ms)
+✔ allocation denies stale entitlement (0.1605ms)
+✔ allocation denies substituted entitlement evidence (0.158792ms)
+✔ allocation denies expired entitlement (0.164083ms)
+✔ allocation denies future entitlement evidence (0.164125ms)
+✔ allocation denies changed credit terms (0.170208ms)
+✔ allocation denies insufficient last payer (0.182875ms)
+✔ allocation denies currency substitution (0.155125ms)
+✔ allocation denies money ceiling exceeded (0.167458ms)
+✔ allocation denies client credential smuggling (0.333208ms)
+✔ all billing definitions are closed and accept representative shapes (2.2505ms)
+✔ small brand reserves only its named installation (0.979667ms)
+✔ specialist multi-store allocation reserves both exact shares (0.33375ms)
+✔ failure at last payer leaves every balance unchanged (0.308875ms)
+✔ vendor budget denial leaves credit wallets untouched (0.293584ms)
+✔ vendor currency mismatch cannot be treated as an exchange rate (0.238292ms)
+✔ reservation replay never deducts twice and changed payload is denied (2.480958ms)
+✔ all child work consumes one root credit ceiling (1.518625ms)
+✔ concurrent-intent admissions cannot exceed remaining payer money (0.608208ms)
+✔ dispatch rechecks uninstall after successful reservation (0.460791ms)
+✔ unused reservation releases once after cancellation (0.555291ms)
+✔ unknown submitted outcome retains credit and vendor reservations (0.476583ms)
+✔ settlement needs rate and verified provider evidence (0.462792ms)
+✔ uncertain provider cost cannot masquerade as zero usage (0.450625ms)
+✔ known provider cost requires a value (0.157541ms)
+✔ unknown cost cannot carry a fabricated zero (0.147ms)
+✔ settlement releases proven unused shares and records separate vendor cost (0.467458ms)
+✔ settlement replay cannot charge twice or rewrite historical usage (0.593459ms)
+✔ revoked entitlement does not erase previously incurred liability (0.440667ms)
+✔ failed settlement is atomic: too many credits (0.432708ms)
+✔ failed settlement is atomic: too much merchant liability (0.42775ms)
+✔ failed settlement is atomic: too much provider cost (0.437583ms)
+✔ failed settlement is atomic: wrong provider currency (0.407708ms)
+✔ failed settlement is atomic: wrong reservation (0.405833ms)
+✔ failed settlement is atomic: missing payer (0.384ms)
+✔ failed settlement is atomic: duplicate usage id (0.396708ms)
+✔ failed settlement is atomic: future usage (0.655041ms)
+✔ returned snapshots and records cannot mutate ledger balances (0.500375ms)
+✔ meter event binds exact settled credits, liability and subscription (0.561917ms)
+✔ unknown meter submission cannot get a new id or blind retry (0.928542ms)
+✔ meter can reconcile an unknown result with the same immutable identity (0.761333ms)
+✔ meter cannot change subscription or rate on retry (0.43725ms)
+✔ accepted meter needs a receipt and a previous submission (0.399667ms)
+✔ P01.A02.schema.valid.Id (1.081583ms)
+✔ P01.A02.schema.valid.Revision (0.074417ms)
+✔ P01.A02.schema.valid.Count (0.054292ms)
+✔ P01.A02.schema.valid.UtcTime (0.180167ms)
+✔ P01.A02.schema.valid.Date (0.066875ms)
+✔ P01.A02.schema.valid.Digest (0.060458ms)
+✔ P01.A02.schema.valid.FieldPath (0.066084ms)
+✔ P01.A02.schema.valid.CapabilityId (0.065708ms)
+✔ P01.A02.schema.valid.Decimal (0.068542ms)
+✔ P01.A02.schema.valid.Currency (0.076875ms)
+✔ P01.A02.schema.valid.Money (0.133792ms)
+✔ P01.A02.schema.valid.ActorRef (0.272208ms)
+✔ P01.A02.schema.valid.ResourceRef (0.204459ms)
+✔ P01.A02.schema.valid.Scope (0.254959ms)
+✔ P01.A02.schema.valid.Grant (0.704834ms)
+✔ P01.A02.schema.valid.PolicyDecision (0.187583ms)
+✔ P01.A02.schema.valid.AnchorRef (0.180417ms)
+✔ P01.A02.schema.valid.AnswerRef (0.164834ms)
+✔ P01.A02.schema.valid.ApprovalRef (0.162708ms)
+✔ P01.A02.schema.valid.ArtifactRef (0.162416ms)
+✔ P01.A02.schema.valid.AttributionRef (0.163125ms)
+✔ P01.A02.schema.valid.AudienceRef (0.186084ms)
+✔ P01.A02.schema.valid.BudgetRef (0.162292ms)
+✔ P01.A02.schema.valid.CaseRef (0.165584ms)
+✔ P01.A02.schema.valid.ConfigRef (0.160583ms)
+✔ P01.A02.schema.valid.CoverageRef (0.157375ms)
+✔ P01.A02.schema.valid.DecisionRef (0.158416ms)
+✔ P01.A02.schema.valid.EvaluationRef (0.162958ms)
+✔ P01.A02.schema.valid.EvidenceRef (0.158375ms)
+✔ P01.A02.schema.valid.FilterRef (0.159917ms)
+✔ P01.A02.schema.valid.FreshnessRef (0.158416ms)
+✔ P01.A02.schema.valid.GrantRef (0.160458ms)
+✔ P01.A02.schema.valid.MandateRef (0.159042ms)
+✔ P01.A02.schema.valid.MoneyRef (0.159417ms)
+✔ P01.A02.schema.valid.PatchRef (0.157167ms)
+✔ P01.A02.schema.valid.PeriodRef (0.172875ms)
+✔ P01.A02.schema.valid.PolicyRef (0.165125ms)
+✔ P01.A02.schema.valid.ProofRef (0.157333ms)
+✔ P01.A02.schema.valid.ProposalRef (0.161084ms)
+✔ P01.A02.schema.valid.QuerySetRef (0.158ms)
+✔ P01.A02.schema.valid.ReleaseRef (0.159417ms)
+✔ P01.A02.schema.valid.ReviewRef (0.157834ms)
+✔ P01.A02.schema.valid.ScheduleRef (0.159208ms)
+✔ P01.A02.schema.valid.SchemaRef (0.288791ms)
+✔ P01.A02.schema.valid.ScopeRef (0.568542ms)
+✔ P01.A02.schema.valid.SubjectRef (0.54475ms)
+✔ P01.A02.schema.valid.IdList (0.260167ms)
+✔ P01.A02.schema.valid.FieldList (0.286875ms)
+✔ P01.A02.schema.valid.StringList (0.178417ms)
+✔ P01.A02.schema.valid.ArtifactList (0.163166ms)
+✔ P01.A02.schema.valid.EvidenceList (0.169417ms)
+✔ P01.A02.schema.valid.ResourceList (0.167791ms)
+✔ P01.A02.schema.valid.MoneyList (0.141917ms)
+✔ P01.A02.schema.valid.UrlList (2.076917ms)
+✔ P01.A02.schema.valid.CriteriaList (0.189083ms)
+✔ P01.A02.schema.valid.OptionList (0.130458ms)
+✔ P01.A02.schema.valid.ViewportList (0.11625ms)
+✔ P01.A02.schema.valid.SnapshotRef (0.590875ms)
+✔ P01.A02.schema.valid.AccountList (0.05825ms)
+✔ P01.A02.schema.valid.AudienceList (0.057041ms)
+✔ P01.A02.schema.valid.CostList (0.051041ms)
+✔ P01.A02.schema.valid.InventoryList (0.051875ms)
+✔ P01.A02.schema.valid.KnowledgeList (0.054417ms)
+✔ P01.A02.schema.valid.ListingList (0.06475ms)
+✔ P01.A02.schema.valid.OrderList (0.052292ms)
+✔ P01.A02.schema.valid.ProductList (0.053083ms)
+✔ P01.A02.schema.valid.SegmentList (0.052417ms)
+✔ P01.A02.schema.valid.MetricPoint (0.456417ms)
+✔ P01.A02.schema.valid.AdMetricList (0.057209ms)
+✔ P01.A02.schema.valid.LifecycleMetricList (0.0535ms)
+✔ P01.A02.schema.valid.SearchMetricList (0.053458ms)
+✔ P01.A02.schema.valid.LiabilityList (0.105791ms)
+✔ P01.A02.schema.valid.UsageList (0.182708ms)
+✔ P01.A02.schema.valid.QuestionList (0.056292ms)
+✔ P01.A02.schema.valid.QuestionRef (0.176167ms)
+✔ P01.A02.schema.valid.TaskStatus (0.039459ms)
+✔ P01.A02.schema.valid.GoalStatus (0.033833ms)
+✔ P01.A02.schema.valid.RunStatus (0.034667ms)
+✔ P01.A02.schema.valid.QuestionStatus (0.032458ms)
+✔ P01.A02.schema.valid.ApprovalStatus (0.033167ms)
+✔ P01.A02.schema.valid.OperationStatus (0.037ms)
+✔ P01.A02.schema.valid.InstallationStatus (0.034167ms)
+✔ P01.A02.schema.valid.RoutineStatus (0.031292ms)
+✔ P01.A02.schema.valid.Goal (0.415834ms)
+✔ P01.A02.schema.valid.Task (0.498833ms)
+✔ P01.A02.schema.valid.Run (0.663834ms)
+✔ P01.A02.schema.valid.Question (0.990041ms)
+✔ P01.A02.schema.valid.ArtifactRevision (0.476417ms)
+✔ P01.A02.schema.valid.ArtifactAnchor (0.784917ms)
+✔ P01.A02.schema.valid.Proposal (0.7085ms)
+✔ P01.A02.schema.valid.Approval (0.645917ms)
+✔ P01.A02.schema.valid.Operation (0.733458ms)
+✔ P01.A02.schema.valid.AutomationMandate (0.686583ms)
+✔ P01.A02.schema.valid.Budget (0.276542ms)
+✔ P01.A02.schema.valid.Reservation (0.281208ms)
+✔ P01.A02.schema.valid.StoreInstallation (0.369333ms)
+✔ P01.A02.schema.valid.LinkingHandoff (0.35575ms)
+✔ P01.A02.schema.valid.PersistedDraft (0.320083ms)
+✔ P01.A02.schema.valid.CrossHostResume (0.465959ms)
+✔ P01.A02.schema.valid.HostContext (0.345042ms)
+✔ P01.A02.schema.valid.EventEnvelope (0.393291ms)
+✔ P01.A02.schema.valid.CommandEnvelope (0.226917ms)
+✔ P01.A02.schema.valid.ErrorEnvelope (0.365417ms)
+✔ P01.A02.schema.valid.Period (0.145458ms)
+✔ P01.A02.schema.valid.MetricDefinition (0.373875ms)
+✔ P01.A02.schema.valid.Schedule (0.271ms)
+✔ P01.A02.schema.valid.RuntimeProfile (0.174875ms)
+✔ P01.A02.schema.valid.PinnedDependency (0.127875ms)
+✔ P01.A02.schema.valid.SkillRelease (0.358417ms)
+✔ P01.A02.schema.valid.AgentInstallation (0.521708ms)
+✔ P01.A02.schema.valid.RunManifest (0.35025ms)
+✔ P01.A02.schema.valid.Evidence (0.311083ms)
+✔ P01.A02.schema.valid.RetentionPolicy (0.575792ms)
+✔ P01.A02.schema.valid.integer (0.166125ms)
+✔ P01.A02.schema.valid.string (0.053584ms)
+✔ P01.A02.schema.invalid.extra_host_authority (0.043416ms)
+✔ P01.A02.schema.invalid.missing_workspace (0.030125ms)
+✔ P01.A02.schema.invalid.unknown_host (0.037875ms)
+✔ P01.A02.schema.invalid.floating_money (0.019917ms)
+✔ P01.A02.schema.invalid.exponent_money (0.019041ms)
+✔ P01.A02.schema.invalid.currency_lowercase (0.016209ms)
+✔ P01.A02.schema.invalid.zero_revision (0.047833ms)
+✔ P01.A02.schema.invalid.unknown_task_state (0.03475ms)
+✔ P01.A02.schema.invalid.unknown_operation_state (0.044959ms)
+✔ P01.A02.schema.invalid.raw_customer_in_event (0.029083ms)
+✔ P01.A02.schema.invalid.null_event_payload (0.024209ms)
+✔ P01.A02.schema.invalid.invalid_digest (0.058917ms)
+✔ P01.A02.schema.invalid.provider_secret_in_run (0.06325ms)
+✔ P01.A02.schema.invalid.unbounded_runtime (0.026459ms)
+✔ P01.A02.schema.invalid.unchecked_schema_null (0.032375ms)
+✔ P01.A02.schema.invalid.wildcard_fields (0.020166ms)
+✔ P01.A02.schema.invalid.local_event_timestamp (0.083416ms)
+✔ P01.A02.schema.invalid.duplicate_grant_verbs (0.038375ms)
+✔ P01.A02.binding.exact_identity_store_and_revision.standalone_session_b (1.113ms)
+✔ P01.A02.binding.exact_identity_store_and_revision.standalone (0.240042ms)
+✔ P01.A02.binding.selector_change_preserves_proposal_target.standalone_session_b (0.199333ms)
+✔ P01.A02.binding.selector_change_preserves_proposal_target.standalone (0.61075ms)
+✔ P01.A02.binding.client_cannot_retarget.standalone_session_b (0.546917ms)
+✔ P01.A02.binding.client_cannot_retarget.standalone (0.500917ms)
+✔ P01.A02.binding.fabricated_host_bootstrap.standalone_session_b (0.488584ms)
+✔ P01.A02.binding.fabricated_host_bootstrap.standalone (0.471333ms)
+✔ P01.A02.binding.revoked_membership.standalone_session_b (0.532875ms)
+✔ P01.A02.binding.revoked_membership.standalone (0.484791ms)
+✔ P01.A02.binding.changed_policy.standalone_session_b (0.417709ms)
+✔ P01.A02.binding.changed_policy.standalone (0.388708ms)
+✔ P01.A02.binding.foreign_workspace.standalone_session_b (0.348958ms)
+✔ P01.A02.binding.foreign_workspace.standalone (0.364584ms)
+✔ P01.A02.binding.foreign_org.standalone_session_b (0.342042ms)
+✔ P01.A02.binding.foreign_org.standalone (0.281375ms)
+✔ P01.A02.binding.lost_store_access.standalone_session_b (0.178625ms)
+✔ P01.A02.binding.lost_store_access.standalone (0.144375ms)
+✔ P01.A02.binding.changed_proposal_content.standalone_session_b (0.13025ms)
+✔ P01.A02.binding.changed_proposal_content.standalone (0.123209ms)
+✔ P01.A02.binding.changed_parameters.standalone_session_b (0.12175ms)
+✔ P01.A02.binding.changed_parameters.standalone (0.115667ms)
+✔ P01.A02.binding.changed_proposal_revision.standalone_session_b (0.134333ms)
+✔ P01.A02.binding.changed_proposal_revision.standalone (0.125708ms)
+✔ P01.A02.binding.wrong_proposal_record.standalone_session_b (0.132625ms)
+✔ P01.A02.binding.wrong_proposal_record.standalone (0.114666ms)
+✔ P01.A02.binding.wrong_approval_digest.standalone_session_b (0.115083ms)
+✔ P01.A02.binding.wrong_approval_digest.standalone (0.110125ms)
+✔ P01.A02.binding.wrong_scope_digest.standalone_session_b (0.117375ms)
+✔ P01.A02.binding.wrong_scope_digest.standalone (0.112542ms)
+✔ P01.A02.binding.expired_approval.standalone_session_b (0.128209ms)
+✔ P01.A02.binding.expired_approval.standalone (0.111917ms)
+✔ P01.A02.binding.ineligible_reviewer.standalone_session_b (0.110792ms)
+✔ P01.A02.binding.ineligible_reviewer.standalone (0.124083ms)
+✔ P01.A02.binding.unapproved_status.standalone_session_b (0.372375ms)
+✔ P01.A02.binding.unapproved_status.standalone (0.136ms)
+✔ P01.A02.binding.expired_session.standalone_session_b (0.126959ms)
+✔ P01.A02.binding.expired_session.standalone (0.270542ms)
+✔ P01.A02.binding.foreign_approval_record.standalone_session_b (0.219042ms)
+✔ P01.A02.binding.foreign_approval_record.standalone (0.197708ms)
+✔ P01.A02.state.verified_operation_has_readback (0.568958ms)
+✔ P01.A02.state.submitted_not_complete (0.170375ms)
+✔ P01.A02.state.uncertain_cannot_blind_retry (0.135167ms)
+✔ P01.A02.state.uncertain_requires_reconciliation (0.123917ms)
+✔ P01.A02.state.unproven_no_effect_not_failure (0.121167ms)
+✔ P01.A02.state.cancel_with_liabilities_waits (0.148084ms)
+✔ P01.A02.state.cancel_after_reconciliation (0.129791ms)
+✔ P01.A02.state.model_cannot_complete_work (0.119959ms)
+✔ P01.A02.state.accepted_evidence_completes_task (0.115875ms)
+✔ P01.A02.state.early_answer_resumes (0.118375ms)
+✔ P01.A02.state.wrong_respondent_cannot_answer (0.117333ms)
+✔ P01.A02.state.eligible_answer_matches_schema (0.1455ms)
+✔ P01.A02.state.approval_reject_terminal (0.12ms)
+✔ P01.A02.state.approval_revocation_invalidates (0.11725ms)
+✔ P01.A02.state.submitted_cancel_does_not_erase (0.129084ms)
+✔ P01.A02.state.generation_job_finishes_before_cancel (0.116792ms)
+✔ P01.A02.state.active_installation_can_suspend (0.116416ms)
+✔ P01.A02.state.staged_not_automatically_active (0.124959ms)
+✔ P01.A02.handoff.single_use_link_is_valid (0.036667ms)
+✔ P01.A02.handoff.handoff_replay_denied (0.016166ms)
+✔ P01.A02.handoff.handoff_expiry_denied (0.017333ms)
+✔ P01.A02.handoff.wrong_linking_principal (0.014083ms)
+✔ P01.A02.handoff.conflicting_store_ownership (0.014042ms)
+✔ P01.A02.handoff.wrong_workspace_for_handoff (0.020208ms)
+✔ P01.A02.handoff.stale_ownership_revision (0.013542ms)
+✔ P01.A02.fence.current_revision_and_lease (0.018708ms)
+✔ P01.A02.fence.stale_revision_conflicts (0.013125ms)
+✔ P01.A02.fence.zombie_generation_denied (0.012625ms)
+✔ P01.A02.binding.signed_wrong_store_scope.standalone_session_b (0.186541ms)
+✔ P01.A02.binding.foreign_parameter_reference.standalone_session_b (0.137708ms)
+✔ P01.A02.binding.wrong_parameter_reference_digest.standalone_session_b (0.122417ms)
+✔ P01.A02.binding.foreign_target.standalone_session_b (0.113916ms)
+✔ P01.A02.binding.target_field_outside_scope.standalone_session_b (0.121583ms)
+✔ P01.A02.binding.foreign_reviewer.standalone_session_b (0.125458ms)
+✔ P01.A02.binding.signed_wrong_store_scope.standalone (0.113959ms)
+✔ P01.A02.binding.foreign_parameter_reference.standalone (0.112917ms)
+✔ P01.A02.binding.wrong_parameter_reference_digest.standalone (0.134208ms)
+✔ P01.A02.binding.foreign_target.standalone (0.114208ms)
+✔ P01.A02.binding.target_field_outside_scope.standalone (0.117333ms)
+✔ P01.A02.binding.foreign_reviewer.standalone (0.109459ms)
+✔ P01.A02.schema.denied.workspace_surface.shopify_admin (0.030208ms)
+✔ P01.A02.schema.denied.workspace_surface.shopify_connector (0.01825ms)
+✔ P01.A02.schema.valid.ConnectorContext (0.232541ms)
+✔ P01.A02.schema.denied.connector.agent_execution (0.020958ms)
+✔ P01.A02.schema.denied.connector.workspace_authority (0.020167ms)
+✔ P01.A02.schema.denied.connector.credential_smuggling (0.023875ms)
+✔ canonical digest ignores JSON property order (0.033375ms)
+✔ canonical digest preserves array ordering (0.055ms)
+✔ approved parameters and costs change proposal digest (3.740167ms)
+✔ non-JSON infinity cannot be hashed as a valid approval (0.320125ms)
+✔ capability body schemas reject credential smuggling (2.321625ms)
+✔ retention policy cannot become arbitrary freeform JSON (0.051375ms)
+✔ fixture secret denies: openai (0.703541ms)
+✔ fixture secret denies: github (0.17225ms)
+✔ fixture secret denies: aws (0.036458ms)
+✔ fixture secret denies: private (0.029833ms)
+✔ fixture secret denies: literal (0.033708ms)
+✔ reference/digest does not masquerade as credential (0.585708ms)
+✔ reviewed unchanged migration envelope allowed by metadata gate (0.14725ms)
+✔ broken checksum denies changed SQL (0.085042ms)
+✔ unlisted migration denies (0.047375ms)
+✔ non-transactional migration needs separate reviewed path (0.373375ms)
+✔ reordered migrations deny (0.052459ms)
+✔ catalogue satisfies domain and traceability contracts (1.881542ms)
+✔ rejects untracked provider (1.077167ms)
+✔ rejects duplicate operation (2.306875ms)
+✔ rejects missing launch domain (1.780917ms)
+✔ rejects premature capability activation (1.729416ms)
+✔ rejects missing review gate (1.872459ms)
+✔ rejects connector domain exposure (24.9675ms)
+✔ rejects unbounded fields (0.83075ms)
+✔ rejects invented implementation task (0.792917ms)
+✔ rejects unknown nested type (0.824458ms)
+✔ P01.A01.owner_content_publish_with_all_gates.standalone_session_b (0.149292ms)
+✔ P01.A01.owner_content_publish_with_all_gates.standalone (0.028459ms)
+✔ P01.A01.seo_can_draft.standalone_session_b (0.022084ms)
+✔ P01.A01.seo_can_draft.standalone (0.019917ms)
+✔ P01.A01.seo_title_does_not_grant_refunds.standalone_session_b (0.064375ms)
+✔ P01.A01.seo_title_does_not_grant_refunds.standalone (0.022917ms)
+✔ P01.A01.seo_title_does_not_grant_ad_spend.standalone_session_b (0.020208ms)
+✔ P01.A01.seo_title_does_not_grant_ad_spend.standalone (0.029583ms)
+✔ P01.A01.draft_grant_does_not_grant_publication.standalone_session_b (0.031209ms)
+✔ P01.A01.draft_grant_does_not_grant_publication.standalone (0.028958ms)
+✔ P01.A01.revoked_owner_denied.standalone_session_b (0.022084ms)
+✔ P01.A01.revoked_owner_denied.standalone (0.021083ms)
+✔ P01.A01.cross_tenant_denied.standalone_session_b (0.021084ms)
+✔ P01.A01.cross_tenant_denied.standalone (0.016375ms)
+✔ P01.A01.cross_workspace_denied.standalone_session_b (0.018042ms)
+✔ P01.A01.cross_workspace_denied.standalone (0.015333ms)
+✔ P01.A01.wrong_store_denied.standalone_session_b (0.022584ms)
+✔ P01.A01.wrong_store_denied.standalone (0.01675ms)
+✔ P01.A01.wrong_resource_denied.standalone_session_b (0.025ms)
+✔ P01.A01.wrong_resource_denied.standalone (0.015083ms)
+✔ P01.A01.wrong_meta_account_denied.standalone_session_b (0.022875ms)
+✔ P01.A01.wrong_meta_account_denied.standalone (0.021875ms)
+✔ P01.A01.seo_price_field_denied.standalone_session_b (0.016333ms)
+✔ P01.A01.seo_price_field_denied.standalone (0.020208ms)
+✔ P01.A01.restricted_field_grant_denied.standalone_session_b (0.019166ms)
+✔ P01.A01.restricted_field_grant_denied.standalone (0.018416ms)
+✔ P01.A01.owner_cannot_bypass_provider_review.standalone_session_b (0.017416ms)
+✔ P01.A01.owner_cannot_bypass_provider_review.standalone (0.020334ms)
+✔ P01.A01.owner_cannot_bypass_provider_permission.standalone_session_b (0.02225ms)
+✔ P01.A01.owner_cannot_bypass_provider_permission.standalone (0.01575ms)
+✔ P01.A01.subscription_does_not_grant_authority.standalone_session_b (0.01625ms)
+✔ P01.A01.subscription_does_not_grant_authority.standalone (0.01475ms)
+✔ P01.A01.missing_entitlement_denied.standalone_session_b (0.01925ms)
+✔ P01.A01.missing_entitlement_denied.standalone (0.017333ms)
+✔ P01.A01.changed_proposal_requires_new_review.standalone_session_b (0.029458ms)
+✔ P01.A01.changed_proposal_requires_new_review.standalone (0.018917ms)
+✔ P01.A01.expired_review_denied.standalone_session_b (0.022958ms)
+✔ P01.A01.expired_review_denied.standalone (0.020167ms)
+✔ P01.A01.ineligible_reviewer_denied.standalone_session_b (0.018459ms)
+✔ P01.A01.ineligible_reviewer_denied.standalone (0.021334ms)
+✔ P01.A01.stale_product_precondition_denied.standalone_session_b (0.015958ms)
+✔ P01.A01.stale_product_precondition_denied.standalone (0.023625ms)
+✔ P01.A01.spend_without_reservation_denied.standalone_session_b (0.021375ms)
+✔ P01.A01.spend_without_reservation_denied.standalone (0.020375ms)
+✔ P01.A01.spend_above_ceiling_denied.standalone_session_b (0.017583ms)
+✔ P01.A01.spend_above_ceiling_denied.standalone (0.019375ms)
+✔ P01.A01.mixed_currency_budget_denied.standalone_session_b (0.022083ms)
+✔ P01.A01.mixed_currency_budget_denied.standalone (0.01625ms)
+✔ P01.A01.inventory_absolute_write_without_authority_denied.standalone_session_b (0.016542ms)
+✔ P01.A01.inventory_absolute_write_without_authority_denied.standalone (0.015583ms)
+✔ P01.A01.merchant_cannot_publish_firstparty_release.standalone_session_b (0.017125ms)
+✔ P01.A01.merchant_cannot_publish_firstparty_release.standalone (0.015875ms)
+✔ P01.A01.explicit_operator_can_publish_qualified_release.standalone_session_b (0.018709ms)
+✔ P01.A01.explicit_operator_can_publish_qualified_release.standalone (0.024458ms)
+✔ P01.A01.agent_cannot_be_human_reviewer.standalone_session_b (0.025958ms)
+✔ P01.A01.agent_cannot_be_human_reviewer.standalone (0.016667ms)
+✔ P01.A01.expired_agent_mandate_denied.standalone_session_b (0.015416ms)
+✔ P01.A01.expired_agent_mandate_denied.standalone (0.020083ms)
+✔ P01.A01.delegation_cannot_bypass_seo_authority.standalone_session_b (0.018542ms)
+✔ P01.A01.delegation_cannot_bypass_seo_authority.standalone (0.016958ms)
+✔ P01.A01.delegation_cannot_widen_store_scope.standalone_session_b (0.013916ms)
+✔ P01.A01.delegation_cannot_widen_store_scope.standalone (0.014042ms)
+✔ P01.A01.bounded_agent_can_publish_with_current_authority.standalone_session_b (0.013875ms)
+✔ P01.A01.bounded_agent_can_publish_with_current_authority.standalone (0.01375ms)
+✔ P01.A01.revoked_origin_cannot_keep_agent_authority.standalone_session_b (0.017292ms)
+✔ P01.A01.revoked_origin_cannot_keep_agent_authority.standalone (0.017416ms)
+✔ P01.A01.agent_requires_bound_origin.standalone_session_b (0.018834ms)
+✔ P01.A01.agent_requires_bound_origin.standalone (0.04875ms)
+✔ P01.A01.denied.domain_surface.shopify_admin (0.0235ms)
+✔ P01.A01.denied.domain_surface.shopify_connector (0.016833ms)
+✔ headless contract lab is deterministic and does not complete work (22.52175ms)
+✔ fixture read returns schema-valid scoped references (4.652542ms)
+✔ other organization denies the fake account (0.085083ms)
+✔ other store cannot reuse fake account (0.319416ms)
+✔ other provider account cannot impersonate Shopify (0.1115ms)
+✔ connection expiry remains explicit (0.061959ms)
+✔ partial result retains unresolved items (0.161083ms)
+✔ uncertain outcome does not pretend verified or retryable (0.0505ms)
+✔ unsupported fields do not invent source facts (0.05375ms)
+✔ unknown products do not become success (0.078333ms)
+✔ returned fixture copies cannot alter subsequent evidence (0.152792ms)
+✔ fixture catalogue covers both merchant segments (0.044875ms)
+✔ partial outcome follows requested item order (0.059083ms)
+✔ invalid clock cannot make a fake expiry valid (0.041542ms)
+✔ route inventory has unique IDs/patterns and valid parents (1.645291ms)
+✔ round trip canonical route home (0.864709ms)
+✔ round trip canonical route ask (0.073708ms)
+✔ round trip canonical route work (0.064166ms)
+✔ round trip canonical route task (0.066708ms)
+✔ round trip canonical route inbox (0.056042ms)
+✔ round trip canonical route review (0.073167ms)
+✔ round trip canonical route catalog (0.056ms)
+✔ round trip canonical route assets (0.062708ms)
+✔ round trip canonical route agents (0.118458ms)
+✔ round trip canonical route agent_store (0.064083ms)
+✔ round trip canonical route builder (0.078667ms)
+✔ round trip canonical route knowledge (0.05225ms)
+✔ round trip canonical route connections (0.047667ms)
+✔ round trip canonical route settings (0.0455ms)
+✔ round trip canonical route operator_authoring (0.031833ms)
+✔ round trip canonical route product (0.05075ms)
+✔ round trip canonical route work_artifact (0.0415ms)
+✔ round trip canonical route asset (0.044792ms)
+✔ round trip canonical route agent (0.049292ms)
+✔ round trip canonical route agent_listing (0.04875ms)
+✔ round trip canonical route builder_draft (0.043583ms)
+✔ round trip canonical route connection (0.058083ms)
+✔ round trip canonical route knowledge_item (0.04625ms)
+✔ round trip canonical route question (0.073583ms)
+✔ round trip canonical route exception (0.059416ms)
+✔ round trip canonical route settings_section (0.059541ms)
+✔ static builder route wins over dynamic agent route (0.044375ms)
+✔ reserved static slug cannot masquerade as an agent identity (3.765125ms)
+✔ builder draft resolves its exact detail rather than an installation (0.683583ms)
+✔ merchant domain URLs deny surface shopify_admin (0.164417ms)
+✔ merchant domain URLs deny surface shopify_connector (0.3215ms)
+✔ merchant domain URLs deny surface operator_console (4.163916ms)
+✔ reject unsafe/unscoped path /w/workspace-1/work/a%2Fb (0.566667ms)
+✔ reject unsafe/unscoped path /w/workspace-1/work/%2e%2e (0.338709ms)
+✔ reject unsafe/unscoped path /w/workspace-1/work/%FF (0.133042ms)
+✔ reject unsafe/unscoped path //external.example (0.047375ms)
+✔ reject unsafe/unscoped path https://external.example (0.038916ms)
+✔ reject unsafe/unscoped path /w/workspace-1/work/task-1?token=abc (0.036875ms)
+✔ reject unsafe/unscoped path /w/workspace-1/work/task-1#other (0.034542ms)
+✔ reject unsafe/unscoped path /w/workspace-1/settings/api-key (0.067958ms)
+✔ reject unsafe/unscoped path /operator/releases (0.052625ms)
+✔ URL params cannot inject a redirect, store change or credential (1.60175ms)
+✔ task URL contains stable identity rather than navigation store (0.08925ms)
+✔ every advertised capability has a gated provider/implementation route (2.065875ms)
+✔ provider register rejects missing capability route (0.609209ms)
+✔ provider register rejects duplicate route (0.438792ms)
+✔ provider register rejects unrecorded selection (0.4125ms)
+✔ provider register rejects untracked provider (0.424208ms)
+✔ provider register rejects wrong dependency (1.418167ms)
+✔ provider register rejects unqualified activation (0.912875ms)
+✔ provider register rejects fabricated engineering (0.84ms)
+✔ provider register rejects fabricated account test (0.865959ms)
+✔ provider register rejects claiming login is grant (0.941125ms)
+✔ provider register rejects latest API (0.8965ms)
+✔ provider register rejects blanket scope (1.245125ms)
+✔ provider register rejects connector domain exposure (6.395666ms)
+✔ provider register rejects missing readback (0.459292ms)
+✔ provider register rejects unverified primary source (4.090708ms)
+✔ provider register rejects invented evidence (0.92125ms)
+✔ recorded designs permit independent local preparation without claiming activation (0.247542ms)
+✔ Ready denied for structural decision open (0.148333ms)
+✔ Ready denied for structural decision proposed (0.057333ms)
+✔ Ready denied for structural decision rejected (0.059125ms)
+✔ Ready denied for structural decision undefined (0.051833ms)
+✔ a decision without review evidence cannot promote Ready (0.089666ms)
+✔ missing required account blocks a controlled test, not independent research (0.079916ms)
+✔ selected design cannot replace required package qualification (0.076708ms)
+✔ unknown structural decision denies Ready (0.058666ms)
+✔ shopify_admin: surface gate remains enforced with otherwise qualified synthetic facts (0.101ms)
+✔ shopify_admin: denies production permission pending (0.058459ms)
+✔ shopify_admin: denies no review receipt (0.052125ms)
+✔ shopify_admin: denies only documentary design (0.045583ms)
+✔ shopify_admin: denies no controlled test (0.086333ms)
+✔ shopify_admin: denies merchant account revoked (0.044875ms)
+✔ shopify_admin: denies specialist lacks authority (0.022875ms)
+✔ shopify_admin: denies US database alone (0.01925ms)
+✔ shopify_admin: denies owner infrastructure has no ceiling (0.033042ms)
+✔ shopify_admin: denies stale approval (0.023375ms)
+✔ shopify_admin: denies unresolved API field (0.023208ms)
+✔ standalone: surface gate remains enforced with otherwise qualified synthetic facts (0.017375ms)
+✔ standalone: denies production permission pending (0.015417ms)
+✔ standalone: denies no review receipt (0.0145ms)
+✔ standalone: denies only documentary design (0.013875ms)
+✔ standalone: denies no controlled test (0.013708ms)
+✔ standalone: denies merchant account revoked (0.014209ms)
+✔ standalone: denies specialist lacks authority (0.014875ms)
+✔ standalone: denies US database alone (0.016083ms)
+✔ standalone: denies owner infrastructure has no ceiling (0.02725ms)
+✔ standalone: denies stale approval (0.017916ms)
+✔ standalone: denies unresolved API field (0.02325ms)
+✔ warm estimate exposes only known components and cannot authorize spend (0.327958ms)
+✔ cost estimate rejects hiding required missing costs (0.248542ms)
+✔ no arbitrary owner ceiling does not imply zero fixed cost (0.091083ms)
+✔ generated client validates a real input/output pair (4.061209ms)
+✔ extra input cannot reach transport (0.254958ms)
+✔ provider output is not accepted on static types alone (0.076292ms)
+✔ closed input validation does not coerce (0.054042ms)
+✔ runtime revision 1 (0.273042ms)
+✔ runtime revision 1.2 (0.032917ms)
+✔ runtime revision 1 (0.038375ms)
+✔ runtime revision 9007199254740992 (0.029875ms)
+✔ deny UI crossing: import x from '@shopify/shopify-app-react-router/server' (2.082625ms)
+✔ deny UI crossing: export {x} from './credentials.server' (0.556542ms)
+✔ deny UI crossing: import x from '../../api/src/index' (0.1595ms)
+✔ deny UI crossing: const x=import(secretModule) (0.669292ms)
+✔ deny UI crossing: const x=process['env']['KEY'] (0.176334ms)
+✔ deny UI crossing: import fs from 'fs' (0.082583ms)
+✔ ordinary shared UI imports allowed (0.118583ms)
+✔ neutral contracts cannot depend on app implementations (0.124ms)
+✔ incompatible schema delta blocks before baseline rewrite (1.144584ms)
+ℹ tests 515
+ℹ suites 0
+ℹ pass 515
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 790.728333
+
+> morrow@0.0.0 build
+> npm run build --workspaces --if-present
+
+
+> @morrow/api@0.0.0 build
+> tsc -p tsconfig.json && esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs
+
+
+> @morrow/shopify-connector@0.0.0 build
+> react-router build
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 43 modules transformed.
+rendering chunks...
+computing gzip size...
+build/client/.vite/manifest.json                1.46 kB │ gzip:  0.35 kB
+build/client/assets/auth-l0sNRNKZ.js            0.00 kB │ gzip:  0.02 kB
+build/client/assets/index-DJN3l3_E.js           0.24 kB │ gzip:  0.20 kB
+build/client/assets/root-DWnJuk9v.js            0.40 kB │ gzip:  0.26 kB
+build/client/assets/fixture-DXNISPai.js         0.44 kB │ gzip:  0.30 kB
+build/client/assets/jsx-runtime-MPSlSRXs.js   127.14 kB │ gzip: 42.99 kB
+build/client/assets/entry.client-Bhfy8GUQ.js  140.19 kB │ gzip: 45.38 kB
+✓ built in 4.20s
+  ⚠️  Future Flag Warning: Route middleware support is changing in React Router v8.
+     You can use the `future.v8_middleware` flag to opt in early.
+     -> https://reactrouter.com/v7/upgrading/future#futurev8_middleware
+  ⚠️  Future Flag Warning: Route module splitting behavior is changing in React Router v8.
+     You can use the `future.v8_splitRouteModules` flag to opt in early.
+     -> https://reactrouter.com/v7/upgrading/future#futurev8_splitroutemodules
+  ⚠️  Future Flag Warning: Vite Environment API usage is changing in React Router v8.
+     You can use the `future.v8_viteEnvironmentApi` flag to opt in early.
+     -> https://reactrouter.com/v7/upgrading/future#futurev8_viteenvironmentapi
+  ⚠️  Future Flag Warning: Request handling behavior is changing in React Router v8.
+     You can use the `future.v8_passThroughRequests` flag to opt in early.
+     -> https://reactrouter.com/v7/upgrading/future#futurev8_passthroughrequests
+  ⚠️  Future Flag Warning: Data request URL formats are changing in React Router v8.
+     You can use the `future.v8_trailingSlashAwareDataRequests` flag to opt in early.
+     -> https://reactrouter.com/v7/upgrading/future#futurev8_trailingslashawaredatarequests
+vite v7.3.7 building ssr environment for production...
+transforming...
+✓ 9 modules transformed.
+rendering chunks...
+build/server/.vite/manifest.json  0.17 kB
+build/server/index.js             8.53 kB
+✓ built in 17ms
+
+> @morrow/workers@0.0.0 build
+> tsc -p tsconfig.json && esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs
+
+
+> @morrow/workspace-web@0.0.0 build
+> vite build
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 28 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.38 kB │ gzip:  0.25 kB
+dist/assets/index-uIPS1GsJ.js  142.99 kB │ gzip: 46.07 kB
+✓ built in 3.31s
+
+> morrow@0.0.0 lab
+> node --import tsx scripts/lab.mjs
+
+{
+  "synthetic": true,
+  "durable": false,
+  "providerCalls": 0,
+  "paidDispatches": 0,
+  "clock": "2026-10-06T10:00:00Z",
+  "goalId": "goal-catalog",
+  "taskId": "task-catalog",
+  "taskStatus": "draft",
+  "result": {
+    "kind": "partial",
+    "verified": [
+      {
+        "resource": {
+          "organizationId": "org-small",
+          "workspaceId": "workspace-main",
+          "storeId": "store-main",
+          "connectionId": "connection-shopify",
+          "kind": "product",
+          "id": "product-shirt"
+        },
+        "providerId": "fake-shopify",
+        "revision": 1,
+        "observedAt": "2026-10-06T10:00:00Z",
+        "dataRef": {
+          "organizationId": "org-small",
+          "workspaceId": "workspace-main",
+          "storeId": "store-main",
+          "kind": "artifact",
+          "id": "product-shirt-dataRef",
+          "revision": 1,
+          "digest": "359edce04337f05fff1eee59b41bf7337cfc5d991693b8a4171919a2be85549b"
+        },
+        "schemaRef": {
+          "organizationId": "org-small",
+          "workspaceId": "workspace-main",
+          "storeId": "store-main",
+          "kind": "schema",
+          "id": "product-shirt-schemaRef",
+          "revision": 1,
+          "digest": "359edce04337f05fff1eee59b41bf7337cfc5d991693b8a4171919a2be85549b"
+        }
+      }
+    ],
+    "unresolved": [
+      "product-bag"
+    ],
+    "complete": false
+  },
+  "completionClaim": false
+}

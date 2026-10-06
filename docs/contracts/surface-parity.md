@@ -1,0 +1,22 @@
+# Surface responsibility matrix
+
+The full workspace exists in standalone Morrow. The thin Shopify connector supports verified install/link/status/reconnect/disconnect/return only; it cannot dispatch these domain capabilities. These are contracts, not qualified UI. Historical filename retained for references.
+
+| Journey | Domain | Standalone work | Shopify connector |
+| --- | --- | --- | --- |
+| J01 | Workspace coordination | workspace.goal.create, workspace.task.create, workspace.task.assign, workspace.task.delegate, workspace.task.takeover, workspace.task.pause, workspace.task.resume, workspace.task.cancel, workspace.question.request, workspace.question.answer, workspace.artifact.read, workspace.artifact.edit, workspace.comment.create, workspace.knowledge.approve, workspace.knowledge.read, workspace.routine.configure, workspace.routine.activate | No domain execution; safe verified return to Morrow |
+| J02 | Catalog | catalog.products.read, catalog.audit.create, catalog.content.propose, catalog.content.publish, catalog.variants.propose, catalog.variants.publish, catalog.collection.propose, catalog.collection.publish, catalog.channel.publish | No domain execution; safe verified return to Morrow |
+| J03 | Search and discovery | search.public.inspect, search.performance.read, search.audit.create, search.improvements.propose, search.citations.observe, search.results.report | No domain execution; safe verified return to Morrow |
+| J04 | Creative | creative.brief.create, creative.image.generate, creative.contact_sheet.create, creative.image.revise, creative.image.approve, creative.media.attach | No domain execution; safe verified return to Morrow |
+| J05 | Merchandising and analytics | analytics.report.create, analytics.anomaly.investigate, analytics.assortment.propose | No domain execution; safe verified return to Morrow |
+| J06 | Paid acquisition | ads.accounts.read, ads.performance.read, ads.campaign.propose, ads.campaign.create_paused, ads.campaign.activate, ads.budget.change, ads.campaign.pause, ads.audience.select | No domain execution; safe verified return to Morrow |
+| J07 | Lifecycle marketing | lifecycle.segment.read, lifecycle.campaign.propose, lifecycle.campaign.create_draft, lifecycle.campaign.send, lifecycle.performance.read | No domain execution; safe verified return to Morrow |
+| J08 | Customer support | support.case.read, support.reply.propose, support.reply.send, support.case.escalate, support.case.close | No domain execution; safe verified return to Morrow |
+| J09 | Orders and fulfillment | orders.read, orders.exceptions.triage, orders.cancel, orders.fulfillment.create, orders.fulfillment.tracking_update, orders.return.create, orders.refund.create | No domain execution; safe verified return to Morrow |
+| J10 | Inventory | inventory.levels.read, inventory.risk.report, inventory.adjust.propose, inventory.quantity.adjust, inventory.quantity.set | No domain execution; safe verified return to Morrow |
+| J11 | Finance | finance.costs.read, finance.margin.report, finance.reconciliation.propose | No domain execution; safe verified return to Morrow |
+| J12 | Storefront | storefront.ux.audit, storefront.change.propose, storefront.extension.prepare, storefront.extension.activate, storefront.theme.preview_write, storefront.theme.publish | No domain execution; safe verified return to Morrow |
+| J13 | Governance | governance.membership.invite, governance.grants.revise, governance.membership.revoke, governance.connection.connect, governance.connection.disconnect, governance.approval.decide, governance.usage.read, governance.budget.revise, governance.audit.export, governance.privacy.export, governance.privacy.erase | No domain execution; safe verified return to Morrow |
+| J14 | Custom agents | agents.listing.read, agents.builder.describe, agents.installation.stage, agents.installation.sample, agents.installation.activate, agents.installation.upgrade, agents.installation.disable, agents.installation.uninstall, agents.skill.research, agents.release.evaluate, agents.release.publish, agents.release.revoke | No domain execution; safe verified return to Morrow |
+
+Browser/session resume and connector return preserve existing work, revisions and immutable proposal targets. A different selected store cannot retarget a review.

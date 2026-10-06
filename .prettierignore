@@ -1,0 +1,5 @@
+node_modules
+build
+dist
+.react-router
+packages/contracts/src/generated

@@ -1,0 +1,255 @@
+{
+  "generated_at": "2026-10-06T14:17:49.524Z",
+  "scope": "Automated local prototype interaction checks only; no merchant completion rate, screen-reader qualification, real authorization or provider effects.",
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1040
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "checks": [
+    {
+      "name": "Store filter preserves Main store proposal target",
+      "passed": true
+    },
+    {
+      "name": "Approval starts disabled until exact confirmation",
+      "passed": true
+    },
+    {
+      "name": "Partial review shows two items and a 20-credit ceiling",
+      "passed": true
+    },
+    {
+      "name": "Confirmation enables only the selected approval",
+      "passed": true
+    },
+    {
+      "name": "Partial approval leaves the tote unapproved",
+      "passed": true
+    },
+    {
+      "name": "Restricted specialist gets an eligible-reviewer path",
+      "passed": true
+    },
+    {
+      "name": "Expired review has no approval action",
+      "passed": true
+    },
+    {
+      "name": "Refreshing review requires renewed confirmation",
+      "passed": true
+    },
+    {
+      "name": "Navigation protects an unsaved draft",
+      "passed": true
+    },
+    {
+      "name": "Stay retains the typed draft",
+      "passed": true
+    },
+    {
+      "name": "Mobile reflows without whole-page horizontal scrolling",
+      "passed": true
+    },
+    {
+      "name": "Collapsed conversation remains reachable on mobile",
+      "passed": true
+    },
+    {
+      "name": "Mobile navigation makes background controls inert",
+      "passed": true
+    },
+    {
+      "name": "Mobile navigation contains keyboard focus",
+      "passed": true
+    },
+    {
+      "name": "Closing navigation restores main access",
+      "passed": true
+    },
+    {
+      "name": "Artifact tabs support arrow-key navigation",
+      "passed": true
+    },
+    {
+      "name": "Mobile review exposes exact store and ceiling",
+      "passed": true
+    },
+    {
+      "name": "Unknown external outcome offers reconciliation without blind retry",
+      "passed": true
+    },
+    {
+      "name": "Thin connector exposes connection controls without workspace tabs",
+      "passed": true
+    },
+    {
+      "name": "Reconnect preview returns to the same project",
+      "passed": true
+    },
+    {
+      "name": "320 CSS-pixel reflow has no whole-page horizontal scroll",
+      "passed": true
+    },
+    {
+      "name": "Tablet reflow has no whole-page horizontal scroll",
+      "passed": true
+    },
+    {
+      "name": "Expired session hides private task and store details",
+      "passed": true
+    },
+    {
+      "name": "Session recovery resumes the pinned sample project",
+      "passed": true
+    },
+    {
+      "name": "Revoked membership hides private records",
+      "passed": true
+    },
+    {
+      "name": "Builder asks for account and reviewer before activation",
+      "passed": true
+    },
+    {
+      "name": "Saving an agent draft does not activate a routine",
+      "passed": true
+    },
+    {
+      "name": "Image choice is keyboard selectable",
+      "passed": true
+    },
+    {
+      "name": "Image review asks for fidelity and stays a draft",
+      "passed": true
+    },
+    {
+      "name": "Artifact deep link survives reload",
+      "passed": true
+    },
+    {
+      "name": "Answering a question does not approve publication",
+      "passed": true
+    },
+    {
+      "name": "Confirmed failed draft save preserves unsaved text",
+      "passed": true
+    },
+    {
+      "name": "Uncertain submitted work blocks renewed approval",
+      "passed": true
+    },
+    {
+      "name": "Conflicting edits show both versions without losing local text",
+      "passed": true
+    },
+    {
+      "name": "Credit exhaustion disables new paid sample dispatch",
+      "passed": true
+    },
+    {
+      "name": "Credit exhaustion preserves an ordinary export path",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: ready",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: onboarding",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: session",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: revoked",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: save-error",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: question",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: stale",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: conflict",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: offline",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: uncertain",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: partial",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: denied",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: disconnected",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: exhausted",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: cancelled",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: empty",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: loading",
+      "passed": true
+    },
+    {
+      "name": "Scenario renders: running",
+      "passed": true
+    }
+  ],
+  "harness_repairs": [
+    {
+      "kind": "test-harness",
+      "detail": "The read-only browser scope omits the inert property; inspect the actual inert attributes instead."
+    }
+  ],
+  "product_repairs": [
+    "Partial approval initially marked all products; now only selected items are marked.",
+    "Collapsed team button initially had no visible icon; narrow layouts now show a team icon.",
+    "Mobile navigation now contains focus and makes its background inert.",
+    "Expired session and revoked access hide private sample records.",
+    "Unknown/cancelled submitted work blocks renewed approval until reconciliation."
+  ],
+  "manual_screen_reader": "not_run",
+  "representative_merchant_testing": "not_run"
+}

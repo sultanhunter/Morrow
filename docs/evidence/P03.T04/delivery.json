@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-10-06T14:56:12.869Z",
+  "scope": "Known-pattern secret guard, dependency locking, migration metadata/checksum/envelope only; not complete secret assurance or PostgreSQL execution. Remote CI/protection not activated.",
+  "scanned_files": 193,
+  "dependency_records": 311,
+  "migrations": 0,
+  "negative_checks": [
+    {
+      "name": "leaked_fixture_key",
+      "passed": true
+    },
+    {
+      "name": "private_key_header",
+      "passed": true
+    },
+    {
+      "name": "broken_migration_checksum",
+      "passed": true
+    }
+  ],
+  "secret_findings": [],
+  "migration_errors": []
+}

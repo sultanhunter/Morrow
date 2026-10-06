@@ -1,0 +1,581 @@
+[
+  {
+    "id": "S01",
+    "url": "https://shopify.dev/docs/api/usage/access-scopes",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "App scopes constrain store data; historical orders beyond 60 days need additional access. Operation-specific field permissions remain a qualification gate."
+  },
+  {
+    "id": "S02",
+    "url": "https://shopify.dev/docs/apps/launch/protected-customer-data",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Customer-data requirements must be qualified separately from installation scopes."
+  },
+  {
+    "id": "S03",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/productUpdate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Product content writes require write_products and product-update permission; variant updates require another operation."
+  },
+  {
+    "id": "S04",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/themeFilesUpsert",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Theme file modification requires write_themes and a Shopify exemption."
+  },
+  {
+    "id": "S05",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/inventorySetQuantities",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Absolute quantity writes require source-of-truth authority; compare quantity protects concurrency; current versions require an idempotency directive."
+  },
+  {
+    "id": "S06",
+    "url": "https://developers.google.com/webmaster-tools/v1/searchanalytics/query",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Search Analytics supports authorized property queries, including a read-only OAuth scope; reporting dates use Pacific Time."
+  },
+  {
+    "id": "S07",
+    "url": "https://developers.google.com/search/docs/appearance/ai-features",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Google AI-feature traffic is included in overall Web search reporting; no dedicated schema or guaranteed inclusion follows from optimization."
+  },
+  {
+    "id": "S08",
+    "url": "https://developers.facebook.com/docs/marketing-api/overview/authorization/",
+    "status": "unavailable",
+    "observed_at": "2026-10-06",
+    "finding": "Official page could not be retrieved. Meta endpoints scopes version and external-business approval route remain unverified."
+  },
+  {
+    "id": "S09",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/refundCreate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Refund creation has distinct payment and restock consequences. Exact scope and staff checks must be resolved against the pinned schema; latest documentation wording is insufficient for a production grant."
+  },
+  {
+    "id": "S10",
+    "url": "https://json-schema.org/specification",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "JSON Schema 2020-12 selected for versioned closed core contracts."
+  },
+  {
+    "id": "S11",
+    "url": "https://ajv.js.org/json-schema.html",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Use the separate 2020-12 validator entry point; do not coerce types or infer authority."
+  },
+  {
+    "id": "S12",
+    "url": "https://www.rfc-editor.org/rfc/rfc8785",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Canonical JSON representation precedes exact-content SHA-256 proposal hashing."
+  },
+  {
+    "id": "S13",
+    "url": "https://github.com/erdtman/canonicalize",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Pinned canonicalize package implements JCS; fixture hashing does not authenticate an actor."
+  },
+  {
+    "id": "S14",
+    "url": "https://temporal.io/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Pay-as-you-go has no base monthly fee; actions and history storage are usage charged.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S15",
+    "url": "https://docs.temporal.io/evaluate/cloud/regions",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "AWS us-east-1 is a supported Temporal Cloud region; namespace configuration must be evidenced.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S16",
+    "url": "https://docs.temporal.io/cloud/namespaces",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Closed history retention is configurable from one to ninety days.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S17",
+    "url": "https://developers.cloudflare.com/workers/platform/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Workers Standard has a monthly base; direct static asset serving has separate free request treatment.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S18",
+    "url": "https://developers.cloudflare.com/data-localization/how-to/workers/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Ordinary Workers processing is not regional; Regional Services applies to configured custom domains with documented caveats.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S19",
+    "url": "https://aws.amazon.com/fargate/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Linux x86 us-east-1 compute examples supply separate per-second CPU and memory prices; network and other fees are additional.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S20",
+    "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-security-considerations.html",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Tasks isolate compute, but containers inside one task share network and ephemeral storage. Task isolation does not prove egress confinement.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S21",
+    "url": "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2-auto-pause.html",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Zero-ACU pause requires supported versions/configuration; open connections and some integrations prevent pause. Storage charges and resume latency remain.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S22",
+    "url": "https://aws.amazon.com/rds/aurora/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Published Aurora Standard examples supply ACU, storage and I/O rates. A specific regional deployment still needs a current quote.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S23",
+    "url": "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Managing.Backups.html",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Aurora continuous backup retention supports one through thirty-five days; restore needs testing.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S24",
+    "url": "https://aws.amazon.com/elasticloadbalancing/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "US-East ALB example has hourly and LCU usage charges.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S25",
+    "url": "https://aws.amazon.com/vpc/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Public IPv4 is hourly charged. NAT example reviewed is Ohio, not a verified Virginia quote.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S26",
+    "url": "https://workos.com/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "AuthKit has a free first-million MAU tier. Production SSO and directory connections carry per-connection minimums; staging is free.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S27",
+    "url": "https://www.postgresql.org/docs/17/ddl-rowsecurity.html",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "RLS needs non-bypass application roles and owner/force-policy discipline; it supplements application authority.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S28",
+    "url": "https://shopify.dev/docs/apps/launch/distribution",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Unrelated merchant stores require public distribution; custom distribution cannot use Shopify billing. Distribution choice is consequential.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S29",
+    "url": "https://shopify.dev/docs/api/usage/versioning",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "2026-10 is the observed latest stable Admin API; pin requests and check response version rather than silent fall-forward.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S30",
+    "url": "https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "New App Pricing supports usage billing, Partner API subscription queries and AppEvents usage. It does not enforce usage caps.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S31",
+    "url": "https://shopify.dev/docs/apps/launch/billing",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Public App Store charging uses Shopify-provided billing; standalone entry does not imply an alternative payment route.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S32",
+    "url": "https://shopify.dev/docs/apps/build/compliance/privacy-law-compliance",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Public apps require mandatory privacy topics, verified HMAC and request completion within documented deadlines.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S33",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/productVariantsBulkUpdate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_products and variant-update permission; allowPartialUpdates defaults false.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S34",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionUpdate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_products plus permitted input fields/staff action and plan eligibility; modern collection input replaces deprecated paths.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S35",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionReorderProducts",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_products; manual sorting, asynchronous job and sequential moves require qualified readback.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S36",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/publishablePublish",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_publications and product/catalog edit permission; product status and publication constraints apply.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S37",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/fileCreate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Files are asynchronously processed. Alternative scope routes exist; file creation does not prove product attachment.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S38",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/orderCancel",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_orders or specific marketplace/buyer alternatives; cancellation is irreversible and can refund, restock or notify.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S39",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/fulfillmentCreate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Fulfillment-order-specific scopes and fulfill-and-ship permission; explicit line quantities avoid default-all fulfillment.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S40",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/fulfillmentTrackingInfoUpdate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Fulfillment scopes and staff permission apply; notifications are a separate declared consequence.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S41",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/returnCreate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_returns or marketplace alternative; creates an approved open return and reverse fulfillment.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S42",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/inventoryAdjustQuantities",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_inventory and quantity-change permission; current API requires @idempotent. Delta writes need operation reconciliation.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S43",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/objects/InventoryItem",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "read_inventory or read_products; unitCost also depends on View product costs permission when granular permissions apply.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S44",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/themePublish",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_themes and Shopify exemption required for publication.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S45",
+    "url": "https://shopify.dev/docs/apps/build/online-store/theme-app-extensions/configuration",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Supported deep links lead to merchant preview and Save; use client_id/api_key rather than deprecated UUID parameters.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S46",
+    "url": "https://www.postman.com/meta/facebook-marketing-api/documentation/0zr4mes/facebook-marketing-api-mapi",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Meta-owned collection documents ads_read/ads_management and Advanced Access for other businesses accounts.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S47",
+    "url": "https://github.com/facebook/facebook-nodejs-business-sdk/blob/main/src/api.js",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Official SDK source reports Marketing API v26.0 and SDK 26.0.2. Package version alone is not access approval.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S48",
+    "url": "https://github.com/facebook/facebook-nodejs-business-sdk/blob/main/src/objects/ad-account.js",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Official SDK exposes campaign/ad-set/creative/ad creation and custom-audience edges. Field eligibility still needs account conformance.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S49",
+    "url": "https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/campaign.py",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Official campaign object supports status and budget updates; successful delivery is distinct from resource creation.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S50",
+    "url": "https://developers.klaviyo.com/en/docs/set_up_oauth",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Partner integrations use OAuth/PKCE and least privilege; token and revoke endpoints use a.klaviyo.com.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S51",
+    "url": "https://developers.klaviyo.com/en/reference/get_segments",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "segments:read, revision 2026-07-15; segment reporting does not by itself prove recipient consent.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S52",
+    "url": "https://developers.klaviyo.com/en/reference/create_campaign",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:write, revision 2026-07-15; draft campaign creation is separate from sending.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S53",
+    "url": "https://developers.klaviyo.com/en/reference/update_campaign_message",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:write permits campaign-message update; revision header is explicit.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S54",
+    "url": "https://developers.klaviyo.com/en/reference/create_template",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "templates:write; provider template limits apply.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S55",
+    "url": "https://developers.klaviyo.com/en/reference/assign_template_to_campaign_message",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:write; assign a non-reusable template copy to a message.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S56",
+    "url": "https://developers.klaviyo.com/en/reference/send_campaign",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:write; send is an asynchronous campaign-send-job request.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S57",
+    "url": "https://developers.klaviyo.com/en/reference/get_campaign_send_job",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:read; poll campaign-send-job. A queued job is not delivery evidence.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S58",
+    "url": "https://developers.klaviyo.com/en/reference/query_campaign_values",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:read; aggregate values reporting has a lower rate limit than CRUD.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S59",
+    "url": "https://developers.gorgias.com/docs/private-vs-public-app",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Public marketplace apps use OAuth and review; private own-account key setup is a different distribution path.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S60",
+    "url": "https://developers.gorgias.com/docs/oauth2-scopes",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "tickets read/write cover case/message actions; request separate customer/account/user scopes only as needed.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S61",
+    "url": "https://developers.gorgias.com/docs/set-up-oauth2-app-store",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "OAuth account subdomain/token lifecycle needs validation. Refresh revocation alone may leave issued access tokens valid until expiry.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S62",
+    "url": "https://developers.gorgias.com/docs/overview",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Developer app draft and sandbox prerequisites require provider account setup; vendor review evidence is separate.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S63",
+    "url": "https://developers.gorgias.com/reference/create-ticket-message",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "POST tickets/{id}/messages creates an asynchronously sent reply or explicit internal note. Creation is not proof of send.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S64",
+    "url": "https://developers.gorgias.com/reference/update-ticket",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "PUT tickets/{id} supports assignment/priority/status; follow response with scoped ticket readback.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S65",
+    "url": "https://developers.openai.com/api/docs/guides/your-data",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "store:false is distinct from approved ZDR/MAM. US regional endpoint/project eligibility and endpoint/model restrictions need evidence.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S66",
+    "url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Responses API for tool calling. Standard short-context text rates are $2 input/$10 output per million; long context, cache writes, regional and service-tier terms matter.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S67",
+    "url": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Standard short-context text rates are $10 input/$50 output per million; alias availability is not an invented immutable snapshot.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S68",
+    "url": "https://developers.openai.com/api/docs/guides/image-generation",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "GPT Image 2.5 Sunburst/Flare use direct generation/edit APIs or Responses tools; select size/quality and budget, retain provenance.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S69",
+    "url": "https://developers.gorgias.com/reference/get-ticket",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "GET /api/tickets/{id} reads a scoped ticket for case readback.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S70",
+    "url": "https://developers.gorgias.com/reference/list-ticket-messages",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "GET /api/tickets/{ticket_id}/messages reads ticket messages; permission filtering remains required.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S71",
+    "url": "https://www.postman.com/meta/facebook-marketing-api/request/u38qbri/get-insight-details-from-an-adaccount-l4",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Meta-owned collection documents account Insights GET path and aggregate spend/currency fields.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S72",
+    "url": "https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "App Pricing subscription state and usage are distinct; verify active subscription server-side. Exact API, meters and no-charge development integration qualify in P18.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S73",
+    "url": "https://www.shopify.com/partners/terms",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Applicable app charges, revenue scope and reporting need separate treatment; external billing permission does not itself establish fee exemption.",
+    "evidence_kind": "primary_agreement"
+  },
+  {
+    "id": "S74",
+    "url": "https://community.shopify.dev/t/does-a-split-billing-model-satisfy-1-2-1-shopify-origin-installs-billing-api-pre-existing-platform-customers-direct-billing/36909",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Developer Support distinguishes existing paid independent SaaS relationships from Shopify-acquired/free accounts. Morrow-specific qualification and usage-only facts remain unresolved.",
+    "evidence_kind": "official_support_guidance"
+  }
+]

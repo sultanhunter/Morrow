@@ -1,0 +1,57 @@
+{
+  "name": "morrow",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "verify:foundation": "node scripts/verify-foundation.mjs",
+    "test:foundation": "node --test tests/foundation.test.mjs",
+    "plan:sync": "node scripts/sync-plan.mjs",
+    "catalogue:render": "node scripts/render-catalogue.mjs",
+    "verify:contracts": "node scripts/verify-contracts.mjs",
+    "test:contracts": "node --test tests/contracts.test.mjs",
+    "verify": "npm run verify:foundation && npm run verify:contracts && npm run verify:providers && npm run verify:billing && npm run verify:design && npm run verify:boundaries && npm run verify:delivery",
+    "test": "node --import tsx --test tests/*.test.mjs",
+    "verify:providers": "node scripts/verify-providers.mjs",
+    "test:providers": "node --test tests/providers.test.mjs",
+    "cost:estimate": "node scripts/cost-estimate.mjs",
+    "verify:billing": "node scripts/verify-billing.mjs",
+    "test:billing": "node --test tests/billing.test.mjs",
+    "verify:design": "node scripts/verify-design.mjs",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev:workspace": "npm run dev -w @morrow/workspace-web",
+    "dev:connector": "npm run dev -w @morrow/shopify-connector",
+    "dev:api": "npm run dev -w @morrow/api",
+    "contracts:generate": "node scripts/generate-contracts.mjs",
+    "verify:boundaries": "node scripts/generate-contracts.mjs --check && node scripts/verify-boundaries.mjs",
+    "smoke:scaffold": "node scripts/smoke-scaffold.mjs",
+    "lab": "node --import tsx scripts/lab.mjs",
+    "format": "prettier --write apps packages scripts/generate-contracts.mjs scripts/boundary-checks.mjs scripts/verify-boundaries.mjs scripts/lab.mjs scripts/smoke-scaffold.mjs scripts/delivery-checks.mjs tests/typed-boundaries.test.mjs tests/lab.test.mjs tests/delivery.test.mjs scripts/index-evidence.mjs",
+    "format:check": "prettier --check apps packages scripts/generate-contracts.mjs scripts/boundary-checks.mjs scripts/verify-boundaries.mjs scripts/lab.mjs scripts/smoke-scaffold.mjs scripts/delivery-checks.mjs tests/typed-boundaries.test.mjs tests/lab.test.mjs tests/delivery.test.mjs scripts/index-evidence.mjs",
+    "verify:delivery": "node scripts/delivery-checks.mjs",
+    "ci": "npm run format:check && npm run typecheck && npm run verify && npm test && npm run build && npm run lab && npm run evidence:index",
+    "evidence:index": "node scripts/index-evidence.mjs"
+  },
+  "devDependencies": {
+    "@react-router/dev": "7.18.2",
+    "@types/node": "24.0.0",
+    "@types/react": "18.3.25",
+    "@types/react-dom": "18.3.7",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "canonicalize": "5.1.0",
+    "esbuild": "0.25.12",
+    "prettier": "3.6.2",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vite": "7.3.7"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

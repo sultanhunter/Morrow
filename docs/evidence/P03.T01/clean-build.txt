@@ -1,0 +1,63 @@
+
+> morrow@0.0.0 build
+> npm run build --workspaces --if-present
+
+
+> @morrow/api@0.0.0 build
+> tsc -p tsconfig.json && esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs
+
+
+> @morrow/shopify-connector@0.0.0 build
+> react-router build
+
+vite v7.3.1 building client environment for production...
+transforming...
+✓ 43 modules transformed.
+rendering chunks...
+computing gzip size...
+build/client/.vite/manifest.json                1.46 kB │ gzip:  0.35 kB
+build/client/assets/auth-l0sNRNKZ.js            0.00 kB │ gzip:  0.02 kB
+build/client/assets/index-DJN3l3_E.js           0.24 kB │ gzip:  0.20 kB
+build/client/assets/root-DWnJuk9v.js            0.40 kB │ gzip:  0.26 kB
+build/client/assets/fixture-DXNISPai.js         0.44 kB │ gzip:  0.30 kB
+build/client/assets/jsx-runtime-MPSlSRXs.js   127.14 kB │ gzip: 42.99 kB
+build/client/assets/entry.client-Bhfy8GUQ.js  140.19 kB │ gzip: 45.38 kB
+✓ built in 4.14s
+  ⚠️  Future Flag Warning: Route middleware support is changing in React Router v8.
+     You can use the `future.v8_middleware` flag to opt in early.
+     -> https://reactrouter.com/v7/upgrading/future#futurev8_middleware
+  ⚠️  Future Flag Warning: Route module splitting behavior is changing in React Router v8.
+     You can use the `future.v8_splitRouteModules` flag to opt in early.
+     -> https://reactrouter.com/v7/upgrading/future#futurev8_splitroutemodules
+  ⚠️  Future Flag Warning: Vite Environment API usage is changing in React Router v8.
+     You can use the `future.v8_viteEnvironmentApi` flag to opt in early.
+     -> https://reactrouter.com/v7/upgrading/future#futurev8_viteenvironmentapi
+  ⚠️  Future Flag Warning: Request handling behavior is changing in React Router v8.
+     You can use the `future.v8_passThroughRequests` flag to opt in early.
+     -> https://reactrouter.com/v7/upgrading/future#futurev8_passthroughrequests
+  ⚠️  Future Flag Warning: Data request URL formats are changing in React Router v8.
+     You can use the `future.v8_trailingSlashAwareDataRequests` flag to opt in early.
+     -> https://reactrouter.com/v7/upgrading/future#futurev8_trailingslashawaredatarequests
+vite v7.3.1 building ssr environment for production...
+transforming...
+✓ 9 modules transformed.
+rendering chunks...
+build/server/.vite/manifest.json  0.17 kB
+build/server/index.js             8.59 kB
+✓ built in 20ms
+
+> @morrow/workers@0.0.0 build
+> tsc -p tsconfig.json && esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.mjs
+
+
+> @morrow/workspace-web@0.0.0 build
+> vite build
+
+vite v7.3.1 building client environment for production...
+transforming...
+✓ 28 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.33 kB │ gzip:  0.24 kB
+dist/assets/index-uIPS1GsJ.js  142.99 kB │ gzip: 46.07 kB
+✓ built in 3.19s

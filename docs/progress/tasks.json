@@ -1,0 +1,400 @@
+{
+  "plan_sequence": 27,
+  "tasks": [
+    {
+      "id": "P01.T01",
+      "status": "Verified"
+    },
+    {
+      "id": "P01.T02",
+      "status": "Verified"
+    },
+    {
+      "id": "P01.T03",
+      "status": "Verified"
+    },
+    {
+      "id": "P01.T04",
+      "status": "Verified"
+    },
+    {
+      "id": "P02.T01",
+      "status": "Verified"
+    },
+    {
+      "id": "P02.T02",
+      "status": "In review"
+    },
+    {
+      "id": "P02.T03",
+      "status": "In review"
+    },
+    {
+      "id": "P02.T04",
+      "status": "In progress"
+    },
+    {
+      "id": "P03.T01",
+      "status": "Verified"
+    },
+    {
+      "id": "P03.T02",
+      "status": "Verified"
+    },
+    {
+      "id": "P03.T03",
+      "status": "Verified"
+    },
+    {
+      "id": "P03.T04",
+      "status": "In review"
+    },
+    {
+      "id": "P04.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P04.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P04.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P04.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P05.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P05.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P05.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P05.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P06.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P06.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P06.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P06.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P07.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P07.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P07.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P07.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P07.T05",
+      "status": "Planned"
+    },
+    {
+      "id": "P08.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P08.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P08.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P08.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P09.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P09.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P09.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P09.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P09.T05",
+      "status": "Planned"
+    },
+    {
+      "id": "P10.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P10.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P10.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P10.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P11.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P11.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P11.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P11.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P11.T05",
+      "status": "Planned"
+    },
+    {
+      "id": "P12.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P12.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P12.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P12.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P12.T05",
+      "status": "Planned"
+    },
+    {
+      "id": "P13.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P13.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P13.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P13.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P14.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P14.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P14.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P14.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P15.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P15.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P15.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P15.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P15.T05",
+      "status": "Planned"
+    },
+    {
+      "id": "P16.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P16.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P16.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P16.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P16.T05",
+      "status": "Planned"
+    },
+    {
+      "id": "P17.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P17.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P17.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P17.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P17.T05",
+      "status": "Planned"
+    },
+    {
+      "id": "P18.T01",
+      "status": "Planned"
+    },
+    {
+      "id": "P18.T02",
+      "status": "Planned"
+    },
+    {
+      "id": "P18.T03",
+      "status": "Planned"
+    },
+    {
+      "id": "P18.T04",
+      "status": "Planned"
+    },
+    {
+      "id": "P18.T05",
+      "status": "Planned"
+    }
+  ],
+  "acceptance_ids": [
+    "P01.A01",
+    "P01.A02",
+    "P01.A03",
+    "P01.A04",
+    "P02.A01",
+    "P02.A02",
+    "P02.A03",
+    "P02.A04",
+    "P03.A01",
+    "P03.A02",
+    "P03.A03",
+    "P03.A04",
+    "P04.A01",
+    "P04.A02",
+    "P04.A03",
+    "P05.A01",
+    "P05.A02",
+    "P05.A03",
+    "P06.A01",
+    "P06.A02",
+    "P06.A03",
+    "P07.A01",
+    "P07.A02",
+    "P07.A03",
+    "P07.A04",
+    "P07.A05",
+    "P08.A01",
+    "P08.A02",
+    "P08.A03",
+    "P08.A04",
+    "P09.A01",
+    "P09.A02",
+    "P09.A03",
+    "P09.A04",
+    "P09.A05",
+    "P10.A01",
+    "P10.A02",
+    "P10.A03",
+    "P11.A01",
+    "P11.A02",
+    "P11.A03",
+    "P12.A01",
+    "P12.A02",
+    "P12.A03",
+    "P12.A04",
+    "P13.A01",
+    "P13.A02",
+    "P13.A03",
+    "P13.A04",
+    "P14.A01",
+    "P14.A02",
+    "P14.A03",
+    "P14.A04",
+    "P15.A01",
+    "P15.A02",
+    "P15.A03",
+    "P15.A04",
+    "P15.A05",
+    "P16.A01",
+    "P16.A02",
+    "P16.A03",
+    "P16.A04",
+    "P16.A05",
+    "P17.A01",
+    "P17.A02",
+    "P17.A03",
+    "P17.A04",
+    "P17.A05",
+    "P18.A01",
+    "P18.A02",
+    "P18.A03",
+    "P18.A04",
+    "P18.A05"
+  ]
+}

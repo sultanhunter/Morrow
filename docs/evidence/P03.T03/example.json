@@ -1,0 +1,51 @@
+{
+  "synthetic": true,
+  "durable": false,
+  "providerCalls": 0,
+  "paidDispatches": 0,
+  "clock": "2026-10-06T10:00:00Z",
+  "goalId": "goal-catalog",
+  "taskId": "task-catalog",
+  "taskStatus": "draft",
+  "result": {
+    "kind": "partial",
+    "verified": [
+      {
+        "resource": {
+          "organizationId": "org-small",
+          "workspaceId": "workspace-main",
+          "storeId": "store-main",
+          "connectionId": "connection-shopify",
+          "kind": "product",
+          "id": "product-shirt"
+        },
+        "providerId": "fake-shopify",
+        "revision": 1,
+        "observedAt": "2026-10-06T10:00:00Z",
+        "dataRef": {
+          "organizationId": "org-small",
+          "workspaceId": "workspace-main",
+          "storeId": "store-main",
+          "kind": "artifact",
+          "id": "product-shirt-dataRef",
+          "revision": 1,
+          "digest": "359edce04337f05fff1eee59b41bf7337cfc5d991693b8a4171919a2be85549b"
+        },
+        "schemaRef": {
+          "organizationId": "org-small",
+          "workspaceId": "workspace-main",
+          "storeId": "store-main",
+          "kind": "schema",
+          "id": "product-shirt-schemaRef",
+          "revision": 1,
+          "digest": "359edce04337f05fff1eee59b41bf7337cfc5d991693b8a4171919a2be85549b"
+        }
+      }
+    ],
+    "unresolved": [
+      "product-bag"
+    ],
+    "complete": false
+  },
+  "completionClaim": false
+}

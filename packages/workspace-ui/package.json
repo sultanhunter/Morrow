@@ -1,0 +1,15 @@
+{
+  "name": "@morrow/workspace-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "react": "18.3.1"
+  }
+}

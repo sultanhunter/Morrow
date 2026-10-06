@@ -1,0 +1,46 @@
+{
+  "task": "P01.T03",
+  "generated_at": "2026-10-06T14:53:48.039Z",
+  "plan_sequence": 27,
+  "providers": 12,
+  "bindings": 103,
+  "scope": "Documentary feasibility and selected design consistency only; no real provider, runtime, billing, merchant or production qualification.",
+  "input_digests": {
+    "docs/decisions/providers.json": "49a4d969261d3658407fa45e4d92bdad7292765e7575fd8a3a78ef3c22f0e575",
+    "docs/decisions/provider-bindings.json": "7855d957cc68f87cd39001f6cfc8a482e116f94076a11f84492459aeb23da473",
+    "docs/decisions/deployment-policy.json": "aeabc52f0282e49431090af610583ea343d5d95a8db110ec3042c63b228f09e1",
+    "docs/decisions/capacity-targets.json": "4430f79dcd99f3096bc11339cce110f241d929014e2d889259489625412b1b31",
+    "docs/decisions/cost-model.json": "09f8a4a3a9aa5d1332e3cbe714bd916baefabefbaa0f7bac328efcbd23200ff5",
+    "docs/decisions/model-policy.json": "2c8172cb4d75a05df6187f590f2f773d3f4a762ad7094cdf9554e2329cfed91f",
+    "docs/research/sources.json": "edbd3d8e649363cc759554d51b295dbc3edb9f40e8bfaa586a85e5cca4e3bfb9"
+  },
+  "cost_components": {
+    "currency": "USD",
+    "status": "component_estimate_not_complete_quote",
+    "components": {
+      "trusted_compute": "108.121176000",
+      "database_minimum": "87.600000000",
+      "alb_base": "16.425000000",
+      "cloudflare_standard": "5.000000000"
+    },
+    "subtotal": "217.146176000",
+    "completeQuote": false,
+    "provisioningAuthorized": false,
+    "exclusions": [
+      "Regional Aurora rate/engine floor",
+      "NAT hourly and bytes for selected AZ layout",
+      "ALB LCU usage",
+      "S3 bytes, requests, versions and egress",
+      "Secrets Manager/KMS",
+      "CloudWatch logs/metrics/traces",
+      "SQS ingestion and dead-letter retention",
+      "Public IPv4 count and data transfer",
+      "Backup/restore and staging hours",
+      "Actual Temporal history/actions",
+      "WorkOS enterprise connections and retention terms",
+      "Business-service account subscriptions",
+      "Taxes/support and model/tool charges"
+    ]
+  },
+  "errors": []
+}

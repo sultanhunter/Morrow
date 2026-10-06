@@ -1,0 +1,10 @@
+# Morrow checkpoint
+Canonical Page page_b1ef27b80b788191b91e67cbb52f1037 sequence27, read6October2026. Before task/resume read live Page, AGENTS, packet and actual diff; local snapshot is not independent authority.
+
+P01.T01–T04 Verified documentary/self-review only. P02.T01 IA Verified; T02/T03 In review candidates (option1 prototype, tokens, nine contrasts,44URL tests,54automated browser cases). T04 protocol In progress; actual owners/specialists/native screen-reader/reviewer evidence not run. Feature UI held by P02 baseline. User asked for representative testers; reply pending. Prototype/sampledata browser tab17 deliverable; loopback8877 server alive, not provider work.
+
+P03.T01–T03 Verified local scaffold/typed boundaries/synthetic laboratory with Codex self-review. T04 In review: localCI515tests/type/build/format/import/schema/known-secret/migration checks pass; nine scaffold guards; clean source-copy install/build passes. Vite7.3.7/transitive esbuild security patches, npm audit0advisories at observation. No independent review, real database, production session/identity/authority, orchestration, Shopify installation, billing/model/provider effect or paid resource.
+
+User explicitly approved private sultanhunter/Morrow; created once with README at https://github.com/sultanhunter/Morrow. Isolated publishing clone work/morrow-publish. Next: clean final source-copy verification, guarded save to Desktop, publish reviewed foundation branch/draft PR, attach artifact, inspect actualCI and main protection. Desktop existing Git and dependencies are preserved by copier; do not overwrite concurrent user edits. No remote claim yet. Initial main README can remain unmerged baseline; no feature activation until applicable gates.
+
+All18packages/80tasks/73acceptance cases/14domains preserved. US private data; standalone/thin connector; managed model workcredits; Cloudflare public assets/AWS/Temporal/WorkOS design only. Account terms/permissions, connector/UI/distribution, billing eligibility/prices and production qualification remain open. No uncertain live operation exists.

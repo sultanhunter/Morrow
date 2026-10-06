@@ -1,0 +1,265 @@
+{
+  "status": "P01.T02 candidate, schema-defined; semantic/provider review still required",
+  "types": {
+    "AccountList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/AccountList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "AdMetricList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/AdMetricList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "AnchorRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/AnchorRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "AnswerRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/AnswerRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ApprovalRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ApprovalRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ArtifactList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ArtifactList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ArtifactRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ArtifactRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "AttributionRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/AttributionRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "AudienceList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/AudienceList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "AudienceRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/AudienceRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "BudgetRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/BudgetRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "CaseRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/CaseRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ConfigRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ConfigRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "CostList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/CostList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "CoverageRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/CoverageRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "CriteriaList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/CriteriaList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "Date": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/Date",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "DecisionRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/DecisionRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "EvaluationRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/EvaluationRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "EvidenceList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/EvidenceList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "EvidenceRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/EvidenceRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "FieldList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/FieldList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "FilterRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/FilterRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "FreshnessRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/FreshnessRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "GrantRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/GrantRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "Id": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/Id",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "IdList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/IdList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "InstallationStatus": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/InstallationStatus",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "InventoryList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/InventoryList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "KnowledgeList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/KnowledgeList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "LiabilityList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/LiabilityList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "LifecycleMetricList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/LifecycleMetricList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ListingList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ListingList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "MandateRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/MandateRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "MoneyList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/MoneyList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "MoneyRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/MoneyRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "OptionList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/OptionList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "OrderList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/OrderList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "PatchRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/PatchRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "PeriodRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/PeriodRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "PolicyRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/PolicyRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ProductList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ProductList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ProofRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ProofRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ProposalRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ProposalRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "QuerySetRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/QuerySetRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "QuestionList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/QuestionList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "QuestionStatus": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/QuestionStatus",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ReleaseRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ReleaseRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ResourceList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ResourceList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ReviewRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ReviewRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "Revision": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/Revision",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "RoutineStatus": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/RoutineStatus",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ScheduleRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ScheduleRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "SchemaRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/SchemaRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ScopeRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ScopeRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "SearchMetricList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/SearchMetricList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "SegmentList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/SegmentList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "StringList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/StringList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "SubjectRef": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/SubjectRef",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "TaskStatus": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/TaskStatus",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "UrlList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/UrlList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "UsageList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/UsageList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "ViewportList": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/ViewportList",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "integer": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/integer",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "string": {
+      "schema": "urn:morrow:contracts:core:v1#/$defs/string",
+      "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    }
+  }
+}

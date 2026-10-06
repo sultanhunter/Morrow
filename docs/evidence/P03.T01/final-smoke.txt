@@ -1,0 +1,5 @@
+
+> morrow@0.0.0 smoke:scaffold
+> node scripts/smoke-scaffold.mjs
+
+PASS: 9 scaffold guards.

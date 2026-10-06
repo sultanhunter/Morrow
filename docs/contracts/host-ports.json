@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "ports": [
+    {
+      "name": "bootstrap",
+      "input": "Authenticated server entry proof; adapter-specific",
+      "output": "HostContext",
+      "rule": "Server verifies entry and membership; SDK token is not workspace permission"
+    },
+    {
+      "name": "navigate",
+      "input": "LogicalRoute + authorized target references",
+      "output": "navigation_result",
+      "rule": "Preserve workspace and proposal target; adapter maps route to host URL"
+    },
+    {
+      "name": "pickResources",
+      "input": "Resource kind and current scope",
+      "output": "ResourceRef[] or unsupported",
+      "rule": "Optional native picker; shared picker provides equivalent workflow"
+    },
+    {
+      "name": "protectDraft",
+      "input": "Persisted draft status and save/revert handlers",
+      "output": "save_guard_result",
+      "rule": "Persist drafts before leaving Morrow; connector has no domain draft UI"
+    },
+    {
+      "name": "feedback",
+      "input": "Safe message and status",
+      "output": "feedback_result",
+      "rule": "Short native notification; authoritative task state remains in shared UI"
+    },
+    {
+      "name": "returnToWorkspace",
+      "input": "Single-use CrossHostResume reference",
+      "output": "opened or denied",
+      "rule": "Connector-to-Morrow only; reauthenticate/recheck grants; no credential or customer data in URL"
+    }
+  ]
+}

@@ -1,0 +1,218 @@
+{
+  "kind": "synthetic_billing_walkthrough",
+  "qualification": "not_production",
+  "facts": {
+    "now": "2026-10-06T13:00:00Z",
+    "organizationId": "org-1",
+    "workspaceId": "workspace-1",
+    "rootRunId": "run-1",
+    "taskId": "task-1",
+    "authenticated": true,
+    "currentMembership": true,
+    "spendingGrant": true,
+    "providerQualified": true,
+    "rateQualified": true,
+    "economicAdmission": true,
+    "rateRevision": 1,
+    "termsRevision": 1,
+    "meterKey": "agent-work",
+    "authorizedStoreIds": [
+      "store-1",
+      "store-2"
+    ],
+    "rootMaximumCredits": "150",
+    "vendorId": "openai",
+    "costScheduleRevision": 1,
+    "vendorBudget": {
+      "amount": "5",
+      "currency": "USD"
+    },
+    "accounts": {
+      "payer-1": {
+        "schemaVersion": 1,
+        "id": "payer-1",
+        "organizationId": "org-1",
+        "workspaceId": "workspace-1",
+        "installationId": "installation-1",
+        "storeId": "store-1",
+        "provider": "shopify_app_pricing",
+        "currency": "USD",
+        "status": "active",
+        "revision": 1
+      },
+      "payer-2": {
+        "schemaVersion": 1,
+        "id": "payer-2",
+        "organizationId": "org-1",
+        "workspaceId": "workspace-1",
+        "installationId": "installation-2",
+        "storeId": "store-2",
+        "provider": "shopify_app_pricing",
+        "currency": "USD",
+        "status": "active",
+        "revision": 1
+      }
+    },
+    "entitlements": {
+      "payer-1": {
+        "schemaVersion": 1,
+        "billingAccountId": "payer-1",
+        "organizationId": "org-1",
+        "workspaceId": "workspace-1",
+        "installationId": "installation-1",
+        "storeId": "store-1",
+        "subscriptionId": "subscription-1",
+        "status": "active",
+        "providerEvidenceRef": "650e3942f09ac59e329c10915a842d4b700785fafddcb156f9a9b622c2752c7a",
+        "verifiedAt": "2026-10-06T12:00:00Z",
+        "validUntil": "2026-10-06T14:00:00Z",
+        "revision": 1
+      },
+      "payer-2": {
+        "schemaVersion": 1,
+        "billingAccountId": "payer-2",
+        "organizationId": "org-1",
+        "workspaceId": "workspace-1",
+        "installationId": "installation-2",
+        "storeId": "store-2",
+        "subscriptionId": "subscription-2",
+        "status": "active",
+        "providerEvidenceRef": "704d4317039784e49f34fd149cd20b0f0787fbef70a03c91f0a3272af1c3ea32",
+        "verifiedAt": "2026-10-06T12:00:00Z",
+        "validUntil": "2026-10-06T14:00:00Z",
+        "revision": 1
+      }
+    },
+    "entitlementRevisions": {
+      "payer-1": 1,
+      "payer-2": 1
+    },
+    "entitlementEvidence": {
+      "payer-1": "650e3942f09ac59e329c10915a842d4b700785fafddcb156f9a9b622c2752c7a",
+      "payer-2": "704d4317039784e49f34fd149cd20b0f0787fbef70a03c91f0a3272af1c3ea32"
+    },
+    "wallets": {
+      "payer-1": {
+        "schemaVersion": 1,
+        "billingAccountId": "payer-1",
+        "available": "100",
+        "reserved": "0",
+        "consumed": "0",
+        "rateRevision": 1,
+        "termsRevision": 1,
+        "revision": 1
+      },
+      "payer-2": {
+        "schemaVersion": 1,
+        "billingAccountId": "payer-2",
+        "available": "100",
+        "reserved": "0",
+        "consumed": "0",
+        "rateRevision": 1,
+        "termsRevision": 1,
+        "revision": 1
+      }
+    },
+    "monetaryCeilings": {
+      "payer-1": {
+        "amount": "10",
+        "currency": "USD"
+      },
+      "payer-2": {
+        "amount": "10",
+        "currency": "USD"
+      }
+    }
+  },
+  "allocation": {
+    "schemaVersion": 1,
+    "id": "allocation-1",
+    "organizationId": "org-1",
+    "workspaceId": "workspace-1",
+    "taskId": "task-1",
+    "rootRunId": "run-1",
+    "revision": 1,
+    "rateRevision": 1,
+    "meterKey": "agent-work",
+    "maximumCredits": "50",
+    "shares": [
+      {
+        "billingAccountId": "payer-1",
+        "installationId": "installation-1",
+        "storeId": "store-1",
+        "entitlementRevision": 1,
+        "maximumCredits": "30",
+        "maximumLiability": {
+          "amount": "3",
+          "currency": "USD"
+        }
+      },
+      {
+        "billingAccountId": "payer-2",
+        "installationId": "installation-2",
+        "storeId": "store-2",
+        "entitlementRevision": 1,
+        "maximumCredits": "20",
+        "maximumLiability": {
+          "amount": "2",
+          "currency": "USD"
+        }
+      }
+    ],
+    "allocationDigest": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "vendorReservation": {
+    "schemaVersion": 1,
+    "id": "vendor-reservation-1",
+    "rootRunId": "run-1",
+    "vendorId": "openai",
+    "costScheduleRevision": 1,
+    "maximumCost": {
+      "amount": "1.5",
+      "currency": "USD"
+    },
+    "status": "reserved"
+  },
+  "usage": [
+    {
+      "schemaVersion": 1,
+      "id": "usage-1",
+      "reservationId": "reservation-1",
+      "operationId": "operation-1",
+      "billingAccountId": "payer-1",
+      "merchantCredits": "15",
+      "merchantLiability": {
+        "amount": "1.5",
+        "currency": "USD"
+      },
+      "providerCost": {
+        "amount": "0.2",
+        "currency": "USD"
+      },
+      "providerCostStatus": "known",
+      "rateRevision": 1,
+      "observedAt": "2026-10-06T12:59:00Z",
+      "status": "reconciled"
+    },
+    {
+      "schemaVersion": 1,
+      "id": "usage-2",
+      "reservationId": "reservation-1",
+      "operationId": "operation-1",
+      "billingAccountId": "payer-2",
+      "merchantCredits": "10",
+      "merchantLiability": {
+        "amount": "1",
+        "currency": "USD"
+      },
+      "providerCost": {
+        "amount": "0.1",
+        "currency": "USD"
+      },
+      "providerCostStatus": "known",
+      "rateRevision": 1,
+      "observedAt": "2026-10-06T12:59:00Z",
+      "status": "reconciled"
+    }
+  ]
+}

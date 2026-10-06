@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "plan_sequence": 17,
+  "status": "targets_not_measured",
+  "fixture": {
+    "organizations": 100,
+    "stores": 1000,
+    "interactive_users": 100,
+    "reasoning_jobs": 50,
+    "image_jobs": 10,
+    "browser_jobs": 5
+  },
+  "load": {
+    "api_rps_normal": 20,
+    "api_rps_peak": 100,
+    "webhooks_rps_normal": 25,
+    "webhooks_rps_burst": 100
+  },
+  "targets": {
+    "control_api_availability_percent": "99.9",
+    "metadata_read_p95_ms": 500,
+    "command_accept_p95_ms": 1000,
+    "normal_projection_p95_ms": 120000,
+    "regional_db_rpo_minutes": 5,
+    "regional_db_rto_minutes": 60,
+    "critical_authority_failures": 0
+  },
+  "qualification_packages": [
+    "P04",
+    "P12",
+    "P17",
+    "P18"
+  ],
+  "fair_scheduling_required": true,
+  "provider_throttling_required": true,
+  "role_quality_gate": "held-out outcomes, corrections, latency and total cost thresholds recorded before trial; no invented merchant results"
+}

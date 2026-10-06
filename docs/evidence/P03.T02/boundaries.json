@@ -1,0 +1,35 @@
+{
+  "scope": "Import/dependency and unreleased contract-freeze checks, not production tenant authority.",
+  "files": 22,
+  "negative_checks": [
+    {
+      "name": "host_sdk",
+      "passed": true
+    },
+    {
+      "name": "relative_api",
+      "passed": true
+    },
+    {
+      "name": "export_secret",
+      "passed": true
+    },
+    {
+      "name": "server_env",
+      "passed": true
+    },
+    {
+      "name": "dynamic_secret",
+      "passed": true
+    },
+    {
+      "name": "runtime",
+      "passed": true
+    },
+    {
+      "name": "incompatible_schema_type",
+      "passed": true
+    }
+  ],
+  "errors": []
+}
