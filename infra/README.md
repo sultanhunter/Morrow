@@ -1,0 +1,34 @@
+# Morrow infrastructure foundation
+
+Canonical build plan sequence29. These are local templates, not deployed resources. They do not confer provider approval, real tenant isolation, database restore proof or merchant access. No deploy/bootstrap command is provided.
+
+`npm run infra:synth` produces development/staging/production CloudFormation in ignored `work/infrastructure-templates/`, verifies deterministic output and records inventory/digests under `docs/evidence/P04.T01/`. It uses no AWS credentials, context lookup, Docker build or asset publishing. Required parameters have no invented defaults: regional Aurora PostgreSQL17 minor, qualified maximum ACUs and an environment-owned regional certificate. Engine compatibility must be checked in the actual account/region before provisioning.
+
+Each environment has separately named encrypted keys, private versioned S3, encrypted delivery signals/dead letters, fourteen-day encrypted log storage, regional TLS ingress and WAF, two-AZ network definitions and reserved trusted compute. Production has a warm writer and reader in different AZs, minimum0.5ACU each, with35-day PITR; other environments have one warm instance and7-day PITR. These capacity floors are planning settings, not measured service capacity. Staging auto-pause stays disabled until its engine and connection lifecycle qualify.
+
+Private browser HTML/sessions/API/webhooks/transfers terminate at AWS. Cloudflare configuration permits public immutable assets and DNS only. Regional WAF request sampling and database content log exports are disabled; encrypted log storage does not itself redact application logs. P04.T03 must qualify producers and redaction before content-bearing telemetry is enabled.
+
+Ingress returns503. There are no ECS task definitions, task roles or services: current API binds loopback and worker scaffold exits, so neither is represented as a functioning cloud service. Trusted subnet outbound paths are currently unrouted, with API/worker security groups reserved for P04.T02. The untrusted execution pool is a separate unrouted VPC with DNS disabled and without peering, gateways or endpoints. No untrusted task can be activated by these templates. P12 must qualify broker/proxy leases, address filtering, quotas and cleanup before execution profiles become available.
+
+Versioned S3 does not alone implement immutable application revisions or tenant authorization. P07 supplies unique revision keys, authorized transfers and erasure behavior. Only `closed-working/` objects have a seven-day lifecycle; permanent artifact revisions have no blanket expiry. Transport holds opaque signal identities, never authoritative business state. PostgreSQL outbox/inbox/ordering arrive in P06. KMS keys, buckets, queues and logs are retained on stack removal; Aurora snapshots and deletion protection require a reviewed recovery/destruction procedure. Retention does not override explicit erasure or restore deletion-marker replay.
+
+External-provider configuration contains no secrets or invented account IDs. Temporal namespace endpoints/credentials and WorkOS client/connection/terms remain unqualified. Morrow owns authority regardless of identity-provider assertions.
+
+## Promotion and rollback
+
+1. Review source, generated template digests and semantic changes. Promote the same reviewed source revision; regenerate separately named environment templates without copying credentials, identities, merchant records or namespace names.
+2. Qualify region/account/engine/certificate and real cross-environment denial. Finish service identities/network, rotation, restore quarantine and external processing terms. Enforced repository protection applies before release-code merge or privileged deployment.
+3. Produce the complete regional quote and owner cost authorization bound to environment/account/source/template/quote. Include all17categories declared by `readiness.ts`, with justified zero lines where a resource is not activated. No partial compute-only estimate qualifies.
+4. A future deployment port must independently verify receipts and authorize its own principal. `inspectProvisioningReadiness` only checks completeness and consistency of supplied records; fabricating JSON cannot confer approval.
+5. Review a change set and migration compatibility before execution. Keep dispatch disabled for initial/restore environments; unlock only after the appropriate packages qualify identity, state, provider and runtime.
+6. Roll back only a compatible application/config revision. Do not restore old database state to undo an application deploy or discard newer erasures/revocations/liabilities. Restore into a separately identified quarantined target, verify matching artifact versions and replay later markers before reopening. Destructive replacement, DB downgrade and namespace history incompatibility require a separate reviewed recovery path.
+
+## Local validation and dependency repair
+
+`npm run ci` runs the reviewed dependency repair, type/schema/boundary/delivery/tests/build/lab and deterministic infrastructure synthesis. An additional pinned `cfn-lint1.57.1` check validates generated templates for us-east-1 in GitHub CI. Local installation uses the exact versions in `requirements-validation.txt`; it does not call AWS.
+
+CDK2.272.0 bundles brace-expansion5.0.9 with published DoS advisories. Older CDK candidates added other advisories, so the selected version remains current. `deps:repair` verifies original/fixed package tree hashes, replaces only that bundled folder with locked upstream5.0.12, verifies readback and exercises normal/deeply nested expansion. It runs before CI/synthesis after every clean installation. Unexpected package/tree versions fail, rather than being silently patched. Parent tarball integrity covers original bundled packages; the fixed direct dependency has its own registry integrity. No lifecycle scripts are enabled.
+
+`npm audit` still reports the original bundled package from the upstream lock metadata. Preserve that report and the separate repair receipt; do not claim zero registry advisories. Remove the workaround after an audited upstream CDK upgrade and review its changed digests. [Upstream nesting advisory](https://github.com/advisories/GHSA-qhr7-859c-m2p7), [AWS CloudFormation validator](https://github.com/aws-cloudformation/cfn-lint).
+
+`npm run lab:engine` uses the pinned official PostgreSQL17.11 image for an ephemeral actual-engine transaction probe. It has no network, ports or host mounts, a read-only root, no capabilities, an unprivileged user and bounded resources; only synthetic tmpfs data exists. It waits for the final PostgreSQL process rather than accepting the temporary initialization server as ready, and removes only its own newly created container. This does not select an Aurora minor or prove backup/rotation/tenant isolation.

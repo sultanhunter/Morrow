@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 28,
-  "plan_digest": "bb3e8add9e3d54ada6819a024948137feff316bc82b47363d7dc926170edfab3",
+  "plan_sequence": 30,
+  "plan_digest": "ad8adc4ffec50b79b27c246eb0dda1d80f988e054922464868328583d697c9a1",
   "tasks": [
     {
       "id": "P01.T01",
@@ -49,6 +49,10 @@
     },
     {
       "id": "P03.T04",
+      "status": "Verified"
+    },
+    {
+      "id": "P04.T01",
       "status": "In review"
     }
   ],
@@ -63,7 +67,7 @@
     },
     {
       "path": "docs/evidence/P01.T01/verification.json",
-      "sha256": "aee8af5120bee32bd492ff5ae3ff215b581e4ee4904d679bd76c5e6aebd075b7"
+      "sha256": "c27b1daf36c9137cb9d82447d2251b42b411aca9eafec6009612e113502b7481"
     },
     {
       "path": "docs/evidence/P01.T02/review.md",
@@ -75,7 +79,7 @@
     },
     {
       "path": "docs/evidence/P01.T02/verification.json",
-      "sha256": "f0dfd86f7f8b10c018ac9251a1f37e642373a4158102f6dd3b66696faea0e9cc"
+      "sha256": "aa99e61f6f742d683284046cf86b94bf2771140b94d7ec7018db41bb6b9e1ea2"
     },
     {
       "path": "docs/evidence/P01.T03/review.md",
@@ -87,7 +91,7 @@
     },
     {
       "path": "docs/evidence/P01.T03/verification.json",
-      "sha256": "4ad45adf6b18103a077c669e750dc1601ba4f71f0413957e50981ba9e8859b1b"
+      "sha256": "fba93b13823787740b4bea62a21f7071f71c52f54b13aea522673948b0074e7a"
     },
     {
       "path": "docs/evidence/P01.T04/review.md",
@@ -99,7 +103,7 @@
     },
     {
       "path": "docs/evidence/P01.T04/verification.json",
-      "sha256": "6020f9db299da4ecc81717958f81d46dd9517cd94ccfc3aebcb984921e81da53"
+      "sha256": "ffcafe2819ece9c654708626e9f61b215227ab7efa497d3584455cc71c287cd6"
     },
     {
       "path": "docs/evidence/P02.T01/review.md",
@@ -143,7 +147,7 @@
     },
     {
       "path": "docs/evidence/P02.T02/verification.json",
-      "sha256": "fde8763a9a046cf7ef36f757ada10651414a77428dc17a29cac78bf4aea2bae2"
+      "sha256": "7c192b97ae91ac94d230334abb98ab02ce45f5f1fb0d03cbf70eac98f3d49f25"
     },
     {
       "path": "docs/evidence/P02.T03/browser-checks.json",
@@ -175,11 +179,11 @@
     },
     {
       "path": "docs/evidence/P03.T01/smoke.json",
-      "sha256": "3ff1f7db083d20888c72ab16b0afbe5ead0bbcb38276c3453b7188f40a71c6ad"
+      "sha256": "88be033ff0bdeb4a82ea5c314a60f38e0c01af84679cfae629aa9d822d2c3407"
     },
     {
       "path": "docs/evidence/P03.T02/boundaries.json",
-      "sha256": "f33cd808332a93393621302e1b4d20051134dfcaf0d49e2883185372901fef84"
+      "sha256": "757713b6b929924e9aa7255c097badc5b576b83b506ee8aee635af22996ad709"
     },
     {
       "path": "docs/evidence/P03.T02/review.md",
@@ -215,7 +219,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/delivery.json",
-      "sha256": "b4de8704b7e60c9dbce3698f347fee562daec10f73a6e24aef20d6f5271d5238"
+      "sha256": "cea1c365aae7446572437b0c503fcce844f709b57a8fd4cfeeafa4c9b4a91125"
     },
     {
       "path": "docs/evidence/P03.T04/dependency-audit.json",
@@ -223,7 +227,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/remote.json",
-      "sha256": "c1470d24778c2ae34f9c1006834e3dc9b125803aa3205e85dd47782b27436c48"
+      "sha256": "b6c5e11f73fb7ced1b8efb3dbfb0bfa1ec9e413e282e9bc9ea28254fc432a512"
     },
     {
       "path": "docs/evidence/P03.T04/reproducible-build.json",
@@ -231,7 +235,43 @@
     },
     {
       "path": "docs/evidence/P03.T04/review.md",
-      "sha256": "e7125094c962d7580c749e05a776cd4d86002e413c1f6b2716ad4a04fc2ea624"
+      "sha256": "fda62d6507afef51ee1abff8cd4c7bade02fff9d15e617f9f620a12523b34243"
+    },
+    {
+      "path": "docs/evidence/P04.T01/clean-reproduction.json",
+      "sha256": "43febf799afdac9c70eefede4d8fa0338358f9f8ce32dbb0be237850c28dfb83"
+    },
+    {
+      "path": "docs/evidence/P04.T01/cloudformation-lint.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "docs/evidence/P04.T01/dependency-audit.json",
+      "sha256": "1d80ab83904da92740ddf48c8fbc67d223bc6ebb16b87329a2dca728f0d3b2dc"
+    },
+    {
+      "path": "docs/evidence/P04.T01/dependency-repair.json",
+      "sha256": "5bde7d95f11f4411c9817011842ef580390cb1474cdfc1805323eeec827384c3"
+    },
+    {
+      "path": "docs/evidence/P04.T01/postgres-engine.json",
+      "sha256": "1f751f0a3831ad2ff9dfc847da863484bb8cef3139584f0964e504ecdd02a2a2"
+    },
+    {
+      "path": "docs/evidence/P04.T01/readiness.json",
+      "sha256": "24352432502d2b9a335e7dff1863fb572389622de780a6ea67c8a205950590ec"
+    },
+    {
+      "path": "docs/evidence/P04.T01/review.json",
+      "sha256": "6af1e14f3934543f83dd8c5da0d0dccb5d49e463bbc0c642b3f64ff45ba36b62"
+    },
+    {
+      "path": "docs/evidence/P04.T01/synthesis.json",
+      "sha256": "299561b13972fb9e391470991880b9c66e4ee114ae35e2b63f58a1e7b698346e"
+    },
+    {
+      "path": "docs/evidence/P04.T01/validation-tool.json",
+      "sha256": "ef5d8990b0eb6322d4daef53ec99755f37bd33c5a757737802b6346e95b69aa4"
     }
   ]
 }

@@ -1,0 +1,83 @@
+{
+  "scope": "Independent source-only locked installation with verified bundle repair, full554tests, builds and deterministic synthesis; no cloud service or authority qualification",
+  "matched_artifacts": 15,
+  "artifacts": [
+    {
+      "path": "apps/shopify-connector/build/server/index.js",
+      "sha256": "d657ff0396788aea5ffeee8b464ca742b15cfb15879efe31b4932f1597141377",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/entry.client-Bhfy8GUQ.js",
+      "sha256": "9cb597a271c7297b50d0008770b8f8f7ea757256501928710fe4fe1de66b0911",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/manifest-194425f3.js",
+      "sha256": "7c5811945dba727fcb7995855f0be83c0201361c49601ff5d0be7e970bfba06f",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/index-DJN3l3_E.js",
+      "sha256": "09d06f8ed147ecfae2159b51fcf40d3bd65957022b3d35ce50dd99e479652acb",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/fixture-DXNISPai.js",
+      "sha256": "90c046d3b052c3d81aafd651f401d2376c6d49a6500aefbca9880b0d91641057",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/auth-l0sNRNKZ.js",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/jsx-runtime-MPSlSRXs.js",
+      "sha256": "f8a6151e3010dde6e66da75201a40fa6a133a0192a484ed1fdaeef041992b542",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/root-DWnJuk9v.js",
+      "sha256": "c84cc4a613b96ac8b6bb18ea9aea8911a3bcf06de5169fed4daf32d5f781fe8d",
+      "matches": true
+    },
+    {
+      "path": "apps/workspace-web/dist/index.html",
+      "sha256": "a6c9728bac7b01142f5a74296b0275f2bf8a600604dfd0b099c9f9be4fefd7b3",
+      "matches": true
+    },
+    {
+      "path": "apps/workspace-web/dist/assets/index-uIPS1GsJ.js",
+      "sha256": "1f3135a684b1552ac0c2244bff9987b36c4bec7c5bbc9b798c7b228b0c333b01",
+      "matches": true
+    },
+    {
+      "path": "apps/api/dist/index.mjs",
+      "sha256": "e4abfd996aec6fece0d9b8a56c7485ab161b5ad3360f9e973056c80ef16a2d2c",
+      "matches": true
+    },
+    {
+      "path": "apps/workers/dist/index.mjs",
+      "sha256": "1bc77134a2dbabbe20575cdd21634232ee120da20c666252a660dc5c6d60c2c8",
+      "matches": true
+    },
+    {
+      "path": "work/infrastructure-templates/staging.json",
+      "sha256": "6d523e60ccd9e53131c453dc1005cddc594eeaf809e9d7389c26ef4ff6ba6552",
+      "matches": true
+    },
+    {
+      "path": "work/infrastructure-templates/production.json",
+      "sha256": "0ac1ca61b9b6afacb60419f8aa7a4eff972dcd6f2170276ac3fee284e6cd3007",
+      "matches": true
+    },
+    {
+      "path": "work/infrastructure-templates/development.json",
+      "sha256": "bfb2343342d68e19d4093530995fcb69fe41afec75504208cfa24dfb6ff7af7e",
+      "matches": true
+    }
+  ],
+  "source_ci": "passed",
+  "clean_ci": "passed"
+}

@@ -14,8 +14,10 @@ npm run ci
 npm run smoke:scaffold
 ```
 
-515 deterministic repository tests; 54 recorded prototype browser cases and nine scaffold guards. Local type/build/format checks cover 334 generated schema definitions, 103 capability pairs, import/compatibility/known-secret/migration integrity. Native screen-reader/merchant success, remote CI/protected review and real database/provider qualification remain separate. See docs/development/local-setup.md, repository-map.md and delivery.md for exact limits.
+554 deterministic repository tests; 54 recorded prototype browser cases and nine scaffold guards. Local type/build/format checks cover 334 generated schema definitions, 103 capability pairs, import/compatibility/known-secret/migration integrity. Native screen-reader/merchant success, hosted CI passes on the prior foundation; enforced release protection and real provider qualification remain separate. See docs/development/local-setup.md, repository-map.md and delivery.md for exact limits.
 
 npm run dev:workspace serves a bare standalone shell; dev:connector explicitly enables a local synthetic entry. Real connector/auth entries fail closed, production refuses fixtures. Full design prototype is docs/design/prototype.html, sample data only; it is not accepted production feature UI. Lab examples never call providers or complete real work. Billing review models never emit charges. No merchant price, provider grant or paid provisioning is activated.
 
 Update scope/architecture in the canonical Page first, then refresh the snapshot, consumed records, packets and evidence. The plan preserves all18packages,80tasks,73acceptance cases and14domains.
+
+P04 adds local, deterministic infrastructure templates for three environments and versioned provider configs. Regional TLS/WAF ingress is closed; there are no deployed services or agent dispatch. Structural CloudFormation checks and an isolated PostgreSQL17.11 transaction probe pass. Actual AWS account/Aurora minor, IAM, rotation/restore and complete cost authorization remain pending. Read infra/README.md, including the reproducible CDK bundle advisory repair and its audit limits. No GitHub upgrade is needed to keep coding.

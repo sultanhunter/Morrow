@@ -47,9 +47,28 @@ export function inspectMigrations(manifest, files) {
   if (Object.keys(files).some((name) => !names.has(name))) errors.push("UNREVIEWED_MIGRATION_FILE");
   return [...new Set(errors)];
 }
+export function lockedBundleAncestor(path, packages) {
+  if (!packages[path]?.inBundle) return false;
+  let parent = path;
+  while (parent.includes("/node_modules/")) {
+    parent = parent.slice(0, parent.lastIndexOf("/node_modules/"));
+    const record = packages[parent];
+    if (record && !record.inBundle)
+      return !!record.integrity && record.resolved?.startsWith("https://registry.npmjs.org/");
+  }
+  return false;
+}
 function verify() {
   const paths = [];
-  const skip = new Set(["node_modules", ".git", "build", "dist", ".react-router"]);
+  const skip = new Set([
+    "node_modules",
+    ".git",
+    "build",
+    "dist",
+    ".react-router",
+    "cdk.out",
+    "work",
+  ]);
   function walk(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const p = (dir === "." ? "" : dir + "/") + entry.name;
@@ -79,7 +98,8 @@ function verify() {
     if (
       path.includes("node_modules") &&
       !pkg.link &&
-      (!pkg.integrity || !pkg.resolved?.startsWith("https://registry.npmjs.org/"))
+      (!pkg.integrity || !pkg.resolved?.startsWith("https://registry.npmjs.org/")) &&
+      !lockedBundleAncestor(path, lock.packages)
     )
       migrationErrors.push("UNPINNED_REGISTRY_DEPENDENCY:" + path);
   }
@@ -118,7 +138,7 @@ function verify() {
       {
         generated_at: new Date().toISOString(),
         scope:
-          "Known-pattern secret guard, dependency locking, migration metadata/checksum/envelope only; not complete secret assurance or PostgreSQL execution. Remote CI/protection not activated.",
+          "Known-pattern secret guard, dependency locking (bundles bound to integrity-checked parent tarballs), migration metadata/checksum/envelope only; not complete secret assurance or PostgreSQL execution. Hosted CI evidenced separately; release protection pending.",
         scanned_files: paths.length,
         dependency_records: Object.keys(lock.packages).length,
         migrations: manifest.migrations.length,

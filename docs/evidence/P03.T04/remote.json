@@ -3,8 +3,8 @@
   "private": true,
   "pull_request": "https://github.com/sultanhunter/Morrow/pull/1",
   "draft": true,
-  "qualified_ci_commit": "8fdf84fbf29c988d33855367e531f0c2d1d1b625",
-  "ci_run": "https://github.com/sultanhunter/Morrow/actions/runs/37483812792",
+  "qualified_ci_commit": "7ca7169ac71591a6916f1e3b06706be6fc9ca8bf",
+  "ci_run": "https://github.com/sultanhunter/Morrow/actions/runs/37484550729",
   "ci_conclusion": "success",
   "ci_checks": [
     "locked_install",
@@ -18,6 +18,7 @@
     "upgrade_purchased": false,
     "privacy_preserved": true
   },
-  "package_gate": "In review; actual protection pending",
-  "qualification_scope": "Hosted foundation CI only, not merchant/provider/production qualification"
+  "package_gate": "Verified engineering; enforced protection remains mandatory before release-code merge/privileged deployment",
+  "qualification_scope": "Hosted foundation CI only, not merchant/provider/production qualification",
+  "sequencing_plan_revision": 29
 }

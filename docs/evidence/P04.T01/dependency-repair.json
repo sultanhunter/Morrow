@@ -1,0 +1,9 @@
+{
+  "scope": "Reproducible fixed upstream package replacement for a bundled CDK advisory; not an upstream release fix",
+  "cdk_version": "2.272.0",
+  "fixed_version": "5.0.12",
+  "fixed_tree_sha256": "5ec5bcf00a1565e25a2aa554999ccdbea820e545c0c456e501059da4251aa194",
+  "behavior_check": "passed",
+  "deep_nesting_regression": "passed; 4000 nested groups",
+  "registry_audit": "npm audit still flags original bundled package in lock; keep upstream advisory pending, never report zero"
+}

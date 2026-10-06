@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "region": "aws-us-east-1",
+  "namespaces": {
+    "development": {
+      "namespace": null,
+      "closed_history_days": 7,
+      "credential_secret_reference": null,
+      "dispatch": "disabled"
+    },
+    "staging": {
+      "namespace": null,
+      "closed_history_days": 7,
+      "credential_secret_reference": null,
+      "dispatch": "disabled"
+    },
+    "production": {
+      "namespace": null,
+      "closed_history_days": 30,
+      "credential_secret_reference": null,
+      "dispatch": "disabled"
+    }
+  },
+  "history_payloads": "opaque_reference_ids_and_safe_enums_only",
+  "business_authority": "PostgreSQL",
+  "payload_redaction_qualification": "pending",
+  "worker_compatibility_qualification": "P12",
+  "deployment_status": "not_qualified"
+}

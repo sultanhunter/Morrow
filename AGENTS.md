@@ -24,3 +24,5 @@ Do not place secrets, customer records or browser session material in the repo. 
 Use pinned Node24.13.0. Run npm run ci and npm run smoke:scaffold for the local engineering baseline; browser prototype checks remain separately recorded. Checks and self-review do not confer real tenant/provider access or satisfy P02 participant/remote protected-review gates.
 
 Persist status and next action in docs/progress/checkpoint.md. Report self-review separately from independent review and launch qualification. Do not mark a task Verified merely because structural checks pass.
+
+Canonical sequence29: GitHub plan eligibility does not block coding. P03engineering qualifies subsequent local infrastructure definitions/labs. Actual host-enforced protection gates release-code merges and privileged deployment; no paid subscription or public visibility change to continue. Preserve provider/paid-provisioning and P02feature qualification gates.

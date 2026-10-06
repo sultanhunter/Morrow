@@ -1,0 +1,12 @@
+{
+  "validator": "AWS CloudFormation cfn-lint",
+  "version": "1.57.1",
+  "python": "3.13.7",
+  "requirements": "infra/requirements-validation.txt",
+  "regions": [
+    "us-east-1"
+  ],
+  "templates": 3,
+  "findings": 0,
+  "scope": "Local schema/static validation only; no AWS service/account/engine deployment proof"
+}

@@ -30,11 +30,15 @@
     "verify:boundaries": "node scripts/generate-contracts.mjs --check && node scripts/verify-boundaries.mjs",
     "smoke:scaffold": "node scripts/smoke-scaffold.mjs",
     "lab": "node --import tsx scripts/lab.mjs",
-    "format": "prettier --write apps packages scripts/generate-contracts.mjs scripts/boundary-checks.mjs scripts/verify-boundaries.mjs scripts/lab.mjs scripts/smoke-scaffold.mjs scripts/delivery-checks.mjs tests/typed-boundaries.test.mjs tests/lab.test.mjs tests/delivery.test.mjs scripts/index-evidence.mjs",
-    "format:check": "prettier --check apps packages scripts/generate-contracts.mjs scripts/boundary-checks.mjs scripts/verify-boundaries.mjs scripts/lab.mjs scripts/smoke-scaffold.mjs scripts/delivery-checks.mjs tests/typed-boundaries.test.mjs tests/lab.test.mjs tests/delivery.test.mjs scripts/index-evidence.mjs",
+    "format": "prettier --write apps packages scripts/generate-contracts.mjs scripts/boundary-checks.mjs scripts/verify-boundaries.mjs scripts/lab.mjs scripts/smoke-scaffold.mjs scripts/delivery-checks.mjs tests/typed-boundaries.test.mjs tests/lab.test.mjs tests/delivery.test.mjs scripts/index-evidence.mjs scripts/infrastructure.mjs tests/infrastructure.test.mjs scripts/repair-cdk-bundle.mjs scripts/infrastructure-readiness.mjs scripts/postgres-engine-probe.mjs",
+    "format:check": "prettier --check apps packages scripts/generate-contracts.mjs scripts/boundary-checks.mjs scripts/verify-boundaries.mjs scripts/lab.mjs scripts/smoke-scaffold.mjs scripts/delivery-checks.mjs tests/typed-boundaries.test.mjs tests/lab.test.mjs tests/delivery.test.mjs scripts/index-evidence.mjs scripts/infrastructure.mjs tests/infrastructure.test.mjs scripts/repair-cdk-bundle.mjs scripts/infrastructure-readiness.mjs scripts/postgres-engine-probe.mjs",
     "verify:delivery": "node scripts/delivery-checks.mjs",
-    "ci": "npm run format:check && npm run typecheck && npm run verify && npm test && npm run build && npm run lab && npm run evidence:index",
-    "evidence:index": "node scripts/index-evidence.mjs"
+    "ci": "npm run deps:repair && npm run format:check && npm run typecheck && npm run verify && npm test && npm run build && npm run lab && npm run infra:synth && npm run infra:readiness && npm run evidence:index",
+    "evidence:index": "node scripts/index-evidence.mjs",
+    "infra:synth": "npm run deps:repair && node --import tsx scripts/infrastructure.mjs",
+    "deps:repair": "node scripts/repair-cdk-bundle.mjs",
+    "infra:readiness": "node --import tsx scripts/infrastructure-readiness.mjs",
+    "lab:engine": "node scripts/postgres-engine-probe.mjs"
   },
   "devDependencies": {
     "@react-router/dev": "7.18.2",
@@ -43,6 +47,7 @@
     "@types/react-dom": "18.3.7",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
+    "brace-expansion": "5.0.12",
     "canonicalize": "5.1.0",
     "esbuild": "0.25.12",
     "prettier": "3.6.2",

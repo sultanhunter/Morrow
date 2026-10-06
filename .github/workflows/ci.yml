@@ -23,3 +23,8 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run ci
       - run: npm run smoke:scaffold
+      - name: Validate regional CloudFormation templates without AWS credentials
+        run: |
+          python3 -m venv /tmp/morrow-cfn-validator
+          /tmp/morrow-cfn-validator/bin/pip install --disable-pip-version-check -r infra/requirements-validation.txt
+          /tmp/morrow-cfn-validator/bin/cfn-lint --regions us-east-1 --template work/infrastructure-templates/development.json work/infrastructure-templates/staging.json work/infrastructure-templates/production.json

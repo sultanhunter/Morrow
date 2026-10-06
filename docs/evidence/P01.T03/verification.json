@@ -1,13 +1,13 @@
 {
   "task": "P01.T03",
-  "generated_at": "2026-10-06T15:05:16.482Z",
-  "plan_sequence": 28,
+  "generated_at": "2026-10-06T15:43:32.395Z",
+  "plan_sequence": 30,
   "providers": 12,
   "bindings": 103,
   "scope": "Documentary feasibility and selected design consistency only; no real provider, runtime, billing, merchant or production qualification.",
   "input_digests": {
-    "docs/decisions/providers.json": "cb0fcdf15d3c2f6a578153ab671df5a304330d9a7914e6573429a38e49e9362d",
-    "docs/decisions/provider-bindings.json": "9ca6468ef3744c244e81b68caec4576437be25170c6dbe81a86480e2fcf64e63",
+    "docs/decisions/providers.json": "727b1469d0c0f4f48cf66d9012a97a9cfb06d1cbfaf0bf7855cca3676c21c7b7",
+    "docs/decisions/provider-bindings.json": "89a693c0fe3e6aa48af379596cef1ca7137211227f4a4a034b464ad275d80401",
     "docs/decisions/deployment-policy.json": "aeabc52f0282e49431090af610583ea343d5d95a8db110ec3042c63b228f09e1",
     "docs/decisions/capacity-targets.json": "4430f79dcd99f3096bc11339cce110f241d929014e2d889259489625412b1b31",
     "docs/decisions/cost-model.json": "09f8a4a3a9aa5d1332e3cbe714bd916baefabefbaa0f7bac328efcbd23200ff5",

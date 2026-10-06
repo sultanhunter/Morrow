@@ -11,3 +11,6 @@ dist/
 build/
 .react-router/
 *.tsbuildinfo
+
+cdk.out/
+work/
