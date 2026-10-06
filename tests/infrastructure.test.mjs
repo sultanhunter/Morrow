@@ -9,6 +9,8 @@ import {
   costCategories,
   qualificationChecks,
   inspectProvisioningReadiness,
+  deploymentConfigurationDigest,
+  deploymentParameterNames,
 } from "../packages/infrastructure/src/readiness.ts";
 import { inspectRepairTrees } from "../scripts/repair-cdk-bundle.mjs";
 import { lockedBundleAncestor } from "../scripts/delivery-checks.mjs";
@@ -24,6 +26,7 @@ for (const name of environmentNames) {
     assert.equal(template.Parameters.AuroraEngineVersion.Default, undefined);
     assert.equal(template.Parameters.AuroraMaximumAcu.Default, undefined);
     assert.equal(template.Parameters.IngressCertificateArn.Default, undefined);
+    assert.deepEqual(Object.keys(template.Parameters).sort(), [...deploymentParameterNames].sort());
     assert.deepEqual(template.Rules.RegionalBoundary.Assertions[0].Assert, {
       "Fn::Equals": [{ Ref: "AWS::Region" }, "us-east-1"],
     });
@@ -102,14 +105,16 @@ for (const name of environmentNames) {
       ),
     );
     const dbIngress = template.Resources.DatabaseSecurityGroup.Properties.SecurityGroupIngress;
-    assert.equal(dbIngress.length, 2);
+    assert.equal(dbIngress.length, 3);
     assert.ok(
-      dbIngress.every((rule) => /ApiSecurityGroup|WorkerSecurityGroup/.test(JSON.stringify(rule))),
+      dbIngress.every((rule) =>
+        /ApiSecurityGroup|WorkerSecurityGroup|BrokerSecurityGroup/.test(JSON.stringify(rule)),
+      ),
     );
     assert.ok(!JSON.stringify(dbIngress).includes("Untrusted"));
     assert.equal(resources(template, "AWS::ECS::TaskDefinition").length, 0);
     assert.equal(resources(template, "AWS::ECS::Service").length, 0);
-    assert.equal(resources(template, "AWS::IAM::Role").length, 0);
+    assert.equal(resources(template, "AWS::IAM::Role").length, 7);
   });
   test(`${name}: regional HTTPS/WAF closes ingress; no sampled private requests`, () => {
     const listeners = resources(template, "AWS::ElasticLoadBalancingV2::Listener");
@@ -135,7 +140,7 @@ for (const name of environmentNames) {
     assert.equal(template.Resources.RedactedLogs.Properties.RetentionInDays, 14);
     assert.equal(template.Resources.RedactedLogs.DeletionPolicy, "Retain");
     const keys = resources(template, "AWS::KMS::Key");
-    assert.equal(keys.length, 5);
+    assert.equal(keys.length, 6);
     assert.ok(
       keys.every(([, key]) => key.Properties.EnableKeyRotation && key.DeletionPolicy === "Retain"),
     );
@@ -191,7 +196,7 @@ const expected = {
   now: "2026-10-06T12:00:00Z",
 };
 function syntheticReadiness() {
-  return {
+  const candidate = {
     environment: "staging",
     region: "us-east-1",
     accountId: "000000000000",
@@ -199,6 +204,11 @@ function syntheticReadiness() {
     templateDigest: expected.templateDigest,
     engineVersion: "17.999",
     maximumAcu: 2,
+    ingressCertificateArn:
+      "arn:aws:acm:us-east-1:000000000000:certificate/aabbccdd-0011-2233-4455-66778899aabb",
+    s3RegionalPrefixListId: "pl-00000000",
+    deploymentIssuerRolePath: "synthetic/DeploymentOwner",
+    recoveryIssuerRolePath: "synthetic/RecoveryOwner",
     cloudflarePrivateProcessing: false,
     checks: Object.fromEntries(
       qualificationChecks.map((check) => [
@@ -226,6 +236,12 @@ function syntheticReadiness() {
       reference: "synthetic-not-user-approval",
     },
   };
+  const configurationDigest = deploymentConfigurationDigest(candidate);
+  for (const evidence of Object.values(candidate.checks))
+    evidence.configurationDigest = configurationDigest;
+  candidate.quote.configurationDigest = configurationDigest;
+  candidate.ownerAuthorization.configurationDigest = configurationDigest;
+  return candidate;
 }
 test("readiness schema can inspect complete synthetic receipts, not authorize provisioning", () => {
   assert.deepEqual(inspectProvisioningReadiness(syntheticReadiness(), expected), []);
@@ -264,3 +280,41 @@ for (const mutation of [
     assert.ok(inspectProvisioningReadiness(candidate, expected).length > 0);
   });
 }
+for (const [field, changed] of [
+  ["engineVersion", "17.998"],
+  ["maximumAcu", 256],
+  ["ingressCertificateArn", "arn:aws:acm:us-east-1:000000000000:certificate/abcdef"],
+  ["s3RegionalPrefixListId", "pl-abcdef"],
+  ["deploymentIssuerRolePath", "synthetic/OtherOwner"],
+  ["recoveryIssuerRolePath", "synthetic/OtherRecovery"],
+])
+  test(`changed ${field} invalidates qualification, quote and owner cost receipts`, () => {
+    const candidate = syntheticReadiness();
+    candidate[field] = changed;
+    const errors = inspectProvisioningReadiness(candidate, expected);
+    assert.equal(
+      errors.filter((error) => error.startsWith("PENDING:")).length,
+      qualificationChecks.length,
+    );
+    assert.ok(errors.includes("COMPLETE_REGIONAL_QUOTE_REQUIRED"));
+    assert.ok(errors.includes("BOUND_OWNER_COST_AUTHORIZATION_REQUIRED"));
+  });
+test("invalid capacity and foreign certificate cannot qualify even after receipt restamping", () => {
+  const candidate = syntheticReadiness();
+  candidate.maximumAcu = 0.25;
+  candidate.ingressCertificateArn = "arn:aws:acm:us-east-1:111111111111:certificate/abcdef";
+  const digest = deploymentConfigurationDigest(candidate);
+  for (const evidence of Object.values(candidate.checks)) evidence.configurationDigest = digest;
+  candidate.quote.configurationDigest = digest;
+  candidate.ownerAuthorization.configurationDigest = digest;
+  const errors = inspectProvisioningReadiness(candidate, expected);
+  assert.ok(errors.includes("ENGINE_CAPACITY_UNQUALIFIED"));
+  assert.ok(errors.includes("DEPLOYMENT_PARAMETERS_UNQUALIFIED"));
+});
+test("malformed account input produces denial instead of throwing during certificate inspection", () => {
+  const candidate = syntheticReadiness();
+  candidate.accountId = "[";
+  const errors = inspectProvisioningReadiness(candidate, expected);
+  assert.ok(errors.includes("ACCOUNT_UNQUALIFIED"));
+  assert.ok(errors.includes("DEPLOYMENT_PARAMETERS_UNQUALIFIED"));
+});

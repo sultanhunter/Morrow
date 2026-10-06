@@ -39,5 +39,7 @@
     "scripts/postgres-engine-probe.mjs": "c25ec83f9513d8c4abc7e36cb379fe17a126979f13d1aa0fd886828771d38924",
     "scripts/repair-cdk-bundle.mjs": "ea3c2482a8cae3269647a42121555e935be4e5459c0d4ac22bfb2e318bd54acf",
     "tests/infrastructure.test.mjs": "bea3c225fb8962b895e51b501b87cc5381ea2882bc2b9c2c85ab16a7b121bd2d"
-  }
+  },
+  "historical_source_commit": "54949de7a82c579e5a82a20c2e4beaf0cc7cca51",
+  "historical_notice": "This T01 receipt is historical; subsequent identity templates/configuration require their own evidence."
 }

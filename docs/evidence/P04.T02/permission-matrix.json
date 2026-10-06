@@ -1,0 +1,4362 @@
+{
+  "scope": "Compiled identity/boundary/endpoint inventory and synthetic fixture matching; not authenticated AWS IAM decisions or tenant authority",
+  "actual_cross_environment_requests": "not performed; P04.A01 pending",
+  "environments": [
+    {
+      "environment": "development",
+      "profiles": [
+        {
+          "id": "ApiRole",
+          "role_name": "morrow-development-api",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "f982e25a5e93ebf35517a6fb670298d540fd4a29a0f06434b059ab6c6b0a4cd7",
+          "permission_boundary": {
+            "Ref": "ApiPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/development/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_api"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "PrivateArtifactListing",
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket",
+                "s3:ListBucketVersions",
+                "s3:GetBucketLocation"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "Artifacts",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AuthorizedArtifactOperations",
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion",
+                "s3:AbortMultipartUpload"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "Artifacts",
+                        "Arn"
+                      ]
+                    },
+                    "/*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "OwnedArtifactEncryption",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ArtifactKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "s3.us-east-1.amazonaws.com",
+                  "kms:EncryptionContext:aws:s3:arn": {
+                    "Fn::GetAtt": [
+                      "Artifacts",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "OpaqueDeliverySignals",
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage",
+                "sqs:GetQueueAttributes"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "DeliverySignals",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "DeliveryDeadLetters",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "EncryptedDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TransportKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "sqs.us-east-1.amazonaws.com"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "WorkersRole",
+          "role_name": "morrow-development-workers",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "e7a874ec7f8927ffff15b62d62ec626219c8522a8d5a628efaaf643f9592eea1",
+          "permission_boundary": {
+            "Ref": "WorkersPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/development/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_workers"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "OpaqueDeliveryConsumption",
+              "Effect": "Allow",
+              "Action": [
+                "sqs:ReceiveMessage",
+                "sqs:DeleteMessage",
+                "sqs:ChangeMessageVisibility",
+                "sqs:GetQueueAttributes"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "DeliverySignals",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "DeliveryDeadLetters",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "EncryptedDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TransportKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "sqs.us-east-1.amazonaws.com"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "ConnectorRole",
+          "role_name": "morrow-development-connector",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "6ba009fe9978980cd8c114f80a222772c97f0acda7e34a6b2b2c9efab6e4bbae",
+          "permission_boundary": {
+            "Ref": "ConnectorPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/development/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_connector"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "OpaqueDeliverySignals",
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage",
+                "sqs:GetQueueAttributes"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "DeliverySignals",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "DeliveryDeadLetters",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "EncryptedDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TransportKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "sqs.us-east-1.amazonaws.com"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "CredentialBrokerRole",
+          "role_name": "morrow-development-credential-broker",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "4b26625c9377159b243f6fe0f0ff27d7527417dd30e80df7f7ec06537065296a",
+          "permission_boundary": {
+            "Ref": "CredentialBrokerPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/development/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_broker"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "BrokerCredentialRetrieval",
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:secretsmanager:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":secret:morrow/development/*"
+                  ]
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:RequestedRegion": "us-east-1"
+                }
+              }
+            },
+            {
+              "Sid": "BrokerCredentialDecryption",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "CredentialKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "secretsmanager.us-east-1.amazonaws.com"
+                },
+                "StringLike": {
+                  "kms:EncryptionContext:SecretARN": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:secretsmanager:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":secret:morrow/development/*"
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "TaskExecutionRole",
+          "role_name": "morrow-development-task-execution",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "ae3ebbe3e49607c33a76903a7d966c035c2d251f134d8c04050d2011c45dfd34",
+          "permission_boundary": {
+            "Ref": "TaskExecutionPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/development/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "PinnedRegistryPull",
+              "Effect": "Allow",
+              "Action": [
+                "ecr:BatchGetImage",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchCheckLayerAvailability"
+              ],
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-development/api"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-development/workers"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-development/connector"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-development/credential-broker"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "RegistryAuthenticationOnly",
+              "Effect": "Allow",
+              "Action": [
+                "ecr:GetAuthorizationToken"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:RequestedRegion": "us-east-1"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "DeploymentRole",
+          "role_name": "morrow-development-deployment",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": {
+                    "Fn::Sub": [
+                      "arn:aws:iam::${AWS::AccountId}:role/${IssuerRolePath}",
+                      {
+                        "IssuerRolePath": {
+                          "Ref": "DeploymentIssuerRolePath"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Action": [
+                  "sts:AssumeRole",
+                  "sts:SetSourceIdentity"
+                ],
+                "Condition": {
+                  "StringEquals": {
+                    "sts:SourceIdentity": "morrow-development-deployment"
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "7196af2b9faefa62e093aac8ec77299179b73ad65723dd69b3e1038b2378dd31",
+          "permission_boundary": {
+            "Ref": "DeploymentPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "ReviewedStackInspection",
+              "Effect": "Allow",
+              "Action": [
+                "cloudformation:DescribeStacks",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:GetTemplate"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:cloudformation:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":stack/Morrow-development/*"
+                  ]
+                ]
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "RecoveryRole",
+          "role_name": "morrow-development-recovery",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": {
+                    "Fn::Sub": [
+                      "arn:aws:iam::${AWS::AccountId}:role/${IssuerRolePath}",
+                      {
+                        "IssuerRolePath": {
+                          "Ref": "RecoveryIssuerRolePath"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Action": [
+                  "sts:AssumeRole",
+                  "sts:SetSourceIdentity"
+                ],
+                "Condition": {
+                  "StringEquals": {
+                    "sts:SourceIdentity": "morrow-development-recovery"
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "eb63b59e966534ee32d198e004b2bdadcd78160e06fb77cf65ec46e6fc57fbb8",
+          "permission_boundary": {
+            "Ref": "RecoveryPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "ReviewedStackInspection",
+              "Effect": "Allow",
+              "Action": [
+                "cloudformation:DescribeStacks",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:GetTemplate"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:cloudformation:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":stack/Morrow-development/*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "RecoveryInventoryOnly",
+              "Effect": "Allow",
+              "Action": [
+                "rds:DescribeDBClusters",
+                "rds:DescribeDBInstances",
+                "rds:DescribeDBClusterSnapshots"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:RequestedRegion": "us-east-1"
+                }
+              }
+            },
+            {
+              "Sid": "PrivateArtifactListing",
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket",
+                "s3:ListBucketVersions",
+                "s3:GetBucketLocation"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "Artifacts",
+                  "Arn"
+                ]
+              }
+            }
+          ],
+          "deployed": false
+        }
+      ],
+      "endpoints": [
+        {
+          "id": "RegistryApiEndpoint",
+          "service": "com.amazonaws.us-east-1.ecr.api",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "PinnedRegistryPull",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:BatchGetImage",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:BatchCheckLayerAvailability"
+                ],
+                "Resource": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-development/api"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-development/workers"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-development/connector"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-development/credential-broker"
+                      ]
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RegistryAuthenticationOnly",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:GetAuthorizationToken"
+                ],
+                "Resource": "*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "us-east-1"
+                  }
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "RegistryDockerEndpoint",
+          "service": "com.amazonaws.us-east-1.ecr.dkr",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "PinnedRegistryPull",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:BatchGetImage",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:BatchCheckLayerAvailability"
+                ],
+                "Resource": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-development/api"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-development/workers"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-development/connector"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-development/credential-broker"
+                      ]
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RegistryAuthenticationOnly",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:GetAuthorizationToken"
+                ],
+                "Resource": "*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "us-east-1"
+                  }
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "LogEndpoint",
+          "service": "com.amazonaws.us-east-1.logs",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/development/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/development/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "WorkersRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/development/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ConnectorRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/development/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "CredentialBrokerRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/development/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "SecretEndpoint",
+          "service": "com.amazonaws.us-east-1.secretsmanager",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "BrokerCredentialRetrieval",
+                "Effect": "Allow",
+                "Action": [
+                  "secretsmanager:GetSecretValue",
+                  "secretsmanager:DescribeSecret"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:secretsmanager:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":secret:morrow/development/*"
+                    ]
+                  ]
+                },
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "us-east-1"
+                  }
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "CredentialBrokerRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "SignalEndpoint",
+          "service": "com.amazonaws.us-east-1.sqs",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "OpaqueDeliverySignals",
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:SendMessage",
+                  "sqs:GetQueueAttributes"
+                ],
+                "Resource": [
+                  {
+                    "Fn::GetAtt": [
+                      "DeliverySignals",
+                      "Arn"
+                    ]
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "DeliveryDeadLetters",
+                      "Arn"
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "OpaqueDeliveryConsumption",
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:ReceiveMessage",
+                  "sqs:DeleteMessage",
+                  "sqs:ChangeMessageVisibility",
+                  "sqs:GetQueueAttributes"
+                ],
+                "Resource": [
+                  {
+                    "Fn::GetAtt": [
+                      "DeliverySignals",
+                      "Arn"
+                    ]
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "DeliveryDeadLetters",
+                      "Arn"
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "WorkersRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "OpaqueDeliverySignals",
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:SendMessage",
+                  "sqs:GetQueueAttributes"
+                ],
+                "Resource": [
+                  {
+                    "Fn::GetAtt": [
+                      "DeliverySignals",
+                      "Arn"
+                    ]
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "DeliveryDeadLetters",
+                      "Arn"
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ConnectorRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "StorageGatewayEndpoint",
+          "service": "com.amazonaws.us-east-1.s3",
+          "type": "Gateway",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "PrivateArtifactListing",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:ListBucket",
+                  "s3:ListBucketVersions",
+                  "s3:GetBucketLocation"
+                ],
+                "Resource": {
+                  "Fn::GetAtt": [
+                    "Artifacts",
+                    "Arn"
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "AuthorizedArtifactOperations",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:GetObject",
+                  "s3:GetObjectVersion",
+                  "s3:PutObject",
+                  "s3:DeleteObject",
+                  "s3:DeleteObjectVersion",
+                  "s3:AbortMultipartUpload"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "Artifacts",
+                          "Arn"
+                        ]
+                      },
+                      "/*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "PrivateArtifactListing",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:ListBucket",
+                  "s3:ListBucketVersions",
+                  "s3:GetBucketLocation"
+                ],
+                "Resource": {
+                  "Fn::GetAtt": [
+                    "Artifacts",
+                    "Arn"
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "RecoveryRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RegionalRegistryLayersOnly",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": [
+                  "s3:GetObject"
+                ],
+                "Resource": "arn:aws:s3:::prod-us-east-1-starport-layer-bucket/*"
+              }
+            ]
+          }
+        }
+      ],
+      "provider_egress": "not implemented; trusted private subnet has no direct internet route",
+      "broker_authentication": "not implemented; reserved TLS/internal authorization ports are not an authenticated service",
+      "database_users_rls": "not implemented; IAM connect permission does not create a database user or grant SQL rights"
+    },
+    {
+      "environment": "staging",
+      "profiles": [
+        {
+          "id": "ApiRole",
+          "role_name": "morrow-staging-api",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "2ece25cd9a8493039b88af7bab61158e71f55e79695bd98526a63ee24bc7977f",
+          "permission_boundary": {
+            "Ref": "ApiPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/staging/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_api"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "PrivateArtifactListing",
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket",
+                "s3:ListBucketVersions",
+                "s3:GetBucketLocation"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "Artifacts",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AuthorizedArtifactOperations",
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion",
+                "s3:AbortMultipartUpload"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "Artifacts",
+                        "Arn"
+                      ]
+                    },
+                    "/*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "OwnedArtifactEncryption",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ArtifactKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "s3.us-east-1.amazonaws.com",
+                  "kms:EncryptionContext:aws:s3:arn": {
+                    "Fn::GetAtt": [
+                      "Artifacts",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "OpaqueDeliverySignals",
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage",
+                "sqs:GetQueueAttributes"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "DeliverySignals",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "DeliveryDeadLetters",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "EncryptedDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TransportKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "sqs.us-east-1.amazonaws.com"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "WorkersRole",
+          "role_name": "morrow-staging-workers",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "0be07916dfa8422b3b972fb4d67e63c4f2265fe51c085d81f53e62cb42361113",
+          "permission_boundary": {
+            "Ref": "WorkersPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/staging/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_workers"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "OpaqueDeliveryConsumption",
+              "Effect": "Allow",
+              "Action": [
+                "sqs:ReceiveMessage",
+                "sqs:DeleteMessage",
+                "sqs:ChangeMessageVisibility",
+                "sqs:GetQueueAttributes"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "DeliverySignals",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "DeliveryDeadLetters",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "EncryptedDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TransportKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "sqs.us-east-1.amazonaws.com"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "ConnectorRole",
+          "role_name": "morrow-staging-connector",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "a5e18fb75bcd0271a6450d5622d4ace08d9e147e80d3745edce1f264d8b8cfda",
+          "permission_boundary": {
+            "Ref": "ConnectorPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/staging/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_connector"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "OpaqueDeliverySignals",
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage",
+                "sqs:GetQueueAttributes"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "DeliverySignals",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "DeliveryDeadLetters",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "EncryptedDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TransportKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "sqs.us-east-1.amazonaws.com"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "CredentialBrokerRole",
+          "role_name": "morrow-staging-credential-broker",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "02b2e8fdd612174e45f90cdbfa013f67ff5c316237e4e21cab429a8c1bfbf584",
+          "permission_boundary": {
+            "Ref": "CredentialBrokerPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/staging/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_broker"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "BrokerCredentialRetrieval",
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:secretsmanager:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":secret:morrow/staging/*"
+                  ]
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:RequestedRegion": "us-east-1"
+                }
+              }
+            },
+            {
+              "Sid": "BrokerCredentialDecryption",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "CredentialKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "secretsmanager.us-east-1.amazonaws.com"
+                },
+                "StringLike": {
+                  "kms:EncryptionContext:SecretARN": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:secretsmanager:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":secret:morrow/staging/*"
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "TaskExecutionRole",
+          "role_name": "morrow-staging-task-execution",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "2ea522628990a995d6466de3d1cdd2ee9098888ac144471cf05745db87300021",
+          "permission_boundary": {
+            "Ref": "TaskExecutionPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/staging/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "PinnedRegistryPull",
+              "Effect": "Allow",
+              "Action": [
+                "ecr:BatchGetImage",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchCheckLayerAvailability"
+              ],
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-staging/api"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-staging/workers"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-staging/connector"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-staging/credential-broker"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "RegistryAuthenticationOnly",
+              "Effect": "Allow",
+              "Action": [
+                "ecr:GetAuthorizationToken"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:RequestedRegion": "us-east-1"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "DeploymentRole",
+          "role_name": "morrow-staging-deployment",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": {
+                    "Fn::Sub": [
+                      "arn:aws:iam::${AWS::AccountId}:role/${IssuerRolePath}",
+                      {
+                        "IssuerRolePath": {
+                          "Ref": "DeploymentIssuerRolePath"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Action": [
+                  "sts:AssumeRole",
+                  "sts:SetSourceIdentity"
+                ],
+                "Condition": {
+                  "StringEquals": {
+                    "sts:SourceIdentity": "morrow-staging-deployment"
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "d50eb2c538f975467430ec6f9eb00e266bb167ce8605cab784b5d2b3188764c7",
+          "permission_boundary": {
+            "Ref": "DeploymentPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "ReviewedStackInspection",
+              "Effect": "Allow",
+              "Action": [
+                "cloudformation:DescribeStacks",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:GetTemplate"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:cloudformation:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":stack/Morrow-staging/*"
+                  ]
+                ]
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "RecoveryRole",
+          "role_name": "morrow-staging-recovery",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": {
+                    "Fn::Sub": [
+                      "arn:aws:iam::${AWS::AccountId}:role/${IssuerRolePath}",
+                      {
+                        "IssuerRolePath": {
+                          "Ref": "RecoveryIssuerRolePath"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Action": [
+                  "sts:AssumeRole",
+                  "sts:SetSourceIdentity"
+                ],
+                "Condition": {
+                  "StringEquals": {
+                    "sts:SourceIdentity": "morrow-staging-recovery"
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "15242f77efb57089e59f5b6c8f5933b5325d62ed1944a6119a4c2d526fafbc71",
+          "permission_boundary": {
+            "Ref": "RecoveryPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "ReviewedStackInspection",
+              "Effect": "Allow",
+              "Action": [
+                "cloudformation:DescribeStacks",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:GetTemplate"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:cloudformation:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":stack/Morrow-staging/*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "RecoveryInventoryOnly",
+              "Effect": "Allow",
+              "Action": [
+                "rds:DescribeDBClusters",
+                "rds:DescribeDBInstances",
+                "rds:DescribeDBClusterSnapshots"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:RequestedRegion": "us-east-1"
+                }
+              }
+            },
+            {
+              "Sid": "PrivateArtifactListing",
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket",
+                "s3:ListBucketVersions",
+                "s3:GetBucketLocation"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "Artifacts",
+                  "Arn"
+                ]
+              }
+            }
+          ],
+          "deployed": false
+        }
+      ],
+      "endpoints": [
+        {
+          "id": "RegistryApiEndpoint",
+          "service": "com.amazonaws.us-east-1.ecr.api",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "PinnedRegistryPull",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:BatchGetImage",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:BatchCheckLayerAvailability"
+                ],
+                "Resource": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-staging/api"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-staging/workers"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-staging/connector"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-staging/credential-broker"
+                      ]
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RegistryAuthenticationOnly",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:GetAuthorizationToken"
+                ],
+                "Resource": "*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "us-east-1"
+                  }
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "RegistryDockerEndpoint",
+          "service": "com.amazonaws.us-east-1.ecr.dkr",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "PinnedRegistryPull",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:BatchGetImage",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:BatchCheckLayerAvailability"
+                ],
+                "Resource": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-staging/api"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-staging/workers"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-staging/connector"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-staging/credential-broker"
+                      ]
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RegistryAuthenticationOnly",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:GetAuthorizationToken"
+                ],
+                "Resource": "*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "us-east-1"
+                  }
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "LogEndpoint",
+          "service": "com.amazonaws.us-east-1.logs",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/staging/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/staging/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "WorkersRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/staging/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ConnectorRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/staging/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "CredentialBrokerRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/staging/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "SecretEndpoint",
+          "service": "com.amazonaws.us-east-1.secretsmanager",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "BrokerCredentialRetrieval",
+                "Effect": "Allow",
+                "Action": [
+                  "secretsmanager:GetSecretValue",
+                  "secretsmanager:DescribeSecret"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:secretsmanager:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":secret:morrow/staging/*"
+                    ]
+                  ]
+                },
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "us-east-1"
+                  }
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "CredentialBrokerRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "SignalEndpoint",
+          "service": "com.amazonaws.us-east-1.sqs",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "OpaqueDeliverySignals",
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:SendMessage",
+                  "sqs:GetQueueAttributes"
+                ],
+                "Resource": [
+                  {
+                    "Fn::GetAtt": [
+                      "DeliverySignals",
+                      "Arn"
+                    ]
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "DeliveryDeadLetters",
+                      "Arn"
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "OpaqueDeliveryConsumption",
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:ReceiveMessage",
+                  "sqs:DeleteMessage",
+                  "sqs:ChangeMessageVisibility",
+                  "sqs:GetQueueAttributes"
+                ],
+                "Resource": [
+                  {
+                    "Fn::GetAtt": [
+                      "DeliverySignals",
+                      "Arn"
+                    ]
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "DeliveryDeadLetters",
+                      "Arn"
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "WorkersRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "OpaqueDeliverySignals",
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:SendMessage",
+                  "sqs:GetQueueAttributes"
+                ],
+                "Resource": [
+                  {
+                    "Fn::GetAtt": [
+                      "DeliverySignals",
+                      "Arn"
+                    ]
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "DeliveryDeadLetters",
+                      "Arn"
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ConnectorRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "StorageGatewayEndpoint",
+          "service": "com.amazonaws.us-east-1.s3",
+          "type": "Gateway",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "PrivateArtifactListing",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:ListBucket",
+                  "s3:ListBucketVersions",
+                  "s3:GetBucketLocation"
+                ],
+                "Resource": {
+                  "Fn::GetAtt": [
+                    "Artifacts",
+                    "Arn"
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "AuthorizedArtifactOperations",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:GetObject",
+                  "s3:GetObjectVersion",
+                  "s3:PutObject",
+                  "s3:DeleteObject",
+                  "s3:DeleteObjectVersion",
+                  "s3:AbortMultipartUpload"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "Artifacts",
+                          "Arn"
+                        ]
+                      },
+                      "/*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "PrivateArtifactListing",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:ListBucket",
+                  "s3:ListBucketVersions",
+                  "s3:GetBucketLocation"
+                ],
+                "Resource": {
+                  "Fn::GetAtt": [
+                    "Artifacts",
+                    "Arn"
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "RecoveryRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RegionalRegistryLayersOnly",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": [
+                  "s3:GetObject"
+                ],
+                "Resource": "arn:aws:s3:::prod-us-east-1-starport-layer-bucket/*"
+              }
+            ]
+          }
+        }
+      ],
+      "provider_egress": "not implemented; trusted private subnet has no direct internet route",
+      "broker_authentication": "not implemented; reserved TLS/internal authorization ports are not an authenticated service",
+      "database_users_rls": "not implemented; IAM connect permission does not create a database user or grant SQL rights"
+    },
+    {
+      "environment": "production",
+      "profiles": [
+        {
+          "id": "ApiRole",
+          "role_name": "morrow-production-api",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "b2ced6f358a692905ab8bb801fc291b7128722bc40c7595e99d2d31bf300287f",
+          "permission_boundary": {
+            "Ref": "ApiPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/production/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_api"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "PrivateArtifactListing",
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket",
+                "s3:ListBucketVersions",
+                "s3:GetBucketLocation"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "Artifacts",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AuthorizedArtifactOperations",
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion",
+                "s3:AbortMultipartUpload"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "Artifacts",
+                        "Arn"
+                      ]
+                    },
+                    "/*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "OwnedArtifactEncryption",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "ArtifactKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "s3.us-east-1.amazonaws.com",
+                  "kms:EncryptionContext:aws:s3:arn": {
+                    "Fn::GetAtt": [
+                      "Artifacts",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "Sid": "OpaqueDeliverySignals",
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage",
+                "sqs:GetQueueAttributes"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "DeliverySignals",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "DeliveryDeadLetters",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "EncryptedDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TransportKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "sqs.us-east-1.amazonaws.com"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "WorkersRole",
+          "role_name": "morrow-production-workers",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "40d2414f2fedbf49de6449da123c32f3c28e6f33cb8f1961ae214c15b4287057",
+          "permission_boundary": {
+            "Ref": "WorkersPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/production/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_workers"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "OpaqueDeliveryConsumption",
+              "Effect": "Allow",
+              "Action": [
+                "sqs:ReceiveMessage",
+                "sqs:DeleteMessage",
+                "sqs:ChangeMessageVisibility",
+                "sqs:GetQueueAttributes"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "DeliverySignals",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "DeliveryDeadLetters",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "EncryptedDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TransportKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "sqs.us-east-1.amazonaws.com"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "ConnectorRole",
+          "role_name": "morrow-production-connector",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "ace1294efa2b765c128d1d377b1e91e3c64d10910ae793958e36300fc2736be8",
+          "permission_boundary": {
+            "Ref": "ConnectorPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/production/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_connector"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "OpaqueDeliverySignals",
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage",
+                "sqs:GetQueueAttributes"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "DeliverySignals",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "DeliveryDeadLetters",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "EncryptedDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "TransportKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "sqs.us-east-1.amazonaws.com"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "CredentialBrokerRole",
+          "role_name": "morrow-production-credential-broker",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "2b647d8479bf00374865438c10de17366624614c6d44974fe031251c090955df",
+          "permission_boundary": {
+            "Ref": "CredentialBrokerPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/production/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "ScopedDatabasePrincipal",
+              "Effect": "Allow",
+              "Action": [
+                "rds-db:connect"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:rds-db:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":dbuser:",
+                    {
+                      "Fn::GetAtt": [
+                        "Database",
+                        "DBClusterResourceId"
+                      ]
+                    },
+                    "/morrow_broker"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "BrokerCredentialRetrieval",
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:secretsmanager:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":secret:morrow/production/*"
+                  ]
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:RequestedRegion": "us-east-1"
+                }
+              }
+            },
+            {
+              "Sid": "BrokerCredentialDecryption",
+              "Effect": "Allow",
+              "Action": [
+                "kms:Decrypt"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "CredentialKey",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": "secretsmanager.us-east-1.amazonaws.com"
+                },
+                "StringLike": {
+                  "kms:EncryptionContext:SecretARN": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:secretsmanager:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":secret:morrow/production/*"
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "TaskExecutionRole",
+          "role_name": "morrow-production-task-execution",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:SourceAccount": {
+                      "Ref": "AWS::AccountId"
+                    }
+                  },
+                  "ArnLike": {
+                    "aws:SourceArn": {
+                      "Fn::Sub": "arn:aws:ecs:us-east-1:${AWS::AccountId}:*"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "b251754eaacab17b3c016c2c63f47271c97e31559a7ed30de1bd03f6db7ebc68",
+          "permission_boundary": {
+            "Ref": "TaskExecutionPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "RedactedLogDelivery",
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:logs:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":log-group:/morrow/production/redacted:log-stream:*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "PinnedRegistryPull",
+              "Effect": "Allow",
+              "Action": [
+                "ecr:BatchGetImage",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchCheckLayerAvailability"
+              ],
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-production/api"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-production/workers"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-production/connector"
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:ecr:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":repository/morrow-production/credential-broker"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Sid": "RegistryAuthenticationOnly",
+              "Effect": "Allow",
+              "Action": [
+                "ecr:GetAuthorizationToken"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:RequestedRegion": "us-east-1"
+                }
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "DeploymentRole",
+          "role_name": "morrow-production-deployment",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": {
+                    "Fn::Sub": [
+                      "arn:aws:iam::${AWS::AccountId}:role/${IssuerRolePath}",
+                      {
+                        "IssuerRolePath": {
+                          "Ref": "DeploymentIssuerRolePath"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Action": [
+                  "sts:AssumeRole",
+                  "sts:SetSourceIdentity"
+                ],
+                "Condition": {
+                  "StringEquals": {
+                    "sts:SourceIdentity": "morrow-production-deployment"
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "b44b118e937d6861f56fcb4cea57ed60c8a7d81ed8bd4e6a0e4a1f09a19407a0",
+          "permission_boundary": {
+            "Ref": "DeploymentPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "ReviewedStackInspection",
+              "Effect": "Allow",
+              "Action": [
+                "cloudformation:DescribeStacks",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:GetTemplate"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:cloudformation:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":stack/Morrow-production/*"
+                  ]
+                ]
+              }
+            }
+          ],
+          "deployed": false
+        },
+        {
+          "id": "RecoveryRole",
+          "role_name": "morrow-production-recovery",
+          "principal": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": {
+                    "Fn::Sub": [
+                      "arn:aws:iam::${AWS::AccountId}:role/${IssuerRolePath}",
+                      {
+                        "IssuerRolePath": {
+                          "Ref": "RecoveryIssuerRolePath"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Action": [
+                  "sts:AssumeRole",
+                  "sts:SetSourceIdentity"
+                ],
+                "Condition": {
+                  "StringEquals": {
+                    "sts:SourceIdentity": "morrow-production-recovery"
+                  }
+                }
+              }
+            ]
+          },
+          "maximum_policy_sha256": "c4f9c11992431de5a323adfd318c0192ff19a7b3fdcd2ee3e70d80efd1df9f8b",
+          "permission_boundary": {
+            "Ref": "RecoveryPermissionBoundary"
+          },
+          "statements": [
+            {
+              "Sid": "ReviewedStackInspection",
+              "Effect": "Allow",
+              "Action": [
+                "cloudformation:DescribeStacks",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:GetTemplate"
+              ],
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:cloudformation:us-east-1:",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":stack/Morrow-production/*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Sid": "RecoveryInventoryOnly",
+              "Effect": "Allow",
+              "Action": [
+                "rds:DescribeDBClusters",
+                "rds:DescribeDBInstances",
+                "rds:DescribeDBClusterSnapshots"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:RequestedRegion": "us-east-1"
+                }
+              }
+            },
+            {
+              "Sid": "PrivateArtifactListing",
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket",
+                "s3:ListBucketVersions",
+                "s3:GetBucketLocation"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "Artifacts",
+                  "Arn"
+                ]
+              }
+            }
+          ],
+          "deployed": false
+        }
+      ],
+      "endpoints": [
+        {
+          "id": "RegistryApiEndpoint",
+          "service": "com.amazonaws.us-east-1.ecr.api",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "PinnedRegistryPull",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:BatchGetImage",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:BatchCheckLayerAvailability"
+                ],
+                "Resource": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-production/api"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-production/workers"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-production/connector"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-production/credential-broker"
+                      ]
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RegistryAuthenticationOnly",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:GetAuthorizationToken"
+                ],
+                "Resource": "*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "us-east-1"
+                  }
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "RegistryDockerEndpoint",
+          "service": "com.amazonaws.us-east-1.ecr.dkr",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "PinnedRegistryPull",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:BatchGetImage",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:BatchCheckLayerAvailability"
+                ],
+                "Resource": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-production/api"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-production/workers"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-production/connector"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:ecr:us-east-1:",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":repository/morrow-production/credential-broker"
+                      ]
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RegistryAuthenticationOnly",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:GetAuthorizationToken"
+                ],
+                "Resource": "*",
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "us-east-1"
+                  }
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "LogEndpoint",
+          "service": "com.amazonaws.us-east-1.logs",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/production/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/production/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "WorkersRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/production/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ConnectorRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/production/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "CredentialBrokerRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RedactedLogDelivery",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:logs:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":log-group:/morrow/production/redacted:log-stream:*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "TaskExecutionRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "SecretEndpoint",
+          "service": "com.amazonaws.us-east-1.secretsmanager",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "BrokerCredentialRetrieval",
+                "Effect": "Allow",
+                "Action": [
+                  "secretsmanager:GetSecretValue",
+                  "secretsmanager:DescribeSecret"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:secretsmanager:us-east-1:",
+                      {
+                        "Ref": "AWS::AccountId"
+                      },
+                      ":secret:morrow/production/*"
+                    ]
+                  ]
+                },
+                "Condition": {
+                  "StringEquals": {
+                    "aws:RequestedRegion": "us-east-1"
+                  }
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "CredentialBrokerRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "SignalEndpoint",
+          "service": "com.amazonaws.us-east-1.sqs",
+          "type": "Interface",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "OpaqueDeliverySignals",
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:SendMessage",
+                  "sqs:GetQueueAttributes"
+                ],
+                "Resource": [
+                  {
+                    "Fn::GetAtt": [
+                      "DeliverySignals",
+                      "Arn"
+                    ]
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "DeliveryDeadLetters",
+                      "Arn"
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "OpaqueDeliveryConsumption",
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:ReceiveMessage",
+                  "sqs:DeleteMessage",
+                  "sqs:ChangeMessageVisibility",
+                  "sqs:GetQueueAttributes"
+                ],
+                "Resource": [
+                  {
+                    "Fn::GetAtt": [
+                      "DeliverySignals",
+                      "Arn"
+                    ]
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "DeliveryDeadLetters",
+                      "Arn"
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "WorkersRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "OpaqueDeliverySignals",
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:SendMessage",
+                  "sqs:GetQueueAttributes"
+                ],
+                "Resource": [
+                  {
+                    "Fn::GetAtt": [
+                      "DeliverySignals",
+                      "Arn"
+                    ]
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "DeliveryDeadLetters",
+                      "Arn"
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ConnectorRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "StorageGatewayEndpoint",
+          "service": "com.amazonaws.us-east-1.s3",
+          "type": "Gateway",
+          "policy": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "PrivateArtifactListing",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:ListBucket",
+                  "s3:ListBucketVersions",
+                  "s3:GetBucketLocation"
+                ],
+                "Resource": {
+                  "Fn::GetAtt": [
+                    "Artifacts",
+                    "Arn"
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "AuthorizedArtifactOperations",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:GetObject",
+                  "s3:GetObjectVersion",
+                  "s3:PutObject",
+                  "s3:DeleteObject",
+                  "s3:DeleteObjectVersion",
+                  "s3:AbortMultipartUpload"
+                ],
+                "Resource": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "Artifacts",
+                          "Arn"
+                        ]
+                      },
+                      "/*"
+                    ]
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "ApiRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "PrivateArtifactListing",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:ListBucket",
+                  "s3:ListBucketVersions",
+                  "s3:GetBucketLocation"
+                ],
+                "Resource": {
+                  "Fn::GetAtt": [
+                    "Artifacts",
+                    "Arn"
+                  ]
+                },
+                "Principal": {
+                  "AWS": {
+                    "Fn::GetAtt": [
+                      "RecoveryRole",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              {
+                "Sid": "RegionalRegistryLayersOnly",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": [
+                  "s3:GetObject"
+                ],
+                "Resource": "arn:aws:s3:::prod-us-east-1-starport-layer-bucket/*"
+              }
+            ]
+          }
+        }
+      ],
+      "provider_egress": "not implemented; trusted private subnet has no direct internet route",
+      "broker_authentication": "not implemented; reserved TLS/internal authorization ports are not an authenticated service",
+      "database_users_rls": "not implemented; IAM connect permission does not create a database user or grant SQL rights"
+    }
+  ]
+}

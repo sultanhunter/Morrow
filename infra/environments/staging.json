@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plan_sequence": 30,
+  "plan_sequence": 33,
   "environment": "staging",
   "status": "local_template_candidate",
   "aws": {
@@ -9,7 +9,10 @@
     "aurora_major": 17,
     "aurora_minor": null,
     "maximum_acu": null,
-    "certificate_arn": null
+    "certificate_arn": null,
+    "s3_regional_prefix_list_id": null,
+    "deployment_issuer_role_path": null,
+    "recovery_issuer_role_path": null
   },
   "dispatch": "disabled",
   "ingress": "fixed_503",

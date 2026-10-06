@@ -20,13 +20,17 @@ import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as waf from "aws-cdk-lib/aws-wafv2";
 import { Template } from "aws-cdk-lib/assertions";
 import { environment } from "./environments.js";
+import { defineServiceIdentities, serviceStatements } from "./service-identities.js";
 export { environment, environmentNames, environments } from "./environments.js";
 export type { EnvironmentDefinition, EnvironmentName } from "./environments.js";
 
 // No context lookups, asset publication, account calls or deployment entrypoint.
 export function foundationTemplate(name: string): Record<string, unknown> {
   const config = environment(name);
-  const app = new App({ analyticsReporting: false });
+  const app = new App({
+    analyticsReporting: false,
+    context: { "@aws-cdk/core:validateAgainstDefaultRules": true },
+  });
   const synthesis = new BootstraplessSynthesizer();
   const stack = new Stack(app, `Morrow-${config.name}`, {
     env: { region: config.region },
@@ -66,6 +70,12 @@ export function foundationTemplate(name: string): Record<string, unknown> {
     allowedPattern: "^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[a-f0-9-]+$",
     description:
       "Required certificate in this environment account and us-east-1; preflight verifies ownership",
+  });
+  const s3PrefixList = new CfnParameter(stack, "S3RegionalPrefixListId", {
+    type: "String",
+    allowedPattern: "^pl-[a-f0-9]+$",
+    description:
+      "Required preflighted AWS-managed us-east-1 S3 prefix-list ID; no account lookup or invented default",
   });
   const retain = <T extends { applyRemovalPolicy: (policy: RemovalPolicy) => void }>(
     resource: T,
@@ -115,6 +125,7 @@ export function foundationTemplate(name: string): Record<string, unknown> {
   const artifactKey = key("ArtifactKey");
   const databaseKey = key("DatabaseKey");
   const databaseSecretKey = key("DatabaseSecretKey");
+  const credentialKey = key("CredentialKey");
   const transportKey = key("TransportKey");
   const logName = `/morrow/${config.name}/redacted`;
   const logKey = key("LogKey", logName);
@@ -138,6 +149,7 @@ export function foundationTemplate(name: string): Record<string, unknown> {
   });
   const ingressSubnets: ec2.CfnSubnet[] = [];
   const trustedSubnets: ec2.CfnSubnet[] = [];
+  const trustedRoutes: ec2.CfnRouteTable[] = [];
   const databaseSubnets: ec2.CfnSubnet[] = [];
   for (let az = 0; az < config.availabilityZones; az++) {
     for (const [tier, segment, target] of [
@@ -154,6 +166,7 @@ export function foundationTemplate(name: string): Record<string, unknown> {
       });
       target.push(subnet);
       const routes = new ec2.CfnRouteTable(stack, `${tier}Routes${az}`, { vpcId: vpc.ref });
+      if (tier === "Trusted") trustedRoutes.push(routes);
       new ec2.CfnSubnetRouteTableAssociation(stack, `${tier}Association${az}`, {
         subnetId: subnet.ref,
         routeTableId: routes.ref,
@@ -188,11 +201,34 @@ export function foundationTemplate(name: string): Record<string, unknown> {
     groupDescription: "Reserved trusted worker boundary; no workload activated",
     securityGroupEgress: noEgress,
   });
+  const brokerGroup = new ec2.CfnSecurityGroup(stack, "BrokerSecurityGroup", {
+    vpcId: vpc.ref,
+    groupDescription: "Reserved credential broker boundary; no workload activated",
+    securityGroupEgress: noEgress,
+    securityGroupIngress: [apiGroup, workerGroup].map((group) => ({
+      ipProtocol: "tcp",
+      fromPort: 8443,
+      toPort: 8443,
+      sourceSecurityGroupId: group.attrGroupId,
+    })),
+  });
+  for (const [id, group] of [
+    ["Api", apiGroup],
+    ["Worker", workerGroup],
+  ] as const) {
+    new ec2.CfnSecurityGroupEgress(stack, `${id}BrokerEgress`, {
+      groupId: group.attrGroupId,
+      ipProtocol: "tcp",
+      fromPort: 8443,
+      toPort: 8443,
+      destinationSecurityGroupId: brokerGroup.attrGroupId,
+    });
+  }
   const dbGroup = new ec2.CfnSecurityGroup(stack, "DatabaseSecurityGroup", {
     vpcId: vpc.ref,
     groupDescription: "Database only from reserved trusted API/worker groups",
     securityGroupEgress: noEgress,
-    securityGroupIngress: [apiGroup, workerGroup].map((group) => ({
+    securityGroupIngress: [apiGroup, workerGroup, brokerGroup].map((group) => ({
       ipProtocol: "tcp",
       fromPort: 5432,
       toPort: 5432,
@@ -203,12 +239,18 @@ export function foundationTemplate(name: string): Record<string, unknown> {
     dbSubnetGroupDescription: `${prefix} isolated database subnets`,
     subnetIds: databaseSubnets.map((subnet) => subnet.ref),
   });
+  const dbParameters = new rds.CfnDBClusterParameterGroup(stack, "DatabaseParameters", {
+    description: `${prefix} encrypted connections and suppressed statement telemetry`,
+    family: "aurora-postgresql17",
+    parameters: { "rds.force_ssl": "1", log_statement: "none", log_min_duration_statement: "-1" },
+  });
   const cluster = new rds.CfnDBCluster(stack, "Database", {
     dbClusterIdentifier: `${prefix}-records`,
     engine: "aurora-postgresql",
     engineMode: "provisioned",
     engineVersion: engine.valueAsString,
     dbSubnetGroupName: dbSubnetGroup.ref,
+    dbClusterParameterGroupName: dbParameters.ref,
     vpcSecurityGroupIds: [dbGroup.attrGroupId],
     storageEncrypted: true,
     kmsKeyId: databaseKey.attrArn,
@@ -366,6 +408,116 @@ export function foundationTemplate(name: string): Record<string, unknown> {
       ],
     },
   });
+  const identityResources = {
+    accountId: Aws.ACCOUNT_ID,
+    databaseResourceId: cluster.attrDbClusterResourceId,
+    bucketArn: artifacts.attrArn,
+    artifactKeyArn: artifactKey.attrArn,
+    credentialKeyArn: credentialKey.attrArn,
+    transportKeyArn: transportKey.attrArn,
+    queueArns: [queue.attrArn, deadLetters.attrArn],
+  };
+  const roles = defineServiceIdentities(stack, config.name, identityResources);
+  const permissions = serviceStatements(config.name, identityResources);
+  const endpointGroup = new ec2.CfnSecurityGroup(stack, "PrivateEndpointSecurityGroup", {
+    vpcId: vpc.ref,
+    groupDescription: "AWS private dependency endpoints from trusted workload groups only",
+    securityGroupEgress: noEgress,
+    securityGroupIngress: [apiGroup, workerGroup, brokerGroup].map((group) => ({
+      ipProtocol: "tcp",
+      fromPort: 443,
+      toPort: 443,
+      sourceSecurityGroupId: group.attrGroupId,
+    })),
+  });
+  for (const [id, group] of [
+    ["Api", apiGroup],
+    ["Worker", workerGroup],
+    ["Broker", brokerGroup],
+  ] as const) {
+    new ec2.CfnSecurityGroupEgress(stack, `${id}DatabaseEgress`, {
+      groupId: group.attrGroupId,
+      ipProtocol: "tcp",
+      fromPort: 5432,
+      toPort: 5432,
+      destinationSecurityGroupId: dbGroup.attrGroupId,
+    });
+    new ec2.CfnSecurityGroupEgress(stack, `${id}PrivateDependencyEgress`, {
+      groupId: group.attrGroupId,
+      ipProtocol: "tcp",
+      fromPort: 443,
+      toPort: 443,
+      destinationSecurityGroupId: endpointGroup.attrGroupId,
+    });
+  }
+  const profilePolicy = (
+    profiles: (keyof typeof roles)[],
+    select: (action: string) => boolean,
+  ) => ({
+    Version: "2012-10-17",
+    Statement: profiles.flatMap((profile) => {
+      return permissions[profile]
+        .filter((statement) => statement.Action.some(select))
+        .map((statement) => ({ ...statement, Principal: { AWS: roles[profile].attrArn } }));
+    }),
+  });
+  const interfaces = [
+    ["RegistryApiEndpoint", "ecr.api", ["task-execution"], "ecr:"],
+    ["RegistryDockerEndpoint", "ecr.dkr", ["task-execution"], "ecr:"],
+    [
+      "LogEndpoint",
+      "logs",
+      ["api", "workers", "connector", "credential-broker", "task-execution"],
+      "logs:",
+    ],
+    ["SecretEndpoint", "secretsmanager", ["credential-broker"], "secretsmanager:"],
+    ["SignalEndpoint", "sqs", ["api", "workers", "connector"], "sqs:"],
+  ] as const;
+  for (const [id, service, profiles, actionPrefix] of interfaces) {
+    new ec2.CfnVPCEndpoint(stack, id, {
+      vpcId: vpc.ref,
+      vpcEndpointType: "Interface",
+      serviceName: `com.amazonaws.us-east-1.${service}`,
+      subnetIds: trustedSubnets.map((subnet) => subnet.ref),
+      securityGroupIds: [endpointGroup.attrGroupId],
+      privateDnsEnabled: true,
+      policyDocument: profilePolicy([...profiles], (action) => action.startsWith(actionPrefix)),
+    });
+  }
+  const storageEndpoint = new ec2.CfnVPCEndpoint(stack, "StorageGatewayEndpoint", {
+    vpcId: vpc.ref,
+    vpcEndpointType: "Gateway",
+    serviceName: "com.amazonaws.us-east-1.s3",
+    routeTableIds: trustedRoutes.map((routes) => routes.ref),
+    policyDocument: {
+      Version: "2012-10-17",
+      Statement: [
+        ...profilePolicy(["api", "recovery"], (action) => action.startsWith("s3:")).Statement,
+        {
+          Sid: "RegionalRegistryLayersOnly",
+          Effect: "Allow",
+          Principal: "*",
+          Action: ["s3:GetObject"],
+          Resource: "arn:aws:s3:::prod-us-east-1-starport-layer-bucket/*",
+        },
+      ],
+    },
+  });
+  // Gateway prefix lists are regional, but the endpoint policy also restricts
+  // buckets/principals; this is not arbitrary S3 or internet access.
+  for (const [id, group] of [
+    ["Api", apiGroup],
+    ["Worker", workerGroup],
+    ["Broker", brokerGroup],
+  ] as const) {
+    new ec2.CfnSecurityGroupEgress(stack, `${id}StorageEndpointEgress`, {
+      groupId: group.attrGroupId,
+      ipProtocol: "tcp",
+      fromPort: 443,
+      toPort: 443,
+      destinationPrefixListId: s3PrefixList.valueAsString,
+    });
+  }
   const loadBalancer = new elb.CfnLoadBalancer(stack, "PrivateApplicationIngress", {
     type: "application",
     scheme: "internet-facing",

@@ -24,8 +24,10 @@ for (const name of environmentNames) {
     resources: Object.fromEntries(
       Object.entries(template.Resources).map(([id, value]) => [id, value.Type]),
     ),
-    workloads: "absent; foundation ingress fixed 503; task roles/services are not qualified",
-    trusted_egress: "unrouted until P04.T02 restricted egress is qualified",
+    workloads:
+      "absent; foundation ingress fixed 503; reserved role definitions do not activate a service",
+    trusted_egress:
+      "private AWS endpoints/gateway and reserved database/broker paths only; provider internet egress unimplemented",
     untrusted_runtime: "separate unrouted VPC reserved; no task IAM role/service; P12 required",
     database_pause: "disabled; staging idle pause requires exact minor/capacity qualification",
     external_services: {

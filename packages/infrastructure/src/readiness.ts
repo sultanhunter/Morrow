@@ -1,4 +1,13 @@
 import type { EnvironmentName } from "./environments.js";
+import { createHash } from "node:crypto";
+export const deploymentParameterNames = [
+  "AuroraEngineVersion",
+  "AuroraMaximumAcu",
+  "IngressCertificateArn",
+  "S3RegionalPrefixListId",
+  "DeploymentIssuerRolePath",
+  "RecoveryIssuerRolePath",
+] as const;
 
 export const costCategories = [
   "aurora_compute",
@@ -18,6 +27,7 @@ export const costCategories = [
   "temporal",
   "workos",
   "cloudflare_dns_assets",
+  "image_registry_storage",
 ] as const;
 export const qualificationChecks = [
   "account_ownership",
@@ -35,6 +45,7 @@ export interface Evidence {
   reference: string;
   sourceCommit: string;
   templateDigest: string;
+  configurationDigest: string;
 }
 export interface ProvisioningReadiness {
   environment: EnvironmentName;
@@ -44,6 +55,10 @@ export interface ProvisioningReadiness {
   templateDigest: string | null;
   engineVersion: string | null;
   maximumAcu: number | null;
+  ingressCertificateArn: string | null;
+  s3RegionalPrefixListId: string | null;
+  deploymentIssuerRolePath: string | null;
+  recoveryIssuerRolePath: string | null;
   cloudflarePrivateProcessing: boolean;
   checks: Partial<Record<(typeof qualificationChecks)[number], Evidence>>;
   quote: {
@@ -52,6 +67,7 @@ export interface ProvisioningReadiness {
     validUntil: string;
     totalMonthlyEstimate: number;
     estimateReference: string;
+    configurationDigest: string;
     categories: Partial<
       Record<(typeof costCategories)[number], { monthlyEstimate: number; basis: string }>
     >;
@@ -62,9 +78,30 @@ export interface ProvisioningReadiness {
     environment: EnvironmentName;
     sourceCommit: string;
     templateDigest: string;
+    configurationDigest: string;
     estimateReference: string;
     reference: string;
   } | null;
+}
+// Fixed normalized non-secret fields; no keys, credentials or provider content.
+export function deploymentConfigurationDigest(candidate: ProvisioningReadiness): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        environment: candidate.environment,
+        accountId: candidate.accountId,
+        region: candidate.region,
+        parameters: {
+          AuroraEngineVersion: candidate.engineVersion,
+          AuroraMaximumAcu: candidate.maximumAcu,
+          IngressCertificateArn: candidate.ingressCertificateArn,
+          S3RegionalPrefixListId: candidate.s3RegionalPrefixListId,
+          DeploymentIssuerRolePath: candidate.deploymentIssuerRolePath,
+          RecoveryIssuerRolePath: candidate.recoveryIssuerRolePath,
+        },
+      }),
+    )
+    .digest("hex");
 }
 // Evidence inventory only. This does not execute deployments or authenticate an approver.
 // A future privileged deployment port must verify these receipts independently.
@@ -78,6 +115,7 @@ export function inspectProvisioningReadiness(
   },
 ): string[] {
   const errors: string[] = [];
+  const configurationDigest = deploymentConfigurationDigest(candidate);
   if (candidate.environment !== expected.environment) errors.push("ENVIRONMENT_MISMATCH");
   if (candidate.region !== "us-east-1" || candidate.cloudflarePrivateProcessing !== false)
     errors.push("REGIONAL_BOUNDARY");
@@ -98,9 +136,26 @@ export function inspectProvisioningReadiness(
     !/^17\.[0-9]+$/.test(candidate.engineVersion) ||
     candidate.maximumAcu === null ||
     !Number.isFinite(candidate.maximumAcu) ||
-    candidate.maximumAcu < 0.5
+    candidate.maximumAcu < 0.5 ||
+    candidate.maximumAcu > 256 ||
+    !Number.isInteger(candidate.maximumAcu * 2)
   )
     errors.push("ENGINE_CAPACITY_UNQUALIFIED");
+  const rolePath = /^[A-Za-z0-9+=,.@_-]+(?:\/[A-Za-z0-9+=,.@_-]+)*$/;
+  const certificateAccount = /^arn:aws:acm:us-east-1:([0-9]{12}):certificate\/[a-f0-9-]+$/.exec(
+    candidate.ingressCertificateArn ?? "",
+  )?.[1];
+  if (
+    !certificateAccount ||
+    certificateAccount !== candidate.accountId ||
+    !candidate.s3RegionalPrefixListId ||
+    !/^pl-[a-f0-9]+$/.test(candidate.s3RegionalPrefixListId) ||
+    !candidate.deploymentIssuerRolePath ||
+    !rolePath.test(candidate.deploymentIssuerRolePath) ||
+    !candidate.recoveryIssuerRolePath ||
+    !rolePath.test(candidate.recoveryIssuerRolePath)
+  )
+    errors.push("DEPLOYMENT_PARAMETERS_UNQUALIFIED");
   for (const check of qualificationChecks) {
     const evidence = candidate.checks[check];
     if (
@@ -108,7 +163,8 @@ export function inspectProvisioningReadiness(
       evidence.status !== "qualified" ||
       !evidence.reference.trim() ||
       evidence.sourceCommit !== expected.sourceCommit ||
-      evidence.templateDigest !== expected.templateDigest
+      evidence.templateDigest !== expected.templateDigest ||
+      evidence.configurationDigest !== configurationDigest
     )
       errors.push("PENDING:" + check);
   }
@@ -123,6 +179,7 @@ export function inspectProvisioningReadiness(
       until <= now ||
       quote.currency !== "USD" ||
       quote.region !== "us-east-1" ||
+      quote.configurationDigest !== configurationDigest ||
       !quote.estimateReference.trim() ||
       !Number.isFinite(quote.totalMonthlyEstimate) ||
       quote.totalMonthlyEstimate < 0
@@ -152,6 +209,7 @@ export function inspectProvisioningReadiness(
     authorization.environment !== expected.environment ||
     authorization.sourceCommit !== expected.sourceCommit ||
     authorization.templateDigest !== expected.templateDigest ||
+    authorization.configurationDigest !== configurationDigest ||
     !quote ||
     authorization.estimateReference !== quote.estimateReference
   )

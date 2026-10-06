@@ -79,5 +79,7 @@
     }
   ],
   "source_ci": "passed",
-  "clean_ci": "passed"
+  "clean_ci": "passed",
+  "historical_source_commit": "54949de7a82c579e5a82a20c2e4beaf0cc7cca51",
+  "historical_notice": "This T01 receipt is historical; subsequent identity templates/configuration require their own evidence."
 }
