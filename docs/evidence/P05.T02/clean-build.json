@@ -1,0 +1,102 @@
+{
+  "task": "P05.T02a",
+  "consumed_sequence": 37,
+  "recorded_in_sequence": 38,
+  "scope": "Separate locked dependency reproduction and same-implementer semantic review; fixtures are not SQL-backed authorization or hosted/provider acceptance",
+  "tests": 682,
+  "targeted_policy_tests": 69,
+  "scaffold_guards": 9,
+  "unchanged_actual_identity_sql_checks": 31,
+  "source_digests": {
+    "packages/policy/src/index.ts": "b722df914500d2930eea3d5eae2b67ddf465f2c886edf2f8cb4ec5f8bf9f1972",
+    "packages/policy/package.json": "7ddffd4c81f359ec5d3a775f9501e6ac27868147d86c32c9494d4d9766c9152c",
+    "tests/policy.test.mjs": "b0d2be9e5899f67a34b51e0aae11a1d220a478cb9ecd2ce3856169f944f0399b",
+    "package.json": "fc73be2d0e7e0b781c67f0603e35180f6c3af02ccf1f86bb5e23ba8fdc6d9445",
+    "package-lock.json": "f57f8e1d3ed0de3050ef32df28a9ceca1f1e47df886f792dbe57d0cf6446304e"
+  },
+  "capability_semantics_sha256": "4106e0c85f28e31d4dc09b8cdaf2d7f7a2d9a7a99e1d67419e051a42c03d1955",
+  "matching_artifacts": [
+    {
+      "path": "apps/api/dist/index.mjs",
+      "sha256": "e4abfd996aec6fece0d9b8a56c7485ab161b5ad3360f9e973056c80ef16a2d2c",
+      "matches": true
+    },
+    {
+      "path": "apps/workers/dist/index.mjs",
+      "sha256": "1bc77134a2dbabbe20575cdd21634232ee120da20c666252a660dc5c6d60c2c8",
+      "matches": true
+    },
+    {
+      "path": "apps/workspace-web/dist/index.html",
+      "sha256": "a6c9728bac7b01142f5a74296b0275f2bf8a600604dfd0b099c9f9be4fefd7b3",
+      "matches": true
+    },
+    {
+      "path": "apps/workspace-web/dist/assets/index-uIPS1GsJ.js",
+      "sha256": "1f3135a684b1552ac0c2244bff9987b36c4bec7c5bbc9b798c7b228b0c333b01",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/server/index.js",
+      "sha256": "d657ff0396788aea5ffeee8b464ca742b15cfb15879efe31b4932f1597141377",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/entry.client-Bhfy8GUQ.js",
+      "sha256": "9cb597a271c7297b50d0008770b8f8f7ea757256501928710fe4fe1de66b0911",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/manifest-194425f3.js",
+      "sha256": "7c5811945dba727fcb7995855f0be83c0201361c49601ff5d0be7e970bfba06f",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/index-DJN3l3_E.js",
+      "sha256": "09d06f8ed147ecfae2159b51fcf40d3bd65957022b3d35ce50dd99e479652acb",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/fixture-DXNISPai.js",
+      "sha256": "90c046d3b052c3d81aafd651f401d2376c6d49a6500aefbca9880b0d91641057",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/auth-l0sNRNKZ.js",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/jsx-runtime-MPSlSRXs.js",
+      "sha256": "f8a6151e3010dde6e66da75201a40fa6a133a0192a484ed1fdaeef041992b542",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/root-DWnJuk9v.js",
+      "sha256": "c84cc4a613b96ac8b6bb18ea9aea8911a3bcf06de5169fed4daf32d5f781fe8d",
+      "matches": true
+    },
+    {
+      "path": "work/infrastructure-templates/staging.json",
+      "sha256": "05f381895d0e4c1c8bd488e1406dfd751e81b88b5eb484c7d5bcbc70f45a6ddc",
+      "matches": true
+    },
+    {
+      "path": "work/infrastructure-templates/production.json",
+      "sha256": "1aaa7ed42bcc158ca72c21ee665963d892b5b264aa025ee5b0e3e795cfef7336",
+      "matches": true
+    },
+    {
+      "path": "work/infrastructure-templates/development.json",
+      "sha256": "7d1669e5e636bc019ba99c693022826edf845dab04d649c2649be5686d6d9892",
+      "matches": true
+    }
+  ],
+  "node": "24.13.0",
+  "commands": [
+    "npm ci --ignore-scripts --no-audit --no-fund",
+    "npm run ci",
+    "npm run smoke:scaffold",
+    "npm run lab:identity"
+  ]
+}

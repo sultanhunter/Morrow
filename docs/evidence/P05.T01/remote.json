@@ -1,0 +1,7 @@
+{
+  "source": "0194e3ceac8faa1accfde9608be167396ea98ec3",
+  "run": 37506347298,
+  "url": "https://github.com/sultanhunter/Morrow/actions/runs/37506347298",
+  "conclusion": "success",
+  "scope": "Hosted locked engineering build/scaffold guards/isolated PostgreSQL identity+rotation+restore/template validation; not provider integration, protected release approval or deployment"
+}
