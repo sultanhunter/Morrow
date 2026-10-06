@@ -8,6 +8,12 @@
       "file": "0001.identity-foundation.sql",
       "sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
       "reviewRef": "docs/evidence/P05.T01/review.json"
+    },
+    {
+      "sequence": 2,
+      "file": "0002.identity-grants.sql",
+      "sha256": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+      "reviewRef": "docs/evidence/P05.T02/database-review.json"
     }
   ]
 }

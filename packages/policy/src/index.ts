@@ -1,3 +1,5 @@
+import { withIdentityRead } from "@morrow/identity";
+import type { IdentitySqlPool } from "@morrow/identity";
 import { randomUUID } from "node:crypto";
 import type {
   Core_ActorRef,
@@ -304,6 +306,87 @@ export function createHumanPolicyService(
         throw new PolicyBoundaryError("POLICY_AUTHORITY_UNAVAILABLE");
       }
       return evaluate(request, authority, at);
+    },
+  });
+}
+
+// Workspace ownership comes from SQL, while provider/entitlement constraints
+// stay a separate qualified server reader. This is not an HTTP authenticator.
+export interface CurrentConstraintsReader {
+  readCurrent(
+    request: PermissionRequest,
+    actor: Core_ActorRef,
+  ): Promise<{ providerAllowed: boolean; entitlementAllowed: boolean }>;
+}
+export function createWorkspacePermissionBoundary(
+  pool: IdentitySqlPool,
+  constraints: CurrentConstraintsReader,
+  clock: () => Date = () => new Date(),
+) {
+  return Object.freeze({
+    async decide(
+      serverSessionDigest: string,
+      workspaceId: string,
+      value: unknown,
+    ): Promise<PermissionResult> {
+      let request: PermissionRequest;
+      try {
+        request = parseRequest(value);
+      } catch {
+        throw new PolicyBoundaryError("POLICY_INPUT_INVALID");
+      }
+      return withIdentityRead(pool, serverSessionDigest, workspaceId, async (scope) => {
+        const reader: AuthorityReader = {
+          async readCurrent(currentRequest) {
+            const before = await scope.readWorkspaceAuthority();
+            const facts = (
+              current: typeof before,
+              providerAllowed: boolean,
+              entitlementAllowed: boolean,
+              grantsRevision = current.identity.policyRevision,
+            ): HumanAuthority => ({
+              actor: current.identity.actor,
+              policyRevision: current.identity.policyRevision,
+              grantsRevision,
+              principalActive: true,
+              organizationActive: true,
+              workspaceActive: true,
+              membershipActive: true,
+              sessionCurrent: true,
+              resource: current.resource,
+              accountId: null,
+              providerAllowed,
+              entitlementAllowed,
+              grants: current.grants,
+            });
+            // Reject selectors/grants before any external constraint reader sees
+            // them. This temporary permission check is never returned/dispatchable.
+            let at: string;
+            try {
+              at = clock().toISOString();
+            } catch {
+              throw new PolicyBoundaryError("POLICY_AUTHORITY_UNAVAILABLE");
+            }
+            const preliminary = evaluate(
+              currentRequest,
+              parseAuthority(facts(before, true, true)),
+              at,
+            );
+            if (!preliminary.decision.allowed) return facts(before, false, false);
+            const conditions = await constraints.readCurrent(currentRequest, before.identity.actor);
+            // Constraint lookup may wait: reload SQL authority and reject a changed
+            // policy rather than returning a stale allow after revocation.
+            const after = await scope.readWorkspaceAuthority();
+            return facts(
+              after,
+              conditions.providerAllowed,
+              conditions.entitlementAllowed,
+              before.identity.policyRevision,
+            );
+          },
+        };
+        return createHumanPolicyService(reader, clock).decide(request);
+      });
     },
   });
 }

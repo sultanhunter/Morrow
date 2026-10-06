@@ -1,0 +1,107 @@
+{
+  "task": "P05.T02b",
+  "consumed_sequence": 38,
+  "recorded_in_sequence": 39,
+  "scope": "Separate locked dependency reproduction and same-implementer review; local actual SQL/application behavior, not production driver/provider/HTTP/dispatch or independent acceptance",
+  "tests": 698,
+  "targeted_identity_policy_tests": 106,
+  "scaffold_guards": 9,
+  "actual_sql_permission_checks": 22,
+  "source_digests": {
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/manifest.json": "8c5bd080b8ec65b0d3845e837b3d97789703cd1b632b511491f36fdb68e0eee9",
+    "packages/identity/src/index.ts": "041952d82c134a04487b9e9648c2a648879fa069220c9d37eb9113509a7c3643",
+    "packages/policy/src/index.ts": "712726f4d56705051404326edf5e285c7d7c4cac9739d513645de8af167eb0c3",
+    "packages/policy/package.json": "f530d8fb7fdc046235a33f152b810441d66ad79a3fb50b02ebbb4930a3cb7ea4",
+    "scripts/local-identity-sql.mjs": "12ef9eef9c8b050091a7133cb783d63bf76309b1b1673418b70ec2524d9c1011",
+    "scripts/permission-database-lab.mjs": "96cd347762653023a10ec9d1772c6b6e424e90ba69efccaa721590e667914bf8",
+    "tests/workspace-policy.test.mjs": "f228a87dc03ee002e0b5a4dfb057bc3d460f810bbe1dbc7d616168d657e6753a",
+    "package.json": "7207fc7c7e1f773633ac94cc1f012e6488110d102710452971d911517aeb2f4e",
+    "package-lock.json": "19b8dd95c4c84b35f8bcdb0958a2467d4a4676dc8f1548f81ef96638de336848",
+    ".github/workflows/ci.yml": "40a7e9b203ddecf4005b8ab6296f25bbd2e8379540111c12582575c2b7fd5d51"
+  },
+  "matching_artifacts": [
+    {
+      "path": "apps/api/dist/index.mjs",
+      "sha256": "e4abfd996aec6fece0d9b8a56c7485ab161b5ad3360f9e973056c80ef16a2d2c",
+      "matches": true
+    },
+    {
+      "path": "apps/workers/dist/index.mjs",
+      "sha256": "1bc77134a2dbabbe20575cdd21634232ee120da20c666252a660dc5c6d60c2c8",
+      "matches": true
+    },
+    {
+      "path": "apps/workspace-web/dist/index.html",
+      "sha256": "a6c9728bac7b01142f5a74296b0275f2bf8a600604dfd0b099c9f9be4fefd7b3",
+      "matches": true
+    },
+    {
+      "path": "apps/workspace-web/dist/assets/index-uIPS1GsJ.js",
+      "sha256": "1f3135a684b1552ac0c2244bff9987b36c4bec7c5bbc9b798c7b228b0c333b01",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/server/index.js",
+      "sha256": "d657ff0396788aea5ffeee8b464ca742b15cfb15879efe31b4932f1597141377",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/entry.client-Bhfy8GUQ.js",
+      "sha256": "9cb597a271c7297b50d0008770b8f8f7ea757256501928710fe4fe1de66b0911",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/manifest-194425f3.js",
+      "sha256": "7c5811945dba727fcb7995855f0be83c0201361c49601ff5d0be7e970bfba06f",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/index-DJN3l3_E.js",
+      "sha256": "09d06f8ed147ecfae2159b51fcf40d3bd65957022b3d35ce50dd99e479652acb",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/fixture-DXNISPai.js",
+      "sha256": "90c046d3b052c3d81aafd651f401d2376c6d49a6500aefbca9880b0d91641057",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/auth-l0sNRNKZ.js",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/jsx-runtime-MPSlSRXs.js",
+      "sha256": "f8a6151e3010dde6e66da75201a40fa6a133a0192a484ed1fdaeef041992b542",
+      "matches": true
+    },
+    {
+      "path": "apps/shopify-connector/build/client/assets/root-DWnJuk9v.js",
+      "sha256": "c84cc4a613b96ac8b6bb18ea9aea8911a3bcf06de5169fed4daf32d5f781fe8d",
+      "matches": true
+    },
+    {
+      "path": "work/infrastructure-templates/staging.json",
+      "sha256": "05f381895d0e4c1c8bd488e1406dfd751e81b88b5eb484c7d5bcbc70f45a6ddc",
+      "matches": true
+    },
+    {
+      "path": "work/infrastructure-templates/production.json",
+      "sha256": "1aaa7ed42bcc158ca72c21ee665963d892b5b264aa025ee5b0e3e795cfef7336",
+      "matches": true
+    },
+    {
+      "path": "work/infrastructure-templates/development.json",
+      "sha256": "7d1669e5e636bc019ba99c693022826edf845dab04d649c2649be5686d6d9892",
+      "matches": true
+    }
+  ],
+  "node": "24.13.0",
+  "commands": [
+    "npm ci --ignore-scripts --no-audit --no-fund",
+    "npm run ci",
+    "npm run smoke:scaffold",
+    "npm run lab:permissions"
+  ]
+}

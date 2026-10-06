@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-10-06T18:02:21.814Z",
+  "generated_at": "2026-10-06T18:23:26.507Z",
   "scope": "Known-pattern secret guard, dependency locking (bundles bound to integrity-checked parent tarballs), migration metadata/checksum/envelope only; not complete secret assurance or PostgreSQL execution. Hosted CI evidenced separately; release protection pending.",
-  "scanned_files": 272,
+  "scanned_files": 280,
   "dependency_records": 344,
-  "migrations": 1,
+  "migrations": 2,
   "negative_checks": [
     {
       "name": "leaked_fixture_key",

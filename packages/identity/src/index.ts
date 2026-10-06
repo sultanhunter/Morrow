@@ -1,4 +1,4 @@
-import type { Core_ActorRef as ActorRef } from "@morrow/contracts";
+import type { Core_ActorRef as ActorRef, Core_Grant, Core_ResourceRef } from "@morrow/contracts";
 import { validateDefinition } from "@morrow/contracts/validation";
 
 // Server-only persistence port. No issuer, cookie parser or request authenticator
@@ -34,12 +34,26 @@ export const identitySql = Object.freeze({
     "SELECT principal_id, organization_id, workspace_id, membership_id, policy_revision::text FROM morrow_identity.resolved_context()",
   workspace:
     "SELECT id::text, organization_id::text, display_name FROM morrow_identity.workspaces WHERE id::text = $1",
+  workspaceAuthority: `WITH context AS MATERIALIZED (SELECT * FROM morrow_identity.resolved_context())
+SELECT c.principal_id, c.organization_id, c.workspace_id, c.membership_id, c.policy_revision::text,
+COALESCE((SELECT jsonb_agg(g.payload ORDER BY g.id) FROM
+ (SELECT id, payload FROM morrow_identity.grants
+  WHERE organization_id::text=c.organization_id AND workspace_id::text=c.workspace_id
+    AND membership_id::text=c.membership_id AND principal_id::text=c.principal_id
+  ORDER BY id LIMIT 1001) g), '[]'::jsonb) AS grants
+FROM context c JOIN morrow_identity.workspaces w ON w.id::text=c.workspace_id AND w.organization_id::text=c.organization_id`,
   commit: "COMMIT",
   rollback: "ROLLBACK",
 });
 
+export interface CurrentWorkspaceAuthority {
+  readonly identity: ResolvedIdentity;
+  readonly resource: Core_ResourceRef;
+  readonly grants: readonly Core_Grant[];
+}
 export interface IdentityReadScope {
   readonly identity: ResolvedIdentity;
+  readWorkspaceAuthority(): Promise<CurrentWorkspaceAuthority>;
   readWorkspace(): Promise<{ id: string; organizationId: string; displayName: string }>;
 }
 const denied = () => new IdentityAccessError("IDENTITY_DENIED");
@@ -127,6 +141,39 @@ export async function withIdentityRead<T>(
     live = true;
     const scope: IdentityReadScope = Object.freeze({
       identity,
+      async readWorkspaceAuthority() {
+        if (!live) throw denied();
+        const rows = (await client.query(identitySql.workspaceAuthority)).rows;
+        if (!live) throw denied();
+        const row = rows[0];
+        if (
+          !row ||
+          rows.length !== 1 ||
+          Object.keys(row).sort().join(",") !==
+            "grants,membership_id,organization_id,policy_revision,principal_id,workspace_id" ||
+          !Array.isArray(row.grants) ||
+          row.grants.length > 1000 ||
+          !row.grants.every((g) => validateDefinition("core", "Grant", g))
+        )
+          throw denied();
+        const { grants, ...context } = row;
+        const current = decodeContext([context], requestedWorkspace);
+        if (
+          current.actor.principalId !== identity.actor.principalId ||
+          current.actor.membershipId !== identity.actor.membershipId ||
+          current.actor.organizationId !== identity.actor.organizationId
+        )
+          throw denied();
+        const resource: Core_ResourceRef = {
+          organizationId: current.actor.organizationId,
+          workspaceId: requestedWorkspace,
+          storeId: null,
+          connectionId: null,
+          kind: "workspace",
+          id: requestedWorkspace,
+        };
+        return { identity: current, resource, grants: grants as Core_Grant[] };
+      },
       async readWorkspace() {
         if (!live) throw denied();
         const rows = (await client.query(identitySql.workspace, [requestedWorkspace])).rows;
