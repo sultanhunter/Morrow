@@ -23,10 +23,11 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run ci
       - run: npm run smoke:scaffold
-      - name: Exercise isolated PostgreSQL rotation and quarantined restore
+      - name: Exercise isolated PostgreSQL identity, rotation and quarantined restore
         run: |
           npm run lab:operations
           npm run lab:restore
+          npm run lab:identity
       - name: Validate regional CloudFormation templates without AWS credentials
         run: |
           python3 -m venv /tmp/morrow-cfn-validator

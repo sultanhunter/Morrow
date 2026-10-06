@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plan_sequence": 34,
+  "plan_sequence": 36,
   "bindings": [
     {
       "capability": "workspace.goal.create",

@@ -1,1 +1,13 @@
-{"schema_version":1,"engine":"postgresql17","status":"no_database_migrations_yet","migrations":[]}
+{
+  "schema_version": 1,
+  "engine": "postgresql17",
+  "status": "identity_candidate_not_deployed",
+  "migrations": [
+    {
+      "sequence": 1,
+      "file": "0001.identity-foundation.sql",
+      "sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+      "reviewRef": "docs/evidence/P05.T01/review.json"
+    }
+  ]
+}

@@ -26,3 +26,5 @@ Use pinned Node24.13.0. Run npm run ci and npm run smoke:scaffold for the local 
 Persist status and next action in docs/progress/checkpoint.md. Report self-review separately from independent review and launch qualification. Do not mark a task Verified merely because structural checks pass.
 
 Canonical sequence29: GitHub plan eligibility does not block coding. P03engineering qualifies subsequent local infrastructure definitions/labs. Actual host-enforced protection gates release-code merges and privileged deployment; no paid subscription or public visibility change to continue. Preserve provider/paid-provisioning and P02feature qualification gates.
+
+Canonical sequence35: reviewed P04 engineering plus actual isolated PostgreSQL17 rotation/recovery primitives qualifies P05 local identity/membership/policy code and real local SQL tests. Actual P04/provider evidence still gates hosted identity/SSO/SCIM/session qualification and activation. No local identity adapter can authenticate production requests. Keep real entry routes denied until a selected-provider boundary is qualified.

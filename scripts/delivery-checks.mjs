@@ -75,7 +75,7 @@ function verify() {
       if (entry.isDirectory()) {
         if (!skip.has(entry.name)) walk(p);
       } else if (
-        /\.(?:ts|tsx|mjs|json|md|yml|yaml|toml|html)$/.test(p) ||
+        /\.(?:ts|tsx|mjs|json|md|yml|yaml|toml|html|sql)$/.test(p) ||
         /\.env(?:\.|$)/.test(entry.name)
       )
         paths.push(p);

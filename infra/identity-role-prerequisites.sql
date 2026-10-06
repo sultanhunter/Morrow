@@ -1,0 +1,7 @@
+-- Reviewed prerequisites only. Not an activation/deployment command.
+-- Run through an owned database administrator before immutable migrations.
+-- Owner is deliberately privileged within the identity schema; never grant it
+-- to an application/service role. LOGIN/IAM/TLS belongs to qualified P04 setup.
+CREATE ROLE morrow_identity_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+CREATE ROLE morrow_api NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+GRANT CREATE ON DATABASE morrow TO morrow_identity_owner;
