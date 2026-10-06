@@ -2,7 +2,7 @@ name: Morrow foundation
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, "codex/morrow-foundation"]
 permissions:
   contents: read
 concurrency:

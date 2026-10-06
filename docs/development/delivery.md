@@ -8,3 +8,5 @@ Migrations: immutable NNNN.slug.sql, sequence, SHA-256 and reviewed evidence ref
 Secret scan covers recognizable keys/private-key headers and credential literals, reports path/category only, never secret values. It is bounded assurance, not proof of no secrets or replacement for provider revocation. Suspected leaks block and require rotation/review via actual owner; fixture keys used for negative tests are constructed in memory. No credential is ever needed in CI. The production security/isolated-runtime gates remain P12/P18.
 
 Evidence index records packet status, source hashes, cases, scope and remaining gates. Reviews explicitly distinguish Codex self-review from independent review, real merchant usability and provider permissions. Qualification is not obtained by ignoring a check or relabelling test fixtures.
+
+Initial private repository has only a README on main. The foundation branch also triggers push CI so its workflow can be qualified before merging any application code. PR/main checks remain; this bootstrap trigger does not confer release approval or bypass review.
