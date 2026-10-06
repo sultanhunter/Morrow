@@ -1,5 +1,5 @@
 {
-  "plan_sequence": 33,
+  "plan_sequence": 34,
   "tasks": [
     {
       "id": "P01.T01",
@@ -59,11 +59,11 @@
     },
     {
       "id": "P04.T03",
-      "status": "Planned"
+      "status": "In review"
     },
     {
       "id": "P04.T04",
-      "status": "Planned"
+      "status": "In review"
     },
     {
       "id": "P05.T01",

@@ -1,6 +1,6 @@
 {
   "scope": "Import/dependency and unreleased contract-freeze checks, not production tenant authority.",
-  "files": 26,
+  "files": 27,
   "negative_checks": [
     {
       "name": "host_sdk",

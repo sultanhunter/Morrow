@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 33,
-  "plan_digest": "2a245952599ec4d0d877585629bf4a30bf7b87fc210d69776a675bf7eb31506a",
+  "plan_sequence": 34,
+  "plan_digest": "05ce2c36004e422824eeddbe6b316da287152e18f925492db12ac5ae39fbbdfa",
   "tasks": [
     {
       "id": "P01.T01",
@@ -58,6 +58,14 @@
     {
       "id": "P04.T02",
       "status": "In review"
+    },
+    {
+      "id": "P04.T03",
+      "status": "In review"
+    },
+    {
+      "id": "P04.T04",
+      "status": "In review"
     }
   ],
   "entries": [
@@ -71,7 +79,7 @@
     },
     {
       "path": "docs/evidence/P01.T01/verification.json",
-      "sha256": "6fe60d9a088023cddbcfcbcfcecea50ebba62ffd5b2d79d8a696c72844b367d1"
+      "sha256": "eaa5ec9f899fd7805ea1535d8b0f9fc0d0c5e774f3d8125d81d6ab5aad6f0652"
     },
     {
       "path": "docs/evidence/P01.T02/review.md",
@@ -83,7 +91,7 @@
     },
     {
       "path": "docs/evidence/P01.T02/verification.json",
-      "sha256": "a8ed9f19d9cc71a248aa722603a6f9cc99bf500138b6fb143b2cd9be8a2f2a51"
+      "sha256": "0b2070ce77508e689d0529f79bec5d063d99e4680e35dcb5671d978ee4b48fa3"
     },
     {
       "path": "docs/evidence/P01.T03/review.md",
@@ -95,7 +103,7 @@
     },
     {
       "path": "docs/evidence/P01.T03/verification.json",
-      "sha256": "e130f46644aedbe999762005a5794a432e616ade6577ba8ec957d0c65c1265e4"
+      "sha256": "0a55a981fdac8bb190b94e29ddd47b10135041b81ea5d126a364d8767bf54217"
     },
     {
       "path": "docs/evidence/P01.T04/review.md",
@@ -107,7 +115,7 @@
     },
     {
       "path": "docs/evidence/P01.T04/verification.json",
-      "sha256": "55cc53a2202dfafd5eaa54db0a0d1e2bc2f6f0a2206bb5c718e229642775c7ba"
+      "sha256": "e69c8b16b17adc34b34411fee45ba910e9c26718f48058ee9442884fed462675"
     },
     {
       "path": "docs/evidence/P02.T01/review.md",
@@ -151,7 +159,7 @@
     },
     {
       "path": "docs/evidence/P02.T02/verification.json",
-      "sha256": "277930f01c476f99b36171601a731384a64bae0de3caae3bcfe978ad0f8a6fc4"
+      "sha256": "36e15f3f57c47cbdbc48d48f311aa8a318d8d2eaf3f40cf2f4b0b5cacd50888d"
     },
     {
       "path": "docs/evidence/P02.T03/browser-checks.json",
@@ -183,11 +191,11 @@
     },
     {
       "path": "docs/evidence/P03.T01/smoke.json",
-      "sha256": "88be033ff0bdeb4a82ea5c314a60f38e0c01af84679cfae629aa9d822d2c3407"
+      "sha256": "dd79ed9238430482c79689948b4f9a9a205a66fb3b7c3e022800c2af9ca1ab43"
     },
     {
       "path": "docs/evidence/P03.T02/boundaries.json",
-      "sha256": "0f36ae7b57920968bd3add11bc0cabc614dc7f1e5acbd628f1193d7e3a7cd0c7"
+      "sha256": "dda61fe90284ad3bf6eb0189f719d15b1c7bf9546b1db391111fe1f5b1b605b5"
     },
     {
       "path": "docs/evidence/P03.T02/review.md",
@@ -223,7 +231,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/delivery.json",
-      "sha256": "aaf0d7ffe7e96fcb6bef7423e7c77bf9c8253a493593ef0fea7a3bf4276a7bd8"
+      "sha256": "2f7d3097cd4ceebe1e11ff4f356ba8d95b983387f488f8cacb3d6036c9a4286e"
     },
     {
       "path": "docs/evidence/P03.T04/dependency-audit.json",
@@ -287,7 +295,7 @@
     },
     {
       "path": "docs/evidence/P04.T02/clean-reproduction.json",
-      "sha256": "fed1c5c6f8dbc31f7648d9d4d7eba3622e1a33b1a7a54b44a7aea6fd6a9e01b5"
+      "sha256": "197ca839cf1585f9c186a8ca60d7fa62f58e94419d40b4f21c0e7624c358da05"
     },
     {
       "path": "docs/evidence/P04.T02/cloudformation-lint.json",
@@ -298,8 +306,28 @@
       "sha256": "bd0f53c55cfb95c22174e2bb9290e41ca979c015a904e3ecc83a9529f73bd25c"
     },
     {
+      "path": "docs/evidence/P04.T02/remote-ci.json",
+      "sha256": "b2c9f5ceeccb011470ba006ab5498c6104b8b8ea4fe1214899a5a95bdafa45b3"
+    },
+    {
       "path": "docs/evidence/P04.T02/review.json",
-      "sha256": "ec88f35821119bb2b28d4c6ace0cda7735d1c46a0d946ff15bbfd7f8606c5bdc"
+      "sha256": "57be06f0aaeeca65bf19d4a3423d3a9790e2dff500db1082dcefaeb21476cfee"
+    },
+    {
+      "path": "docs/evidence/P04.T03/operations-lab.json",
+      "sha256": "df4a575756bf2db849711d1491f1a49b826f1634469c65c850779ab3e2edd56a"
+    },
+    {
+      "path": "docs/evidence/P04.T03/review.json",
+      "sha256": "e117e3f3a7011e12c442e2a2a343ce16ff62cd988b46e84451c26025d64d763b"
+    },
+    {
+      "path": "docs/evidence/P04.T04/restore-lab.json",
+      "sha256": "c94519c3602554c143e5088efea446b54dc98834e131a6163aa7278aea4afc2b"
+    },
+    {
+      "path": "docs/evidence/P04.T04/review.json",
+      "sha256": "5ba22e660960d005a12f687331bbdb1fc8250e810ce4d85eb73fa4e997fb2242"
     }
   ]
 }

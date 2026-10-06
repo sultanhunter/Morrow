@@ -30,8 +30,8 @@
     "verify:boundaries": "node scripts/generate-contracts.mjs --check && node scripts/verify-boundaries.mjs",
     "smoke:scaffold": "node scripts/smoke-scaffold.mjs",
     "lab": "node --import tsx scripts/lab.mjs",
-    "format": "prettier --write apps packages scripts/generate-contracts.mjs scripts/boundary-checks.mjs scripts/verify-boundaries.mjs scripts/lab.mjs scripts/smoke-scaffold.mjs scripts/delivery-checks.mjs tests/typed-boundaries.test.mjs tests/lab.test.mjs tests/delivery.test.mjs scripts/index-evidence.mjs scripts/infrastructure.mjs tests/infrastructure.test.mjs scripts/repair-cdk-bundle.mjs scripts/infrastructure-readiness.mjs scripts/postgres-engine-probe.mjs tests/service-identities.test.mjs scripts/service-permissions.mjs",
-    "format:check": "prettier --check apps packages scripts/generate-contracts.mjs scripts/boundary-checks.mjs scripts/verify-boundaries.mjs scripts/lab.mjs scripts/smoke-scaffold.mjs scripts/delivery-checks.mjs tests/typed-boundaries.test.mjs tests/lab.test.mjs tests/delivery.test.mjs scripts/index-evidence.mjs scripts/infrastructure.mjs tests/infrastructure.test.mjs scripts/repair-cdk-bundle.mjs scripts/infrastructure-readiness.mjs scripts/postgres-engine-probe.mjs tests/service-identities.test.mjs scripts/service-permissions.mjs",
+    "format": "prettier --write apps packages scripts/generate-contracts.mjs scripts/boundary-checks.mjs scripts/verify-boundaries.mjs scripts/lab.mjs scripts/smoke-scaffold.mjs scripts/delivery-checks.mjs tests/typed-boundaries.test.mjs tests/lab.test.mjs tests/delivery.test.mjs scripts/index-evidence.mjs scripts/infrastructure.mjs tests/infrastructure.test.mjs scripts/repair-cdk-bundle.mjs scripts/infrastructure-readiness.mjs scripts/postgres-engine-probe.mjs tests/service-identities.test.mjs scripts/service-permissions.mjs packages/infrastructure/src/operations.ts tests/operations.test.mjs scripts/local-postgres-lab.mjs scripts/encrypted-lab-fixtures.mjs scripts/operations-lab.mjs scripts/restore-lab.mjs",
+    "format:check": "prettier --check apps packages scripts/generate-contracts.mjs scripts/boundary-checks.mjs scripts/verify-boundaries.mjs scripts/lab.mjs scripts/smoke-scaffold.mjs scripts/delivery-checks.mjs tests/typed-boundaries.test.mjs tests/lab.test.mjs tests/delivery.test.mjs scripts/index-evidence.mjs scripts/infrastructure.mjs tests/infrastructure.test.mjs scripts/repair-cdk-bundle.mjs scripts/infrastructure-readiness.mjs scripts/postgres-engine-probe.mjs tests/service-identities.test.mjs scripts/service-permissions.mjs packages/infrastructure/src/operations.ts tests/operations.test.mjs scripts/local-postgres-lab.mjs scripts/encrypted-lab-fixtures.mjs scripts/operations-lab.mjs scripts/restore-lab.mjs",
     "verify:delivery": "node scripts/delivery-checks.mjs",
     "ci": "npm run deps:repair && npm run format:check && npm run typecheck && npm run verify && npm test && npm run build && npm run lab && npm run infra:synth && npm run infra:permissions && npm run infra:readiness && npm run evidence:index",
     "evidence:index": "node scripts/index-evidence.mjs",
@@ -39,7 +39,9 @@
     "deps:repair": "node scripts/repair-cdk-bundle.mjs",
     "infra:readiness": "node --import tsx scripts/infrastructure-readiness.mjs",
     "lab:engine": "node scripts/postgres-engine-probe.mjs",
-    "infra:permissions": "node --import tsx scripts/service-permissions.mjs"
+    "infra:permissions": "node --import tsx scripts/service-permissions.mjs",
+    "lab:operations": "node --import tsx scripts/operations-lab.mjs",
+    "lab:restore": "node --import tsx scripts/restore-lab.mjs"
   },
   "devDependencies": {
     "@react-router/dev": "7.18.2",

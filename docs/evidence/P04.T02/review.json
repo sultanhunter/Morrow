@@ -32,5 +32,7 @@
     "scripts/infrastructure-readiness.mjs": "5be83b95f5d3f6140b85586c2f7fcdd6a5fc2a891ac155eef35cda55841a0ba7",
     "tests/service-identities.test.mjs": "ccfd33e8bf1212bfee39538d20bb572a22d1abf337ecd4e5ac28548ccea30d46",
     "tests/infrastructure.test.mjs": "9678b3eaeab8b99bd08dede5b673310d6080db1a91857345f9bf4ddc9391e1f2"
-  }
+  },
+  "historical_source_commit": "befbaf6fd8fde32cab86c79eb21409c07886af51",
+  "historical_notice": "T02 identity/source reproduction receipt; later operational/plan changes have separate evidence."
 }

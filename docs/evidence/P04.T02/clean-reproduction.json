@@ -79,5 +79,7 @@
       "sha256": "7d1669e5e636bc019ba99c693022826edf845dab04d649c2649be5686d6d9892",
       "matches": true
     }
-  ]
+  ],
+  "historical_source_commit": "befbaf6fd8fde32cab86c79eb21409c07886af51",
+  "historical_notice": "T02 identity/source reproduction receipt; later operational/plan changes have separate evidence."
 }
