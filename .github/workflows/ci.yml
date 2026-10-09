@@ -29,6 +29,7 @@ jobs:
           npm run lab:restore
           npm run lab:identity
           npm run lab:permissions
+          npm run lab:authentication
       - name: Validate regional CloudFormation templates without AWS credentials
         run: |
           python3 -m venv /tmp/morrow-cfn-validator

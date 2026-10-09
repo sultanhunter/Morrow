@@ -1,0 +1,159 @@
+{
+  "task": "P05.T01b",
+  "canonical_sequence": 41,
+  "observed_at": "2026-10-09T23:43:40.888Z",
+  "scope": "Actual application pre-authentication challenge transaction on isolated PostgreSQL17.11, synthetic owner bindings; not WorkOS authentication/session issuance or production SQL/IAM/TLS.",
+  "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+  "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "migrations": [
+    {
+      "sequence": 1,
+      "file": "0001.identity-foundation.sql",
+      "sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+      "reviewRef": "docs/evidence/P05.T01/review.json"
+    },
+    {
+      "sequence": 2,
+      "file": "0002.identity-grants.sql",
+      "sha256": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+      "reviewRef": "docs/evidence/P05.T02/database-review.json"
+    },
+    {
+      "sequence": 3,
+      "file": "0003.authentication-challenges.sql",
+      "sha256": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+      "reviewRef": "docs/evidence/P05.T01/challenge-review.json"
+    }
+  ],
+  "checks": [
+    {
+      "name": "third_migration_failure_rolls_back_tables_and_functions",
+      "passed": true
+    },
+    {
+      "name": "prior_identity_and_grant_schema_survives_failed_third_migration",
+      "passed": true
+    },
+    {
+      "name": "application_creates_only_hashed_independent_proofs",
+      "passed": true
+    },
+    {
+      "name": "fixed_exact_binding_consumes_once",
+      "passed": true
+    },
+    {
+      "name": "committed_replay_denied",
+      "passed": true
+    },
+    {
+      "name": "two_real_concurrent_connections_have_exactly_one_consumer",
+      "passed": true
+    },
+    {
+      "name": "other_application_cannot_consume_state",
+      "passed": true
+    },
+    {
+      "name": "wrong_binding_does_not_consume_original",
+      "passed": true
+    },
+    {
+      "name": "mixing_two_browser_transactions_denied",
+      "passed": true
+    },
+    {
+      "name": "original_browser_transaction_remains_valid",
+      "passed": true
+    },
+    {
+      "name": "database_time_rejects_expired_challenge",
+      "passed": true
+    },
+    {
+      "name": "disabled_owner_binding_rejects_consumption",
+      "passed": true
+    },
+    {
+      "name": "disabled_owner_binding_rejects_creation",
+      "passed": true
+    },
+    {
+      "name": "owner_configuration_change_rejects_old_server_binding",
+      "passed": true
+    },
+    {
+      "name": "new_environment_cannot_relabel_old_challenge",
+      "passed": true
+    },
+    {
+      "name": "callback_change_cannot_rebind_old_challenge",
+      "passed": true
+    },
+    {
+      "name": "challenge_valid_before_waiting_on_real_row_lock",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_real_row_lock_wait_denies_after_acquisition",
+      "passed": true
+    },
+    {
+      "name": "owned_lock_holder_finished_without_proof_output",
+      "passed": true
+    },
+    {
+      "name": "future_dated_challenge_cannot_consume",
+      "passed": true
+    },
+    {
+      "name": "direct_challenge_read_denied",
+      "passed": true
+    },
+    {
+      "name": "direct_binding_read_denied",
+      "passed": true
+    },
+    {
+      "name": "direct_challenge_write_denied",
+      "passed": true
+    },
+    {
+      "name": "direct_binding_activation_denied",
+      "passed": true
+    },
+    {
+      "name": "direct_session_write_still_denied",
+      "passed": true
+    },
+    {
+      "name": "direct_grant_write_still_denied",
+      "passed": true
+    },
+    {
+      "name": "owner_role_escalation_denied",
+      "passed": true
+    },
+    {
+      "name": "both_new_private_tables_force_rls",
+      "passed": true
+    },
+    {
+      "name": "public_role_has_no_function_execution",
+      "passed": true
+    },
+    {
+      "name": "challenge_cannot_create_principal_or_session",
+      "passed": true
+    },
+    {
+      "name": "all_observed_output_excludes_raw_and_hashed_proofs",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "No provider exchange/PKCE or cookie/origin/rate-qualified HTTP entry.",
+    "No principal, session, membership or grant authority conferred.",
+    "SQL role is synthetic local login; no cloud activation or production pool."
+  ]
+}

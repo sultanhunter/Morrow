@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { identitySql } from "../packages/identity/src/index.ts";
+import { authenticationSql } from "../packages/identity/src/authentication-challenges.ts";
 // Scripts-only local test adapter. Executes the real application query strings
 // on one persistent unprivileged psql connection; never a production driver.
 // No host network/mount, proof arguments/env or raw error output.
@@ -89,7 +90,7 @@ export function localIdentityPool(id) {
           if (
             closed ||
             pending ||
-            !Object.values(identitySql).includes(text) ||
+            ![...Object.values(identitySql), ...Object.values(authenticationSql)].includes(text) ||
             !values.every((v) => typeof v === "string")
           )
             throw Error("LOCAL_IDENTITY_QUERY_UNSUPPORTED");

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plan_sequence": 40,
+  "plan_sequence": 42,
   "environment": "staging",
   "status": "local_template_candidate",
   "aws": {

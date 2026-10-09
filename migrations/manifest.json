@@ -14,6 +14,12 @@
       "file": "0002.identity-grants.sql",
       "sha256": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
       "reviewRef": "docs/evidence/P05.T02/database-review.json"
+    },
+    {
+      "sequence": 3,
+      "file": "0003.authentication-challenges.sql",
+      "sha256": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+      "reviewRef": "docs/evidence/P05.T01/challenge-review.json"
     }
   ]
 }

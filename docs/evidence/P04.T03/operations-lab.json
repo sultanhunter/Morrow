@@ -22,58 +22,58 @@
       "environment": "development",
       "service": "workers",
       "code": "CREDENTIAL_ROTATION_FAILED",
-      "correlationId": "2d3a4c78-5896-416e-96d5-6cbe7bd84e7e",
-      "at": "2026-10-06T16:55:02.809Z"
+      "correlationId": "da5234bd-91ad-4451-8003-08862076b821",
+      "at": "2026-10-09T23:41:58.388Z"
     },
     {
       "schemaVersion": 1,
       "environment": "development",
       "service": "workers",
       "code": "CREDENTIAL_ROTATION_STARTED",
-      "correlationId": "2d3a4c78-5896-416e-96d5-6cbe7bd84e7e",
-      "at": "2026-10-06T16:55:03.025Z"
+      "correlationId": "da5234bd-91ad-4451-8003-08862076b821",
+      "at": "2026-10-09T23:41:58.562Z"
     },
     {
       "schemaVersion": 1,
       "environment": "development",
       "service": "workers",
       "code": "CREDENTIAL_ROTATION_VERIFIED",
-      "correlationId": "2d3a4c78-5896-416e-96d5-6cbe7bd84e7e",
-      "at": "2026-10-06T16:55:03.190Z"
+      "correlationId": "da5234bd-91ad-4451-8003-08862076b821",
+      "at": "2026-10-09T23:41:59.034Z"
     },
     {
       "schemaVersion": 1,
       "environment": "development",
       "service": "workers",
       "code": "CREDENTIAL_ROTATION_PROMOTED",
-      "correlationId": "2d3a4c78-5896-416e-96d5-6cbe7bd84e7e",
-      "at": "2026-10-06T16:55:03.190Z"
+      "correlationId": "da5234bd-91ad-4451-8003-08862076b821",
+      "at": "2026-10-09T23:41:59.034Z"
     },
     {
       "schemaVersion": 1,
       "environment": "development",
       "service": "workers",
       "code": "WORKER_CONNECTION_LOST",
-      "correlationId": "2d3a4c78-5896-416e-96d5-6cbe7bd84e7e",
-      "at": "2026-10-06T16:55:03.262Z"
+      "correlationId": "da5234bd-91ad-4451-8003-08862076b821",
+      "at": "2026-10-09T23:41:59.257Z"
     },
     {
       "schemaVersion": 1,
       "environment": "development",
       "service": "workers",
       "code": "WORKER_CONNECTION_RECOVERED",
-      "correlationId": "2d3a4c78-5896-416e-96d5-6cbe7bd84e7e",
-      "at": "2026-10-06T16:55:03.388Z"
+      "correlationId": "da5234bd-91ad-4451-8003-08862076b821",
+      "at": "2026-10-09T23:41:59.699Z"
     },
     {
       "schemaVersion": 1,
       "environment": "development",
       "service": "workers",
       "code": "ACTIVATION_HELD",
-      "correlationId": "2d3a4c78-5896-416e-96d5-6cbe7bd84e7e",
-      "at": "2026-10-06T16:55:03.388Z"
+      "correlationId": "da5234bd-91ad-4451-8003-08862076b821",
+      "at": "2026-10-09T23:41:59.700Z"
     }
   ],
-  "elapsed_ms": 2149,
+  "elapsed_ms": 4135,
   "cleanup": "owned ephemeral container removed"
 }
