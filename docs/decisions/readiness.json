@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plan_sequence": 42,
+  "plan_sequence": 43,
   "reviewer": "Codex (same implementer)",
   "signature_kind": "self_review_declaration",
   "independent_review": "not_performed",

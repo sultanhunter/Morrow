@@ -1,6 +1,6 @@
 # Morrow infrastructure foundation
 
-Canonical build plan sequence42. These are local templates, not deployed resources. They do not confer provider approval, real tenant isolation, database restore proof or merchant access. No deploy/bootstrap command is provided.
+Canonical build plan sequence43. These are local templates, not deployed resources. They do not confer provider approval, real tenant isolation, database restore proof or merchant access. No deploy/bootstrap command is provided.
 
 `npm run infra:synth` produces development/staging/production CloudFormation in ignored `work/infrastructure-templates/`, verifies deterministic output and records inventory/digests under `docs/evidence/P04.T01/`. It uses no AWS credentials, context lookup, Docker build or asset publishing. Required parameters have no invented defaults: regional Aurora PostgreSQL17 minor, qualified maximum ACUs and an environment-owned regional certificate. Engine compatibility must be checked in the actual account/region before provisioning.
 

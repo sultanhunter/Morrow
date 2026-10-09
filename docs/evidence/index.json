@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 42,
-  "plan_digest": "fd5a443844aac1367668e9fef552bc8c1d0aae254610b360bdb243faaa553f9d",
+  "plan_sequence": 43,
+  "plan_digest": "6bf4fabb667b6e757fd0b9a7de7389cdfd137b48f38c6aa14cafe0a3cd0887c1",
   "tasks": [
     {
       "id": "P01.T01",
@@ -87,7 +87,7 @@
     },
     {
       "path": "docs/evidence/P01.T01/verification.json",
-      "sha256": "97effe337386eeece2ad2b9f101a8f21e85240dbbfa796efae9e94bd173c0e81"
+      "sha256": "76e252cd940de2f25501015a2b88defc63d4a875ae8ecee65981fc08cad9ed30"
     },
     {
       "path": "docs/evidence/P01.T02/review.md",
@@ -99,7 +99,7 @@
     },
     {
       "path": "docs/evidence/P01.T02/verification.json",
-      "sha256": "d99da712370147a33adef45c6a27a688cd39ab703ac0e224a105cbee8678c294"
+      "sha256": "3023d8ecf5946332422a365609ef4281a52c23cad09597afed54d503bef51406"
     },
     {
       "path": "docs/evidence/P01.T03/review.md",
@@ -111,7 +111,7 @@
     },
     {
       "path": "docs/evidence/P01.T03/verification.json",
-      "sha256": "018cedf0bb86ad263e668103df8d9d2cb93cb6136f64ba88fe7050322b349a39"
+      "sha256": "27ad1da168ed50f44f530477e4ac42a32f18219b84989cf5ac2ba9a0864fc8f1"
     },
     {
       "path": "docs/evidence/P01.T04/review.md",
@@ -123,7 +123,7 @@
     },
     {
       "path": "docs/evidence/P01.T04/verification.json",
-      "sha256": "cca8ad78af6b9f397ee82835273b16fd6286dc637a4d5c383993f2d3ae793fcc"
+      "sha256": "7b8c3865a1635fe39d52a2478eddbf8c7b93c31d8a25385d3afa6de100d3a508"
     },
     {
       "path": "docs/evidence/P02.T01/review.md",
@@ -167,7 +167,7 @@
     },
     {
       "path": "docs/evidence/P02.T02/verification.json",
-      "sha256": "7af2ef0dfd915e0a2ccf799fc8ba643f26d34e0133fa357907deafb5885801f7"
+      "sha256": "8b66343cfa2c312dbffbe0b92a6daf86b873238d7e1199cd0f1cba6ddc1262ac"
     },
     {
       "path": "docs/evidence/P02.T03/browser-checks.json",
@@ -239,7 +239,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/delivery.json",
-      "sha256": "4bac7b1664a2914c32b4695ffe5c3930eb53cfc00118d9ec03639428148e5701"
+      "sha256": "0d941bf43f96d264721c6d6d87b32d8b46e06d5faa89d908f4d22be45149e21e"
     },
     {
       "path": "docs/evidence/P03.T04/dependency-audit.json",
@@ -344,6 +344,10 @@
     {
       "path": "docs/evidence/P05.T01/challenge-lab.json",
       "sha256": "f5debde4d533abf66c653b792766ecfeaa8698779c3cd6d1ff3140f01851edab"
+    },
+    {
+      "path": "docs/evidence/P05.T01/challenge-remote.json",
+      "sha256": "44e74fff85bda96fa3fe15b890397fce3e67067ef844526e32766fa17376e3d6"
     },
     {
       "path": "docs/evidence/P05.T01/challenge-review.json",

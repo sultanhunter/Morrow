@@ -13,5 +13,5 @@
   "callbacks_configured": false,
   "authentication_qualified": false,
   "scope": "Observed owned staging selectors only; not secret configuration, deployed identity mapping or activation authority.",
-  "plan_sequence": 42
+  "plan_sequence": 43
 }
