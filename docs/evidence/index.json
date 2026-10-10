@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 48,
-  "plan_digest": "e32495a0f7aeb99d5322d78947cb3b70e65930b5f2630d0903d23168bcb3cc39",
+  "plan_sequence": 50,
+  "plan_digest": "ffdad437583a2b5aa26e415f7f58c3a7cb5f398547cd6fda813025c1e38847d6",
   "tasks": [
     {
       "id": "P01.T01",
@@ -87,7 +87,7 @@
     },
     {
       "path": "docs/evidence/P01.T01/verification.json",
-      "sha256": "0df1daf86019869b29dbf8153d738c11b2e13609f1512d0792cb93be024f4301"
+      "sha256": "1ee776ea1553d9910b41c62ce31ffcb48eb32f1541a6f2a70024da3ba9c40aa3"
     },
     {
       "path": "docs/evidence/P01.T02/review.md",
@@ -99,7 +99,7 @@
     },
     {
       "path": "docs/evidence/P01.T02/verification.json",
-      "sha256": "0af6741fe2aa8ad8ee0088798f41ddc2fc348c8d4194937f9117c6f99e483e9f"
+      "sha256": "ead00282834e3073da73d9cdb26cbe24fb24fa21817440f107c51c01e3317337"
     },
     {
       "path": "docs/evidence/P01.T03/review.md",
@@ -111,7 +111,7 @@
     },
     {
       "path": "docs/evidence/P01.T03/verification.json",
-      "sha256": "fdd0b91a7efe97637cfb72d50111b46894d0cf48b80eac95151ef07227f5b5a3"
+      "sha256": "b8333d48b9d4aa28dbf08d6044d069d3b135dbcd6195062ca7f805e46f662dec"
     },
     {
       "path": "docs/evidence/P01.T04/review.md",
@@ -123,7 +123,7 @@
     },
     {
       "path": "docs/evidence/P01.T04/verification.json",
-      "sha256": "4f9b9658b07a9a5925b247537114ac8355d14230acb3db8433872e27991a10b9"
+      "sha256": "564e301c64d8a6853ce0681be5b6888cb252a854fbf5be66a488889f631c4ccf"
     },
     {
       "path": "docs/evidence/P02.T01/review.md",
@@ -167,7 +167,7 @@
     },
     {
       "path": "docs/evidence/P02.T02/verification.json",
-      "sha256": "8de1f664a527e5f2e0cc5331242dd06dff8dc382a51e47844db2ff6babb08f3f"
+      "sha256": "c39c31b130ececf56c7822b237ee25175c149b693b033c20b3efea96a0029ab5"
     },
     {
       "path": "docs/evidence/P02.T03/browser-checks.json",
@@ -199,7 +199,7 @@
     },
     {
       "path": "docs/evidence/P03.T01/smoke.json",
-      "sha256": "98594a294eb89cf5a489a743d3a6cabff4a70c91df76fa0505bf57986a8582e0"
+      "sha256": "5eac6a669ff3c39c2001e34b6f5c63172fd2adfd905d3cbeb63ce7141febf235"
     },
     {
       "path": "docs/evidence/P03.T02/boundaries.json",
@@ -239,7 +239,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/delivery.json",
-      "sha256": "66c8edfca8ef2d9344b6c7f8ed4d3d5c7d82e051cb1db3a7185f3fbd35c67c50"
+      "sha256": "109bc7995b375d5d9e23b8a6f2f677b872b423aea3f41c607e084ca4fe18dcb9"
     },
     {
       "path": "docs/evidence/P03.T04/dependency-audit.json",
@@ -299,15 +299,15 @@
     },
     {
       "path": "docs/evidence/P04.T01a/permissions.json",
-      "sha256": "c8a00d819e68466fed69219a894fa82dc307e0ae3880c7149900a72f8ce187b4"
+      "sha256": "d3e91a547128281f9e10719717e38d1f10b00bf75cab7476d752cb86ca0e4bde"
     },
     {
       "path": "docs/evidence/P04.T01a/readiness.json",
-      "sha256": "1e9938e4c95cbaa5763964a31561b4b07e5c205ac3c5a2431ec499c81ba1306f"
+      "sha256": "6a6494e9effefec8dec9d88a64f830a8c746a9ada562c9f94446c2711b03fbab"
     },
     {
       "path": "docs/evidence/P04.T01a/synth.json",
-      "sha256": "53dfab8e67fa75794d1c0a25582400efa660c669906f5b036b97a7bf8745c312"
+      "sha256": "b0e1d4b8517e3e83b29a275fbc8007282b15f17b7c68a0d72b5df11faa0c6c15"
     },
     {
       "path": "docs/evidence/P04.T01b/verification.json",
@@ -324,6 +324,18 @@
     {
       "path": "docs/evidence/P04.T01c/review.json",
       "sha256": "643cf7709460761aa38aa2a3d813d2e4ca308d3f741235286024865e68e2b83b"
+    },
+    {
+      "path": "docs/evidence/P04.T01d/provider-actions.json",
+      "sha256": "94f01baeae86e1bfe59e3699bc1dcface6d59ebc58ea72e405e3392291e8f321"
+    },
+    {
+      "path": "docs/evidence/P04.T01d/qualification.json",
+      "sha256": "2dbb2de8b97057d99a44836ac3c5a7a5e7aa934355124de68066ca8927e8f17a"
+    },
+    {
+      "path": "docs/evidence/P04.T01d/review.json",
+      "sha256": "4fc456a9a3f22c6c07f63ff991959524a545a650e65804eabdc8c1f38ae405b5"
     },
     {
       "path": "docs/evidence/P04.T02/README.md",

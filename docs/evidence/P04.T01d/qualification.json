@@ -1,0 +1,74 @@
+{
+  "task": "P04.T01d",
+  "observed_at": "2026-10-10T20:48:12.270Z",
+  "status": "passed",
+  "phase": "cleanup",
+  "binding": {
+    "environment": "staging",
+    "projectId": "cool-butterfly-64820147",
+    "branchId": "br-flat-sea-b8pulqt6",
+    "hostname": "ep-proud-bread-b8wezfad.c-14.us-east-1.aws.neon.tech",
+    "database": "morrow_staging"
+  },
+  "checks": [
+    "restricted_role_flags_and_membership",
+    "three_immutable_migrations",
+    "nine_force_rls_tables",
+    "two_synthetic_tenants_seeded",
+    "actual_adapter_own_workspace",
+    "retained_scope_denied",
+    "cross_tenant_proof_denied",
+    "missing_proof_denied",
+    "concurrent_tenant_context_isolation",
+    "runtime_direct_login",
+    "no_context_no_visibility",
+    "commit_context_cleared",
+    "rollback_context_cleared",
+    "private_sessions_denied",
+    "private_challenges_denied",
+    "runtime_write_denied",
+    "owner_escalation_denied",
+    "grant_write_denied",
+    "real_kernel_exact_sql_grant",
+    "foreign_resource_denied",
+    "revision_changed_during_wait_denied",
+    "membership_revoked_between_reads",
+    "revoked_proof_denied",
+    "expired_proof_denied",
+    "run_owned_fixture_cleanup_verified"
+  ],
+  "fixture_cleanup_verified": true,
+  "migrations_applied": true,
+  "migration_digests": [
+    {
+      "sequence": 1,
+      "file": "0001.identity-foundation.sql",
+      "sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+      "reviewRef": "docs/evidence/P05.T01/review.json"
+    },
+    {
+      "sequence": 2,
+      "file": "0002.identity-grants.sql",
+      "sha256": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+      "reviewRef": "docs/evidence/P05.T02/database-review.json"
+    },
+    {
+      "sequence": 3,
+      "file": "0003.authentication-challenges.sql",
+      "sha256": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+      "reviewRef": "docs/evidence/P05.T01/challenge-review.json"
+    }
+  ],
+  "source_digests": {
+    "scripts/neon-authority-qualification.mjs": "ada563cbbec208abba6a54230071d4922bb14dc1361c1fb50e6b73974944cdd1",
+    "scripts/neon-authority-input.mjs": "2c3f14f5a1184d88a5fce0d03e678b5bf9d651a75c1a11750b80661f96a594ef",
+    "scripts/fixtures/neon-authority.ts": "26a9b5ea4bd275b5b1c047e5dd327bed7b4e2b99b6e98fd8adc6c8dfc350b0c9",
+    "scripts/neon-preflight-egress.mjs": "b7e25fcc618a81cc15756cd8b2b7ecce5779b70118afb96954e7d7944bdb9a44",
+    "packages/identity/src/neon.ts": "0904219a4d8a09303cfe00940f2536549f35d16e94ad76ffa1b81685996f3ecf",
+    "packages/identity/src/neon-request.ts": "8e36e14303f602e239ffe2a57921eb18df2483b0bd9654eee6783abd5a43b651",
+    "packages/identity/src/index.ts": "041952d82c134a04487b9e9648c2a648879fa069220c9d37eb9113509a7c3643",
+    "packages/policy/src/index.ts": "712726f4d56705051404326edf5e285c7d7c4cac9739d513645de8af167eb0c3",
+    "package-lock.json": "3b0ae7c244bae8bf21384696a838ccc40013962616be333bbcbbed1c19fc1750"
+  },
+  "scope": "Actual Neon restricted roles/migrations and synthetic application authority in local workerd. Not WorkOS authentication, Cloudflare deployment, rotation/recovery or launch acceptance."
+}

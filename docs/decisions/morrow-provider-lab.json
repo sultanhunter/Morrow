@@ -1,6 +1,6 @@
 {
-  "task": "P04.T01c",
-  "plan_sequence": 48,
+  "task": "P04.T01d",
+  "plan_sequence": 50,
   "observed_date_india": "2026-10-11",
   "qualification": "temporary_laboratory_only",
   "neon": {
@@ -21,10 +21,13 @@
     "history_hours": 6,
     "seven_day_staging_recovery_qualified": false,
     "read_only_operator_preflight": "passed",
-    "runtime_role_and_rls_qualified": false,
-    "migrations_applied": false,
+    "runtime_role_and_rls_qualified": true,
+    "migrations_applied": true,
     "paid_upgrade": false,
-    "console_url": "https://console.neon.tech/app/projects/cool-butterfly-64820147/branches/br-flat-sea-b8pulqt6"
+    "console_url": "https://console.neon.tech/app/projects/cool-butterfly-64820147/branches/br-flat-sea-b8pulqt6",
+    "qualification_scope": "restricted synthetic authority laboratory from local workerd only",
+    "authority_evidence": "docs/evidence/P04.T01d/qualification.json",
+    "hosted_application_identity_qualified": false
   },
   "daytona": {
     "organization_id": "8862ff17-6109-4eb1-ac70-2f7bafba64ae",
@@ -39,9 +42,17 @@
     "sandbox_created": false,
     "paid_upgrade": false,
     "morrow_startup_credit_entitlement_confirmed": false,
-    "network_documentation": "https://www.daytona.io/docs/en/network-limits/"
+    "network_documentation": "https://www.daytona.io/docs/en/network-limits/",
+    "technical_support_request": "sent_awaiting_response"
   },
   "cloudflare_deployment": false,
   "merchant_or_production_activation": false,
-  "scope": "Approved separate resource setup and Neon read-only local transport tests. No deployment, runtime credential, migration, grant or paid activation; unrelated projects untouched."
+  "scope": "Approved separate resources and actual Neon restricted synthetic authority laboratory. Three immutable migrations, restricted roles and25 checks passed; all run-owned fixtures removed. No WorkOS authentication, public deployment, paid activation or launch acceptance.",
+  "removed_unrelated_neon_project": {
+    "name": "ShopifyFlow",
+    "project_id": "wandering-tree-28469764",
+    "action": "permanently_deleted",
+    "owner_exact_confirmation": true,
+    "project_list_verified_only_morrow_staging": true
+  }
 }

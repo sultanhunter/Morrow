@@ -1,8 +1,8 @@
 {
   "task": "P01.T01",
-  "generated_at": "2026-10-10T20:20:19.646Z",
-  "plan_sequence": 48,
-  "plan_digest": "e32495a0f7aeb99d5322d78947cb3b70e65930b5f2630d0903d23168bcb3cc39",
+  "generated_at": "2026-10-10T20:50:45.438Z",
+  "plan_sequence": 50,
+  "plan_digest": "ffdad437583a2b5aa26e415f7f58c3a7cb5f398547cd6fda813025c1e38847d6",
   "capabilities": 103,
   "domains": 14,
   "packages": 18,
@@ -11,7 +11,7 @@
   "walkthrough_cases": 70,
   "scope": "Catalogue consistency and synthetic authority walkthroughs only; not production enforcement or provider qualification.",
   "input_digests": {
-    "docs/contracts/capabilities.json": "c83525a5b4cdf4ca534bb2be4ec9557b7cb6569f2614b891ea7963f606380a1a",
+    "docs/contracts/capabilities.json": "9235a040d25543d084f95630c63ec8ac12b05431d07077330bb2984f551813ca",
     "docs/decisions/dependencies.json": "156e4e56472f3dce0808eb85f8ccd98b9b0cb160952168235fe8e032f6ddffad",
     "docs/acceptance/P01.A01-fixtures.json": "c5cee8ff337b84e080c0775d0709ef46a8e63d646cfa7505487fce8a1b326786"
   },
