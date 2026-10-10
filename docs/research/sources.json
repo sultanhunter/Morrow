@@ -577,5 +577,68 @@
     "observed_at": "2026-10-06",
     "finding": "Developer Support distinguishes existing paid independent SaaS relationships from Shopify-acquired/free accounts. Morrow-specific qualification and usage-only facts remain unresolved.",
     "evidence_kind": "official_support_guidance"
+  },
+  {
+    "id": "S75",
+    "url": "https://developers.cloudflare.com/workflows/reference/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Workflows requests/CPU share Workers allowances; steps and retained state are separately billed."
+  },
+  {
+    "id": "S76",
+    "url": "https://github.com/neondatabase/website/blob/main/content/docs/introduction/plans.md",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Neon Launch and Scale have no monthly minimum; Scale supports thirty-day PITR. Compute, logical storage, change history and snapshots are separately billed."
+  },
+  {
+    "id": "S77",
+    "url": "https://www.daytona.io/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Listed CPU/RAM/disk rates are usage based; disk free allowance is conservatively excluded from planning arithmetic."
+  },
+  {
+    "id": "S78",
+    "url": "https://www.daytona.io/docs/billing/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Started and transitional sandboxes bill reserved CPU/RAM/disk; stopped/paused bill disk only."
+  },
+  {
+    "id": "S79",
+    "url": "https://www.daytona.io/docs/en/isolation/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Default container and explicit VM classes have different isolation boundaries. VM has its own kernel; network policy must be tested."
+  },
+  {
+    "id": "S80",
+    "url": "https://developers.cloudflare.com/r2/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Standard R2 storage and operations are metered, with included allowances and free direct egress."
+  },
+  {
+    "id": "S81",
+    "url": "https://developers.cloudflare.com/secrets-store/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Cloudflare Secrets Store is in open beta; actual key custody and production suitability require qualification."
+  },
+  {
+    "id": "S82",
+    "url": "https://developers.cloudflare.com/r2/buckets/bucket-locks/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Bucket locks prevent overwriting/deletion and can conflict with erasure requirements."
+  },
+  {
+    "id": "S83",
+    "url": "https://developers.cloudflare.com/api/resources/workflows/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Workflow API exposes versions and instance events/status; actual retained-version behavior needs qualification."
   }
 ]

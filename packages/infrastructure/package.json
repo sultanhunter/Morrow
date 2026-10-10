@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/selected-stack.ts",
+    "./legacy-aws": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

@@ -50,8 +50,8 @@ for(const host of ['shopify_admin','standalone']) {
     ['unresolved API field',{remainingStructuralGap:true},'STRUCTURAL_GAP'],
   ])test(`${host}: denies ${name}`,()=>assert.ok(inspectSyntheticActivation({...facts,...delta}).reasons.includes(reason)));
 }
-test('warm estimate exposes only known components and cannot authorize spend',()=>{
-  const estimate=estimateWarmComponents(read('docs/decisions/cost-model.json'));
+test('superseded AWS warm estimate exposes only known components and cannot authorize spend',()=>{
+  const estimate=estimateWarmComponents(read('docs/history/aws-baseline/docs/decisions/cost-model.json'));
   assert.equal(estimate.components.trusted_compute,'108.121176000');
   assert.equal(estimate.components.database_minimum,'87.600000000');
   assert.equal(estimate.components.alb_base,'16.425000000');
@@ -59,5 +59,5 @@ test('warm estimate exposes only known components and cannot authorize spend',()
   assert.equal(estimate.completeQuote,false);assert.equal(estimate.provisioningAuthorized,false);
   assert.ok(estimate.exclusions.includes('NAT hourly and bytes for selected AZ layout'));
 });
-test('cost estimate rejects hiding required missing costs',()=>{const m=structuredClone(read('docs/decisions/cost-model.json'));m.excluded_required_quote_terms=[];assert.throws(()=>estimateWarmComponents(m),/explicit exclusions/);});
-test('no arbitrary owner ceiling does not imply zero fixed cost',()=>{const m=read('docs/decisions/cost-model.json');assert.equal(m.owner_ceiling,null);assert.notEqual(estimateWarmComponents(m).subtotal,'0.000000000');});
+test('cost estimate rejects hiding required missing costs',()=>{const m=structuredClone(read('docs/history/aws-baseline/docs/decisions/cost-model.json'));m.excluded_required_quote_terms=[];assert.throws(()=>estimateWarmComponents(m),/explicit exclusions/);});
+test('no arbitrary owner ceiling does not imply zero fixed cost',()=>{const m=read('docs/history/aws-baseline/docs/decisions/cost-model.json');assert.equal(m.owner_ceiling,null);assert.notEqual(estimateWarmComponents(m).subtotal,'0.000000000');});

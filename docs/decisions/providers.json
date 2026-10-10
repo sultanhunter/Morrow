@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plan_sequence": 43,
+  "plan_sequence": 45,
   "observed_at": "2026-10-06",
   "providers": [
     {
@@ -239,73 +239,21 @@
       "qualification_evidence": []
     },
     {
-      "id": "aws",
-      "name": "AWS",
-      "version": "us-east-1/CDK-typescript",
-      "decision_ids": [
-        "D17"
-      ],
-      "sources": [
-        "S19",
-        "S20",
-        "S21",
-        "S22",
-        "S23",
-        "S24",
-        "S25",
-        "S27"
-      ],
-      "owner": "Morrow platform owner",
-      "design_status": "selected",
-      "controlled_test_status": "not_run",
-      "engineering_status": "not_implemented",
-      "production_review_status": "pending",
-      "activation": "blocked",
-      "blocking_packages": [
-        "P04",
-        "P12",
-        "P18"
-      ],
-      "test_account_plan": "Separate staging account; local PostgreSQL 17/Temporal dev server first; account availability not verified.",
-      "restrictions": "Regional engine/quotas, full quote, service identity, restore/failover and isolated-runtime tests.",
-      "qualification_evidence": []
-    },
-    {
       "id": "cloudflare",
       "name": "Cloudflare",
-      "version": "workers-static-assets",
+      "version": "Workers/Workflows/Queues/R2:selected-contract-v1",
       "decision_ids": [
-        "D18"
-      ],
-      "sources": [
-        "S17",
-        "S18"
-      ],
-      "owner": "Morrow platform owner",
-      "design_status": "selected",
-      "controlled_test_status": "not_run",
-      "engineering_status": "not_implemented",
-      "production_review_status": "pending",
-      "activation": "blocked",
-      "blocking_packages": [
-        "P04",
-        "P18"
-      ],
-      "test_account_plan": "Browser login observed read-only; no Morrow resource created or existing unrelated bucket selected.",
-      "restrictions": "Public-only routes and no private cache, domain ownership and deployment validation.",
-      "qualification_evidence": []
-    },
-    {
-      "id": "temporal",
-      "name": "Temporal Cloud",
-      "version": "aws-us-east-1",
-      "decision_ids": [
+        "D18",
         "D19"
       ],
       "sources": [
-        "S14",
-        "S15",
-        "S16"
+        "S17",
+        "S18",
+        "S75",
+        "S80",
+        "S81",
+        "S82",
+        "S83"
       ],
       "owner": "Morrow platform owner",
       "design_status": "selected",
@@ -315,11 +263,10 @@
       "activation": "blocked",
       "blocking_packages": [
         "P04",
-        "P12",
         "P18"
       ],
-      "test_account_plan": "Local development service before separate staging namespace; Cloud account not verified.",
-      "restrictions": "Namespace region/auth, compatible worker deployment, retention/replay and restore reconciliation.",
+      "test_account_plan": "Owned Cloudflare login observed; create isolated Morrow resource bindings only after reviewed account and cost qualification.",
+      "restrictions": "Private API/session responses uncached; broker-only keys; scoped bindings, R2 erasure/recovery and actual workflow version/wait tests required.",
       "qualification_evidence": []
     },
     {
@@ -342,9 +289,59 @@
         "P05",
         "P18"
       ],
-      "test_account_plan": "Free staging tenant if eligible; account availability not verified.",
-      "restrictions": "US handling terms and production identity lifecycle, linking, SSO/SCIM and connection-cost evidence.",
+      "test_account_plan": "Owned Morrow staging project prepared; callback/credential exchange/provider authentication remain unqualified.",
+      "restrictions": "Provider processing/retention terms, identity lifecycle/linking, SSO/SCIM and connection-cost evidence; no default US-only processing requirement.",
       "qualification_evidence": []
+    },
+    {
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P04",
+        "P18"
+      ],
+      "qualification_evidence": [],
+      "id": "neon",
+      "name": "Neon",
+      "version": "PostgreSQL17:project-contract-v1",
+      "decision_ids": [
+        "D17"
+      ],
+      "sources": [
+        "S76"
+      ],
+      "restrictions": "US primary storage; runtime/issuer/maintenance roles separate; interactive transaction SET LOCAL/RLS isolation and actual recovery required.",
+      "test_account_plan": "Owned Morrow development/staging project required; provider account availability and actual activation remain unverified."
+    },
+    {
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P04",
+        "P18"
+      ],
+      "qualification_evidence": [],
+      "id": "daytona",
+      "name": "Daytona",
+      "version": "LinuxVM:execution-profile-v1",
+      "decision_ids": [
+        "D17"
+      ],
+      "sources": [
+        "S77",
+        "S78",
+        "S79"
+      ],
+      "restrictions": "Explicit VM class; approved image digest, effective no-direct-egress, no raw merchant/platform keys, generation fencing and cleanup required.",
+      "test_account_plan": "Owned Morrow development/staging project required; provider account availability and actual activation remain unverified."
     }
   ]
 }

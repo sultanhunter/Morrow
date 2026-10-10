@@ -317,60 +317,58 @@
   },
   {
     "id": "D17",
-    "key": "aws",
-    "decision": "AWS deployment and account qualification",
+    "key": "storage_and_runtime",
+    "decision": "Neon PostgreSQL and Daytona runtime deployment/account qualification",
     "owner": "Morrow platform owner",
     "resolve_in": "P01.T03",
     "status": "Design recorded",
-    "design_sequence": 17,
+    "design_sequence": 45,
     "activation": "blocked_until_qualified",
     "engineering_status": "not_implemented",
     "controlled_test_status": "not_run",
     "production_permission_status": "pending",
     "sources": [
-      "S19",
-      "S20",
-      "S21",
-      "S22",
-      "S23",
-      "S24",
-      "S25",
-      "S27"
+      "S76",
+      "S77",
+      "S78",
+      "S79"
     ]
   },
   {
     "id": "D18",
     "key": "cloudflare",
-    "decision": "Cloudflare deployment and account qualification",
+    "decision": "Cloudflare application, broker, transport and artifact deployment/account qualification",
     "owner": "Morrow platform owner",
     "resolve_in": "P01.T03",
     "status": "Design recorded",
-    "design_sequence": 17,
+    "design_sequence": 45,
     "activation": "blocked_until_qualified",
     "engineering_status": "not_implemented",
     "controlled_test_status": "not_run",
     "production_permission_status": "pending",
     "sources": [
       "S17",
-      "S18"
+      "S18",
+      "S80",
+      "S81",
+      "S82"
     ]
   },
   {
     "id": "D19",
-    "key": "temporal",
-    "decision": "Temporal Cloud deployment and account qualification",
+    "key": "durable_orchestration",
+    "decision": "Cloudflare Workflows execution versioning, waits and recovery qualification",
     "owner": "Morrow platform owner",
     "resolve_in": "P01.T03",
     "status": "Design recorded",
-    "design_sequence": 17,
+    "design_sequence": 45,
     "activation": "blocked_until_qualified",
     "engineering_status": "not_implemented",
     "controlled_test_status": "not_run",
     "production_permission_status": "pending",
     "sources": [
-      "S14",
-      "S15",
-      "S16"
+      "S75",
+      "S83"
     ]
   },
   {

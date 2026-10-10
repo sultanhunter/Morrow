@@ -1,6 +1,6 @@
 # Data and retention policy
 
-Selected design: canonical sequence 16, elaborated in sequence 17. Machine-readable defaults are deployment-policy.json. A US-hosted database is not a claim of universal US processing: identity, Shopify, external connectors and models have independent terms and controls. Do not send protected content until that provider/class has current eligibility and tenant authorization. Public assets are global; private application storage and ingress are US-east-1. Account region, subprocessors and backup configuration remain qualification evidence.
+Selected design: canonical sequence45. Machine-readable defaults are deployment-policy.json. A US-hosted database is not a claim of universal US processing: identity, Shopify, external connectors and models have independent terms and controls. Do not send protected content until that provider/class has current eligibility and tenant authorization. Primary storage defaults to the US; approved global application/provider processing is permitted. Account region, subprocessors and backup configuration remain qualification evidence.
 
 | Class | Default | Deletion and access |
 | --- | --- | --- |
@@ -10,8 +10,10 @@ Selected design: canonical sequence 16, elaborated in sequence 17. Machine-reada
 | Shared artifacts | Until merchant deletion | Immutable versions do not exempt content from erasure; authorized version history only |
 | Content-free audit/usage metadata | 365 days | No transcripts, addresses or content in metadata; pseudonymize/redact subject associations |
 | Redacted diagnostic logs | Fourteen days | No credentials, bodies or private model prompts; access restricted |
-| Closed Temporal histories | Thirty production/seven staging days | Opaque references and safe state only; open histories bounded through continuation |
-| Database PITR | Thirty-five production/seven staging days | Restore restricted/quarantined; erasure/revocation ledger reapplied before access |
+| Closed workflow execution state | Thirty production/seven staging days | Opaque references and safe state only; open histories bounded through continuation |
+| Database PITR | Thirty production/seven staging days | Restore restricted/quarantined; erasure/revocation ledger reapplied before access |
+
+Daily recovery snapshots/exports are separately retained thirty-five days in production/seven in staging; they do not provide thirty-five-day point-in-time recovery. Qualify changed storage, matching artifact revision manifests and erasure/revocation replay.
 
 These durations are product defaults rather than claimed legal obligations. Any legitimately required financial retention requires a documented basis, exact data class, restricted access and expiry. Do not quietly retain all customer payloads under an accounting exception.
 

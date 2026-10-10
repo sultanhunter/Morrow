@@ -1,0 +1,48 @@
+{
+  "scope": "Selected-stack local design inventory; not provider deployment, identity/network proof or authenticated approval",
+  "stack": "cloudflare-neon-daytona",
+  "mode": "readiness",
+  "paid_resources_created": false,
+  "deployment_entrypoint": false,
+  "environments": [
+    {
+      "environment": "development",
+      "configuration_sha256": "fb5dbc73850c1b7f1be396f6b1dccbefb0c5249b5f6ad0c59e18772e9d47b27f",
+      "status": "pending",
+      "paid_creation_authorized": false,
+      "reasons": [
+        "OWNED_PROVIDER_BINDINGS_REQUIRED",
+        "ACTUAL_PROVIDER_QUALIFICATION_REQUIRED",
+        "COMPLETE_BOUND_QUOTE_REQUIRED",
+        "BOUND_OWNER_COST_AUTHORIZATION_REQUIRED",
+        "AUTHENTICATED_DEPLOYMENT_PORT_NOT_IMPLEMENTED"
+      ]
+    },
+    {
+      "environment": "staging",
+      "configuration_sha256": "8b6effcb06042bd671e8d6ba357aaa8dfa5506d645398ef575d799658f8a8de6",
+      "status": "pending",
+      "paid_creation_authorized": false,
+      "reasons": [
+        "OWNED_PROVIDER_BINDINGS_REQUIRED",
+        "ACTUAL_PROVIDER_QUALIFICATION_REQUIRED",
+        "COMPLETE_BOUND_QUOTE_REQUIRED",
+        "BOUND_OWNER_COST_AUTHORIZATION_REQUIRED",
+        "AUTHENTICATED_DEPLOYMENT_PORT_NOT_IMPLEMENTED"
+      ]
+    },
+    {
+      "environment": "production",
+      "configuration_sha256": "4b6aa3e6800df2cc12cadffb2b38b45d927e2a9cf6e1848fdf12c1f00f9b766d",
+      "status": "pending",
+      "paid_creation_authorized": false,
+      "reasons": [
+        "OWNED_PROVIDER_BINDINGS_REQUIRED",
+        "ACTUAL_PROVIDER_QUALIFICATION_REQUIRED",
+        "COMPLETE_BOUND_QUOTE_REQUIRED",
+        "BOUND_OWNER_COST_AUTHORIZATION_REQUIRED",
+        "AUTHENTICATED_DEPLOYMENT_PORT_NOT_IMPLEMENTED"
+      ]
+    }
+  ]
+}

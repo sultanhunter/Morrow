@@ -1,5 +1,17 @@
-# Morrow checkpoint
-Canonical Page page_b1ef27b80b788191b91e67cbb52f1037 sequence43, freshly read10October2026 (India). Read live Page, AGENTS, packet and current diff after every resume. Snapshot is not a separate authority.
+# Current selected stack continuation
+
+Canonical45 on10October2026 selects Cloudflare Workers/Workflows/Queues/R2, Neon PostgreSQL and Daytona Linux VM execution. WorkOS remains identity. This supersedes AWS/CDK/Aurora/Fargate/Temporal selection and the AWS-account designation question. No cloud resources/data require migration. Current packet P04.T01a reconciles selection, defaults, provider/cost/data contracts and environment inventories; P04.T01 parent In progress. Existing local P05 SQL/authority/challenge implementations and migrations remain.
+
+US is primary storage only; approved global processing is permitted. Neon production PITR30days plus separately costed daily35-day recovery is the recorded retention change. Runtime is explicitly VM, with effective restricted egress and scoped single-writer persistence still requiring actual P12 qualification. Active scripts make no provider calls or deployments. Current test results and next action are appended after execution. Older records below are historical and do not select AWS or infer live acceptance.
+
+# Selected stack verification10October2026
+
+P04.T01a is In review as a local candidate at canonical45. Full local CI passed759 tests/types/format/boundaries/builds/synthetic lab and three selected design-inventory checks; nine HTTP scaffold guards passed separately. The initial loopback bind restriction was resolved through granted network permission, with all guards retained. Illustrative100-merchant core cost is$859.23 before models and other explicit exclusions; this is not a complete provisioning quote. Fresh live Page read confirmed45, and its rendered title/current-stack decision were inspected. Application identity/permission/challenge SQL and migrations are unchanged; no new actual local SQL-lab execution is claimed. Actual selected-provider acceptance remains pending.
+
+Next active packet: owned staging provider qualification for Cloudflare, Neon and Daytona, retaining WorkOS. Bind actual account/project identifiers and pinned adapters before controlled database, private service, R2 recovery and runtime-egress tests. No signup, paid provisioning, secret retrieval or deployment occurred. AWS-account selection in older entries below is superseded and must not be requested again. Specific existing WorkOS credential approval remains a separate pending action; do not infer provider authentication from the local challenge primitive.
+
+# Historical Morrow checkpoint
+Canonical Page page_b1ef27b80b788191b91e67cbb52f1037 sequence45, freshly read10October2026 (India). Read live Page, AGENTS, packet and current diff after every resume. Snapshot is not a separate authority.
 
 User challenged the GitHub Pro gate. Canonical29 corrects it: P03engineering qualifies continued coding; no subscription purchase or public repository change. Actual enforced protection remains required before release-code merge/privileged deployment. Do not repeat the upgrade question. Repo private; PR draft; no merge/deploy.
 

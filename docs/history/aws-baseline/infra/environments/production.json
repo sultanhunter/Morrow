@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "plan_sequence": 43,
+  "environment": "production",
+  "status": "local_template_candidate",
+  "aws": {
+    "region": "us-east-1",
+    "account_id": null,
+    "aurora_major": 17,
+    "aurora_minor": null,
+    "maximum_acu": null,
+    "certificate_arn": null,
+    "s3_regional_prefix_list_id": null,
+    "deployment_issuer_role_path": null,
+    "recovery_issuer_role_path": null
+  },
+  "dispatch": "disabled",
+  "ingress": "fixed_503",
+  "workloads": "absent_pending_qualified_identity_network_and_images",
+  "staging_auto_pause": "disabled",
+  "external_provider_config": [
+    "infra/providers/cloudflare.json",
+    "infra/providers/temporal.json",
+    "infra/providers/workos.json"
+  ],
+  "quote": null,
+  "owner_cost_authorization": null,
+  "deployed_revision": null
+}

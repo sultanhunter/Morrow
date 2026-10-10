@@ -1,34 +1,34 @@
 {
   "schema_version": 1,
-  "plan_sequence": 17,
-  "merchant_data_region": "United States",
-  "aws_region": "us-east-1",
-  "temporal_region": "aws-us-east-1",
-  "cloudflare_private_processing": false,
+  "plan_sequence": 45,
+  "merchant_data_region": "United States primary storage",
+  "cloudflare_private_processing": true,
   "production_database": {
-    "engine_family": "aurora-postgresql",
+    "provider": "Neon",
+    "engine_family": "postgresql",
     "major_version": 17,
     "minor_version": null,
-    "minor_status": "P04 regional compatibility preflight",
-    "serverless": true,
-    "min_acu_per_instance": "0.5",
-    "instances": 2,
-    "availability_zones": 2,
-    "auto_pause": false
+    "minor_status": "P04 actual provider compatibility preflight",
+    "plan": "Scale",
+    "maximum_cu": null,
+    "auto_pause": "qualify actual traffic/pool/latency behavior; not assumed idle"
   },
   "staging_database": {
-    "min_acu": "0",
-    "auto_pause": "idle integration windows only; open connections may prevent pause",
+    "provider": "Neon",
+    "plan": "Launch",
+    "maximum_cu": null,
+    "auto_pause": "qualify connection lifecycle",
     "availability_slo": false
   },
   "runtime": {
-    "provider": "AWS Fargate",
-    "boundary": "one task per run",
+    "provider": "Daytona",
+    "boundary": "explicit Linux VM per isolated execution workspace",
+    "sandbox_class": "linux_vm",
     "task_role": false,
     "direct_internet": false,
     "database_access": false,
     "credentials_in_model": false,
-    "egress": "authenticated allowlist proxy plus artifact broker",
+    "egress": "leased authenticated broker/proxy only; actual network behavior unqualified",
     "qualification_status": "not_run"
   },
   "retention_days": {
@@ -37,12 +37,16 @@
     "normalized_cache": 90,
     "audit_content_free": 365,
     "diagnostic_logs_redacted": 14,
-    "temporal_closed_prod": 30,
-    "temporal_closed_staging": 7,
-    "pitr_prod": 35,
-    "pitr_staging": 7
+    "pitr_prod": 30,
+    "pitr_staging": 7,
+    "workflow_closed_prod": 30,
+    "workflow_closed_staging": 7,
+    "daily_recovery_prod": 35,
+    "daily_recovery_staging": 7
   },
   "deletion_overrides_content_retention": true,
   "restore_erasure_replay": true,
-  "full_processor_us_residency_claim": false
+  "full_processor_us_residency_claim": false,
+  "stack": "cloudflare-neon-daytona",
+  "global_processing": "permitted_under_approved_data_policy"
 }

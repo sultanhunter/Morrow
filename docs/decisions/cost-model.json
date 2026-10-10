@@ -1,115 +1,153 @@
 {
-  "schema_version": 1,
-  "plan_sequence": 17,
-  "as_of": "2026-10-06",
+  "schema_version": 2,
+  "plan_sequence": 45,
+  "as_of": "2026-10-10",
   "currency": "USD",
+  "stack": "cloudflare-neon-daytona",
   "status": "component_estimate_not_complete_quote",
   "owner_ceiling": null,
-  "hours_per_month": "730",
+  "neon_plan": "Scale",
+  "usage_fields": [
+    "worker_requests",
+    "worker_cpu_ms",
+    "workflow_steps",
+    "workflow_state_gb_month",
+    "queue_operations",
+    "r2_gb_month",
+    "r2_class_a_operations",
+    "r2_class_b_operations",
+    "neon_cu_hours",
+    "neon_database_gb_month",
+    "neon_history_gb_month",
+    "neon_snapshot_gb_month",
+    "neon_public_transfer_gb",
+    "daytona_vcpu_hours",
+    "daytona_gib_hours",
+    "daytona_disk_gib_hours"
+  ],
+  "example_usage": {
+    "worker_requests": "5100000",
+    "worker_cpu_ms": "255000000",
+    "workflow_steps": "2000000",
+    "workflow_state_gb_month": "5",
+    "queue_operations": "300000",
+    "r2_gb_month": "500",
+    "r2_class_a_operations": "100000",
+    "r2_class_b_operations": "1000000",
+    "neon_cu_hours": "720",
+    "neon_database_gb_month": "50",
+    "neon_history_gb_month": "50",
+    "neon_snapshot_gb_month": "0",
+    "neon_public_transfer_gb": "500",
+    "daytona_vcpu_hours": "4000",
+    "daytona_gib_hours": "8000",
+    "daytona_disk_gib_hours": "2880000"
+  },
   "rates": {
-    "fargate_x86_cpu_second": {
-      "amount": "0.000011244",
-      "unit": "vCPU-second",
-      "region": "us-east-1",
-      "source": "S19"
-    },
-    "fargate_x86_memory_second": {
-      "amount": "0.000001235",
-      "unit": "GB-second",
-      "region": "us-east-1",
-      "source": "S19"
-    },
-    "aurora_acu_hour": {
-      "amount": "0.12",
-      "unit": "ACU-hour",
-      "region": "published_standard_example",
-      "source": "S22"
-    },
-    "alb_hour": {
-      "amount": "0.0225",
-      "unit": "hour",
-      "region": "us-east-1",
-      "source": "S24"
-    },
-    "alb_lcu_hour": {
-      "amount": "0.008",
-      "unit": "LCU-hour",
-      "region": "us-east-1",
-      "source": "S24"
-    },
-    "public_ipv4_hour": {
-      "amount": "0.005",
-      "unit": "IP-hour",
-      "region": "all_regions",
-      "source": "S25"
-    },
-    "temporal_actions_million": {
-      "amount": "50",
-      "unit": "million_actions",
-      "region": "published_starting_rate",
-      "source": "S14"
-    },
-    "temporal_active_gb_hour": {
-      "amount": "0.042",
-      "unit": "GB-hour",
-      "region": "published",
-      "source": "S14"
-    },
-    "temporal_retained_gb_hour": {
-      "amount": "0.00105",
-      "unit": "GB-hour",
-      "region": "published",
-      "source": "S14"
-    },
-    "temporal_support_fraction": {
-      "amount": "0.10",
-      "unit": "usage_fraction",
-      "region": "developer_plan",
-      "source": "S14"
-    },
-    "cloudflare_standard_base": {
+    "workers_base": {
       "amount": "5",
-      "unit": "month",
-      "region": "global_public_assets",
+      "unit": "account-month",
       "source": "S17"
     },
-    "workos_sso_connection": {
-      "amount": "125",
-      "unit": "connection-month",
-      "region": "initial_tier",
-      "source": "S26"
+    "workers_requests_million": {
+      "amount": "0.30",
+      "unit": "million requests",
+      "source": "S17"
     },
-    "workos_directory_connection": {
-      "amount": "125",
-      "unit": "connection-month",
-      "region": "initial_tier",
-      "source": "S26"
+    "workers_cpu_million_ms": {
+      "amount": "0.02",
+      "unit": "million CPU ms",
+      "source": "S17"
+    },
+    "workflow_100k_steps": {
+      "amount": "0.80",
+      "unit": "100k steps",
+      "source": "S75"
+    },
+    "workflow_state_gb_month": {
+      "amount": "0.20",
+      "unit": "GB-month",
+      "source": "S75"
+    },
+    "queues_million_operations": {
+      "amount": "0.40",
+      "unit": "million operations",
+      "source": "S17"
+    },
+    "r2_gb_month": {
+      "amount": "0.015",
+      "unit": "GB-month",
+      "source": "S80"
+    },
+    "r2_class_a_million": {
+      "amount": "4.50",
+      "unit": "million operations",
+      "source": "S80"
+    },
+    "r2_class_b_million": {
+      "amount": "0.36",
+      "unit": "million operations",
+      "source": "S80"
+    },
+    "neon_launch_cu_hour": {
+      "amount": "0.106",
+      "unit": "CU-hour",
+      "source": "S76"
+    },
+    "neon_scale_cu_hour": {
+      "amount": "0.222",
+      "unit": "CU-hour",
+      "source": "S76"
+    },
+    "neon_storage_gb_month": {
+      "amount": "0.35",
+      "unit": "GB-month",
+      "source": "S76"
+    },
+    "neon_history_gb_month": {
+      "amount": "0.20",
+      "unit": "GB-month",
+      "source": "S76"
+    },
+    "neon_snapshot_gb_month": {
+      "amount": "0.09",
+      "unit": "GB-month",
+      "source": "S76"
+    },
+    "neon_transfer_gb": {
+      "amount": "0.10",
+      "unit": "GB above project allowance",
+      "source": "S76"
+    },
+    "daytona_vcpu_hour": {
+      "amount": "0.0504",
+      "unit": "vCPU-hour",
+      "source": "S77"
+    },
+    "daytona_gib_hour": {
+      "amount": "0.0162",
+      "unit": "GiB-hour",
+      "source": "S77"
+    },
+    "daytona_disk_gib_hour": {
+      "amount": "0.000108",
+      "unit": "reserved GiB-hour",
+      "source": "S77"
     }
   },
-  "warm_example": {
-    "api_tasks": 2,
-    "api_vcpu": "0.5",
-    "api_memory_gb": "1",
-    "worker_tasks": 2,
-    "worker_vcpu": "1",
-    "worker_memory_gb": "2",
-    "db_instances": 2,
-    "min_acu": "0.5"
-  },
-  "excluded_required_quote_terms": [
-    "Regional Aurora rate/engine floor",
-    "NAT hourly and bytes for selected AZ layout",
-    "ALB LCU usage",
-    "S3 bytes, requests, versions and egress",
-    "Secrets Manager/KMS",
-    "CloudWatch logs/metrics/traces",
-    "SQS ingestion and dead-letter retention",
-    "Public IPv4 count and data transfer",
-    "Backup/restore and staging hours",
-    "Actual Temporal history/actions",
-    "WorkOS enterprise connections and retention terms",
-    "Business-service account subscriptions",
-    "Taxes/support and model/tool charges"
+  "assumptions": [
+    "100 merchants, twenty total active VM hours each; 2vCPU/4GiB; five retained 8GiB disks each; thirty-day/720-hour month",
+    "Neon average1CU;50GB database and50GB billable restore history; no replicas",
+    "5GB R2 per merchant; API/workflow CPU and operation counts are illustrative aggregate inputs, not measured",
+    "Ordinary included usage applied; no trial/startup credits or Daytona disk discount assumed",
+    "Queue input is billable operations, not message count; transitions/waiting in started VM count as reserved running time"
   ],
-  "billing_guard": "The component subtotal cannot authorize provisioning; refresh a complete regional quote at P04. No free credit assumed. Always enforce tenant execution budgets."
+  "exclusions": [
+    "Managed model APIs and paid tools",
+    "Additional environments, email, monitoring, alerting and support",
+    "Thirty-five-day daily recovery storage beyond included example; actual changed/snapshot bytes need measurement",
+    "Extra database replicas/branches/private transfer; runtime snapshots/images and other provider meters not modeled",
+    "Enterprise SSO/DirectorySync/contracts, provider quota funding requirements, taxes and any enterprise commitments"
+  ],
+  "billing_guard": "Incomplete component arithmetic cannot authorize provisioning or set merchant prices. Persistent storage and ordinary sync continue when inference stops."
 }

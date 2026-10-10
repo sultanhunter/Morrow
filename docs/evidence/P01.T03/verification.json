@@ -1,45 +1,57 @@
 {
   "task": "P01.T03",
-  "generated_at": "2026-10-09T23:53:41.222Z",
-  "plan_sequence": 43,
+  "generated_at": "2026-10-10T10:39:12.489Z",
+  "plan_sequence": 45,
   "providers": 12,
   "bindings": 103,
   "scope": "Documentary feasibility and selected design consistency only; no real provider, runtime, billing, merchant or production qualification.",
   "input_digests": {
-    "docs/decisions/providers.json": "d5edbdfec911f815dbfad09739773dbbbc5003f4f27b89321ba108995c40a36f",
-    "docs/decisions/provider-bindings.json": "ac2325d2cdca1d35ffb943b74a0d3b090a6485d57d1a7cf968f5439a30cdb769",
-    "docs/decisions/deployment-policy.json": "aeabc52f0282e49431090af610583ea343d5d95a8db110ec3042c63b228f09e1",
+    "docs/decisions/providers.json": "20be5b046ed578fdbf669c4fb93d38ead9f16ed7c906b919be012d577f991593",
+    "docs/decisions/provider-bindings.json": "755e39ece81141bf25f8b8a1ea8140cd2b4ef11c1c677617136d00e5e84a258f",
+    "docs/decisions/deployment-policy.json": "aa787d1bc780e10c375c853e18257944a666755cc061dfe9da86381bb9c2dbd6",
     "docs/decisions/capacity-targets.json": "4430f79dcd99f3096bc11339cce110f241d929014e2d889259489625412b1b31",
-    "docs/decisions/cost-model.json": "09f8a4a3a9aa5d1332e3cbe714bd916baefabefbaa0f7bac328efcbd23200ff5",
-    "docs/decisions/model-policy.json": "2c8172cb4d75a05df6187f590f2f773d3f4a762ad7094cdf9554e2329cfed91f",
-    "docs/research/sources.json": "edbd3d8e649363cc759554d51b295dbc3edb9f40e8bfaa586a85e5cca4e3bfb9"
+    "docs/decisions/cost-model.json": "9f7edcf66f6e7edd144db93abf99a7c9c2945104d36b9ca6d1925e56345beefb",
+    "docs/decisions/model-policy.json": "8c4da01daf5c9643eb30ddf3cf42eae6024c646264c45e7fce9c6796944280ad",
+    "docs/research/sources.json": "708c542141a73f31e8320d2a40de1e63ee2a941ea69fa5ef838bfe7fcbdeba4c"
   },
   "cost_components": {
     "currency": "USD",
     "status": "component_estimate_not_complete_quote",
     "components": {
-      "trusted_compute": "108.121176000",
-      "database_minimum": "87.600000000",
-      "alb_base": "16.425000000",
-      "cloudflare_standard": "5.000000000"
+      "workers_base": "5.000000000",
+      "workers_requests": "0.000000000",
+      "workers_cpu": "4.500000000",
+      "workflow_steps": "12.000000000",
+      "workflow_state": "0.800000000",
+      "queue_operations": "0.000000000",
+      "r2_storage": "7.350000000",
+      "r2_writes": "0.000000000",
+      "r2_reads": "0.000000000",
+      "neon_compute": "159.840000000",
+      "neon_storage": "17.500000000",
+      "neon_restore_history": "10.000000000",
+      "neon_snapshots": "0.000000000",
+      "neon_transfer": "0.000000000",
+      "daytona_cpu": "201.600000000",
+      "daytona_memory": "129.600000000",
+      "daytona_disk": "311.040000000"
     },
-    "subtotal": "217.146176000",
+    "subtotal": "859.230000000",
     "completeQuote": false,
     "provisioningAuthorized": false,
     "exclusions": [
-      "Regional Aurora rate/engine floor",
-      "NAT hourly and bytes for selected AZ layout",
-      "ALB LCU usage",
-      "S3 bytes, requests, versions and egress",
-      "Secrets Manager/KMS",
-      "CloudWatch logs/metrics/traces",
-      "SQS ingestion and dead-letter retention",
-      "Public IPv4 count and data transfer",
-      "Backup/restore and staging hours",
-      "Actual Temporal history/actions",
-      "WorkOS enterprise connections and retention terms",
-      "Business-service account subscriptions",
-      "Taxes/support and model/tool charges"
+      "Managed model APIs and paid tools",
+      "Additional environments, email, monitoring, alerting and support",
+      "Thirty-five-day daily recovery storage beyond included example; actual changed/snapshot bytes need measurement",
+      "Extra database replicas/branches/private transfer; runtime snapshots/images and other provider meters not modeled",
+      "Enterprise SSO/DirectorySync/contracts, provider quota funding requirements, taxes and any enterprise commitments"
+    ],
+    "assumptions": [
+      "100 merchants, twenty total active VM hours each; 2vCPU/4GiB; five retained 8GiB disks each; thirty-day/720-hour month",
+      "Neon average1CU;50GB database and50GB billable restore history; no replicas",
+      "5GB R2 per merchant; API/workflow CPU and operation counts are illustrative aggregate inputs, not measured",
+      "Ordinary included usage applied; no trial/startup credits or Daytona disk discount assumed",
+      "Queue input is billable operations, not message count; transitions/waiting in started VM count as reserved running time"
     ]
   },
   "errors": []

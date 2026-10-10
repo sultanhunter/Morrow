@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plan_sequence": 17,
+  "plan_sequence": 45,
   "provider": "openai",
   "api": "Responses v1 / Images v1",
   "default_model": "gpt-6.1-sol",
@@ -11,10 +11,10 @@
   "alias_drift_policy": "hold affected rollout and re-evaluate pinned routing release; no invented snapshot",
   "reasoning": "high default; bounded effort/attempts per role",
   "store": false,
-  "regional_endpoint": "https://us.api.openai.com",
+  "regional_endpoint": null,
   "regional_project_status": "not_verified",
   "zero_data_retention_status": "not_granted",
-  "private_content_dispatch": "blocked_until_account_region_retention_and_data_policy_qualified",
+  "private_content_dispatch": "blocked_until_account_retention_and_data_policy_qualified",
   "automatic_fallback": false,
   "max_short_context_input_tokens": 272000,
   "initial_rates_per_million": {
@@ -38,5 +38,6 @@
     "S66",
     "S67",
     "S68"
-  ]
+  ],
+  "regional_endpoint_required": "explicit_customer_or_applicable_obligation_only"
 }

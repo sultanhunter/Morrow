@@ -1,15 +1,9 @@
 {
   "schema_version": 1,
-  "role": "public_immutable_assets_and_dns",
-  "private_processing": false,
-  "private_proxy_routes": [],
-  "allowed_asset_types": [
-    "css",
-    "js",
-    "woff2",
-    "public_images"
-  ],
-  "private_html_sessions_api_webhooks_artifacts": "AWS_regional_ingress_only",
+  "plan_sequence": 45,
+  "provider": "cloudflare",
+  "status": "selected_not_qualified",
   "account_id": null,
-  "deployment_status": "not_qualified"
+  "activation": "disabled",
+  "configuration_source": "infra/environments/{environment}.json"
 }

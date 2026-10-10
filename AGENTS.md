@@ -17,7 +17,7 @@ Name: Morrow. Broad production foundation for small and large Shopify brands; no
 
 ## Implementation discipline
 
-P01 contracts first. P02 interaction baseline before feature UI. P03 creates the application scaffold after qualified P01; the initial P01 bootstrap was documentary tooling; P03 now contains application shells and a synthetic laboratory, without accepted feature UI. TypeScript/React and PostgreSQL are defaults; Canonical sequences 16–22 select Cloudflare public assets, AWS us-east-1/Aurora/Fargate, Temporal Cloud and WorkOS; documentary selection is separate from account, engineering and production qualification.
+P01 contracts first. P02 interaction baseline before feature UI. P03 creates the application scaffold after qualified P01; the initial P01 bootstrap was documentary tooling; P03 now contains application shells and a synthetic laboratory, without accepted feature UI. TypeScript/React and PostgreSQL are defaults; Canonical sequence45 selects Cloudflare Workers/Workflows/Queues/R2, Neon PostgreSQL and Daytona Linux VM execution; WorkOS remains identity. AWS/CDK/Aurora/Fargate/Temporal are superseded undeployed history. No AWS account selection is required. Read infra/README.md and P04.T01a before cloud implementation. Selection is separate from owned account, engineering and production qualification.
 
 Do not place secrets, customer records or browser session material in the repo. Provider access and production approvals must be evidenced, never inferred from browser login. Permission and budget checks happen outside model prompts. Verify outcomes and unknown provider effects before retrying. Preserve task, evidence, source revision and decision IDs on resume.
 

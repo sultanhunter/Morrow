@@ -1,3 +1,4 @@
+import {estimateStackComponents} from './stack-cost.mjs';
 import {read} from './foundation.mjs';
 
 // Planning arithmetic only. Integer nanodollars avoid rounding each component
@@ -23,4 +24,4 @@ export function estimateWarmComponents(model) {
   };
   return {currency:model.currency,status:model.status,components:Object.fromEntries(Object.entries(components).map(([k,v])=>[k,format(v)])),subtotal:format(Object.values(components).reduce((a,b)=>a+b,0n)),completeQuote:false,provisioningAuthorized:false,exclusions:model.excluded_required_quote_terms};
 }
-if(process.argv[1]?.endsWith('/cost-estimate.mjs')) console.log(JSON.stringify(estimateWarmComponents(read('docs/decisions/cost-model.json')),null,2));
+if(process.argv[1]?.endsWith('/cost-estimate.mjs')) { const model=read('docs/decisions/cost-model.json'); console.log(JSON.stringify(estimateStackComponents(model,model.example_usage),null,2)); }
