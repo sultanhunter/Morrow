@@ -640,5 +640,40 @@
     "status": "verified",
     "observed_at": "2026-10-10",
     "finding": "Workflow API exposes versions and instance events/status; actual retained-version behavior needs qualification."
+  },
+  {
+    "id": "S84",
+    "url": "https://github.com/neondatabase/serverless",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Client/Pool WebSocket sessions support interactive transactions; serverless connections must be created, used and closed inside one request."
+  },
+  {
+    "id": "S85",
+    "url": "https://raw.githubusercontent.com/neondatabase/serverless/main/CONFIG.md",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Per-client secure WebSocket, exact proxy and authentication pipelining settings are available; pure-JS pg TLS is experimental."
+  },
+  {
+    "id": "S86",
+    "url": "https://developers.cloudflare.com/workers/runtime-apis/web-standards/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Workers forbids eval and new Function; runtime schema compilation cannot be used."
+  },
+  {
+    "id": "S87",
+    "url": "https://ajv.js.org/standalone.html",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "AJV standalone generation supports ahead-of-time validators for runtimes disallowing dynamic code generation."
+  },
+  {
+    "id": "S88",
+    "url": "https://registry.npmjs.org/@neondatabase/serverless/1.2.0",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Official npm driver1.2.0, Node>=19 and integrity verified before locked installation."
   }
 ]

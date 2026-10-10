@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 45,
-  "plan_digest": "62e833bf65abaebe1fc1a220f2288d2a28870a16a382b04af439a186c5e2995c",
+  "plan_sequence": 46,
+  "plan_digest": "7b2b9fb958dc5f975b8b367f68f6dcdc4a882fd58377f4c010f680262bf9ee33",
   "tasks": [
     {
       "id": "P01.T01",
@@ -87,7 +87,7 @@
     },
     {
       "path": "docs/evidence/P01.T01/verification.json",
-      "sha256": "562c41864f1ec86708d4101ad1ebc33d66fdca54e6043ce189b45f2aa947a939"
+      "sha256": "e1c56ca68e4f98cafa26b881afaa7669024bf6ff4c562c6894a4deaf05f53b6a"
     },
     {
       "path": "docs/evidence/P01.T02/review.md",
@@ -99,7 +99,7 @@
     },
     {
       "path": "docs/evidence/P01.T02/verification.json",
-      "sha256": "d02db04e31c882c94946bb75d27ab150cfc2fd812e39945e169453afb93706fb"
+      "sha256": "e0418b5870409140a7d00d10ece498db6913ca4dde8388272aa257927aa2d9c4"
     },
     {
       "path": "docs/evidence/P01.T03/review.md",
@@ -111,7 +111,7 @@
     },
     {
       "path": "docs/evidence/P01.T03/verification.json",
-      "sha256": "69bfca27ab1fdbddbd6b7491225f6dfed9ac547c463e0d4823ba964107112fad"
+      "sha256": "de4a8c0ebfe1919ebbfcd09aa34eb42b7568bafe4d91e984fde7bb2ad2f8771c"
     },
     {
       "path": "docs/evidence/P01.T04/review.md",
@@ -123,7 +123,7 @@
     },
     {
       "path": "docs/evidence/P01.T04/verification.json",
-      "sha256": "3ddbf688aaa008e81ad195bf3c433efe9dbbf164ec72f07b7df88755510f09a3"
+      "sha256": "e0b912957b3737c0b52714ce177189fb051006adbeebc32f49b758c4e302f089"
     },
     {
       "path": "docs/evidence/P02.T01/review.md",
@@ -167,7 +167,7 @@
     },
     {
       "path": "docs/evidence/P02.T02/verification.json",
-      "sha256": "e9587c67b66766416e18bf0de4b3c072ef615d0769c56402caba566c2545af10"
+      "sha256": "228a4ce03e7b394efde226c39400cf263daf5b8788e768ab8172e8bfa56234c7"
     },
     {
       "path": "docs/evidence/P02.T03/browser-checks.json",
@@ -199,11 +199,11 @@
     },
     {
       "path": "docs/evidence/P03.T01/smoke.json",
-      "sha256": "118fad1975d872e9539ab86aa25e5de5c5b11590a78bf3494be136cf59619b9e"
+      "sha256": "211f5df6d1441407d549b53be23c301db5d20c1a8f9dc4ffbcc3e53cfee2405a"
     },
     {
       "path": "docs/evidence/P03.T02/boundaries.json",
-      "sha256": "cc448ae870ebe2689c8b0acae20d89a6d83984c7a1bd49611790672cb5567245"
+      "sha256": "f753f9bfee54f38b11dcbf32514da422b749b61381f52c5cc30c5729c603b15f"
     },
     {
       "path": "docs/evidence/P03.T02/review.md",
@@ -239,7 +239,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/delivery.json",
-      "sha256": "c453a1329b1695735f606e06ca3037a0d415bf81a08d468f6db511c3e065e87c"
+      "sha256": "4ff39f7dd9a21858cf9e02c28250a9d773f57d802504a3258cd2d85e24bacbb0"
     },
     {
       "path": "docs/evidence/P03.T04/dependency-audit.json",
@@ -299,15 +299,23 @@
     },
     {
       "path": "docs/evidence/P04.T01a/permissions.json",
-      "sha256": "98436ec9dd5955d48ba0927f492822de403c1b4f9e9e23fd1103b4bc81a0fcfc"
+      "sha256": "694898aee8c893586573acfdbbc63169f7affe5741480285d06ddc3445992164"
     },
     {
       "path": "docs/evidence/P04.T01a/readiness.json",
-      "sha256": "1bb719cc166763faeb6bee8d8998965fecf49ddad180454c67642437faa30f12"
+      "sha256": "af469a92e0e3962f6618fb57363e35e710c751d18b85ee7d3ff10b3b5fc058bb"
     },
     {
       "path": "docs/evidence/P04.T01a/synth.json",
-      "sha256": "c3e8753a1a36247bdb9b13eeaa16f4e12fad2bbd1d05230a21f674af03a7779f"
+      "sha256": "27b636bf774bae2bedd476fce1c4fcbc43a743024f16ef7868320b76784036ef"
+    },
+    {
+      "path": "docs/evidence/P04.T01b/verification.json",
+      "sha256": "79bdea0ff9e9d2b0a7b1bcc7971d1f0abac6545ec93893924bae34bf4aadb71b"
+    },
+    {
+      "path": "docs/evidence/P04.T01b/workers.json",
+      "sha256": "d83f8a55addddebba24341fa7ca1effb77d7ebf4b11da47ba2914044ea57efe2"
     },
     {
       "path": "docs/evidence/P04.T02/README.md",
@@ -355,7 +363,7 @@
     },
     {
       "path": "docs/evidence/P05.T01/challenge-lab.json",
-      "sha256": "f5debde4d533abf66c653b792766ecfeaa8698779c3cd6d1ff3140f01851edab"
+      "sha256": "4a7d88cf3e3c4268941e5cfa0a8567b5c2284ac0d8b24563a21a30255538ab78"
     },
     {
       "path": "docs/evidence/P05.T01/challenge-remote.json",
@@ -371,7 +379,7 @@
     },
     {
       "path": "docs/evidence/P05.T01/identity-lab.json",
-      "sha256": "eff5223dbbe7bd94b139eeec426dae0148bdb64f1952c7c7954a6a86d474a711"
+      "sha256": "586262188b7fb942c65eedda7d7379505de6d3f816bc98f64fb73ae8acfd7241"
     },
     {
       "path": "docs/evidence/P05.T01/remote.json",
@@ -391,7 +399,7 @@
     },
     {
       "path": "docs/evidence/P05.T02/database-lab.json",
-      "sha256": "6e9550dabed744d0d092583b6d876673b25fd928c64f38f9f50ec8268ee8eff7"
+      "sha256": "e0014736613db2cc82ae85df5cc7d5045085463328913fa033d78080b515ccbd"
     },
     {
       "path": "docs/evidence/P05.T02/database-remote.json",

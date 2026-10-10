@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plan_sequence": 45,
+  "plan_sequence": 46,
   "observed_at": "2026-10-06",
   "providers": [
     {
@@ -307,12 +307,15 @@
       "qualification_evidence": [],
       "id": "neon",
       "name": "Neon",
-      "version": "PostgreSQL17:project-contract-v1",
+      "version": "PostgreSQL17;@neondatabase/serverless1.2.0",
       "decision_ids": [
         "D17"
       ],
       "sources": [
-        "S76"
+        "S76",
+        "S84",
+        "S85",
+        "S88"
       ],
       "restrictions": "US primary storage; runtime/issuer/maintenance roles separate; interactive transaction SET LOCAL/RLS isolation and actual recovery required.",
       "test_account_plan": "Owned Morrow development/staging project required; provider account availability and actual activation remain unverified."

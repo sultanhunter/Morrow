@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "plan_sequence": 45,
+  "plan_sequence": 46,
   "as_of": "2026-10-10",
   "currency": "USD",
   "stack": "cloudflare-neon-daytona",

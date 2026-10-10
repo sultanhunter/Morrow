@@ -5,12 +5,14 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./authentication-challenges": "./src/authentication-challenges.ts"
+    "./authentication-challenges": "./src/authentication-challenges.ts",
+    "./neon": "./src/neon.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@morrow/contracts": "0.0.0"
+    "@morrow/contracts": "0.0.0",
+    "@neondatabase/serverless": "1.2.0"
   }
 }

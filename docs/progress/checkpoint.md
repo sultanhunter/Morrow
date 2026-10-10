@@ -1,4 +1,12 @@
-# Current selected stack continuation
+# Current continuation10October2026
+
+Canonical46/P04.T01b is In review as a local engineering candidate. Exact locked Neon driver1.2.0 implements request-scoped interactive Client reads and awaited shutdown; no cross-request pooling, authenticated route or session issuer is added. Unchanged canonical schemas now generate334 validators ahead of time with deterministic byte/source checks, resolving Workers runtime dynamic-code incompatibility without weakening validation. Parent P04/P05 hosted qualification stays pending.
+
+Full local CI passes785 tests/types/format/boundaries/drift/delivery/builds, nine scaffold guards pass, and pinned local workerd passes4,008 validator cases plus SDK configuration/dynamic-code denial/two concurrent tenant fixtures with zero outbound calls. Actual PostgreSQL identity31, permissions22 and challenges31 checks pass. The local Docker engine was stopped initially and was started for these tests; fixture cleanup remains in the unchanged lab implementations. Local Worker simulation is not real Neon, certificate/TLS, pooled-context or provider identity acceptance. No resources, provider credentials or deployments are created.
+
+Owner replied they still need to create Neon and Daytona accounts. Next necessary input is owner signup/sign-in in the attached browser; no API key should be pasted into chat. Then bind controlled Morrow staging projects and qualify actual service/transaction/egress boundaries, keeping WorkOS staging and the existing SQL authority. Specific sensitive credential actions remain separately confirmed as required. AWS-account selection and GitHub upgrade questions remain superseded. Read live plan, current packet and diff before continuation.
+
+# Historical selected stack reconciliation
 
 Canonical45 on10October2026 selects Cloudflare Workers/Workflows/Queues/R2, Neon PostgreSQL and Daytona Linux VM execution. WorkOS remains identity. This supersedes AWS/CDK/Aurora/Fargate/Temporal selection and the AWS-account designation question. No cloud resources/data require migration. Current packet P04.T01a reconciles selection, defaults, provider/cost/data contracts and environment inventories; P04.T01 parent In progress. Existing local P05 SQL/authority/challenge implementations and migrations remain.
 

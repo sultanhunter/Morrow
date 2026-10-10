@@ -1,7 +1,7 @@
 {
   "task": "P05.T01b",
-  "canonical_sequence": 41,
-  "observed_at": "2026-10-09T23:43:40.888Z",
+  "canonical_sequence": 46,
+  "observed_at": "2026-10-10T14:17:43.644Z",
   "scope": "Actual application pre-authentication challenge transaction on isolated PostgreSQL17.11, synthetic owner bindings; not WorkOS authentication/session issuance or production SQL/IAM/TLS.",
   "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
   "version": "17.11 (Debian 17.11-1.pgdg13+2)",
