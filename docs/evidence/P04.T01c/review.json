@@ -1,0 +1,49 @@
+{
+  "task": "P04.T01c",
+  "plan_sequence": 48,
+  "status": "in_review",
+  "review_kind": "same_implementer_semantic_self_review",
+  "independent_review": false,
+  "qualification": "temporary_lab_setup_and_read_only_operator_transport_only",
+  "results": {
+    "full_local_ci": {
+      "passed": true,
+      "tests": 790,
+      "failures": 0
+    },
+    "scaffold_guards": {
+      "passed": true,
+      "checks": 9
+    },
+    "live_neon_read_only_preflight": {
+      "passed": true,
+      "checks": 8,
+      "report": "docs/evidence/P04.T01c/neon-preflight.json"
+    },
+    "private_credential_repository_scan": {
+      "passed": true
+    }
+  },
+  "findings_repaired": [
+    "SDK address query must be allowed only when it matches exact approved endpoint:5432",
+    "Failed SDK connection shutdown needed a bounded wait to return sanitized503 rather than hang",
+    "Actual Neon endpoint has an optional numeric routing segment c-14, now accepted without allowing arbitrary intermediate labels",
+    "Evidence starts running and overwrites stale success on provider or cleanup failure"
+  ],
+  "remaining": [
+    "Restricted morrow_api role/Morrow migrations and hosted RLS/current authority",
+    "Actual Cloudflare deployment/service identity and WorkOS authentication",
+    "Neon staging seven-day recovery, rotation and restore",
+    "Daytona VM quota/image/strict egress profile and account payment setup"
+  ],
+  "source_digests": {
+    "scripts/neon-preflight-input.mjs": "6239432d7e11632bf84a2d1ddfcf614161df9090a0a8cea1c915b12dde414029",
+    "scripts/neon-preflight-egress.mjs": "b7e25fcc618a81cc15756cd8b2b7ecce5779b70118afb96954e7d7944bdb9a44",
+    "scripts/neon-staging-preflight.mjs": "2b368669c749822e8f5128c46c415139fd8d84fc1525042dc16afe5e51e9f165",
+    "scripts/fixtures/neon-staging-preflight.ts": "2ac50f2e6964eaca8e3e45562c68e0b6781bd1d0392eb05b057d6e8d97346955",
+    "packages/identity/src/neon.ts": "0904219a4d8a09303cfe00940f2536549f35d16e94ad76ffa1b81685996f3ecf",
+    "tests/neon-preflight.test.mjs": "b62e16c2e25352a42fcbb453d8c9ed59a19b3a13f51651d6bfbbe7b527bbd6fa",
+    "tests/neon-preflight-worker.test.mjs": "3521875ff2b03271e708a0245e7779fe7cd25b68ad4ed233900e9ae6411f0af9",
+    "tests/neon-identity.test.mjs": "37f5f6e6bd3b95d7b061265592a20c436121b7fd4f22333cb48e29d61aa113db"
+  }
+}

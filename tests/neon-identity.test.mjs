@@ -136,6 +136,16 @@ test("installed SDK uses explicit role, endpoint and per-client secure transport
     assert.equal(client.neonConfig.pipelineConnect, false);
     assert.equal(client.neonConfig.webSocketConstructor, WebSocket);
     assert.equal(neonConfig.wsProxy, "unreviewed.invalid/v2");
+    const routed = createNeonIdentityClient(
+      { ...binding, hostname: "ep-fixture.c-14.us-east-1.aws.neon.tech" },
+      secret,
+    );
+    assert.equal(routed.host, "ep-fixture.c-14.us-east-1.aws.neon.tech");
+    for (const hostname of [
+      "ep-fixture.c-other.us-east-1.aws.neon.tech",
+      "ep-fixture.c-14.extra.us-east-1.aws.neon.tech",
+    ])
+      assert.throws(() => createNeonIdentityClient({ ...binding, hostname }, secret), unavailable);
   } finally {
     neonConfig.useSecureWebSocket = oldSecure;
     neonConfig.wsProxy = oldProxy;

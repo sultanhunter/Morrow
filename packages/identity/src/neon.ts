@@ -26,7 +26,9 @@ export function createNeonIdentityClient(binding: NeonIdentityBinding, secret: s
       typeof binding.database !== "string" ||
       !/^[a-z0-9][a-z0-9-]{0,79}$/.test(binding.projectId) ||
       !/^br-[a-z0-9-]{1,77}$/.test(binding.branchId) ||
-      !/^ep-[a-z0-9-]+\.[a-z0-9-]+\.(aws|azure)\.neon\.tech$/.test(binding.hostname) ||
+      !/^ep-[a-z0-9-]+\.(?:c-[0-9]+\.)?[a-z0-9-]+\.(aws|azure)\.neon\.tech$/.test(
+        binding.hostname,
+      ) ||
       binding.hostname.length > 253 ||
       !/^[a-z][a-z0-9_]{0,62}$/.test(binding.database) ||
       typeof secret !== "string" ||
