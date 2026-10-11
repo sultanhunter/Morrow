@@ -601,10 +601,10 @@
   },
   {
     "id": "S78",
-    "url": "https://www.daytona.io/docs/billing/",
+    "url": "https://www.daytona.io/docs/en/billing/",
     "status": "verified",
-    "observed_at": "2026-10-10",
-    "finding": "Started and transitional sandboxes bill reserved CPU/RAM/disk; stopped/paused bill disk only."
+    "observed_at": "2026-10-11",
+    "finding": "Terminal stopped/paused VMs bill reserved disk only even when disk quota is released; preserved memory is not billed. Transitions bill all resources. One-time top-ups add wallet credit; snapshot charges survive sandbox deletion."
   },
   {
     "id": "S79",
@@ -675,5 +675,26 @@
     "status": "verified",
     "observed_at": "2026-10-10",
     "finding": "Official npm driver1.2.0, Node>=19 and integrity verified before locked installation."
+  },
+  {
+    "id": "S89",
+    "url": "https://www.daytona.io/docs/en/limits/",
+    "status": "verified",
+    "observed_at": "2026-10-11",
+    "finding": "Tier3 requires a $500 top-up; Tier4 requires $2000 every30days. Paused/stopped VMs free disk quota separately from billing. Published tier resources are not proof of this organization Linux VM quota."
+  },
+  {
+    "id": "S90",
+    "url": "https://www.daytona.io/docs/en/network-limits/",
+    "status": "verified",
+    "observed_at": "2026-10-11",
+    "finding": "Tier3/4 sandbox rules replace default full internet without essential-service bypass. Network policy mutation requires WRITE_SANDBOXES; proxy environment variables alone do not enforce egress. Actual VM behavior requires qualification."
+  },
+  {
+    "id": "S91",
+    "url": "https://www.daytona.io/docs/en/sandboxes/",
+    "status": "verified",
+    "observed_at": "2026-10-11",
+    "finding": "Linux VMs use existing VM snapshots. Pause preserves files/memory; stop preserves files and clears memory. Archive is unsupported. Idle pause/stop settings and deletion completion require explicit handling."
   }
 ]
