@@ -130,7 +130,7 @@ export function captureE2BDevelopmentInput(
       morrowStarted: String(o.startedAtMs),
       morrowDeadline: String(o.deadlineMs),
     });
-    if (input.mode === "allocate" && p.planSequence !== 59) throw e2bDenied();
+    if (input.mode === "allocate" && p.planSequence !== 60) throw e2bDenied();
     if (
       typeof input.apiKey !== "string" ||
       !/^e2b_[A-Za-z0-9_-]{16,508}$/.test(input.apiKey) ||
@@ -770,6 +770,7 @@ export function createE2BDevelopmentTransport(
       });
       if (
         input.mode !== "allocate" ||
+        p.planSequence !== 60 ||
         createAttempted ||
         JSON.stringify(spec.profile) !== JSON.stringify(p) ||
         JSON.stringify(spec.operation) !== JSON.stringify(o) ||

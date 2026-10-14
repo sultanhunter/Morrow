@@ -927,5 +927,26 @@
     "status": "verified",
     "observed_at": "2026-10-14",
     "finding": "Public deletion soft-deletes catalogue/build records; it does not itself cancel an active builder. Catalogue404 cannot prove compute stopped."
+  },
+  {
+    "id": "S125",
+    "url": "https://docs.e2b.dev/faq/calculate-sandbox-price",
+    "status": "verified",
+    "observed_at": "2026-10-15",
+    "finding": "Published running sandbox rates are .000014USD/vCPU-second and .0000045USD/GiB-second; Hobby disk is included. Explicit2CPU/512MiB for600seconds computes .018150USD. This excludes unqualified builder/image-retention pricing and is not a complete test quote."
+  },
+  {
+    "id": "S126",
+    "url": "https://registry-1.docker.io/v2/e2bdev/base/manifests/sha256:4a369f01a820fe5e65f53c2c5727a78899daf86f0541b721097f289559c8b73f",
+    "status": "verified",
+    "observed_at": "2026-10-15",
+    "finding": "Three anonymous exact-origin HTTPS reads verified the fixed index and Linuxamd64 child raw SHA256/header/size/media metadata. No blobs/layers/configuration files/E2B keys or compute. Officialhost IPv4 flags fixed localfamilyprobing without changing TLS/origin. Proof is input provenance, not hosted rootfs/owned image attestation."
+  },
+  {
+    "id": "S127",
+    "url": "https://github.com/e2b-dev/runtime/blob/1a77d1175e9d49bc9f24a249d794c747a162306f/packages/api/internal/orchestrator/analytics.go",
+    "status": "verified",
+    "observed_at": "2026-10-15",
+    "finding": "Customer sandbox execution events differ from template-build telemetry, but hosted billing collector/ledger is absent. Separate telemetry does not prove template builds are free; approved support confirmation remains pending."
   }
 ]

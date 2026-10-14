@@ -53,7 +53,7 @@ export function inspectE2BLabAccount(account, profile, nowMs = Date.now()) {
   if (
     !account ||
     account.schema_version !== 1 ||
-    account.plan_sequence !== 59 ||
+    account.plan_sequence !== 60 ||
     !uuid.test(profile?.projectId ?? "") ||
     account.project_id !== profile.projectId ||
     account.workspace !== "Personal Workspace" ||

@@ -34,7 +34,7 @@ const now = Date.parse("2026-10-14T10:00:00Z");
 const profile = {
   schemaVersion: 1,
   task: "P04.T01h",
-  planSequence: 59,
+  planSequence: 60,
   scope: "builtin_synthetic_operator",
   environment: "development",
   providerId: "e2b",
@@ -64,7 +64,7 @@ const input = () => ({
 });
 const account = () => ({
   schema_version: 1,
-  plan_sequence: 59,
+  plan_sequence: 60,
   observed_at: new Date(now).toISOString(),
   project_id: projectId,
   workspace: "Personal Workspace",
@@ -188,6 +188,7 @@ test("approved readonly access file denies foreign project or expanded allocatio
 test("only current owned free-credit access and complete bounded quote qualify", () => {
   assert.deepEqual(inspectE2BLabAccount(account(), profile, now), []);
   for (const change of [
+    { plan_sequence: 59 },
     { project_id: otherOperation },
     { workspace: "Personal" },
     { project_name: "Other" },

@@ -12,7 +12,7 @@ const startedAtMs = 1000;
 const profile = {
   schemaVersion: 1,
   task: "P04.T01h",
-  planSequence: 59,
+  planSequence: 60,
   scope: "builtin_synthetic_operator",
   environment: "development",
   providerId: "e2b",
@@ -201,6 +201,98 @@ test("synthetic compilation is closed and carries no dispatch or production auth
   assert.match(compiled.profileSha256, /^[a-f0-9]{64}$/);
   const reordered = Object.fromEntries(Object.entries(profile).reverse());
   assert.equal(compileSyntheticLabProfile(reordered).profileSha256, compiled.profileSha256);
+});
+
+test("historical profiles decode only for cleanup and cannot start a new core run", async () => {
+  for (const planSequence of [55, 56, 57, 58, 59]) {
+    const original = { ...profile, planSequence };
+    assert.equal(compileSyntheticLabProfile(original).profile.planSequence, planSequence);
+    let providerAccesses = 0;
+    let journalWrites = 0;
+    const port = new Proxy(
+      {},
+      {
+        get() {
+          providerAccesses++;
+          return async () => undefined;
+        },
+      },
+    );
+    await assert.rejects(
+      runSyntheticLab(original, operationId, port, {
+        startedAtMs,
+        sourceSha256,
+        now: () => startedAtMs,
+        persist: async () => {
+          journalWrites++;
+        },
+      }),
+      /SYNTHETIC_LAB_PROFILE_DENIED/,
+    );
+    assert.equal(providerAccesses, 0);
+    assert.equal(journalWrites, 0);
+  }
+});
+
+test("historical55-59 original operations retain static cleanup after current60 selection", async () => {
+  for (const planSequence of [55, 56, 57, 58, 59]) {
+    const original = { ...profile, planSequence };
+    const originalOperation = prepareSyntheticLabOperation(
+      original,
+      operationId,
+      startedAtMs,
+      sourceSha256,
+    );
+    const events = [];
+    let present = true;
+    const id = "original_historical_vm";
+    const port = {
+      inspect: async (seenId) => {
+        events.push("inspect");
+        assert.equal(seenId, id);
+        return present
+          ? {
+              id,
+              metadata: originalOperation.metadata,
+              templateId: original.templateId,
+              cpu: original.cpu,
+              memoryMiB: original.memoryMiB,
+              state: "paused",
+              network: { outbound: "deny_all", controllerAuth: true },
+              lifecycle: {
+                onTimeout: "kill",
+                autoResume: false,
+                createdAtMs: startedAtMs,
+                endAtMs: null,
+              },
+            }
+          : null;
+      },
+      kill: async (seenId) => {
+        events.push("kill");
+        assert.equal(seenId, id);
+        present = false;
+      },
+    };
+    const result = await runSyntheticLab(original, operationId, port, {
+      startedAtMs,
+      sourceSha256,
+      now: () => originalOperation.deadlineMs + 1,
+      cleanupOnly: true,
+      resume: {
+        operation: originalOperation,
+        createAttempted: true,
+        sandboxId: id,
+        phase: "paused",
+      },
+      persist: async () => undefined,
+    });
+    assert.equal(result.cleanup, "verified_deleted");
+    assert.equal(result.deletionObservation, "absent");
+    assert.equal(result.status, "failed");
+    assert.equal(result.record.operation.profileSha256, originalOperation.profileSha256);
+    assert.deepEqual(events, ["inspect", "kill", "inspect"]);
+  }
 });
 
 test("profile rejects authority widening, extra fields, malformed bindings and nonfinite caps", () => {

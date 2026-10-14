@@ -13,7 +13,7 @@ const current = Date.parse("2026-10-14T16:00:00Z");
 const p = {
   schemaVersion: 1,
   task: "P04.T01h",
-  planSequence: 59,
+  planSequence: 60,
   scope: "builtin_synthetic_operator",
   environment: "development",
   providerId: "e2b",
@@ -231,6 +231,29 @@ test("native port completes the neutral journal lifecycle and fixed-file persist
   assert.ok(!JSON.stringify(report).includes(token));
   assert.ok(!JSON.stringify(saved).includes(key));
   assert.ok(!JSON.stringify(saved).includes(token));
+});
+
+test("old59 native recipes cannot allocate but original cleanup remains available", async () => {
+  const original = { ...p, planSequence: 59 };
+  const operation = prepareSyntheticLabOperation(
+    original,
+    op.operationId,
+    current,
+    op.sourceSha256,
+  );
+  const f = fixture();
+  const input = { apiKey: key, profile: original, operation, mode: "allocate" };
+  await assert.rejects(createE2BNativeDevelopmentTransport(input, f), /DENIED/);
+  assert.deepEqual(f.calls, []);
+  f.seed({ metadata: operation.metadata, state: "paused", endAt: null });
+  const cleanup = await createE2BNativeDevelopmentTransport({ ...input, mode: "cleanup" }, f);
+  await cleanup.kill(id, ctx());
+  assert.equal(f.state, null);
+  assert.equal(f.calls.filter(({ opts }) => opts.method === "DELETE").length, 1);
+  assert.equal(
+    f.calls.some(({ opts }) => opts.method === "POST"),
+    false,
+  );
 });
 
 test("read-only owned discovery obtains actual resources and immutable IDs without an allocation profile", async () => {

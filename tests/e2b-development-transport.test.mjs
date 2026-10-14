@@ -11,7 +11,7 @@ const current = Date.parse("2026-10-14T16:00:00Z");
 const profile = {
   schemaVersion: 1,
   task: "P04.T01h",
-  planSequence: 59,
+  planSequence: 60,
   scope: "builtin_synthetic_operator",
   environment: "development",
   providerId: "e2b",
@@ -183,6 +183,27 @@ function fixture(changes = {}) {
     },
   };
 }
+
+test("historical reference recipes cannot reach an SDK allocation call", async () => {
+  const f = fixture();
+  const original = { ...profile, planSequence: 59 };
+  const originalOperation = prepareSyntheticLabOperation(
+    original,
+    operation.operationId,
+    current,
+    operation.sourceSha256,
+  );
+  assert.throws(
+    () =>
+      createE2BDevelopmentTransport({
+        ...f.opts,
+        profile: original,
+        operation: originalOperation,
+      }),
+    /DENIED/,
+  );
+  assert.deepEqual(f.calls, []);
+});
 
 test("native qualification binds the actual project before reading the pinned build", async () => {
   const f = fetchFixture();

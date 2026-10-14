@@ -299,7 +299,13 @@ export async function createE2BNativeDevelopmentTransport(
         )
           throw e2bDenied();
       });
-      if (input.mode !== "allocate" || createAttempted || now() >= o.deadlineMs) throw e2bDenied();
+      if (
+        input.mode !== "allocate" ||
+        p.planSequence !== 60 ||
+        createAttempted ||
+        now() >= o.deadlineMs
+      )
+        throw e2bDenied();
       createAttempted = true;
       const body: NativeCreate = {
         templateID: `${p.templateId}:${p.templateBuildId}`,

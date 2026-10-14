@@ -1,0 +1,60 @@
+{
+  "task": "P04.T01h",
+  "plan_sequence": 60,
+  "status": "partial",
+  "owner_request": "Qualify owned runtime image/build costs, then E2B test",
+  "public_manifest_verified": true,
+  "owned_ready_builds": 0,
+  "build_registered": false,
+  "build_started": false,
+  "sandbox_allocated": false,
+  "production_qualified": false,
+  "account_observation": {
+    "date": "2026-10-15",
+    "workspace": "Personal Workspace",
+    "project": "Sultanibne's Project",
+    "plan": "Hobby",
+    "region": "US-WEST-1",
+    "free_credit_usd": "100.00",
+    "usage_this_month_usd": "0.00",
+    "payment_methods": 0
+  },
+  "candidate": {
+    "image": "e2bdev/base@sha256:4a369f01a820fe5e65f53c2c5727a78899daf86f0541b721097f289559c8b73f",
+    "cpu": 2,
+    "memory_mib": 512,
+    "min_free_disk_mib": 0,
+    "custom_steps": 0,
+    "uploads": 0,
+    "resources_are_explicit_not_assumed_defaults": true
+  },
+  "sandbox_compute_only_estimate": {
+    "maximum_running_seconds": 600,
+    "cpu_usd_per_second": "0.000014",
+    "ram_gib_usd_per_second": "0.0000045",
+    "expected_usd": "0.018150",
+    "source": "https://docs.e2b.dev/faq/calculate-sandbox-price",
+    "includes_builder_or_template_retention": false,
+    "complete_test_quote": false
+  },
+  "owned_build_quote": null,
+  "retained_template_quote": null,
+  "customer_build_cancel_qualified": false,
+  "support_request": {
+    "date": "2026-10-15",
+    "recipient": "E2B support via console Contact Support",
+    "authorization": "owner_explicit",
+    "submitted": true,
+    "observed_result": "Sending state followed by closed form with no error observed",
+    "ticket_id": null,
+    "reply_received": false,
+    "sensitive_payload": "No API key, merchant data, purchase or account change"
+  },
+  "remaining": [
+    "authoritative_builder_and_retention_pricing",
+    "acceptable_original_build_recovery",
+    "concrete_owned_build_write_receipt",
+    "owned_ready_build_resources_and_controller_proof",
+    "single_disposable_runtime_qualification"
+  ]
+}

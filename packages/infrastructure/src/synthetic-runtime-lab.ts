@@ -73,7 +73,7 @@ function safeData(value: unknown, code: string) {
 export type SyntheticLabProfile = {
   schemaVersion: 1;
   task: "P04.T01h";
-  planSequence: 55 | 56 | 57 | 58 | 59;
+  planSequence: 55 | 56 | 57 | 58 | 59 | 60;
   scope: "builtin_synthetic_operator";
   environment: "development";
   providerId: string;
@@ -111,7 +111,7 @@ export function compileSyntheticLabProfile(value: unknown) {
     ]) ||
     profile.schemaVersion !== 1 ||
     profile.task !== "P04.T01h" ||
-    ![55, 56, 57, 58, 59].includes(profile.planSequence) ||
+    ![55, 56, 57, 58, 59, 60].includes(profile.planSequence) ||
     profile.scope !== "builtin_synthetic_operator" ||
     profile.environment !== "development" ||
     typeof profile.providerId !== "string" ||
@@ -377,6 +377,7 @@ export async function runSyntheticLab(
   )
     return deny("SYNTHETIC_LAB_RESUME_DENIED");
   const cleanupOnly = options.cleanupOnly === true;
+  if (!cleanupOnly && profile.planSequence !== 60) return deny("SYNTHETIC_LAB_PROFILE_DENIED");
   let record: SyntheticLabRecord = {
     operation,
     createAttempted: false,
