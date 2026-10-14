@@ -29,7 +29,9 @@ jobs:
         run: npm run lab:agent-authority-workers
       - name: Exercise controlled workspace and store linking in the local Workers runtime
         run: npm run lab:workspace-store-linking-workers
-      - name: Exercise isolated PostgreSQL identity, linking, rotation and quarantined restore
+      - name: Exercise private PKCE and code admission in the local Workers runtime
+        run: npm run lab:authentication-exchange-workers
+      - name: Exercise isolated PostgreSQL identity, linking, authentication, rotation and quarantined restore
         run: |
           npm run lab:operations
           npm run lab:restore
@@ -38,3 +40,4 @@ jobs:
           npm run lab:authentication
           npm run lab:workspace-revocation
           npm run lab:workspace-store-linking
+          npm run lab:authentication-exchange

@@ -9,4 +9,6 @@ CREATE ROLE morrow_api NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOB
 CREATE ROLE morrow_identity_lifecycle NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
 -- Internal controlled linking executor; no role membership or public issuer.
 CREATE ROLE morrow_identity_linking NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+-- Private pre-authentication correlation only; no API assumption or identity issuance.
+CREATE ROLE morrow_identity_preauth NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
 GRANT CREATE ON DATABASE morrow TO morrow_identity_owner;

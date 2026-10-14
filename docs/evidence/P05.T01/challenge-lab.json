@@ -1,7 +1,7 @@
 {
   "task": "P05.T01b",
-  "canonical_sequence": 68,
-  "observed_at": "2026-10-14T23:15:24.955Z",
+  "canonical_sequence": 69,
+  "observed_at": "2026-10-14T23:36:20.148Z",
   "scope": "Actual application pre-authentication challenge transaction on isolated PostgreSQL17.11, synthetic owner bindings; not WorkOS authentication/session issuance or production SQL/IAM/TLS.",
   "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
   "version": "17.11 (Debian 17.11-1.pgdg13+2)",
@@ -35,6 +35,12 @@
       "file": "0005.workspace-store-linking.sql",
       "sha256": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
       "reviewRef": "docs/evidence/P05.T03/workspace-store-linking-review.json"
+    },
+    {
+      "sequence": 6,
+      "file": "0006.authentication-exchange-admission.sql",
+      "sha256": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+      "reviewRef": "docs/evidence/P05.T01d/review.json"
     }
   ],
   "checks": [

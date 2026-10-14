@@ -1,0 +1,39 @@
+{
+  "plan_sequence": 68,
+  "commit": "9f66a47e393abd63b62a0ff644a16642093468f2",
+  "scope": "Exact reviewed controlled-linking source/evidence before subsequent migration6 prerequisite and regression harness updates; no provider authority",
+  "files": [
+    {
+      "path": "migrations/0005.workspace-store-linking.sql",
+      "sha256": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92"
+    },
+    {
+      "path": "infra/identity-role-prerequisites.sql",
+      "sha256": "0cc7855c8c3b7b1e7c2e4ac6b8d61cca4bd618e4d4203139ec73ca003f72c729"
+    },
+    {
+      "path": "packages/identity/src/workspace-store-linking.ts",
+      "sha256": "0b951ebb12d4e68f5421c9a19df9ba691166399fe247aa56c39ede0176574a53"
+    },
+    {
+      "path": "scripts/local-store-linking-sql.mjs",
+      "sha256": "591ada6d2a5d4ee0dbe086456a534ecd57c5524f78c8be09e213e51a078fcb4e"
+    },
+    {
+      "path": "scripts/workspace-store-linking-lab.mjs",
+      "sha256": "d068d3ef7dd13becba51b93a1e2429e8990838a08f76cf4c987870a7514df074"
+    },
+    {
+      "path": "docs/evidence/P05.T03/workspace-store-linking-lab.json",
+      "sha256": "dd3eff053073403a5da263c7fc293b2f36b7ea477be3a24208a656a2f77d0afb"
+    },
+    {
+      "path": "docs/evidence/P05.T03/workspace-store-linking-review.json",
+      "sha256": "1617ad2482f2fee876c43a1fb6da8aba7b9dd0c3ede14a15f744c9d7071e1d6a"
+    },
+    {
+      "path": "docs/evidence/P05.T03/workers-lab.json",
+      "sha256": "db423eb96a5c8252f918a71dd44e14d81314f52878ce0070aaa5f74f2c2be23b"
+    }
+  ]
+}

@@ -29,7 +29,11 @@ import {
   ownedBuildPriceSourceValid,
 } from "../scripts/e2b-owned-build-lab.mjs";
 
-import { frozenE2B60Fixture, currentE2BFixture } from "./fixtures/frozen-e2b-60.mjs";
+import {
+  frozenE2B60Fixture,
+  currentE2BFixture,
+  currentE2BPlanSequence,
+} from "./fixtures/frozen-e2b-60.mjs";
 
 const profile = JSON.parse(readFileSync("infra/labs/e2b-owned-build.json", "utf8"));
 const operationId = "00000000-0000-4000-8000-000000000015",
@@ -366,11 +370,15 @@ test("current67 builder retains unqualified write permission before private inpu
   assert.ok(report.blockers.includes("E2B_OWNED_BUILD_WRITE_RECEIPT_UNQUALIFIED"));
 });
 
-test("unrelated current68 plan denies frozen67 builder before private receipt or report access", (t) => {
+test("unrelated current plan denies frozen67 builder before private receipt or report access", (t) => {
   const current = currentE2BFixture();
   t.after(current.dispose);
   current.useCurrentPlan();
-  assert.equal(JSON.parse(current.read("docs/plan/source.json")).sources.plan.sequence, 68);
+  assert.equal(
+    JSON.parse(current.read("docs/plan/source.json")).sources.plan.sequence,
+    currentE2BPlanSequence(),
+  );
+  assert.notEqual(currentE2BPlanSequence(), 67);
   const before = current.read("infra/labs/e2b-owned-build.json");
   const child = spawnSync(
     process.execPath,

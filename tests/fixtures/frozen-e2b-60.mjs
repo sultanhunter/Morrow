@@ -13,6 +13,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const e2bRepositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
+export const currentE2BPlanSequence = () =>
+  JSON.parse(readFileSync(resolve(e2bRepositoryRoot, "docs/plan/source.json"), "utf8")).sources.plan
+    .sequence;
 const archiveRoot = fileURLToPath(new URL("./e2b-source-60/", import.meta.url));
 const manifest = JSON.parse(readFileSync(resolve(archiveRoot, "manifest.json"), "utf8"));
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");

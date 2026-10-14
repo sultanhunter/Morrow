@@ -30,3 +30,8 @@ One committed transaction deactivates the selected workspace membership, revokes
 Exact repeated commands return their original result only after current initiating authority is rechecked. Changed bindings cannot replay that result. Exactly bound expected denials commit a redacted terminal audit without an access mutation. Unexpected database failures roll back; a lost COMMIT acknowledgement remains uncertain, even if a later rollback succeeds. Reconcile the same stable command before creating any new operation. Do not treat an unavailable reply as evidence that revocation failed.
 
 This local operation does not return the public capability's affectedRuns field or cancel runs. Full approval issuance, organization-wide revocation, grant issuance, provider identity and command/dispatch fencing remain separate qualification work.
+
+
+## Private PKCE and code admission
+
+Canonical69/P05.T01d adds a private pre-authentication admission ledger with exact owner application/configuration and browser/PKCE commitments. One fresh committed reservation is correlation only; it creates no principal, session, membership, grant or provider success. Exact repeats and read-only reconciliation return held correlation, never a second reservation. Unknown commit/release remains uncertain and is not automatic retry authority. Future provider broker/issuer/HTTP transport remain separately qualified. Immutable migration6 excludes PKCE-managed challenges from the old legacy consumer while leaving its historical-only behavior available. No raw code/verifier/browser state is persisted or logged. The detailed canonical protocol and bounded packet govern its SQL roles, locks, late expiry rollback and checks.

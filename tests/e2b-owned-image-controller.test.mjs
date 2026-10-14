@@ -13,6 +13,7 @@ import {
 import {
   frozenE2B60Fixture,
   currentE2BFixture,
+  currentE2BPlanSequence,
   e2bRepositoryRoot,
 } from "./fixtures/frozen-e2b-60.mjs";
 
@@ -156,14 +157,18 @@ test("current67 image controller denies original60 plan before any request", asy
   }
 });
 
-test("unrelated current68 plan denies completed67 image controller before any request", async () => {
+test("unrelated current plan denies completed67 image controller before any request", async () => {
   const current = currentE2BFixture(),
     previous = process.cwd();
   current.useCurrentPlan();
   process.chdir(current.root);
   let calls = 0;
   try {
-    assert.equal(JSON.parse(current.read("docs/plan/source.json")).sources.plan.sequence, 68);
+    assert.equal(
+      JSON.parse(current.read("docs/plan/source.json")).sources.plan.sequence,
+      currentE2BPlanSequence(),
+    );
+    assert.notEqual(currentE2BPlanSequence(), 67);
     await assert.rejects(
       mainE2BOwnedImageQualification(["--verify-public-image"], {
         fetch: async () => {

@@ -1,6 +1,6 @@
 {
   "task": "P05.T03a",
-  "observed_at": "2026-10-14T23:15:35.002Z",
+  "observed_at": "2026-10-14T23:38:13.568Z",
   "scope": "Actual isolated PostgreSQL with controlled fixture proofs/reviews only; no production issuer, provider authentication, merchant data or public route",
   "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
   "version": "17.11 (Debian 17.11-1.pgdg13+2)",
@@ -1472,9 +1472,9 @@
   ],
   "source_digests": {
     "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
-    "infra/identity-role-prerequisites.sql": "0cc7855c8c3b7b1e7c2e4ac6b8d61cca4bd618e4d4203139ec73ca003f72c729",
+    "infra/identity-role-prerequisites.sql": "8908ee3f90d1f48dffc21c72879357dff2bc845f1cea2851f31152bd86494a22",
     "packages/identity/src/workspace-store-linking.ts": "0b951ebb12d4e68f5421c9a19df9ba691166399fe247aa56c39ede0176574a53",
     "scripts/local-store-linking-sql.mjs": "591ada6d2a5d4ee0dbe086456a534ecd57c5524f78c8be09e213e51a078fcb4e",
-    "scripts/workspace-store-linking-lab.mjs": "d068d3ef7dd13becba51b93a1e2429e8990838a08f76cf4c987870a7514df074"
+    "scripts/workspace-store-linking-lab.mjs": "13faf1b0c6adce76d7d033971ec484398a1e2922d4e311cc36c04bc7dc74126c"
   }
 }

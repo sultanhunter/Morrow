@@ -32,6 +32,12 @@
       "file": "0005.workspace-store-linking.sql",
       "sha256": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
       "reviewRef": "docs/evidence/P05.T03/workspace-store-linking-review.json"
+    },
+    {
+      "sequence": 6,
+      "file": "0006.authentication-exchange-admission.sql",
+      "sha256": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+      "reviewRef": "docs/evidence/P05.T01d/review.json"
     }
   ]
 }

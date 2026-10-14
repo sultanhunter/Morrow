@@ -27,7 +27,8 @@ const migrations = manifest.migrations.map((record) => {
   if (hash(text) !== record.sha256) throw Error("MIGRATION_CHECKSUM");
   return { record, text };
 });
-if (migrations.length !== 5) throw Error("LINKING_MIGRATION_REQUIRED");
+if (migrations.length < 5 || migrations[4].record.sequence !== 5)
+  throw Error("LINKING_MIGRATION_REQUIRED");
 const secrets = [];
 const observed = await localPostgresLab("P05.T03a", async ({ id, sql, image, version }) => {
   sql("CREATE DATABASE morrow; CREATE DATABASE morrow_linking_rollback;");

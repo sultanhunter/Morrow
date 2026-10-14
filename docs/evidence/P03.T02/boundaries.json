@@ -1,6 +1,6 @@
 {
   "scope": "Source import/dependency and unreleased contract-freeze checks; not a security sandbox, production tenant authority or live runtime/provider qualification.",
-  "files": 45,
+  "files": 46,
   "negative_checks": [
     {
       "name": "host_sdk",
