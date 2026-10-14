@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plan_sequence": 51,
+  "plan_sequence": 53,
   "stack": "cloudflare-neon-daytona",
   "environment": "development",
   "status": "design_candidate",

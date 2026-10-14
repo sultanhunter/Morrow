@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "task": "P04.T01f",
+  "plan_sequence": 53,
+  "observed_at": "2026-10-14T13:27:15.397717+00:00",
+  "organization_id": "8862ff17-6109-4eb1-ac70-2f7bafba64ae",
+  "region": "us",
+  "tier": 1,
+  "free_credit_usd": "0.00",
+  "paid_credit_usd": "0.00",
+  "payment_method_on_file": false,
+  "container_creation_enabled": false,
+  "trial_eligibility_confirmed": false,
+  "automatic_top_up_disabled": null,
+  "snapshot_identity_qualified": false,
+  "operator_access_authorized": false,
+  "network_policy": "tier1_essential_service_exceptions",
+  "console_version": "0.223.2",
+  "console_url": "https://app.daytona.io/dashboard/billing/wallet",
+  "screenshot_sha256": "4baf1e446ffae9c83cf2ffca07b8b8e3332527dc402c4988d0307cb25566fa49"
+}

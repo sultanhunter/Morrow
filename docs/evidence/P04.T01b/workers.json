@@ -1,6 +1,6 @@
 {
   "task": "P04.T01b",
-  "plan_sequence": 46,
+  "plan_sequence": 53,
   "scope": "Pinned local workerd runtime with synthetic driver/identity; not hosted Neon, TLS, pool reuse, provider identity or deployment qualification",
   "runtime": "miniflare4.20260730.0",
   "compatibility_date": "2026-07-30",
@@ -12,14 +12,14 @@
   "request_clients_closed": true,
   "provider_calls": 0,
   "deployed": false,
-  "bundle_sha256": "a9504383af1998da19623634c294c54ecf93c03ebc21dd1a7d791a474addd693",
+  "bundle_sha256": "7d45d2baf1a6e66fadb61ff99feb324a13d36b1481e0680d186f400c0dd55cb2",
   "input_digests": {
-    "packages/identity/src/neon.ts": "f56b190b4542948d109782dca222580e1c47dc15525a2f4af19a71464dcf9c97",
+    "packages/identity/src/neon.ts": "0904219a4d8a09303cfe00940f2536549f35d16e94ad76ffa1b81685996f3ecf",
     "packages/identity/src/neon-request.ts": "8e36e14303f602e239ffe2a57921eb18df2483b0bd9654eee6783abd5a43b651",
     "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
     "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
     "scripts/fixtures/neon-worker.ts": "7b1718a70424cb95186f78e8d26619c7ea0dc8315cc8bb9c6829428c4c0c267d",
     "scripts/workers-identity-lab.mjs": "744a6bbf35d61ddf47ca49e67659b7f6719819422e99ca281f9b26847c552d53",
-    "package-lock.json": "3b0ae7c244bae8bf21384696a838ccc40013962616be333bbcbbed1c19fc1750"
+    "package-lock.json": "95facba7dbecd9d59e691fba912780356377ab8153ad7d55459512b4d525d735"
   }
 }

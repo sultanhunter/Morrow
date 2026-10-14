@@ -696,5 +696,40 @@
     "status": "verified",
     "observed_at": "2026-10-11",
     "finding": "Linux VMs use existing VM snapshots. Pause preserves files/memory; stop preserves files and clears memory. Archive is unsupported. Idle pause/stop settings and deletion completion require explicit handling."
+  },
+  {
+    "id": "S92",
+    "url": "https://www.daytona.io/docs/en/typescript-sdk/daytona/",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Official creation options include explicit snapshot/name/labels, idle controls, private preview and wall TTL. Version0.224.0 is pinned for the development-only adapter."
+  },
+  {
+    "id": "S93",
+    "url": "https://registry.npmjs.org/@daytona/sdk/0.224.0",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Official SDK0.224.0 metadata/integrity verified before ignore-scripts locked installation. Constructor defaults/telemetry and retry behavior inspected; live CLI defers construction and denies implicit .env/DAYTONA settings."
+  },
+  {
+    "id": "S94",
+    "url": "https://www.daytona.io/docs/en/persistence/",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Container filesystem survives stop/start, while process memory is cleared. Pause/resume memory is VM-only."
+  },
+  {
+    "id": "S95",
+    "url": "https://www.daytona.io/docs/en/api-keys/",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "GET /api-keys/current provides organization key metadata without manage:api_keys. Actual organization, sandbox permissions and expiry are verified before allocation; missing binding denies."
+  },
+  {
+    "id": "S96",
+    "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Braces<=3.0.3 has an unpatched nested-pattern stack-exhaustion advisory. SDK glob/directory operations remain outside the fixed Buffer/path lab flow; no zero-advisory claim."
   }
 ]

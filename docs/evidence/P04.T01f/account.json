@@ -1,0 +1,21 @@
+{
+  "task": "P04.T01f",
+  "plan_sequence": 53,
+  "observed_date_india": "2026-10-14",
+  "scope": "Visible account and support observations only; no execution qualification",
+  "account_observation": "infra/labs/daytona-development-account.json",
+  "support_issue_id": 20446,
+  "vm_follow_up_reply": "The top up is applied as credits, yes. Yes that would be provisioned. Yes those rates apply. Linux VM should work with networking the same as with containers. Yes that is how pause/resume works.",
+  "vm_reply_interpretation": "Partial commercial/general behavior confirmation; not enabled access, immutable image/API quota or effective-network test evidence",
+  "free_credit_request": {
+    "status": "sent_awaiting_response",
+    "owner_authorization": "Send the free-credit request",
+    "screenshot_sha256": "9acc235c4d07ec96c797e2b2c61087e9c54ae081380845fb7ed61478cf8615eb",
+    "financial_commitment": false
+  },
+  "billing_method_changed": false,
+  "top_up_completed": false,
+  "api_key_created": false,
+  "sandbox_created": false,
+  "live_tests": "not_run"
+}

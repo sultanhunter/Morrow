@@ -1,7 +1,7 @@
 {
   "task": "P01.T03",
-  "generated_at": "2026-10-11T13:45:56.663Z",
-  "plan_sequence": 51,
+  "generated_at": "2026-10-14T14:15:37.101Z",
+  "plan_sequence": 53,
   "providers": 12,
   "bindings": 103,
   "scope": "Documentary feasibility and selected design consistency only; no real provider, runtime, billing, merchant or production qualification.",
@@ -12,7 +12,7 @@
     "docs/decisions/capacity-targets.json": "4430f79dcd99f3096bc11339cce110f241d929014e2d889259489625412b1b31",
     "docs/decisions/cost-model.json": "89e15c69ba3e58891af4248aba42d5a3500de9bf155f4ec429ce36f0e644b498",
     "docs/decisions/model-policy.json": "ccfb2b4173bbdf136a52674aa10aa023dff9685a7ec919d6fafe5cbde53a8e8b",
-    "docs/research/sources.json": "cd7a0e7e5094f223c6f4d1d0623e46a24960dd1ea04ae53205e8c422be486fda"
+    "docs/research/sources.json": "ce23926454a038c841704dda96b51d00c706cc4bfe3495f0ce41de3736b92a64"
   },
   "cost_components": {
     "currency": "USD",

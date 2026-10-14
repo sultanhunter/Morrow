@@ -1,7 +1,7 @@
 {
   "task": "P01.T02",
-  "generated_at": "2026-10-11T13:45:56.352Z",
-  "plan_sequence": 51,
+  "generated_at": "2026-10-14T14:14:02.105Z",
+  "plan_sequence": 53,
   "schema_definitions": 116,
   "capability_bodies": 206,
   "state_transitions": 94,
@@ -12,7 +12,7 @@
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/fixtures/P01.A02.json": "29394bf69cdffdf7b5165874ae080a22c4e8a89a5876ed9cfd8c6d5afc653451",
-    "package-lock.json": "3b0ae7c244bae8bf21384696a838ccc40013962616be333bbcbbed1c19fc1750"
+    "package-lock.json": "95facba7dbecd9d59e691fba912780356377ab8153ad7d55459512b4d525d735"
   },
   "errors": [],
   "results": [

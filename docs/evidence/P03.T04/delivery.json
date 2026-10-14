@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-10-11T13:45:59.602Z",
+  "generated_at": "2026-10-14T14:14:10.031Z",
   "scope": "Known-pattern secret guard, dependency locking (bundles bound to integrity-checked parent tarballs), migration metadata/checksum/envelope only; not complete secret assurance or PostgreSQL execution. Hosted CI evidenced separately; release protection pending.",
-  "scanned_files": 346,
-  "dependency_records": 397,
+  "scanned_files": 363,
+  "dependency_records": 559,
   "migrations": 3,
   "negative_checks": [
     {

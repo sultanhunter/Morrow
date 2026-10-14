@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 51,
-  "plan_digest": "591efca65f658b427beb97f25c2a0b6c8d4cc2009e9d9120ec34055340f4ff7d",
+  "plan_sequence": 53,
+  "plan_digest": "c609c1019cd2cd18df6d6d9a052969f318217bcaf1adb7d26e2ebc8aac9a67bd",
   "tasks": [
     {
       "id": "P01.T01",
@@ -87,7 +87,7 @@
     },
     {
       "path": "docs/evidence/P01.T01/verification.json",
-      "sha256": "fc13576ce64eb3308038c2a8f593f371665da408909ecddbb60f19bf9be08803"
+      "sha256": "7dca4b603b255a1f89a665ce116024b0a33445e3b286870b94a8b0f705771e37"
     },
     {
       "path": "docs/evidence/P01.T02/review.md",
@@ -99,7 +99,7 @@
     },
     {
       "path": "docs/evidence/P01.T02/verification.json",
-      "sha256": "6087611b30e5c956146e2e8f055a0f3bbb084e6b7b7c4d744e98578a31d5342b"
+      "sha256": "deb95d931626e8e2d0086251a3376288ce65193ce4d45a9a645b96424d4261cc"
     },
     {
       "path": "docs/evidence/P01.T03/review.md",
@@ -111,7 +111,7 @@
     },
     {
       "path": "docs/evidence/P01.T03/verification.json",
-      "sha256": "dae81a63c36c8167cdf9b7d36325052dfa6251914ec513b0d304acacb2a6d1aa"
+      "sha256": "6e539df92441f070b245f4b0b7d21871f07fc65153e547d19877729f6010bbaa"
     },
     {
       "path": "docs/evidence/P01.T04/review.md",
@@ -123,7 +123,7 @@
     },
     {
       "path": "docs/evidence/P01.T04/verification.json",
-      "sha256": "de01c87e2f6d46efca7ed0d173c5130ccc1a5f160bd72e98e434051cb29cd95f"
+      "sha256": "440668148db39c3347281245e553339fb82b533e09fed4ee7ca120a45c8d64e2"
     },
     {
       "path": "docs/evidence/P02.T01/review.md",
@@ -167,7 +167,7 @@
     },
     {
       "path": "docs/evidence/P02.T02/verification.json",
-      "sha256": "7ae2d514799a8f7a064bb57fc67fc447acf402149f25f58790e7a5de6799f4fb"
+      "sha256": "265ac708d1549f862c100b8ccafefb9c8d40ac745dc507a9d016b23a2e61e8fd"
     },
     {
       "path": "docs/evidence/P02.T03/browser-checks.json",
@@ -199,11 +199,11 @@
     },
     {
       "path": "docs/evidence/P03.T01/smoke.json",
-      "sha256": "7bef297a42e8a78827dc9e133a99079e36d4abfc60c26298600ca013ae2c6919"
+      "sha256": "117c06a6f7aa65e2a57410a1108ebce269f7f987dc2ea9f674fc8d5cf2647984"
     },
     {
       "path": "docs/evidence/P03.T02/boundaries.json",
-      "sha256": "f753f9bfee54f38b11dcbf32514da422b749b61381f52c5cc30c5729c603b15f"
+      "sha256": "6c950cd2da0a0b195a74085c37069b44161e5de7ce8044ba81cee14bf0c91aa1"
     },
     {
       "path": "docs/evidence/P03.T02/review.md",
@@ -239,7 +239,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/delivery.json",
-      "sha256": "c7692167f51ebac0f592a443a9b928029faf6198f772f4257b37cc7e7df29e18"
+      "sha256": "ed02ef314db35ab99852a818375c2ee47dfac303cfffd0c8e7c376a4e0e2238e"
     },
     {
       "path": "docs/evidence/P03.T04/dependency-audit.json",
@@ -299,15 +299,15 @@
     },
     {
       "path": "docs/evidence/P04.T01a/permissions.json",
-      "sha256": "e6e197b09cf7503e78093e0fb17b997e377fa262e0a7a8560755e0aa90287372"
+      "sha256": "a11b752a5e056b334ec64172a941a15487f36bb58d51a8d0904f66fd825e6181"
     },
     {
       "path": "docs/evidence/P04.T01a/readiness.json",
-      "sha256": "d738c4a009096c8ea272a32186440927b5b0a10ef0da11dc0feaf8592eba2a60"
+      "sha256": "e523ac60fdc3714b957058a529f85d63452b54d0e6c5e2c163628275d949801f"
     },
     {
       "path": "docs/evidence/P04.T01a/synth.json",
-      "sha256": "9816ef37212e8df3a9da4f3b689eacff3a68a56277884d6057cc2d02d1fa36be"
+      "sha256": "43ba457ac0831c14e23887bfdc23b6d6a6b55787aa359796fa04260ed92d3971"
     },
     {
       "path": "docs/evidence/P04.T01b/verification.json",
@@ -315,7 +315,7 @@
     },
     {
       "path": "docs/evidence/P04.T01b/workers.json",
-      "sha256": "d83f8a55addddebba24341fa7ca1effb77d7ebf4b11da47ba2914044ea57efe2"
+      "sha256": "ab77d3637727ff14afe4d7c3143efdfff111aa71454f92793f1f270cd7dfb6e6"
     },
     {
       "path": "docs/evidence/P04.T01c/neon-preflight.json",
@@ -344,6 +344,26 @@
     {
       "path": "docs/evidence/P04.T01e/review.json",
       "sha256": "186524d54b2ab910e0d98e8214863f7c179a3e96b43d4e6137a6004829e2858f"
+    },
+    {
+      "path": "docs/evidence/P04.T01f/account.json",
+      "sha256": "0ea450546a5c5e5846988ded0a4d7264e57bd0d1bc733b71a1478290a98123f3"
+    },
+    {
+      "path": "docs/evidence/P04.T01f/dependencies.json",
+      "sha256": "b01ca229f75e6b12279aa97b8c7240630db00b54efd72a0036e515663f7d7416"
+    },
+    {
+      "path": "docs/evidence/P04.T01f/live.json",
+      "sha256": "fc6e2917a56ce2c952139e7749ce53569b5e51319d5b02b8739b3cf92c2d6ab6"
+    },
+    {
+      "path": "docs/evidence/P04.T01f/preparation.json",
+      "sha256": "d5435be89501dad8912c20b3073a15b7a59e9ccf33cde17dff9c3602e94fb272"
+    },
+    {
+      "path": "docs/evidence/P04.T01f/review.json",
+      "sha256": "0e581adbe13a1154695efa53c94b8ee562dcd04f712cddb8003522c7e0c76283"
     },
     {
       "path": "docs/evidence/P04.T02/README.md",
