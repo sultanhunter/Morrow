@@ -130,7 +130,7 @@ export function captureE2BDevelopmentInput(
       morrowStarted: String(o.startedAtMs),
       morrowDeadline: String(o.deadlineMs),
     });
-    if (input.mode === "allocate" && p.planSequence !== 60) throw e2bDenied();
+    if (input.mode === "allocate" && p.planSequence !== 67) throw e2bDenied();
     if (
       typeof input.apiKey !== "string" ||
       !/^e2b_[A-Za-z0-9_-]{16,508}$/.test(input.apiKey) ||
@@ -182,6 +182,13 @@ export async function e2bBounded<T>(
     if (cancel) context.signal.removeEventListener("abort", cancel);
   }
 }
+export function assertE2BDevelopmentTls(): void {
+  if (
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED !== undefined &&
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "1"
+  )
+    throw e2bDenied();
+}
 async function jsonGet(
   path: string,
   apiKey: string,
@@ -190,7 +197,9 @@ async function jsonGet(
   request: NativeFetch,
   limit = 262_144,
 ): Promise<{ value: unknown; next: string | null; status: number }> {
+  assertE2BDevelopmentTls();
   return e2bBounded(context, now, async (signal) => {
+    assertE2BDevelopmentTls();
     const response = await request(`${API}${path}`, {
       method: "GET",
       redirect: "error",
@@ -362,7 +371,16 @@ export async function discoverE2BDevelopmentOwnedTemplates(
             Number(build.memoryMB) < 128 ||
             Number(build.memoryMB) > 4096 ||
             Number(build.diskSizeMB) < 1 ||
-            Number(build.diskSizeMB) > 10240 ||
+            (Number(build.diskSizeMB) > 10240 &&
+              !(
+                input.projectId === "22220c06-b76d-47b2-98d7-a1069d611e8f" &&
+                templateId === "pdht65h2trfuizuvmotc" &&
+                listed.buildID === "4324bde3-d3a9-4d18-91c1-b2b1b3e80b80" &&
+                build.cpuCount === 2 &&
+                build.memoryMB === 512 &&
+                build.diskSizeMB === 12422 &&
+                build.envdVersion === "0.10.0"
+              )) ||
             (Number(major) === 0 && Number(minor) < 2)
           )
             continue;
@@ -770,7 +788,7 @@ export function createE2BDevelopmentTransport(
       });
       if (
         input.mode !== "allocate" ||
-        p.planSequence !== 60 ||
+        p.planSequence !== 67 ||
         createAttempted ||
         JSON.stringify(spec.profile) !== JSON.stringify(p) ||
         JSON.stringify(spec.operation) !== JSON.stringify(o) ||

@@ -26,9 +26,10 @@ import {
   inspectOwnedBuildPrerequisites,
   ownedBuildRecipe,
   ownedManifestProofValid,
+  ownedBuildPriceSourceValid,
 } from "../scripts/e2b-owned-build-lab.mjs";
 
-import { frozenE2B60Fixture } from "./fixtures/frozen-e2b-60.mjs";
+import { frozenE2B60Fixture, currentE2BFixture } from "./fixtures/frozen-e2b-60.mjs";
 
 const profile = JSON.parse(readFileSync("infra/labs/e2b-owned-build.json", "utf8"));
 const operationId = "00000000-0000-4000-8000-000000000015",
@@ -151,7 +152,12 @@ test("recipe does not infer a provider default or permit arbitrary image/resourc
     assert.throws(() => ownedBuildRecipe({ ...profile, ...changed }));
 });
 test("read-only account/key observations cannot qualify builder write access or quote", () => {
-  const blockers = inspectOwnedBuildPrerequisites(profile, {}, null, { sourceSha256 });
+  const blockers = inspectOwnedBuildPrerequisites(
+    { ...profile, buildQuote: null, buildAuthorization: null },
+    {},
+    null,
+    { sourceSha256 },
+  );
   assert.ok(blockers.includes("E2B_OWNED_BUILD_WRITE_RECEIPT_UNQUALIFIED"));
   assert.ok(blockers.includes("E2B_OWNED_BUILD_QUOTE_UNQUALIFIED"));
   assert.ok(blockers.includes("E2B_OWNED_BUILD_MANIFEST_UNQUALIFIED"));
@@ -330,6 +336,69 @@ test("manifest flags alone do not qualify a public proof", () => {
   assert.equal(Boolean(ownedManifestProofValid({}, sourceSha256)), false);
   assert.equal(
     Boolean(ownedManifestProofValid({ sourceSha256, providerCompute: false }, sourceSha256)),
+    false,
+  );
+});
+
+test("current67 builder retains unqualified write permission before private input", (t) => {
+  const current = currentE2BFixture();
+  t.after(current.dispose);
+  const profilePath = join(current.root, "infra/labs/e2b-owned-build.json");
+  const readonlyProfile = JSON.parse(readFileSync(profilePath, "utf8"));
+  readonlyProfile.buildAuthorization = null;
+  writeFileSync(profilePath, JSON.stringify(readonlyProfile));
+  const child = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      current.loader,
+      current.script("scripts/e2b-owned-build-lab.mjs"),
+      "--build",
+      "/never/read-private-receipt",
+    ],
+    { encoding: "utf8", cwd: current.root },
+  );
+  assert.equal(child.status, 2, child.stderr);
+  const report = JSON.parse(current.read("docs/evidence/P04.T01h/owned-build-blocked.json"));
+  assert.equal(report.plan_sequence, 67);
+  assert.equal(report.provider_calls, false);
+  assert.equal(report.private_input_read, false);
+  assert.ok(report.blockers.includes("E2B_OWNED_BUILD_WRITE_RECEIPT_UNQUALIFIED"));
+});
+
+test("dated builder pricing proof rejects modified bytes, stale/future and overlong windows", () => {
+  const now = 1792000000000,
+    bytes = Buffer.from('{"scope":"operator"}');
+  const quote = {
+    priceSourceRef: "docs/evidence/P04.T01h/e2b-support-pricing-65.json",
+    priceSourceSha256: ownedBuildSha(bytes),
+    verifiedAtMs: now,
+    expiresAtMs: now + 86400000,
+  };
+  let reads = 0;
+  const read = () => {
+    reads++;
+    return bytes;
+  };
+  assert.equal(ownedBuildPriceSourceValid(quote, now, read), true);
+  assert.equal(reads, 1);
+  for (const drift of [
+    { verifiedAtMs: now + 1 },
+    { expiresAtMs: now },
+    { verifiedAtMs: now - 86400001 },
+    { expiresAtMs: now + 86400001 },
+    { priceSourceSha256: "f".repeat(64) },
+    { priceSourceRef: "/private/never-read" },
+  ])
+    assert.equal(ownedBuildPriceSourceValid({ ...quote, ...drift }, now, read), false);
+  assert.equal(
+    ownedBuildPriceSourceValid(quote, now, () => Buffer.from("changed")),
+    false,
+  );
+  assert.equal(
+    ownedBuildPriceSourceValid(quote, now, () => {
+      throw Error("missing");
+    }),
     false,
   );
 });

@@ -10,12 +10,16 @@ import {
   ownedManifestProofValid,
 } from "../scripts/e2b-owned-build-lab.mjs";
 
-import { frozenE2B60Fixture, e2bRepositoryRoot } from "./fixtures/frozen-e2b-60.mjs";
+import {
+  frozenE2B60Fixture,
+  currentE2BFixture,
+  e2bRepositoryRoot,
+} from "./fixtures/frozen-e2b-60.mjs";
 
 const index = readFileSync("tests/fixtures/e2b-base-index.json"),
   child = readFileSync("tests/fixtures/e2b-base-amd64.json");
 const clock = 1792000000000;
-const frozen = frozenE2B60Fixture(),
+const frozen = currentE2BFixture(),
   originalCwd = process.cwd();
 process.chdir(frozen.root);
 after(() => {
@@ -126,10 +130,9 @@ test("injected sink cannot overwrite repository evidence", async () => {
   assert.equal(calls, 0);
 });
 
-test("current plan denies frozen60 image qualification before any request", async () => {
+test("current67 image controller denies original60 plan before any request", async () => {
   const current = frozenE2B60Fixture(),
     previous = process.cwd();
-  current.useCurrentPlan();
   process.chdir(current.root);
   let calls = 0;
   try {

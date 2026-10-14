@@ -202,7 +202,10 @@ test("default and malformed CLI invocations cannot read a key or instantiate pro
   assert.equal(report.private_input_read, false);
   assert.equal(report.live_ready, false);
   assert.equal(report.status, "archived_cleanup_only");
-  assert.equal(report.current_plan_sequence, 64);
+  assert.equal(
+    report.current_plan_sequence,
+    JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence,
+  );
   assert.equal(report.plan_sequence, 54);
   assert.equal(
     readFileSync("docs/evidence/P04.T01f/preparation.json", "utf8"),

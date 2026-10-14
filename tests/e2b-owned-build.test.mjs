@@ -16,7 +16,7 @@ const now = Date.parse("2026-10-15T00:30:00Z");
 const recipe = {
   schemaVersion: 1,
   task: "P04.T01h",
-  planSequence: 60,
+  planSequence: 67,
   workspaceId: "477b25a3-cd53-441c-b9ce-01c3bb48e378",
   projectId: "22220c06-b76d-47b2-98d7-a1069d611e8f",
   imageRef: E2B_OWNED_BUILD_IMAGE,
@@ -691,4 +691,56 @@ test("real native registration redirect stops before forwarding a synthetic key 
   assert.equal(foreign, 0);
   assert.equal(f.calls.filter((x) => x.options.method === "POST").length, 1);
   await agent.close();
+});
+
+test("original60 build records reconcile exact identity without gaining current67 write authority", async () => {
+  const legacy = prepareE2BOwnedBuildOperation(
+    { ...recipe, planSequence: 60 },
+    original().operation.operationId,
+    now,
+    "a".repeat(64),
+    "b".repeat(64),
+    "c".repeat(64),
+  );
+  const f = pureFixture();
+  await assert.rejects(
+    runE2BOwnedBuild(legacy, f.port, opts({ authorization: auth(legacy) })),
+    /DENIED/,
+  );
+  assert.deepEqual(f.calls, []);
+  let nativeFetches = 0;
+  assert.throws(
+    () =>
+      createE2BOwnedBuildNativePort(
+        { apiKey: key, record: legacy, authorization: auth(legacy), mode: "build" },
+        {
+          now: () => now,
+          fetch: async () => {
+            nativeFetches++;
+            throw Error("never");
+          },
+        },
+      ),
+    /DENIED/,
+  );
+  assert.equal(nativeFetches, 0);
+  const pending = {
+    ...legacy,
+    registrationAttempted: true,
+    startAttempted: true,
+    registrationVerified: true,
+    templateId,
+    buildId,
+    phase: "held",
+  };
+  f.set(observation("ready"));
+  const report = await runE2BOwnedBuild(
+    pending,
+    f.port,
+    opts({ mode: "reconcile", authorization: null }),
+  );
+  assert.equal(report.status, "ready_retained");
+  assert.equal(report.record.recipe.planSequence, 60);
+  assert.equal(report.record.operation.sourceSha256, legacy.operation.sourceSha256);
+  assert.deepEqual(f.calls, ["project", "inspect"]);
 });

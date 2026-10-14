@@ -1,19 +1,19 @@
 {
   "task": "P04.T01h",
-  "plan_sequence": 60,
+  "plan_sequence": 67,
   "scope": "synthetic_owned_image_only",
   "production_qualified": false,
   "sandbox_allocated": false,
-  "source_sha256": "ec7ddde2e284ed289dfae670e00b4bf5cfecc089d54dcf0cf87e557f8fda3ce8",
+  "source_sha256": "a3cb26277c21cfed8536bcedee2880dc0aca819ea272819f188b488e2055d999",
   "source_digests": {
-    "packages/runtime-adapters/src/e2b/owned-image.ts": "282a506c689ab14c4f5dab86fe0dddf660a7297324eee251de82f89d005311e4",
-    "packages/runtime-adapters/src/e2b/owned-build.ts": "d4a33dbcadde8f720d4bba313eff70fb814eead7e4d0a481869e9624d8cc24f5",
+    "packages/runtime-adapters/src/e2b/owned-image.ts": "877178234b35a7c40271498792ecea0f7a4920c1ed737f8d9b090203cc39aac9",
+    "packages/runtime-adapters/src/e2b/owned-build.ts": "4e94b9ed5b191f9f912f5735fc9846db744ff7a8714ff187bb6f624d800dce18",
     "scripts/e2b-owned-build-input.mjs": "59704cde8a9d216df56a4f499430c4aa0b5ad6dac881a49ad5666381d7b0480f",
-    "scripts/e2b-owned-image-qualification.mjs": "b62644a679894be3ec371e181a3122d84c40c1a676a2ecf68c04321758e5684b",
-    "scripts/e2b-owned-build-lab.mjs": "f8238e5273c4a493af5a29dc7c5791be4f58068ac10102392359ef68b6957870",
-    "packages/runtime-adapters/src/e2b/development-transport.ts": "3d2cf71460ecf1bc9fea23cd2eb930842a26e378726ff3ff35e7b485759991c2",
-    "scripts/e2b-development-input.mjs": "98c61933d72c3468feed8c0842ff66ece48591a0760672e0f3417117ca24b6b4",
-    "infra/labs/e2b-owned-build.json": "bf84a41ff12c4db1d8d497997025aab9c0fd662542b1e675909b1d52021f2075",
+    "scripts/e2b-owned-image-qualification.mjs": "9d9b22a33c4a32ae4afa741cbba67df8fe98ac37939efc6ac32fac26d1d3b447",
+    "scripts/e2b-owned-build-lab.mjs": "6b320cb1620e0e3e9daaebbd1743992ee7cc246737785ec5631606abff607095",
+    "packages/runtime-adapters/src/e2b/development-transport.ts": "4b2c5e3e19f85624f1e77e850b21fb3108db2e7fbc47d2fea2798fe44a34a3c8",
+    "scripts/e2b-development-input.mjs": "9309515b9286ba79276bc485b2a76f67f289f2038f95193ba71e6263ec80a775",
+    "infra/labs/e2b-owned-build.json": "7b95d1a0ff28d9bb2d1b066122829f06501e722fc566aaf1b803f604286e9792",
     "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
   },
   "status": "prepared",
@@ -22,8 +22,7 @@
   "build_registered": false,
   "build_started": false,
   "blockers": [
-    "E2B_OWNED_BUILD_ACCOUNT_UNQUALIFIED",
-    "E2B_OWNED_BUILD_FREE_CREDIT_UNQUALIFIED",
+    "E2B_OWNED_BUILD_MANIFEST_UNQUALIFIED",
     "E2B_OWNED_BUILD_QUOTE_UNQUALIFIED",
     "E2B_OWNED_BUILD_WRITE_RECEIPT_UNQUALIFIED"
   ]

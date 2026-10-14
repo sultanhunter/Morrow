@@ -28,7 +28,7 @@ const digest = (value: unknown): string => {
 export interface E2BOwnedBuildRecipe {
   schemaVersion: 1;
   task: "P04.T01h";
-  planSequence: 60;
+  planSequence: 60 | 65 | 66 | 67;
   workspaceId: string;
   projectId: string;
   imageRef: typeof E2B_OWNED_BUILD_IMAGE;
@@ -168,7 +168,7 @@ export function compileE2BOwnedBuildRecipe(value: unknown) {
     if (
       r.schemaVersion !== 1 ||
       r.task !== "P04.T01h" ||
-      r.planSequence !== 60 ||
+      ![60, 65, 66, 67].includes(r.planSequence as number) ||
       r.workspaceId !== WORKSPACE ||
       r.projectId !== PROJECT ||
       r.imageRef !== E2B_OWNED_BUILD_IMAGE ||
@@ -181,7 +181,7 @@ export function compileE2BOwnedBuildRecipe(value: unknown) {
     const recipe: E2BOwnedBuildRecipe = Object.freeze({
       schemaVersion: 1,
       task: "P04.T01h",
-      planSequence: 60,
+      planSequence: r.planSequence as 60 | 65 | 66 | 67,
       workspaceId: WORKSPACE,
       projectId: PROJECT,
       imageRef: E2B_OWNED_BUILD_IMAGE,
@@ -434,7 +434,17 @@ export function validateE2BOwnedBuildReadyProof(
       observation.memoryMiB !== 512 ||
       observation.diskMiB === null ||
       observation.diskMiB < 1 ||
-      observation.diskMiB > 10240 ||
+      (observation.diskMiB > 10240 &&
+        !(
+          record.recipe.planSequence === 65 &&
+          record.operation.operationId === "c423fb7d-6935-4917-8862-0b4bbf5a2961" &&
+          record.operation.sourceSha256 ===
+            "b20517ffdaac601c56edea1c2d75d81c636b914b7b546be7661aaf3236c8b4ce" &&
+          record.templateId === "pdht65h2trfuizuvmotc" &&
+          record.buildId === "4324bde3-d3a9-4d18-91c1-b2b1b3e80b80" &&
+          observation.diskMiB === 12422 &&
+          observation.envdVersion === "0.10.0"
+        )) ||
       observation.envdVersion === null ||
       observation.finishedAtMs === null ||
       (Number(observation.envdVersion.split(".")[0]) === 0 &&
@@ -469,6 +479,7 @@ export async function runE2BOwnedBuild(
     (mode !== "build" && mode !== "reconcile")
   )
     fail();
+  if (mode === "build" && record.recipe.planSequence !== 67) fail();
   const initialAuth =
     mode === "build"
       ? validateE2BOwnedBuildAuthorization(options.authorization, record, now())
@@ -611,6 +622,7 @@ export function createE2BOwnedBuildNativePort(
     (mode !== "build" && mode !== "reconcile")
   )
     fail();
+  if (mode === "build" && record.recipe.planSequence !== 67) fail();
   const apiKey = keyValue;
   const now = dependencies.now ?? Date.now;
   const authorization =

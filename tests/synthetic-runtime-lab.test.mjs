@@ -12,7 +12,7 @@ const startedAtMs = 1000;
 const profile = {
   schemaVersion: 1,
   task: "P04.T01h",
-  planSequence: 60,
+  planSequence: 67,
   scope: "builtin_synthetic_operator",
   environment: "development",
   providerId: "e2b",
@@ -204,7 +204,7 @@ test("synthetic compilation is closed and carries no dispatch or production auth
 });
 
 test("historical profiles decode only for cleanup and cannot start a new core run", async () => {
-  for (const planSequence of [55, 56, 57, 58, 59]) {
+  for (const planSequence of [55, 56, 57, 58, 59, 60, 65, 66]) {
     const original = { ...profile, planSequence };
     assert.equal(compileSyntheticLabProfile(original).profile.planSequence, planSequence);
     let providerAccesses = 0;
@@ -234,8 +234,8 @@ test("historical profiles decode only for cleanup and cannot start a new core ru
   }
 });
 
-test("historical55-59 original operations retain static cleanup after current60 selection", async () => {
-  for (const planSequence of [55, 56, 57, 58, 59]) {
+test("historical55-66 original operations retain static cleanup after current67 selection", async () => {
+  for (const planSequence of [55, 56, 57, 58, 59, 60, 65, 66]) {
     const original = { ...profile, planSequence };
     const originalOperation = prepareSyntheticLabOperation(
       original,

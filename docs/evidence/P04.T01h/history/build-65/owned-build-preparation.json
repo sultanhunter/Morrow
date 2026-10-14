@@ -1,0 +1,27 @@
+{
+  "task": "P04.T01h",
+  "plan_sequence": 65,
+  "scope": "synthetic_owned_image_only",
+  "production_qualified": false,
+  "sandbox_allocated": false,
+  "source_sha256": "301d7e80c6729facaa6ccb2b4d89dc8940563a51831e8a3c93772e3e1730188f",
+  "source_digests": {
+    "packages/runtime-adapters/src/e2b/owned-image.ts": "aad117aa9d685029bda3ccc96b723b8849f82f87152d40b02335ac790aafeb32",
+    "packages/runtime-adapters/src/e2b/owned-build.ts": "ca558a994de3b4ee6a02e6d200053c070155df14af588d8029e8432d8b6e3b9e",
+    "scripts/e2b-owned-build-input.mjs": "59704cde8a9d216df56a4f499430c4aa0b5ad6dac881a49ad5666381d7b0480f",
+    "scripts/e2b-owned-image-qualification.mjs": "d605ee2903a3b3773b230e07fb8d9b0f9cf9414d434c9d0b0407a1275c83e449",
+    "scripts/e2b-owned-build-lab.mjs": "e2bb0e23436b4b4b880da865dc48782bc745b8aa518ac0a3ece8222920454187",
+    "packages/runtime-adapters/src/e2b/development-transport.ts": "fa9a7fd31e82b8001c4fbb509531cff3b51d1b313a14c49db0bd3b7fe83db945",
+    "scripts/e2b-development-input.mjs": "c531171cbfd36f1a588ab24de8289855603cd337e161172ce266ae33ce2f9a37",
+    "infra/labs/e2b-owned-build.json": "76b18e22ab22b675d02ac59367178cb7dd983a89b1ddbaa0db79809dc8219f4d",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+  },
+  "status": "prepared",
+  "provider_calls": false,
+  "private_input_read": false,
+  "build_registered": false,
+  "build_started": false,
+  "blockers": [
+    "E2B_OWNED_BUILD_WRITE_RECEIPT_UNQUALIFIED"
+  ]
+}

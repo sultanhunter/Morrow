@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "task": "P04.T01h",
+  "planSequence": 65,
+  "scope": "builtin_synthetic_operator",
+  "projectId": "22220c06-b76d-47b2-98d7-a1069d611e8f",
+  "workspaceId": "477b25a3-cd53-441c-b9ce-01c3bb48e378",
+  "image": "e2bdev/base@sha256:4a369f01a820fe5e65f53c2c5727a78899daf86f0541b721097f289559c8b73f",
+  "cpu": 2,
+  "memoryMiB": 512,
+  "minFreeDiskMiB": 0,
+  "maximumObservationMs": 600000,
+  "estimatedCreditCeilingUsd": "0.25",
+  "retainReadyTemplate": true,
+  "buildQuote": {
+    "schemaVersion": 1,
+    "recipeSha256": "06f75fb43b9a8f13d513985630e0e20a2f185664a29bb3c43967a5d4178474d4",
+    "quoteVerified": true,
+    "allMetersQualified": true,
+    "recoveryQualified": true,
+    "buildExpectedUsd": "0.000000",
+    "readyRetentionExpectedUsd": "0.000000",
+    "otherExpectedUsd": "0.000000",
+    "estimatedCreditCeilingUsd": "0.25",
+    "priceSourceRef": "docs/evidence/P04.T01h/e2b-support-pricing-65.json",
+    "priceSourceSha256": "ab91404a4e515085fc6a8d86e0f3e29c01dcd004f4392e9ea93a557dbfa0159d",
+    "verifiedAtMs": 1792013175637,
+    "expiresAtMs": 1792099575637
+  },
+  "buildAuthorization": "owner_explicit",
+  "merchantRouting": false
+}

@@ -2,6 +2,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  snapshotE2BDevelopmentDiagnostics,
+  markE2BDevelopmentCleanup,
+} from "../packages/runtime-adapters/src/e2b/development-native.ts";
+import {
   compileSyntheticLabProfile,
   prepareSyntheticLabOperation,
   runSyntheticLab,
@@ -99,6 +103,8 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
     return 2;
   }
   if (
+    (process.env.NODE_TLS_REJECT_UNAUTHORIZED !== undefined &&
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "1") ||
     existsSync(".env") ||
     existsSync(".env.local") ||
     Object.keys(process.env).some(
@@ -121,6 +127,13 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
         accountObservationSha256: envelope.accountObservationSha256,
       });
       if (input.operationId !== argv[1]) throw Error("E2B_LAB_ORIGINAL_OPERATION_DENIED");
+      Object.assign(base, {
+        plan_sequence: compiled.profile.planSequence,
+        controller_plan_sequence: plan?.sources?.plan?.sequence ?? null,
+        controller_source_sha256: source?.sourceSha256 ?? null,
+        source_sha256: envelope.record.operation.sourceSha256,
+        source_digests: envelope.sourceDigests,
+      });
     } catch {
       journal.closeController();
       throw Error("E2B_LAB_CLEANUP_INPUT_DENIED");
@@ -156,6 +169,9 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
   process.once("SIGINT", cancel);
   process.once("SIGTERM", cancel);
   let providerAttempted = false,
+    transport,
+    terminalReceiptSaved = false,
+    heldSlot = true,
     result,
     exitCode = 1;
   const persist = async (record) => {
@@ -169,7 +185,7 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
       (await import("../packages/runtime-adapters/src/e2b/development-transport.ts"))
         .createOfficialE2BDevelopmentTransport;
     providerAttempted = true;
-    const transport = await createOfficialE2BDevelopmentTransport({
+    transport = await createOfficialE2BDevelopmentTransport({
       apiKey: input.apiKey,
       profile: compiled.profile,
       operation: envelope.record.operation,
@@ -179,6 +195,7 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
       startedAtMs: envelope.record.operation.startedAtMs,
       sourceSha256: envelope.record.operation.sourceSha256,
       signal: controller.signal,
+      onCleanup: () => markE2BDevelopmentCleanup(transport),
       persist,
     };
     if (cleanup) Object.assign(options, { cleanupOnly: true, resume: envelope.record });
@@ -187,8 +204,20 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
       cleanup &&
       result.status !== "unresolved" &&
       ["not_needed", "verified_deleted"].includes(result.cleanup);
+    if (result.status !== "unresolved") {
+      heldSlot = null;
+      terminalReceiptSaved = journal.release(result);
+      heldSlot = !terminalReceiptSaved;
+    }
     report("live.json", {
-      status: cleanupCompleted ? "cleanup_completed" : result.status,
+      terminal_receipt_saved: terminalReceiptSaved,
+      held_slot: heldSlot,
+      native_diagnostics: snapshotE2BDevelopmentDiagnostics(transport),
+      status: !terminalReceiptSaved
+        ? "unresolved"
+        : cleanupCompleted
+          ? "cleanup_completed"
+          : result.status,
       provider_calls: true,
       operation_id: input.operationId,
       original_source_sha256: envelope.record.operation.sourceSha256,
@@ -199,12 +228,11 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
       sandbox_id: result.record.sandboxId,
       provider_qualification: transport.qualification ?? null,
     });
-    exitCode = result.status === "passed" || cleanupCompleted ? 0 : 1;
-    if (result.status !== "unresolved") journal.release(result);
+    exitCode = terminalReceiptSaved && (result.status === "passed" || cleanupCompleted) ? 0 : 1;
     console.log(
-      cleanupCompleted
+      cleanupCompleted && terminalReceiptSaved
         ? "E2B_LAB_CLEANUP_COMPLETED"
-        : result.status === "passed"
+        : result.status === "passed" && terminalReceiptSaved
           ? "E2B_LAB_PASSED"
           : "E2B_LAB_NOT_PASSED",
     );
@@ -222,14 +250,21 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
         memoryPersistenceClaimed: false,
       };
       try {
-        journal.release(noEffect);
+        heldSlot = null;
+        terminalReceiptSaved = journal.release(noEffect);
+        heldSlot = !terminalReceiptSaved;
       } catch {
         /* Keep the operation slot if receipt persistence fails. */
       }
     }
     report("live.json", {
-      status: "unresolved",
+      status: terminalReceiptSaved ? "failed" : "unresolved",
       code: "E2B_LAB_CONTROLLER_FAILED",
+      terminal_receipt_saved: terminalReceiptSaved,
+      held_slot: heldSlot,
+      native_diagnostics: snapshotE2BDevelopmentDiagnostics(transport),
+      cleanup: result?.cleanup ?? null,
+      deletion_observation: result?.deletionObservation ?? "not_observed",
       operation_id: input.operationId,
       provider_calls_attempted: providerAttempted,
     });

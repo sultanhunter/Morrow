@@ -1,47 +1,68 @@
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { e2bLabSourceBinding, e2bLabSources } from "../../scripts/e2b-development-input.mjs";
-import {
-  ownedBuildSourceBinding,
-  ownedBuildSources,
-} from "../../scripts/e2b-owned-build-input.mjs";
 
 export const e2bRepositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
+const archiveRoot = fileURLToPath(new URL("./e2b-source-60/", import.meta.url));
+const manifest = JSON.parse(readFileSync(resolve(archiveRoot, "manifest.json"), "utf8"));
+const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
-// Frozen operator recipes keep their original source bytes and plan revision.
-// Only public code/configuration is copied; no private credential or live report.
-export function frozenE2B60Fixture() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "morrow-e2b-frozen-60-")));
-  for (const path of new Set([
-    ...e2bLabSources,
-    ...ownedBuildSources,
-    "infra/labs/e2b-development-account.json",
-  ])) {
-    const target = resolve(root, path);
-    mkdirSync(dirname(target), { recursive: true });
-    copyFileSync(resolve(e2bRepositoryRoot, path), target);
-  }
-  mkdirSync(resolve(root, "docs/plan"), { recursive: true });
-  copyFileSync(
-    new URL("./e2b-plan-60.json", import.meta.url),
-    resolve(root, "docs/plan/source.json"),
+function fixture(frozen) {
+  const root = realpathSync(
+    mkdtempSync(join(tmpdir(), `morrow-e2b-${frozen ? "frozen-60" : "current-67"}-`)),
   );
-  mkdirSync(resolve(root, "docs/evidence/P04.T01h"), { recursive: true });
-  if (
-    e2bLabSourceBinding(root).sourceSha256 !==
-      "1a3995f691cdb4447653c21d3f091953791fb544c1c36992eb86a37d6b423891" ||
-    ownedBuildSourceBinding(root).sourceSha256 !==
-      "ec7ddde2e284ed289dfae670e00b4bf5cfecc089d54dcf0cf87e557f8fda3ce8"
-  ) {
+  try {
+    // Only module-format scaffolding; original controller/dependency bytes stay exact.
+    writeFileSync(resolve(root, "package.json"), JSON.stringify({ private: true, type: "module" }));
+    for (const [path, expected] of Object.entries(manifest.files)) {
+      const bytes = readFileSync(resolve(frozen ? archiveRoot : e2bRepositoryRoot, path));
+      if (frozen && sha(bytes) !== expected) throw Error("FROZEN_E2B_60_SOURCE_CHANGED");
+      const target = resolve(root, path);
+      mkdirSync(dirname(target), { recursive: true });
+      copyFileSync(resolve(frozen ? archiveRoot : e2bRepositoryRoot, path), target);
+    }
+    mkdirSync(resolve(root, "docs/plan"), { recursive: true });
+    copyFileSync(
+      frozen
+        ? new URL("./e2b-plan-60.json", import.meta.url)
+        : resolve(e2bRepositoryRoot, "docs/plan/source.json"),
+      resolve(root, "docs/plan/source.json"),
+    );
+    mkdirSync(resolve(root, "docs/evidence/P04.T01h"), { recursive: true });
+    if (frozen) {
+      const binding = (paths) =>
+        sha(
+          JSON.stringify(
+            Object.fromEntries(paths.map((p) => [p, sha(readFileSync(resolve(root, p)))])),
+          ),
+        );
+      if (
+        binding(manifest.runtimeSources) !==
+          "1a3995f691cdb4447653c21d3f091953791fb544c1c36992eb86a37d6b423891" ||
+        binding(manifest.ownedBuildSources) !==
+          "ec7ddde2e284ed289dfae670e00b4bf5cfecc089d54dcf0cf87e557f8fda3ce8"
+      )
+        throw Error("FROZEN_E2B_60_SOURCE_CHANGED");
+    }
+  } catch (error) {
     rmSync(root, { recursive: true, force: true });
-    throw Error("FROZEN_E2B_60_SOURCE_CHANGED");
+    throw error;
   }
   return {
     root,
     read: (path) => readFileSync(resolve(root, path)),
-    script: (path) => resolve(e2bRepositoryRoot, path),
+    // Run the copied controller and its copied dependencies, never the active source.
+    script: (path) => resolve(root, path),
     loader: resolve(e2bRepositoryRoot, "node_modules/tsx/dist/loader.mjs"),
     useCurrentPlan: () =>
       copyFileSync(
@@ -51,3 +72,7 @@ export function frozenE2B60Fixture() {
     dispose: () => rmSync(root, { recursive: true, force: true }),
   };
 }
+
+// Exact public60 code/configuration only; no private credential or live report.
+export const frozenE2B60Fixture = () => fixture(true);
+export const currentE2BFixture = () => fixture(false);

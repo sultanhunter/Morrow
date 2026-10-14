@@ -15,7 +15,7 @@ const amd64Bytes = await readFile(new URL("./fixtures/e2b-base-amd64.json", impo
 const sourceSha256 = "b".repeat(64);
 const current = Date.parse("2026-10-15T06:00:00Z");
 const anonymousToken = "synthetic.public.pull.only";
-const request = () => ({ schemaVersion: 1, task: "P04.T01h", planSequence: 60, sourceSha256 });
+const request = () => ({ schemaVersion: 1, task: "P04.T01h", planSequence: 67, sourceSha256 });
 const urls = [
   E2B_OWNED_BASE_IMAGE.authUrl,
   `${E2B_OWNED_BASE_IMAGE.registryOrigin}/v2/e2bdev/base/manifests/${E2B_OWNED_BASE_IMAGE.indexDigest}`,

@@ -11,7 +11,7 @@ const current = Date.parse("2026-10-14T16:00:00Z");
 const profile = {
   schemaVersion: 1,
   task: "P04.T01h",
-  planSequence: 60,
+  planSequence: 67,
   scope: "builtin_synthetic_operator",
   environment: "development",
   providerId: "e2b",
@@ -186,7 +186,7 @@ function fixture(changes = {}) {
 
 test("historical reference recipes cannot reach an SDK allocation call", async () => {
   const f = fixture();
-  const original = { ...profile, planSequence: 59 };
+  const original = { ...profile, planSequence: 60 };
   const originalOperation = prepareSyntheticLabOperation(
     original,
     operation.operationId,
@@ -869,4 +869,27 @@ test("pinned real SDK serializes v2 creation/pause/restore without uncertain mut
     uncertainCreateAttempts: 2,
     externalCalls: 0,
   });
+});
+
+test("qualification rechecks TLS before each credential GET after an awaited response", async () => {
+  const previous = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  let calls = 0;
+  try {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "1";
+    await assert.rejects(
+      verifyE2BDevelopmentAccess(input(), {
+        now: () => current,
+        fetch: async () => {
+          calls++;
+          process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+          return json([]);
+        },
+      }),
+      /DENIED/,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    if (previous === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previous;
+  }
 });

@@ -43,7 +43,7 @@ export function ownedManifestProofValid(proof, sourceSha256) {
     ]) &&
     proof.schemaVersion === 1 &&
     proof.task === "P04.T01h" &&
-    proof.planSequence === 60 &&
+    proof.planSequence === 67 &&
     proof.sourceSha256 === sourceSha256 &&
     proof.scope === "public_oci_manifest_provenance_only" &&
     Number.isFinite(Date.parse(proof.verifiedAt)) &&
@@ -96,6 +96,8 @@ export function ownedManifestProofValid(proof, sourceSha256) {
 const json = (p) => JSON.parse(readFileSync(p, "utf8"));
 const keyRoot = () => resolve("../../morrow-private-staging");
 const envDenied = () =>
+  (process.env.NODE_TLS_REJECT_UNAUTHORIZED !== undefined &&
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "1") ||
   existsSync(".env") ||
   existsSync(".env.local") ||
   Object.keys(process.env).some(
@@ -105,7 +107,7 @@ export function ownedBuildRecipe(profile) {
   if (
     profile?.schemaVersion !== 1 ||
     profile.task !== "P04.T01h" ||
-    profile.planSequence !== 60 ||
+    profile.planSequence !== 67 ||
     profile.scope !== "builtin_synthetic_operator" ||
     profile.estimatedCreditCeilingUsd !== "0.25" ||
     profile.retainReadyTemplate !== true ||
@@ -115,7 +117,7 @@ export function ownedBuildRecipe(profile) {
   return compileE2BOwnedBuildRecipe({
     schemaVersion: 1,
     task: "P04.T01h",
-    planSequence: 60,
+    planSequence: 67,
     projectId: profile.projectId,
     workspaceId: profile.workspaceId,
     imageRef: profile.image,
@@ -124,6 +126,29 @@ export function ownedBuildRecipe(profile) {
     minFreeDiskMiB: profile.minFreeDiskMiB,
     maximumObservationMs: profile.maximumObservationMs,
   });
+}
+export function ownedBuildPriceSourceValid(quote, now = Date.now(), read = readFileSync) {
+  try {
+    if (
+      !quote ||
+      !Number.isSafeInteger(now) ||
+      !Number.isSafeInteger(quote.verifiedAtMs) ||
+      !Number.isSafeInteger(quote.expiresAtMs) ||
+      quote.verifiedAtMs < 0 ||
+      quote.verifiedAtMs > now ||
+      quote.expiresAtMs <= now ||
+      quote.expiresAtMs <= quote.verifiedAtMs ||
+      quote.expiresAtMs - quote.verifiedAtMs > 86400000 ||
+      typeof quote.priceSourceRef !== "string" ||
+      !/^docs\/evidence\/P04\.T01h\/[a-z0-9-]+\.json$/.test(quote.priceSourceRef) ||
+      typeof quote.priceSourceSha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(quote.priceSourceSha256)
+    )
+      return false;
+    return ownedBuildSha(read(quote.priceSourceRef)) === quote.priceSourceSha256;
+  } catch {
+    return false;
+  }
 }
 export function inspectOwnedBuildPrerequisites(
   profile,
@@ -141,7 +166,7 @@ export function inspectOwnedBuildPrerequisites(
   }
   const observed = Date.parse(account?.observed_at ?? "");
   if (
-    account?.plan_sequence !== 60 ||
+    account?.plan_sequence !== 67 ||
     account.workspace_id !== profile?.workspaceId ||
     account.project_id !== profile?.projectId ||
     account.workspace !== "Personal Workspace" ||
@@ -165,7 +190,7 @@ export function inspectOwnedBuildPrerequisites(
   )
     reasons.push("E2B_OWNED_BUILD_FREE_CREDIT_UNQUALIFIED");
   if (
-    manifestReport?.plan_sequence !== 60 ||
+    manifestReport?.plan_sequence !== 67 ||
     manifestReport.provider_calls !== true ||
     manifestReport.injected_transport !== false ||
     manifestReport.source_sha256 !== source.sourceSha256 ||
@@ -187,6 +212,9 @@ export function inspectOwnedBuildPrerequisites(
     "otherExpectedUsd",
     "estimatedCreditCeilingUsd",
     "priceSourceRef",
+    "priceSourceSha256",
+    "verifiedAtMs",
+    "expiresAtMs",
   ];
   const decimal = (x) => typeof x === "string" && /^\d{1,3}\.\d{6}$/.test(x);
   if (
@@ -198,6 +226,7 @@ export function inspectOwnedBuildPrerequisites(
     quote.allMetersQualified !== true ||
     quote.recoveryQualified !== true ||
     quote.estimatedCreditCeilingUsd !== "0.25" ||
+    !ownedBuildPriceSourceValid(quote, now) ||
     ![quote.buildExpectedUsd, quote.readyRetentionExpectedUsd, quote.otherExpectedUsd].every(
       decimal,
     ) ||
@@ -226,8 +255,16 @@ export async function mainE2BOwnedBuild(argv = process.argv.slice(2)) {
     console.log("E2B_OWNED_BUILD_USAGE_DENIED");
     return 2;
   }
-  const currentPlan = json("docs/plan/source.json").sources.plan.sequence;
-  if (currentPlan !== 60 || envDenied()) throw Error("E2B_OWNED_BUILD_CONTROLLER_DENIED");
+  let currentPlan;
+  if (mode === "reconcile") {
+    try {
+      currentPlan = json("docs/plan/source.json").sources.plan.sequence;
+    } catch {
+      currentPlan = null;
+    }
+  } else currentPlan = json("docs/plan/source.json").sources.plan.sequence;
+  if ((mode !== "reconcile" && currentPlan !== 67) || envDenied())
+    throw Error("E2B_OWNED_BUILD_CONTROLLER_DENIED");
   mkdirSync("docs/evidence/P04.T01h", { recursive: true });
   const writeReport = (name, base, value) =>
     writeFileSync(
@@ -249,7 +286,7 @@ export async function mainE2BOwnedBuild(argv = process.argv.slice(2)) {
       authorization = null;
     let base = {
       task: "P04.T01h",
-      plan_sequence: 60,
+      plan_sequence: 67,
       scope: "synthetic_owned_image_only",
       production_qualified: false,
       sandbox_allocated: false,
@@ -263,8 +300,18 @@ export async function mainE2BOwnedBuild(argv = process.argv.slice(2)) {
         digests: journal.envelope.sourceDigests,
         sourceSha256: record.operation.sourceSha256,
       };
+      let controllerSource = null;
+      try {
+        controllerSource = ownedBuildSourceBinding(".");
+      } catch {
+        /* Original read-only recovery remains available. */
+      }
       base = {
         ...base,
+        plan_sequence: recipe.planSequence,
+        controller_source_sha256: controllerSource?.sourceSha256 ?? null,
+        controller_source_digests: controllerSource?.digests ?? null,
+        controller_plan_sequence: currentPlan,
         source_sha256: source.sourceSha256,
         source_digests: source.digests,
         read_only: true,
@@ -306,7 +353,10 @@ export async function mainE2BOwnedBuild(argv = process.argv.slice(2)) {
       authorization = validateE2BOwnedBuildAuthorization(receipt, record, Date.now());
       if (authorization.quoteSha256 !== ownedBuildSha(JSON.stringify(profile.buildQuote)))
         throw Error("E2B_OWNED_BUILD_QUOTE_BINDING_DENIED");
-      if (!existsSync(profile.buildQuote.priceSourceRef))
+      if (
+        authorization.expiresAtMs > profile.buildQuote.expiresAtMs ||
+        !ownedBuildPriceSourceValid(profile.buildQuote)
+      )
         throw Error("E2B_OWNED_BUILD_PRICE_SOURCE_DENIED");
       access = loadE2BReadOnlyAccess(resolve(keyRoot(), "e2b-trial-key.json"), keyRoot(), {
         projectId: recipe.projectId,

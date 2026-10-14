@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRequire } from "node:module";
-import { createE2BNativeDevelopmentTransport } from "../packages/runtime-adapters/src/e2b/development-native.ts";
+import {
+  createE2BNativeDevelopmentTransport,
+  snapshotE2BDevelopmentDiagnostics,
+  markE2BDevelopmentCleanup,
+} from "../packages/runtime-adapters/src/e2b/development-native.ts";
 import { discoverE2BDevelopmentOwnedTemplates } from "../packages/runtime-adapters/src/e2b/development-transport.ts";
 import {
   prepareSyntheticLabOperation,
@@ -13,7 +17,7 @@ const current = Date.parse("2026-10-14T16:00:00Z");
 const p = {
   schemaVersion: 1,
   task: "P04.T01h",
-  planSequence: 60,
+  planSequence: 67,
   scope: "builtin_synthetic_operator",
   environment: "development",
   providerId: "e2b",
@@ -233,8 +237,8 @@ test("native port completes the neutral journal lifecycle and fixed-file persist
   assert.ok(!JSON.stringify(saved).includes(token));
 });
 
-test("old59 native recipes cannot allocate but original cleanup remains available", async () => {
-  const original = { ...p, planSequence: 59 };
+test("original60 native recipes cannot allocate but original cleanup remains available", async () => {
+  const original = { ...p, planSequence: 60 };
   const operation = prepareSyntheticLabOperation(
     original,
     op.operationId,
@@ -737,5 +741,240 @@ test("real redirect handling never forwards API keys or guest tokens to a foreig
       target,
     );
     await agent.close();
+  }
+});
+
+test("native TLS verification is required before qualification and every later credential request", async () => {
+  const previous = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  try {
+    for (const value of ["0", "false", ""]) {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = value;
+      const f = fixture();
+      await assert.rejects(createE2BNativeDevelopmentTransport(args(), f), /DENIED/);
+      assert.equal(f.calls.length, 0);
+      await assert.rejects(
+        discoverE2BDevelopmentOwnedTemplates({ apiKey: key, projectId: p.projectId }, f),
+        /DENIED/,
+      );
+      assert.equal(f.calls.length, 0);
+    }
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "1";
+    const f = fixture(),
+      port = await createE2BNativeDevelopmentTransport(args(), f);
+    const before = f.calls.length;
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    await assert.rejects(port.inspect(id, ctx()), /DENIED/);
+    assert.equal(f.calls.length, before);
+    await assert.rejects(port.kill(id, ctx()), /DENIED/);
+    assert.equal(f.calls.length, before);
+  } finally {
+    if (previous === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previous;
+  }
+});
+
+test("native diagnostics distinguish write HTTP, decode, schema, redirect and hostile transport failures without reflection", async () => {
+  for (const [fault, outcome, status] of [
+    ["503", "http_rejected", 503],
+    ["json", "decode_denied", 200],
+    ["shape", "shape_denied", 200],
+    ["redirect", "redirect_denied", 307],
+    ["hostile", "transport_rejected", null],
+  ]) {
+    const f = fixture(),
+      port = await createE2BNativeDevelopmentTransport(args(), f);
+    f.seed();
+    let traps = 0;
+    f.hooks.request = (url) => {
+      if (new URL(url).origin !== ENVD) return;
+      if (fault === "hostile")
+        throw new Proxy(Error(key + token), {
+          get() {
+            traps++;
+            throw Error("never");
+          },
+          getOwnPropertyDescriptor() {
+            traps++;
+            throw Error("never");
+          },
+          ownKeys() {
+            traps++;
+            throw Error("never");
+          },
+        });
+      if (fault === "503") return new Response(key + token, { status: 503 });
+      if (fault === "json") return new Response("{broken" + key, { status: 200 });
+      if (fault === "shape")
+        return new Response(
+          JSON.stringify([{ leaked: key, path: op.markerPath, type: "directory" }]),
+          { status: 200 },
+        );
+      return new Response(null, {
+        status: 307,
+        headers: { location: "https://foreign.test/" + key },
+      });
+    };
+    await assert.rejects(port.writeMarker(id, op.markerPath, op.markerValue, ctx()));
+    const snapshot = snapshotE2BDevelopmentDiagnostics(port);
+    assert.deepEqual(snapshot.firstExecutionFailure, {
+      stage: "marker_write",
+      endpoint: "guest_files",
+      outcome,
+      status,
+      elapsedMs: 0,
+    });
+    assert.equal(snapshot.firstCleanupFailure, null);
+    assert.equal(traps, 0);
+    assert.equal(JSON.stringify(snapshot).includes(key), false);
+    assert.equal(JSON.stringify(snapshot).includes(token), false);
+    assert.ok(Object.isFrozen(snapshot));
+    assert.ok(snapshot.requestCounts.total > 0 && snapshot.requestCounts.total <= 4096);
+  }
+});
+
+test("initial marker read and cleanup failure remain separate and never overwrite the execution cause", async () => {
+  const f = fixture(),
+    port = await createE2BNativeDevelopmentTransport(args(), f);
+  f.seed();
+  await port.writeMarker(id, op.markerPath, op.markerValue, ctx());
+  f.hooks.request = (url, options) =>
+    new URL(url).origin === ENVD || options.method === "DELETE"
+      ? new Response("private provider text", { status: 503 })
+      : undefined;
+  await assert.rejects(port.readMarker(id, op.markerPath, ctx()));
+  const before = snapshotE2BDevelopmentDiagnostics(port).firstExecutionFailure;
+  assert.equal(before.stage, "marker_initial_read");
+  await assert.rejects(port.kill(id, ctx()));
+  const after = snapshotE2BDevelopmentDiagnostics(port);
+  assert.deepEqual(after.firstExecutionFailure, before);
+  assert.deepEqual(after.firstCleanupFailure, {
+    stage: "cleanup_delete",
+    endpoint: "control_api",
+    outcome: "http_rejected",
+    status: 503,
+    elapsedMs: 0,
+  });
+});
+
+test("native diagnostic snapshot never accesses caller objects and records bounded request timeout", async () => {
+  let traps = 0;
+  const hostile = new Proxy(
+    {},
+    {
+      get() {
+        traps++;
+        throw Error("never");
+      },
+      ownKeys() {
+        traps++;
+        throw Error("never");
+      },
+    },
+  );
+  assert.equal(snapshotE2BDevelopmentDiagnostics(hostile), null);
+  assert.equal(traps, 0);
+  const f = fixture(),
+    port = await createE2BNativeDevelopmentTransport(args(), f);
+  f.seed();
+  f.hooks.request = (url) => (new URL(url).origin === ENVD ? new Promise(() => {}) : undefined);
+  await assert.rejects(port.writeMarker(id, op.markerPath, op.markerValue, ctx(current + 5)));
+  const failure = snapshotE2BDevelopmentDiagnostics(port).firstExecutionFailure;
+  assert.equal(failure.stage, "marker_write");
+  assert.equal(failure.outcome, "timeout");
+  assert.equal(failure.status, null);
+  assert.ok(failure.elapsedMs >= 0 && failure.elapsedMs <= 600000);
+});
+
+test("a diagnostic-only clock failure cannot prevent original owned deletion", async () => {
+  const f = fixture();
+  let failClock = false;
+  const port = await createE2BNativeDevelopmentTransport(args(), {
+    fetch: f.fetch,
+    now: () => {
+      if (failClock) {
+        failClock = false;
+        throw Error("instrumentation only");
+      }
+      return f.now();
+    },
+  });
+  f.seed();
+  failClock = true;
+  await port.kill(id, ctx());
+  assert.equal(f.state, null);
+  assert.equal(snapshotE2BDevelopmentDiagnostics(port).firstCleanupFailure, null);
+});
+
+test("core-side cancellation marks the first failing cleanup GET without inventing an execution failure", async () => {
+  const f = fixture(),
+    port = await createE2BNativeDevelopmentTransport(args(), f),
+    controller = new AbortController();
+  let cleanup = false;
+  f.hooks.request = (url, options) =>
+    cleanup && new URL(url).pathname === `/sandboxes/${id}` && options.method === "GET"
+      ? new Response("private cleanup response", { status: 503 })
+      : undefined;
+  const result = await runSyntheticLab(p, op.operationId, port, {
+    startedAtMs: current,
+    sourceSha256: op.sourceSha256,
+    now: f.now,
+    signal: controller.signal,
+    onCleanup: () => {
+      cleanup = true;
+      markE2BDevelopmentCleanup(port);
+    },
+    persist: async (record) => {
+      if (record.phase === "created") controller.abort();
+    },
+  });
+  assert.equal(result.status, "unresolved");
+  const snapshot = snapshotE2BDevelopmentDiagnostics(port);
+  assert.equal(snapshot.firstExecutionFailure, null);
+  assert.equal(snapshot.firstCleanupFailure.stage, "cleanup_absence");
+  assert.equal(snapshot.firstCleanupFailure.outcome, "http_rejected");
+  assert.equal(snapshot.firstCleanupFailure.status, 503);
+});
+
+test("the restored marker read has its own stage and a failing diagnostic callback never blocks cleanup", async () => {
+  const f = fixture(),
+    port = await createE2BNativeDevelopmentTransport(args(), f);
+  let reads = 0;
+  f.hooks.request = (url, options) =>
+    new URL(url).origin === ENVD && options.method === "GET" && ++reads === 2
+      ? new Response("private", { status: 503 })
+      : undefined;
+  const result = await runSyntheticLab(p, op.operationId, port, {
+    startedAtMs: current,
+    sourceSha256: op.sourceSha256,
+    now: f.now,
+    onCleanup: () => {
+      throw Error("diagnostic sink failed");
+    },
+    persist: async () => {},
+  });
+  assert.equal(result.cleanup, "verified_deleted");
+  assert.equal(f.state, null);
+  assert.equal(
+    snapshotE2BDevelopmentDiagnostics(port).firstExecutionFailure.stage,
+    "marker_restored_read",
+  );
+});
+
+test("rejected and nonsettling diagnostic observers are never awaited and cannot obstruct deletion", async () => {
+  for (const observer of [
+    () => Promise.reject(Error("diagnostic rejection")),
+    () => new Promise(() => {}),
+  ]) {
+    const f = fixture(),
+      port = await createE2BNativeDevelopmentTransport(args(), f);
+    const result = await runSyntheticLab(p, op.operationId, port, {
+      startedAtMs: current,
+      sourceSha256: op.sourceSha256,
+      now: f.now,
+      onCleanup: observer,
+      persist: async () => {},
+    });
+    assert.equal(result.cleanup, "verified_deleted");
+    assert.equal(f.state, null);
   }
 });

@@ -28,7 +28,7 @@ export const E2B_OWNED_BASE_IMAGE = Object.freeze({
 export type E2BOwnedImageRequest = Readonly<{
   schemaVersion: 1;
   task: "P04.T01h";
-  planSequence: 60;
+  planSequence: 67;
   sourceSha256: string;
 }>;
 
@@ -44,7 +44,7 @@ export type E2BOwnedImageRuntime = {
 export type E2BOwnedImageProof = Readonly<{
   schemaVersion: 1;
   task: "P04.T01h";
-  planSequence: 60;
+  planSequence: 67;
   sourceSha256: string;
   scope: "public_oci_manifest_provenance_only";
   verifiedAt: string;
@@ -109,14 +109,14 @@ export function compileE2BOwnedImageRequest(
       !SHA256.test(expectedSourceSha256) ||
       input.schemaVersion !== 1 ||
       input.task !== "P04.T01h" ||
-      input.planSequence !== 60 ||
+      input.planSequence !== 67 ||
       input.sourceSha256 !== expectedSourceSha256
     )
       throw failure();
     return Object.freeze({
       schemaVersion: 1,
       task: "P04.T01h",
-      planSequence: 60,
+      planSequence: 67,
       sourceSha256: expectedSourceSha256,
     });
   } catch {

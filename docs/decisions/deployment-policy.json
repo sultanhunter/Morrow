@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plan_sequence": 64,
+  "plan_sequence": 67,
   "merchant_data_region": "United States primary storage",
   "cloudflare_private_processing": true,
   "production_database": {

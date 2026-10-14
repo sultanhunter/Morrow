@@ -31,12 +31,14 @@ export async function mainE2BTemplateQualification(argv = process.argv.slice(2))
     return 0;
   }
   if (
-    plan.sources.plan.sequence !== 60 ||
-    account.plan_sequence !== 60 ||
+    plan.sources.plan.sequence !== 67 ||
+    account.plan_sequence !== 67 ||
     account.project_id !== "22220c06-b76d-47b2-98d7-a1069d611e8f" ||
     account.operator_access_authorized !== true ||
     account.private_access_receipt !== "owner_explicit" ||
     account.allocation_authorized !== false ||
+    (process.env.NODE_TLS_REJECT_UNAUTHORIZED !== undefined &&
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "1") ||
     existsSync(".env") ||
     existsSync(".env.local") ||
     Object.keys(process.env).some(

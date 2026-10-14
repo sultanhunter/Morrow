@@ -1,0 +1,63 @@
+{
+  "task": "P04.T01h",
+  "plan_sequence": 65,
+  "status": "owner_approved_bound_inputs_preparing",
+  "destination": {
+    "workspace": "Personal Workspace",
+    "project": "Sultanibne's Project",
+    "project_id": "22220c06-b76d-47b2-98d7-a1069d611e8f",
+    "workspace_id": "477b25a3-cd53-441c-b9ce-01c3bb48e378",
+    "region": "US-WEST-1",
+    "plan": "Hobby"
+  },
+  "image": "e2bdev/base@sha256:4a369f01a820fe5e65f53c2c5727a78899daf86f0541b721097f289559c8b73f",
+  "build": {
+    "maximum_templates": 1,
+    "maximum_registration_posts": 1,
+    "maximum_start_posts": 1,
+    "cpu": 2,
+    "memory_mib": 512,
+    "min_free_disk_mib": 0,
+    "uploads": 0,
+    "custom_steps": 0,
+    "ready_template_retained": true,
+    "expected_credit_usd": "0.000000",
+    "active_cancel_supported": false,
+    "ambiguous_outcome": "retain original journal; no retry/replacement; read-only reconciliation"
+  },
+  "sandbox": {
+    "prerequisite": "Exact ready owned template/build, resource/controller proof, fresh source/account/profile/quote binding",
+    "maximum_allocations": 1,
+    "maximum_wall_ms": 600000,
+    "expected_compute_credit_usd": "0.018150",
+    "expected_total_credit_ceiling_usd": "0.25",
+    "probes": [
+      "fixed marker write/read",
+      "full pause/restore",
+      "fixed marker read after restore",
+      "delete known original sandbox and verify static absence"
+    ],
+    "cleanup": "static original-resource inspect/delete after deadline or credit loss; never resume for cleanup; retain unresolved journal",
+    "guest_egress": "deny all; effective application egress qualification remains separate",
+    "memory_continuity_claim": false
+  },
+  "credential": "Use original approved project key from protected staging file; no new key or guest credential",
+  "excluded": [
+    "card",
+    "subscription",
+    "top-up",
+    "paid overage",
+    "template deletion",
+    "project move",
+    "merchant data",
+    "models/connectors",
+    "public app server",
+    "production activation"
+  ],
+  "authorization": {
+    "build": "owner_explicit",
+    "sandbox": "owner_explicit",
+    "read_only": "existing owner-explicit approval retained",
+    "receipt": "User answered Approve the build and sandbox test in current conversation"
+  }
+}

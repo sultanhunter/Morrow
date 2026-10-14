@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "task": "P04.T01h",
+  "planSequence": 65,
+  "scope": "builtin_synthetic_operator",
+  "environment": "development",
+  "providerId": "e2b",
+  "projectId": "22220c06-b76d-47b2-98d7-a1069d611e8f",
+  "templateId": null,
+  "templateBuildId": null,
+  "cpu": null,
+  "memoryMiB": null,
+  "diskMiB": null,
+  "maximumWallMs": 600000,
+  "expectedCreditCeilingUsd": "0.25",
+  "outbound": "deny_all",
+  "merchantRouting": false
+}

@@ -26,7 +26,7 @@ import {
   prepareSyntheticLabOperation,
 } from "../packages/infrastructure/src/synthetic-runtime-lab.ts";
 import { mainE2BLab } from "../scripts/e2b-development-lab.mjs";
-import { frozenE2B60Fixture } from "./fixtures/frozen-e2b-60.mjs";
+import { frozenE2B60Fixture, currentE2BFixture } from "./fixtures/frozen-e2b-60.mjs";
 
 const projectId = "a1234567-1234-4234-8234-123456789abc";
 const operationId = "b1234567-1234-4234-8234-123456789abc";
@@ -35,7 +35,7 @@ const now = Date.parse("2026-10-14T10:00:00Z");
 const profile = {
   schemaVersion: 1,
   task: "P04.T01h",
-  planSequence: 60,
+  planSequence: 67,
   scope: "builtin_synthetic_operator",
   environment: "development",
   providerId: "e2b",
@@ -65,7 +65,7 @@ const input = () => ({
 });
 const account = () => ({
   schema_version: 1,
-  plan_sequence: 60,
+  plan_sequence: 67,
   observed_at: new Date(now).toISOString(),
   project_id: projectId,
   workspace: "Personal Workspace",
@@ -184,7 +184,7 @@ test("current plan denies a frozen60 allocation before private input", (t) => {
   assert.equal(out.status, 2, out.stderr);
   assert.match(out.stdout, /PREREQUISITES_UNQUALIFIED/);
   const report = JSON.parse(frozen.read("docs/evidence/P04.T01h/live.json"));
-  assert.equal(report.plan_sequence, 64);
+  assert.equal(report.plan_sequence, 67);
   assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"));
   assert.equal(report.private_input_read, false);
   assert.equal(report.provider_calls, false);
@@ -398,17 +398,28 @@ test("foreign release, replaced mutex and symlinked journal are denied", async (
   assert.throws(() => openE2BLabJournal(root, operationId, true), /PRIVATE_INPUT_DENIED/);
   assert.equal(existsSync(join(root, "e2b-development-controller.lock")), false);
 });
-test("controller cleanup survives malformed allocation files and missing current source manifests", async (t) => {
+test("original60 controller cleanup survives malformed allocation files and different current source", async (t) => {
   const root = temporary(t),
     first = openE2BLabJournal(root, operationId),
     saved = envelope();
+  saved.profile = { ...saved.profile, planSequence: 60 };
+  saved.record.operation = prepareSyntheticLabOperation(
+    saved.profile,
+    operationId,
+    now,
+    expected.sourceSha256,
+  );
   saved.record.createAttempted = true;
   saved.record.sandboxId = "owned-original";
   saved.record.phase = "paused";
   await first.persist(saved);
   first.closeController();
   const file = join(root, "key.json");
-  writeFileSync(file, JSON.stringify(input()), { mode: 0o600 });
+  writeFileSync(
+    file,
+    JSON.stringify({ ...input(), profileSha256: saved.record.operation.profileSha256 }),
+    { mode: 0o600 },
+  );
   const calls = [],
     port = {
       qualification: null,
@@ -437,12 +448,19 @@ test("controller cleanup survives malformed allocation files and missing current
     },
     transportFactory: async ({ profile: original, operation, mode }) => {
       assert.equal(original.projectId, projectId);
+      assert.equal(original.planSequence, 60);
       assert.equal(operation.sourceSha256, expected.sourceSha256);
       assert.equal(mode, "cleanup");
       return port;
     },
   });
   assert.equal(result, 0);
+  const report = JSON.parse(readFileSync(join(root, "evidence/live.json")));
+  assert.equal(report.plan_sequence, 60);
+  assert.equal(report.controller_plan_sequence, null);
+  assert.equal(report.terminal_receipt_saved, true);
+  assert.equal(report.held_slot, false);
+  assert.equal(report.source_sha256, expected.sourceSha256);
   assert.deepEqual(calls, [["inspect", "owned-original"]]);
   assert.equal(existsSync(join(root, "e2b-development-active")), false);
 });
@@ -474,9 +492,70 @@ test("controller receipt persistence failure cannot return success or clear pend
     transportFactory: async () => ({ inspect: async () => null }),
   });
   assert.equal(result, 1);
+  const failedReport = JSON.parse(readFileSync(join(root, "evidence/live.json")));
+  assert.equal(failedReport.terminal_receipt_saved, false);
+  assert.equal(failedReport.held_slot, null);
+  assert.equal(failedReport.deletion_observation, "absent");
   assert.ok(existsSync(join(root, "e2b-development-active/operation.json")));
   assert.equal(
     readFileSync(join(root, `e2b-development-${operationId}-terminal.json`), "utf8"),
     "existing-immutable-receipt",
   );
+});
+
+test("current67 runtime still needs fresh allocation authority before private input", (t) => {
+  const current = currentE2BFixture();
+  t.after(current.dispose);
+  const accountPath = join(current.root, "infra/labs/e2b-development-account.json");
+  const readonlyAccount = JSON.parse(readFileSync(accountPath, "utf8"));
+  readonlyAccount.allocation_authorized = false;
+  writeFileSync(accountPath, JSON.stringify(readonlyAccount));
+  const out = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      current.loader,
+      current.script("scripts/e2b-development-lab.mjs"),
+      "--run",
+      "/never/read-private-input",
+    ],
+    { encoding: "utf8", cwd: current.root },
+  );
+  assert.equal(out.status, 2, out.stderr);
+  const report = JSON.parse(current.read("docs/evidence/P04.T01h/live.json"));
+  assert.equal(report.plan_sequence, 67);
+  assert.equal(report.provider_calls, false);
+  assert.equal(report.private_input_read, false);
+  assert.ok(report.blockers.includes("E2B_LAB_ACCESS_UNQUALIFIED"));
+});
+
+test("runtime CLI refuses disabled TLS before an original cleanup key is loaded", async (t) => {
+  const root = temporary(t),
+    before = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+  let calls = 0;
+  try {
+    await assert.rejects(
+      mainE2BLab(["--cleanup", operationId, "/never/read-key"], {
+        privateRoot: root,
+        evidenceDirectory: join(root, "evidence"),
+        readFile: () => {
+          throw Error("no current allocation data");
+        },
+        sourceBinding: () => {
+          throw Error("no current source");
+        },
+        transportFactory: async () => {
+          calls++;
+          throw Error("never");
+        },
+      }),
+      /IMPLICIT_CONFIGURATION_DENIED/,
+    );
+    assert.equal(calls, 0);
+    assert.equal(existsSync(join(root, "e2b-development-controller.lock")), false);
+  } finally {
+    if (before === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    else process.env.NODE_TLS_REJECT_UNAUTHORIZED = before;
+  }
 });

@@ -1,13 +1,13 @@
 {
   "task": "P04.T01h",
-  "plan_sequence": 60,
-  "status": "partial",
+  "plan_sequence": 67,
+  "status": "pricing_qualified_owned_image_retained_runtime_marker_failed",
   "owner_request": "Qualify owned runtime image/build costs, then E2B test",
   "public_manifest_verified": true,
   "owned_ready_builds": 0,
-  "build_registered": false,
-  "build_started": false,
-  "sandbox_allocated": false,
+  "build_registered": true,
+  "build_started": true,
+  "sandbox_allocated": true,
   "production_qualified": false,
   "account_observation": {
     "date": "2026-10-15",
@@ -34,11 +34,14 @@
     "ram_gib_usd_per_second": "0.0000045",
     "expected_usd": "0.018150",
     "source": "https://docs.e2b.dev/faq/calculate-sandbox-price",
-    "includes_builder_or_template_retention": false,
-    "complete_test_quote": false
+    "includes_builder_or_template_retention": true,
+    "complete_test_quote": true,
+    "builder_expected_usd": "0.000000",
+    "ready_template_retention_expected_usd": "0.000000",
+    "hard_provider_operation_cap": false
   },
-  "owned_build_quote": null,
-  "retained_template_quote": null,
+  "owned_build_quote": "e2b-support-pricing-65.json",
+  "retained_template_quote": "e2b-support-pricing-65.json",
   "customer_build_cancel_qualified": false,
   "support_request": {
     "date": "2026-10-15",
@@ -47,14 +50,40 @@
     "submitted": true,
     "observed_result": "Sending state followed by closed form with no error observed",
     "ticket_id": null,
-    "reply_received": false,
-    "sensitive_payload": "No API key, merchant data, purchase or account change"
+    "reply_received": true,
+    "sensitive_payload": "No API key, merchant data, purchase or account change",
+    "representative": "Dennis from E2B",
+    "reply_provenance": "owner_pasted_reply_current_conversation"
   },
   "remaining": [
-    "authoritative_builder_and_retention_pricing",
-    "acceptable_original_build_recovery",
-    "concrete_owned_build_write_receipt",
-    "owned_ready_build_resources_and_controller_proof",
-    "single_disposable_runtime_qualification"
-  ]
+    "safe_stage_specific_marker_diagnostics",
+    "specific_additional_test_receipt",
+    "successful_persistence_lifecycle_test"
+  ],
+  "explicit_owner_build_and_sandbox_authorization": true,
+  "actual_owned_build": {
+    "original_plan_sequence": 65,
+    "operation_id": "c423fb7d-6935-4917-8862-0b4bbf5a2961",
+    "template_id": "pdht65h2trfuizuvmotc",
+    "build_id": "4324bde3-d3a9-4d18-91c1-b2b1b3e80b80",
+    "provider_status": "ready",
+    "cpu": 2,
+    "memory_mib": 512,
+    "disk_mib_total": 12422,
+    "envd_version": "0.10.0",
+    "controller_phase": "ready_retained_after_read_only_reconciliation",
+    "original_source_sha256": "b20517ffdaac601c56edea1c2d75d81c636b914b7b546be7661aaf3236c8b4ce",
+    "registration_attempts": 1,
+    "start_attempts": 1
+  },
+  "actual_runtime": {
+    "plan_sequence": 66,
+    "operation_id": "cb45e68e-79d7-4e01-9bf7-7e16fc2545c9",
+    "sandbox_id": "i9z55h09hwmhn67t0ks1p",
+    "status": "failed_marker_phase_before_pause_restore",
+    "cleanup": "verified_deleted",
+    "terminal_receipt_saved": true,
+    "active_slot_present": false,
+    "additional_allocation_authorized": false
+  }
 }

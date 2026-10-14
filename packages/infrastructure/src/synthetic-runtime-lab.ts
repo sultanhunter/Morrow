@@ -73,7 +73,7 @@ function safeData(value: unknown, code: string) {
 export type SyntheticLabProfile = {
   schemaVersion: 1;
   task: "P04.T01h";
-  planSequence: 55 | 56 | 57 | 58 | 59 | 60;
+  planSequence: 55 | 56 | 57 | 58 | 59 | 60 | 65 | 66 | 67;
   scope: "builtin_synthetic_operator";
   environment: "development";
   providerId: string;
@@ -111,7 +111,7 @@ export function compileSyntheticLabProfile(value: unknown) {
     ]) ||
     profile.schemaVersion !== 1 ||
     profile.task !== "P04.T01h" ||
-    ![55, 56, 57, 58, 59, 60].includes(profile.planSequence) ||
+    ![55, 56, 57, 58, 59, 60, 65, 66, 67].includes(profile.planSequence) ||
     profile.scope !== "builtin_synthetic_operator" ||
     profile.environment !== "development" ||
     typeof profile.providerId !== "string" ||
@@ -130,7 +130,17 @@ export function compileSyntheticLabProfile(value: unknown) {
     profile.memoryMiB > 4096 ||
     !Number.isSafeInteger(profile.diskMiB) ||
     profile.diskMiB < 1 ||
-    profile.diskMiB > 10240 ||
+    (profile.diskMiB > 10240 &&
+      !(
+        [66, 67].includes(profile.planSequence) &&
+        profile.providerId === "e2b" &&
+        profile.projectId === "22220c06-b76d-47b2-98d7-a1069d611e8f" &&
+        profile.templateId === "pdht65h2trfuizuvmotc" &&
+        profile.templateBuildId === "4324bde3-d3a9-4d18-91c1-b2b1b3e80b80" &&
+        profile.cpu === 2 &&
+        profile.memoryMiB === 512 &&
+        profile.diskMiB === 12422
+      )) ||
     profile.maximumWallMs !== 600000 ||
     profile.expectedCreditCeilingUsd !== "0.25" ||
     profile.outbound !== "deny_all" ||
@@ -247,6 +257,8 @@ export type SyntheticLabOptions = {
   signal?: AbortSignal;
   resume?: SyntheticLabRecord;
   cleanupOnly?: boolean;
+  // Diagnostic notification only; cannot grant authority or obstruct cleanup.
+  onCleanup?: () => void;
   persist(record: SyntheticLabRecord): Promise<void>;
 };
 export type SyntheticLabResult = {
@@ -377,7 +389,7 @@ export async function runSyntheticLab(
   )
     return deny("SYNTHETIC_LAB_RESUME_DENIED");
   const cleanupOnly = options.cleanupOnly === true;
-  if (!cleanupOnly && profile.planSequence !== 60) return deny("SYNTHETIC_LAB_PROFILE_DENIED");
+  if (!cleanupOnly && profile.planSequence !== 67) return deny("SYNTHETIC_LAB_PROFILE_DENIED");
   let record: SyntheticLabRecord = {
     operation,
     createAttempted: false,
@@ -576,6 +588,18 @@ export async function runSyntheticLab(
   // Cleanup ignores the caller's cancelled/expired execution scope, but has its
   // own finite scope. Inspection and deletion must never restore a paused guest.
   if (possibleEffect && cleanup !== "foreign_resource_denied") {
+    try {
+      const notification: unknown = options.onCleanup?.();
+      if (notification !== undefined) {
+        try {
+          void Promise.prototype.then.call(notification, undefined, () => undefined);
+        } catch {
+          /* Non-Promise notification values are ignored. */
+        }
+      }
+    } catch {
+      /* Observability cannot prevent cleanup. */
+    }
     try {
       let current: SyntheticLabResource | null;
       if (record.sandboxId === null) {

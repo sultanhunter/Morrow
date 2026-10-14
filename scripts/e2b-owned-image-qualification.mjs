@@ -11,7 +11,7 @@ export async function mainE2BOwnedImageQualification(
 ) {
   if (argv.length && !(argv.length === 1 && argv[0] === "--verify-public-image")) return 2;
   const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
-  if (plan.sources.plan.sequence !== 60) throw Error("E2B_OWNED_IMAGE_CURRENT_PLAN_DENIED");
+  if (plan.sources.plan.sequence !== 67) throw Error("E2B_OWNED_IMAGE_CURRENT_PLAN_DENIED");
   const source = ownedBuildSourceBinding(".");
   const live = argv.length === 1;
   const { evidenceDirectory, ...runtimeOverrides } = dependencies;
@@ -42,7 +42,7 @@ export async function mainE2BOwnedImageQualification(
       JSON.stringify(
         {
           task: "P04.T01h",
-          plan_sequence: 60,
+          plan_sequence: 67,
           source_sha256: source.sourceSha256,
           source_digests: source.digests,
           read_only: true,
@@ -73,7 +73,7 @@ export async function mainE2BOwnedImageQualification(
     throw Error("E2B_OWNED_IMAGE_ENVIRONMENT_DENIED");
   try {
     const result = await qualifyE2BOwnedBaseImage(
-      { schemaVersion: 1, task: "P04.T01h", planSequence: 60, sourceSha256: source.sourceSha256 },
+      { schemaVersion: 1, task: "P04.T01h", planSequence: 67, sourceSha256: source.sourceSha256 },
       { ...runtimeOverrides, sourceSha256: source.sourceSha256 },
     );
     report({

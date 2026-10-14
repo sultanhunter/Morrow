@@ -8,6 +8,7 @@ import type {
 } from "../../../infrastructure/src/synthetic-runtime-lab.js";
 import {
   captureE2BDevelopmentInput,
+  assertE2BDevelopmentTls,
   exactE2BMetadata,
   e2bBounded,
   e2bDenied,
@@ -17,6 +18,52 @@ import {
   verifyE2BDevelopmentAccess,
 } from "./development-transport.js";
 import type { E2BDevelopmentInput, E2BDevelopmentQualification } from "./development-transport.js";
+
+type DiagnosticStage =
+  | "identity_recheck"
+  | "marker_write"
+  | "marker_initial_read"
+  | "pause"
+  | "restore"
+  | "marker_restored_read"
+  | "cleanup_delete"
+  | "cleanup_absence"
+  | "allocation_create"
+  | "operation_lookup";
+type DiagnosticEndpoint = "control_api" | "guest_files";
+type DiagnosticOutcome =
+  | "precondition_denied"
+  | "transport_rejected"
+  | "timeout"
+  | "cancelled"
+  | "redirect_denied"
+  | "http_rejected"
+  | "decode_denied"
+  | "shape_denied";
+type DiagnosticFailure = Readonly<{
+  stage: DiagnosticStage;
+  endpoint: DiagnosticEndpoint;
+  outcome: DiagnosticOutcome;
+  status: number | null;
+  elapsedMs: number;
+}>;
+export type E2BDevelopmentDiagnostics = Readonly<{
+  schemaVersion: 1;
+  firstExecutionFailure: DiagnosticFailure | null;
+  firstCleanupFailure: DiagnosticFailure | null;
+  requestCounts: Readonly<{ controlApi: number; guestFiles: number; total: number }>;
+}>;
+const diagnosticSnapshots = new WeakMap<object, () => E2BDevelopmentDiagnostics>();
+const cleanupMarkers = new WeakMap<object, () => void>();
+export function markE2BDevelopmentCleanup(value: unknown): void {
+  if (typeof value === "object" && value !== null) cleanupMarkers.get(value)?.();
+}
+export function snapshotE2BDevelopmentDiagnostics(
+  value: unknown,
+): E2BDevelopmentDiagnostics | null {
+  if (typeof value !== "object" || value === null) return null;
+  return diagnosticSnapshots.get(value)?.() ?? null;
+}
 
 const API = "https://api.e2b.app";
 const ENVD = "https://sandbox.e2b.app";
@@ -74,6 +121,7 @@ export async function createE2BNativeDevelopmentTransport(
   const request = dependencies.fetch ?? fetch;
   const now = dependencies.now ?? Date.now;
   const environment = () => {
+    assertE2BDevelopmentTls();
     if (Object.keys(process.env).some((key) => key.startsWith("E2B_"))) throw e2bDenied();
   };
   environment();
@@ -83,6 +131,78 @@ export async function createE2BNativeDevelopmentTransport(
   let createAttempted = false;
   // Never export, journal, print or mount these per-sandbox credentials.
   const credentials = new Map<string, { token: string; diskMiB: number; envdVersion: string }>();
+  type Trace = {
+    stage: DiagnosticStage;
+    endpoint: DiagnosticEndpoint;
+    outcome: DiagnosticOutcome;
+    status: number | null;
+    startedAt: number | null;
+    signal: AbortSignal | null;
+  };
+  let firstExecutionFailure: DiagnosticFailure | null = null,
+    firstCleanupFailure: DiagnosticFailure | null = null;
+  let cleanupStarted = input.mode === "cleanup",
+    restored = false,
+    restoredRead = false;
+  const counts = { controlApi: 0, guestFiles: 0, total: 0 };
+  const cleaning = () => cleanupStarted || firstExecutionFailure !== null || restoredRead;
+  function snapshot(): E2BDevelopmentDiagnostics {
+    return Object.freeze({
+      schemaVersion: 1,
+      firstExecutionFailure,
+      firstCleanupFailure,
+      requestCounts: Object.freeze({ ...counts }),
+    });
+  }
+  async function observe<T>(
+    stage: DiagnosticStage,
+    endpoint: DiagnosticEndpoint,
+    context: SyntheticLabContext,
+    body: (trace: Trace) => Promise<T>,
+  ): Promise<T> {
+    let diagnosticStart: number | null = null;
+    try {
+      diagnosticStart = now();
+    } catch {
+      /* Instrumentation cannot block native cleanup. */
+    }
+    const trace: Trace = {
+      stage,
+      endpoint,
+      outcome: "precondition_denied",
+      status: null,
+      startedAt: diagnosticStart,
+      signal: null,
+    };
+    const isCleanup = stage === "cleanup_delete" || stage === "cleanup_absence" || cleaning();
+    try {
+      return await body(trace);
+    } catch (error) {
+      // No error/response reflection. Diagnostic failure cannot obstruct native cleanup.
+      try {
+        const outcome = context.signal.aborted
+          ? "cancelled"
+          : trace.signal?.aborted || now() >= context.deadlineMs
+            ? "timeout"
+            : trace.outcome;
+        const elapsed = trace.startedAt === null ? 0 : now() - trace.startedAt;
+        const failure: DiagnosticFailure = Object.freeze({
+          stage,
+          endpoint: trace.endpoint,
+          outcome,
+          status: trace.status,
+          elapsedMs: Number.isFinite(elapsed)
+            ? Math.min(600000, Math.max(0, Math.floor(elapsed)))
+            : 0,
+        });
+        if (isCleanup) firstCleanupFailure ??= failure;
+        else firstExecutionFailure ??= failure;
+      } catch {
+        /* Retain safety behavior even if the diagnostics clock fails. */
+      }
+      throw error;
+    }
+  }
   async function http(
     origin: typeof API | typeof ENVD,
     path: string,
@@ -93,12 +213,14 @@ export async function createE2BNativeDevelopmentTransport(
     guestId?: string,
     resultKind: "json" | "bytes" | "none" = "json",
     limit = 262144,
+    trace?: Trace,
   ): Promise<{ status: number; data: unknown; next: string | null }> {
     environment();
     if (!path.startsWith("/") || path.startsWith("//") || /[\r\n\0#]/.test(path)) throw e2bDenied();
     const url = `${origin}${path}`;
     if (new URL(url).origin !== origin) throw e2bDenied();
     return e2bBounded(ctx, now, async (signal) => {
+      if (trace) trace.signal = signal;
       let headers: Record<string, string>;
       if (origin === API) {
         if (guestId !== undefined) throw e2bDenied();
@@ -115,6 +237,14 @@ export async function createE2BNativeDevelopmentTransport(
           "Accept-Encoding": "identity",
         };
       }
+      environment();
+      if (trace) {
+        trace.outcome = "transport_rejected";
+        trace.endpoint = origin === API ? "control_api" : "guest_files";
+      }
+      const counter = origin === API ? "controlApi" : "guestFiles";
+      counts[counter] = Math.min(4096, counts[counter] + 1);
+      counts.total = Math.min(4096, counts.total + 1);
       const response = await request(url, {
         method,
         headers,
@@ -122,12 +252,24 @@ export async function createE2BNativeDevelopmentTransport(
         redirect: "error",
         ...(body === undefined ? {} : { body }),
       });
+      if (trace)
+        trace.status =
+          Number.isInteger(response.status) && response.status >= 100 && response.status <= 599
+            ? response.status
+            : null;
       // A redirected or foreign reply must never become ownership or absence.
       if (
         response.redirected ||
         (response.url && response.url !== url) ||
         !accepted.includes(response.status)
       ) {
+        if (trace)
+          trace.outcome =
+            response.redirected ||
+            (response.url && response.url !== url) ||
+            (response.status >= 300 && response.status <= 399)
+              ? "redirect_denied"
+              : "http_rejected";
         await response.body?.cancel().catch(() => undefined);
         throw e2bDenied();
       }
@@ -135,6 +277,7 @@ export async function createE2BNativeDevelopmentTransport(
         await response.body?.cancel().catch(() => undefined);
         return { status: response.status, data: null, next: null };
       }
+      if (trace) trace.outcome = "decode_denied";
       if (
         resultKind === "json" &&
         origin === API &&
@@ -143,11 +286,13 @@ export async function createE2BNativeDevelopmentTransport(
         await response.body?.cancel().catch(() => undefined);
         throw e2bDenied();
       }
+      if (trace) trace.outcome = "decode_denied";
       const value = await bytes(response, limit);
       const data: unknown =
         resultKind === "bytes"
           ? value
           : JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(value));
+      if (trace) trace.outcome = "shape_denied";
       const next = response.headers.get("x-next-token");
       if (next !== null && !/^[A-Za-z0-9_.~=-]{1,2048}$/.test(next)) throw e2bDenied();
       return { status: response.status, data, next };
@@ -222,13 +367,31 @@ export async function createE2BNativeDevelopmentTransport(
     id: string,
     ctx: SyntheticLabContext,
   ): Promise<SyntheticLabResource | null> {
-    safeId(id);
-    const response = await http(API, `/sandboxes/${id}`, "GET", ctx, [200, 404]);
-    if (response.status === 404) {
-      credentials.delete(id);
-      return null;
-    }
-    return normalize(response.data, id);
+    return observe(
+      cleaning() ? "cleanup_absence" : "identity_recheck",
+      "control_api",
+      ctx,
+      async (trace) => {
+        safeId(id);
+        const response = await http(
+          API,
+          `/sandboxes/${id}`,
+          "GET",
+          ctx,
+          [200, 404],
+          undefined,
+          undefined,
+          "json",
+          262144,
+          trace,
+        );
+        if (response.status === 404) {
+          credentials.delete(id);
+          return null;
+        }
+        return normalize(response.data, id);
+      },
+    );
   }
   async function permitted(id: string, state: "running" | "paused", ctx: SyntheticLabContext) {
     if (input.mode !== "allocate" || now() >= o.deadlineMs) throw e2bDenied();
@@ -281,163 +444,241 @@ export async function createE2BNativeDevelopmentTransport(
       return id;
     });
   }
-  return {
+  const port: SyntheticLabPort & { qualification: E2BDevelopmentQualification } = {
     qualification,
     inspect,
     async create(spec, ctx) {
-      e2bGuarded(() => {
-        const raw = e2bRecord(spec);
-        if (Object.keys(raw).sort().join(",") !== "operation,profile") throw e2bDenied();
-        captureE2BDevelopmentInput({
-          ...input,
-          profile: raw.profile as E2BDevelopmentInput["profile"],
-          operation: raw.operation as E2BDevelopmentInput["operation"],
+      return observe("allocation_create", "control_api", ctx, async (trace) => {
+        e2bGuarded(() => {
+          const raw = e2bRecord(spec);
+          if (Object.keys(raw).sort().join(",") !== "operation,profile") throw e2bDenied();
+          captureE2BDevelopmentInput({
+            ...input,
+            profile: raw.profile as E2BDevelopmentInput["profile"],
+            operation: raw.operation as E2BDevelopmentInput["operation"],
+          });
+          if (
+            JSON.stringify(raw.profile) !== JSON.stringify(p) ||
+            JSON.stringify(raw.operation) !== JSON.stringify(o)
+          )
+            throw e2bDenied();
         });
         if (
-          JSON.stringify(raw.profile) !== JSON.stringify(p) ||
-          JSON.stringify(raw.operation) !== JSON.stringify(o)
+          input.mode !== "allocate" ||
+          p.planSequence !== 67 ||
+          createAttempted ||
+          now() >= o.deadlineMs
         )
           throw e2bDenied();
+        createAttempted = true;
+        const body: NativeCreate = {
+          templateID: `${p.templateId}:${p.templateBuildId}`,
+          timeout: runtimeSeconds(),
+          autoPause: false,
+          autoResume: { enabled: false },
+          allow_internet_access: false,
+          network: { allowOut: [], denyOut: ["0.0.0.0/0"], allowPublicTraffic: false },
+          metadata: { ...o.metadata },
+          envVars: {},
+        };
+        const reply = await http(
+          API,
+          "/v2/sandboxes",
+          "POST",
+          ctx,
+          [201],
+          JSON.stringify(body),
+          undefined,
+          "json",
+          262144,
+          trace,
+        );
+        const id = connectionReply(reply.data);
+        const observed = await inspect(id, ctx);
+        if (!observed) throw e2bFailed();
+        return observed;
       });
-      if (
-        input.mode !== "allocate" ||
-        p.planSequence !== 60 ||
-        createAttempted ||
-        now() >= o.deadlineMs
-      )
-        throw e2bDenied();
-      createAttempted = true;
-      const body: NativeCreate = {
-        templateID: `${p.templateId}:${p.templateBuildId}`,
-        timeout: runtimeSeconds(),
-        autoPause: false,
-        autoResume: { enabled: false },
-        allow_internet_access: false,
-        network: { allowOut: [], denyOut: ["0.0.0.0/0"], allowPublicTraffic: false },
-        metadata: { ...o.metadata },
-        envVars: {},
-      };
-      const reply = await http(API, "/v2/sandboxes", "POST", ctx, [201], JSON.stringify(body));
-      const id = connectionReply(reply.data);
-      const observed = await inspect(id, ctx);
-      if (!observed) throw e2bFailed();
-      return observed;
     },
     async getByOperation(operation, ctx) {
-      e2bGuarded(() => {
-        captureE2BDevelopmentInput({ ...input, operation });
-        if (JSON.stringify(operation) !== JSON.stringify(o)) throw e2bDenied();
-      });
-      const resources: SyntheticLabResource[] = [];
-      const ids = new Set<string>();
-      const cursors = new Set<string>();
-      let next: string | null = null;
-      for (let page = 0; page < 16; page++) {
-        const metadata = new URLSearchParams(o.metadata).toString();
-        const query = new URLSearchParams({
-          metadata,
-          state: "running,paused",
-          limit: "100",
-          ...(next ? { nextToken: next } : {}),
+      return observe("operation_lookup", "control_api", ctx, async (trace) => {
+        e2bGuarded(() => {
+          captureE2BDevelopmentInput({ ...input, operation });
+          if (JSON.stringify(operation) !== JSON.stringify(o)) throw e2bDenied();
         });
-        const reply = await http(API, `/v2/sandboxes?${query}`, "GET", ctx, [200]);
-        if (!Array.isArray(reply.data) || reply.data.length > 100) throw e2bDenied();
-        for (const entry of reply.data) {
-          const id = e2bGuarded(() => {
-            const raw = e2bRecord(entry);
-            exactE2BMetadata(raw.metadata, o.metadata);
-            return safeId(raw.sandboxID);
+        const resources: SyntheticLabResource[] = [];
+        const ids = new Set<string>();
+        const cursors = new Set<string>();
+        let next: string | null = null;
+        for (let page = 0; page < 16; page++) {
+          const metadata = new URLSearchParams(o.metadata).toString();
+          const query = new URLSearchParams({
+            metadata,
+            state: "running,paused",
+            limit: "100",
+            ...(next ? { nextToken: next } : {}),
           });
-          if (ids.has(id)) throw e2bDenied();
-          ids.add(id);
-          const owned = await inspect(id, ctx);
-          if (!owned) throw e2bFailed();
-          resources.push(owned);
+          const reply = await http(
+            API,
+            `/v2/sandboxes?${query}`,
+            "GET",
+            ctx,
+            [200],
+            undefined,
+            undefined,
+            "json",
+            262144,
+            trace,
+          );
+          if (!Array.isArray(reply.data) || reply.data.length > 100) throw e2bDenied();
+          for (const entry of reply.data) {
+            const id = e2bGuarded(() => {
+              const raw = e2bRecord(entry);
+              exactE2BMetadata(raw.metadata, o.metadata);
+              return safeId(raw.sandboxID);
+            });
+            if (ids.has(id)) throw e2bDenied();
+            ids.add(id);
+            const owned = await inspect(id, ctx);
+            if (!owned) throw e2bFailed();
+            resources.push(owned);
+          }
+          next = reply.next;
+          if (!next) return { resources, complete: true };
+          if (cursors.has(next)) throw e2bDenied();
+          cursors.add(next);
         }
-        next = reply.next;
-        if (!next) return { resources, complete: true };
-        if (cursors.has(next)) throw e2bDenied();
-        cursors.add(next);
-      }
-      throw e2bDenied();
+        throw e2bDenied();
+      });
     },
     async writeMarker(id, path, value, ctx) {
-      if (path !== o.markerPath || value !== o.markerValue) throw e2bDenied();
-      await permitted(id, "running", ctx);
-      const form = new FormData();
-      form.append(
-        "file",
-        new Blob([o.markerValue], { type: "application/octet-stream" }),
-        o.markerPath,
-      );
-      const query = new URLSearchParams({ path: o.markerPath });
-      const reply = await http(ENVD, `/files?${query}`, "POST", ctx, [200], form, id, "json", 8192);
-      if (!Array.isArray(reply.data) || reply.data.length !== 1) throw e2bDenied();
-      e2bGuarded(() => {
-        const entry = e2bRecord((reply.data as unknown[])[0]);
-        if (entry.path !== o.markerPath || entry.type !== "file") throw e2bDenied();
+      return observe("marker_write", "guest_files", ctx, async (trace) => {
+        if (path !== o.markerPath || value !== o.markerValue) throw e2bDenied();
+        await permitted(id, "running", ctx);
+        const form = new FormData();
+        form.append(
+          "file",
+          new Blob([o.markerValue], { type: "application/octet-stream" }),
+          o.markerPath,
+        );
+        const query = new URLSearchParams({ path: o.markerPath });
+        const reply = await http(
+          ENVD,
+          `/files?${query}`,
+          "POST",
+          ctx,
+          [200],
+          form,
+          id,
+          "json",
+          8192,
+          trace,
+        );
+        if (!Array.isArray(reply.data) || reply.data.length !== 1) throw e2bDenied();
+        e2bGuarded(() => {
+          const entry = e2bRecord((reply.data as unknown[])[0]);
+          if (entry.path !== o.markerPath || entry.type !== "file") throw e2bDenied();
+        });
       });
     },
     async readMarker(id, path, ctx) {
-      if (path !== o.markerPath) throw e2bDenied();
-      await permitted(id, "running", ctx);
-      const query = new URLSearchParams({ path: o.markerPath });
-      const expected = new TextEncoder().encode(o.markerValue);
-      const reply = await http(
-        ENVD,
-        `/files?${query}`,
-        "GET",
+      return observe(
+        restored ? "marker_restored_read" : "marker_initial_read",
+        "guest_files",
         ctx,
-        [200],
-        undefined,
-        id,
-        "bytes",
-        expected.byteLength,
+        async (trace) => {
+          if (path !== o.markerPath) throw e2bDenied();
+          await permitted(id, "running", ctx);
+          const query = new URLSearchParams({ path: o.markerPath });
+          const expected = new TextEncoder().encode(o.markerValue);
+          const reply = await http(
+            ENVD,
+            `/files?${query}`,
+            "GET",
+            ctx,
+            [200],
+            undefined,
+            id,
+            "bytes",
+            expected.byteLength,
+            trace,
+          );
+          const actual = reply.data;
+          if (
+            !(actual instanceof Uint8Array) ||
+            actual.byteLength !== expected.byteLength ||
+            actual.some((byte, index) => byte !== expected[index])
+          )
+            throw e2bDenied();
+          if (restored) restoredRead = true;
+          return o.markerValue;
+        },
       );
-      const actual = reply.data;
-      if (
-        !(actual instanceof Uint8Array) ||
-        actual.byteLength !== expected.byteLength ||
-        actual.some((byte, index) => byte !== expected[index])
-      )
-        throw e2bDenied();
-      return o.markerValue;
     },
     async pause(id, ctx) {
-      await permitted(id, "running", ctx);
-      await http(
-        API,
-        `/sandboxes/${id}/pause`,
-        "POST",
-        ctx,
-        [204, 409],
-        JSON.stringify({ memory: true }),
-        undefined,
-        "none",
-      );
-      const observed = await inspect(id, ctx);
-      if (!observed || observed.state !== "paused") throw e2bFailed();
-      credentials.delete(id);
+      return observe("pause", "control_api", ctx, async (trace) => {
+        await permitted(id, "running", ctx);
+        await http(
+          API,
+          `/sandboxes/${id}/pause`,
+          "POST",
+          ctx,
+          [204, 409],
+          JSON.stringify({ memory: true }),
+          undefined,
+          "none",
+          262144,
+          trace,
+        );
+        const observed = await inspect(id, ctx);
+        if (!observed || observed.state !== "paused") throw e2bFailed();
+        credentials.delete(id);
+      });
     },
     async restore(id, ctx) {
-      await permitted(id, "paused", ctx);
-      const body: NativeConnect = { timeout: runtimeSeconds(), memory: true };
-      const reply = await http(
-        API,
-        `/v2/sandboxes/${id}/connect`,
-        "POST",
-        ctx,
-        [200, 201],
-        JSON.stringify(body),
-      );
-      connectionReply(reply.data, id);
-      await permitted(id, "running", ctx);
+      return observe("restore", "control_api", ctx, async (trace) => {
+        await permitted(id, "paused", ctx);
+        const body: NativeConnect = { timeout: runtimeSeconds(), memory: true };
+        const reply = await http(
+          API,
+          `/v2/sandboxes/${id}/connect`,
+          "POST",
+          ctx,
+          [200, 201],
+          JSON.stringify(body),
+          undefined,
+          "json",
+          262144,
+          trace,
+        );
+        connectionReply(reply.data, id);
+        await permitted(id, "running", ctx);
+        restored = true;
+      });
     },
     async kill(id, ctx) {
-      const owned = await inspect(id, ctx);
-      if (!owned) return;
-      await http(API, `/sandboxes/${id}`, "DELETE", ctx, [204, 404], undefined, undefined, "none");
-      if ((await inspect(id, ctx)) !== null) throw e2bFailed();
+      return observe("cleanup_delete", "control_api", ctx, async (trace) => {
+        cleanupStarted = true;
+        const owned = await inspect(id, ctx);
+        if (!owned) return;
+        await http(
+          API,
+          `/sandboxes/${id}`,
+          "DELETE",
+          ctx,
+          [204, 404],
+          undefined,
+          undefined,
+          "none",
+          262144,
+          trace,
+        );
+        if ((await inspect(id, ctx)) !== null) throw e2bFailed();
+      });
     },
   };
+  diagnosticSnapshots.set(port, snapshot);
+  cleanupMarkers.set(port, () => {
+    cleanupStarted = true;
+  });
+  return port;
 }

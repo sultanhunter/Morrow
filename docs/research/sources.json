@@ -933,7 +933,7 @@
     "url": "https://docs.e2b.dev/faq/calculate-sandbox-price",
     "status": "verified",
     "observed_at": "2026-10-15",
-    "finding": "Published running sandbox rates are .000014USD/vCPU-second and .0000045USD/GiB-second; Hobby disk is included. Explicit2CPU/512MiB for600seconds computes .018150USD. This excludes unqualified builder/image-retention pricing and is not a complete test quote."
+    "finding": "Current official running-only formula/rates:0.000014USD/vCPU-second plus0.0000045USD/GiB-second; included disk, paused/killed unbilled. Explicit2vCPU/512MiB for600seconds estimates0.018150USD credit. Build/ready-image zero pricing today is separately supported by Dennis\u2019s owner-supplied reply; source-bound dated trial quote only, not a permanent or hard per-operation cap."
   },
   {
     "id": "S126",
@@ -947,6 +947,20 @@
     "url": "https://github.com/e2b-dev/runtime/blob/1a77d1175e9d49bc9f24a249d794c747a162306f/packages/api/internal/orchestrator/analytics.go",
     "status": "verified",
     "observed_at": "2026-10-15",
-    "finding": "Customer sandbox execution events differ from template-build telemetry, but hosted billing collector/ledger is absent. Separate telemetry does not prove template builds are free; approved support confirmation remains pending."
+    "finding": "Source observation at60: customer sandbox execution events differ from template-build telemetry and billing collector/ledger is absent. This source alone cannot prove free template builds; current zero build/image price is separately qualified by the owner-supplied Dennis support reply at65."
+  },
+  {
+    "id": "S128",
+    "url": "https://docs.e2b.dev/faq/build-limits",
+    "status": "verified",
+    "observed_at": "2026-10-15",
+    "finding": "Whole-build limit1hour from running start, waiting40minutes; disk free-space allowance is above image size. Broad replacement wording is not a supported client teardown proof. Dennis specifically confirms no active builder cancel or stopped-compute proof; Morrow holds unknown attempts and never cancels by replacement/deletion."
+  },
+  {
+    "id": "S129",
+    "url": "https://e2b.dev/terms",
+    "status": "verified",
+    "observed_at": "2026-10-15",
+    "finding": "Account Access, Pricing and Payment section2 provides at least30days notice for new/increased service fees. Read-only verification of existing terms; no new agreement accepted. Current support pricing does not settle production commercial SaaS/enterprise qualification."
   }
 ]

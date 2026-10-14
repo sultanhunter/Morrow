@@ -1,7 +1,7 @@
 {
   "task": "P01.T04",
-  "generated_at": "2026-10-14T21:05:01.969Z",
-  "plan_sequence": 64,
+  "generated_at": "2026-10-14T21:54:29.825Z",
+  "plan_sequence": 67,
   "billing_definitions": 12,
   "checks": [
     {
