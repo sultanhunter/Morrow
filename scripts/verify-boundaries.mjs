@@ -1,12 +1,14 @@
 import { readFileSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
-import { inspectImports, inspectCompatibility } from "./boundary-checks.mjs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { inspectImports, inspectCompatibility, isBoundarySource } from "./boundary-checks.mjs";
 const files = [];
 function walk(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const p = dir + "/" + entry.name;
     if (entry.isDirectory()) {
       if (!["node_modules", "dist", "build", ".react-router"].includes(entry.name)) walk(p);
-    } else if (/\.tsx?$/.test(p)) files.push(p);
+    } else if (isBoundarySource(p)) files.push(p);
   }
 }
 walk("apps");
@@ -30,6 +32,118 @@ const negatives = [
   name,
   passed: inspectImports("apps/workspace-web/src/test.tsx", code).includes(expected),
 }));
+for (const [name, path, code, expected] of [
+  ...[
+    ["daytona", "@daytona/sdk"],
+    ["e2b", "@e2b/code-interpreter"],
+    ["modal", "@modal-labs/sdk"],
+    ["blaxel", "@blaxel/core"],
+    ["sprites", "@fly/sprites"],
+    ["cloudflare", "@cloudflare/sandbox"],
+  ].map(([name, specifier]) => [
+    `runtime_sdk_${name}`,
+    "packages/runtime/src/harness.ts",
+    `import {Client} from '${specifier}';`,
+    "RUNTIME_SDK_OUTSIDE_ADAPTER",
+  ]),
+  [
+    "runtime_sdk_type_query",
+    "packages/contracts/src/index.ts",
+    "type X = import('@daytona/sdk').Client;",
+    "RUNTIME_SDK_OUTSIDE_ADAPTER",
+  ],
+  [
+    "runtime_sdk_import_equals",
+    "packages/runtime/src/harness.ts",
+    "import X = require('e2b');",
+    "RUNTIME_SDK_OUTSIDE_ADAPTER",
+  ],
+  [
+    "runtime_sdk_ui_folder_impostor",
+    "apps/workspace-web/src/runtime-adapters/daytona/client.ts",
+    "import {Client} from '@daytona/sdk';",
+    "RUNTIME_SDK_OUTSIDE_ADAPTER",
+  ],
+  [
+    "runtime_adapter_api_import",
+    "apps/api/src/index.ts",
+    "import {createProvider} from '@morrow/runtime-adapters/daytona';",
+    "RUNTIME_ADAPTER_IMPORT_DENIED",
+  ],
+  [
+    "runtime_adapter_relative_escape",
+    "packages/runtime/src/harness.ts",
+    "export {createProvider} from '../../runtime-adapters/src/daytona/client';",
+    "RUNTIME_ADAPTER_IMPORT_DENIED",
+  ],
+  [
+    "runtime_sdk_wrong_provider_adapter",
+    "packages/runtime-adapters/src/daytona/client.ts",
+    "import {Client} from 'e2b';",
+    "RUNTIME_SDK_OUTSIDE_ADAPTER",
+  ],
+  [
+    "runtime_sdk_node_modules_escape",
+    "packages/identity/src/index.ts",
+    "import {Client} from '../../../node_modules/@daytona/sdk';",
+    "RUNTIME_SDK_OUTSIDE_ADAPTER",
+  ],
+  [
+    "runtime_sdk_wrapped_require",
+    "packages/runtime/src/harness.js",
+    "const x = require.call(null, '@daytona/sdk');",
+    "MODULE_LOADER_UNREVIEWED",
+  ],
+  [
+    "runtime_sdk_module_require",
+    "packages/runtime/src/harness.cjs",
+    "const x = module.require('e2b');",
+    "MODULE_LOADER_UNREVIEWED",
+  ],
+  [
+    "runtime_sdk_parenthesized_require",
+    "packages/runtime/src/harness.cts",
+    "const x = (require)('e2b');",
+    "MODULE_LOADER_UNREVIEWED",
+  ],
+  [
+    "runtime_custom_loader",
+    "packages/runtime/src/harness.mjs",
+    "import {createRequire} from 'node:module';",
+    "RUNTIME_LOADER_OUTSIDE_ADAPTER",
+  ],
+  [
+    "runtime_core_alias_escape",
+    "packages/runtime/src/harness.mts",
+    "import {compose} from '@morrow/workers/runtime-provider-composition.server';",
+    "RUNTIME_CORE_DEPENDENCY_DENIED",
+  ],
+  [
+    "runtime_adapter_sibling_alias",
+    "packages/runtime-adapters/src/daytona/client.ts",
+    "import {createProvider} from '@morrow/runtime-adapters/e2b';",
+    "RUNTIME_ADAPTER_PROVIDER_MISMATCH",
+  ],
+  [
+    "runtime_adapter_sibling_relative",
+    "packages/runtime-adapters/src/daytona/client.ts",
+    "import {createProvider} from '../e2b/client';",
+    "RUNTIME_ADAPTER_PROVIDER_MISMATCH",
+  ],
+  [
+    "runtime_adapter_absolute_import",
+    "apps/api/src/index.ts",
+    `import {createProvider} from ${JSON.stringify(resolve("packages/runtime-adapters/src/e2b/client.ts"))};`,
+    "RUNTIME_ADAPTER_IMPORT_DENIED",
+  ],
+  [
+    "runtime_adapter_file_url_import",
+    "packages/runtime/src/harness.mts",
+    `import {createProvider} from ${JSON.stringify(pathToFileURL(resolve("packages/runtime-adapters/src/e2b/client.ts")).href)};`,
+    "RUNTIME_ADAPTER_IMPORT_DENIED",
+  ],
+])
+  negatives.push({ name, passed: inspectImports(path, code).includes(expected) });
 const changed = { ...schemas };
 const first = Object.keys(changed)[0];
 const value = JSON.parse(changed[first]);
@@ -46,7 +160,7 @@ writeFileSync(
   JSON.stringify(
     {
       scope:
-        "Import/dependency and unreleased contract-freeze checks, not production tenant authority.",
+        "Source import/dependency and unreleased contract-freeze checks; not a security sandbox, production tenant authority or live runtime/provider qualification.",
       files: files.length,
       negative_checks: negatives,
       errors,
@@ -57,5 +171,5 @@ writeFileSync(
 );
 if (errors.length) throw Error(errors.join("\n"));
 console.log(
-  `PASS: ${files.length} typed sources, ${negatives.length} deliberate boundary/schema failures detected.`,
+  `PASS: ${files.length} source modules, ${negatives.length} deliberate boundary/schema failures detected.`,
 );

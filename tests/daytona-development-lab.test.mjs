@@ -150,6 +150,8 @@ test("development lab is a separate closed, non-activating configuration", () =>
       /CONFIGURATION_DENIED/,
     );
   assert.throws(() => developmentLabConfiguration(52), /PLAN_DENIED/);
+  assert.throws(() => developmentLabConfiguration(53), /PLAN_DENIED/);
+  assert.throws(() => developmentLabConfiguration(55), /PLAN_DENIED/);
   const cyclic = { ...config };
   cyclic.extra = cyclic;
   assert.throws(() => compileDevelopmentLabConfiguration(cyclic), /CONFIGURATION_DENIED/);

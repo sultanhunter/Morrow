@@ -7,7 +7,7 @@
   "environments": [
     {
       "environment": "development",
-      "configuration_sha256": "df8a244d053e0a3df3d6f948b7cf408325673282a02f32a422275e2afdac8247",
+      "configuration_sha256": "38954bd9f82fd14892f0c886d28c6afa322f9c9920a2d6fd0feb042556be3191",
       "profiles": {
         "api": [
           "current_identity_and_policy_reads",
@@ -40,7 +40,7 @@
     },
     {
       "environment": "staging",
-      "configuration_sha256": "5b06ec823e39a4e453221755682bf86d70724a3d82a57135b290161e62bec027",
+      "configuration_sha256": "03b44f977dbe3701160c6f875a48a58c8b6959d30621736bd4f62f5470b76ed5",
       "profiles": {
         "api": [
           "current_identity_and_policy_reads",
@@ -73,7 +73,7 @@
     },
     {
       "environment": "production",
-      "configuration_sha256": "4b5cf3b8d1dc26d93dbbcf47673efdebcd2cb3d0c4d7afc8a37c86f1a11d3c15",
+      "configuration_sha256": "c3c3e8b52bcef627e9ee10832d306710ec165b991a2941274e0b84626602e777",
       "profiles": {
         "api": [
           "current_identity_and_policy_reads",

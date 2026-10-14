@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-14T14:01:27.090Z",
+  "generated_at": "2026-10-14T14:51:34.334Z",
   "scope": "Local production build HTTP status/headers and no-dispatch worker only, no authenticated tenant/provider qualification.",
   "checks": [
     {

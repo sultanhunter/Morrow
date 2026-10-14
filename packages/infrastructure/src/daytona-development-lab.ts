@@ -19,8 +19,8 @@ const canonical = (value: unknown): string => {
 };
 const sha = (value: string) => createHash("sha256").update(value).digest("hex");
 
-export function developmentLabConfiguration(planSequence = 53) {
-  if (planSequence !== 53) throw Error("DEVELOPMENT_LAB_PLAN_DENIED");
+export function developmentLabConfiguration(planSequence = 54) {
+  if (planSequence !== 54) throw Error("DEVELOPMENT_LAB_PLAN_DENIED");
   return {
     schemaVersion: 1,
     task: "P04.T01f",

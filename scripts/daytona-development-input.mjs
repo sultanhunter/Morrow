@@ -50,7 +50,7 @@ export function inspectDevelopmentLabAccount(account, nowMs = Date.now(), mode =
     if (
       !account ||
       account.schema_version !== 1 ||
-      account.plan_sequence !== 53 ||
+      account.plan_sequence !== 54 ||
       account.organization_id !== organizationId ||
       account.region !== "us" ||
       !["allocate", "cleanup"].includes(mode) ||

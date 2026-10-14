@@ -40,7 +40,7 @@ const input = () => ({
 });
 const account = () => ({
   schema_version: 1,
-  plan_sequence: 53,
+  plan_sequence: 54,
   observed_at: new Date(now).toISOString(),
   organization_id: organizationId,
   region: "us",

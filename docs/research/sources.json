@@ -731,5 +731,75 @@
     "status": "verified",
     "observed_at": "2026-10-14",
     "finding": "Braces<=3.0.3 has an unpatched nested-pattern stack-exhaustion advisory. SDK glob/directory operations remain outside the fixed Buffer/path lab flow; no zero-advisory claim."
+  },
+  {
+    "id": "S97",
+    "url": "https://e2b.dev/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Hobby advertises $100 one-time credits, no card, one-hour continuous sessions/20 concurrent; Pro $150/month plus usage. Actual entitlement/default RAM requires account readback."
+  },
+  {
+    "id": "S98",
+    "url": "https://docs.e2b.dev/sandbox/persistence",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Pause preserves files and memory; paused instances have no automatic expiry. Connect extends runtime; kill and original deadline/cleanup handling must be explicit."
+  },
+  {
+    "id": "S99",
+    "url": "https://docs.e2b.dev/network/internet-access",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Internet defaults on. Disable explicitly; domain rules allow DNS and inspect HTTP Host/TLS SNI with shared-endpoint caveats; actual application-level denial is required."
+  },
+  {
+    "id": "S100",
+    "url": "https://modal.com/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Starter $0 subscription plus usage/$30 monthly compute credits. Sandboxes have distinct CPU/RAM rates; do not use Function unit pricing. Team has a fixed subscription."
+  },
+  {
+    "id": "S101",
+    "url": "https://modal.com/docs/guide/billing",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "A payment method is required to use Modal. Starter usage need not be prepaid; credits do not eliminate other applicable charges."
+  },
+  {
+    "id": "S102",
+    "url": "https://modal.com/blog/vm-sandboxes-agent-computers",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "VM Sandboxes GA1October2026; explicitly select vm because default remains gVisor. API compatibility is not Morrow isolation qualification."
+  },
+  {
+    "id": "S103",
+    "url": "https://modal.com/docs/guide/sandbox-networking",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Full network blocking and CIDR allowlists documented; domain filtering Beta/TLS-only and DNS caveats require effective tests."
+  },
+  {
+    "id": "S104",
+    "url": "https://modal.com/docs/guide/sandbox-snapshots",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Filesystem snapshots and Alpha memory snapshots differ; native handles/expiry are not portable cross-vendor checkpoints."
+  },
+  {
+    "id": "S105",
+    "url": "https://developers.cloudflare.com/agents/tools/sandbox/",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Current attached Linux sandbox runs in its own VM; default Internet disabled. Local Docker does not qualify hosted behavior."
+  },
+  {
+    "id": "S106",
+    "url": "https://developers.cloudflare.com/containers/platform/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Hosted Containers require Workers Paid; compute, memory, disk and transfer billed alongside Worker/DO use."
   }
 ]

@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 53,
-  "plan_digest": "c609c1019cd2cd18df6d6d9a052969f318217bcaf1adb7d26e2ebc8aac9a67bd",
+  "plan_sequence": 54,
+  "plan_digest": "a9d118499a81861c8b35020b0f62348b6b02e4793a3344030005106324126211",
   "tasks": [
     {
       "id": "P01.T01",
@@ -87,7 +87,7 @@
     },
     {
       "path": "docs/evidence/P01.T01/verification.json",
-      "sha256": "7dca4b603b255a1f89a665ce116024b0a33445e3b286870b94a8b0f705771e37"
+      "sha256": "b2b532388b5085540654a14b16897ab3c8c8930d2e681d54346d913b4088ad29"
     },
     {
       "path": "docs/evidence/P01.T02/review.md",
@@ -99,7 +99,7 @@
     },
     {
       "path": "docs/evidence/P01.T02/verification.json",
-      "sha256": "deb95d931626e8e2d0086251a3376288ce65193ce4d45a9a645b96424d4261cc"
+      "sha256": "e8c184d531f9e72c6c72914a0181492aab7d341528da34db43cc919da30b80ef"
     },
     {
       "path": "docs/evidence/P01.T03/review.md",
@@ -111,7 +111,7 @@
     },
     {
       "path": "docs/evidence/P01.T03/verification.json",
-      "sha256": "6e539df92441f070b245f4b0b7d21871f07fc65153e547d19877729f6010bbaa"
+      "sha256": "fdc5837aebdbd5622b431aadff0e9e4c54f995d35876df0c794d3ddd7b6a0980"
     },
     {
       "path": "docs/evidence/P01.T04/review.md",
@@ -123,7 +123,7 @@
     },
     {
       "path": "docs/evidence/P01.T04/verification.json",
-      "sha256": "440668148db39c3347281245e553339fb82b533e09fed4ee7ca120a45c8d64e2"
+      "sha256": "96b4926cddf148bc62f1b24d119ccd197cf5658b427d48b5ef6ab5e9d2d12173"
     },
     {
       "path": "docs/evidence/P02.T01/review.md",
@@ -167,7 +167,7 @@
     },
     {
       "path": "docs/evidence/P02.T02/verification.json",
-      "sha256": "265ac708d1549f862c100b8ccafefb9c8d40ac745dc507a9d016b23a2e61e8fd"
+      "sha256": "a03ca9c997743168ef3876abaf580eb8a88a1c6df4733611663e4dd962664b66"
     },
     {
       "path": "docs/evidence/P02.T03/browser-checks.json",
@@ -199,11 +199,11 @@
     },
     {
       "path": "docs/evidence/P03.T01/smoke.json",
-      "sha256": "117c06a6f7aa65e2a57410a1108ebce269f7f987dc2ea9f674fc8d5cf2647984"
+      "sha256": "1b1b290a35c5fde411b7cd1ac13db2b3f547cfe11fcb02fbf5f67f1c2b28cd66"
     },
     {
       "path": "docs/evidence/P03.T02/boundaries.json",
-      "sha256": "6c950cd2da0a0b195a74085c37069b44161e5de7ce8044ba81cee14bf0c91aa1"
+      "sha256": "ba235c991916171f5791fb1648d7f9a4e2fecc18536e80eb3b78ec7499a7a0cb"
     },
     {
       "path": "docs/evidence/P03.T02/review.md",
@@ -239,7 +239,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/delivery.json",
-      "sha256": "ed02ef314db35ab99852a818375c2ee47dfac303cfffd0c8e7c376a4e0e2238e"
+      "sha256": "ad55b1663a470e8487190ff8db8d9424dcced9c5743eac7a906a83a40d6cac05"
     },
     {
       "path": "docs/evidence/P03.T04/dependency-audit.json",
@@ -299,15 +299,15 @@
     },
     {
       "path": "docs/evidence/P04.T01a/permissions.json",
-      "sha256": "a11b752a5e056b334ec64172a941a15487f36bb58d51a8d0904f66fd825e6181"
+      "sha256": "4d84a6bc6517d0c46f0dc431b72ab795b42f40210da7830bb2569b85bd73e6ea"
     },
     {
       "path": "docs/evidence/P04.T01a/readiness.json",
-      "sha256": "e523ac60fdc3714b957058a529f85d63452b54d0e6c5e2c163628275d949801f"
+      "sha256": "b218d6590872554d5c1c033034ae07371fea81e4046c974b6ed029fdb2f749c9"
     },
     {
       "path": "docs/evidence/P04.T01a/synth.json",
-      "sha256": "43ba457ac0831c14e23887bfdc23b6d6a6b55787aa359796fa04260ed92d3971"
+      "sha256": "232f9b755d272ef3e1a8024cdc3f09b6718b3df248549b116ad9232fc479ea52"
     },
     {
       "path": "docs/evidence/P04.T01b/verification.json",
@@ -355,15 +355,19 @@
     },
     {
       "path": "docs/evidence/P04.T01f/live.json",
-      "sha256": "fc6e2917a56ce2c952139e7749ce53569b5e51319d5b02b8739b3cf92c2d6ab6"
+      "sha256": "352f5376fadc640a5f8da6843c11de53bb30886e006acf40eda45d453b329224"
     },
     {
       "path": "docs/evidence/P04.T01f/preparation.json",
-      "sha256": "d5435be89501dad8912c20b3073a15b7a59e9ccf33cde17dff9c3602e94fb272"
+      "sha256": "4cd01742c805b7ebf2047a2861cf60d628445a93bebc7577782b7972e30fbc67"
     },
     {
       "path": "docs/evidence/P04.T01f/review.json",
       "sha256": "0e581adbe13a1154695efa53c94b8ee562dcd04f712cddb8003522c7e0c76283"
+    },
+    {
+      "path": "docs/evidence/P04.T01g/review.json",
+      "sha256": "a59db1a0c18a018d8ee57c01972178012dac39c0a07baab993f21ab92ed0aeae"
     },
     {
       "path": "docs/evidence/P04.T02/README.md",
