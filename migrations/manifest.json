@@ -20,6 +20,12 @@
       "file": "0003.authentication-challenges.sql",
       "sha256": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
       "reviewRef": "docs/evidence/P05.T01/challenge-review.json"
+    },
+    {
+      "sequence": 4,
+      "file": "0004.workspace-access-revocation.sql",
+      "sha256": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+      "reviewRef": "docs/evidence/P05.T01/workspace-revocation-review.json"
     }
   ]
 }

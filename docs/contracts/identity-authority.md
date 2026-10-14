@@ -17,3 +17,16 @@ Wrong-tenant identifiers return a redacted denied result. Reviewer cannot approv
 ## Compatibility and evidence
 
 Every command/read declares schema version 1. Unknown fields and invalid enum values fail validation; no implicit coercion/default authority. Breaking fields/states/meaning require a new version and explicit migration with retained workflow histories. Additions remain opt-in via negotiated schema versions, not silently accepted fields. Consumers pin reviewed contract revisions. Run npm run verify:contracts and npm run test:contracts for contract fixture evidence; these do not prove production authorization or provider access. Open provider/region/retention/billing targets remain in the decision register and block consumers that need them.
+
+
+## Internal workspace access revocation
+
+Canonical61/P05.T01c adds a local persistence primitive with a separate dedicated executor. It is not a public capability implementation or an organization-wide membership command. No production receipt issuer or approval issuer exists; only isolated laboratory maintenance can seed synthetic authorization receipts.
+
+The exact receipt pins organization, workspace, initiating human membership and session digest, target membership, command ID, request digest, expected organization policy revision, immutable approval-evidence ID and expiry, plus a validated authorizing-grant payload. Every binding must match; a request digest, session digest or receipt ID alone grants no authority. The narrow SQL function checks current locked authority and pinned grant facts after serialization waits. Its private receipt/result tables use tenant foreign keys and FORCE RLS. Neither the ordinary API database role nor agent runtime can invoke it, assume its executor role or write these tables.
+
+One committed transaction deactivates the selected workspace membership, revokes that workspace's target grants, increments organization policy revision and saves receipt consumption plus attributable audit/result. It preserves organization membership, organization-scoped sessions, principal activity and other workspace grants. A preserved session immediately fails current identity resolution in the revoked workspace. Existing permission reads reload current SQL facts and never cache allows.
+
+Exact repeated commands return their original result only after current initiating authority is rechecked. Changed bindings cannot replay that result. Exactly bound expected denials commit a redacted terminal audit without an access mutation. Unexpected database failures roll back; a lost COMMIT acknowledgement remains uncertain, even if a later rollback succeeds. Reconcile the same stable command before creating any new operation. Do not treat an unavailable reply as evidence that revocation failed.
+
+This local operation does not return the public capability's affectedRuns field or cancel runs. Full approval issuance, organization-wide revocation, grant issuance, provider identity and command/dispatch fencing remain separate qualification work.

@@ -26,6 +26,7 @@ import {
   prepareSyntheticLabOperation,
 } from "../packages/infrastructure/src/synthetic-runtime-lab.ts";
 import { mainE2BLab } from "../scripts/e2b-development-lab.mjs";
+import { frozenE2B60Fixture } from "./fixtures/frozen-e2b-60.mjs";
 
 const projectId = "a1234567-1234-4234-8234-123456789abc";
 const operationId = "b1234567-1234-4234-8234-123456789abc";
@@ -108,51 +109,85 @@ function temporary(t) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return root;
 }
-test("unbound default prepares offline without loading private input or SDK", () => {
-  const out = spawnSync(process.execPath, ["--import", "tsx", "scripts/e2b-development-lab.mjs"], {
-    encoding: "utf8",
-    env: { ...process.env, E2B_API_KEY: "untrusted-ambient" },
-  });
+test("unbound default prepares offline without loading private input or SDK", (t) => {
+  const frozen = frozenE2B60Fixture();
+  t.after(frozen.dispose);
+  const out = spawnSync(
+    process.execPath,
+    ["--import", frozen.loader, frozen.script("scripts/e2b-development-lab.mjs")],
+    {
+      encoding: "utf8",
+      cwd: frozen.root,
+      env: { ...process.env, E2B_API_KEY: "untrusted-ambient" },
+    },
+  );
   assert.equal(out.status, 0, out.stderr);
-  const report = JSON.parse(readFileSync("docs/evidence/P04.T01h/preparation.json"));
+  const report = JSON.parse(frozen.read("docs/evidence/P04.T01h/preparation.json"));
   assert.equal(report.provider_calls, false);
   assert.equal(report.private_input_read, false);
   assert.equal(report.live_ready, false);
   assert.ok(report.blockers.includes("E2B_LAB_PROFILE_UNBOUND"));
   assert.equal(report.production_qualified, false);
 });
-test("unqualified run denies before credentials, journal or provider calls", () => {
+test("unqualified run denies before credentials, journal or provider calls", (t) => {
+  const frozen = frozenE2B60Fixture();
+  t.after(frozen.dispose);
   const out = spawnSync(
     process.execPath,
     [
       "--import",
-      "tsx",
-      "scripts/e2b-development-lab.mjs",
+      frozen.loader,
+      frozen.script("scripts/e2b-development-lab.mjs"),
       "--run",
       "/does-not-exist/private-key.json",
     ],
-    { encoding: "utf8" },
+    { encoding: "utf8", cwd: frozen.root },
   );
   assert.equal(out.status, 2);
   assert.match(out.stdout, /PREREQUISITES_UNQUALIFIED/);
-  const report = JSON.parse(readFileSync("docs/evidence/P04.T01h/live.json"));
+  const report = JSON.parse(frozen.read("docs/evidence/P04.T01h/live.json"));
   assert.equal(report.private_input_read, false);
   assert.equal(report.provider_calls, false);
 });
-test("readonly discovery preparation cannot read credentials or overwrite live qualification", () => {
+test("readonly discovery preparation cannot read credentials or overwrite live qualification", (t) => {
+  const frozen = frozenE2B60Fixture();
+  t.after(frozen.dispose);
   const destination = "docs/evidence/P04.T01h/template-qualification.json";
   const previous = existsSync(destination) ? readFileSync(destination, "utf8") : null;
   const out = spawnSync(
     process.execPath,
-    ["--import", "tsx", "scripts/e2b-template-qualification.mjs"],
-    { encoding: "utf8" },
+    ["--import", frozen.loader, frozen.script("scripts/e2b-template-qualification.mjs")],
+    { encoding: "utf8", cwd: frozen.root },
   );
   assert.equal(out.status, 0, out.stderr);
-  const report = JSON.parse(readFileSync("docs/evidence/P04.T01h/template-preparation.json"));
+  const report = JSON.parse(frozen.read("docs/evidence/P04.T01h/template-preparation.json"));
   assert.equal(report.provider_calls, false);
   assert.equal(report.private_input_read, false);
   assert.equal(report.sandbox_allocated, false);
   assert.equal(existsSync(destination) ? readFileSync(destination, "utf8") : null, previous);
+});
+test("current plan denies a frozen60 allocation before private input", (t) => {
+  const frozen = frozenE2B60Fixture();
+  t.after(frozen.dispose);
+  frozen.useCurrentPlan();
+  const out = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      frozen.loader,
+      frozen.script("scripts/e2b-development-lab.mjs"),
+      "--run",
+      "/does-not-exist/private-key.json",
+    ],
+    { encoding: "utf8", cwd: frozen.root },
+  );
+  assert.equal(out.status, 2, out.stderr);
+  assert.match(out.stdout, /PREREQUISITES_UNQUALIFIED/);
+  const report = JSON.parse(frozen.read("docs/evidence/P04.T01h/live.json"));
+  assert.equal(report.plan_sequence, 61);
+  assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"));
+  assert.equal(report.private_input_read, false);
+  assert.equal(report.provider_calls, false);
 });
 test("approved readonly access file denies foreign project or expanded allocation authority", (t) => {
   const root = temporary(t),

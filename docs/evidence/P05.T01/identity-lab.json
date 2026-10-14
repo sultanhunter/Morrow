@@ -1,7 +1,7 @@
 {
   "task": "P05.T01a",
-  "plan_sequence": 46,
-  "observed_at": "2026-10-10T14:17:31.197Z",
+  "plan_sequence": 61,
+  "observed_at": "2026-10-14T20:25:28.111Z",
   "scope": "Actual isolated PostgreSQL17.11 immutable application migration and unprivileged SQL tenant boundary. Synthetic issuer/session data only; no WorkOS/provider/production authentication or capability authorization.",
   "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
   "version": "17.11 (Debian 17.11-1.pgdg13+2)",

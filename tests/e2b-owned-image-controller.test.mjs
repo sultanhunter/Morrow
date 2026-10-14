@@ -1,8 +1,8 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { mainE2BOwnedImageQualification } from "../scripts/e2b-owned-image-qualification.mjs";
 import { ownedBuildSourceBinding } from "../scripts/e2b-owned-build-input.mjs";
 import {
@@ -10,9 +10,18 @@ import {
   ownedManifestProofValid,
 } from "../scripts/e2b-owned-build-lab.mjs";
 
+import { frozenE2B60Fixture, e2bRepositoryRoot } from "./fixtures/frozen-e2b-60.mjs";
+
 const index = readFileSync("tests/fixtures/e2b-base-index.json"),
   child = readFileSync("tests/fixtures/e2b-base-amd64.json");
 const clock = 1792000000000;
+const frozen = frozenE2B60Fixture(),
+  originalCwd = process.cwd();
+process.chdir(frozen.root);
+after(() => {
+  process.chdir(originalCwd);
+  frozen.dispose();
+});
 function response(body, url, type, digest) {
   const r = new Response(body, {
     headers: { "content-type": type, ...(digest ? { "docker-content-digest": digest } : {}) },
@@ -57,7 +66,10 @@ test("injected image transport needs an isolated evidence sink before any reques
   assert.equal(calls, 0);
 });
 test("mock image proof stays outside active evidence and has no provider-call claim", async () => {
-  const active = "docs/evidence/P04.T01h/owned-image-qualification.json",
+  const active = resolve(
+      e2bRepositoryRoot,
+      "docs/evidence/P04.T01h/owned-image-qualification.json",
+    ),
     before = existsSync(active) ? readFileSync(active) : null;
   const folder = realpathSync(mkdtempSync(join(tmpdir(), "morrow-image-evidence-")));
   try {
@@ -112,4 +124,31 @@ test("injected sink cannot overwrite repository evidence", async () => {
     }),
   );
   assert.equal(calls, 0);
+});
+
+test("current plan denies frozen60 image qualification before any request", async () => {
+  const current = frozenE2B60Fixture(),
+    previous = process.cwd();
+  current.useCurrentPlan();
+  process.chdir(current.root);
+  let calls = 0;
+  try {
+    await assert.rejects(
+      mainE2BOwnedImageQualification(["--verify-public-image"], {
+        fetch: async () => {
+          calls++;
+          throw Error("never");
+        },
+      }),
+      /E2B_OWNED_IMAGE_CURRENT_PLAN_DENIED/,
+    );
+    assert.equal(calls, 0);
+    assert.equal(
+      existsSync(resolve(current.root, "docs/evidence/P04.T01h/owned-image-qualification.json")),
+      false,
+    );
+  } finally {
+    process.chdir(previous);
+    current.dispose();
+  }
 });

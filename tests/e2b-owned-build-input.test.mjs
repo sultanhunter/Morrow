@@ -28,6 +28,8 @@ import {
   ownedManifestProofValid,
 } from "../scripts/e2b-owned-build-lab.mjs";
 
+import { frozenE2B60Fixture } from "./fixtures/frozen-e2b-60.mjs";
+
 const profile = JSON.parse(readFileSync("infra/labs/e2b-owned-build.json", "utf8"));
 const operationId = "00000000-0000-4000-8000-000000000015",
   otherId = "00000000-0000-4000-8000-000000000016";
@@ -79,34 +81,62 @@ function fixture(fn) {
     .finally(() => rmSync(root, { recursive: true, force: true }));
 }
 
-test("owned build default prepares offline and never reads private input", () => {
+test("owned build default prepares offline and never reads private input", (t) => {
+  const frozen = frozenE2B60Fixture();
+  t.after(frozen.dispose);
   const child = spawnSync(
     process.execPath,
-    ["--import", "tsx", "scripts/e2b-owned-build-lab.mjs"],
-    { encoding: "utf8" },
+    ["--import", frozen.loader, frozen.script("scripts/e2b-owned-build-lab.mjs")],
+    { encoding: "utf8", cwd: frozen.root },
   );
   assert.equal(child.status, 0);
   assert.match(child.stdout, /E2B_OWNED_BUILD_PREPARED/);
-  const report = JSON.parse(
-    readFileSync("docs/evidence/P04.T01h/owned-build-preparation.json", "utf8"),
-  );
+  const report = JSON.parse(frozen.read("docs/evidence/P04.T01h/owned-build-preparation.json"));
   assert.equal(report.provider_calls, false);
   assert.equal(report.private_input_read, false);
   assert.equal(report.build_registered, false);
 });
-test("unqualified builder quote denies --build before an invalid private path is read", () => {
+test("unqualified builder quote denies --build before an invalid private path is read", (t) => {
+  const frozen = frozenE2B60Fixture();
+  t.after(frozen.dispose);
   const child = spawnSync(
     process.execPath,
-    ["--import", "tsx", "scripts/e2b-owned-build-lab.mjs", "--build", "/private/does-not-exist"],
-    { encoding: "utf8" },
+    [
+      "--import",
+      frozen.loader,
+      frozen.script("scripts/e2b-owned-build-lab.mjs"),
+      "--build",
+      "/private/does-not-exist",
+    ],
+    { encoding: "utf8", cwd: frozen.root },
   );
   assert.equal(child.status, 2);
   assert.match(child.stdout, /E2B_OWNED_BUILD_PREREQUISITES_DENIED/);
-  const report = JSON.parse(
-    readFileSync("docs/evidence/P04.T01h/owned-build-blocked.json", "utf8"),
-  );
+  const report = JSON.parse(frozen.read("docs/evidence/P04.T01h/owned-build-blocked.json"));
   assert.equal(report.private_input_read, false);
   assert.equal(report.provider_calls, false);
+});
+test("current plan denies frozen60 build effects before private input", (t) => {
+  const frozen = frozenE2B60Fixture();
+  t.after(frozen.dispose);
+  frozen.useCurrentPlan();
+  const child = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      frozen.loader,
+      frozen.script("scripts/e2b-owned-build-lab.mjs"),
+      "--build",
+      "/private/does-not-exist",
+    ],
+    { encoding: "utf8", cwd: frozen.root },
+  );
+  assert.equal(child.status, 2);
+  assert.match(child.stdout, /E2B_OWNED_BUILD_CONTROLLER_DENIED/);
+  assert.equal(
+    existsSync(join(frozen.root, "docs/evidence/P04.T01h/owned-build-qualification.json")),
+    false,
+  );
 });
 test("recipe does not infer a provider default or permit arbitrary image/resources", () => {
   assert.equal(ownedBuildRecipe(profile).recipe.memoryMiB, 512);

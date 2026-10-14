@@ -7,7 +7,7 @@ export type SelectedEnvironment = (typeof selectedEnvironments)[number];
 
 export function selectedConfiguration(environment: SelectedEnvironment, planSequence: number) {
   if (!selectedEnvironments.includes(environment)) throw Error("UNKNOWN_ENVIRONMENT");
-  if (!Number.isSafeInteger(planSequence) || planSequence < 60)
+  if (!Number.isSafeInteger(planSequence) || planSequence < 61)
     throw Error("UNRECORDED_STACK_DECISION");
   const prefix = `morrow-${environment}`;
   return {
@@ -106,7 +106,7 @@ export function inspectSelectedConfiguration(value: unknown): string[] {
   const input = value as Partial<SelectedConfiguration>;
   if (!selectedEnvironments.includes(input.environment as SelectedEnvironment))
     return ["UNKNOWN_ENVIRONMENT"];
-  if (!Number.isSafeInteger(input.plan_sequence) || (input.plan_sequence ?? 0) < 60)
+  if (!Number.isSafeInteger(input.plan_sequence) || (input.plan_sequence ?? 0) < 61)
     return ["UNRECORDED_STACK_DECISION"];
   const expected = selectedConfiguration(
     input.environment as SelectedEnvironment,

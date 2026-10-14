@@ -32,3 +32,4 @@ jobs:
           npm run lab:identity
           npm run lab:permissions
           npm run lab:authentication
+          npm run lab:workspace-revocation

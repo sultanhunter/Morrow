@@ -1,0 +1,41 @@
+{
+  "task": "P05.T01c",
+  "canonical_sequence": 61,
+  "status": "local_engineering_candidate",
+  "review": "Root semantic self-review and delegated peer engineering review; not independent provider or production acceptance",
+  "unit_tests": 19,
+  "actual_postgresql_checks": 109,
+  "repository_tests": 1124,
+  "findings_resolved": [
+    "Separate lifecycle executor cannot be assumed or invoked by API/runtime roles; no private table privileges",
+    "Workspace-only scope preserves organization membership, principal activity, sessions and other workspace grants",
+    "Exact private receipt and pinned validated grant bindings are checked against locked current authority using database time after waits",
+    "Terminal expected denials commit attributable redacted audit; malformed bindings expose no private result",
+    "Lost commit acknowledgement remains uncertain; exact stable command reconciles once without duplicate writes",
+    "Strict result decoder rejects impossible audit/revision combinations and wrong applied revision",
+    "Other-workspace fixture issuer scope and ambiguous PL/pgSQL revision reference repaired before final tests",
+    "First three immutable migrations unchanged; no v1 business schema, public route or production issuer changed"
+  ],
+  "remaining": [
+    "WorkOS and hosted identity qualification",
+    "Production approval/receipt issuer and qualified lifecycle driver/credential broker",
+    "Organization-wide membership commands, grant issuance/revision, affected-run cancellation and dispatch fencing",
+    "P02 participant/native screen-reader qualification and release protection",
+    "E2B authoritative build/retention/recovery response and reviewed rebound recipe before effects"
+  ],
+  "source_digests": {
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/manifest.json": "fae6a5fcbb45056c5d02627d1ec123650737f1cebe347c1061698bebedb9c7e8",
+    "infra/identity-role-prerequisites.sql": "66622d57284ae2ceb1dd1233152f1ec90d02ec51cbb1092ee7ff6ea7eed9c211",
+    "packages/identity/src/workspace-access-revocation.ts": "3a95fa19bd1b667a731afdd6ffad730d0ee4376cfe0baa057cfaad58f9c6798d",
+    "packages/identity/package.json": "423941b4fc1a4a7dd4ba003ab65c422738fe6c0e746c036d136cd06626e0d93f",
+    "scripts/workspace-revocation-lab.mjs": "60c308b1526cdba721f227404ab250c0a8eaa458ded1a5701278eadeaa6ff14e",
+    "scripts/local-lifecycle-sql.mjs": "98817faf7ec9cd24a8d2c14b8a4edd17b14b952e0cfe0b05f22ef0bb3e6305a3",
+    "tests/workspace-revocation.test.mjs": "a93c54cd1fd930fd8d19221a783a2c92f0f9c029a9397c227c752519b67f94e4",
+    "docs/contracts/identity-authority.md": "29939920e475d4b9729419c6cb4339f3ce94a5c2ccbf713ce4c8a41614d4ff3f",
+    "docs/packets/P05.T01c.md": "0e047a977156321caddd90cebef1fff5956cf78d229e80f0d3808aa02a45cdb4",
+    "package.json": "84fea8995ecbb5a33c3c29ecc4cd419da48226677f051d0eedcbee86b55d500d",
+    ".github/workflows/ci.yml": "d06d44f6c79e7afe8d6c4624caf2a771ca600fd009410701956684c7e92f91e4",
+    "tests/fixtures/frozen-e2b-60.mjs": "bac3028c803c57afaa1cfa7c902596e466f946b80b0ec2a16b473ea0840fcd03"
+  }
+}

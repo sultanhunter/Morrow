@@ -37,7 +37,7 @@ test("selected environment inventories are distinct and remain non-activating", 
   }
 });
 test("configuration digest is independent of JSON key ordering", () => {
-  const config = selectedConfiguration("staging", 60);
+  const config = selectedConfiguration("staging", 61);
   const reordered = Object.fromEntries(Object.entries(config).reverse());
   assert.equal(
     compileSelectedConfiguration(config).configuration_sha256,
@@ -70,11 +70,11 @@ test("selected runtime registry, policy and neutral capability routes agree", ()
 });
 test("non-finite and cyclic configuration values cannot masquerade as null selectors", () => {
   for (const invalid of [NaN, Infinity, undefined]) {
-    const config = selectedConfiguration("staging", 60);
+    const config = selectedConfiguration("staging", 61);
     config.cloudflare.account_id = invalid;
     assert.deepEqual(inspectSelectedConfiguration(config), ["INVALID_CONFIGURATION_VALUE"]);
   }
-  const config = selectedConfiguration("staging", 60);
+  const config = selectedConfiguration("staging", 61);
   config.quote = config;
   assert.deepEqual(inspectSelectedConfiguration(config), ["INVALID_CONFIGURATION_VALUE"]);
 });
@@ -101,15 +101,15 @@ for (const [name, change] of [
   ["unexpected credential field", (c) => (c.runtime.token = "synthetic")],
 ])
   test(`local selected inventory rejects ${name}`, () => {
-    const config = selectedConfiguration("staging", 60);
+    const config = selectedConfiguration("staging", 61);
     change(config);
     assert.deepEqual(inspectSelectedConfiguration(config), ["UNREVIEWED_CONFIGURATION_DELTA"]);
     assert.throws(() => compileSelectedConfiguration(config), /UNREVIEWED_CONFIGURATION_DELTA/);
   });
 test("earlier hosting decisions and unknown environments cannot compile", () => {
-  for (const revision of [44, 45, 54, 55, 56, 57, 58, 59])
+  for (const revision of [44, 45, 54, 55, 56, 57, 58, 59, 60])
     assert.throws(() => selectedConfiguration("staging", revision), /UNRECORDED_STACK_DECISION/);
-  assert.throws(() => selectedConfiguration("invented", 60), /UNKNOWN_ENVIRONMENT/);
+  assert.throws(() => selectedConfiguration("invented", 61), /UNKNOWN_ENVIRONMENT/);
 });
 test("E2B active arithmetic excludes unbound subscription and runtime meters", () => {
   const result = estimateStackComponents(model, model.example_usage);

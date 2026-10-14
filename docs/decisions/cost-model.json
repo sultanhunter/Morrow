@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "plan_sequence": 60,
+  "plan_sequence": 61,
   "as_of": "2026-10-14",
   "currency": "USD",
   "stack": "cloudflare-neon-runtime",

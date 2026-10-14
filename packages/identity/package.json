@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./authentication-challenges": "./src/authentication-challenges.ts",
-    "./neon": "./src/neon.ts"
+    "./neon": "./src/neon.ts",
+    "./workspace-access-revocation": "./src/workspace-access-revocation.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
