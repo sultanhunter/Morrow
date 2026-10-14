@@ -1,0 +1,32 @@
+{
+  "task": "P04.T01h",
+  "plan_sequence": 59,
+  "scope": "Synthetic operator microVM lab only",
+  "sdk": "e2b2.56.0",
+  "source_sha256": "0b67b339b67bf522df9467b2c13cb2a46a1869fbcefb7a8cf117434c11ba2573",
+  "source_digests": {
+    "packages/infrastructure/src/synthetic-runtime-lab.ts": "a3aaa146c2d2245e93487e9d959904698073e6fdb5e217d6047f04062d621647",
+    "packages/runtime-adapters/src/e2b/development-transport.ts": "aaaab9ddf3f722781b40e95bd69ab9f454fc8fe02b34ff24c84d4635c69c149d",
+    "packages/runtime-adapters/src/e2b/development-native.ts": "d59e01fba6ebf4161ef51cb8d20c479637d0fac4d63430e2e6f46c6b56a37caa",
+    "packages/runtime-adapters/package.json": "61dfb1db475c95abd11d6ee5c9e6f8f576e999e5e659164b45e063b64f3648fb",
+    "scripts/e2b-development-input.mjs": "a68fef2c6f73f9e51079f8ac610325e680356b93b9ba0c467347d7e6ce07b873",
+    "scripts/e2b-development-lab.mjs": "687a8b4c85fb4a09c47d33644906299c7040995a253c9647eb8eb3083c0cbbb9",
+    "scripts/e2b-template-qualification.mjs": "d946438c51c0b9366e247b06ca49cb6b7f22e00c6c457123d70fb8463a0acb01",
+    "infra/labs/e2b-development.json": "23eb8d4f73cd74477660630ebad6e368f7eb1e225a947b54781528e4903e2fc5",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+  },
+  "production_qualified": false,
+  "merchant_dispatch": false,
+  "memory_persistence_claimed": false,
+  "effective_egress_verified": false,
+  "status": "blocked",
+  "provider_calls": false,
+  "private_input_read": false,
+  "blockers": [
+    "E2B_LAB_PROFILE_UNBOUND",
+    "E2B_LAB_ACCOUNT_UNQUALIFIED",
+    "E2B_LAB_FREE_CREDIT_UNQUALIFIED",
+    "E2B_LAB_ACCESS_UNQUALIFIED",
+    "E2B_LAB_QUOTE_UNQUALIFIED"
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "plan_sequence": 46,
-  "observed_at": "2026-10-06",
+  "plan_sequence": 59,
+  "observed_at": "2026-10-14",
   "providers": [
     {
       "id": "morrow",
@@ -329,22 +329,23 @@
       "activation": "blocked",
       "blocking_packages": [
         "P04",
+        "P12",
         "P18"
       ],
       "qualification_evidence": [],
-      "id": "daytona",
-      "name": "Daytona",
-      "version": "LinuxVM:execution-profile-v1",
+      "id": "e2b",
+      "name": "E2B",
+      "version": "LinuxMicroVM:execution-profile-v1",
       "decision_ids": [
         "D17"
       ],
       "sources": [
-        "S77",
-        "S78",
-        "S79"
+        "S97",
+        "S98",
+        "S99"
       ],
-      "restrictions": "Explicit VM class; approved image digest, effective no-direct-egress, no raw merchant/platform keys, generation fencing and cleanup required.",
-      "test_account_plan": "Owned Morrow development/staging project required; provider account availability and actual activation remain unverified."
+      "restrictions": "Pinned Linux microVM template/build and effective deny-by-default egress require qualification. No direct database/provider keys. Paused resources lack a native TTL; persist original cleanup, deadline and fenced writer. Production SaaS/data-processing terms, actual account quotas and bound quote remain pending.",
+      "test_account_plan": "Separate Morrow owned project, verified free entitlement and specifically authorized private access before the bounded synthetic laboratory. Selection or signup is not qualified project authority."
     }
   ]
 }

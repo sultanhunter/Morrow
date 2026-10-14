@@ -1,13 +1,13 @@
 // Credential-free design inventory. No provider SDK, network or activation path.
 import { createHash } from "node:crypto";
 
-export const selectedStack = "cloudflare-neon-daytona";
+export const selectedStack = "cloudflare-neon-runtime";
 export const selectedEnvironments = ["development", "staging", "production"] as const;
 export type SelectedEnvironment = (typeof selectedEnvironments)[number];
 
 export function selectedConfiguration(environment: SelectedEnvironment, planSequence: number) {
   if (!selectedEnvironments.includes(environment)) throw Error("UNKNOWN_ENVIRONMENT");
-  if (!Number.isSafeInteger(planSequence) || planSequence < 45)
+  if (!Number.isSafeInteger(planSequence) || planSequence < 59)
     throw Error("UNRECORDED_STACK_DECISION");
   const prefix = `morrow-${environment}`;
   return {
@@ -51,10 +51,13 @@ export function selectedConfiguration(environment: SelectedEnvironment, planSequ
       tenant_context: "SET_LOCAL_in_interactive_transaction",
       authority_cache: false,
     },
-    daytona: {
-      organization_id: null,
-      region: "us",
-      sandbox_class: "linux_vm",
+    runtime: {
+      provider: "e2b",
+      project_id: null,
+      region: null,
+      sandbox_class: "linux_microvm",
+      template_id: null,
+      template_build_id: null,
       image_digest: null,
       direct_internet: false,
       direct_database: false,
@@ -103,7 +106,7 @@ export function inspectSelectedConfiguration(value: unknown): string[] {
   const input = value as Partial<SelectedConfiguration>;
   if (!selectedEnvironments.includes(input.environment as SelectedEnvironment))
     return ["UNKNOWN_ENVIRONMENT"];
-  if (!Number.isSafeInteger(input.plan_sequence) || (input.plan_sequence ?? 0) < 45)
+  if (!Number.isSafeInteger(input.plan_sequence) || (input.plan_sequence ?? 0) < 59)
     return ["UNRECORDED_STACK_DECISION"];
   const expected = selectedConfiguration(
     input.environment as SelectedEnvironment,

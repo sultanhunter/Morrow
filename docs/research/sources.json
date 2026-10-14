@@ -737,7 +737,7 @@
     "url": "https://e2b.dev/pricing",
     "status": "verified",
     "observed_at": "2026-10-14",
-    "finding": "Hobby advertises $100 one-time credits, no card, one-hour continuous sessions/20 concurrent; Pro $150/month plus usage. Actual entitlement/default RAM requires account readback."
+    "finding": "Hobby advertises $100 one-time credits/no card, $0 subscription, one-hour continuous sessions/20 concurrent; CPU $0.000014/vCPU-second and RAM $0.0000045/GiB-second. Pro $150/month plus usage. Actual owned entitlement/resources and paused-resource meters still require qualification."
   },
   {
     "id": "S98",
@@ -801,5 +801,131 @@
     "status": "verified",
     "observed_at": "2026-10-14",
     "finding": "Hosted Containers require Workers Paid; compute, memory, disk and transfer billed alongside Worker/DO use."
+  },
+  {
+    "id": "S107",
+    "url": "https://registry.npmjs.org/e2b/2.56.0",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Official e2b2.56.0 metadata/integrity verified before ignore-scripts locked installation; requires Node>=22.19 and Undici8.11.2. Adapter is scripts-only and imports SDK inside provider folder."
+  },
+  {
+    "id": "S108",
+    "url": "https://docs.e2b.dev/projects",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "API keys are project-scoped; no public scopes/expiry introspection assumed. Fixed project metrics API authorizes the exact requested team UUID."
+  },
+  {
+    "id": "S109",
+    "url": "https://github.com/e2b-dev/runtime/blob/main/packages/api/internal/handlers/team_metrics.go",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Native authenticated metrics handler checks requested team/project ID against key-bound ID before query; exact200boundedJSON proof cannot be replaced by invented scope metadata."
+  },
+  {
+    "id": "S110",
+    "url": "https://docs.e2b.dev/template/tags",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Template tags are mutable. Immutable templateID:buildUUID and ready native CPU/RAM/disk/envd read bind the lab quote; SDK getInfo does not attest disk/buildID."
+  },
+  {
+    "id": "S111",
+    "url": "https://docs.e2b.dev/faq/sandbox-lifetime",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Native timeout bounds running time only; paused sandboxes have no automatic expiry. Persist original deadline and reconcile/kill via static control-plane operations; connect resumes/extends."
+  },
+  {
+    "id": "S112",
+    "url": "https://docs.e2b.dev/network/restrict-public-access",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Disable public service traffic and retain authenticated controller proof. Network configuration is not effective egress evidence; file persistence is not RAM/process proof."
+  },
+  {
+    "id": "S113",
+    "url": "https://docs.e2b.dev/workspaces",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Public docs formerly describe project billing. Actual14Oct2026 console now states shared workspace invoices/payment methods/credit; new Morrow workspace requires card for all project APIs and has$0 credit. Actual account eligibility overrides no-card advertising."
+  },
+  {
+    "id": "S114",
+    "url": "https://e2b.dev/terms",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Owner handled signup acceptance. Public terms impose downstream service/access restrictions; applicable SaaS/enterprise integration and data processing eligibility remain an explicit launch qualification, not inferred from signup."
+  },
+  {
+    "id": "S115",
+    "url": "https://github.com/e2b-dev/E2B/blob/main/packages/js-sdk/src/sandbox/sandboxApi.ts",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Pinned SDK static getInfo/list/pause/kill preserve control-plane inspection; connect resumes. Creation is non-idempotent: original closed metadata, single allocation and exhaustive running/paused reconciliation are required."
+  },
+  {
+    "id": "S116",
+    "url": "https://registry.npmjs.org/undici/8.12.1",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Actual E2B dependency locked to official Undici8.12.1; metadata/integrity verified, Node>=22.19. Miniflare separately remains7.29.1. Parent-only overrides did not force8.11.2 in npm workspace resolution, so ineffective override was removed; actual lock evidence governs."
+  },
+  {
+    "id": "S117",
+    "url": "https://github.com/e2b-dev/runtime/blob/main/spec/openapi.yml",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Documented native v2 sandbox control-plane requests used with redirect:error and bounded original-origin validation. SDK controlled307 forwards synthetic X-API-Key and can map foreign404 as absence; fixed apiUrl is insufficient."
+  },
+  {
+    "id": "S118",
+    "url": "https://docs.e2b.dev/api-reference/filesystem/upload-a-file-and-ensure-the-parent-directories-exist-if-the-file-exists-it-will-be-overwritten",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Fixed sandbox.e2b.app/files upload uses E2b-Sandbox-Id/E2b-Sandbox-Port49983/X-Access-Token, FormData Blob and native bounded serialized-JSON reply which may be text/plain. Only builtin marker permitted."
+  },
+  {
+    "id": "S119",
+    "url": "https://docs.e2b.dev/api-reference/filesystem/download-a-file",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Fixed native envd GET files downloads bounded text with owned routing/controller header. Redirect/error/file404 cannot prove sandbox absence; project API key never reaches file origin."
+  },
+  {
+    "id": "S120",
+    "url": "https://github.com/e2b-dev/runtime/blob/50fc41af77ff0877d4224e5e4ded5e7f308b5476/packages/api/internal/handlers/template_alias.go",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Pinned handler requires alias ownership even when public; actual approved project alias lookup returned403. No alternate JWT/public-ID guess is a qualification fallback."
+  },
+  {
+    "id": "S121",
+    "url": "https://docs.e2b.dev/api-reference/templates/list-templates-v2",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Bound owned-template catalogue is the read-only discovery path; complete pagination and owned ready immutable resource evidence precede runtime qualification. Current approved account has no suitable ready build."
+  },
+  {
+    "id": "S122",
+    "url": "https://docs.e2b.dev/api-reference/templates/create-template-v3",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Template registration/building is a distinct provider mutation. Resource fields and minFreeDiskMb are not a maximum build lifetime/cost/disk guarantee; explicit reviewed recipe and authorization remain required."
+  },
+  {
+    "id": "S123",
+    "url": "https://github.com/e2b-dev/runtime/blob/50fc41af77ff0877d4224e5e4ded5e7f308b5476/packages/api/internal/template-manager/template_status.go",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Pinned source attempts build cancellation after one hour but logs cancellation failures; this is not a verified deployed service lifetime or cost ceiling."
+  },
+  {
+    "id": "S124",
+    "url": "https://github.com/e2b-dev/runtime/blob/50fc41af77ff0877d4224e5e4ded5e7f308b5476/packages/api/internal/handlers/template_delete.go",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Public deletion soft-deletes catalogue/build records; it does not itself cancel an active builder. Catalogue404 cannot prove compute stopped."
   }
 ]

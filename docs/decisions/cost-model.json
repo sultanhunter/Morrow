@@ -1,10 +1,10 @@
 {
-  "schema_version": 2,
-  "plan_sequence": 46,
-  "as_of": "2026-10-10",
+  "schema_version": 3,
+  "plan_sequence": 59,
+  "as_of": "2026-10-14",
   "currency": "USD",
-  "stack": "cloudflare-neon-daytona",
-  "status": "component_estimate_not_complete_quote",
+  "stack": "cloudflare-neon-runtime",
+  "status": "component_estimate_runtime_unbound",
   "owner_ceiling": null,
   "neon_plan": "Scale",
   "usage_fields": [
@@ -21,9 +21,8 @@
     "neon_history_gb_month",
     "neon_snapshot_gb_month",
     "neon_public_transfer_gb",
-    "daytona_vcpu_hours",
-    "daytona_gib_hours",
-    "daytona_disk_gib_hours"
+    "runtime_vcpu_seconds",
+    "runtime_gib_seconds"
   ],
   "example_usage": {
     "worker_requests": "5100000",
@@ -39,9 +38,8 @@
     "neon_history_gb_month": "50",
     "neon_snapshot_gb_month": "0",
     "neon_public_transfer_gb": "500",
-    "daytona_vcpu_hours": "4000",
-    "daytona_gib_hours": "8000",
-    "daytona_disk_gib_hours": "2880000"
+    "runtime_vcpu_seconds": "14400000",
+    "runtime_gib_seconds": "28800000"
   },
   "rates": {
     "workers_base": {
@@ -119,35 +117,65 @@
       "unit": "GB above project allowance",
       "source": "S76"
     },
-    "daytona_vcpu_hour": {
-      "amount": "0.0504",
-      "unit": "vCPU-hour",
-      "source": "S77"
+    "e2b_vcpu_second": {
+      "amount": "0.000014",
+      "unit": "running vCPU-second",
+      "source": "S97"
     },
-    "daytona_gib_hour": {
-      "amount": "0.0162",
-      "unit": "GiB-hour",
-      "source": "S77"
-    },
-    "daytona_disk_gib_hour": {
-      "amount": "0.000108",
-      "unit": "reserved GiB-hour",
-      "source": "S77"
+    "e2b_gib_second": {
+      "amount": "0.0000045",
+      "unit": "running GiB-second",
+      "source": "S97"
     }
   },
   "assumptions": [
-    "100 merchants, twenty total active VM hours each; 2vCPU/4GiB; five retained 8GiB disks each; thirty-day/720-hour month",
+    "100 merchants, twenty total active sandbox hours each; illustrative 2vCPU/4GiB. Actual immutable template/build resources remain unqualified.",
     "Neon average1CU;50GB database and50GB billable restore history; no replicas",
     "5GB R2 per merchant; API/workflow CPU and operation counts are illustrative aggregate inputs, not measured",
-    "Ordinary included usage applied; no trial/startup credits or Daytona disk discount assumed",
-    "Queue input is billable operations, not message count; transitions/waiting in started VM count as reserved running time"
+    "Ordinary Cloudflare/Neon included usage applied; no trial/startup credit discount assumed",
+    "Queue input is billable operations, not message count. CPU/RAM quantities are explicit active seconds; pause/resume transition metering requires actual qualification.",
+    "No E2B production plan is selected or bound. Hobby advertises $0 subscription; Pro is $150/month plus usage. Neither entitlement nor paused-resource zero cost is inferred."
   ],
   "exclusions": [
+    "Unbound E2B subscription/plan, actual template/build/resources, quotas and production commercial terms",
+    "E2B paused-resource/storage/snapshot/build/transfer/transition and other unqualified meters; included running disk is not a claim of zero paused-workspace cost",
     "Managed model APIs and paid tools",
     "Additional environments, email, monitoring, alerting and support",
     "Thirty-five-day daily recovery storage beyond included example; actual changed/snapshot bytes need measurement",
     "Extra database replicas/branches/private transfer; runtime snapshots/images and other provider meters not modeled",
     "Enterprise SSO/DirectorySync/contracts, provider quota funding requirements, taxes and any enterprise commitments"
   ],
-  "billing_guard": "Incomplete component arithmetic cannot authorize provisioning or set merchant prices. Persistent storage and ordinary sync continue when inference stops."
+  "billing_guard": "Known component subtotal omits unbound runtime subscription and unknown runtime meters. It cannot authorize provisioning or set merchant prices. Persistent storage and ordinary sync continue when inference stops.",
+  "runtime_provider": "e2b",
+  "runtime_plan": null,
+  "runtime_subscription_amount": null,
+  "runtime_quote": null,
+  "published_runtime_plans": {
+    "Hobby": {
+      "subscription_amount": "0",
+      "subscription_unit": "workspace-month",
+      "source": "S97",
+      "entitlement_status": "unverified",
+      "advertised_trial_credit": "100",
+      "continuous_session_seconds": 3600,
+      "concurrent_sandboxes": 20,
+      "included_storage_gib": 10
+    },
+    "Pro": {
+      "subscription_amount": "150",
+      "subscription_unit": "workspace-month",
+      "source": "S97",
+      "entitlement_status": "not_selected_or_authorized",
+      "continuous_session_seconds": 86400,
+      "concurrent_sandboxes": 100,
+      "included_storage_gib": 20
+    }
+  },
+  "missing_runtime_costs": [
+    "ACTUAL_OWNED_RUNTIME_PLAN_AND_ENTITLEMENT",
+    "BOUND_RUNTIME_SUBSCRIPTION",
+    "PINNED_TEMPLATE_RESOURCE_AND_ACCOUNT_QUOTE",
+    "PAUSED_RESOURCE_AND_OTHER_RUNTIME_METERS"
+  ],
+  "legacy_cost_model": "docs/decisions/archive/daytona-selection-54/docs/decisions/cost-model.json"
 }

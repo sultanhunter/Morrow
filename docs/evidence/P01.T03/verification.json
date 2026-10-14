@@ -1,22 +1,22 @@
 {
   "task": "P01.T03",
-  "generated_at": "2026-10-14T15:10:08.645Z",
-  "plan_sequence": 54,
+  "generated_at": "2026-10-14T17:21:23.644Z",
+  "plan_sequence": 59,
   "providers": 12,
   "bindings": 103,
   "scope": "Documentary feasibility and selected design consistency only; no real provider, runtime, billing, merchant or production qualification.",
   "input_digests": {
-    "docs/decisions/providers.json": "3c022db2c1ee5d9f7ef6d62a4fc060521c3f65694f1f014e483ada25e07705c4",
-    "docs/decisions/provider-bindings.json": "41a78c0788abf3029bbefb37b5f10e1b73ee86370a4d00e2f4993a27060613ed",
-    "docs/decisions/deployment-policy.json": "dde46eb60cf118f2bc75dd39d9e7375bc5867a8a3565479d09e410e4a0662e43",
+    "docs/decisions/providers.json": "8f049a8417413a38c5481ac8d2bc8056436ede0e9918399cd6808a10b9ee45db",
+    "docs/decisions/provider-bindings.json": "191473df3b0337790a0c9866632e20b4f3ff9e6da727d25930c7ca5266902a6a",
+    "docs/decisions/deployment-policy.json": "71d9e5d7249f02136c8463551b22500db79e1d3af8e19c581ebcc669b5dc94f3",
     "docs/decisions/capacity-targets.json": "4430f79dcd99f3096bc11339cce110f241d929014e2d889259489625412b1b31",
-    "docs/decisions/cost-model.json": "89e15c69ba3e58891af4248aba42d5a3500de9bf155f4ec429ce36f0e644b498",
+    "docs/decisions/cost-model.json": "95cfb7653589608f68cda85860716a8126577148da71e4ba593aef6fd2e54b79",
     "docs/decisions/model-policy.json": "ccfb2b4173bbdf136a52674aa10aa023dff9685a7ec919d6fafe5cbde53a8e8b",
-    "docs/research/sources.json": "d7de47581e1325d90cd34b880ada29ff0f2610f797d18f5e166c0c2643daa66f"
+    "docs/research/sources.json": "29efb8adec7043a9f5e795a887f4693dc6bdd72c5d01ce853227a690afb46d39"
   },
   "cost_components": {
     "currency": "USD",
-    "status": "component_estimate_not_complete_quote",
+    "status": "component_estimate_runtime_unbound",
     "components": {
       "workers_base": "5.000000000",
       "workers_requests": "0.000000000",
@@ -32,14 +32,26 @@
       "neon_restore_history": "10.000000000",
       "neon_snapshots": "0.000000000",
       "neon_transfer": "0.000000000",
-      "daytona_cpu": "201.600000000",
-      "daytona_memory": "129.600000000",
-      "daytona_disk": "311.040000000"
+      "runtime_cpu": "201.600000000",
+      "runtime_memory": "129.600000000"
     },
-    "subtotal": "859.230000000",
+    "subtotal": "548.190000000",
+    "subtotalScope": "known_components_only_runtime_subscription_and_other_meters_omitted",
+    "runtimeProvider": "e2b",
+    "runtimePlan": null,
+    "runtimeSubscriptionAmount": null,
+    "runtimeQuoteBound": false,
+    "missingRuntimeCosts": [
+      "ACTUAL_OWNED_RUNTIME_PLAN_AND_ENTITLEMENT",
+      "BOUND_RUNTIME_SUBSCRIPTION",
+      "PINNED_TEMPLATE_RESOURCE_AND_ACCOUNT_QUOTE",
+      "PAUSED_RESOURCE_AND_OTHER_RUNTIME_METERS"
+    ],
     "completeQuote": false,
     "provisioningAuthorized": false,
     "exclusions": [
+      "Unbound E2B subscription/plan, actual template/build/resources, quotas and production commercial terms",
+      "E2B paused-resource/storage/snapshot/build/transfer/transition and other unqualified meters; included running disk is not a claim of zero paused-workspace cost",
       "Managed model APIs and paid tools",
       "Additional environments, email, monitoring, alerting and support",
       "Thirty-five-day daily recovery storage beyond included example; actual changed/snapshot bytes need measurement",
@@ -47,11 +59,12 @@
       "Enterprise SSO/DirectorySync/contracts, provider quota funding requirements, taxes and any enterprise commitments"
     ],
     "assumptions": [
-      "100 merchants, twenty total active VM hours each; 2vCPU/4GiB; five retained 8GiB disks each; thirty-day/720-hour month",
+      "100 merchants, twenty total active sandbox hours each; illustrative 2vCPU/4GiB. Actual immutable template/build resources remain unqualified.",
       "Neon average1CU;50GB database and50GB billable restore history; no replicas",
       "5GB R2 per merchant; API/workflow CPU and operation counts are illustrative aggregate inputs, not measured",
-      "Ordinary included usage applied; no trial/startup credits or Daytona disk discount assumed",
-      "Queue input is billable operations, not message count; transitions/waiting in started VM count as reserved running time"
+      "Ordinary Cloudflare/Neon included usage applied; no trial/startup credit discount assumed",
+      "Queue input is billable operations, not message count. CPU/RAM quantities are explicit active seconds; pause/resume transition metering requires actual qualification.",
+      "No E2B production plan is selected or bound. Hobby advertises $0 subscription; Pro is $150/month plus usage. Neither entitlement nor paused-resource zero cost is inferred."
     ]
   },
   "errors": []

@@ -1,0 +1,153 @@
+{
+  "schema_version": 2,
+  "plan_sequence": 46,
+  "as_of": "2026-10-10",
+  "currency": "USD",
+  "stack": "cloudflare-neon-daytona",
+  "status": "component_estimate_not_complete_quote",
+  "owner_ceiling": null,
+  "neon_plan": "Scale",
+  "usage_fields": [
+    "worker_requests",
+    "worker_cpu_ms",
+    "workflow_steps",
+    "workflow_state_gb_month",
+    "queue_operations",
+    "r2_gb_month",
+    "r2_class_a_operations",
+    "r2_class_b_operations",
+    "neon_cu_hours",
+    "neon_database_gb_month",
+    "neon_history_gb_month",
+    "neon_snapshot_gb_month",
+    "neon_public_transfer_gb",
+    "daytona_vcpu_hours",
+    "daytona_gib_hours",
+    "daytona_disk_gib_hours"
+  ],
+  "example_usage": {
+    "worker_requests": "5100000",
+    "worker_cpu_ms": "255000000",
+    "workflow_steps": "2000000",
+    "workflow_state_gb_month": "5",
+    "queue_operations": "300000",
+    "r2_gb_month": "500",
+    "r2_class_a_operations": "100000",
+    "r2_class_b_operations": "1000000",
+    "neon_cu_hours": "720",
+    "neon_database_gb_month": "50",
+    "neon_history_gb_month": "50",
+    "neon_snapshot_gb_month": "0",
+    "neon_public_transfer_gb": "500",
+    "daytona_vcpu_hours": "4000",
+    "daytona_gib_hours": "8000",
+    "daytona_disk_gib_hours": "2880000"
+  },
+  "rates": {
+    "workers_base": {
+      "amount": "5",
+      "unit": "account-month",
+      "source": "S17"
+    },
+    "workers_requests_million": {
+      "amount": "0.30",
+      "unit": "million requests",
+      "source": "S17"
+    },
+    "workers_cpu_million_ms": {
+      "amount": "0.02",
+      "unit": "million CPU ms",
+      "source": "S17"
+    },
+    "workflow_100k_steps": {
+      "amount": "0.80",
+      "unit": "100k steps",
+      "source": "S75"
+    },
+    "workflow_state_gb_month": {
+      "amount": "0.20",
+      "unit": "GB-month",
+      "source": "S75"
+    },
+    "queues_million_operations": {
+      "amount": "0.40",
+      "unit": "million operations",
+      "source": "S17"
+    },
+    "r2_gb_month": {
+      "amount": "0.015",
+      "unit": "GB-month",
+      "source": "S80"
+    },
+    "r2_class_a_million": {
+      "amount": "4.50",
+      "unit": "million operations",
+      "source": "S80"
+    },
+    "r2_class_b_million": {
+      "amount": "0.36",
+      "unit": "million operations",
+      "source": "S80"
+    },
+    "neon_launch_cu_hour": {
+      "amount": "0.106",
+      "unit": "CU-hour",
+      "source": "S76"
+    },
+    "neon_scale_cu_hour": {
+      "amount": "0.222",
+      "unit": "CU-hour",
+      "source": "S76"
+    },
+    "neon_storage_gb_month": {
+      "amount": "0.35",
+      "unit": "GB-month",
+      "source": "S76"
+    },
+    "neon_history_gb_month": {
+      "amount": "0.20",
+      "unit": "GB-month",
+      "source": "S76"
+    },
+    "neon_snapshot_gb_month": {
+      "amount": "0.09",
+      "unit": "GB-month",
+      "source": "S76"
+    },
+    "neon_transfer_gb": {
+      "amount": "0.10",
+      "unit": "GB above project allowance",
+      "source": "S76"
+    },
+    "daytona_vcpu_hour": {
+      "amount": "0.0504",
+      "unit": "vCPU-hour",
+      "source": "S77"
+    },
+    "daytona_gib_hour": {
+      "amount": "0.0162",
+      "unit": "GiB-hour",
+      "source": "S77"
+    },
+    "daytona_disk_gib_hour": {
+      "amount": "0.000108",
+      "unit": "reserved GiB-hour",
+      "source": "S77"
+    }
+  },
+  "assumptions": [
+    "100 merchants, twenty total active VM hours each; 2vCPU/4GiB; five retained 8GiB disks each; thirty-day/720-hour month",
+    "Neon average1CU;50GB database and50GB billable restore history; no replicas",
+    "5GB R2 per merchant; API/workflow CPU and operation counts are illustrative aggregate inputs, not measured",
+    "Ordinary included usage applied; no trial/startup credits or Daytona disk discount assumed",
+    "Queue input is billable operations, not message count; transitions/waiting in started VM count as reserved running time"
+  ],
+  "exclusions": [
+    "Managed model APIs and paid tools",
+    "Additional environments, email, monitoring, alerting and support",
+    "Thirty-five-day daily recovery storage beyond included example; actual changed/snapshot bytes need measurement",
+    "Extra database replicas/branches/private transfer; runtime snapshots/images and other provider meters not modeled",
+    "Enterprise SSO/DirectorySync/contracts, provider quota funding requirements, taxes and any enterprise commitments"
+  ],
+  "billing_guard": "Incomplete component arithmetic cannot authorize provisioning or set merchant prices. Persistent storage and ordinary sync continue when inference stops."
+}

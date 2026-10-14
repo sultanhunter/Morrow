@@ -13,11 +13,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
+  developmentLabSourceBinding,
   inspectDevelopmentLabAccount,
   loadDevelopmentLabInput,
   openDevelopmentLabJournal,
   parseDevelopmentLabInput,
 } from "../scripts/daytona-development-input.mjs";
+import { archivedDevelopmentLabBinding } from "../scripts/daytona-development-lab.mjs";
 import {
   developmentLabConfiguration,
   prepareDevelopmentLabOperation,
@@ -192,12 +194,20 @@ test("verified cleanup removes only the bound journal while holding the controll
 });
 test("default and malformed CLI invocations cannot read a key or instantiate provider SDK", () => {
   const script = resolve("scripts/daytona-development-lab.mjs");
+  const originalPreparation = readFileSync("docs/evidence/P04.T01f/preparation.json", "utf8");
   const prepared = spawnSync(process.execPath, ["--import", "tsx", script], { encoding: "utf8" });
   assert.equal(prepared.status, 0, prepared.stderr);
-  const report = JSON.parse(readFileSync("docs/evidence/P04.T01f/preparation.json"));
+  const report = JSON.parse(readFileSync("docs/evidence/P04.T01f/archive.json"));
   assert.equal(report.provider_calls, false);
   assert.equal(report.private_input_read, false);
   assert.equal(report.live_ready, false);
+  assert.equal(report.status, "archived_cleanup_only");
+  assert.equal(report.current_plan_sequence, 59);
+  assert.equal(report.plan_sequence, 54);
+  assert.equal(
+    readFileSync("docs/evidence/P04.T01f/preparation.json", "utf8"),
+    originalPreparation,
+  );
   const malformed = spawnSync(
     process.execPath,
     ["--import", "tsx", script, "--run", "/never-read.json", "extra"],
@@ -211,8 +221,103 @@ test("default and malformed CLI invocations cannot read a key or instantiate pro
     { encoding: "utf8" },
   );
   assert.equal(blocked.status, 2);
-  assert.match(blocked.stdout, /LIVE_PREREQUISITES_UNQUALIFIED/);
-  const live = JSON.parse(readFileSync("docs/evidence/P04.T01f/live.json"));
+  assert.match(blocked.stdout, /PROVIDER_ARCHIVED/);
+  const cleanup = spawnSync(
+    process.execPath,
+    ["--import", "tsx", script, "--resume", "/never-read.json"],
+    { encoding: "utf8" },
+  );
+  assert.equal(cleanup.status, 2);
+  assert.match(cleanup.stdout, /LIVE_PREREQUISITES_UNQUALIFIED/);
+  const live = JSON.parse(readFileSync("docs/evidence/P04.T01f/cleanup.json"));
   assert.equal(live.provider_calls, false);
   assert.equal(live.status, "blocked");
+});
+
+test("archived Daytona allocation denial precedes every config/account/private read", (t) => {
+  const root = temporary(t);
+  const script = resolve("scripts/daytona-development-lab.mjs");
+  const result = spawnSync(
+    process.execPath,
+    ["--import", resolve("node_modules/tsx/dist/loader.mjs"), script, "--run", "/never-read.json"],
+    { cwd: root, encoding: "utf8" },
+  );
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stdout, /^DEVELOPMENT_LAB_PROVIDER_ARCHIVED\n$/);
+  assert.equal(existsSync(join(root, "docs")), false);
+});
+
+test("original54 cleanup source/profile remain explicit while current controllers and plans change", () => {
+  const receipt = JSON.parse(readFileSync("docs/evidence/P04.T01f/archive-binding.json", "utf8"));
+  const plan = { sources: { plan: { sequence: 55 } } };
+  const binding = archivedDevelopmentLabBinding(developmentLabConfiguration(), plan, receipt);
+  assert.equal(binding.originalPlanSequence, 54);
+  assert.equal(binding.sourceSha256, receipt.original_source_sha256);
+  assert.equal(binding.profileSha256, receipt.original_profile_sha256);
+  assert.notEqual(developmentLabSourceBinding(".").sourceSha256, binding.sourceSha256);
+  assert.equal(
+    archivedDevelopmentLabBinding(
+      developmentLabConfiguration(),
+      { sources: { plan: { sequence: 56 } } },
+      receipt,
+    ).sourceSha256,
+    binding.sourceSha256,
+  );
+  const cleanupExpected = {
+    ...expected,
+    profileSha256: binding.profileSha256,
+    sourceSha256: binding.sourceSha256,
+  };
+  assert.equal(
+    parseDevelopmentLabInput({ ...input(), ...cleanupExpected }, cleanupExpected).operationId,
+    operationId,
+  );
+  assert.throws(
+    () =>
+      parseDevelopmentLabInput(
+        {
+          ...input(),
+          ...cleanupExpected,
+          sourceSha256: developmentLabSourceBinding(".").sourceSha256,
+        },
+        cleanupExpected,
+      ),
+    /PRIVATE_INPUT_DENIED/,
+  );
+  for (const changed of [
+    { original_plan_sequence: 55 },
+    { original_source_commit: "a".repeat(40) },
+    { original_profile_sha256: "a".repeat(64) },
+    { original_source_sha256: "a".repeat(64) },
+    {
+      original_source_digests: {
+        ...receipt.original_source_digests,
+        "package-lock.json": "a".repeat(64),
+      },
+    },
+    { new_allocation_authorized: true },
+    { production_qualified: true },
+  ])
+    assert.throws(
+      () =>
+        archivedDevelopmentLabBinding(developmentLabConfiguration(), plan, {
+          ...receipt,
+          ...changed,
+        }),
+      /ARCHIVE_BINDING_DENIED/,
+    );
+  assert.throws(
+    () =>
+      archivedDevelopmentLabBinding(
+        developmentLabConfiguration(),
+        { sources: { plan: { sequence: 54 } } },
+        receipt,
+      ),
+    /ARCHIVE_BINDING_DENIED/,
+  );
+  assert.throws(
+    () =>
+      archivedDevelopmentLabBinding({ ...developmentLabConfiguration(), cpu: 2 }, plan, receipt),
+    /ARCHIVE_BINDING_DENIED/,
+  );
 });

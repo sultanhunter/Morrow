@@ -1,17 +1,18 @@
 {
   "scope": "Selected-stack local design inventory; not provider deployment, identity/network proof or authenticated approval",
-  "stack": "cloudflare-neon-daytona",
+  "stack": "cloudflare-neon-runtime",
+  "runtime_provider": "e2b",
   "mode": "synth",
   "paid_resources_created": false,
   "deployment_entrypoint": false,
   "environments": [
     {
       "environment": "development",
-      "configuration_sha256": "38954bd9f82fd14892f0c886d28c6afa322f9c9920a2d6fd0feb042556be3191",
+      "configuration_sha256": "44fb6ce0861b870fc3b2c1c67d4b378a086621b1f3b5ab5d28353093ad16a967",
       "configuration": {
         "schema_version": 1,
-        "plan_sequence": 54,
-        "stack": "cloudflare-neon-daytona",
+        "plan_sequence": 59,
+        "stack": "cloudflare-neon-runtime",
         "environment": "development",
         "status": "design_candidate",
         "global_processing": "permitted_under_approved_data_policy",
@@ -49,19 +50,6 @@
           "tenant_context": "SET_LOCAL_in_interactive_transaction",
           "authority_cache": false
         },
-        "daytona": {
-          "organization_id": null,
-          "region": "us",
-          "sandbox_class": "linux_vm",
-          "image_digest": null,
-          "direct_internet": false,
-          "direct_database": false,
-          "raw_provider_keys": false,
-          "public_preview": false,
-          "single_writer_generation": true,
-          "effective_network_tests": "not_run",
-          "dispatch": "disabled"
-        },
         "workflow": {
           "provider": "cloudflare_workflows",
           "transport": "cloudflare_queues",
@@ -74,16 +62,32 @@
         "owner_cost_authorization": null,
         "provider_qualification": null,
         "deployed_revision": null,
-        "dispatch": "disabled"
+        "dispatch": "disabled",
+        "runtime": {
+          "provider": "e2b",
+          "project_id": null,
+          "region": null,
+          "sandbox_class": "linux_microvm",
+          "template_id": null,
+          "template_build_id": null,
+          "image_digest": null,
+          "direct_internet": false,
+          "direct_database": false,
+          "raw_provider_keys": false,
+          "public_preview": false,
+          "single_writer_generation": true,
+          "effective_network_tests": "not_run",
+          "dispatch": "disabled"
+        }
       }
     },
     {
       "environment": "staging",
-      "configuration_sha256": "03b44f977dbe3701160c6f875a48a58c8b6959d30621736bd4f62f5470b76ed5",
+      "configuration_sha256": "a3ac59c8c8b9fc1b55a5a151dac00fa4be540a0f8b29417ff08249351a3c604f",
       "configuration": {
         "schema_version": 1,
-        "plan_sequence": 54,
-        "stack": "cloudflare-neon-daytona",
+        "plan_sequence": 59,
+        "stack": "cloudflare-neon-runtime",
         "environment": "staging",
         "status": "design_candidate",
         "global_processing": "permitted_under_approved_data_policy",
@@ -121,19 +125,6 @@
           "tenant_context": "SET_LOCAL_in_interactive_transaction",
           "authority_cache": false
         },
-        "daytona": {
-          "organization_id": null,
-          "region": "us",
-          "sandbox_class": "linux_vm",
-          "image_digest": null,
-          "direct_internet": false,
-          "direct_database": false,
-          "raw_provider_keys": false,
-          "public_preview": false,
-          "single_writer_generation": true,
-          "effective_network_tests": "not_run",
-          "dispatch": "disabled"
-        },
         "workflow": {
           "provider": "cloudflare_workflows",
           "transport": "cloudflare_queues",
@@ -146,16 +137,32 @@
         "owner_cost_authorization": null,
         "provider_qualification": null,
         "deployed_revision": null,
-        "dispatch": "disabled"
+        "dispatch": "disabled",
+        "runtime": {
+          "provider": "e2b",
+          "project_id": null,
+          "region": null,
+          "sandbox_class": "linux_microvm",
+          "template_id": null,
+          "template_build_id": null,
+          "image_digest": null,
+          "direct_internet": false,
+          "direct_database": false,
+          "raw_provider_keys": false,
+          "public_preview": false,
+          "single_writer_generation": true,
+          "effective_network_tests": "not_run",
+          "dispatch": "disabled"
+        }
       }
     },
     {
       "environment": "production",
-      "configuration_sha256": "c3c3e8b52bcef627e9ee10832d306710ec165b991a2941274e0b84626602e777",
+      "configuration_sha256": "10aebb0642f5cf2a80bb7bed511df6d942267614b75e3bcd2f12e30dd2833b3b",
       "configuration": {
         "schema_version": 1,
-        "plan_sequence": 54,
-        "stack": "cloudflare-neon-daytona",
+        "plan_sequence": 59,
+        "stack": "cloudflare-neon-runtime",
         "environment": "production",
         "status": "design_candidate",
         "global_processing": "permitted_under_approved_data_policy",
@@ -193,19 +200,6 @@
           "tenant_context": "SET_LOCAL_in_interactive_transaction",
           "authority_cache": false
         },
-        "daytona": {
-          "organization_id": null,
-          "region": "us",
-          "sandbox_class": "linux_vm",
-          "image_digest": null,
-          "direct_internet": false,
-          "direct_database": false,
-          "raw_provider_keys": false,
-          "public_preview": false,
-          "single_writer_generation": true,
-          "effective_network_tests": "not_run",
-          "dispatch": "disabled"
-        },
         "workflow": {
           "provider": "cloudflare_workflows",
           "transport": "cloudflare_queues",
@@ -218,7 +212,23 @@
         "owner_cost_authorization": null,
         "provider_qualification": null,
         "deployed_revision": null,
-        "dispatch": "disabled"
+        "dispatch": "disabled",
+        "runtime": {
+          "provider": "e2b",
+          "project_id": null,
+          "region": null,
+          "sandbox_class": "linux_microvm",
+          "template_id": null,
+          "template_build_id": null,
+          "image_digest": null,
+          "direct_internet": false,
+          "direct_database": false,
+          "raw_provider_keys": false,
+          "public_preview": false,
+          "single_writer_generation": true,
+          "effective_network_tests": "not_run",
+          "dispatch": "disabled"
+        }
       }
     }
   ]

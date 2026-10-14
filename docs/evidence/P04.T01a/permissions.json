@@ -1,13 +1,14 @@
 {
   "scope": "Selected-stack local design inventory; not provider deployment, identity/network proof or authenticated approval",
-  "stack": "cloudflare-neon-daytona",
+  "stack": "cloudflare-neon-runtime",
+  "runtime_provider": "e2b",
   "mode": "permissions",
   "paid_resources_created": false,
   "deployment_entrypoint": false,
   "environments": [
     {
       "environment": "development",
-      "configuration_sha256": "38954bd9f82fd14892f0c886d28c6afa322f9c9920a2d6fd0feb042556be3191",
+      "configuration_sha256": "44fb6ce0861b870fc3b2c1c67d4b378a086621b1f3b5ab5d28353093ad16a967",
       "profiles": {
         "api": [
           "current_identity_and_policy_reads",
@@ -40,7 +41,7 @@
     },
     {
       "environment": "staging",
-      "configuration_sha256": "03b44f977dbe3701160c6f875a48a58c8b6959d30621736bd4f62f5470b76ed5",
+      "configuration_sha256": "a3ac59c8c8b9fc1b55a5a151dac00fa4be540a0f8b29417ff08249351a3c604f",
       "profiles": {
         "api": [
           "current_identity_and_policy_reads",
@@ -73,7 +74,7 @@
     },
     {
       "environment": "production",
-      "configuration_sha256": "c3c3e8b52bcef627e9ee10832d306710ec165b991a2941274e0b84626602e777",
+      "configuration_sha256": "10aebb0642f5cf2a80bb7bed511df6d942267614b75e3bcd2f12e30dd2833b3b",
       "profiles": {
         "api": [
           "current_identity_and_policy_reads",

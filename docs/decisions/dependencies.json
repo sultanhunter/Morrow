@@ -318,11 +318,11 @@
   {
     "id": "D17",
     "key": "storage_and_runtime",
-    "decision": "Neon PostgreSQL and Daytona runtime deployment/account qualification",
+    "decision": "Neon PostgreSQL and replaceable E2B runtime deployment/account qualification",
     "owner": "Morrow platform owner",
     "resolve_in": "P01.T03",
     "status": "Design recorded",
-    "design_sequence": 45,
+    "design_sequence": 55,
     "activation": "blocked_until_qualified",
     "engineering_status": "not_implemented",
     "controlled_test_status": "not_run",
@@ -330,8 +330,13 @@
     "sources": [
       "S76",
       "S77",
-      "S78",
-      "S79"
+      "S97",
+      "S98",
+      "S99",
+      "S107",
+      "S108",
+      "S109",
+      "S110"
     ]
   },
   {

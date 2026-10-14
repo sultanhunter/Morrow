@@ -3,6 +3,7 @@ import {
   selectedEnvironments,
   compileSelectedConfiguration,
   selectedPermissionProfiles,
+  selectedStack,
 } from "../packages/infrastructure/src/selected-stack.ts";
 
 const mode = process.argv[2] ?? "synth";
@@ -19,7 +20,8 @@ mkdirSync(destination, { recursive: true });
 const payload = {
   scope:
     "Selected-stack local design inventory; not provider deployment, identity/network proof or authenticated approval",
-  stack: "cloudflare-neon-daytona",
+  stack: selectedStack,
+  runtime_provider: "e2b",
   mode,
   paid_resources_created: false,
   deployment_entrypoint: false,
@@ -47,5 +49,5 @@ const payload = {
 };
 writeFileSync(`${destination}/${mode}.json`, JSON.stringify(payload, null, 2) + "\n");
 console.log(
-  `PASS: selected Cloudflare/Neon/Daytona ${mode}; three isolated design inventories; no provider calls or activation.`,
+  `PASS: selected Cloudflare/Neon/E2B ${mode}; three isolated design inventories; no provider calls or activation.`,
 );
