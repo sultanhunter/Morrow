@@ -1,5 +1,5 @@
 {
-  "plan_sequence": 61,
+  "plan_sequence": 64,
   "tasks": [
     {
       "id": "P01.T01",
@@ -79,7 +79,7 @@
     },
     {
       "id": "P05.T04",
-      "status": "Planned"
+      "status": "In progress"
     },
     {
       "id": "P06.T01",

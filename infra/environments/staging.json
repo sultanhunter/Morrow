@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plan_sequence": 61,
+  "plan_sequence": 64,
   "stack": "cloudflare-neon-runtime",
   "environment": "staging",
   "status": "design_candidate",

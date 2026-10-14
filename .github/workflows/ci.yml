@@ -25,6 +25,8 @@ jobs:
       - run: npm run smoke:scaffold
       - name: Exercise identity and validators in the local Workers runtime
         run: npm run lab:workers
+      - name: Exercise delegated and automation permissions in the local Workers runtime
+        run: npm run lab:agent-authority-workers
       - name: Exercise isolated PostgreSQL identity, rotation and quarantined restore
         run: |
           npm run lab:operations

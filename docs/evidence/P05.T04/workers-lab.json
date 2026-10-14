@@ -1,0 +1,108 @@
+{
+  "task": "P05.T04a",
+  "canonical_sequence": 64,
+  "observed_at": "2026-10-14T21:04:24.133Z",
+  "scope": "Actual pinned local workerd with synthetic agent authority readers; no hosted deployment, SQL ownership, provider authentication or dispatch qualification",
+  "runtime": "miniflare4.20260730.0",
+  "compatibility_date": "2026-07-30",
+  "provider_calls": 0,
+  "bundle_sha256": "f0a8a9ac2e0e3e230ddc165415d645c106b717066b1dca49bb1321621904e6ea",
+  "input_digests": {
+    "packages/policy/src/agent-authority.ts": "b50aeb76832533a182c48dee4690df04d79747b90bc12d23bcb2859ff729be04",
+    "packages/policy/src/agent-authority-facts.ts": "a65c51e7891dc065fc22984f6e6f320f188b8296ec8b080058e5f7f832add79c",
+    "scripts/fixtures/agent-authority-worker.ts": "e6a9682350aada88a7a99496019879638a097c4a460759398c69698d20e6e33e",
+    "scripts/agent-authority-workers-lab.mjs": "2e0278a9481216d6d0187b5121569d34f77e2cf518d9949e6a797bc7aad95fbb",
+    "tests/fixtures/agent-authority.mjs": "b34305793a2debeb8058f6e79e3436ec781738ffb9727451696560c34fde0669",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+  },
+  "checks": [
+    {
+      "name": "delegation_owner_coordinator_specialist_allows",
+      "passed": true
+    },
+    {
+      "name": "origin_departure_denies",
+      "passed": true
+    },
+    {
+      "name": "shared_admin_owned_installation_allows",
+      "passed": true
+    },
+    {
+      "name": "installation_owner_departure_denies",
+      "passed": true
+    },
+    {
+      "name": "missing_dispatch_grant_denies",
+      "passed": true
+    },
+    {
+      "name": "cross_tenant_resource_denies",
+      "passed": true
+    },
+    {
+      "name": "envelope_expiry_denies",
+      "passed": true
+    },
+    {
+      "name": "stale_policy_facts_deny",
+      "passed": true
+    },
+    {
+      "name": "disabled_installation_denies",
+      "passed": true
+    },
+    {
+      "name": "provider_constraint_denies",
+      "passed": true
+    },
+    {
+      "name": "grant_reference_digest_mismatch_denies",
+      "passed": true
+    },
+    {
+      "name": "automation_offline_owner_allows",
+      "passed": true
+    },
+    {
+      "name": "automation_owner_departure_denies",
+      "passed": true
+    },
+    {
+      "name": "automation_mandate_expiry_denies",
+      "passed": true
+    },
+    {
+      "name": "automation_mandate_reference_mismatch_denies",
+      "passed": true
+    },
+    {
+      "name": "proxy_input_rejected_without_traps",
+      "passed": true
+    },
+    {
+      "name": "accessor_input_rejected_without_getters",
+      "passed": true
+    },
+    {
+      "name": "malformed_json_rejected",
+      "passed": true
+    },
+    {
+      "name": "proxy_reader_rejected_without_reflection",
+      "passed": true
+    },
+    {
+      "name": "canonical_digest_matches_independent_node_oracle",
+      "passed": true
+    },
+    {
+      "name": "dynamic_code_generation_denied",
+      "passed": true
+    },
+    {
+      "name": "zero_provider_requests",
+      "passed": true
+    }
+  ]
+}

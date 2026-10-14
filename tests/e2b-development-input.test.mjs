@@ -184,7 +184,7 @@ test("current plan denies a frozen60 allocation before private input", (t) => {
   assert.equal(out.status, 2, out.stderr);
   assert.match(out.stdout, /PREREQUISITES_UNQUALIFIED/);
   const report = JSON.parse(frozen.read("docs/evidence/P04.T01h/live.json"));
-  assert.equal(report.plan_sequence, 61);
+  assert.equal(report.plan_sequence, 64);
   assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"));
   assert.equal(report.private_input_read, false);
   assert.equal(report.provider_calls, false);

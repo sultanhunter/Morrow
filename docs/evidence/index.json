@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 61,
-  "plan_digest": "940c66cea0c372c1c7785f7ddda5db17560774f6d1198ab7afc6bed1293bce12",
+  "plan_sequence": 64,
+  "plan_digest": "28a26fd8848a215b791bb3a271d8482e4e9b8370be755a12b919663746d5c036",
   "tasks": [
     {
       "id": "P01.T01",
@@ -74,6 +74,10 @@
     {
       "id": "P05.T02",
       "status": "In progress"
+    },
+    {
+      "id": "P05.T04",
+      "status": "In progress"
     }
   ],
   "entries": [
@@ -87,7 +91,7 @@
     },
     {
       "path": "docs/evidence/P01.T01/verification.json",
-      "sha256": "4f85d2df2d87ae3d07f9c885378286033c6b0d173468393188ecddc7e42bce13"
+      "sha256": "121ed2226696a154a5ab3aa849c31207e1bf987d6d35c40aaa23c2dfaab4e1bf"
     },
     {
       "path": "docs/evidence/P01.T02/review.md",
@@ -99,7 +103,7 @@
     },
     {
       "path": "docs/evidence/P01.T02/verification.json",
-      "sha256": "b64b1600611349f8e26c06a5786c80e999142a0ca00c02c01f9b1f568ab157fd"
+      "sha256": "c8b25dfe5b616f51a38da6c94c4a8375c6eeeaf7cfc967021a565cb86e0137f0"
     },
     {
       "path": "docs/evidence/P01.T03/review.md",
@@ -111,7 +115,7 @@
     },
     {
       "path": "docs/evidence/P01.T03/verification.json",
-      "sha256": "36d3a6d5ba7716b7f51d5c6445b926c6b220a094acd2f6324829a55629753571"
+      "sha256": "20edc12d2169587a74afc1078e9174dad5a204e677aed26d8693ed5e57f0ffe3"
     },
     {
       "path": "docs/evidence/P01.T04/review.md",
@@ -123,7 +127,7 @@
     },
     {
       "path": "docs/evidence/P01.T04/verification.json",
-      "sha256": "5a872b47f810375ee3ef85f6a90666e90534659065887dc036554fab3acbbd15"
+      "sha256": "4004da6eb5a6a1d95a4194bc8b349e5067d350d85de4b0fc76f72c32731d09f9"
     },
     {
       "path": "docs/evidence/P02.T01/review.md",
@@ -167,7 +171,7 @@
     },
     {
       "path": "docs/evidence/P02.T02/verification.json",
-      "sha256": "7680f2e58a0f80d3eb87d347f169b402fb6e3659549ad8e9e0a8f7566edbbbc3"
+      "sha256": "03c26d695241fb8c4f985d9d473ef09f1e0c341193eb710d9f64479644bf7efd"
     },
     {
       "path": "docs/evidence/P02.T03/browser-checks.json",
@@ -199,11 +203,11 @@
     },
     {
       "path": "docs/evidence/P03.T01/smoke.json",
-      "sha256": "94d9d295192fe771769567303140771a9974568d37324bfee91373915f12dff3"
+      "sha256": "79e4e5b40f87c6d9fb7e317b0f07a024dbd319bd517387ef63385aef346012e7"
     },
     {
       "path": "docs/evidence/P03.T02/boundaries.json",
-      "sha256": "2e8bd567e4548fe250d97665b89372134907c7d38b7652eff0041dc6dbef158c"
+      "sha256": "71efeb16901201ec397663474c8edc4687a6f168f4da78e290b93e76f9543a1d"
     },
     {
       "path": "docs/evidence/P03.T02/review.md",
@@ -239,7 +243,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/delivery.json",
-      "sha256": "1e8121c5ed0828bdcc88f0dc8e9aef023d0088f0849d0cf16d5e7def4480dc05"
+      "sha256": "e41c1eb8b50e81d041ed8a5827738dfa330e0e2d57f514aa7fb9758d55dcea1d"
     },
     {
       "path": "docs/evidence/P03.T04/dependency-audit.json",
@@ -299,15 +303,15 @@
     },
     {
       "path": "docs/evidence/P04.T01a/permissions.json",
-      "sha256": "5e55c2898c37eba468f79fb275ed373d1022416022b433f41a877e664c0486ac"
+      "sha256": "2984a5c741fb27dfd0c0de132926aca706f3a3b0a80885cac0b1921838ab9d15"
     },
     {
       "path": "docs/evidence/P04.T01a/readiness.json",
-      "sha256": "c8ec580aa6187f9746d1169da5247901c2ee533311726f3c6a6f83a0dce6450f"
+      "sha256": "231cde1bd4b937e6a85f41cfb6500310f663010eb797db7c7060fce58721959f"
     },
     {
       "path": "docs/evidence/P04.T01a/synth.json",
-      "sha256": "ee517f57f6bdfd16a8a06fe87497f09559bf24649ecccff7a1fa8282e9132eb1"
+      "sha256": "56fb7d2a0190eb7fd73c21b710ad9857e46a4475b714f4453fee2d722df8e47a"
     },
     {
       "path": "docs/evidence/P04.T01b/verification.json",
@@ -355,11 +359,11 @@
     },
     {
       "path": "docs/evidence/P04.T01f/archive.json",
-      "sha256": "45762c3f53e8f299317e6bbcc3cafbfc9cdcf2caf651a99d9600b40146078cdc"
+      "sha256": "a7346b23ea4720207e1d72882704d5d2010a943385b9a487e5b33d0d6a634cc3"
     },
     {
       "path": "docs/evidence/P04.T01f/cleanup.json",
-      "sha256": "17631997a7c443cd7881aa798627e35bfefc9ea16de833d7498a68be6f8b66e4"
+      "sha256": "c764dbcd903a2b73392f250af1556eb6326dca3d308cdb320fb81111be002a9d"
     },
     {
       "path": "docs/evidence/P04.T01f/dependencies.json",
@@ -552,6 +556,18 @@
     {
       "path": "docs/evidence/P05.T02/review.json",
       "sha256": "bb53a7a3e0cf3edc2d381c000763aa5533c68c5f0e6cdd1c3921b10992820700"
+    },
+    {
+      "path": "docs/evidence/P05.T04/e2b-frozen-60-integrity.json",
+      "sha256": "a388c449e50af899049dd0389591ecbd40faefd168c044f13d8ce5d81f3c4ee5"
+    },
+    {
+      "path": "docs/evidence/P05.T04/engineering-review.json",
+      "sha256": "702d783e97ee397c1b380bab2176e112a71ecefa09295e45b0fe54a93743541e"
+    },
+    {
+      "path": "docs/evidence/P05.T04/workers-lab.json",
+      "sha256": "ce204fd638fc094403d659d74cafdcf1a08c4009af36f7a278fe25efdeba4c74"
     }
   ]
 }
