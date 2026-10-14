@@ -2,22 +2,25 @@
   "task": "P04.T01h",
   "plan_sequence": 67,
   "scope": "scripts-only provider qualification; no merchant or production acceptance",
-  "runtime_source_sha256": "fee93a6e48fac781e63920d76c54cb738fd54f49c7d34e349a49f45a2cf05a36",
+  "runtime_source_sha256": "4a87e6c4573f1b5a42258a5a1df64f4bd6c210fd194969c162749cddedc6661c",
   "owned_controller_source_sha256": "a3cb26277c21cfed8536bcedee2880dc0aca819ea272819f188b488e2055d999",
   "verification": {
-    "targeted_tests": 236,
-    "repository_tests": 1188,
+    "targeted_tests": 242,
+    "repository_tests": 1194,
     "scaffold_guards": 9,
     "adapter_and_infrastructure_types": "passed",
     "full_types_format_validators_boundaries_builds_inventories": "passed",
-    "independent_peer_cases": 103,
+    "independent_peer_cases": 86,
     "peer_engineering_review": "clear"
   },
   "actual_provider": {
     "one_owned_build": "ready_retained_original65",
     "one_runtime66": "failed_marker_phase; verified_deleted; durable receipt and cleared slot",
-    "new_67_allocations": 0,
-    "additional_receipt": "pending"
+    "new_67_allocations": 3,
+    "diagnostic_runs1_and2": "failed_restore; both staticverifieddeleted with durable receipts and cleared slots",
+    "diagnostic_run3": "passed file write/read, full pause, restore, restored read; staticverifieddeleted; durable receipt and cleared slot",
+    "additional_receipt": "approved batch fully consumed; allocation false",
+    "actual_provider_charge_reconciled": false
   },
   "diagnostics": {
     "ownership": "native WeakMap only",
@@ -25,16 +28,23 @@
     "first_execution_and_cleanup_failures": "separate",
     "raw_error_or_provider_payload": "excluded",
     "observer_failure_obstructs_cleanup": false,
-    "ambiguous_release": "terminal_receipt_saved false and held_slot null; observed absence remains separate"
+    "ambiguous_release": "terminal_receipt_saved false and held_slot null; observed absence remains separate",
+    "post_restore_predicates": "fixed state/resource/controller/network/lifecycle/expiry groups, no raw values and no stale POSTstatus"
   },
   "legacy_archives": {
     "sequence60_files": 16,
     "sequence65_files": 19,
     "sequence66_files": 19,
-    "exact_original_bindings_verified": true
+    "exact_original_bindings_verified": true,
+    "sequence67_files": 19,
+    "sequence67_restore_files": 19,
+    "sequence67_command_files": 19
   },
   "protocol_changed": false,
   "v1_business_schemas_changed": false,
   "merchant_runtime_enabled": false,
-  "production_qualified": false
+  "production_qualified": false,
+  "memory_persistence_claimed": false,
+  "effective_egress_verified": false,
+  "canonical_sequence_unchanged_reason": "Routine command-response and diagnostic contract correction within67; every authority predicate, provider, origin, resource and allocation limit preserved."
 }

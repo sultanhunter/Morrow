@@ -1,10 +1,10 @@
 {
   "task": "P04.T01h",
   "plan_sequence": 67,
-  "status": "pricing_qualified_owned_image_retained_runtime_marker_failed",
+  "status": "pricing_qualified_owned_image_retained_synthetic_file_lifecycle_passed",
   "owner_request": "Qualify owned runtime image/build costs, then E2B test",
   "public_manifest_verified": true,
-  "owned_ready_builds": 0,
+  "owned_ready_builds": 1,
   "build_registered": true,
   "build_started": true,
   "sandbox_allocated": true,
@@ -17,7 +17,8 @@
     "region": "US-WEST-1",
     "free_credit_usd": "100.00",
     "usage_this_month_usd": "0.00",
-    "payment_methods": 0
+    "payment_methods": 0,
+    "observation_limit": "Console rounds/delays usage; visible $0 is not a measured zero-cost claim."
   },
   "candidate": {
     "image": "e2bdev/base@sha256:4a369f01a820fe5e65f53c2c5727a78899daf86f0541b721097f289559c8b73f",
@@ -56,9 +57,10 @@
     "reply_provenance": "owner_pasted_reply_current_conversation"
   },
   "remaining": [
-    "safe_stage_specific_marker_diagnostics",
-    "specific_additional_test_receipt",
-    "successful_persistence_lifecycle_test"
+    "separate_fixed_process_memory_probe",
+    "effective_application_egress_and_production_isolation",
+    "commercial_SaaS_and_protected_data_terms",
+    "P12_runtime_registry_and_merchant_admission"
   ],
   "explicit_owner_build_and_sandbox_authorization": true,
   "actual_owned_build": {
@@ -77,6 +79,17 @@
     "start_attempts": 1
   },
   "actual_runtime": {
+    "plan_sequence": 67,
+    "operation_id": "4d87dffa-b008-425d-a4a9-7d126b716934",
+    "sandbox_id": "ipgnybc2b82hjxsokta71",
+    "source_sha256": "4a87e6c4573f1b5a42258a5a1df64f4bd6c210fd194969c162749cddedc6661c",
+    "status": "passed_synthetic_file_pause_restore",
+    "cleanup": "verified_deleted",
+    "terminal_receipt_saved": true,
+    "active_slot_present": false,
+    "additional_allocation_authorized": false
+  },
+  "original_runtime66": {
     "plan_sequence": 66,
     "operation_id": "cb45e68e-79d7-4e01-9bf7-7e16fc2545c9",
     "sandbox_id": "i9z55h09hwmhn67t0ks1p",
@@ -85,5 +98,20 @@
     "terminal_receipt_saved": true,
     "active_slot_present": false,
     "additional_allocation_authorized": false
-  }
+  },
+  "diagnostic_batch": {
+    "batch_id": "66a1f485-fb35-47ec-aa6d-0fac8cafcd34",
+    "owner_receipt": "Approve up to 3 diagnostic runs",
+    "approved_runs": 3,
+    "used_runs": 3,
+    "remaining_runs": 0,
+    "one_at_a_time": true,
+    "all_sandboxes_verified_deleted": true,
+    "new_builds": 0,
+    "expected_credit_ceiling_usd": "0.25",
+    "worst_expected_credit_usd_three_full_runs": "0.054450",
+    "actual_provider_charge_reconciled": false
+  },
+  "memory_persistence_claimed": false,
+  "effective_egress_verified": false
 }

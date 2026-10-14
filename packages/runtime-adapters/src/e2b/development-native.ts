@@ -39,7 +39,13 @@ type DiagnosticOutcome =
   | "redirect_denied"
   | "http_rejected"
   | "decode_denied"
-  | "shape_denied";
+  | "shape_denied"
+  | "state_denied"
+  | "resource_denied"
+  | "controller_denied"
+  | "network_denied"
+  | "lifecycle_denied"
+  | "expiry_denied";
 type DiagnosticFailure = Readonly<{
   stage: DiagnosticStage;
   endpoint: DiagnosticEndpoint;
@@ -393,30 +399,41 @@ export async function createE2BNativeDevelopmentTransport(
       },
     );
   }
-  async function permitted(id: string, state: "running" | "paused", ctx: SyntheticLabContext) {
-    if (input.mode !== "allocate" || now() >= o.deadlineMs) throw e2bDenied();
+  async function permitted(
+    id: string,
+    state: "running" | "paused",
+    ctx: SyntheticLabContext,
+    trace?: Trace,
+  ) {
+    function reject(outcome: DiagnosticOutcome): never {
+      if (trace) trace.outcome = outcome;
+      throw e2bDenied();
+    }
+    if (input.mode !== "allocate") reject("precondition_denied");
+    if (now() >= o.deadlineMs) reject("expiry_denied");
     const current = await inspect(id, ctx);
     const credential = credentials.get(id);
+    if (!current || current.state !== state) reject("state_denied");
+    if (current.cpu !== p.cpu || current.memoryMiB !== p.memoryMiB) reject("resource_denied");
     if (
-      !current ||
-      current.state !== state ||
-      current.cpu !== p.cpu ||
-      current.memoryMiB !== p.memoryMiB ||
-      current.network.outbound !== "deny_all" ||
       !current.network.controllerAuth ||
-      current.lifecycle.onTimeout !== "kill" ||
-      current.lifecycle.autoResume ||
+      !credential ||
+      credential.envdVersion !== qualification.template?.envdVersion
+    )
+      reject("controller_denied");
+    if (credential.diskMiB !== p.diskMiB) reject("resource_denied");
+    if (current.network.outbound !== "deny_all") reject("network_denied");
+    if (current.lifecycle.onTimeout !== "kill" || current.lifecycle.autoResume)
+      reject("lifecycle_denied");
+    if (
       current.lifecycle.createdAtMs < o.startedAtMs ||
       current.lifecycle.createdAtMs > now() ||
-      !credential ||
-      credential.diskMiB !== p.diskMiB ||
-      credential.envdVersion !== qualification.template?.envdVersion ||
       (state === "running" &&
         (current.lifecycle.endAtMs === null ||
           current.lifecycle.endAtMs <= now() ||
           current.lifecycle.endAtMs > o.deadlineMs))
     )
-      throw e2bDenied();
+      reject("expiry_denied");
     return current;
   }
   function runtimeSeconds() {
@@ -638,7 +655,7 @@ export async function createE2BNativeDevelopmentTransport(
       return observe("restore", "control_api", ctx, async (trace) => {
         await permitted(id, "paused", ctx);
         const body: NativeConnect = { timeout: runtimeSeconds(), memory: true };
-        const reply = await http(
+        await http(
           API,
           `/v2/sandboxes/${id}/connect`,
           "POST",
@@ -646,12 +663,15 @@ export async function createE2BNativeDevelopmentTransport(
           [200, 201],
           JSON.stringify(body),
           undefined,
-          "json",
+          "none",
           262144,
           trace,
         );
-        connectionReply(reply.data, id);
-        await permitted(id, "running", ctx);
+        // Connect is a command acknowledgment. Only the original-ID static
+        // GET below may admit execution or cache fresh authentication.
+        trace.status = null;
+        trace.outcome = "precondition_denied";
+        await permitted(id, "running", ctx, trace);
         restored = true;
       });
     },

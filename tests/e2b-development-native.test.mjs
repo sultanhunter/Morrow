@@ -978,3 +978,195 @@ test("rejected and nonsettling diagnostic observers are never awaited and cannot
     assert.equal(f.state, null);
   }
 });
+
+function restoreFixture(acknowledgment = {}, staticChanges = {}, response = null) {
+  const f = fixture();
+  f.hooks.request = (url, options) => {
+    if (new URL(url).pathname !== `/v2/sandboxes/${id}/connect`) return;
+    const body = JSON.parse(options.body);
+    assert.equal(body.memory, true);
+    f.tick(100);
+    f.change({
+      state: "running",
+      startedAt: new Date(f.now()).toISOString(),
+      endAt: new Date(f.now() + body.timeout * 1000).toISOString(),
+      ...staticChanges,
+    });
+    if (response) return response();
+    return json(
+      {
+        sandboxID: id,
+        templateID: p.templateId,
+        envdVersion: "0.6.2",
+        domain: "e2b.app",
+        ...acknowledgment,
+      },
+      201,
+    );
+  };
+  return f;
+}
+const runRestoreFixture = async (f) => {
+  const port = await createE2BNativeDevelopmentTransport(args(), f);
+  const report = await runSyntheticLab(p, op.operationId, port, {
+    startedAtMs: current,
+    sourceSha256: op.sourceSha256,
+    now: f.now,
+    onCleanup: () => markE2BDevelopmentCleanup(port),
+    persist: async () => {},
+  });
+  return { port, report };
+};
+
+test("restore accepts omitted or nullable POST credentials and uses only fresh static authentication", async () => {
+  for (const acknowledgment of [
+    {},
+    { trafficAccessToken: null },
+    {
+      envdAccessToken: "unused_post_envd_token",
+      trafficAccessToken: "unused_post_traffic_token",
+      domain: null,
+    },
+  ]) {
+    const f = restoreFixture(acknowledgment),
+      { port, report } = await runRestoreFixture(f);
+    assert.equal(report.status, "passed");
+    assert.equal(report.cleanup, "verified_deleted");
+    assert.equal(snapshotE2BDevelopmentDiagnostics(port).firstExecutionFailure, null);
+    assert.equal(f.calls.filter(({ url }) => new URL(url).origin === ENVD).length, 3);
+    assert.equal(
+      f.calls.filter(
+        ({ url, opts }) => new URL(url).pathname.endsWith("/connect") && opts.method === "POST",
+      ).length,
+      1,
+    );
+    const connectIndex = f.calls.findIndex(({ url }) => new URL(url).pathname.endsWith("/connect"));
+    assert.equal(new URL(f.calls[connectIndex + 1].url).pathname, `/sandboxes/${id}`);
+    assert.equal(f.calls[connectIndex + 1].opts.method, "GET");
+  }
+});
+
+test("foreign or partial acknowledgment data cannot replace the original static identity or credentials", async () => {
+  for (const acknowledgment of [
+    { sandboxID: "foreign_VM" },
+    { templateID: "foreign_template" },
+    { domain: "foreign.test" },
+    { envdVersion: "0.6.3" },
+    { envdVersion: "0.1.0" },
+    { envdVersion: undefined },
+  ]) {
+    const f = restoreFixture(acknowledgment),
+      { port, report } = await runRestoreFixture(f);
+    assert.equal(report.status, "passed");
+    assert.equal(report.cleanup, "verified_deleted");
+    assert.equal(snapshotE2BDevelopmentDiagnostics(port).firstExecutionFailure, null);
+    assert.equal(f.calls.filter(({ url }) => new URL(url).origin === ENVD).length, 3);
+    assert.equal(
+      f.calls.filter(
+        ({ url, opts }) => new URL(url).pathname.endsWith("/connect") && opts.method === "POST",
+      ).length,
+      1,
+    );
+  }
+});
+
+test("valid restore acknowledgment cannot bypass missing credentials or drift in the authoritative static GET", async () => {
+  for (const drift of [
+    { envdAccessToken: undefined },
+    { envdAccessToken: "" },
+    { domain: "foreign.test" },
+    { envdVersion: "0.6.3" },
+    { cpuCount: 4 },
+    { memoryMB: 1024 },
+    { diskSizeMB: 10241 },
+    { metadata: { ...op.metadata, morrowSource: "f".repeat(64) } },
+    { network: { allowOut: [], denyOut: ["0.0.0.0/0"], allowPublicTraffic: true } },
+    { lifecycle: { onTimeout: "kill", autoResume: true } },
+    { endAt: new Date(op.deadlineMs + 1000).toISOString() },
+  ]) {
+    const f = restoreFixture({}, drift),
+      { report, port } = await runRestoreFixture(f);
+    assert.notEqual(report.status, "passed");
+    const failure = snapshotE2BDevelopmentDiagnostics(port).firstExecutionFailure;
+    if (failure.stage === "restore") assert.equal(failure.status, null);
+    assert.equal(f.calls.filter(({ url }) => new URL(url).origin === ENVD).length, 2);
+    assert.equal(
+      f.calls.filter(
+        ({ url, opts }) => new URL(url).pathname.endsWith("/connect") && opts.method === "POST",
+      ).length,
+      1,
+    );
+    if (drift.metadata)
+      assert.equal(f.calls.filter(({ opts }) => opts.method === "DELETE").length, 0);
+  }
+});
+
+test("blank and non-JSON connect acknowledgments are discarded before the mandatory original static GET", async () => {
+  for (const response of [
+    () => new Response(null, { status: 201 }),
+    () => new Response("not JSON private transient body", { status: 201 }),
+    () =>
+      new Response(
+        JSON.stringify({
+          sandboxID: "foreign",
+          envdAccessToken: "untrusted_body_token",
+          domain: "foreign.test",
+        }),
+        { status: 200 },
+      ),
+  ]) {
+    const f = restoreFixture({}, {}, response),
+      { report, port } = await runRestoreFixture(f);
+    assert.equal(report.status, "passed");
+    assert.equal(report.cleanup, "verified_deleted");
+    assert.equal(snapshotE2BDevelopmentDiagnostics(port).firstExecutionFailure, null);
+    assert.equal(f.calls.filter(({ url }) => new URL(url).origin === ENVD).length, 3);
+    const connect = f.calls.findIndex(({ url }) => new URL(url).pathname.endsWith("/connect"));
+    assert.equal(new URL(f.calls[connect + 1].url).pathname, `/sandboxes/${id}`);
+  }
+});
+
+test("rejected or redirected connect acknowledgments cannot authorize guest access or another connect", async () => {
+  for (const status of [307, 400, 401, 403, 404, 500, 503]) {
+    const f = restoreFixture(
+        {},
+        {},
+        () =>
+          new Response("private response", {
+            status,
+            headers: status === 307 ? { location: "https://foreign.test" } : {},
+          }),
+      ),
+      { report } = await runRestoreFixture(f);
+    assert.notEqual(report.status, "passed");
+    assert.equal(report.cleanup, "verified_deleted");
+    assert.equal(f.calls.filter(({ url }) => new URL(url).origin === ENVD).length, 2);
+    assert.equal(
+      f.calls.filter(
+        ({ url, opts }) => new URL(url).pathname.endsWith("/connect") && opts.method === "POST",
+      ).length,
+      1,
+    );
+  }
+});
+
+test("fresh original restore admission reports fixed predicate groups without stale POST status", async () => {
+  for (const [drift, outcome] of [
+    [{ state: "paused" }, "state_denied"],
+    [{ cpuCount: 4 }, "resource_denied"],
+    [{ envdAccessToken: "" }, "controller_denied"],
+    [{ allowInternetAccess: true }, "network_denied"],
+    [{ lifecycle: { onTimeout: "pause", autoResume: false } }, "lifecycle_denied"],
+    [{ endAt: new Date(op.deadlineMs + 1000).toISOString() }, "expiry_denied"],
+  ]) {
+    const f = restoreFixture({}, drift),
+      { report, port } = await runRestoreFixture(f);
+    assert.notEqual(report.status, "passed");
+    const failure = snapshotE2BDevelopmentDiagnostics(port).firstExecutionFailure;
+    assert.equal(failure.stage, "restore");
+    assert.equal(failure.endpoint, "control_api");
+    assert.equal(failure.outcome, outcome);
+    assert.equal(failure.status, null);
+    assert.equal(f.calls.filter(({ url }) => new URL(url).origin === ENVD).length, 2);
+  }
+});

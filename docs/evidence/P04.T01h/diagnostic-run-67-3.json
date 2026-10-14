@@ -1,0 +1,58 @@
+{
+  "task": "P04.T01h",
+  "plan_sequence": 67,
+  "scope": "Synthetic operator microVM lab only",
+  "sdk": "e2b2.56.0",
+  "source_sha256": "4a87e6c4573f1b5a42258a5a1df64f4bd6c210fd194969c162749cddedc6661c",
+  "source_digests": {
+    "packages/infrastructure/src/synthetic-runtime-lab.ts": "b0d360948b414437ebc416ec24c32be128ff6a31e9af2208da1ca8e10b58735b",
+    "packages/runtime-adapters/src/e2b/development-transport.ts": "4b2c5e3e19f85624f1e77e850b21fb3108db2e7fbc47d2fea2798fe44a34a3c8",
+    "packages/runtime-adapters/src/e2b/development-native.ts": "9122f4901c0c0068c696dda0e807eac64454c2e3f7a02fd4423c7f1915a63adc",
+    "packages/runtime-adapters/package.json": "61dfb1db475c95abd11d6ee5c9e6f8f576e999e5e659164b45e063b64f3648fb",
+    "scripts/e2b-development-input.mjs": "9309515b9286ba79276bc485b2a76f67f289f2038f95193ba71e6263ec80a775",
+    "scripts/e2b-development-lab.mjs": "f95b033c0cab79a60eca1b0ab9935a2f00c274107e9f2643f7c27d7a97c718ed",
+    "scripts/e2b-template-qualification.mjs": "18e6a02f46b87884e546a3991203d72eb7ecf8bf31e2b987f3bedfa08e972cc9",
+    "infra/labs/e2b-development.json": "4a4520e9b72fe5e380dd9042af0ed8a0741f7abfa9b4a892e7ab3fc59548df10",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+  },
+  "production_qualified": false,
+  "merchant_dispatch": false,
+  "memory_persistence_claimed": false,
+  "effective_egress_verified": false,
+  "terminal_receipt_saved": true,
+  "held_slot": false,
+  "native_diagnostics": {
+    "schemaVersion": 1,
+    "firstExecutionFailure": null,
+    "firstCleanupFailure": null,
+    "requestCounts": {
+      "controlApi": 21,
+      "guestFiles": 3,
+      "total": 24
+    }
+  },
+  "status": "passed",
+  "provider_calls": true,
+  "operation_id": "4d87dffa-b008-425d-a4a9-7d126b716934",
+  "original_source_sha256": "4a87e6c4573f1b5a42258a5a1df64f4bd6c210fd194969c162749cddedc6661c",
+  "profile_sha256": "6e310f598fd8ed5a6b5358db59446b958eaba82bbbd3f2ad565035502cba858b",
+  "code": "SYNTHETIC_LAB_CHECKS_PASSED",
+  "cleanup": "verified_deleted",
+  "deletion_observation": "absent",
+  "sandbox_id": "ipgnybc2b82hjxsokta71",
+  "provider_qualification": {
+    "projectId": "22220c06-b76d-47b2-98d7-a1069d611e8f",
+    "binding": "authenticated_project_metrics",
+    "verifiedAtMs": 1792016284255,
+    "template": {
+      "templateId": "pdht65h2trfuizuvmotc",
+      "templateBuildId": "4324bde3-d3a9-4d18-91c1-b2b1b3e80b80",
+      "cpu": 2,
+      "memoryMiB": 512,
+      "diskMiB": 12422,
+      "envdVersion": "0.10.0"
+    }
+  },
+  "terminal_receipt_sha256": "7ab1ccc8ba942aec99af4b7566cefc65f4ae66bf25c6354ebec971f5ad9bc41c",
+  "independent_private_terminal_binding_verified": true
+}

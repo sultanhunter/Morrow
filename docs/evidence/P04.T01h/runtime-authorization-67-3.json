@@ -1,0 +1,15 @@
+{
+  "task": "P04.T01h",
+  "plan_sequence": 67,
+  "batch_id": "66a1f485-fb35-47ec-aa6d-0fac8cafcd34",
+  "run": 3,
+  "operation_id": "4d87dffa-b008-425d-a4a9-7d126b716934",
+  "source_sha256": "4a87e6c4573f1b5a42258a5a1df64f4bd6c210fd194969c162749cddedc6661c",
+  "profile_sha256": "6e310f598fd8ed5a6b5358db59446b958eaba82bbbd3f2ad565035502cba858b",
+  "account_observation_sha256": "f405b0a774071d5f613dd1653b040e3eb4c2d61b377b932e578f313f9d99cb34",
+  "owner_receipt": "Approve up to 3 diagnostic runs",
+  "maximum_runs": 3,
+  "total_expected_credit_ceiling_usd": "0.25",
+  "private_key_output": false,
+  "production_qualified": false
+}
