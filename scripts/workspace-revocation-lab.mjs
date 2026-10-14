@@ -27,7 +27,8 @@ const migrations = manifest.migrations.map((m) => {
   if (hash(text) !== m.sha256) throw Error("MIGRATION_CHECKSUM");
   return { record: m, text };
 });
-if (migrations.length !== 4) throw Error("LIFECYCLE_MIGRATION_REQUIRED");
+if (migrations.length < 4 || migrations[3].record.sequence !== 4)
+  throw Error("LIFECYCLE_MIGRATION_REQUIRED");
 const proofs = [];
 const observed = await localPostgresLab("P05.T01c", async ({ id, sql, image, version }) => {
   sql("CREATE DATABASE morrow; CREATE DATABASE morrow_lifecycle_rollback;");

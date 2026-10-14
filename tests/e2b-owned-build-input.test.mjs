@@ -366,6 +366,32 @@ test("current67 builder retains unqualified write permission before private inpu
   assert.ok(report.blockers.includes("E2B_OWNED_BUILD_WRITE_RECEIPT_UNQUALIFIED"));
 });
 
+test("unrelated current68 plan denies frozen67 builder before private receipt or report access", (t) => {
+  const current = currentE2BFixture();
+  t.after(current.dispose);
+  current.useCurrentPlan();
+  assert.equal(JSON.parse(current.read("docs/plan/source.json")).sources.plan.sequence, 68);
+  const before = current.read("infra/labs/e2b-owned-build.json");
+  const child = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      current.loader,
+      current.script("scripts/e2b-owned-build-lab.mjs"),
+      "--build",
+      "/never/read-private-receipt",
+    ],
+    { encoding: "utf8", cwd: current.root },
+  );
+  assert.equal(child.status, 2, child.stderr);
+  assert.match(child.stdout + child.stderr, /E2B_OWNED_BUILD_CONTROLLER_DENIED/);
+  assert.equal(
+    existsSync(join(current.root, "docs/evidence/P04.T01h/owned-build-blocked.json")),
+    false,
+  );
+  assert.deepEqual(current.read("infra/labs/e2b-owned-build.json"), before);
+});
+
 test("dated builder pricing proof rejects modified bytes, stale/future and overlong windows", () => {
   const now = 1792000000000,
     bytes = Buffer.from('{"scope":"operator"}');

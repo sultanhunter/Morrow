@@ -209,7 +209,46 @@ test("connection setup requires explicit connection capability/administer grant"
   assert.equal(await reason(f), "capability_denied");
   f.request.verb = "administer";
   f.grant.verbs = ["administer"];
-  assert.equal(await reason(f), "allowed");
+  const result = await service(f.authority).decide(f.request);
+  assert.equal(result.decision.reason, "allowed");
+  assert.deepEqual(result.obligations, ["recheck_at_dispatch", "exact_approval"]);
+});
+test("workspace linking needs one grant covering the actual connection input fields before review", async () => {
+  const f = fixture();
+  const target = {
+    ...resource,
+    kind: "workspace",
+    id: "workspace_a",
+    storeId: null,
+    connectionId: null,
+  };
+  f.request = {
+    capabilityId: "governance.connection.connect",
+    verb: "administer",
+    resource: target,
+    accountId: null,
+    fields: ["providerId", "installationProof", "scope"],
+  };
+  f.authority.resource = target;
+  f.authority.accountId = null;
+  f.grant.capabilityId = f.request.capabilityId;
+  f.grant.verbs = ["administer"];
+  f.grant.scope = {
+    ...f.grant.scope,
+    storeIds: [],
+    accountIds: [],
+    resources: [target],
+    fields: [...f.request.fields],
+  };
+  let result = await service(f.authority).decide(f.request);
+  assert.equal(result.decision.allowed, true);
+  assert.ok(result.obligations.includes("exact_approval"));
+  for (const field of f.request.fields) {
+    f.grant.scope.fields = f.request.fields.filter((value) => value !== field);
+    result = await service(f.authority).decide(f.request);
+    assert.equal(result.decision.reason, "field_denied");
+    assert.deepEqual(result.obligations, []);
+  }
 });
 test("fresh authority is loaded every time; removal revokes next decision", async () => {
   const f = fixture();

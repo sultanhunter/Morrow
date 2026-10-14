@@ -1,4 +1,14 @@
-# Current continuation 15 October 2026: E2B synthetic file lifecycle passed
+# Current continuation 15 October 2026: controlled workspace/store linking
+
+Canonical Page68 saved/read back and exact snapshot refreshed before code. Packet docs/packets/P05.T03a.md now has an independently reviewed local engineering candidate: immutable migration5, dedicated linking executor, exact first-claim/reconciliation transaction, primitive-JSON application and Workers boundary, and narrow shared connect/administer exact-review obligation. Parent P05.T03 remains In progress. Actual Shopify authentication, hosted identity, production proof/review issuer, public routes and P06/P12 remain gated.
+
+Validation:366 actual PostgreSQL17.11 checks,13 application tests,20 actual Workers checks with zero provider requests,70 shared-policy tests and all1,211repository tests pass. The full local pipeline and all nine scaffold guards pass. Existing operations/restore plus31identity/22permissions/31authentication/109revocation SQL checks pass. Independent semantic review has no material finding. Frozen v1 schemas/capability bodies and migrations1–4 remain unchanged.
+
+Completed E2B67 source/config/account/actual reports remain frozen; all approved sandboxes deleted, three-run allowance consumed and allocation false. Test-only fixtures pin67 while new current-plan operator commands deny before private inputs/provider calls. No provider credential/effect is included in linking.
+
+Publication target remains existing draft PR1 https://github.com/sultanhunter/Morrow/pull/1 on codex/morrow-foundation; exact-head GitHub checks are the hosted CI authority. Source work/morrow-p01/repository is non-Git; publisher work/morrow-publish; user Desktop/Morrow. No merge/deployment. Next independent plan work is a separately specified P05.T01d durable PKCE/code-exchange admission boundary; record its exact canonical protocol before implementation. No account secret or callback choice is needed yet. Do not treat local admission as authentication, real exchange permission or a session issuer.
+
+# Historical continuation 15 October 2026: E2B synthetic file lifecycle passed
 
 Canonical Page67 freshly read in full and snapshot refreshed. Routine native command/readback and diagnostics corrections retained all authority predicates, strict create validation, fixed origins/no redirects/no retries, original deadlines and cleanup. No canonical design/authority/provider/billing change was needed. The owned original65 image is ready retained; no rebuild occurred.
 

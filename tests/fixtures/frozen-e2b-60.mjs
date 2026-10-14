@@ -35,7 +35,7 @@ function fixture(frozen) {
     copyFileSync(
       frozen
         ? new URL("./e2b-plan-60.json", import.meta.url)
-        : resolve(e2bRepositoryRoot, "docs/plan/source.json"),
+        : new URL("./e2b-plan-67.json", import.meta.url),
       resolve(root, "docs/plan/source.json"),
     );
     mkdirSync(resolve(root, "docs/evidence/P04.T01h"), { recursive: true });
@@ -73,6 +73,7 @@ function fixture(frozen) {
   };
 }
 
-// Exact public60 code/configuration only; no private credential or live report.
+// Exact public60 code/configuration or completed67 public sources with their
+// isolated plan snapshot; no private credential, live report or new authority.
 export const frozenE2B60Fixture = () => fixture(true);
 export const currentE2BFixture = () => fixture(false);

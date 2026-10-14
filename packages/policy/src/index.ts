@@ -256,8 +256,13 @@ function evaluate(request: PermissionRequest, a: HumanAuthority, at: string): Pe
   const obligations: ExecutionObligation[] = [];
   if (reason === "allowed") {
     obligations.push("recheck_at_dispatch");
+    if (
+      capability?.review_required &&
+      (request.verb === "execute" ||
+        (request.capabilityId === "governance.connection.connect" && request.verb === "administer"))
+    )
+      obligations.push("exact_approval");
     if (request.verb === "execute" && capability) {
-      if (capability.review_required) obligations.push("exact_approval");
       if (["spend", "billable_job"].includes(capability.effect))
         obligations.push("budget_reservation");
       if (["external_write", "spend", "communication", "billable_job"].includes(capability.effect))

@@ -155,3 +155,31 @@ test("current67 image controller denies original60 plan before any request", asy
     current.dispose();
   }
 });
+
+test("unrelated current68 plan denies completed67 image controller before any request", async () => {
+  const current = currentE2BFixture(),
+    previous = process.cwd();
+  current.useCurrentPlan();
+  process.chdir(current.root);
+  let calls = 0;
+  try {
+    assert.equal(JSON.parse(current.read("docs/plan/source.json")).sources.plan.sequence, 68);
+    await assert.rejects(
+      mainE2BOwnedImageQualification(["--verify-public-image"], {
+        fetch: async () => {
+          calls++;
+          throw Error("never");
+        },
+      }),
+      /E2B_OWNED_IMAGE_CURRENT_PLAN_DENIED/,
+    );
+    assert.equal(calls, 0);
+    assert.equal(
+      existsSync(resolve(current.root, "docs/evidence/P04.T01h/owned-image-qualification.json")),
+      false,
+    );
+  } finally {
+    process.chdir(previous);
+    current.dispose();
+  }
+});

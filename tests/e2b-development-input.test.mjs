@@ -166,7 +166,7 @@ test("readonly discovery preparation cannot read credentials or overwrite live q
   assert.equal(report.sandbox_allocated, false);
   assert.equal(existsSync(destination) ? readFileSync(destination, "utf8") : null, previous);
 });
-test("current plan denies a frozen60 allocation before private input", (t) => {
+test("current68 plan denies a frozen60 allocation before private input", (t) => {
   const frozen = frozenE2B60Fixture();
   t.after(frozen.dispose);
   frozen.useCurrentPlan();
@@ -184,7 +184,7 @@ test("current plan denies a frozen60 allocation before private input", (t) => {
   assert.equal(out.status, 2, out.stderr);
   assert.match(out.stdout, /PREREQUISITES_UNQUALIFIED/);
   const report = JSON.parse(frozen.read("docs/evidence/P04.T01h/live.json"));
-  assert.equal(report.plan_sequence, 67);
+  assert.equal(report.plan_sequence, 68);
   assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"));
   assert.equal(report.private_input_read, false);
   assert.equal(report.provider_calls, false);
@@ -527,6 +527,32 @@ test("current67 runtime still needs fresh allocation authority before private in
   assert.equal(report.provider_calls, false);
   assert.equal(report.private_input_read, false);
   assert.ok(report.blockers.includes("E2B_LAB_ACCESS_UNQUALIFIED"));
+});
+
+test("unrelated current68 plan denies frozen67 runtime allocation before private input", (t) => {
+  const current = currentE2BFixture();
+  t.after(current.dispose);
+  current.useCurrentPlan();
+  assert.equal(JSON.parse(current.read("docs/plan/source.json")).sources.plan.sequence, 68);
+  const before = current.read("infra/labs/e2b-development.json");
+  const out = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      current.loader,
+      current.script("scripts/e2b-development-lab.mjs"),
+      "--run",
+      "/never/read-private-input",
+    ],
+    { encoding: "utf8", cwd: current.root },
+  );
+  assert.equal(out.status, 2, out.stderr);
+  const report = JSON.parse(current.read("docs/evidence/P04.T01h/live.json"));
+  assert.equal(report.plan_sequence, 68);
+  assert.equal(report.provider_calls, false);
+  assert.equal(report.private_input_read, false);
+  assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"));
+  assert.deepEqual(current.read("infra/labs/e2b-development.json"), before);
 });
 
 test("runtime CLI refuses disabled TLS before an original cleanup key is loaded", async (t) => {

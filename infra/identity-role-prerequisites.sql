@@ -7,4 +7,6 @@ CREATE ROLE morrow_api NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOB
 -- Internal lifecycle persistence only; never grant to API/runtime roles.
 -- The isolated laboratory explicitly enables its own local test login.
 CREATE ROLE morrow_identity_lifecycle NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+-- Internal controlled linking executor; no role membership or public issuer.
+CREATE ROLE morrow_identity_linking NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
 GRANT CREATE ON DATABASE morrow TO morrow_identity_owner;
