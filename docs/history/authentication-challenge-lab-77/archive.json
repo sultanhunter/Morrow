@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "3937e194e65f225380d226e99edeb0ea0b2e345a",
+  "canonicalSequence": 77,
+  "successfulCi": 38760128490,
+  "reason": "Preserve published laboratory and historical source-bound report before canonical79 test-only synchronization repair; never execute in this archive.",
+  "fileCount": 2,
+  "files": [
+    {
+      "path": "scripts/authentication-challenge-lab.mjs",
+      "sha256": "a467a0d78d8bb2894cfbdf4e8e0a9ef6db8a43e88dc1d51562dbf3ca95ea9af9",
+      "bytes": 15239,
+      "gitBlob": "2866e5020c138898d27f87766ea20de645a47f09"
+    },
+    {
+      "path": "docs/evidence/P05.T01/challenge-lab.json",
+      "sha256": "b5a911d02000e828f4d3a010cab4159c0f29875e947f7701e69a054e097bc376",
+      "bytes": 5237,
+      "gitBlob": "0adcc2b64014553429aa1732ab06a0edfc797d76"
+    }
+  ]
+}

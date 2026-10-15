@@ -1,4 +1,22 @@
-# Current continuation 15 October 2026: provider subject and selected workspace resolution
+# Current continuation: local qualification passed, publication pending
+
+Canonical revision 79 is saved, fully read back and synchronized. P05.T01k passes the full local pipeline: 1,475 tests, nine scaffold guards, 248 Workers cases with 2,682 checks and zero outbound requests, 211 selection SQL checks and 38 challenge checks. The ten unaffected preserved laboratories also pass, including the 43/59/99 checked-copy regressions. The copied75 report retains its earlier execution sequence78.
+
+The maintained reader checks both impersonation signals and eight explicit normal authentication methods. The test-only lock fixture preserves its two-second window and application SQL. Warmed connections and database observations prove that the actual consumer waits before expiry and is denied after release. All 31 original assertions remain, with seven added. Earlier failed attempts remain unqualified historical records. Thirteen normal selection clients have verified closure and backend absence; the deliberate host-signal fault remains unverified, with a separate container fence.
+
+Independent source and evidence reviews are clear. All 456 protected files and original reports are exact. The selected 35-input digest is d0122b0f5ac31970b4905b3b7221c4eeff2eddaf5e7f149da085edf10dfa6b8d; all 37 distinct report-bound inputs were separately verified. The two archives preserve 60 identity and two challenge payloads from published 3937e194. Current evidence is under docs/evidence/P05.T01k.
+
+Publisher and Desktop remain clean at 3937e194 before publication. Publish to existing draft PR1, require exact-head hosted CI, then guard the Desktop sync and Git alignment. Publication receipts remain outside Git. Parent P05.T01 stays In progress. After this gate, save the separate P05.T01l protocol in the canonical plan before implementing the next operator. The reviewed future draft proposes sequence 80 and confers no authority. Earlier 74/75 allowances are consumed; the temporary 75 key was removed. No new WorkOS, key, sign-in, hosted migration, issuer or merchant action is authorized.
+
+# Historical selected78 candidate 15 October 2026: selected human session policy correction
+
+Canonical78 saved/fullreadback439blocks:432priorunchanged,7exactparagraphs. Exact published77 curatedarchive captured BEFORE plan snapshot/selectedcodechanges:60payloads+archive.json from3937e194e65f225380d226e99edeb0ea0b2e345a, successful exactCI38760128490; root independentlycomparedall60Gitbytes. Manifestd928322a727fe30bbabc5d09f27c48b304189ae86b0a238659e415f7e34e86f7. Full78snapshot nowsynchronized; activepacket docs/packets/P05.T01k.md.
+
+Correct onlymaintainedreader targetauthmethod/impersonatorconsistency and nullable reasonshape. Preserve72/parser/76composer/77resolver, SQL1–7/v1 andalllegacy native/history/actualreceipts. Prior77 has1458fulltests/9scaffold/211SQL/100Workers1390checks andall11legacy labs; all967Desktop/sourcefilesalignedclean3937before78. Completed74/75allowancesconsumed/keydeleted. No provider/key/signin/hostedmigration/issuer/merchant authorization.
+
+PhaseB implementselectedpolicy/currentfixtures andredirectnewselectedreportsunderK, preservepriorH/I/Jreports. Thenindependentreview/fullpipeline/scaffold/Workers/SQL/43/59/99/immutablechecks/exactCI/Desktop. FutureT01lpositivewire needsowncanonicalprotocol/freshsourceboundapproval/manualavailabilityafterreviewCI. No userinputrequiredforcurrentofflineK.
+
+# Historical continuation 15 October 2026: provider subject and selected workspace resolution
 
 Canonical77 saved and fullreadback verified432blocks: all425prior blocks unchanged,7exact new paragraphs. Snapshot synchronized before packet/code. Active packet docs/packets/P05.T01j.md. Local scope is owner-seeded stable identity mappings, exact verification profiles/explicit allow bindings, dedicated read-only executor, private nonauthorizing workspace snapshots and real localSQL/actualzeroegressWorkers qualification. No user input needed, provider/key/signin/hosted migration/issuer/merchant action. ParentP05.T01 remainsInprogress.
 

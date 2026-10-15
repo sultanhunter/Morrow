@@ -70,6 +70,18 @@ function optionalText(value: unknown, max: number): void {
   if (value !== undefined && value !== null && (typeof value !== "string" || value.length > max))
     throw fail();
 }
+// Source-owned eligibility policy, separate from valid catalogue-row shape.
+// A listed method is not a physical-human or immediate-revocation guarantee.
+const humanSessionMethods = new Set([
+  "cross_app_auth",
+  "external_auth",
+  "magic_code",
+  "migrated_session",
+  "oauth",
+  "passkey",
+  "password",
+  "sso",
+]);
 function session(value: unknown, subjectId: string, now: number) {
   const row = record(value);
   const required = [
@@ -123,12 +135,17 @@ function session(value: unknown, subjectId: string, now: number) {
     if (
       typeof impersonator.email !== "string" ||
       impersonator.email.length > 320 ||
-      typeof impersonator.reason !== "string" ||
-      impersonator.reason.length > 4096
+      (impersonator.reason !== null &&
+        (typeof impersonator.reason !== "string" || impersonator.reason.length > 4096))
     )
       throw fail();
   }
-  return { id: row.id, expiresAt, impersonated };
+  return {
+    id: row.id,
+    expiresAt,
+    impersonated,
+    authMethod: typeof row.auth_method === "string" ? row.auth_method : null,
+  };
 }
 
 export function createWorkosSessionStatusReader(
@@ -288,7 +305,12 @@ export function createWorkosSessionStatusReader(
               sessions.add(entry.id);
               itemCount++;
               if (entry.id === providerSessionId) {
-                if (entry.impersonated) throw fail();
+                if (
+                  entry.impersonated ||
+                  entry.authMethod === null ||
+                  !humanSessionMethods.has(entry.authMethod)
+                )
+                  throw fail();
                 matchedExpiry = entry.expiresAt;
               }
             }

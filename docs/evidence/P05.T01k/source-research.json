@@ -1,0 +1,60 @@
+{
+  "packet": "P05.T01k",
+  "planSequence": 78,
+  "checkedDate": "2026-10-15",
+  "scope": "Public official documentation and SDK interface research only; no authenticated provider calls, tokens, private account data or live impersonation test.",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/workos/workos-node/main/src/user-management/interfaces/session.interface.ts",
+      "kind": "Official WorkOS Node SDK interface",
+      "facts": [
+        "The response type requires auth_method and separately makes impersonator optional.",
+        "Its method union contains the eight methods allowed by canonical78, plus impersonation and unknown."
+      ],
+      "versionLimit": "Public main branch reference read as rendered on the checked date, not a retrieved immutable commit or an endpoint wire guarantee."
+    },
+    {
+      "url": "https://raw.githubusercontent.com/workos/workos-node/main/src/user-management/interfaces/impersonator.interface.ts",
+      "kind": "Official WorkOS Node SDK interface",
+      "facts": [
+        "The impersonator type contains an email string and a reason that can be either string or null."
+      ],
+      "versionLimit": "Public main branch reference; no new SDK dependency or runtime import."
+    },
+    {
+      "url": "https://workos.com/docs/authkit/impersonation",
+      "kind": "Official WorkOS documentation",
+      "facts": [
+        "Impersonation signs in as another user for support or administration.",
+        "An impersonation authentication response includes impersonator metadata, and its access token carries the act claim."
+      ],
+      "versionLimit": "Current public documentation; not a demonstration of an inconsistent actual session-list response."
+    }
+  ],
+  "morrowPolicy": {
+    "targetOnlyMethods": [
+      "cross_app_auth",
+      "external_auth",
+      "magic_code",
+      "migrated_session",
+      "oauth",
+      "passkey",
+      "password",
+      "sso"
+    ],
+    "selection": "Only the exact target with a recognized method and no non-null impersonator can yield observed_active; either independent impersonation signal denies. Unknown, absent, null, padded or differently cased target methods hold.",
+    "shapeVsEligibility": "Nullable impersonator reason is valid row shape. A different valid impersonated or unknown-method row does not disqualify a normal target; malformed rows anywhere still hold.",
+    "pagination": "Complete bounded pagination and explicit before/after metadata remain required. Optional SDK list metadata types are not evidence that endpoint omission or completeness has been qualified.",
+    "cryptography": "The unchanged72 verifier independently rejects act. The reader correction adds consistency checking; it does not replace token verification.",
+    "provenance": "Application/client binding remains expected_only; provider liveness remains not_guaranteed. The allowlist is Morrow policy, not proof of physical human presence or immediate revocation."
+  },
+  "findingScope": "Canonical78 records an offline synthetic reproduction against the prior reader. No actual WorkOS wire exploit was demonstrated or tested.",
+  "sourcesPreserved": {
+    "published77": "3937e194e65f225380d226e99edeb0ea0b2e345a",
+    "archiveManifest": "docs/history/workos-identity-77/archive.json",
+    "historicalSqlReport": "docs/evidence/P05.T01j/postgresql-lab.json"
+  },
+  "selectedReaderSha256": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+  "unchangedVerifierSha256": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+  "qualificationLimit": "Offline Node/Workers/local SQL policy qualification only. No new sign-in, key acquisition, live session-list read, issuer or merchant authority."
+}

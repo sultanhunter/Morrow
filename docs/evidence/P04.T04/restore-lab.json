@@ -5,7 +5,7 @@
   "server_version": "17.11 (Debian 17.11-1.pgdg13+2)",
   "network": "none",
   "host_mounts": 0,
-  "backup_sha256": "a15e3d4531deebdf948657b3733d2e764d81b3d4590edb5d8e03e29026da1221",
+  "backup_sha256": "f5a36361c54e39883c3ad18db1aa7c1d5163366438b07a5ae96cce93e49ca79b",
   "backup_marker_sequence": 10,
   "replayed_marker_sequences": [
     11,
@@ -30,33 +30,33 @@
   ],
   "dispatch_enabled": false,
   "reopening": "denied; local integrity cannot authorize activation",
-  "restore_and_replay_ms": 1113,
+  "restore_and_replay_ms": 18793,
   "events": [
     {
       "schemaVersion": 1,
       "environment": "development",
       "service": "recovery",
       "code": "RESTORE_QUARANTINED",
-      "correlationId": "4354aa12-775f-47e4-9d91-8ee5b4f80506",
-      "at": "2026-10-15T15:10:55.504Z"
+      "correlationId": "9e529f02-3b12-496c-960f-d01c8d6d19e5",
+      "at": "2026-10-15T15:49:15.882Z"
     },
     {
       "schemaVersion": 1,
       "environment": "development",
       "service": "recovery",
       "code": "RESTORE_INTEGRITY_FAILED",
-      "correlationId": "4354aa12-775f-47e4-9d91-8ee5b4f80506",
-      "at": "2026-10-15T15:10:55.680Z"
+      "correlationId": "9e529f02-3b12-496c-960f-d01c8d6d19e5",
+      "at": "2026-10-15T15:49:20.249Z"
     },
     {
       "schemaVersion": 1,
       "environment": "development",
       "service": "recovery",
       "code": "RESTORE_INTEGRITY_VERIFIED",
-      "correlationId": "4354aa12-775f-47e4-9d91-8ee5b4f80506",
-      "at": "2026-10-15T15:10:56.291Z"
+      "correlationId": "9e529f02-3b12-496c-960f-d01c8d6d19e5",
+      "at": "2026-10-15T15:49:30.060Z"
     }
   ],
-  "elapsed_ms": 3553,
+  "elapsed_ms": 58393,
   "cleanup": "owned ephemeral container and process-local encrypted fixtures removed"
 }

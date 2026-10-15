@@ -1,14 +1,14 @@
 {
-  "captured_at": "2026-10-15T14:51:31.590Z",
+  "captured_at": "2026-10-15T16:11:48.431Z",
   "canonical_key": "plan",
   "sources": {
     "plan": {
       "title": "Shopify Workspace End to End Build and Test Plan",
       "page_id": "page_b1ef27b80b788191b91e67cbb52f1037",
       "url": "https://chatgpt.com/space/page_b1ef27b80b788191b91e67cbb52f1037",
-      "sequence": 77,
+      "sequence": 79,
       "path": "docs/plan/build-plan.md",
-      "sha256": "7af6322287a6a2fe00150cd9f434718b5526054bd79a88f92db0edd630a1a8bc",
+      "sha256": "51e13e3f2f8a1e78d9fda95488597d4962562dde4e46ec4cd8a792c568691ccc",
       "authority": "canonical"
     },
     "hld": {

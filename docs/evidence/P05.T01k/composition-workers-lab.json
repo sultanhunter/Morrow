@@ -1,0 +1,2117 @@
+{
+  "task": "P05.T01k",
+  "boundary": "composition",
+  "selected_policy_sequence": 78,
+  "canonical_sequence": 79,
+  "observed_at": "2026-10-15T16:19:24.415Z",
+  "scope": "Actual pinned local workerd qualifying canonical78 selected human-session policy with independently native-RSA-signed fake tokens and synthetic session pages. No provider key, network, local identity/session/grant or merchant access.",
+  "runtime": "miniflare4.20260730.0",
+  "compatibility_date": "2026-07-30",
+  "cases": 63,
+  "outbound_requests": 0,
+  "bundle_sha256": "68e7bfd0d25298f66778747e4d5d01322dfd3ccf37cab02866b720a60184fe2c",
+  "input_digests": {
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/identity/package.json": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3",
+    "scripts/fixtures/workos-authentication-evidence-worker.ts": "051bc03ca0e6d2dcc05bea061341f12c808d2574017fd2d0e5f4dd3aa8b42500",
+    "scripts/workos-authentication-evidence-workers-lab.mjs": "42ea685c1e5d4922fbcc2bb7694f1fa5e5fbaa8eb042906b0fa543ba70fd09b0",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+  },
+  "checks": [
+    {
+      "name": "human_method_cross_app_auth_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_read_budget",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_closed_result",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_cross_app_auth_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_read_budget",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_closed_result",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_external_auth_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_read_budget",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_closed_result",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_magic_code_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_read_budget",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_closed_result",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_migrated_session_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_read_budget",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_closed_result",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_oauth_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_read_budget",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_closed_result",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_passkey_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "human_method_password",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_read_budget",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_closed_result",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_password_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_read_budget",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_closed_result",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "human_method_sso_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "target_policy_missing_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "target_policy_missing",
+      "passed": true
+    },
+    {
+      "name": "target_policy_missing_read_budget",
+      "passed": true
+    },
+    {
+      "name": "target_policy_missing_closed_result",
+      "passed": true
+    },
+    {
+      "name": "target_policy_missing_no_handle",
+      "passed": true
+    },
+    {
+      "name": "target_policy_null_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "target_policy_null",
+      "passed": true
+    },
+    {
+      "name": "target_policy_null_read_budget",
+      "passed": true
+    },
+    {
+      "name": "target_policy_null_closed_result",
+      "passed": true
+    },
+    {
+      "name": "target_policy_null_no_handle",
+      "passed": true
+    },
+    {
+      "name": "target_policy_unknown_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "target_policy_unknown",
+      "passed": true
+    },
+    {
+      "name": "target_policy_unknown_read_budget",
+      "passed": true
+    },
+    {
+      "name": "target_policy_unknown_closed_result",
+      "passed": true
+    },
+    {
+      "name": "target_policy_unknown_no_handle",
+      "passed": true
+    },
+    {
+      "name": "target_policy_new_method_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "target_policy_new_method",
+      "passed": true
+    },
+    {
+      "name": "target_policy_new_method_read_budget",
+      "passed": true
+    },
+    {
+      "name": "target_policy_new_method_closed_result",
+      "passed": true
+    },
+    {
+      "name": "target_policy_new_method_no_handle",
+      "passed": true
+    },
+    {
+      "name": "target_policy_wrong_case_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "target_policy_wrong_case",
+      "passed": true
+    },
+    {
+      "name": "target_policy_wrong_case_read_budget",
+      "passed": true
+    },
+    {
+      "name": "target_policy_wrong_case_closed_result",
+      "passed": true
+    },
+    {
+      "name": "target_policy_wrong_case_no_handle",
+      "passed": true
+    },
+    {
+      "name": "target_policy_leading_space_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "target_policy_leading_space",
+      "passed": true
+    },
+    {
+      "name": "target_policy_leading_space_read_budget",
+      "passed": true
+    },
+    {
+      "name": "target_policy_leading_space_closed_result",
+      "passed": true
+    },
+    {
+      "name": "target_policy_leading_space_no_handle",
+      "passed": true
+    },
+    {
+      "name": "target_policy_trailing_space_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "target_policy_trailing_space",
+      "passed": true
+    },
+    {
+      "name": "target_policy_trailing_space_read_budget",
+      "passed": true
+    },
+    {
+      "name": "target_policy_trailing_space_closed_result",
+      "passed": true
+    },
+    {
+      "name": "target_policy_trailing_space_no_handle",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_absent_metadata_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_absent_metadata",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_absent_metadata_read_budget",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_absent_metadata_closed_result",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_absent_metadata_no_handle",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_null_metadata_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_null_metadata",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_null_metadata_read_budget",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_null_metadata_closed_result",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_null_metadata_no_handle",
+      "passed": true
+    },
+    {
+      "name": "target_policy_normal_with_impersonator_null_reason_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "target_policy_normal_with_impersonator_null_reason",
+      "passed": true
+    },
+    {
+      "name": "target_policy_normal_with_impersonator_null_reason_read_budget",
+      "passed": true
+    },
+    {
+      "name": "target_policy_normal_with_impersonator_null_reason_closed_result",
+      "passed": true
+    },
+    {
+      "name": "target_policy_normal_with_impersonator_null_reason_no_handle",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_with_impersonator_null_reason_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_with_impersonator_null_reason",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_with_impersonator_null_reason_read_budget",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_with_impersonator_null_reason_closed_result",
+      "passed": true
+    },
+    {
+      "name": "target_policy_impersonation_with_impersonator_null_reason_no_handle",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_read_budget",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_closed_result",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "normal_method_null_impersonator_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_fixed_page_request_1",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_read_budget",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_closed_result",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "normal_target_then_valid_impersonated_row_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_fixed_page_request_1",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_read_budget",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_closed_result",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "unrelated_unknown_method_then_normal_target_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "later_malformed_impersonator_holds_early_match_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "later_malformed_impersonator_holds_early_match_fixed_page_request_1",
+      "passed": true
+    },
+    {
+      "name": "later_malformed_impersonator_holds_early_match",
+      "passed": true
+    },
+    {
+      "name": "later_malformed_impersonator_holds_early_match_read_budget",
+      "passed": true
+    },
+    {
+      "name": "later_malformed_impersonator_holds_early_match_closed_result",
+      "passed": true
+    },
+    {
+      "name": "later_malformed_impersonator_holds_early_match_no_handle",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_read_budget",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_closed_result",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "exact_signed_active_evidence_evidence_expiry",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_read_budget",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_closed_result",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "signed_org_roles_are_not_local_authority_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "complete_miss_held_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "complete_miss_held",
+      "passed": true
+    },
+    {
+      "name": "complete_miss_held_read_budget",
+      "passed": true
+    },
+    {
+      "name": "complete_miss_held_closed_result",
+      "passed": true
+    },
+    {
+      "name": "complete_miss_held_no_handle",
+      "passed": true
+    },
+    {
+      "name": "different_session_held_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "different_session_held",
+      "passed": true
+    },
+    {
+      "name": "different_session_held_read_budget",
+      "passed": true
+    },
+    {
+      "name": "different_session_held_closed_result",
+      "passed": true
+    },
+    {
+      "name": "different_session_held_no_handle",
+      "passed": true
+    },
+    {
+      "name": "wrong_user_held_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "wrong_user_held",
+      "passed": true
+    },
+    {
+      "name": "wrong_user_held_read_budget",
+      "passed": true
+    },
+    {
+      "name": "wrong_user_held_closed_result",
+      "passed": true
+    },
+    {
+      "name": "wrong_user_held_no_handle",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_fixed_page_request_1",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_read_budget",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_closed_result",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "first_match_needs_complete_second_page_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "late_invalid_page_holds_early_match_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "late_invalid_page_holds_early_match_fixed_page_request_1",
+      "passed": true
+    },
+    {
+      "name": "late_invalid_page_holds_early_match",
+      "passed": true
+    },
+    {
+      "name": "late_invalid_page_holds_early_match_read_budget",
+      "passed": true
+    },
+    {
+      "name": "late_invalid_page_holds_early_match_closed_result",
+      "passed": true
+    },
+    {
+      "name": "late_invalid_page_holds_early_match_no_handle",
+      "passed": true
+    },
+    {
+      "name": "duplicate_cross_page_holds_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "duplicate_cross_page_holds_fixed_page_request_1",
+      "passed": true
+    },
+    {
+      "name": "duplicate_cross_page_holds",
+      "passed": true
+    },
+    {
+      "name": "duplicate_cross_page_holds_read_budget",
+      "passed": true
+    },
+    {
+      "name": "duplicate_cross_page_holds_closed_result",
+      "passed": true
+    },
+    {
+      "name": "duplicate_cross_page_holds_no_handle",
+      "passed": true
+    },
+    {
+      "name": "ended_target_holds_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "ended_target_holds",
+      "passed": true
+    },
+    {
+      "name": "ended_target_holds_read_budget",
+      "passed": true
+    },
+    {
+      "name": "ended_target_holds_closed_result",
+      "passed": true
+    },
+    {
+      "name": "ended_target_holds_no_handle",
+      "passed": true
+    },
+    {
+      "name": "impersonated_target_holds_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "impersonated_target_holds",
+      "passed": true
+    },
+    {
+      "name": "impersonated_target_holds_read_budget",
+      "passed": true
+    },
+    {
+      "name": "impersonated_target_holds_closed_result",
+      "passed": true
+    },
+    {
+      "name": "impersonated_target_holds_no_handle",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_read_budget",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_closed_result",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "token_expiry_caps_evidence_evidence_expiry",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_read_budget",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_closed_result",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "keyset_expiry_caps_evidence_evidence_expiry",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_read_budget",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_closed_result",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "provider_session_expiry_caps_evidence_evidence_expiry",
+      "passed": true
+    },
+    {
+      "name": "wrong_signature",
+      "passed": true
+    },
+    {
+      "name": "wrong_signature_read_budget",
+      "passed": true
+    },
+    {
+      "name": "wrong_signature_closed_result",
+      "passed": true
+    },
+    {
+      "name": "wrong_signature_no_handle",
+      "passed": true
+    },
+    {
+      "name": "wrong_client",
+      "passed": true
+    },
+    {
+      "name": "wrong_client_read_budget",
+      "passed": true
+    },
+    {
+      "name": "wrong_client_closed_result",
+      "passed": true
+    },
+    {
+      "name": "wrong_client_no_handle",
+      "passed": true
+    },
+    {
+      "name": "wrong_issuer",
+      "passed": true
+    },
+    {
+      "name": "wrong_issuer_read_budget",
+      "passed": true
+    },
+    {
+      "name": "wrong_issuer_closed_result",
+      "passed": true
+    },
+    {
+      "name": "wrong_issuer_no_handle",
+      "passed": true
+    },
+    {
+      "name": "expired_token",
+      "passed": true
+    },
+    {
+      "name": "expired_token_read_budget",
+      "passed": true
+    },
+    {
+      "name": "expired_token_closed_result",
+      "passed": true
+    },
+    {
+      "name": "expired_token_no_handle",
+      "passed": true
+    },
+    {
+      "name": "nonhuman_subject",
+      "passed": true
+    },
+    {
+      "name": "nonhuman_subject_read_budget",
+      "passed": true
+    },
+    {
+      "name": "nonhuman_subject_closed_result",
+      "passed": true
+    },
+    {
+      "name": "nonhuman_subject_no_handle",
+      "passed": true
+    },
+    {
+      "name": "object_token",
+      "passed": true
+    },
+    {
+      "name": "object_token_read_budget",
+      "passed": true
+    },
+    {
+      "name": "object_token_closed_result",
+      "passed": true
+    },
+    {
+      "name": "object_token_no_handle",
+      "passed": true
+    },
+    {
+      "name": "object_profile_config_denial",
+      "passed": true
+    },
+    {
+      "name": "object_profile_config_denial_read_budget",
+      "passed": true
+    },
+    {
+      "name": "object_snapshot_config_denial",
+      "passed": true
+    },
+    {
+      "name": "object_snapshot_config_denial_read_budget",
+      "passed": true
+    },
+    {
+      "name": "wrong_keyset_environment",
+      "passed": true
+    },
+    {
+      "name": "wrong_keyset_environment_read_budget",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "profile_drift",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_read_budget",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_closed_result",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_no_handle",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "clock_backward",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_read_budget",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_closed_result",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_no_handle",
+      "passed": true
+    },
+    {
+      "name": "cancel_page_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "cancel_page",
+      "passed": true
+    },
+    {
+      "name": "cancel_page_read_budget",
+      "passed": true
+    },
+    {
+      "name": "cancel_page_closed_result",
+      "passed": true
+    },
+    {
+      "name": "cancel_page_no_handle",
+      "passed": true
+    },
+    {
+      "name": "stall_abort_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "stall_abort",
+      "passed": true
+    },
+    {
+      "name": "stall_abort_read_budget",
+      "passed": true
+    },
+    {
+      "name": "stall_abort_closed_result",
+      "passed": true
+    },
+    {
+      "name": "stall_abort_no_handle",
+      "passed": true
+    },
+    {
+      "name": "throw_page_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "throw_page",
+      "passed": true
+    },
+    {
+      "name": "throw_page_read_budget",
+      "passed": true
+    },
+    {
+      "name": "throw_page_closed_result",
+      "passed": true
+    },
+    {
+      "name": "throw_page_no_handle",
+      "passed": true
+    },
+    {
+      "name": "token_expires_during_page_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "token_expires_during_page",
+      "passed": true
+    },
+    {
+      "name": "token_expires_during_page_read_budget",
+      "passed": true
+    },
+    {
+      "name": "token_expires_during_page_closed_result",
+      "passed": true
+    },
+    {
+      "name": "token_expires_during_page_no_handle",
+      "passed": true
+    },
+    {
+      "name": "keyset_expires_during_page_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "keyset_expires_during_page",
+      "passed": true
+    },
+    {
+      "name": "keyset_expires_during_page_read_budget",
+      "passed": true
+    },
+    {
+      "name": "keyset_expires_during_page_closed_result",
+      "passed": true
+    },
+    {
+      "name": "keyset_expires_during_page_no_handle",
+      "passed": true
+    },
+    {
+      "name": "observation_lease_during_page_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "observation_lease_during_page",
+      "passed": true
+    },
+    {
+      "name": "observation_lease_during_page_read_budget",
+      "passed": true
+    },
+    {
+      "name": "observation_lease_during_page_closed_result",
+      "passed": true
+    },
+    {
+      "name": "observation_lease_during_page_no_handle",
+      "passed": true
+    },
+    {
+      "name": "overall_deadline_during_page_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "overall_deadline_during_page",
+      "passed": true
+    },
+    {
+      "name": "overall_deadline_during_page_read_budget",
+      "passed": true
+    },
+    {
+      "name": "overall_deadline_during_page_closed_result",
+      "passed": true
+    },
+    {
+      "name": "overall_deadline_during_page_no_handle",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_read_budget",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_closed_result",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_drift_denial",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_on_read_no_profile_revival",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_read_budget",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_closed_result",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_clock_denial",
+      "passed": true
+    },
+    {
+      "name": "clock_backward_on_read_no_clock_revival",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_read_budget",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_closed_result",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "cancel_on_read_cancel_denial",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_read_budget",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_closed_result",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "expiry_during_profile_read_post_profile_time_recheck",
+      "passed": true
+    },
+    {
+      "name": "token_expires_during_crypto",
+      "passed": true
+    },
+    {
+      "name": "token_expires_during_crypto_read_budget",
+      "passed": true
+    },
+    {
+      "name": "token_expires_during_crypto_closed_result",
+      "passed": true
+    },
+    {
+      "name": "token_expires_during_crypto_no_handle",
+      "passed": true
+    },
+    {
+      "name": "keyset_expires_during_crypto",
+      "passed": true
+    },
+    {
+      "name": "keyset_expires_during_crypto_read_budget",
+      "passed": true
+    },
+    {
+      "name": "keyset_expires_during_crypto_closed_result",
+      "passed": true
+    },
+    {
+      "name": "keyset_expires_during_crypto_no_handle",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_during_crypto",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_during_crypto_read_budget",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_during_crypto_closed_result",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_during_crypto_no_handle",
+      "passed": true
+    },
+    {
+      "name": "global_cancel_during_crypto",
+      "passed": true
+    },
+    {
+      "name": "global_cancel_during_crypto_read_budget",
+      "passed": true
+    },
+    {
+      "name": "global_cancel_during_crypto_closed_result",
+      "passed": true
+    },
+    {
+      "name": "global_cancel_during_crypto_no_handle",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_fixed_page_request_0",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_read_budget",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_closed_result",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_private_frozen_evidence",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_minimal_evidence_shape",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_provenance_stays_separate",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_exact_signed_identity",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_independent_digest_oracles",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_exact_time_metadata",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_successful_handle_survives_cleanup",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_opaque_handle",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_serialized_handle",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_foreign_handle",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_completed_operation_deadline_is_not_evidence_expiry",
+      "passed": true
+    },
+    {
+      "name": "completed_operation_can_retain_its_observation_lease_evidence_expiry",
+      "passed": true
+    },
+    {
+      "name": "concurrency_first_reaches_owned_page",
+      "passed": true
+    },
+    {
+      "name": "concurrency_second_token_verified",
+      "passed": true
+    },
+    {
+      "name": "concurrency_first_attempt_deadline_held",
+      "passed": true
+    },
+    {
+      "name": "concurrency_timeout_does_not_poison_second",
+      "passed": true
+    },
+    {
+      "name": "concurrency_exact_two_derived_subject_reads",
+      "passed": true
+    },
+    {
+      "name": "hostile_token_held_without_page",
+      "passed": true
+    },
+    {
+      "name": "hostile_handle_no_reflection",
+      "passed": true
+    },
+    {
+      "name": "hostile_profile_denied",
+      "passed": true
+    },
+    {
+      "name": "hostile_snapshot_denied",
+      "passed": true
+    },
+    {
+      "name": "zero_hostile_object_traps",
+      "passed": true
+    },
+    {
+      "name": "zero_outbound_requests",
+      "passed": true
+    }
+  ]
+}

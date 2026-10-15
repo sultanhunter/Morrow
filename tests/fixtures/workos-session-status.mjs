@@ -22,6 +22,7 @@ export function buildWorkosSessionStatusFixture() {
     id: query.providerSessionId,
     user_id: query.subjectId,
     status: "active",
+    auth_method: "oauth",
     ended_at: null,
     created_at: new Date(at - 60000).toISOString(),
     updated_at: new Date(at - 1000).toISOString(),

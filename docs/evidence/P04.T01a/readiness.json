@@ -8,7 +8,7 @@
   "environments": [
     {
       "environment": "development",
-      "configuration_sha256": "aad6182e5f9eb0b831031b1aa6ab428b50f335f77edb5887ee0042e47b108831",
+      "configuration_sha256": "982d60e9da525fc9fc1ae545ed6843df3240cdc1697523f78b310f45fc8f9f0f",
       "status": "pending",
       "paid_creation_authorized": false,
       "reasons": [
@@ -21,7 +21,7 @@
     },
     {
       "environment": "staging",
-      "configuration_sha256": "81547906c68710553a4b6ccd93b83a519419001680775a11f4a2ada9012c045b",
+      "configuration_sha256": "3e7579972307768c545104c555a1a987674d7b2a9eca5579a192b4cb97fd4b0d",
       "status": "pending",
       "paid_creation_authorized": false,
       "reasons": [
@@ -34,7 +34,7 @@
     },
     {
       "environment": "production",
-      "configuration_sha256": "18241bfe4a33117939905cc5533e3490c6cb3ac070545b5623a2476198b26d4a",
+      "configuration_sha256": "5cd7971022acf18e1fcb16c8a3a5f53177bc6d6337deeb7ef2c9a306c2375754",
       "status": "pending",
       "paid_creation_authorized": false,
       "reasons": [

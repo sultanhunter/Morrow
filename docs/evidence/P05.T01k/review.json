@@ -1,0 +1,182 @@
+{
+  "task": "P05.T01k",
+  "canonical_sequence": 79,
+  "selected_policy_sequence": 78,
+  "observed_at": "2026-10-15T16:33:18.569555+00:00",
+  "scope": "Local synthetic engineering and consistency-policy qualification only; no actual positive provider wire, issuer, SSO/SCIM or merchant qualification.",
+  "engineering_source_digest": "d0122b0f5ac31970b4905b3b7221c4eeff2eddaf5e7f149da085edf10dfa6b8d",
+  "engineering_source_digest_scope": "Selected 35 audited inputs; not a claim that these are every measured dependency.",
+  "source_digests": {
+    ".github/workflows/ci.yml": "0bdef63f1e9a9715dd0e4011563c99ee62ba626eec5047e60b995f1857eed666",
+    ".nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "docs/history/authentication-challenge-lab-77/archive.json": "1c34c83afa1294b9bdc7fa07269150d98661fe16fd6092876ca634a58888de8b",
+    "docs/history/workos-identity-77/archive.json": "d928322a727fe30bbabc5d09f27c48b304189ae86b0a238659e415f7e34e86f7",
+    "docs/plan/build-plan.md": "51e13e3f2f8a1e78d9fda95488597d4962562dde4e46ec4cd8a792c568691ccc",
+    "infra/identity-role-prerequisites.sql": "2c166df1d5b18eda1b4be14c94a26fb31828292833ed110655608400b29fe9af",
+    "migrations/0007.provider-subject-resolution.sql": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+    "migrations/manifest.json": "e115ec9e3326dd75542fc28edecc7de9f37d44c92d975388d58c2cdeda760e9f",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "package.json": "80f9f8a68635ccef71666b6c1a8c28c1549b1417120a77b93b151573e2badb5c",
+    "packages/identity/package.json": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3",
+    "packages/identity/src/authentication-challenges.ts": "e35daaf3acede100afe2fd5ce1b3df1c981ed73dcd760d8c27e1b2c1ef7a253f",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+    "scripts/authentication-challenge-lab.mjs": "786e5bd928878ff18ad1ec6a5a8d3f1463a733df74e6931953561e5d3da6f1c7",
+    "scripts/fixtures/workos-authentication-evidence-worker.ts": "051bc03ca0e6d2dcc05bea061341f12c808d2574017fd2d0e5f4dd3aa8b42500",
+    "scripts/fixtures/workos-session-status-worker.ts": "861bd88c4160bf7eb2c85716a9ef7bf7a23aefba410c5ffabf1766d48a96f1a3",
+    "scripts/fixtures/workos-workspace-selection-worker.ts": "795adf5e4dae727b621905917aff3610ba6633d57bb3dc909fdd3474c726641f",
+    "scripts/local-identity-sql.mjs": "a2054bcf8ad288373fce50697154cebc1e0fa9e6c6e8090f51b15a0e0dd92278",
+    "scripts/local-provider-subject-sql.mjs": "03ee4c0f79b225348a1fe88a7750775efcfb8ea05f0eb8865e96324ed790fa85",
+    "scripts/provider-subject-resolution-lab.mjs": "de4ce84acedecd098a3ca34eb9685843a7ca3f1f71ce5d608b2eef3468f33bf7",
+    "scripts/workos-authentication-evidence-workers-lab.mjs": "42ea685c1e5d4922fbcc2bb7694f1fa5e5fbaa8eb042906b0fa543ba70fd09b0",
+    "scripts/workos-session-status-workers-lab.mjs": "bc5efb7e444f79b88cbeb4c6f241dd40588a4bcddad7cb32f9b7f8f8254ace77",
+    "scripts/workos-workspace-selection-workers-lab.mjs": "81cea2bd21a84a8411c4603fb25029f341618ce1e0432a072d8e936d65fccdfd",
+    "tests/fixtures/workos-authentication-evidence.mjs": "1faa18afb5f35fc4740a6f6ae1f08332102c0efb1a42ee42924778b63449af5b",
+    "tests/fixtures/workos-session-status.mjs": "53c55fbbf6aa2e2f45c5a524bbae165793610ecf6cf730162699458899220b44",
+    "tests/provider-subject-sql.test.mjs": "b8bcf2bf3465bbc8f83cfcfd034b1dfebaeca0482dc8619aee9d6c1d2759dda9",
+    "tests/workos-authentication-evidence.test.mjs": "cde7e6ab3a8a3f1de0182991f43b8fe95433d21827efa413de876fd4cf9d982b",
+    "tests/workos-human-session-policy.test.mjs": "6b03a3e0e813cbb02799acc01962366a6455d533ce5e536ff1449e7916bb6a37",
+    "tests/workos-identity77-archive.test.mjs": "012f0da941459ebad05904ff6f04a28f646440d1961f223d3e953e00842ca1fc",
+    "tests/workos-session-status.test.mjs": "880703cba923aa395777d6b689bc56d73258c968705dc769fac53bc750a32c83",
+    "tests/workos-workspace-selection.test.mjs": "c70eb55657e3f10199c49ed8a24a008ebcfb94cb709f7b336ce6112f56e3ed25"
+  },
+  "distinct_measured_report_input_count": 37,
+  "measured_input_union_digest": "116b5771032d0e3bca3f042314bee07db0c1fc3753feeec519e78f1775921d4f",
+  "measured_input_digests": {
+    ".nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "docs/plan/build-plan.md": "51e13e3f2f8a1e78d9fda95488597d4962562dde4e46ec4cd8a792c568691ccc",
+    "docs/plan/source.json": "0e86312dfa9f3cd36879be9baf15bb2d3a4939417137d7a57a4334f41907e385",
+    "infra/identity-role-prerequisites.sql": "2c166df1d5b18eda1b4be14c94a26fb31828292833ed110655608400b29fe9af",
+    "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "migrations/0007.provider-subject-resolution.sql": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+    "migrations/manifest.json": "e115ec9e3326dd75542fc28edecc7de9f37d44c92d975388d58c2cdeda760e9f",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "packages/identity/package.json": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3",
+    "packages/identity/src/authentication-challenges.ts": "e35daaf3acede100afe2fd5ce1b3df1c981ed73dcd760d8c27e1b2c1ef7a253f",
+    "packages/identity/src/index.ts": "041952d82c134a04487b9e9648c2a648879fa069220c9d37eb9113509a7c3643",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+    "scripts/authentication-challenge-lab.mjs": "786e5bd928878ff18ad1ec6a5a8d3f1463a733df74e6931953561e5d3da6f1c7",
+    "scripts/fixtures/workos-authentication-evidence-worker.ts": "051bc03ca0e6d2dcc05bea061341f12c808d2574017fd2d0e5f4dd3aa8b42500",
+    "scripts/fixtures/workos-session-status-worker.ts": "861bd88c4160bf7eb2c85716a9ef7bf7a23aefba410c5ffabf1766d48a96f1a3",
+    "scripts/fixtures/workos-workspace-selection-worker.ts": "795adf5e4dae727b621905917aff3610ba6633d57bb3dc909fdd3474c726641f",
+    "scripts/local-identity-sql.mjs": "a2054bcf8ad288373fce50697154cebc1e0fa9e6c6e8090f51b15a0e0dd92278",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "scripts/local-provider-subject-sql.mjs": "03ee4c0f79b225348a1fe88a7750775efcfb8ea05f0eb8865e96324ed790fa85",
+    "scripts/provider-subject-resolution-lab.mjs": "de4ce84acedecd098a3ca34eb9685843a7ca3f1f71ce5d608b2eef3468f33bf7",
+    "scripts/workos-authentication-evidence-workers-lab.mjs": "42ea685c1e5d4922fbcc2bb7694f1fa5e5fbaa8eb042906b0fa543ba70fd09b0",
+    "scripts/workos-session-status-workers-lab.mjs": "bc5efb7e444f79b88cbeb4c6f241dd40588a4bcddad7cb32f9b7f8f8254ace77",
+    "scripts/workos-workspace-selection-workers-lab.mjs": "81cea2bd21a84a8411c4603fb25029f341618ce1e0432a072d8e936d65fccdfd",
+    "tests/fixtures/workos-authentication-evidence.mjs": "1faa18afb5f35fc4740a6f6ae1f08332102c0efb1a42ee42924778b63449af5b"
+  },
+  "reviews": [
+    {
+      "area": "selected reader and16full-chain policy Node tests",
+      "author": "dev_runtime_review",
+      "independent_reviewers": [
+        "root",
+        "e2b_stack_reconciliation"
+      ],
+      "result": "clear",
+      "focused_tests": 66,
+      "execution_note": "Earlier78 execution; exact current domain/test input bytes remain unchanged."
+    },
+    {
+      "area": "current Workers policy oracles and held-evidence zeroSQL boundary",
+      "author": "harness_design",
+      "independent_reviewers": [
+        "root",
+        "dev_runtime_review",
+        "e2b_stack_reconciliation"
+      ],
+      "result": "clear",
+      "cases": 248,
+      "checks": 2682,
+      "outbound_requests": 0
+    },
+    {
+      "area": "actual SQL selection and normal-versus-unverified cleanup measurements",
+      "authors": [
+        "e2b_stack_reconciliation"
+      ],
+      "independent_reviewers": [
+        "root",
+        "dev_runtime_review"
+      ],
+      "result": "clear",
+      "checks": 211,
+      "normal_backend_closures_verified": 13,
+      "deliberate_host_signal_fault_unverified": 1
+    },
+    {
+      "area": "test-only challenge synchronization, unchanged2s expiry/productSQL and actual waiter ordering",
+      "author": "harness_design",
+      "independent_reviewers": [
+        "root",
+        "dev_runtime_review",
+        "e2b_stack_reconciliation"
+      ],
+      "result": "clear",
+      "original_assertions_retained": 31,
+      "additional_assertions": 7,
+      "actual_checks": 38
+    },
+    {
+      "area": "cross-report source bindings, archives and claims",
+      "independent_reviewers": [
+        "root",
+        "dev_runtime_review",
+        "e2b_stack_reconciliation"
+      ],
+      "result": "clear",
+      "selected_source_inputs": 35,
+      "distinct_measured_report_inputs": 37,
+      "protected_files": 456
+    }
+  ],
+  "reports": {
+    "reader-workers-lab.json": "642ed13d13d2501942dc3a9d22600d9ad1a5f4aa95f306430a3c7d37f88fef50",
+    "composition-workers-lab.json": "c419ac96d9aa71381908d460bb92dcb753ac20f3eae9c88a99276fffee787fe7",
+    "selection-workers-lab.json": "834ca332324546b486a6fed6dde8e6f6b6d1003ec7d7c22347e0346f0005283a",
+    "postgresql-lab.json": "c74be81d37745fd16b8d1f46dd6a80e738c563cc7e9e186fce7af843fa18d385",
+    "authentication-challenge-lab.json": "83e5a2c93d48676cfdae768b4e01eb4e9b06c8eea72c176762c6d3be03dcf7ef",
+    "source-research.json": "321a9c26746266043918b644e49e3f05a54fbac85ba95237d8d606dc1c7c4fce",
+    "failed-attempts.json": "e1bc1ab32393c7e367a72afe14053ce628ff630e907a638f6f824f3950197f6f"
+  },
+  "preservation": {
+    "protected_files_unchanged": 456,
+    "published77_identity_payloads": 60,
+    "published77_challenge_payloads": 2,
+    "original75_payloads": 25,
+    "historical_reports_unchanged": true,
+    "original_native_authority_not_reopened": true
+  },
+  "failed_attempts": "Three initial failed local qualification records remain failed and unqualified. An identical selected-SQL rerun passed; the challenge fixture was synchronized without changing application logic or its two-second expiry. Causes beyond the demonstrated fixture setup race are not asserted.",
+  "cleanup_limits": {
+    "selection_adapter": "13normal client close plus post-close backend absence verified; separate intentional host-signal fault remains unverified with final container fence.",
+    "challenge_helpers": "Normal owned child closure, proof-free outputs and final owned-container absence measured; no extra per-helper backend-absence claim."
+  },
+  "not_qualified": [
+    "actual_positive_provider_token_plus_session_wire",
+    "guaranteed_provider_liveness_or_physical_human_presence",
+    "local_session_issuer_or_mapping_issuance",
+    "SSO_SCIM_or_merchant_activation",
+    "production_deployment"
+  ],
+  "new_provider_or_key_access_in_packet": false
+}

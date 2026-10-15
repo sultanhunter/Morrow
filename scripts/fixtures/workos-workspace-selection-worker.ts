@@ -15,6 +15,9 @@ type Case = {
   snapshotJson: string;
   token: string;
   page: string;
+  pages: string[];
+  expectedPageReads: number;
+  expectedEvidence: "verified_active_evidence" | "held";
   now: number;
   evidenceExpiresAtMs: number;
   profileDigest: string;
@@ -74,42 +77,49 @@ export default {
           controlsValid = true,
           noQueryAfterDisposal = true,
           discardedOnly = true;
+        let pageSelectorsValid = true;
         const queried: string[] = [];
         const cancel = new AbortController();
         const evidence = createWorkosAuthenticationEvidence(c.profileJson, c.snapshotJson, {
           now: () => now,
           currentProfile: () => currentProfile,
           readPage: async (selector, control) => {
-            pageReads++;
             const value = JSON.parse(selector);
-            check(
-              c.name + "_page_selector",
+            pageSelectorsValid &&=
               names(value) === "after,limit,order,schemaVersion,subjectId" &&
-                value.schemaVersion === 1 &&
-                value.subjectId === c.args[7] &&
-                value.after === null &&
-                value.limit === 100 &&
-                value.order === "asc" &&
-                Object.isFrozen(control) &&
-                control.signal instanceof AbortSignal,
-            );
-            return c.page;
+              value.schemaVersion === 1 &&
+              value.subjectId === c.args[7] &&
+              value.after ===
+                (pageReads === 0 ? null : JSON.parse(c.pages[pageReads - 1]).list_metadata.after) &&
+              value.limit === 100 &&
+              value.order === "asc" &&
+              Object.isFrozen(control) &&
+              control.signal instanceof AbortSignal;
+            return c.pages[pageReads++];
           },
         });
         const verified = await evidence.verify(c.token);
-        if (verified.outcome !== "verified_active_evidence") throw Error("FIXTURE_EVIDENCE_FAILED");
         const owned = evidence.readEvidence(verified.handle);
-        check(c.name + "_owned_evidence", owned !== null && pageReads === 1);
+        check(c.name + "_page_selector", pageSelectorsValid && pageReads === c.expectedPageReads);
+        check(
+          c.name + "_owned_evidence",
+          verified.outcome === c.expectedEvidence &&
+            (c.expectedEvidence === "held"
+              ? verified.handle === null && owned === null
+              : owned !== null),
+        );
         check(
           c.name + "_independent_provenance",
-          owned !== null &&
-            owned.tokenProvenance === "signature_verified" &&
-            owned.sessionClientBinding === "expected_only" &&
-            owned.sessionLiveness === "not_guaranteed" &&
-            owned.tokenProfileDigest === c.profileDigest &&
-            owned.keySetDigest === c.keySetDigest &&
-            owned.observationProfileDigest === c.observationDigest &&
-            owned.expiresAtMs === c.evidenceExpiresAtMs,
+          c.expectedEvidence === "held"
+            ? owned === null
+            : owned !== null &&
+                owned.tokenProvenance === "signature_verified" &&
+                owned.sessionClientBinding === "expected_only" &&
+                owned.sessionLiveness === "not_guaranteed" &&
+                owned.tokenProfileDigest === c.profileDigest &&
+                owned.keySetDigest === c.keySetDigest &&
+                owned.observationProfileDigest === c.observationDigest &&
+                owned.expiresAtMs === c.evidenceExpiresAtMs,
         );
         const controlValid = (control: Readonly<WorkspaceSelectionControl>) => {
           controlsValid &&=
@@ -264,8 +274,21 @@ export default {
         );
         check(
           c.name + "_connection_budget",
-          connects === c.expectedConnects && lookups === c.expectedLookups && pageReads === 1,
+          connects === c.expectedConnects &&
+            lookups === c.expectedLookups &&
+            pageReads === c.expectedPageReads,
         );
+        if (c.expectedEvidence === "held")
+          check(
+            c.name + "_held_evidence_zero_sql",
+            verified.outcome === "held" &&
+              verified.handle === null &&
+              result.outcome === "held" &&
+              result.selection === null &&
+              connects === 0 &&
+              queried.length === 0 &&
+              releases === 0,
+          );
         const normal = queried.filter((key) => key !== "rollback");
         check(
           c.name + "_fixed_query_order",

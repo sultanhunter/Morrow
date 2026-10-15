@@ -97,6 +97,7 @@ const page = JSON.stringify({
       id: session,
       user_id: subject,
       status: "active",
+      auth_method: "oauth",
       ended_at: null,
       expires_at: new Date(now + 120000).toISOString(),
       created_at: new Date(now - 60000).toISOString(),
@@ -145,6 +146,9 @@ function make(name, options = {}) {
     snapshotJson,
     token: signedToken(p),
     page,
+    pages: [page],
+    expectedPageReads: 1,
+    expectedEvidence: "verified_active_evidence",
     now,
     evidenceExpiresAtMs: expires,
     profileDigest: sha(profileJson),
@@ -174,6 +178,94 @@ function make(name, options = {}) {
   };
 }
 const add = (name, options = {}) => cases.push(make(name, options));
+// Drive the maintained reader through the unchanged composition and selector.
+// Negative evidence must terminate before even acquiring a SQL connection.
+const policyPage = (change = {}, after = null) => {
+  const value = JSON.parse(page);
+  Object.assign(value.data[0], change);
+  value.list_metadata.after = after;
+  return JSON.stringify(value);
+};
+const unrelatedSession = "session_" + "Y".repeat(26);
+for (const method of [
+  "cross_app_auth",
+  "external_auth",
+  "magic_code",
+  "migrated_session",
+  "oauth",
+  "passkey",
+  "password",
+  "sso",
+])
+  add("human_method_selects_" + method, { pages: [policyPage({ auth_method: method })] });
+const noEvidence = {
+  expected: "held",
+  expectedEvidence: "held",
+  expectedConnects: 0,
+  expectedLookups: 0,
+  expectedReleases: 0,
+  expectedQueryPrefix: [],
+};
+for (const [name, change] of Object.entries({
+  missing: { auth_method: undefined },
+  null: { auth_method: null },
+  unknown: { auth_method: "unknown" },
+  new_method: { auth_method: "future_method" },
+  wrong_case: { auth_method: "OAuth" },
+  leading_space: { auth_method: " oauth" },
+  trailing_space: { auth_method: "oauth " },
+  impersonation_absent_metadata: { auth_method: "impersonation" },
+  impersonation_null_metadata: { auth_method: "impersonation", impersonator: null },
+  normal_with_impersonator_null_reason: {
+    impersonator: { email: "synthetic@example.test", reason: null },
+  },
+  normal_with_impersonator_string_reason: {
+    impersonator: { email: "synthetic@example.test", reason: "synthetic" },
+  },
+  impersonation_with_impersonator_null_reason: {
+    auth_method: "impersonation",
+    impersonator: { email: "synthetic@example.test", reason: null },
+  },
+}))
+  add("policy_held_zero_sql_" + name, { ...noEvidence, pages: [policyPage(change)] });
+add("normal_null_impersonator_selects", { pages: [policyPage({ impersonator: null })] });
+add("normal_target_then_valid_impersonated_row_selects", {
+  pages: [
+    policyPage({}, session),
+    policyPage({
+      id: unrelatedSession,
+      auth_method: "impersonation",
+      impersonator: { email: "synthetic@example.test", reason: null },
+    }),
+  ],
+  expectedPageReads: 2,
+});
+add("unrelated_unknown_then_normal_target_selects", {
+  pages: [policyPage({ id: unrelatedSession, auth_method: "unknown" }, unrelatedSession), page],
+  expectedPageReads: 2,
+});
+add("later_malformed_row_holds_evidence_zero_sql", {
+  ...noEvidence,
+  expectedPageReads: 2,
+  pages: [
+    policyPage({}, session),
+    policyPage({
+      id: unrelatedSession,
+      auth_method: "impersonation",
+      impersonator: { email: "synthetic@example.test", reason: 7 },
+    }),
+  ],
+});
+add("complete_target_miss_holds_evidence_zero_sql", {
+  ...noEvidence,
+  pages: [
+    policyPage({
+      id: unrelatedSession,
+      auth_method: "impersonation",
+      impersonator: { email: "synthetic@example.test", reason: null },
+    }),
+  ],
+});
 add("exact_private_snapshot", { advanceAfter: true });
 add("selected_second_organization", { row: rowB });
 add("safe_integer_revision_limit", {
@@ -425,6 +517,7 @@ const required = [
 const expectedNames = cases.flatMap((c) => [
   ...required.map((suffix) => c.name + "_" + suffix),
   ...(c.advanceAfter ? [c.name + "_snapshot_is_historical"] : []),
+  ...(c.expectedEvidence === "held" ? [c.name + "_held_evidence_zero_sql"] : []),
 ]);
 expectedNames.push(
   "two_organizations_same_owned_evidence",
@@ -498,17 +591,19 @@ try {
     "scripts/workos-workspace-selection-workers-lab.mjs",
     "package-lock.json",
   ];
-  mkdirSync("docs/evidence/P05.T01j", { recursive: true });
+  mkdirSync("docs/evidence/P05.T01k", { recursive: true });
   writeFileSync(
-    "docs/evidence/P05.T01j/workers-lab.json",
+    "docs/evidence/P05.T01k/selection-workers-lab.json",
     JSON.stringify(
       {
-        task: "P05.T01j",
+        task: "P05.T01k",
+        boundary: "selection",
+        selected_policy_sequence: 78,
         canonical_sequence: JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
           .sequence,
         observed_at: new Date().toISOString(),
         scope:
-          "Actual pinned local workerd with native-RSA-signed synthetic tokens, owning T01i evidence and fixed injected SQL clients. SQL eligibility/constraints are qualified separately in PostgreSQL. Private selection snapshots are nonauthorizing historical observations; no provider, production adapter, session or merchant access.",
+          "Actual pinned local workerd qualifying canonical78 selected human-session policy with native-RSA-signed synthetic tokens, owning T01i evidence and fixed injected SQL clients. SQL eligibility/constraints are qualified separately in PostgreSQL. Private selection snapshots are nonauthorizing historical observations; no provider, production adapter, session or merchant access.",
         runtime: "miniflare4.20260730.0",
         compatibility_date: "2026-07-30",
         cases: cases.length + 1,

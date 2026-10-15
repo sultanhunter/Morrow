@@ -30,9 +30,14 @@ const migrations = manifest.migrations.map((m) => {
 });
 if (migrations.length !== 7 || migrations[6].m.sequence !== 7)
   throw Error("RESOLUTION_MIGRATION_REQUIRED");
+// Capture the measured plan at startup; later plan changes cannot relabel a run.
+const planSequence = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
+  .sequence;
+if (!Number.isSafeInteger(planSequence) || planSequence < 78)
+  throw Error("SELECTED_POLICY_PLAN_REQUIRED");
 const adapterMetrics = [];
 const faultInjectionMetrics = [];
-const outcome = await localPostgresLab("P05.T01j", async ({ id, sql, image, version }) => {
+const outcome = await localPostgresLab("P05.T01k", async ({ id, sql, image, version }) => {
   sql("CREATE DATABASE morrow; CREATE DATABASE morrow_subject_rollback;");
   sql(readFileSync("infra/identity-role-prerequisites.sql", "utf8"), "morrow");
   for (const m of migrations) sql("SET ROLE morrow_identity_owner;\n" + m.text, "morrow");
@@ -855,6 +860,7 @@ INSERT INTO morrow_identity.provider_subject_profile_bindings VALUES(${literal(f
     readPage: async () =>
       rsa.page([
         rsa.session({
+          auth_method: "oauth",
           created_at: new Date(realAt - 60000).toISOString(),
           updated_at: new Date(realAt - 1000).toISOString(),
           expires_at: new Date(realAt + 60000).toISOString(),
@@ -910,14 +916,21 @@ INSERT INTO morrow_identity.provider_subject_profile_bindings VALUES(${literal(f
   return { image, version };
 });
 
-mkdirSync("docs/evidence/P05.T01j", { recursive: true });
+mkdirSync("docs/evidence/P05.T01k", { recursive: true });
 writeFileSync(
-  "docs/evidence/P05.T01j/postgresql-lab.json",
+  "docs/evidence/P05.T01k/postgresql-lab.json",
   JSON.stringify(
     {
-      packet: "P05.T01j",
-      planSequence: 77,
+      packet: "P05.T01k",
+      planSequence,
+      selectedPolicySequence: 78,
       synthetic: true,
+      qualificationScope:
+        "Current selected human-session policy with explicit oauth fixture through unchanged token/composition/selection into isolated SQL; SQL-specific fault and constraint scenarios use labeled trusted synthetic readers. No provider or issuer qualification.",
+      historicalReport: {
+        path: "docs/evidence/P05.T01j/postgresql-lab.json",
+        sha256: "5a06e6fc90e3368873c86ede58e2f11f12f6f0daeece0459ed06f5ffca21f826",
+      },
       providerRequests: 0,
       engine: outcome.image,
       version: outcome.version,
@@ -937,6 +950,15 @@ writeFileSync(
           "scripts/local-provider-subject-sql.mjs",
           "scripts/provider-subject-resolution-lab.mjs",
           "packages/identity/src/workos-workspace-selection.ts",
+          "packages/identity/src/workos-authentication-evidence.ts",
+          "packages/identity/src/workos-session-token.ts",
+          "packages/identity/src/workos-session-status.ts",
+          "packages/identity/src/workos-session-status-json.ts",
+          "tests/fixtures/workos-authentication-evidence.mjs",
+          "scripts/local-postgres-lab.mjs",
+          "infra/local-engine.json",
+          "migrations/manifest.json",
+          ...migrations.slice(0, 6).map(({ m }) => "migrations/" + m.file),
         ].map((path) => [path, hash(readFileSync(path))]),
       ),
     },
@@ -946,7 +968,7 @@ writeFileSync(
 );
 console.log(
   JSON.stringify({
-    packet: "P05.T01j",
+    packet: "P05.T01k",
     checks: checks.length,
     passed: checks.length,
     providerRequests: 0,

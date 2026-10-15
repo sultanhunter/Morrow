@@ -22,6 +22,7 @@ const session = (change = {}) => ({
   id: targetId,
   user_id: subjectId,
   status: "active",
+  auth_method: "oauth",
   expires_at: new Date(now + 120000).toISOString(),
   ended_at: null,
   created_at: new Date(now - 60000).toISOString(),
@@ -42,6 +43,93 @@ const add = (name, pages, expected = "held", options = {}) =>
     expectedReads: 1,
     ...options,
   });
+// Independent canonical78 policy cases. The complete catalogue can contain
+// other valid impersonated/unknown-method sessions; only the signed target
+// must satisfy the conservative recognized-human-method predicate.
+for (const method of [
+  "cross_app_auth",
+  "external_auth",
+  "magic_code",
+  "migrated_session",
+  "oauth",
+  "passkey",
+  "password",
+  "sso",
+])
+  add("human_method_" + method, [page([session({ auth_method: method })])], "observed_active");
+for (const [name, change] of Object.entries({
+  missing: { auth_method: undefined },
+  null: { auth_method: null },
+  unknown: { auth_method: "unknown" },
+  new_method: { auth_method: "future_method" },
+  wrong_case: { auth_method: "OAuth" },
+  leading_space: { auth_method: " oauth" },
+  trailing_space: { auth_method: "oauth " },
+  impersonation_absent_metadata: { auth_method: "impersonation" },
+  impersonation_null_metadata: { auth_method: "impersonation", impersonator: null },
+  normal_with_impersonator_null_reason: {
+    impersonator: { email: "synthetic@example.test", reason: null },
+  },
+  impersonation_with_impersonator_null_reason: {
+    auth_method: "impersonation",
+    impersonator: { email: "synthetic@example.test", reason: null },
+  },
+}))
+  add("target_policy_" + name, [page([session(change)])]);
+add(
+  "normal_method_null_impersonator",
+  [page([session({ impersonator: null })])],
+  "observed_active",
+);
+add(
+  "normal_target_then_valid_impersonated_row",
+  [
+    page([session()], targetId),
+    page([
+      session({
+        id: otherId,
+        auth_method: "impersonation",
+        impersonator: { email: "synthetic@example.test", reason: null },
+      }),
+    ]),
+  ],
+  "observed_active",
+  { expectedReads: 2 },
+);
+add(
+  "unrelated_unknown_method_then_normal_target",
+  [page([session({ id: otherId, auth_method: "unknown" })], otherId), page([session()])],
+  "observed_active",
+  { expectedReads: 2 },
+);
+add(
+  "later_malformed_impersonator_holds_early_match",
+  [
+    page([session()], targetId),
+    page([
+      session({
+        id: otherId,
+        auth_method: "impersonation",
+        impersonator: { email: "synthetic@example.test", reason: 7 },
+      }),
+    ]),
+  ],
+  "held",
+  { expectedReads: 2 },
+);
+add(
+  "complete_only_unrelated_impersonated_is_not_revoked",
+  [
+    page([
+      session({
+        id: otherId,
+        auth_method: "impersonation",
+        impersonator: { email: "synthetic@example.test", reason: null },
+      }),
+    ]),
+  ],
+  "not_observed_active",
+);
 add("complete_active", [page([session()])], "observed_active", { later: now + 5000 });
 add("complete_empty_is_not_observed_active", [page()], "not_observed_active", {
   later: now + 5000,
@@ -208,17 +296,19 @@ try {
     "package-lock.json",
   ];
   const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
-  mkdirSync("docs/evidence/P05.T01h", { recursive: true });
+  mkdirSync("docs/evidence/P05.T01k", { recursive: true });
   writeFileSync(
-    "docs/evidence/P05.T01h/workers-lab.json",
+    "docs/evidence/P05.T01k/reader-workers-lab.json",
     JSON.stringify(
       {
-        task: "P05.T01h",
+        task: "P05.T01k",
+        boundary: "reader",
+        selected_policy_sequence: 78,
         canonical_sequence: JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
           .sequence,
         observed_at: new Date().toISOString(),
         scope:
-          "Actual pinned local workerd with fake paginated session pages only; no credential, provider network, local identity/session/grant or merchant access",
+          "Actual pinned local workerd qualifying canonical78 selected human-session policy with fake paginated session pages only; no credential, provider network, local identity/session/grant or merchant access",
         runtime: "miniflare4.20260730.0",
         compatibility_date: "2026-07-30",
         cases: cases.length,

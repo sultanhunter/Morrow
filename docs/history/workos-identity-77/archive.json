@@ -1,0 +1,452 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Nonexecuted curated published77 identity preservation before canonical78 selected-reader correction",
+  "sourceCommit": "3937e194e65f225380d226e99edeb0ea0b2e345a",
+  "canonicalSequence": 77,
+  "successfulCi": {
+    "runId": "38760128490",
+    "url": "https://github.com/sultanhunter/Morrow/actions/runs/38760128490",
+    "conclusion": "success"
+  },
+  "provenance": "All60 payload files copied from and byte-compared with exact published Git blobs; manifest is later preservation metadata, not part of that commit.",
+  "execution": "Never execute in this archive; this is a curated evidence closure, not a standalone installation or restored native authority.",
+  "evidenceScope": "Prior H/I/J results retain their original source-bound scope. In particular the prior T01i package export digest can differ from the published77 package; historical reports are not relabeled as77 recertification.",
+  "fileCount": 60,
+  "files": [
+    {
+      "path": ".nvmrc",
+      "sha256": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+      "bytes": 8,
+      "gitBlob": "3fe3b1570a5187e1f51cb2467a99647b2ba3ea54"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "1870c52ffbf16b454b6351c94e1647b4d2217101af34cf28ad7a080e7caee93a",
+      "bytes": 20786,
+      "gitBlob": "d3177cc3165009c86ba9c62c393fd3df8dc5c12c"
+    },
+    {
+      "path": "docs/evidence/P05.T01f/workers-lab.json",
+      "sha256": "a981f1fe3a1a7e41033a03504b7c78172182d93eb9faa6f2abb2aacce3544359",
+      "bytes": 6769,
+      "gitBlob": "8a6ce76fc06df97dc2398eb820609e4044013886"
+    },
+    {
+      "path": "docs/evidence/P05.T01h/local-validation.json",
+      "sha256": "3d9ee058f76ce05b19477be5e9ac9d5e710446b8087eea4e6f5b2c7ab28d7de8",
+      "bytes": 4975,
+      "gitBlob": "c7fb748a7169b0b85479a8280d6ee49501d4da6a"
+    },
+    {
+      "path": "docs/evidence/P05.T01h/review.json",
+      "sha256": "7d157e9578a40e7af8c6995b924d50ef86af9783359213dcbecdfd77307a9414",
+      "bytes": 4392,
+      "gitBlob": "c2d77eb5e95bc2055e8e56112ec47b80428334ae"
+    },
+    {
+      "path": "docs/evidence/P05.T01h/workers-lab.json",
+      "sha256": "a22e986952f0f3eaf95bd3ffe9ed9e01803b55805fd3f799d940a3d61cc953e5",
+      "bytes": 20158,
+      "gitBlob": "0e87007ef165a4d9293ddb737365f89e573bf22f"
+    },
+    {
+      "path": "docs/evidence/P05.T01i/local-validation.json",
+      "sha256": "30c5866aa020e260c03b6bd0c6e7479ffbed65d249bfd81458bfe15382c0ad59",
+      "bytes": 4900,
+      "gitBlob": "6c5ad8ae28099d7fc4c1f9995d718264f961577c"
+    },
+    {
+      "path": "docs/evidence/P05.T01i/review.json",
+      "sha256": "16bf5c71c36003a5cfc414de276b8d04a8178568df6291d2e37adeeeffd78ca8",
+      "bytes": 4343,
+      "gitBlob": "311d8b9c1d9a40e985cad86fa2f6732af076aaa6"
+    },
+    {
+      "path": "docs/evidence/P05.T01i/workers-lab.json",
+      "sha256": "27ab3f153ca15f48d82a06bb17d5562c77133d49d942144349c234f3a96727ba",
+      "bytes": 29974,
+      "gitBlob": "c11eeea15223691bca3a8c87956f12b85568cca6"
+    },
+    {
+      "path": "docs/evidence/P05.T01j/local-validation.json",
+      "sha256": "8377896c9c967c47508a0d86c972f0b9ef4559f3bf3ef00fd34a99306e121aab",
+      "bytes": 6107,
+      "gitBlob": "21fc4783528713212e9e793a62ee81326e30acfc"
+    },
+    {
+      "path": "docs/evidence/P05.T01j/postgresql-lab.json",
+      "sha256": "5a06e6fc90e3368873c86ede58e2f11f12f6f0daeece0459ed06f5ffca21f826",
+      "bytes": 24376,
+      "gitBlob": "7bad91c5da2e0b019ad7362d28b69f643207760b"
+    },
+    {
+      "path": "docs/evidence/P05.T01j/review.json",
+      "sha256": "5963ddf0ec019f6ad2b5bf340b392296fed68c0c10d25c273e150c68b57ca45d",
+      "bytes": 4718,
+      "gitBlob": "7d6cbe565f1416e07e2a4bd4e431ddadea3ffbfb"
+    },
+    {
+      "path": "docs/evidence/P05.T01j/workers-lab.json",
+      "sha256": "6cbcf9062ce10176e3f71628463e7f3a9cddbd5333fe4da6b3cb10c6ca0c0a2d",
+      "bytes": 135683,
+      "gitBlob": "c5cbf8354719e2a4bb48d4cfb4133a082f44b3c4"
+    },
+    {
+      "path": "docs/packets/P05.T01f.md",
+      "sha256": "b23b6fc103882de5549e3ba1e3f2053105850a12f308f87fc92a4a88fdab1c65",
+      "bytes": 8114,
+      "gitBlob": "c2d64b25f6ee5daa2ae02df77d16035f48bb1fc8"
+    },
+    {
+      "path": "docs/packets/P05.T01h.md",
+      "sha256": "3cb2dc20ccc6ef25ba33d2f3b97e79dd8d9b7ade8aaed7d781922a9496add4cc",
+      "bytes": 12142,
+      "gitBlob": "529f3059fdeefb302d455c927c55088ac4943379"
+    },
+    {
+      "path": "docs/packets/P05.T01i.md",
+      "sha256": "a03ad02a4e2cfd1223f4e274150eda911fce748e90e3d8a219e5796ac1bfaaa0",
+      "bytes": 11084,
+      "gitBlob": "3f48e7caf232affcac86715d491e3e5ea8a5a84a"
+    },
+    {
+      "path": "docs/packets/P05.T01j.md",
+      "sha256": "b0754014ae01703a99904fcf16d86575cfc466044ee6bd847b769a3219497691",
+      "bytes": 14500,
+      "gitBlob": "34f35bb693b05767bdbd612abf39c803916a02a4"
+    },
+    {
+      "path": "docs/plan/build-plan.md",
+      "sha256": "7af6322287a6a2fe00150cd9f434718b5526054bd79a88f92db0edd630a1a8bc",
+      "bytes": 275482,
+      "gitBlob": "4cc4cd6189f3c1eb1d8a560b7e0d2a4a1481962d"
+    },
+    {
+      "path": "docs/plan/source.json",
+      "sha256": "8377e00320dc6c9a99830f9db428af499042cd36dc72f8e02e425a6b5bfef753",
+      "bytes": 1762,
+      "gitBlob": "0156ba34d1ddcf5eecc5212f687d05fbc11617d4"
+    },
+    {
+      "path": "docs/progress/checkpoint.md",
+      "sha256": "cb14c7a33094536b09e918bc5a6772387ce02a2b6fff54805d2febb2a947b4fb",
+      "bytes": 87055,
+      "gitBlob": "f5fd41ad1b9fadda233c8072c550c576ecd65004"
+    },
+    {
+      "path": "infra/identity-role-prerequisites.sql",
+      "sha256": "2c166df1d5b18eda1b4be14c94a26fb31828292833ed110655608400b29fe9af",
+      "bytes": 1380,
+      "gitBlob": "114e90a78116ab7bbc28d7757fffc5cc5baf212e"
+    },
+    {
+      "path": "infra/local-engine.json",
+      "sha256": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+      "bytes": 481,
+      "gitBlob": "96a169aafd3ba19291d151ecd494c653dbed8827"
+    },
+    {
+      "path": "migrations/0001.identity-foundation.sql",
+      "sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+      "bytes": 6311,
+      "gitBlob": "b817e2c26e6c25efa9fdd86b2b5cdd61657416e8"
+    },
+    {
+      "path": "migrations/0002.identity-grants.sql",
+      "sha256": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+      "bytes": 2374,
+      "gitBlob": "5fca01620733165e1518b60f5cc88fe2318f3388"
+    },
+    {
+      "path": "migrations/0003.authentication-challenges.sql",
+      "sha256": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+      "bytes": 5409,
+      "gitBlob": "2145eb3b74bf7757bbb7b93f9c2cfe32f3f6ca45"
+    },
+    {
+      "path": "migrations/0004.workspace-access-revocation.sql",
+      "sha256": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+      "bytes": 16189,
+      "gitBlob": "684bc4ee5009c0c4ca9d6d5d99836ec56353b3fc"
+    },
+    {
+      "path": "migrations/0005.workspace-store-linking.sql",
+      "sha256": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+      "bytes": 22946,
+      "gitBlob": "8cee5fe19a90aca327da1a677c1b502925dbbd65"
+    },
+    {
+      "path": "migrations/0006.authentication-exchange-admission.sql",
+      "sha256": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+      "bytes": 17469,
+      "gitBlob": "2ddf14ff04921ddcde1d905c175212aa14024757"
+    },
+    {
+      "path": "migrations/0007.provider-subject-resolution.sql",
+      "sha256": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+      "bytes": 11567,
+      "gitBlob": "b4977dc80a1f15d2e862913bc7f667301e41f7d0"
+    },
+    {
+      "path": "migrations/manifest.json",
+      "sha256": "e115ec9e3326dd75542fc28edecc7de9f37d44c92d975388d58c2cdeda760e9f",
+      "bytes": 1758,
+      "gitBlob": "9ed0f238858e91562dacac61738caf7f78131bfb"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+      "bytes": 278083,
+      "gitBlob": "e57f38fece07460dd594b4a9fda84abc5f41687c"
+    },
+    {
+      "path": "package.json",
+      "sha256": "9b9be4ccc5ae78f00d8f080f35c3797a3450f95aa8449e8dd94328e488f1aa3e",
+      "bytes": 14276,
+      "gitBlob": "978201f734a406109125248a6c3b32d0e97a8c18"
+    },
+    {
+      "path": "packages/identity/package.json",
+      "sha256": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3",
+      "bytes": 924,
+      "gitBlob": "e64921b3a74601505be984fdbc70a723e5e9bb1e"
+    },
+    {
+      "path": "packages/identity/src/index.ts",
+      "sha256": "041952d82c134a04487b9e9648c2a648879fa069220c9d37eb9113509a7c3643",
+      "bytes": 8679,
+      "gitBlob": "e66f23978661622a0d3a50fbc7120a63aff59024"
+    },
+    {
+      "path": "packages/identity/src/workos-authentication-evidence.ts",
+      "sha256": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+      "bytes": 11902,
+      "gitBlob": "8f47b73deb0516710b333f9f882e655020a01c1b"
+    },
+    {
+      "path": "packages/identity/src/workos-session-status-json.ts",
+      "sha256": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+      "bytes": 3053,
+      "gitBlob": "8cddcf6bd41200581a55abdc28c3ce5e9b363ce8"
+    },
+    {
+      "path": "packages/identity/src/workos-session-status.ts",
+      "sha256": "1c6d48b633354e2c7059439dd920591787aadd8b3afae8b88610bf803b9dd579",
+      "bytes": 12904,
+      "gitBlob": "d9cf41caeb0469bc301793373432c6cff2586a25"
+    },
+    {
+      "path": "packages/identity/src/workos-session-token.ts",
+      "sha256": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+      "bytes": 14289,
+      "gitBlob": "ceaeb85993c5ff063259a6ff64e4b170bfa35797"
+    },
+    {
+      "path": "packages/identity/src/workos-workspace-selection.ts",
+      "sha256": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+      "bytes": 15741,
+      "gitBlob": "1cedcc7f5118bf7cc10ca074ab706cc62580eb5b"
+    },
+    {
+      "path": "packages/identity/tsconfig.json",
+      "sha256": "2fbd292cd1864b7f17b399f49e9e8ef465c26ce3117baf06e423921c33296aea",
+      "bytes": 70,
+      "gitBlob": "832af421b968dba7f98ee2167ac6708e236f7532"
+    },
+    {
+      "path": "scripts/fixtures/workos-authentication-evidence-worker.ts",
+      "sha256": "051bc03ca0e6d2dcc05bea061341f12c808d2574017fd2d0e5f4dd3aa8b42500",
+      "bytes": 14089,
+      "gitBlob": "73120f1adc1b4d304b61462b1b0bee3edf1f2a03"
+    },
+    {
+      "path": "scripts/fixtures/workos-session-status-worker.ts",
+      "sha256": "861bd88c4160bf7eb2c85716a9ef7bf7a23aefba410c5ffabf1766d48a96f1a3",
+      "bytes": 7790,
+      "gitBlob": "f99f393ab11b3e2d75cc151fc3d4a2b48e2c3dfc"
+    },
+    {
+      "path": "scripts/fixtures/workos-session-token-worker.ts",
+      "sha256": "e7e8078c2e7657346aea1d556e8c09d51652ffc4c122f3f4ba13c49628f3dd74",
+      "bytes": 4171,
+      "gitBlob": "332d60b43c48656527610bc07d021950892b0116"
+    },
+    {
+      "path": "scripts/fixtures/workos-workspace-selection-worker.ts",
+      "sha256": "40d0b190424055d4846e9707328e77443bc31cb3beb840201fec335dc2b4f10e",
+      "bytes": 15484,
+      "gitBlob": "6fa2514f21cd945c150d9c372d53cb33adc27e6f"
+    },
+    {
+      "path": "scripts/local-postgres-lab.mjs",
+      "sha256": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+      "bytes": 6092,
+      "gitBlob": "71432c638effd0da5de3f3a4c01b6a232b4cd6d3"
+    },
+    {
+      "path": "scripts/local-provider-subject-sql.mjs",
+      "sha256": "03ee4c0f79b225348a1fe88a7750775efcfb8ea05f0eb8865e96324ed790fa85",
+      "bytes": 11384,
+      "gitBlob": "4a9064b5c061ddf714394e3d8f4b8dc9f5ac8dc1"
+    },
+    {
+      "path": "scripts/provider-subject-resolution-lab.mjs",
+      "sha256": "d7e8d7346dc2a7819818724780045c1d14a195f9918610c0725196daa393c890",
+      "bytes": 37303,
+      "gitBlob": "4becc6c93be8163aab02312505d596e183fde13d"
+    },
+    {
+      "path": "scripts/workos-authentication-evidence-workers-lab.mjs",
+      "sha256": "279bfbfd8f9ef52770ee08956a61b0534c9598060f3c1d24a09b237aaac00a87",
+      "bytes": 14190,
+      "gitBlob": "03d91f847d97cde7e1e2dc6468b4f6b81c581993"
+    },
+    {
+      "path": "scripts/workos-session-status-workers-lab.mjs",
+      "sha256": "5abcc65021c7cfaada03a34c69c3c1b0a93c37922f2da934fb0ac12ce2077df9",
+      "bytes": 8051,
+      "gitBlob": "cfb223d06626d4f9875bb89f951420beb1bc7a47"
+    },
+    {
+      "path": "scripts/workos-session-token-workers-lab.mjs",
+      "sha256": "4553823deba74175208a439f380d19e0a1767c16817fe78f48188435491ee6e0",
+      "bytes": 9670,
+      "gitBlob": "2d3d614c51e6684366cc5ee475eeabae659025e3"
+    },
+    {
+      "path": "scripts/workos-workspace-selection-workers-lab.mjs",
+      "sha256": "fc28b0372320e013fb093f56510f906a4a092738db8f9be8be5039057b39cd68",
+      "bytes": 16842,
+      "gitBlob": "edb15501a8a19068383ced2da190a538794d3e91"
+    },
+    {
+      "path": "tests/fixtures/workos-authentication-evidence.mjs",
+      "sha256": "c2ad350d7ae411e6b60738b78599fb7edbeb86392c9fee5f81d233662e5aa8cf",
+      "bytes": 3274,
+      "gitBlob": "0abc67387f9914c7ade1c41ba71ed4876efe29a8"
+    },
+    {
+      "path": "tests/fixtures/workos-session-status.mjs",
+      "sha256": "c71601c2ac42da7851857492b792fca665df541073477b11acb0185098b688de",
+      "bytes": 1330,
+      "gitBlob": "5ddb5e7b9c74934dea72729cb6f0ad63e34378f1"
+    },
+    {
+      "path": "tests/fixtures/workos-session-token.mjs",
+      "sha256": "ef1005fea94abf924b1355cbb03eab34063890bb3a7aea4322aaab125255b05a",
+      "bytes": 2838,
+      "gitBlob": "69993ad1e27cd94903643cd165546a9919980de5"
+    },
+    {
+      "path": "tests/provider-subject-sql.test.mjs",
+      "sha256": "28b3430eba93c02c1cc89a3cb6fe6a8be62243dc171f57fb48a2c4047327c058",
+      "bytes": 3503,
+      "gitBlob": "35fe5850f8ff0a7d7c7f1ce8a71e32296f99bc57"
+    },
+    {
+      "path": "tests/workos-authentication-evidence.test.mjs",
+      "sha256": "cde7e6ab3a8a3f1de0182991f43b8fe95433d21827efa413de876fd4cf9d982b",
+      "bytes": 18717,
+      "gitBlob": "8e8f3415eb11c422c3a608aab06c36802f253e07"
+    },
+    {
+      "path": "tests/workos-session-status.test.mjs",
+      "sha256": "880703cba923aa395777d6b689bc56d73258c968705dc769fac53bc750a32c83",
+      "bytes": 18144,
+      "gitBlob": "e212c7e0b50d985cbc0d267bbf2eadda6b9fdd96"
+    },
+    {
+      "path": "tests/workos-session-token.test.mjs",
+      "sha256": "51b95f9d9b76438eacf95c40c9f7ce493f6de1983fe5613c19b4e657a9345316",
+      "bytes": 16297,
+      "gitBlob": "e66536702e309190e81277ec43d1c5d10deb35d3"
+    },
+    {
+      "path": "tests/workos-workspace-selection.test.mjs",
+      "sha256": "c70eb55657e3f10199c49ed8a24a008ebcfb94cb709f7b336ce6112f56e3ed25",
+      "bytes": 17528,
+      "gitBlob": "2980c3b45f014653293f523b03d8f6b054502826"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "sha256": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+      "bytes": 445,
+      "gitBlob": "4b6dcba029e29f533a7ebde7213e8aa6d7cd520d"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "docs/evidence/P05.T01f/workers-lab.json",
+      "classification": "historical_source_bound_not_current_recertification",
+      "recordedInputsDifferingFromPublishedClosure": [
+        {
+          "path": "packages/identity/package.json",
+          "evidenceSha256": "2f616769f0366b4742aab1ca7e26857fe443a23a2aefbc9962fa361a20a9563b",
+          "publishedSha256": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3"
+        }
+      ]
+    },
+    {
+      "path": "docs/evidence/P05.T01h/local-validation.json",
+      "classification": "historical_source_bound_not_current_recertification",
+      "recordedInputsDifferingFromPublishedClosure": []
+    },
+    {
+      "path": "docs/evidence/P05.T01h/review.json",
+      "classification": "historical_source_bound_not_current_recertification",
+      "recordedInputsDifferingFromPublishedClosure": []
+    },
+    {
+      "path": "docs/evidence/P05.T01h/workers-lab.json",
+      "classification": "historical_source_bound_not_current_recertification",
+      "recordedInputsDifferingFromPublishedClosure": [
+        {
+          "path": "packages/identity/package.json",
+          "evidenceSha256": "55ced72c28df4b3d4e9e85f5bae4af8d95d325dec9be81ac492a45d9a2d83a55",
+          "publishedSha256": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3"
+        }
+      ]
+    },
+    {
+      "path": "docs/evidence/P05.T01i/local-validation.json",
+      "classification": "historical_source_bound_not_current_recertification",
+      "recordedInputsDifferingFromPublishedClosure": []
+    },
+    {
+      "path": "docs/evidence/P05.T01i/review.json",
+      "classification": "historical_source_bound_not_current_recertification",
+      "recordedInputsDifferingFromPublishedClosure": []
+    },
+    {
+      "path": "docs/evidence/P05.T01i/workers-lab.json",
+      "classification": "historical_source_bound_not_current_recertification",
+      "recordedInputsDifferingFromPublishedClosure": [
+        {
+          "path": "packages/identity/package.json",
+          "evidenceSha256": "8452c051d14d1fe762069cfb0898960a7ba570c4fb2fee925e1a2b08561de447",
+          "publishedSha256": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3"
+        }
+      ]
+    },
+    {
+      "path": "docs/evidence/P05.T01j/local-validation.json",
+      "classification": "historical_source_bound_not_current_recertification",
+      "recordedInputsDifferingFromPublishedClosure": []
+    },
+    {
+      "path": "docs/evidence/P05.T01j/postgresql-lab.json",
+      "classification": "historical_source_bound_not_current_recertification",
+      "recordedInputsDifferingFromPublishedClosure": []
+    },
+    {
+      "path": "docs/evidence/P05.T01j/review.json",
+      "classification": "historical_source_bound_not_current_recertification",
+      "recordedInputsDifferingFromPublishedClosure": []
+    },
+    {
+      "path": "docs/evidence/P05.T01j/workers-lab.json",
+      "classification": "historical_source_bound_not_current_recertification",
+      "recordedInputsDifferingFromPublishedClosure": []
+    }
+  ]
+}

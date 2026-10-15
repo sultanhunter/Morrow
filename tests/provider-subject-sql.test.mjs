@@ -57,7 +57,7 @@ test("frozen token, status and composition implementations remain exact", () => 
       "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
     ],
     [
-      "packages/identity/src/workos-session-status.ts",
+      "docs/history/workos-session-status-75/packages/identity/src/workos-session-status.ts",
       "1c6d48b633354e2c7059439dd920591787aadd8b3afae8b88610bf803b9dd579",
     ],
     [

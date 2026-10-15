@@ -67,6 +67,7 @@ export function buildWorkosAuthenticationEvidenceFixture(options = {}) {
     id: claims.sid,
     user_id: claims.sub,
     status: "active",
+    auth_method: "oauth",
     ended_at: null,
     created_at: new Date(at - 60000).toISOString(),
     updated_at: new Date(at - 1000).toISOString(),
