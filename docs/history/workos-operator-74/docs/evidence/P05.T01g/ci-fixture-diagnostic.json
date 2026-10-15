@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01g",
+  "canonical_sequence": 74,
+  "failed_commit": "341548e193e905de1bc1d3191036dee8d792068e",
+  "failed_hosted_run": 38727524718,
+  "hosted_tests_passed": 1367,
+  "hosted_tests_failed": 1,
+  "failed_case": "Synthetic diagnostic driver exit3 test expected processError null but observed other/exit3",
+  "hosted_exact_process_error": "Unobserved; closed diagnostic reported other",
+  "concrete_fixture_defect": "Fake executable exited without consuming the nonempty stdin sent by spawnSync, allowing an independent write error alongside the selected exit status",
+  "author_reproduction": {
+    "large_synthetic_stdin_bytes": 524288,
+    "early_exit_epipe_status3_runs": 20,
+    "drained_exit3_without_process_error_runs": 20
+  },
+  "independent_reproduction": {
+    "large_synthetic_stdin_bytes": 2097152,
+    "early_exit_epipe_status3_runs": 12,
+    "drained_exit3_without_process_error_runs": 12
+  },
+  "repair": "Test fixture only: portable shell builtin drains stdin before selected outcome; exit3 now exercises512KiB input and retains exact null-error assertion",
+  "focused_tests_after_repair": 10,
+  "independent_review": "Separate reviewer reran10 tests and verified exact test/helper/runtime hashes; no finding",
+  "assertions_or_timeouts_relaxed": false,
+  "production_driver_changed": false,
+  "runtime_source_digest": "32bfc0f328e1cc43cfaaa12a9a90ad1fa91f48642a3da8eef3558f05f2972554",
+  "runtime_source_digest_unchanged": true,
+  "source_digests": {
+    "tests/local-postgres-diagnostics.test.mjs": "15f0674151073fca0afb5589cd2db1d072fd108da27c4cfdfb93fab9bbddd963",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4"
+  },
+  "logs_sha256": {
+    "focused_tests": "f6ebd34f7974869b19962a17bfe869b4feb91c21aa5afa47c72a4a7070068525",
+    "hosted_failure": "ed6d4c3f8be0f34a7e15eecef3bfdcfb3007f201ce2802bb9008c7ab90f5f3c2"
+  },
+  "earlier_sql_or_frozen_failure_cause": "Still unproven, separate from this fixture issue;9b899d0 hosted run passed all steps",
+  "provider_requests": 0,
+  "new_actual_trial_allowed": false,
+  "hosted_qualification": "Require the repaired exact head to pass full checks before approval/activation"
+}

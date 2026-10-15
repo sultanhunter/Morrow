@@ -10,7 +10,8 @@
     "./workspace-access-revocation": "./src/workspace-access-revocation.ts",
     "./workspace-store-linking": "./src/workspace-store-linking.ts",
     "./authentication-exchange-admission": "./src/authentication-exchange-admission.ts",
-    "./workos-session-token": "./src/workos-session-token.ts"
+    "./workos-session-token": "./src/workos-session-token.ts",
+    "./workos-session-status": "./src/workos-session-status.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

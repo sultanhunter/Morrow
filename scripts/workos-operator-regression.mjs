@@ -22,8 +22,6 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const archiveRelative = "docs/history/workos-operator-71";
-const reportRelative = "docs/evidence/P05.T01e/postgresql-loopback-lab.json";
 const pageId = "page_b1ef27b80b788191b91e67cbb52f1037";
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const failureDiagnostics = new WeakMap();
@@ -55,6 +53,47 @@ export const frozenWorkosOperator71 = Object.freeze({
   archiveFiles: 42,
   sourceFiles: 29,
   checks: 59,
+});
+export const frozenWorkosOperator74 = Object.freeze({
+  ...frozenWorkosOperator71,
+  manifestDigest: "67bd6361a6a3cf4ca03af737f8d5e4e201f8d21b390369368965e2c04923c055",
+  sourceDigest: "32bfc0f328e1cc43cfaaa12a9a90ad1fa91f48642a3da8eef3558f05f2972554",
+  archiveFiles: 45,
+  sourceFiles: 31,
+  checks: 99,
+});
+// These module-owned descriptors are the only execution choices. Public APIs
+// below select one explicitly; no caller supplies a descriptor or runner.
+const fixed71 = Object.freeze({
+  frozen: frozenWorkosOperator71,
+  sequence: 71,
+  minimumPlan: 72,
+  packet: "P05.T01e",
+  archiveRelative: "docs/history/workos-operator-71",
+  reportRelative: "docs/evidence/P05.T01e/postgresql-loopback-lab.json",
+  evidenceDirectory: "docs/evidence/P05.T01e",
+  reportName: "frozen-regression.json",
+  regressionSources: Object.freeze([
+    "scripts/workos-operator-regression.mjs",
+    "tests/workos-operator-regression.test.mjs",
+    "tests/workos-operator-input.test.mjs",
+  ]),
+});
+const fixed74 = Object.freeze({
+  frozen: frozenWorkosOperator74,
+  sequence: 74,
+  minimumPlan: 75,
+  packet: "P05.T01g",
+  archiveRelative: "docs/history/workos-operator-74",
+  reportRelative: "docs/evidence/P05.T01g/postgresql-loopback-lab.json",
+  evidenceDirectory: "docs/evidence/P05.T01g",
+  reportName: "frozen74-regression.json",
+  regressionSources: Object.freeze([
+    "scripts/workos-operator-regression.mjs",
+    "scripts/workos-operator74-regression.mjs",
+    "tests/workos-operator74-regression.test.mjs",
+    "tests/workos-operator-input.test.mjs",
+  ]),
 });
 // Qualified once against the exact official registry tarballs after full SHA512
 // SRI validation from the archived lock. Runtime preflight is entirely offline.
@@ -110,29 +149,45 @@ function pathAllowed(path) {
     path.split("/").every((part) => part !== "." && part !== "..")
   );
 }
-export function verifyFrozenWorkosOperatorArchive(root = join(sourceRoot, archiveRelative)) {
+function verifyArchive(root, fixed) {
   try {
     exactRoot(root);
     const raw = bytes(root, "archive.json", 32768);
-    if (sha(raw) !== frozenWorkosOperator71.manifestDigest) fail("ARCHIVE");
+    if (sha(raw) !== fixed.frozen.manifestDigest) fail("ARCHIVE");
     const manifest = JSON.parse(raw);
+    const files =
+      fixed.sequence === 74
+        ? [...manifest.published_files, ...manifest.post_commit_observations]
+        : manifest.files;
     if (
-      manifest.plan_sequence !== 71 ||
-      manifest.operator_source_digest !== frozenWorkosOperator71.sourceDigest ||
-      manifest.files.length !== frozenWorkosOperator71.archiveFiles
+      manifest.plan_sequence !== fixed.sequence ||
+      manifest.operator_source_digest !== fixed.frozen.sourceDigest ||
+      files.length !== fixed.frozen.archiveFiles ||
+      (fixed.sequence === 74 &&
+        (manifest.published_files.length !== 44 || manifest.post_commit_observations.length !== 1))
     )
       fail("ARCHIVE");
     const seen = new Set();
-    for (const file of manifest.files) {
+    for (const file of files) {
       if (!pathAllowed(file.path) || seen.has(file.path) || !/^[a-f0-9]{64}$/.test(file.sha256))
         fail("ARCHIVE");
       seen.add(file.path);
       if (sha(bytes(root, file.path)) !== file.sha256) fail("ARCHIVE");
     }
-    return manifest;
+    return fixed.sequence === 74 ? { ...manifest, files } : manifest;
   } catch {
     fail("ARCHIVE_INVALID");
   }
+}
+export function verifyFrozenWorkosOperatorArchive(
+  root = join(sourceRoot, fixed71.archiveRelative),
+) {
+  return verifyArchive(root, fixed71);
+}
+export function verifyFrozenWorkosOperator74Archive(
+  root = join(sourceRoot, fixed74.archiveRelative),
+) {
+  return verifyArchive(root, fixed74);
 }
 function plan(root, minimum) {
   const snapshot = JSON.parse(bytes(root, "docs/plan/source.json", 65536));
@@ -216,7 +271,7 @@ export function verifyFrozenWorkosOperatorToolchain(root = sourceRoot) {
     fail("TOOLCHAIN_INVALID");
   }
 }
-export function verifyFrozenWorkosOperatorWorkspace(root) {
+function verifyWorkspace(root, fixed) {
   try {
     exactRoot(root);
     exactRoot(join(root, "node_modules"));
@@ -234,6 +289,9 @@ export function verifyFrozenWorkosOperatorWorkspace(root) {
       "@morrow/identity/authentication-exchange-admission":
         "packages/identity/src/authentication-exchange-admission.ts",
     };
+    if (fixed.sequence === 74)
+      expected["@morrow/identity/workos-session-token"] =
+        "packages/identity/src/workos-session-token.ts";
     for (const [specifier, file] of Object.entries(expected)) {
       if (realpathSync(require.resolve(specifier)) !== join(root, file)) fail("WORKSPACE_INVALID");
     }
@@ -242,20 +300,26 @@ export function verifyFrozenWorkosOperatorWorkspace(root) {
     fail("WORKSPACE_INVALID");
   }
 }
+export function verifyFrozenWorkosOperatorWorkspace(root) {
+  return verifyWorkspace(root, fixed71);
+}
+export function verifyFrozenWorkosOperator74Workspace(root) {
+  return verifyWorkspace(root, fixed74);
+}
 
 // The only overrides are public filesystem roots for negative/preparation tests.
 // Execution below always uses the real repository, without an injected runner.
-export async function createFrozenWorkosOperatorFixture({
-  repository = sourceRoot,
-  archive = join(repository, archiveRelative),
-} = {}) {
+async function createFixture(
+  fixed,
+  { repository = sourceRoot, archive = join(repository, fixed.archiveRelative) } = {},
+) {
   let root;
   try {
     exactRoot(repository);
-    const current = plan(repository, 72);
-    const manifest = verifyFrozenWorkosOperatorArchive(archive);
+    const current = plan(repository, fixed.minimumPlan);
+    const manifest = verifyArchive(archive, fixed);
     const tooling = verifyFrozenWorkosOperatorToolchain(repository);
-    root = realpathSync(mkdtempSync(join(tmpdir(), "morrow-workos-frozen-71-")));
+    root = realpathSync(mkdtempSync(join(tmpdir(), `morrow-workos-frozen-${fixed.sequence}-`)));
     for (const file of manifest.files) {
       const target = join(root, file.path);
       mkdirSync(dirname(target), { recursive: true });
@@ -266,14 +330,14 @@ export async function createFrozenWorkosOperatorFixture({
       symlinkSync(join(root, "packages", name), join(root, "node_modules/@morrow", name), "dir");
     const input = await import(pathToFileURL(join(root, "scripts/workos-operator-input.mjs")));
     const verify = (afterRun = false) => {
-      verifyFrozenWorkosOperatorArchive(archive);
+      verifyArchive(archive, fixed);
       for (const file of manifest.files) {
-        if (afterRun && file.path === reportRelative) continue;
+        if (afterRun && file.path === fixed.reportRelative) continue;
         if (sha(bytes(root, file.path)) !== file.sha256) fail("COPY_INVALID");
       }
-      verifyFrozenWorkosOperatorWorkspace(root);
+      verifyWorkspace(root, fixed);
       const scope = JSON.parse(input.loadPublicWorkosOperatorScope());
-      if (scope.planSequence !== 71 || scope.sourceDigest !== frozenWorkosOperator71.sourceDigest)
+      if (scope.planSequence !== fixed.sequence || scope.sourceDigest !== fixed.frozen.sourceDigest)
         fail("COPY_INVALID");
       return scope;
     };
@@ -290,6 +354,12 @@ export async function createFrozenWorkosOperatorFixture({
     fail("PREFLIGHT_FAILED");
   }
 }
+export function createFrozenWorkosOperatorFixture(options) {
+  return createFixture(fixed71, options);
+}
+export function createFrozenWorkosOperator74Fixture(options) {
+  return createFixture(fixed74, options);
+}
 
 function childEnvironment(root) {
   // No inherited loader, tsconfig, esbuild override, proxy or provider credential.
@@ -298,12 +368,12 @@ function childEnvironment(root) {
     if (typeof process.env[key] === "string") env[key] = process.env[key];
   return env;
 }
-export function classifyFrozenWorkosOperatorChildCode(stderr) {
+function classifyChildCode(stderr, fixed) {
   if (typeof stderr !== "string" || Buffer.byteLength(stderr) > 65536) return "unrecognized";
   try {
-    const archive = join(sourceRoot, archiveRelative);
-    verifyFrozenWorkosOperatorArchive(archive);
-    const original = JSON.parse(bytes(archive, reportRelative));
+    const archive = join(sourceRoot, fixed.archiveRelative);
+    verifyArchive(archive, fixed);
+    const original = JSON.parse(bytes(archive, fixed.reportRelative));
     const allowed = new Set([
       ...original.checks.map((check) => "WORKOS_OPERATOR_LAB_FAILED:" + check.name),
       "WORKOS_OPERATOR_LAB_FAILED",
@@ -330,7 +400,13 @@ export function classifyFrozenWorkosOperatorChildCode(stderr) {
     return "unrecognized";
   }
 }
-function runCopiedLab(fixture) {
+export function classifyFrozenWorkosOperatorChildCode(stderr) {
+  return classifyChildCode(stderr, fixed71);
+}
+export function classifyFrozenWorkosOperator74ChildCode(stderr) {
+  return classifyChildCode(stderr, fixed74);
+}
+function runCopiedLab(fixture, fixed) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(
       process.execPath,
@@ -358,17 +434,18 @@ function runCopiedLab(fixture) {
           failure(
             "CHILD_FAILED",
             "child_execution",
-            errorBytes <= 65536 ? classifyFrozenWorkosOperatorChildCode(stderr) : "unrecognized",
+            errorBytes <= 65536 ? classifyChildCode(stderr, fixed) : "unrecognized",
           ),
         );
       try {
         if (outputBytes > 65536) fail("RESULT_INVALID", "child_result");
         const result = JSON.parse(output);
         if (
-          result.packet !== "P05.T01e" ||
-          result.checks !== 59 ||
+          result.packet !== fixed.packet ||
+          result.checks !== fixed.frozen.checks ||
           result.realProviderRequests !== 0 ||
           result.syntheticProviderRequests !== 2 ||
+          (fixed.sequence === 74 && result.syntheticJwksReads !== 9) ||
           result.status !== "synthetic_local_qualified_not_provider_qualified"
         )
           fail("RESULT_INVALID", "child_result");
@@ -379,65 +456,75 @@ function runCopiedLab(fixture) {
     });
   });
 }
-export function verifyFrozenWorkosOperatorReport(
-  root,
-  archive = join(sourceRoot, archiveRelative),
-) {
-  const result = JSON.parse(bytes(root, reportRelative));
-  const original = JSON.parse(bytes(archive, reportRelative));
+function verifyReport(root, archive, fixed) {
+  const result = JSON.parse(bytes(root, fixed.reportRelative));
+  const original = JSON.parse(bytes(archive, fixed.reportRelative));
   const names = original.checks.map((c) => c.name);
   if (
-    result.packet !== "P05.T01e" ||
-    result.plan_sequence !== 71 ||
+    result.packet !== fixed.packet ||
+    result.plan_sequence !== fixed.sequence ||
     result.status !== "synthetic_local_qualified_not_provider_qualified" ||
     result.real_provider_requests !== 0 ||
     result.synthetic_provider_requests !== 2 ||
+    (fixed.sequence === 74 && result.synthetic_jwks_reads !== 9) ||
     result.actual_postgresql !== true ||
     result.actual_loopback_origin !== "http://127.0.0.1:4110" ||
     result.provider_session_cleanup !== "unknown" ||
-    result.checks?.length !== 59 ||
+    result.checks?.length !== fixed.frozen.checks ||
     !result.checks.every((c, i) => c.passed === true && c.name === names[i]) ||
     JSON.stringify(result.sources) !== JSON.stringify(original.sources) ||
-    Object.keys(result.sources).length !== 29
+    Object.keys(result.sources).length !== fixed.frozen.sourceFiles
   )
     fail("RESULT_INVALID", "report_validation");
   if (JSON.stringify(result.engine) !== JSON.stringify(original.engine))
     fail("REPORT_ENGINE_INVALID", "report_validation");
   return result;
 }
-export async function runWorkosOperatorRegression() {
-  const archive = join(sourceRoot, archiveRelative);
-  const fixture = await createFrozenWorkosOperatorFixture();
+export function verifyFrozenWorkosOperatorReport(
+  root,
+  archive = join(sourceRoot, fixed71.archiveRelative),
+) {
+  return verifyReport(root, archive, fixed71);
+}
+export function verifyFrozenWorkosOperator74Report(
+  root,
+  archive = join(sourceRoot, fixed74.archiveRelative),
+) {
+  return verifyReport(root, archive, fixed74);
+}
+async function runRegression(fixed) {
+  const archive = join(sourceRoot, fixed.archiveRelative);
+  const fixture = await createFixture(fixed);
   let stage = "preflight";
   try {
     // Revalidate immediately before the sole fixed synthetic child entrypoint.
     fixture.verify();
     verifyFrozenWorkosOperatorToolchain();
-    if (JSON.stringify(plan(sourceRoot, 72)) !== JSON.stringify(fixture.current))
+    if (JSON.stringify(plan(sourceRoot, fixed.minimumPlan)) !== JSON.stringify(fixture.current))
       fail("PLAN_INVALID");
     stage = "child_execution";
-    await runCopiedLab(fixture);
+    await runCopiedLab(fixture, fixed);
     stage = "copy_validation";
     fixture.verify(true);
     stage = "report_validation";
-    const result = verifyFrozenWorkosOperatorReport(fixture.root, archive);
+    const result = verifyReport(fixture.root, archive, fixed);
     const report = {
       schema_version: 1,
-      packet: "P05.T01e",
-      status: "frozen71_synthetic_regression_passed_not_new_provider_qualification",
+      packet: fixed.packet,
+      status: `frozen${fixed.sequence}_synthetic_regression_passed_not_new_provider_qualification`,
       generated_at: new Date().toISOString(),
       current_plan_sequence: fixture.current.sequence,
       current_plan_digest: fixture.current.digest,
-      archived_plan_sequence: 71,
-      operator_source_digest: frozenWorkosOperator71.sourceDigest,
-      archive_manifest_digest: frozenWorkosOperator71.manifestDigest,
-      archive_files_verified: 42,
+      archived_plan_sequence: fixed.sequence,
+      operator_source_digest: fixed.frozen.sourceDigest,
+      archive_manifest_digest: fixed.frozen.manifestDigest,
+      archive_files_verified: fixed.frozen.archiveFiles,
       archive_unchanged: true,
       workspace_resolution: "copied_archived_packages_only",
       tooling: {
         node: process.version,
-        lock_digest: frozenWorkosOperator71.lockDigest,
-        portable_tooling_digest: frozenWorkosOperator71.toolingDigest,
+        lock_digest: fixed.frozen.lockDigest,
+        portable_tooling_digest: fixed.frozen.toolingDigest,
         platform_package: fixture.tooling.platformPackage,
         platform_binary_digest: fixture.tooling.binaryDigest,
         platform_package_integrity: fixture.tooling.packageIntegrity,
@@ -449,22 +536,19 @@ export async function runWorkosOperatorRegression() {
       engine: result.engine,
       real_provider_requests: 0,
       synthetic_provider_requests: 2,
+      ...(fixed.sequence === 74 ? { synthetic_jwks_reads: 9 } : {}),
       checks: result.checks,
       sources: result.sources,
       regression_sources: Object.fromEntries(
-        [
-          "scripts/workos-operator-regression.mjs",
-          "tests/workos-operator-regression.test.mjs",
-          "tests/workos-operator-input.test.mjs",
-        ].map((name) => [name, sha(bytes(sourceRoot, name))]),
+        fixed.regressionSources.map((name) => [name, sha(bytes(sourceRoot, name))]),
       ),
     };
     stage = "report_publication";
-    const directory = exactRoot(join(sourceRoot, "docs/evidence/P05.T01e"));
+    const directory = exactRoot(join(sourceRoot, fixed.evidenceDirectory));
     const temporary = join(directory, `.frozen-regression-${randomUUID()}.json`);
     try {
       writeFileSync(temporary, JSON.stringify(report, null, 2) + "\n", { flag: "wx", mode: 0o600 });
-      renameSync(temporary, join(directory, "frozen-regression.json"));
+      renameSync(temporary, join(directory, fixed.reportName));
     } finally {
       rmSync(temporary, { force: true });
     }
@@ -484,11 +568,17 @@ export async function runWorkosOperatorRegression() {
   } finally {
     try {
       fixture.dispose();
-      verifyFrozenWorkosOperatorArchive(archive);
+      verifyArchive(archive, fixed);
     } catch {
       fail("CLEANUP_FAILED", "cleanup");
     }
   }
+}
+export function runWorkosOperatorRegression() {
+  return runRegression(fixed71);
+}
+export function runWorkosOperator74Regression() {
+  return runRegression(fixed74);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {

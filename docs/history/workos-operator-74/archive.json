@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "plan_sequence": 74,
+  "commit": "5c141c1a838f566e824723d740604b853f31974c",
+  "operator_source_digest": "32bfc0f328e1cc43cfaaa12a9a90ad1fa91f48642a3da8eef3558f05f2972554",
+  "scope": "Exact published74 closure/tests/plan/packet/reports, plus the separately identified post-commit actual trial and cleanup observation. Never execute in this archive or overwrite its evidence.",
+  "published_files": [
+    {
+      "path": ".nvmrc",
+      "sha256": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c"
+    },
+    {
+      "path": "package.json",
+      "sha256": "1bada55e92017c0bfb603895c26a75f5d03de432d38929a6cf98c63dcdbf3f1d"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "sha256": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d"
+    },
+    {
+      "path": "packages/contracts/package.json",
+      "sha256": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6"
+    },
+    {
+      "path": "packages/identity/package.json",
+      "sha256": "2f616769f0366b4742aab1ca7e26857fe443a23a2aefbc9962fa361a20a9563b"
+    },
+    {
+      "path": "infra/local-engine.json",
+      "sha256": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b"
+    },
+    {
+      "path": "infra/identity-role-prerequisites.sql",
+      "sha256": "8908ee3f90d1f48dffc21c72879357dff2bc845f1cea2851f31152bd86494a22"
+    },
+    {
+      "path": "migrations/manifest.json",
+      "sha256": "e857148fe90182961498596386c387798cb8fb5355adac0ce0e75529fc1e4c4d"
+    },
+    {
+      "path": "migrations/0001.identity-foundation.sql",
+      "sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491"
+    },
+    {
+      "path": "migrations/0002.identity-grants.sql",
+      "sha256": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7"
+    },
+    {
+      "path": "migrations/0003.authentication-challenges.sql",
+      "sha256": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f"
+    },
+    {
+      "path": "migrations/0004.workspace-access-revocation.sql",
+      "sha256": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038"
+    },
+    {
+      "path": "migrations/0005.workspace-store-linking.sql",
+      "sha256": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92"
+    },
+    {
+      "path": "migrations/0006.authentication-exchange-admission.sql",
+      "sha256": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87"
+    },
+    {
+      "path": "packages/identity/src/authentication-exchange-admission.ts",
+      "sha256": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa"
+    },
+    {
+      "path": "packages/identity/src/workos-session-token.ts",
+      "sha256": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966"
+    },
+    {
+      "path": "packages/contracts/src/validation.ts",
+      "sha256": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb"
+    },
+    {
+      "path": "packages/contracts/src/generated/runtime-validators.mjs",
+      "sha256": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6"
+    },
+    {
+      "path": "scripts/local-postgres-lab.mjs",
+      "sha256": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4"
+    },
+    {
+      "path": "scripts/local-authentication-exchange-sql.mjs",
+      "sha256": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9"
+    },
+    {
+      "path": "scripts/workos-operator-input.mjs",
+      "sha256": "8f7d6177c71ac234c0307d1a43f48e638d78348aa34c1b9cfa73f35a81f77844"
+    },
+    {
+      "path": "scripts/workos-operator.mjs",
+      "sha256": "b0f15116d48307f4620c558a864da8ea2329733139759f521f600d98d688244a"
+    },
+    {
+      "path": "scripts/workos-operator-journal.mjs",
+      "sha256": "821102b906c789fc907e0a63003ddcb09cbb5ef0b40c10d823a140c8d75e95fd"
+    },
+    {
+      "path": "scripts/workos-operator-controller.mjs",
+      "sha256": "16393e75f7e96bca2194f2441fda2c4f2ee8e4e801c91e3b621d2d704fb1d2b2"
+    },
+    {
+      "path": "scripts/workos-operator-transport.mjs",
+      "sha256": "89608097916d7ba8ce820df5352c67cf8c9f113a4c7d69af7d598d54f56d8f70"
+    },
+    {
+      "path": "scripts/workos-operator-json.mjs",
+      "sha256": "f179547a667b1ef20dca45f035f2924108ae9dfc170c37862f506aca807acf23"
+    },
+    {
+      "path": "scripts/workos-operator-listener.mjs",
+      "sha256": "96a08b26f30b7a0dfcee598cc83fe5cad00690a605d1cd4a8ef13f7ed733ebcd"
+    },
+    {
+      "path": "scripts/workos-operator-lab.mjs",
+      "sha256": "ba6ca93df1dd9380dbf3dac5cf66fdf0bb8a453fa50c06a637cea4cd2c947cc3"
+    },
+    {
+      "path": "docs/decisions/workos-operator-qualification.json",
+      "sha256": "ceed5364d4ab44ec19dfc4925bbbf1d9b90bc1c7125568ec9b106254542bdcc9"
+    },
+    {
+      "path": "tests/workos-operator-controller.test.mjs",
+      "sha256": "dabdb554a9cecc3abc7bc71553a971531b15d86f0f86d5b25acf4031e505f12e"
+    },
+    {
+      "path": "tests/workos-operator-input.test.mjs",
+      "sha256": "35a6f38436509450ae64a8456553173978fc6191e2439be6961fafaa8c6ff963"
+    },
+    {
+      "path": "tests/workos-operator-listener.test.mjs",
+      "sha256": "511b92acd3e8b34f82e6c634ecc84a896b3437810973bd4cd0c52869f2fd5e70"
+    },
+    {
+      "path": "tests/workos-operator-transport.test.mjs",
+      "sha256": "5e657d8dc09c3f89a8bd7c8302595cc9fbf2f14287162f9c35e7fdbfecfb6bd9"
+    },
+    {
+      "path": "tests/local-postgres-diagnostics.test.mjs",
+      "sha256": "15f0674151073fca0afb5589cd2db1d072fd108da27c4cfdfb93fab9bbddd963"
+    },
+    {
+      "path": "docs/plan/build-plan.md",
+      "sha256": "862a77c5e861f73173086cbb0680852f8bd0eff92ba8abf7c00ae86de0ba3045"
+    },
+    {
+      "path": "docs/plan/source.json",
+      "sha256": "e558eb3fae291b85f84d1f5fea00c2e1a38bee8d1482a666436442300d5db029"
+    },
+    {
+      "path": "docs/packets/P05.T01g.md",
+      "sha256": "a9011a815d541dfa08fb75799769451c34114f079c75a17b78700ee6aaecfc48"
+    },
+    {
+      "path": "docs/evidence/P05.T01g/operator-preparation.json",
+      "sha256": "16df075dfa8be0f6e2174a7820139a7041731721f325109b004433335292b3a3"
+    },
+    {
+      "path": "docs/evidence/P05.T01g/postgresql-loopback-lab.json",
+      "sha256": "de0a158542afa826db0006be5ed55049ff1fe885b3bc47cb9cbf38a3076e0703"
+    },
+    {
+      "path": "docs/evidence/P05.T01g/local-validation.json",
+      "sha256": "f1b04cf7110b3eaa0f866a9cd8b39c015ba2ef2b93735d93ad9c88678f6a6b45"
+    },
+    {
+      "path": "docs/evidence/P05.T01g/review.json",
+      "sha256": "86f90567c3c43a486f9f69d4a291984f3c072b6273bc3a3a093bc01938915146"
+    },
+    {
+      "path": "docs/evidence/P05.T01g/public-jwks-preflight-74.json",
+      "sha256": "e5ae0ac08a570887ec9fb94becfe4ca497e73b24684fd2301e1b8ed920882a86"
+    },
+    {
+      "path": "docs/evidence/P05.T01g/ci-fixture-diagnostic.json",
+      "sha256": "89f61cae4f82ba5787c0fdcf368decaa026d54147fc34ce47339e0615ed4a73b"
+    }
+  ],
+  "post_commit_observations": [
+    {
+      "path": "docs/evidence/P05.T01g/actual-workos-74.json",
+      "sha256": "19eead8da7e772d95c868ad4c367c902df89c436ee590d78743278066a33fd98",
+      "provenance": "Root operator observation and protected receipt commitments recorded after the successful published74 trial; this file did not exist in the published source commit."
+    }
+  ]
+}

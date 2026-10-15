@@ -193,18 +193,13 @@ test("caller proxy scope is rejected before coercion or private file creation", 
   );
   assert.equal(traps, 0);
 });
-test("fresh74 exact source prepares only false approval and denies native activation", async (t) => {
+test("completed native74 rejects current plan before private preparation", () => {
+  assert.throws(() => loadPublicWorkosOperatorScope(), /WORKOS_OPERATOR_INPUT_UNAVAILABLE/);
+});
+test("current plan drift denies native74 preparation without creating a private root", (t) => {
   const root = join(privateParent(t), "operator");
-  assert.equal(JSON.parse(loadPublicWorkosOperatorScope()).planSequence, 74);
-  prepareWorkosOperatorActivation(root);
-  assert.equal(JSON.parse(readWorkosOperatorActivation(root)).maxJwksReads, 1);
-  assert.deepEqual(await runWorkosOperatorCommand("start", root), {
-    state: "held",
-    reason: "owner_activation_required",
-    providerSessionCleanup: "unknown",
-  });
-  assert.equal(existsSync(join(root, "claim.json")), false);
-  assert.deepEqual(readdirSync(root), ["activation.json"]);
+  assert.throws(() => prepareWorkosOperatorActivation(root), /WORKOS_OPERATOR_INPUT_UNAVAILABLE/);
+  assert.equal(existsSync(root), false);
 });
 test("execution source-directory predicate rejects an unrelated cwd", (t) => {
   const original = process.cwd(),
