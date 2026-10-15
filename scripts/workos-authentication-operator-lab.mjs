@@ -620,8 +620,8 @@ try {
   );
   if (failedCheck) throw Error("AUTHENTICATION_OPERATOR_LAB_FAILED:" + failedCheck);
   const report = {
-    task: "P05.T01l",
-    canonicalSequence: 80,
+    task: "P05.T01n",
+    canonicalSequence: scope.planSequence,
     scope:
       "Synthetic native-RSA/full evidence composition with real SQL69 and loopback4110; no provider credential or actual provider request; no issuer/mapping/merchant authority.",
     observedAt: new Date().toISOString(),
@@ -652,9 +652,9 @@ try {
   );
   // The privacy check is deliberately included only after it passed.
   report.checks = checks;
-  fs.mkdirSync("docs/evidence/P05.T01l", { recursive: true });
+  fs.mkdirSync("docs/evidence/P05.T01n", { recursive: true });
   fs.writeFileSync(
-    "docs/evidence/P05.T01l/postgresql-loopback-lab.json",
+    "docs/evidence/P05.T01n/postgresql-loopback-lab.json",
     JSON.stringify(report, null, 2) + "\n",
   );
   completed = true;

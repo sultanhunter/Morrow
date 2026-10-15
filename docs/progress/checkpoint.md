@@ -1,3 +1,23 @@
+# Current continuation: current source qualification passed, publication pending
+
+Canonical82 remains synchronized,465blocks. Active packet P05.T01n.md. The narrow six-selector update retains wire80/profile/limits and all native/controller/listener/journal/database/domain/migration bodies. Current37-source digest7e8bf99d334161155a88296abe5bd393fa76d2903358f7bacd5cae934d268cc4; selected53-input digest9a4efd640e160d885f2ccc2b2289166597b7a13044e9e3c5b57b165765f20920. New N evidence preserves original80/81 reports;458 protected files remain byte-exact.
+
+Local fullCI1,576tests, nine scaffold guards,83focused tests/final21guards and181current realSQL/HTTP checks pass. All provider/key replies are synthetic; zero actual provider effects. Independent selector/wiring/helper review is clear; final evidence hash audit pending. The initial default-sandbox CI failed only at denied loopback listen and is retained separately; authorized loopback rerun passes.
+
+Next publish the reviewed source to existing draftPR1, require exact-head hostedCI, and guarded clean Desktop alignment. Then prepare a fresh private root/baseline and obtain the still-required concrete temporary broad-key/action-time receipt before native start. User requests live sign-in and is available; visibly identify the attached Sign in tab before starting its manual window. Original80 allowance is consumed, temporary key absent, no actual82 operation exists. No new callback/key, paid/merchant action, merge or deployment.
+
+# Historical82 implementation start
+
+# Current continuation: current source live sign in maintenance
+
+Canonical82 is saved/full-readback/synchronized:465blocks,461prior unchanged,four additions. Active packet docs/packets/P05.T01n.md. Published81 baseline571310fecc82a4289b9ad78d85cbe3bec0b4f889 passed exactCI38796937797; all1,130Desktop/source/publisher files aligned clean before82. Original81 inputs/reports additionally preserved outsideGit under work/morrow-p01/before82.
+
+Rebind only six maintained operator plan selectors and current reporting/tests; retain wire80/profile/limits and native/controller/listener/journal/database/domain/SQL bodies. Current72units/181actualSQL-HTTP, independent review/fullCI/scaffold/exactCI/Desktop precede any fresh live receipt or key access. User requested another live trial and is available; do not start the manual window until the Sign in tab is visibly identified. Prior80 allowance stays consumed, key absent; no actual82 operation exists.
+
+Next complete narrow maintenance and current-source qualification, then prepare concrete fresh private activation/baseline and required credential/action-time receipt. No provider/key/sign-in effect, new callback/key, paid action, merchant data, merge or deployment yet.
+
+# Historical81 qualification and publication
+
 # Current continuation: local sessions qualified, publication pending
 
 Canonical81 remains synchronized at461 blocks; the fresh full Page read is byte-equivalent. Active packet: docs/packets/P05.T01m.md. Private namespaced provider bindings, independent15minute browser families/generations, atomic owning-evidence admission and coherent authority/revocation/store-linking integration are implemented. Historical migrations1–7 and the72/75parser/78/76/77 domain modules remain byte-identical; migration8 is appended.

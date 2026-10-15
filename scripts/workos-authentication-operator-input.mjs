@@ -155,7 +155,7 @@ export function loadWorkosAuthenticationOperatorScope() {
   try {
     const source = JSON.parse(sourceBytes("docs/plan/source.json").toString("utf8"));
     if (
-      source.sources.plan.sequence !== 80 ||
+      source.sources.plan.sequence !== 82 ||
       source.sources.plan.path !== "docs/plan/build-plan.md" ||
       hash(sourceBytes(source.sources.plan.path)) !== source.sources.plan.sha256
     )
@@ -165,7 +165,7 @@ export function loadWorkosAuthenticationOperatorScope() {
     const sources = workosAuthenticationOperatorSourcePaths.map((p) => [p, hash(sourceBytes(p))]);
     return JSON.stringify({
       schemaVersion: 1,
-      planSequence: 80,
+      planSequence: 82,
       planDigest: source.sources.plan.sha256,
       sourceDigest: hash(JSON.stringify(sources)),
       profileDigest: hash(profileJson),
@@ -201,7 +201,7 @@ function scopeOf(text) {
   const p = parseWorkosAuthenticationOperatorProfile(s.profileJson);
   if (
     s.schemaVersion !== 1 ||
-    s.planSequence !== 80 ||
+    s.planSequence !== 82 ||
     ![s.planDigest, s.sourceDigest, s.profileDigest, s.protectedBindingDigest].every(digest) ||
     s.profileDigest !== hash(s.profileJson) ||
     p.protectedBindingDigest !== s.protectedBindingDigest
@@ -266,7 +266,7 @@ function activationOf(text) {
     !time(a.expiresAtMs) ||
     a.expiresAtMs <= a.preparedAtMs ||
     a.expiresAtMs > a.preparedAtMs + fixed.activationMaxMs ||
-    a.planSequence !== 80 ||
+    a.planSequence !== 82 ||
     ![a.planDigest, a.sourceDigest, a.profileDigest, a.protectedBindingDigest].every(digest) ||
     typeof a.bindingPath !== "string" ||
     typeof a.bindingIdentity !== "string" ||
@@ -314,7 +314,7 @@ function prepare(root, bindingPath, scopeJson, mode, clock) {
     callbackCommandId: randomUUID(),
     preparedAtMs: at,
     expiresAtMs: at + fixed.activationDefaultMs,
-    planSequence: 80,
+    planSequence: 82,
     planDigest: scope.planDigest,
     sourceDigest: scope.sourceDigest,
     profileDigest: scope.profileDigest,
@@ -886,7 +886,7 @@ export function prepareSyntheticWorkosAuthenticationOperatorRun(
   const profileJson = JSON.stringify({ ...fixed, protectedBindingDigest: hash(bindingJson) });
   const scopeJson = JSON.stringify({
     schemaVersion: 1,
-    planSequence: 80,
+    planSequence: 82,
     planDigest: hash("synthetic80plan"),
     sourceDigest: hash("synthetic80source"),
     profileDigest: hash(profileJson),

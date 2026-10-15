@@ -72,7 +72,8 @@
     "workos:authentication-operator": "node --import tsx scripts/workos-authentication-operator.mjs",
     "lab:workos-authentication-operator": "node scripts/workos-authentication-operator-regression.mjs",
     "lab:browser-session-admission": "node --import tsx scripts/browser-session-admission-lab.mjs",
-    "lab:browser-session-admission-workers": "node scripts/workos-browser-session-admission-workers-lab.mjs"
+    "lab:browser-session-admission-workers": "node scripts/workos-browser-session-admission-workers-lab.mjs",
+    "lab:workos-authentication-operator-current": "node --import tsx scripts/workos-authentication-operator-lab.mjs"
   },
   "devDependencies": {
     "@daytona/sdk": "0.224.0",

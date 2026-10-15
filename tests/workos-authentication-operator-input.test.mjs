@@ -83,7 +83,7 @@ test("forged, serialized and hostile run/permit objects confer no authority or g
   assert.equal(traps, 0);
 });
 
-test("false, expired and incorrectly bound approvals fail before lock or claim mutation", () => {
+test("false, expired, incorrectly bound approvals and stale plan scopes fail before lock or claim mutation", () => {
   for (const change of [
     "false",
     "expired",
@@ -92,6 +92,9 @@ test("false, expired and incorrectly bound approvals fail before lock or claim m
     "baseline",
     "stale_baseline",
     "future_baseline",
+    "activation_plan_80",
+    "activation_plan_81",
+    "activation_plan_83",
   ]) {
     const dir = parent(),
       root = path.join(dir, "run");
@@ -108,6 +111,9 @@ test("false, expired and incorrectly bound approvals fail before lock or claim m
               a.expiresAtMs = 2;
             }
             if (change === "source") a.sourceDigest = "f".repeat(64);
+            if (change === "activation_plan_80") a.planSequence = 80;
+            if (change === "activation_plan_81") a.planSequence = 81;
+            if (change === "activation_plan_83") a.planSequence = 83;
             save(r, "activation.json", a);
             receipt.activationSha256 = hash(fs.readFileSync(path.join(r, "activation.json")));
             if (change === "receipt") receipt.approvalReference = "different_owner_action";
@@ -129,6 +135,29 @@ test("false, expired and incorrectly bound approvals fail before lock or claim m
       fs.rmSync(dir, { recursive: true, force: true });
     }
   }
+  for (const planSequence of [80, 81, 83]) {
+    const dir = parent(),
+      root = path.join(dir, "run");
+    try {
+      assert.throws(
+        () =>
+          fixture(root, {
+            currentScope(expected) {
+              return JSON.stringify({ ...JSON.parse(expected), planSequence });
+            },
+          }),
+        /WORKOS_AUTHENTICATION_OPERATOR_HELD/,
+      );
+      assert.equal(fs.existsSync(path.join(root, "claim.json")), false);
+      assert.equal(fs.existsSync(path.join(root, "controller_lock.json")), false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  withRun((run, root) => {
+    assert.equal(data(root, "activation.json").planSequence, 82);
+    assert.equal(JSON.parse(read(run).profileJson).protocolSequence, 80);
+  });
 });
 
 test("symlink ancestors are rejected before mkdir and private parents/regular files are required", () => {

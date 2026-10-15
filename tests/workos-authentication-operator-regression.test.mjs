@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   cpSync,
@@ -29,8 +30,8 @@ import {
 } from "../scripts/workos-authentication-operator-regression.mjs";
 import {
   loadWorkosAuthenticationOperatorScope,
-  prepareWorkosAuthenticationOperatorActivation,
   claimWorkosAuthenticationOperatorRun,
+  workosAuthenticationOperatorSourcePaths,
 } from "../scripts/workos-authentication-operator-input.mjs";
 
 const source = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -278,20 +279,81 @@ test("181 laboratory report rejects missing checks, weakened cleanup, engine dri
   writeFileSync(p, original);
   assert.equal(verifyFrozenWorkosAuthenticationReport(f.root).checks.length, 181);
 });
-test("current80 native scope and preparation deny the newer plan before private effects", () => {
-  assert.throws(() => loadWorkosAuthenticationOperatorScope());
-  const root = join(tmpdir(), "morrow-auth80-current-plan-denied-" + Date.now());
-  const result = prepareWorkosAuthenticationOperatorActivation(
-    root,
-    join(root, "missing-binding.json"),
-  );
-  assert.deepEqual(result, {
-    outcome: "held",
-    reason: "preparation_denied",
-    credentialReads: 0,
-    providerRequests: 0,
-  });
-  assert.equal(existsSync(root), false);
+test("current native scope requires exact82 and false preparation grants no effects", async (t) => {
+  const scope = JSON.parse(loadWorkosAuthenticationOperatorScope());
+  assert.equal(scope.planSequence, 82);
+  assert.equal(JSON.parse(scope.profileJson).protocolSequence, 80);
+  // Copy the current37 inputs, never an archive or private actual binding.
+  // Only the positive synthetic binding digest differs from the current source.
+  async function currentCopy() {
+    const root = join(temporary(t), "current-source");
+    for (const file of workosAuthenticationOperatorSourcePaths) {
+      mkdirSync(dirname(join(root, file)), { recursive: true });
+      copyFileSync(join(source, file), join(root, file));
+    }
+    assert.equal(workosAuthenticationOperatorSourcePaths.length, 37);
+    const input = await import(
+      pathToFileURL(join(root, "scripts/workos-authentication-operator-input.mjs")).href
+    );
+    return { root, input };
+  }
+  {
+    const copied = await currentCopy(),
+      privateRoot = join(temporary(t), "private"),
+      root = join(privateRoot, "proposal"),
+      bindingPath = join(privateRoot, "binding.json"),
+      binding = {
+        schemaVersion: 1,
+        providerId: "workos",
+        environmentId: "environment_" + "A".repeat(26),
+        applicationId: "app_" + "B".repeat(26),
+        clientId: "client_" + "C".repeat(26),
+        approvedSubjectId: "user_" + "D".repeat(26),
+      },
+      bindingJson = JSON.stringify(binding) + "\n";
+    mkdirSync(privateRoot, { mode: 0o700 });
+    writeFileSync(bindingPath, bindingJson, { mode: 0o600 });
+    const profilePath = join(
+        copied.root,
+        "docs/decisions/workos-authentication-operator-qualification.json",
+      ),
+      profile = JSON.parse(readFileSync(profilePath));
+    profile.protectedBindingDigest = createHash("sha256").update(bindingJson).digest("hex");
+    writeFileSync(profilePath, JSON.stringify(profile));
+    const result = copied.input.prepareWorkosAuthenticationOperatorActivation(root, bindingPath);
+    assert.equal(result.outcome, "prepared");
+    assert.equal(result.credentialReads, 0);
+    assert.equal(result.providerRequests, 0);
+    const activation = JSON.parse(readFileSync(join(root, "activation.json")));
+    assert.equal(activation.planSequence, 82);
+    for (const key of ["ownerApproved", "callbackRegistered", "baselineApproved", "keyApproved"])
+      assert.equal(activation[key], false);
+    assert.equal(copied.input.claimWorkosAuthenticationOperatorRun(root), null);
+    for (const file of [
+      "controller_lock.json",
+      "claim.json",
+      "credential.txt",
+      "initiation_started.json",
+    ])
+      assert.equal(existsSync(join(root, file)), false);
+  }
+  for (const planSequence of [80, 81, 83]) {
+    const copied = await currentCopy(),
+      manifestPath = join(copied.root, "docs/plan/source.json"),
+      manifest = JSON.parse(readFileSync(manifestPath)),
+      root = join(temporary(t), "uncreated-proposal");
+    manifest.sources.plan.sequence = planSequence;
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    assert.throws(() => copied.input.loadWorkosAuthenticationOperatorScope());
+    assert.deepEqual(
+      copied.input.prepareWorkosAuthenticationOperatorActivation(
+        root,
+        join(root, "missing-binding.json"),
+      ),
+      { outcome: "held", reason: "preparation_denied", credentialReads: 0, providerRequests: 0 },
+    );
+    assert.equal(existsSync(root), false);
+  }
   let traps = 0;
   const hostile = new Proxy(
     {},
