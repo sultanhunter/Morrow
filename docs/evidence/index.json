@@ -247,7 +247,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/delivery.json",
-      "sha256": "c068a939e39383d47da94f6926b728d03249eecf1a1949cec0cda2f3b8215865"
+      "sha256": "b62125e72fb3c5c79319dbcdf0be939ec60c22bb0079664d6885ee932b275480"
     },
     {
       "path": "docs/evidence/P03.T04/dependency-audit.json",
@@ -783,7 +783,7 @@
     },
     {
       "path": "docs/evidence/P05.T01e/frozen-regression.json",
-      "sha256": "306969437aa9845a8f5854d8c850065fbbcc0838fed93c30a4c224dd8d284b11"
+      "sha256": "b54f24c427387d5b165b435a8aed0bf9bcfb9a9319a57e456a6c1468e7320db1"
     },
     {
       "path": "docs/evidence/P05.T01e/local-validation.json",
@@ -806,12 +806,16 @@
       "sha256": "8c0fe94c29ebf6e31969bef90a0d690410f4e26d5296a5db9fad21b69413b61b"
     },
     {
+      "path": "docs/evidence/P05.T01f/ci-portability-diagnostic.json",
+      "sha256": "e2d00938c88c9393da3143c40423437be05171559fa61a01636cb687fc04bdca"
+    },
+    {
       "path": "docs/evidence/P05.T01f/local-validation.json",
-      "sha256": "5f59fb1d92117cc3652cfe622bed8377c854eb1e1c1e1661b5cce25de9968ace"
+      "sha256": "5d0a561fb404fe082fd499987f9a633de7ced82d1c0fb0cc121ff098afb80511"
     },
     {
       "path": "docs/evidence/P05.T01f/review.json",
-      "sha256": "0c5ac13d22c25753a80769814d16cbdb92e2e8893c181436cd7ea7774181354c"
+      "sha256": "80ee42d8501a5eee3bd7c4062d0d4e80f8be71f5e8a0ee7583414df732fbcb00"
     },
     {
       "path": "docs/evidence/P05.T01f/workers-lab.json",

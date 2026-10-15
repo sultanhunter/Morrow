@@ -20,10 +20,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import {
   createFrozenWorkosOperatorFixture,
+  classifyFrozenWorkosOperatorChildCode,
   frozenWorkosOperator71,
   verifyFrozenWorkosOperatorArchive,
   verifyFrozenWorkosOperatorToolchain,
   verifyFrozenWorkosOperatorWorkspace,
+  verifyFrozenWorkosOperatorReport,
+  workosRegressionFailureDiagnostic,
 } from "../scripts/workos-operator-regression.mjs";
 
 const source = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -300,5 +303,110 @@ test("regression CLI rejects caller arguments instead of accepting another fixtu
   );
   assert.equal(result.status, 1);
   assert.equal(result.stdout, "");
-  assert.equal(result.stderr.trim(), "WORKOS_REGRESSION_FAILED");
+  assert.equal(
+    result.stderr.trim(),
+    'WORKOS_REGRESSION_FAILED {"stage":"preflight","code":"WORKOS_REGRESSION_INPUT_DENIED","childCode":null}',
+  );
+});
+
+test("child diagnostics accept only exact archived check names and fixed child codes", () => {
+  const report = JSON.parse(
+    readFileSync(join(archive, "docs/evidence/P05.T01e/postgresql-loopback-lab.json")),
+  );
+  for (const check of report.checks) {
+    const code = "WORKOS_OPERATOR_LAB_FAILED:" + check.name;
+    assert.equal(classifyFrozenWorkosOperatorChildCode(code + "\n"), code);
+  }
+  assert.equal(
+    classifyFrozenWorkosOperatorChildCode("LOCAL_LAB_COMMAND_FAILED:exec\n"),
+    "LOCAL_LAB_COMMAND_FAILED:exec",
+  );
+  assert.equal(
+    classifyFrozenWorkosOperatorChildCode(
+      "private body omitted\nWORKOS_OPERATOR_LAB_WAIT_FAILED\n",
+    ),
+    "WORKOS_OPERATOR_LAB_WAIT_FAILED",
+  );
+});
+test("unknown, ambiguous, oversized and forged diagnostic text cannot expose arbitrary output", () => {
+  for (const value of [
+    "private body",
+    "WORKOS_OPERATOR_LAB_FAILED:arbitrary_private_value",
+    "WORKOS_OPERATOR_FAKE_SECRET",
+    "LOCAL_LAB_COMMAND_FAILED:private_value",
+    "WORKOS_OPERATOR_LAB_WAIT_FAILED extra-private-value",
+    "WORKOS_OPERATOR_LAB_WAIT_FAILED\nLOCAL_ENGINE_STARTUP_FAILED",
+    "x".repeat(65537),
+  ])
+    assert.equal(classifyFrozenWorkosOperatorChildCode(value), "unrecognized");
+});
+test("diagnostic boundaries never reflect thrown objects or hostile proxy input", () => {
+  let traps = 0;
+  const proxy = new Proxy(
+    {},
+    {
+      get() {
+        traps++;
+        throw Error("private");
+      },
+      getPrototypeOf() {
+        traps++;
+        throw Error("private");
+      },
+      ownKeys() {
+        traps++;
+        throw Error("private");
+      },
+      getOwnPropertyDescriptor() {
+        traps++;
+        throw Error("private");
+      },
+    },
+  );
+  const accessor = Object.defineProperty({}, "message", {
+    get() {
+      traps++;
+      throw Error("private");
+    },
+  });
+  for (const value of [proxy, accessor, Error("WORKOS_REGRESSION_INPUT_DENIED"), null, "private"])
+    assert.deepEqual(workosRegressionFailureDiagnostic(value), {
+      stage: "unknown",
+      code: "WORKOS_REGRESSION_FAILED",
+      childCode: null,
+    });
+  assert.equal(classifyFrozenWorkosOperatorChildCode(proxy), "unrecognized");
+  assert.equal(traps, 0);
+});
+test("report diagnostics distinguish engine drift without relaxing the archived engine check", async (t) => {
+  const f = await fixture(t);
+  const file = join(f.root, "docs/evidence/P05.T01e/postgresql-loopback-lab.json");
+  const report = JSON.parse(readFileSync(file));
+  assert.deepEqual(verifyFrozenWorkosOperatorReport(f.root).engine, report.engine);
+  report.engine.version = "17.11 (different platform build)";
+  writeFileSync(file, JSON.stringify(report));
+  assert.throws(
+    () => verifyFrozenWorkosOperatorReport(f.root),
+    (error) => {
+      assert.deepEqual(workosRegressionFailureDiagnostic(error), {
+        stage: "report_validation",
+        code: "WORKOS_REGRESSION_REPORT_ENGINE_INVALID",
+        childCode: null,
+      });
+      return true;
+    },
+  );
+  report.checks[0].passed = false;
+  writeFileSync(file, JSON.stringify(report));
+  assert.throws(
+    () => verifyFrozenWorkosOperatorReport(f.root),
+    (error) => {
+      assert.deepEqual(workosRegressionFailureDiagnostic(error), {
+        stage: "report_validation",
+        code: "WORKOS_REGRESSION_RESULT_INVALID",
+        childCode: null,
+      });
+      return true;
+    },
+  );
 });

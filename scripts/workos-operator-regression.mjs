@@ -26,9 +26,26 @@ const archiveRelative = "docs/history/workos-operator-71";
 const reportRelative = "docs/evidence/P05.T01e/postgresql-loopback-lab.json";
 const pageId = "page_b1ef27b80b788191b91e67cbb52f1037";
 const sha = (value) => createHash("sha256").update(value).digest("hex");
-const fail = (kind) => {
-  throw Error("WORKOS_REGRESSION_" + kind);
+const failureDiagnostics = new WeakMap();
+const failure = (kind, stage = "preflight", childCode = null) => {
+  const error = Error("WORKOS_REGRESSION_" + kind);
+  failureDiagnostics.set(
+    error,
+    Object.freeze({ stage, code: "WORKOS_REGRESSION_" + kind, childCode }),
+  );
+  return error;
 };
+const fail = (kind, stage, childCode) => {
+  throw failure(kind, stage, childCode);
+};
+// Only errors created by this module carry diagnostics. No error property,
+// getter, prototype, message, stack or arbitrary child output is inspected.
+export function workosRegressionFailureDiagnostic(error) {
+  return (
+    failureDiagnostics.get(error) ??
+    Object.freeze({ stage: "unknown", code: "WORKOS_REGRESSION_FAILED", childCode: null })
+  );
+}
 export const frozenWorkosOperator71 = Object.freeze({
   manifestDigest: "a86e13e0c081696949ee54b787cc5e8fffa25d7bb0cd2c36ff5d3a85c08702ae",
   sourceDigest: "501cd90033d6c85e0c959026f0b2499e7c194c18d70d94dd78fccf248373b250",
@@ -281,6 +298,38 @@ function childEnvironment(root) {
     if (typeof process.env[key] === "string") env[key] = process.env[key];
   return env;
 }
+export function classifyFrozenWorkosOperatorChildCode(stderr) {
+  if (typeof stderr !== "string" || Buffer.byteLength(stderr) > 65536) return "unrecognized";
+  try {
+    const archive = join(sourceRoot, archiveRelative);
+    verifyFrozenWorkosOperatorArchive(archive);
+    const original = JSON.parse(bytes(archive, reportRelative));
+    const allowed = new Set([
+      ...original.checks.map((check) => "WORKOS_OPERATOR_LAB_FAILED:" + check.name),
+      "WORKOS_OPERATOR_LAB_FAILED",
+      "WORKOS_OPERATOR_SOURCE_DIRECTORY_REQUIRED",
+      "WORKOS_OPERATOR_MIGRATION_INVALID",
+      "WORKOS_OPERATOR_LOOPBACK_FAILED",
+      "WORKOS_OPERATOR_LAB_WAIT_FAILED",
+      "WORKOS_OPERATOR_INPUT_INVALID",
+      "WORKOS_OPERATOR_INPUT_UNAVAILABLE",
+      "WORKOS_OPERATOR_JOURNAL_HELD",
+      "WORKOS_OPERATOR_LISTENER_DENIED",
+      "WORKOS_OPERATOR_TRANSPORT_DENIED",
+      "WORKOS_OPERATOR_ACTIVATION_CHANGED",
+      "WORKOS_OPERATOR_RUNTIME_UNQUALIFIED",
+      "CALLBACK_DID_NOT_REDIRECT_PROMPTLY",
+      "LOCAL_ENGINE_IMAGE_UNAVAILABLE",
+      "LOCAL_ENGINE_ISOLATION_FAILED",
+      "LOCAL_ENGINE_STARTUP_FAILED",
+      ...["run", "exec", "inspect", "rm"].map((command) => "LOCAL_LAB_COMMAND_FAILED:" + command),
+    ]);
+    const recognized = new Set(stderr.split(/\r?\n/).filter((line) => allowed.has(line)));
+    return recognized.size === 1 ? [...recognized][0] : "unrecognized";
+  } catch {
+    return "unrecognized";
+  }
+}
 function runCopiedLab(fixture) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(
@@ -289,15 +338,31 @@ function runCopiedLab(fixture) {
       { cwd: fixture.root, env: childEnvironment(fixture.root), stdio: ["ignore", "pipe", "pipe"] },
     );
     let output = "";
-    // Neither stdout nor stderr is forwarded: report validation is authoritative.
+    let stderr = "";
+    let outputBytes = 0;
+    let errorBytes = 0;
+    // Raw streams never leave this boundary. Only one exact archived/fixed
+    // child code may be reported; the report remains authoritative on success.
     child.stdout.on("data", (chunk) => {
-      if (output.length < 65536) output += chunk.toString();
+      outputBytes += chunk.length;
+      if (outputBytes <= 65536) output += chunk.toString();
     });
-    child.stderr.resume();
-    child.once("error", () => reject(Error("WORKOS_REGRESSION_CHILD_FAILED")));
+    child.stderr.on("data", (chunk) => {
+      errorBytes += chunk.length;
+      if (errorBytes <= 65536) stderr += chunk.toString();
+    });
+    child.once("error", () => reject(failure("CHILD_FAILED", "child_execution")));
     child.once("close", (code) => {
-      if (code !== 0) return reject(Error("WORKOS_REGRESSION_CHILD_FAILED"));
+      if (code !== 0)
+        return reject(
+          failure(
+            "CHILD_FAILED",
+            "child_execution",
+            errorBytes <= 65536 ? classifyFrozenWorkosOperatorChildCode(stderr) : "unrecognized",
+          ),
+        );
       try {
+        if (outputBytes > 65536) fail("RESULT_INVALID", "child_result");
         const result = JSON.parse(output);
         if (
           result.packet !== "P05.T01e" ||
@@ -306,15 +371,18 @@ function runCopiedLab(fixture) {
           result.syntheticProviderRequests !== 2 ||
           result.status !== "synthetic_local_qualified_not_provider_qualified"
         )
-          fail("RESULT_INVALID");
+          fail("RESULT_INVALID", "child_result");
         resolvePromise();
       } catch {
-        reject(Error("WORKOS_REGRESSION_RESULT_INVALID"));
+        reject(failure("RESULT_INVALID", "child_result"));
       }
     });
   });
 }
-function checkedReport(root, archive) {
+export function verifyFrozenWorkosOperatorReport(
+  root,
+  archive = join(sourceRoot, archiveRelative),
+) {
   const result = JSON.parse(bytes(root, reportRelative));
   const original = JSON.parse(bytes(archive, reportRelative));
   const names = original.checks.map((c) => c.name);
@@ -330,24 +398,29 @@ function checkedReport(root, archive) {
     result.checks?.length !== 59 ||
     !result.checks.every((c, i) => c.passed === true && c.name === names[i]) ||
     JSON.stringify(result.sources) !== JSON.stringify(original.sources) ||
-    Object.keys(result.sources).length !== 29 ||
-    JSON.stringify(result.engine) !== JSON.stringify(original.engine)
+    Object.keys(result.sources).length !== 29
   )
-    fail("RESULT_INVALID");
+    fail("RESULT_INVALID", "report_validation");
+  if (JSON.stringify(result.engine) !== JSON.stringify(original.engine))
+    fail("REPORT_ENGINE_INVALID", "report_validation");
   return result;
 }
 export async function runWorkosOperatorRegression() {
   const archive = join(sourceRoot, archiveRelative);
   const fixture = await createFrozenWorkosOperatorFixture();
+  let stage = "preflight";
   try {
     // Revalidate immediately before the sole fixed synthetic child entrypoint.
     fixture.verify();
     verifyFrozenWorkosOperatorToolchain();
     if (JSON.stringify(plan(sourceRoot, 72)) !== JSON.stringify(fixture.current))
       fail("PLAN_INVALID");
+    stage = "child_execution";
     await runCopiedLab(fixture);
+    stage = "copy_validation";
     fixture.verify(true);
-    const result = checkedReport(fixture.root, archive);
+    stage = "report_validation";
+    const result = verifyFrozenWorkosOperatorReport(fixture.root, archive);
     const report = {
       schema_version: 1,
       packet: "P05.T01e",
@@ -386,6 +459,7 @@ export async function runWorkosOperatorRegression() {
         ].map((name) => [name, sha(bytes(sourceRoot, name))]),
       ),
     };
+    stage = "report_publication";
     const directory = exactRoot(join(sourceRoot, "docs/evidence/P05.T01e"));
     const temporary = join(directory, `.frozen-regression-${randomUUID()}.json`);
     try {
@@ -395,9 +469,25 @@ export async function runWorkosOperatorRegression() {
       rmSync(temporary, { force: true });
     }
     return report;
+  } catch (error) {
+    const diagnostic = failureDiagnostics.get(error);
+    if (diagnostic) {
+      if (diagnostic.stage === "preflight" && stage !== "preflight")
+        throw failure(
+          diagnostic.code.slice("WORKOS_REGRESSION_".length),
+          stage,
+          diagnostic.childCode,
+        );
+      throw error;
+    }
+    throw failure("FAILED", stage);
   } finally {
-    fixture.dispose();
-    verifyFrozenWorkosOperatorArchive(archive);
+    try {
+      fixture.dispose();
+      verifyFrozenWorkosOperatorArchive(archive);
+    } catch {
+      fail("CLEANUP_FAILED", "cleanup");
+    }
   }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -414,8 +504,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         status: report.status,
       }),
     );
-  } catch {
-    console.error("WORKOS_REGRESSION_FAILED");
+  } catch (error) {
+    console.error(
+      "WORKOS_REGRESSION_FAILED " + JSON.stringify(workosRegressionFailureDiagnostic(error)),
+    );
     process.exitCode = 1;
   }
 }

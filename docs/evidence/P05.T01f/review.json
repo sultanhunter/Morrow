@@ -42,5 +42,7 @@
     "Current provider-session liveness/revocation",
     "Trusted Morrow mapping/session issuance",
     "SSO/SCIM/merchant launch"
-  ]
+  ],
+  "original_source_commit": "90fe4aa667f81cea669fbe2b3c3b820e3cc39c96",
+  "diagnostic_follow_up": "docs/evidence/P05.T01f/ci-portability-diagnostic.json"
 }

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "packet": "P05.T01e",
   "status": "frozen71_synthetic_regression_passed_not_new_provider_qualification",
-  "generated_at": "2026-10-15T10:16:48.457Z",
+  "generated_at": "2026-10-15T10:41:27.860Z",
   "current_plan_sequence": 72,
   "current_plan_digest": "e2050f722a1e3a90cc28e433bbf0e8013f324c635b13a95898ad0b5d118fba01",
   "archived_plan_sequence": 71,
@@ -299,8 +299,8 @@
     "tests/workos-operator-controller.test.mjs": "12b22d9bbc5e8f82265d3cec3f92a30b8f6e533dc24c36b0ede00bac68ad228e"
   },
   "regression_sources": {
-    "scripts/workos-operator-regression.mjs": "bc164804c7b7709dfb1481dc65e24f8143108db33095c8e34f0c6b66f34019ec",
-    "tests/workos-operator-regression.test.mjs": "bebcd2b285998b7bbfd60f34a7cac7f5a6e51910ff6864ee52076839e4234e86",
+    "scripts/workos-operator-regression.mjs": "a9e896d9c36812a59fb274895d38f491a2ac01b738541659c9ed59cc4d97f6a2",
+    "tests/workos-operator-regression.test.mjs": "bfd19089ff67698b8f24a53930f4e24d2cb80d07893d2bef3693d9bdcdaa95bb",
     "tests/workos-operator-input.test.mjs": "0b375f80c6cacb8807678a4f47a7440cc5099494a34be0c95673d8dacb50a730"
   }
 }
