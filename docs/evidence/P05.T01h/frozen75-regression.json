@@ -1,0 +1,282 @@
+{
+  "task": "P05.T01i",
+  "observed_at": "2026-10-15T14:30:59.599Z",
+  "current_plan_sequence": 76,
+  "current_plan_digest": "8e6f417973e790fba51e156031fb97febd7f556d0feb8f45f695ad60c0df744c",
+  "preserved_plan_sequence": 75,
+  "source_commit": "03fd5e63a254639093d810cb4f3934cccd5329e0",
+  "operator_source_digest": "c5213f08c9d79eee2022e9aa1e297c442e64eae4da9e7bfe28c0872d46cbf9f5",
+  "scope": "Checked-copy synthetic Node reader, native-transport and input tests only; no original private inputs, credential access, provider activation, SQL or Docker. The original actual75 negative observation is retained as separate historical evidence, not rerun.",
+  "archive_manifest_sha256": "234e660c688ee4694afa4bc0b3748fc381d4d425cca0e986bd0602780f524a63",
+  "published_files": 24,
+  "post_commit_observations": 1,
+  "archive_files": {
+    ".nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "package.json": "8a1cc52771f2f71fd5971625c6f4b79b70aacd9c03fc5a5647ad71fd587901aa",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "packages/identity/package.json": "55ced72c28df4b3d4e9e85f5bae4af8d95d325dec9be81ac492a45d9a2d83a55",
+    "packages/identity/src/workos-session-status.ts": "1c6d48b633354e2c7059439dd920591787aadd8b3afae8b88610bf803b9dd579",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "scripts/workos-session-status-input.mjs": "184423675d1111e4e8ea285ef3aeff425583c2007961243b7d814526ff7b9610",
+    "scripts/workos-session-status-transport.mjs": "f4edc4732e72127ae5819a5a9b8cf40171c7e1a5074d77136fc27e7099a8048e",
+    "scripts/workos-session-status-operator.mjs": "ac29e0ce026be7d55862b58026120d9326a6c18a905619988f02e458f74b5161",
+    "docs/decisions/workos-session-status-qualification.json": "ed0124c1d586287964c211f95f1a349ba86b76119647e69551eacc5cf9bb3c06",
+    "docs/plan/build-plan.md": "d9d2170c6af190338260449736d7bb331321e81b949aac399f390eea7212fea5",
+    "docs/plan/source.json": "444311eca1ef5e5e4d1b6dcdccf9026760da071353be4ef74e1eba5312c39360",
+    "docs/packets/P05.T01h.md": "3cb2dc20ccc6ef25ba33d2f3b97e79dd8d9b7ade8aaed7d781922a9496add4cc",
+    "tests/workos-session-status.test.mjs": "880703cba923aa395777d6b689bc56d73258c968705dc769fac53bc750a32c83",
+    "tests/workos-session-status-transport.test.mjs": "992d88be6d6b4cee75235a5b8dba80348466778bb46ca0f7653eb7c0372f83bc",
+    "tests/workos-session-status-input.test.mjs": "bfd46f51243c5f55caf548af3d20165c640d417b2e66fa684373a92ecec58e4f",
+    "tests/fixtures/workos-session-status.mjs": "c71601c2ac42da7851857492b792fca665df541073477b11acb0185098b688de",
+    "scripts/fixtures/workos-session-status-worker.ts": "861bd88c4160bf7eb2c85716a9ef7bf7a23aefba410c5ffabf1766d48a96f1a3",
+    "scripts/workos-session-status-workers-lab.mjs": "5abcc65021c7cfaada03a34c69c3c1b0a93c37922f2da934fb0ac12ce2077df9",
+    "docs/evidence/P05.T01h/local-validation.json": "3d9ee058f76ce05b19477be5e9ac9d5e710446b8087eea4e6f5b2c7ab28d7de8",
+    "docs/evidence/P05.T01h/review.json": "7d157e9578a40e7af8c6995b924d50ef86af9783359213dcbecdfd77307a9414",
+    "docs/evidence/P05.T01h/workers-lab.json": "a22e986952f0f3eaf95bd3ffe9ed9e01803b55805fd3f799d940a3d61cc953e5",
+    "docs/evidence/P05.T01h/preparation.json": "90cb701333ecf5b56146d21364dc1fa9f569cf4a54c5fa20fe500641f36da565",
+    "tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+    "docs/evidence/P05.T01h/actual-workos-75.json": "a633ddd200444673db54a3b831174fbedc8ffd96626d8fa2fc8b6f7e0e203054"
+  },
+  "tooling": {
+    "node": "v24.13.0",
+    "platform_package": "@esbuild/darwin-arm64",
+    "platform_binary_digest": "3e030ee2aa86ad3c33e5e95ae0e53bb03de40e0da35c9b1180a67de4a497cae5",
+    "platform_package_integrity": "sha512-N3zl+lxHCifgIlcMUP5016ESkeQjLj/959RxxNYIthIg+CQHInujFuXeWbWMgnTo4cp5XVHqFPmpyu9J65C1Yg=="
+  },
+  "tests": [
+    {
+      "name": "complete active catalogue produces only a private expected-client observation",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "complete absence is not_observed_active, never a specific revoked or expired claim",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "full pagination remains mandatory after an early match and supports exactly four complete pages",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "objects, proxies, boxed strings and errors cross no reflective data boundary",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "closed owner profile and closed query bind exact scalar identifiers and revision",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "strict JSON rejects duplicate escaped keys, malformed UTF16, grammar and nesting",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "page and row shapes reject omissions, foreign fields, non-active state and termination",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "contradictory or invalid timestamps hold and the target expiry caps the lease",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "pagination denies duplicate sessions, cycles, empty continuation and invalid cursors",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "item and UTF8-byte caps hold before an oversized catalogue can produce a handle",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "profile drift after an awaited page holds without another page or exported data",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "clock bounds, regression and post-await expiry hold and never reset a failed clock",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "expired, changed-profile, forged and foreign handles expose no observation",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "synchronous profile checks cannot extend a handle lease or lookup timer",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "cancellation interrupts a stalled reader and late settlement cannot request another page",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "one actual overall timer bounds a stalled reader without resetting its deadline",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "cancellation and query mutation after call cannot substitute another subject or retain a handle",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "concurrent observations retain distinct handles and exact query subject bindings",
+      "file": "tests/workos-session-status.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "fixed GET serialization sends only owned user path, paging and fake auth header",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "at most4 sequential bounded cursor GETs and no restart/cycle/arbitrary user",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "native factory rejects caller credentials/fetch and forged or serialized permits",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "hostile selectors and fixed provider errors cannot invoke getters or leak details",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "exact origin/status/content/declared size and streamed byte guards reject",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "page and total caps accept exactly4x128KiB public JSON but nothing above",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "shared monotonic deadline, current source and TLS recheck prevent later GET",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "ambient key/proxy/TLS configuration is denied rather than used",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "real overall timer cancels stalled readers and late responses after return",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "source checks consume the existing overall timer budget before a stalled GET",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "preflight and in-flight cancellation never repeat or expose response data",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "overlapping page requests and replay stop the attempt",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "synthetic real HTTP exercises fake Authorization without native URL override",
+      "file": "tests/workos-session-status-transport.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "public scope pins exact75 profile and all execution sources without a credential",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "prepare is false and observe holds before any missing receipt/baseline/key or claim",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "one durable claim precedes the first credential read and cannot replay",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "bound fake credential stays private and terminal record is coarse",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "every approval/identity/hash/budget mismatch denies before claim or credential",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "expired activation or non-owned/nonrevoked baseline cannot claim",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "postclaim activation/receipt/baseline/claim drift permanently prevents credential use",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "credential hash, permissions, symlink and hardlink failures hold after claim",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "root permissions and symlink replacement cannot be used by a claimed permit",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "prepare rejects a symlinked or shared parent before creating any foreign directory",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "public scope rejects plan/source/profile drift and aliased execution bytes",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "primitive gates reject hostile objects before coercion or private creation",
+      "file": "tests/workos-session-status-input.test.mjs",
+      "passed": true
+    }
+  ],
+  "counts": {
+    "tests": 43,
+    "failed": 0,
+    "passed": 43,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "topLevel": 43,
+    "suites": 0
+  },
+  "archive_unchanged": true,
+  "copied_execution_sources_unchanged": true,
+  "temporary_copy_removed": true,
+  "regression_sources": {
+    "scripts/workos-session-status-regression.mjs": "d5495838341e14e3326dc29b599dde17b299e4a717ddfb66148e83fd0ff7fecc",
+    "tests/workos-session-status-regression.test.mjs": "6d79c36777d8bee2953a98905638229a71cac379d0a122c3d446c29d4173d383",
+    "tests/workos-session-status-input.test.mjs": "d1421b08394e2668caabf8cc701e07fe44c5b1be66fcb77a8e07cd2f0ac55903",
+    "scripts/workos-operator-regression.mjs": "439d960400acc9f2ea3a17f22b063acbb415db13d3c848656266928b93b8d26b"
+  }
+}

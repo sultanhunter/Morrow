@@ -1,0 +1,94 @@
+{
+  "task": "P05.T01h",
+  "canonical_sequence": 75,
+  "observed_at": "2026-10-15T13:54:57.729722+00:00",
+  "scope": "Local engineering only. Complete synthetic observation validation, fixed native read-only preparation and historical preservation; no new real provider requests or credential access.",
+  "source_digest": "c5213f08c9d79eee2022e9aa1e297c442e64eae4da9e7bfe28c0872d46cbf9f5",
+  "full_pipeline": {
+    "command": "npm run ci",
+    "exit_code": 0,
+    "tests": 1423,
+    "pass": 1423,
+    "fail": 0,
+    "log_sha256": "4053b913fd23856e53003a1e2788249bf8205eda17adc0d56d6e0da22cdb659a"
+  },
+  "scaffold": {
+    "command": "npm run smoke:scaffold",
+    "exit_code": 0,
+    "guards": 9,
+    "log_sha256": "bcc2234352824df18b4011b56963c5e0c56c7252b7147d213f31299191f48afa"
+  },
+  "workers": {
+    "cases": 36,
+    "checks": 222,
+    "outbound_requests": 0,
+    "report_sha256": "a22e986952f0f3eaf95bd3ffe9ed9e01803b55805fd3f799d940a3d61cc953e5"
+  },
+  "preserved_regressions": [
+    {
+      "sequence": 71,
+      "checks": 59,
+      "synthetic_posts": 2,
+      "real_provider_requests": 0,
+      "report_sha256": "e18f989c71424d6585be19bac1ac0ba8943975621b13bc14fed479462ed6a0e4"
+    },
+    {
+      "sequence": 74,
+      "checks": 99,
+      "synthetic_gets": 9,
+      "synthetic_posts": 2,
+      "real_provider_requests": 0,
+      "report_sha256": "97dd029db9c9f939a26d4e3951e9de27a4bcf222c7352f0f3cf5f44b54d4bd2c"
+    }
+  ],
+  "independent_review_sha256": "7d157e9578a40e7af8c6995b924d50ef86af9783359213dcbecdfd77307a9414",
+  "immutable_prior_files": {
+    "scripts/workos-operator-input.mjs": "8f7d6177c71ac234c0307d1a43f48e638d78348aa34c1b9cfa73f35a81f77844",
+    "scripts/workos-operator-controller.mjs": "16393e75f7e96bca2194f2441fda2c4f2ee8e4e801c91e3b621d2d704fb1d2b2",
+    "scripts/workos-operator-journal.mjs": "821102b906c789fc907e0a63003ddcb09cbb5ef0b40c10d823a140c8d75e95fd",
+    "scripts/workos-operator-listener.mjs": "96a08b26f30b7a0dfcee598cc83fe5cad00690a605d1cd4a8ef13f7ed733ebcd",
+    "scripts/workos-operator-transport.mjs": "89608097916d7ba8ce820df5352c67cf8c9f113a4c7d69af7d598d54f56d8f70",
+    "scripts/workos-operator.mjs": "b0f15116d48307f4620c558a864da8ea2329733139759f521f600d98d688244a",
+    "scripts/workos-operator-lab.mjs": "ba6ca93df1dd9380dbf3dac5cf66fdf0bb8a453fa50c06a637cea4cd2c947cc3",
+    "scripts/workos-operator-json.mjs": "f179547a667b1ef20dca45f035f2924108ae9dfc170c37862f506aca807acf23",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "docs/decisions/workos-operator-qualification.json": "ceed5364d4ab44ec19dfc4925bbbf1d9b90bc1c7125568ec9b106254542bdcc9",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7"
+  },
+  "actual74_evidence_unchanged": "19eead8da7e772d95c868ad4c367c902df89c436ee590d78743278066a33fd98",
+  "private_preparation_sha256": "90cb701333ecf5b56146d21364dc1fa9f569cf4a54c5fa20fe500641f36da565",
+  "new_real_provider_requests": 0,
+  "environment_key_read_or_saved": false,
+  "owner_key_access_approved": false,
+  "qualified": [
+    "bounded_offline_active_and_negative_observation_semantics",
+    "actual_local_workers_parity",
+    "synthetic_fixed_native_get_and_private_once_boundary"
+  ],
+  "not_qualified": [
+    "actual_negative_session_list_wire",
+    "actual_active_item_schema",
+    "specific_revocation_reason",
+    "instantaneous_session_liveness",
+    "verified_provider_application_or_client_binding",
+    "local_identity_mapping_or_session_issuer",
+    "hosted_SSO_or_SCIM",
+    "merchant_or_production_access"
+  ],
+  "primary_sources": [
+    "https://workos.com/docs/reference/authkit/session",
+    "https://workos.com/docs/reference/pagination",
+    "https://workos.com/docs/reference/api-authentication",
+    "https://workos.com/docs/reference/platform/api-key",
+    "https://workos.com/docs/events",
+    "https://workos.com/docs/reference/authkit/session-helpers"
+  ],
+  "next_gate": "Exact-head hosted CI and clean Desktop publication, then concrete owner approval for existing broad staging-key private handling and one bounded negative read."
+}

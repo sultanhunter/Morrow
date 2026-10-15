@@ -1,0 +1,50 @@
+{
+  "task": "P05.T01h",
+  "canonical_sequence": 75,
+  "observed_at": "2026-10-15T14:11:45.244Z",
+  "source_commit": "03fd5e63a254639093d810cb4f3934cccd5329e0",
+  "source_digest": "c5213f08c9d79eee2022e9aa1e297c442e64eae4da9e7bfe28c0872d46cbf9f5",
+  "hosted_ci_run": 38746931870,
+  "scope": "One explicitly owner-approved negative session-list wire qualification on an already-owned revoked Staging test session. No sign-in or session write.",
+  "outcome": {
+    "outcome": "not_observed_active",
+    "reason": "complete",
+    "statusClass": "2xx",
+    "getCount": 1,
+    "clientBinding": "expected_only",
+    "sessionLiveness": "not_guaranteed"
+  },
+  "operator_exit_code": 0,
+  "actual_native_gets": 1,
+  "max_approved_gets": 4,
+  "max_seconds": 10,
+  "observations": 1,
+  "private_record_sha256": {
+    "activation.json": "d26bbc3539a03f4f0690a85215aa554cd7796e17268579960536adfe89ad48e1",
+    "baseline.json": "a1428636902bc0c5d012fccbfa97cc13d4ecbad6dd1db9027899df668d23c6d1",
+    "receipt.json": "960043dd26833d29860f212362b2faf37bbcd18e4e4f3d872e930d464fd891b6",
+    "claim.json": "5d503060b818861be5fdc7f8a00ad901f2e69e5fb77afaca42caa3d1e407225a",
+    "observation.json": "eb5a4fe4d65f85f2cbb706f4126e17141a7f6d5025e08e8424200ba75ba1ace1"
+  },
+  "owner_approval_sha256": "0884d724a26ec81650b5301a28d717d0a0b7651478bc6eb608db2ab742e7e034",
+  "operator_result_sha256": "54b3f0e1f15c47f56ee4e30b315e9d2fbeaf0f2262bfccb75230d949682299bd",
+  "cleanup_receipt_sha256": "dd451115efdac8ced4e16316ffe5aa21ec217ffd92275543ba7ecc8c919b66fb",
+  "local_credential_removed": true,
+  "clipboard_used": false,
+  "account_key_changed": false,
+  "allowance_consumed": true,
+  "further_native_observations_allowed": false,
+  "qualified": [
+    "native_fixed_active_session_list_transport",
+    "complete_negative_observation_for_the_controlled_session",
+    "private_receipt_claim_and_credential_disposal"
+  ],
+  "not_qualified": [
+    "positive_active_item_wire_schema",
+    "specific_revocation_reason",
+    "instantaneous_provider_session_liveness",
+    "provider_verified_application_or_client_binding_from_list",
+    "local_identity_mapping_session_or_grant",
+    "merchant_or_production_identity"
+  ]
+}

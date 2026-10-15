@@ -1,0 +1,76 @@
+{
+  "task": "P05.T01i",
+  "canonical_sequence": 76,
+  "observed_at": "2026-10-15T14:32:54.839955+00:00",
+  "scope": "Bounded independent code/test review plus root integration and archive commit-byte review; offline engineering only.",
+  "reviews": [
+    {
+      "area": "token and active-session composition",
+      "author": "dev_runtime_review",
+      "independent_reviewer": "e2b_stack_reconciliation",
+      "tests_passed": 18,
+      "result": "no_remaining_material_finding"
+    },
+    {
+      "area": "Workers composition fixture and native signature/digest/time oracles",
+      "author": "root",
+      "independent_reviewer": "dev_runtime_review",
+      "cases": 40,
+      "checks": 306,
+      "outbound_requests": 0,
+      "result": "no_remaining_material_finding"
+    },
+    {
+      "area": "frozen75 checked-copy regression and active current-plan denial",
+      "author": "harness_design",
+      "independent_reviewers": [
+        "root",
+        "dev_runtime_review"
+      ],
+      "focused_tests_passed": 11,
+      "copied_original_tests_passed": 43,
+      "archive_published_files_exact_commit": 24,
+      "separate_post_commit_files": 1,
+      "result": "no_remaining_material_finding"
+    },
+    {
+      "area": "actual75 receipt/result/credential cleanup audit",
+      "author": "root",
+      "independent_reviewer": "e2b_stack_reconciliation",
+      "result": "all_bindings_and_hashes_agree_credential_absent_allowance_consumed"
+    }
+  ],
+  "source_digests": {
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/package.json": "8452c051d14d1fe762069cfb0898960a7ba570c4fb2fee925e1a2b08561de447",
+    "tests/workos-authentication-evidence.test.mjs": "cde7e6ab3a8a3f1de0182991f43b8fe95433d21827efa413de876fd4cf9d982b",
+    "tests/fixtures/workos-authentication-evidence.mjs": "c2ad350d7ae411e6b60738b78599fb7edbeb86392c9fee5f81d233662e5aa8cf",
+    "scripts/fixtures/workos-authentication-evidence-worker.ts": "051bc03ca0e6d2dcc05bea061341f12c808d2574017fd2d0e5f4dd3aa8b42500",
+    "scripts/workos-authentication-evidence-workers-lab.mjs": "279bfbfd8f9ef52770ee08956a61b0534c9598060f3c1d24a09b237aaac00a87",
+    "scripts/workos-session-status-regression.mjs": "d5495838341e14e3326dc29b599dde17b299e4a717ddfb66148e83fd0ff7fecc",
+    "tests/workos-session-status-regression.test.mjs": "6d79c36777d8bee2953a98905638229a71cac379d0a122c3d446c29d4173d383",
+    "tests/workos-session-status-input.test.mjs": "d1421b08394e2668caabf8cc701e07fe44c5b1be66fcb77a8e07cd2f0ac55903",
+    "scripts/workos-operator-regression.mjs": "439d960400acc9f2ea3a17f22b063acbb415db13d3c848656266928b93b8d26b",
+    "package.json": "f5b06f9540d2443b2ad03ddb785186929a77889a28eae90b073b5219f8185cd3",
+    ".github/workflows/ci.yml": "8236ce33b0c8eaef3f7bb523be6877351c810fb5a1225ca2e042103ba54b323a"
+  },
+  "frozen_input_digests": {
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-session-status.ts": "1c6d48b633354e2c7059439dd920591787aadd8b3afae8b88610bf803b9dd579",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "scripts/workos-session-status-input.mjs": "184423675d1111e4e8ea285ef3aeff425583c2007961243b7d814526ff7b9610",
+    "scripts/workos-session-status-transport.mjs": "f4edc4732e72127ae5819a5a9b8cf40171c7e1a5074d77136fc27e7099a8048e",
+    "scripts/workos-session-status-operator.mjs": "ac29e0ce026be7d55862b58026120d9326a6c18a905619988f02e458f74b5161",
+    "docs/decisions/workos-session-status-qualification.json": "ed0124c1d586287964c211f95f1a349ba86b76119647e69551eacc5cf9bb3c06",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+  },
+  "actual75_report_sha256": "a633ddd200444673db54a3b831174fbedc8ffd96626d8fa2fc8b6f7e0e203054",
+  "remaining_material_findings": [],
+  "new_provider_or_credential_effects": false,
+  "local_identity_session_or_grant_issued": false,
+  "qualification_limits": [
+    "Actual positive-session schema and complete composed evidence have not been tested live",
+    "No immediate revocation-consistency guarantee",
+    "No provider-subject mapping or local session issuer"
+  ]
+}

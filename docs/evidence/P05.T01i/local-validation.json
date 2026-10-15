@@ -1,0 +1,86 @@
+{
+  "task": "P05.T01i",
+  "canonical_sequence": 76,
+  "observed_at": "2026-10-15T14:36:47.268550+00:00",
+  "scope": "Offline composition engineering only; independently signed synthetic tokens and fake session catalogues. Actual75 negative wire evidence is preserved separately.",
+  "engineering_source_digest": "45cc48987ef33c3d307e1b41219b77035316f94d3c652e4c7e4006ad63428998",
+  "full_pipeline": {
+    "exit_code": 0,
+    "tests": 1440,
+    "pass": 1440,
+    "fail": 0,
+    "log_sha256": "da446edd530c6657231f77d01d8546a92d7aecdc1550002d87a971cb4a4aeb9e"
+  },
+  "scaffold": {
+    "exit_code": 0,
+    "guards": 9,
+    "log_sha256": "bcc2234352824df18b4011b56963c5e0c56c7252b7147d213f31299191f48afa"
+  },
+  "workers": {
+    "cases": 40,
+    "checks": 306,
+    "outbound_requests": 0,
+    "report_sha256": "27ab3f153ca15f48d82a06bb17d5562c77133d49d942144349c234f3a96727ba"
+  },
+  "preserved75": {
+    "original_node_tests": 43,
+    "skipped": 0,
+    "failed": 0,
+    "cancelled": 0,
+    "todo": 0,
+    "temporary_copy_removed": true,
+    "report_sha256": "f297eeaf503563649319a583021382194ec19ee71394df6fe2f8ef4d69aed90c"
+  },
+  "preserved71_74": {
+    "checks": [
+      59,
+      99
+    ],
+    "new_real_provider_requests": 0,
+    "report_sha256": [
+      "e5632440d276f5b311d3a9e809bada463b9e85b9d19d366282540c22e80fbcfc",
+      "1c45fe7c74abab33ecadbabd2127ddbabc617caf7a27b71fa9b31086ee55fa89"
+    ]
+  },
+  "independent_review_sha256": "16bf5c71c36003a5cfc414de276b8d04a8178568df6291d2e37adeeeffd78ca8",
+  "source_digests": {
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/package.json": "8452c051d14d1fe762069cfb0898960a7ba570c4fb2fee925e1a2b08561de447",
+    "tests/workos-authentication-evidence.test.mjs": "cde7e6ab3a8a3f1de0182991f43b8fe95433d21827efa413de876fd4cf9d982b",
+    "tests/fixtures/workos-authentication-evidence.mjs": "c2ad350d7ae411e6b60738b78599fb7edbeb86392c9fee5f81d233662e5aa8cf",
+    "scripts/fixtures/workos-authentication-evidence-worker.ts": "051bc03ca0e6d2dcc05bea061341f12c808d2574017fd2d0e5f4dd3aa8b42500",
+    "scripts/workos-authentication-evidence-workers-lab.mjs": "279bfbfd8f9ef52770ee08956a61b0534c9598060f3c1d24a09b237aaac00a87",
+    "scripts/workos-session-status-regression.mjs": "d5495838341e14e3326dc29b599dde17b299e4a717ddfb66148e83fd0ff7fecc",
+    "tests/workos-session-status-regression.test.mjs": "6d79c36777d8bee2953a98905638229a71cac379d0a122c3d446c29d4173d383",
+    "tests/workos-session-status-input.test.mjs": "d1421b08394e2668caabf8cc701e07fe44c5b1be66fcb77a8e07cd2f0ac55903",
+    "scripts/workos-operator-regression.mjs": "439d960400acc9f2ea3a17f22b063acbb415db13d3c848656266928b93b8d26b",
+    "package.json": "f5b06f9540d2443b2ad03ddb785186929a77889a28eae90b073b5219f8185cd3",
+    ".github/workflows/ci.yml": "8236ce33b0c8eaef3f7bb523be6877351c810fb5a1225ca2e042103ba54b323a",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-session-status.ts": "1c6d48b633354e2c7059439dd920591787aadd8b3afae8b88610bf803b9dd579",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "scripts/workos-session-status-input.mjs": "184423675d1111e4e8ea285ef3aeff425583c2007961243b7d814526ff7b9610",
+    "scripts/workos-session-status-transport.mjs": "f4edc4732e72127ae5819a5a9b8cf40171c7e1a5074d77136fc27e7099a8048e",
+    "scripts/workos-session-status-operator.mjs": "ac29e0ce026be7d55862b58026120d9326a6c18a905619988f02e458f74b5161",
+    "docs/decisions/workos-session-status-qualification.json": "ed0124c1d586287964c211f95f1a349ba86b76119647e69551eacc5cf9bb3c06",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+  },
+  "actual75_evidence_unchanged": "a633ddd200444673db54a3b831174fbedc8ffd96626d8fa2fc8b6f7e0e203054",
+  "new_provider_or_credential_effects_during_composition": false,
+  "qualified": [
+    "owned_verified_token_and_complete_active_catalogue_composition",
+    "signed_identity_only_lookup_derivation",
+    "private_opaque_evidence_and_short_freshness",
+    "shared_attempt_deadline_and_concurrent_isolation",
+    "actual_zero_egress_workers_parity",
+    "historical_archive_and_checked_copy_preservation"
+  ],
+  "not_qualified": [
+    "actual_positive_active_item_wire_schema",
+    "actual_full_composed_provider_evidence",
+    "instantaneous_liveness_or_specific_revocation_reason",
+    "provider_subject_mapping_or_local_session_issuer",
+    "SSO_SCIM_merchant_or_production_activation"
+  ],
+  "next": "Require exact-head hosted CI and clean Desktop publication; then separately specify owner-seeded durable provider-subject mapping and selected-workspace resolution before local-session issuer integration."
+}

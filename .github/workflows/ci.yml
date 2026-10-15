@@ -35,6 +35,10 @@ jobs:
         run: npm run lab:workos-session-token-workers
       - name: Exercise bounded session observations in the local Workers runtime
         run: npm run lab:workos-session-status-workers
+      - name: Exercise verified token and active-session composition in local Workers
+        run: npm run lab:workos-authentication-evidence-workers
+      - name: Exercise preserved75 session observation with synthetic providers only
+        run: npm run lab:workos-session-status-frozen75
       - name: Record the isolated pinned PostgreSQL engine build
         run: >-
           node --input-type=module --eval 'import {localPostgresLab} from "./scripts/local-postgres-lab.mjs"; await localPostgresLab("P04.engine-diagnostic", async ({image,version}) => console.log(JSON.stringify({image,version})));'

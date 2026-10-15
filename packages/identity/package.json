@@ -11,7 +11,8 @@
     "./workspace-store-linking": "./src/workspace-store-linking.ts",
     "./authentication-exchange-admission": "./src/authentication-exchange-admission.ts",
     "./workos-session-token": "./src/workos-session-token.ts",
-    "./workos-session-status": "./src/workos-session-status.ts"
+    "./workos-session-status": "./src/workos-session-status.ts",
+    "./workos-authentication-evidence": "./src/workos-authentication-evidence.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
