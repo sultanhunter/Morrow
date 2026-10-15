@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "plan_sequence": 80,
+  "commit": "7c58249c8feae7cccfc53f412ff68d200e9bf6b4",
+  "operator_source_digest": "974598e9c3e407f18f375ac0b0d53e87db4373e4ea59b8cd65e64409c0a8c4f8",
+  "runtime_files": 37,
+  "test_files": 6,
+  "support_files": 2,
+  "scope": "Exact published80 runtime closure, six original operator test files, their independent RSA fixture and original synthetic181-check report. No actual held report or private input. Never execute the archive; qualified synthetic regression runs only in an isolated checked copy.",
+  "files": [
+    {
+      "path": ".nvmrc",
+      "sha256": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "54f3dc0b7c91e31d58dcea642e0ceb5c59c9e97c5736259f8944a697db28c37f",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "docs/decisions/workos-authentication-operator-qualification.json",
+      "sha256": "e776be1808fea93034febefd96966996447322924629239968e77096d15a4b33",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "docs/evidence/P05.T01l/postgresql-loopback-lab.json",
+      "sha256": "10bc935344daeff48e618f400ff4f15a15379688f5b3cefedbe6c5f2fb994e85",
+      "role": "baseline_lab_report"
+    },
+    {
+      "path": "docs/packets/P05.T01l.md",
+      "sha256": "d3ac12033ee32423461668085a788c5951f77fa911f9d51702ab14d4f91ade6c",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "docs/plan/build-plan.md",
+      "sha256": "7983b440c0b202207cc4510c21f7c88bb308c339898e2ae3ca68cfc6b993d5fe",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "docs/plan/source.json",
+      "sha256": "91410bc94ee60c701e329ee65e7a253c693f1324ef0c59ab7c1301e8acb94a2a",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "infra/identity-role-prerequisites.sql",
+      "sha256": "2c166df1d5b18eda1b4be14c94a26fb31828292833ed110655608400b29fe9af",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "infra/local-engine.json",
+      "sha256": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "migrations/0001.identity-foundation.sql",
+      "sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "migrations/0002.identity-grants.sql",
+      "sha256": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "migrations/0003.authentication-challenges.sql",
+      "sha256": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "migrations/0004.workspace-access-revocation.sql",
+      "sha256": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "migrations/0005.workspace-store-linking.sql",
+      "sha256": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "migrations/0006.authentication-exchange-admission.sql",
+      "sha256": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "migrations/manifest.json",
+      "sha256": "e115ec9e3326dd75542fc28edecc7de9f37d44c92d975388d58c2cdeda760e9f",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "package.json",
+      "sha256": "60b87f587bc49483919aa0ba51db4c8992687c8f405a8000cec318dbad1d9067",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "packages/contracts/package.json",
+      "sha256": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "packages/contracts/src/generated/runtime-validators.mjs",
+      "sha256": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "packages/contracts/src/validation.ts",
+      "sha256": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "packages/identity/package.json",
+      "sha256": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "packages/identity/src/authentication-exchange-admission.ts",
+      "sha256": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "packages/identity/src/workos-authentication-evidence.ts",
+      "sha256": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "packages/identity/src/workos-session-status-json.ts",
+      "sha256": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "packages/identity/src/workos-session-status.ts",
+      "sha256": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "packages/identity/src/workos-session-token.ts",
+      "sha256": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "scripts/local-authentication-exchange-sql.mjs",
+      "sha256": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "scripts/local-postgres-lab.mjs",
+      "sha256": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "scripts/workos-authentication-operator-controller.mjs",
+      "sha256": "04df11e5e03bdd84264a028812e94e0899da6ac6a67f53653b20cd1172252f8a",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "scripts/workos-authentication-operator-database.mjs",
+      "sha256": "21841a7a275987040dbdb389d150ebe10c29760156eacfa51a2951a5b0bd1533",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "scripts/workos-authentication-operator-input.mjs",
+      "sha256": "6dac4d42746810af2c3ea53343e9bc98f2abfb0b051d4dc5534267e3269001d4",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "scripts/workos-authentication-operator-journal.mjs",
+      "sha256": "188ab85ac27c0df5443a3efb59df7b3a0487c750a6401a3d44b275a1064aa45a",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "scripts/workos-authentication-operator-lab.mjs",
+      "sha256": "3c6cb43b77da910aab570d1df999801a22f4dc9c6478c1dbac72257fa8eb04a8",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "scripts/workos-authentication-operator-listener.mjs",
+      "sha256": "427d81c1edb9995de2cc05736e26f774264af4ea5f27f15697977874c0b8189e",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "scripts/workos-authentication-operator-native.mjs",
+      "sha256": "e9cf7d9038b7bf890dcd114b21dfe56e27eb7dac8267fba2c428db380c19a778",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "scripts/workos-authentication-operator.mjs",
+      "sha256": "8aef09e8e1919146808481da499061d93af1c1459844045a390599a4dea23375",
+      "role": "runtime_closure"
+    },
+    {
+      "path": "tests/fixtures/workos-authentication-evidence.mjs",
+      "sha256": "1faa18afb5f35fc4740a6f6ae1f08332102c0efb1a42ee42924778b63449af5b",
+      "role": "test_fixture"
+    },
+    {
+      "path": "tests/workos-authentication-operator-cli.test.mjs",
+      "sha256": "4c4c4d3e2589e41bf2a67ae04b7a5b6c8e91f71755c69f9dd75d2310b7491d59",
+      "role": "operator_test"
+    },
+    {
+      "path": "tests/workos-authentication-operator-controller.test.mjs",
+      "sha256": "fd1140298c757e57dc18dcf165d204fad0acef7312584c4464066a166bd7d0a2",
+      "role": "operator_test"
+    },
+    {
+      "path": "tests/workos-authentication-operator-input.test.mjs",
+      "sha256": "335fe42987ab7f85b58ecacd82d256d5dd7438ccb7243e99c9333cfb8c1d69ea",
+      "role": "operator_test"
+    },
+    {
+      "path": "tests/workos-authentication-operator-journal.test.mjs",
+      "sha256": "e26217f686d00b93e94f1b37ae1916e359ec604b95bdfa66515ef6cc9106165d",
+      "role": "operator_test"
+    },
+    {
+      "path": "tests/workos-authentication-operator-listener.test.mjs",
+      "sha256": "8d840358c2b7f814adba9f5bf8563caa14b056c2e593ff096760d4fa6b0e1b96",
+      "role": "operator_test"
+    },
+    {
+      "path": "tests/workos-authentication-operator-native.test.mjs",
+      "sha256": "acf1a317e6063116884ce1b5f033de0c0d3b0a5b35dbf76b41284a317cad2703",
+      "role": "operator_test"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "sha256": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+      "role": "runtime_closure"
+    }
+  ]
+}

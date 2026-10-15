@@ -23,7 +23,8 @@ const tables = [
   "provider_subject_profile_bindings",
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-const migrations = manifest.migrations.map((m) => {
+// Preserve the original seven-migration resolver laboratory after later appends.
+const migrations = manifest.migrations.slice(0, 7).map((m) => {
   const text = readFileSync("migrations/" + m.file, "utf8");
   if (hash(text) !== m.sha256) throw Error("MIGRATION_CHECKSUM");
   return { m, text };
@@ -916,9 +917,9 @@ INSERT INTO morrow_identity.provider_subject_profile_bindings VALUES(${literal(f
   return { image, version };
 });
 
-mkdirSync("docs/evidence/P05.T01k", { recursive: true });
+mkdirSync("docs/evidence/P05.T01m", { recursive: true });
 writeFileSync(
-  "docs/evidence/P05.T01k/postgresql-lab.json",
+  "docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json",
   JSON.stringify(
     {
       packet: "P05.T01k",

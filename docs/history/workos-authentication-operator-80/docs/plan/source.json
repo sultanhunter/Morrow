@@ -1,0 +1,42 @@
+{
+  "captured_at": "2026-10-15T16:58:04.991Z",
+  "canonical_key": "plan",
+  "sources": {
+    "plan": {
+      "title": "Shopify Workspace End to End Build and Test Plan",
+      "page_id": "page_b1ef27b80b788191b91e67cbb52f1037",
+      "url": "https://chatgpt.com/space/page_b1ef27b80b788191b91e67cbb52f1037",
+      "sequence": 80,
+      "path": "docs/plan/build-plan.md",
+      "sha256": "7983b440c0b202207cc4510c21f7c88bb308c339898e2ae3ca68cfc6b993d5fe",
+      "authority": "canonical"
+    },
+    "hld": {
+      "title": "Shopify AI Workspace Product Architecture and Day One Foundation",
+      "page_id": "page_b399216c68208191a8cecc00a0287e54",
+      "url": "https://chatgpt.com/space/page_b399216c68208191a8cecc00a0287e54",
+      "sequence": 9,
+      "path": "docs/references/architecture.md",
+      "sha256": "d89f4610b745f5f5043fcc7a5af5d0e1df01fbeda2999409aedc1917b3ca9812",
+      "authority": "supporting"
+    },
+    "skills": {
+      "title": "Shopify Agent Skills and Agent Store Architecture",
+      "page_id": "page_c222d561201c81918c285c22c52a26a4",
+      "url": "https://chatgpt.com/space/page_c222d561201c81918c285c22c52a26a4",
+      "sequence": 3,
+      "path": "docs/references/skills-and-agent-store.md",
+      "sha256": "244f6afc51d64b62e89a7071a4860bd05d6402ee65e4af93d66155864f79d436",
+      "authority": "supporting"
+    },
+    "ui": {
+      "title": "Shopify Workspace UI UX and Visual Foundation",
+      "page_id": "page_bbb9d8ed22008191ba32290a4d6cc362",
+      "url": "https://chatgpt.com/space/page_bbb9d8ed22008191ba32290a4d6cc362",
+      "sequence": 8,
+      "path": "docs/references/visual-foundation.md",
+      "sha256": "82b35e8fe7c2521cd4dbe79fd8fa2c7a894f9add4b5660b409657852408e90fd",
+      "authority": "supporting"
+    }
+  }
+}

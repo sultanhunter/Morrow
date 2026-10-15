@@ -1,8 +1,8 @@
 {
   "task": "P05.T01k",
   "primitive": "P05.T01b authentication challenge",
-  "canonical_sequence": 79,
-  "execution_sequence": 79,
+  "canonical_sequence": 81,
+  "execution_sequence": 81,
   "fixture_protocol_sequence": 79,
   "selected_policy_sequence": 78,
   "sources": [
@@ -40,11 +40,11 @@
     },
     {
       "path": "packages/identity/package.json",
-      "sha256": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3"
+      "sha256": "537058e5e0bb63f878986fd63e9e439a80a014076027711fa0b53ecb56e46647"
     },
     {
       "path": "infra/identity-role-prerequisites.sql",
-      "sha256": "2c166df1d5b18eda1b4be14c94a26fb31828292833ed110655608400b29fe9af"
+      "sha256": "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581"
     },
     {
       "path": "infra/local-engine.json",
@@ -52,15 +52,15 @@
     },
     {
       "path": "migrations/manifest.json",
-      "sha256": "e115ec9e3326dd75542fc28edecc7de9f37d44c92d975388d58c2cdeda760e9f"
+      "sha256": "d1b64e477df332d095792d8a9d317bec56eb0f4f2a62e1911b0ef4cd93eed243"
     },
     {
       "path": "docs/plan/build-plan.md",
-      "sha256": "51e13e3f2f8a1e78d9fda95488597d4962562dde4e46ec4cd8a792c568691ccc"
+      "sha256": "d18a6a847f2819cfc4fcb24797284ec2f1d87a1cdab07813d6bce05851b49d18"
     },
     {
       "path": "docs/plan/source.json",
-      "sha256": "0e86312dfa9f3cd36879be9baf15bb2d3a4939417137d7a57a4334f41907e385"
+      "sha256": "ea0f50d0bd126bf8cb465215e1d7e7e456b808c3576720edd022b903cae36671"
     },
     {
       "path": ".nvmrc",
@@ -71,7 +71,7 @@
       "sha256": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
     }
   ],
-  "observed_at": "2026-10-15T16:27:10.392Z",
+  "observed_at": "2026-10-15T19:35:21.654Z",
   "scope": "Actual application pre-authentication challenge transaction on isolated PostgreSQL17.11, synthetic owner bindings; not WorkOS authentication/session issuance or production SQL/IAM/TLS.",
   "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
   "version": "17.11 (Debian 17.11-1.pgdg13+2)",
@@ -117,6 +117,12 @@
       "file": "0007.provider-subject-resolution.sql",
       "sha256": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
       "reviewRef": "docs/evidence/P05.T01j/review.json"
+    },
+    {
+      "sequence": 8,
+      "file": "0008.browser-session-admission.sql",
+      "sha256": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
+      "reviewRef": "docs/evidence/P05.T01m/review.json"
     }
   ],
   "checks": [

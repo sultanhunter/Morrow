@@ -452,9 +452,9 @@ try {
     "package-lock.json",
   ];
   const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
-  mkdirSync("docs/evidence/P05.T01k", { recursive: true });
+  mkdirSync("docs/evidence/P05.T01m", { recursive: true });
   writeFileSync(
-    "docs/evidence/P05.T01k/composition-workers-lab.json",
+    "docs/evidence/P05.T01m/legacy-composition-workers-lab.json",
     JSON.stringify(
       {
         task: "P05.T01k",

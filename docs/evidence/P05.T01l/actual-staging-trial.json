@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "task": "P05.T01l",
+  "qualification": "actual_controlled_staging_trial",
+  "reviewedCommit": "7c58249c8feae7cccfc53f412ff68d200e9bf6b4",
+  "planSequence": 80,
+  "planDigest": "7983b440c0b202207cc4510c21f7c88bb308c339898e2ae3ca68cfc6b993d5fe",
+  "sourceDigest": "974598e9c3e407f18f375ac0b0d53e87db4373e4ea59b8cd65e64409c0a8c4f8",
+  "profileDigest": "e776be1808fea93034febefd96966996447322924629239968e77096d15a4b33",
+  "outcome": "held",
+  "cause": "manual_authorization_window_expired_without_callback",
+  "positiveProviderEvidence": false,
+  "ownerApproved": true,
+  "allowance": "single_trial_consumed_no_automatic_restart",
+  "manualAuthorizationInitiations": 1,
+  "manualAuthorizationLinkVisited": true,
+  "validCallbackObserved": false,
+  "nativeJwksAttempts": 0,
+  "nativeCodeExchangeAttempts": 0,
+  "nativeSessionCatalogueAttempts": 0,
+  "nativeCredentialReads": 0,
+  "temporaryExistingStagingCredentialAcquired": true,
+  "temporaryCredentialRemoved": true,
+  "newProviderKeyCreated": false,
+  "attributableNewSession": false,
+  "providerSessionRevocationPerformed": false,
+  "providerSessionCleanup": "unknown_no_verified_new_target",
+  "freshControlledDashboardReadback": {
+    "sameSessionSetAsBaseline": true,
+    "activeSessions": 0,
+    "revokedSessions": 2
+  },
+  "localCleanup": {
+    "hostChildClosure": "observed",
+    "backendNamespace": "absent",
+    "containerFence": "absent"
+  },
+  "localListenerClosed": true,
+  "processLockAbsent": true,
+  "expiredChallengeTabClosed": true,
+  "sourceArchiveFiles": 37,
+  "effectJournalHashes": {
+    "claim.json": "3267f31b683692620ecd3a634f00e925dc93777077a7bbc8eebeff9ad8476a6c",
+    "initiation_started.json": "b3a860bf95f44b5f100563653f5171ccc840f980423478710c9166a05e52ec89"
+  },
+  "merchantAuthority": false,
+  "providerRequestRetries": 0,
+  "observedAt": "2026-10-15T18:55:26.378909+00:00"
+}

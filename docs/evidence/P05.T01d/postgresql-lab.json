@@ -1,6 +1,6 @@
 {
   "task": "P05.T01d",
-  "observed_at": "2026-10-15T16:14:37.912Z",
+  "observed_at": "2026-10-15T19:37:10.865Z",
   "scope": "Actual isolated PostgreSQL with synthetic pre-authentication correlation only; no provider request, exchange permission, identity/session/grant issuance or public route",
   "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
   "version": "17.11 (Debian 17.11-1.pgdg13+2)",
@@ -624,7 +624,7 @@
   ],
   "source_digests": {
     "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
-    "infra/identity-role-prerequisites.sql": "2c166df1d5b18eda1b4be14c94a26fb31828292833ed110655608400b29fe9af",
+    "infra/identity-role-prerequisites.sql": "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581",
     "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
     "scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
     "scripts/authentication-exchange-admission-lab.mjs": "afea149efa7b1a3f798b58a7f3275bd8919d4e01bc30e8679307e5b7befe888c"

@@ -13,4 +13,6 @@ CREATE ROLE morrow_identity_linking NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE 
 CREATE ROLE morrow_identity_preauth NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
 -- Private read-only subject/workspace selection; no inherited or assumable role.
 CREATE ROLE morrow_identity_resolution NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
+-- Private browser-session admission only; no API assumption or table privileges.
+CREATE ROLE morrow_identity_sessions NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;
 GRANT CREATE ON DATABASE morrow TO morrow_identity_owner;

@@ -39,6 +39,8 @@ jobs:
         run: npm run lab:workos-authentication-evidence-workers
       - name: Exercise private provider identity and workspace selection in local Workers
         run: npm run lab:workos-workspace-selection-workers
+      - name: Exercise private local browser session admission in Workers
+        run: npm run lab:browser-session-admission-workers
       - name: Exercise preserved75 session observation with synthetic providers only
         run: npm run lab:workos-session-status-frozen75
       - name: Record the isolated pinned PostgreSQL engine build
@@ -55,9 +57,10 @@ jobs:
           npm run lab:workspace-store-linking
           npm run lab:authentication-exchange
           npm run lab:provider-subject-resolution
+          npm run lab:browser-session-admission
       - name: Exercise isolated WorkOS operator with SQL and loopback only
         run: npm run lab:workos-operator
       - name: Exercise preserved74 WorkOS signature operator with synthetic providers only
         run: npm run lab:workos-operator-frozen74
-      - name: Exercise current full authentication evidence operator with synthetic providers only
+      - name: Exercise preserved80 full authentication operator with synthetic providers only
         run: npm run lab:workos-authentication-operator

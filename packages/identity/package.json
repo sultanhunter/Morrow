@@ -13,7 +13,8 @@
     "./workos-session-token": "./src/workos-session-token.ts",
     "./workos-session-status": "./src/workos-session-status.ts",
     "./workos-authentication-evidence": "./src/workos-authentication-evidence.ts",
-    "./workos-workspace-selection": "./src/workos-workspace-selection.ts"
+    "./workos-workspace-selection": "./src/workos-workspace-selection.ts",
+    "./workos-browser-session-admission": "./src/workos-browser-session-admission.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

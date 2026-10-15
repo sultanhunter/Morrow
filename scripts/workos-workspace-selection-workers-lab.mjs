@@ -591,9 +591,9 @@ try {
     "scripts/workos-workspace-selection-workers-lab.mjs",
     "package-lock.json",
   ];
-  mkdirSync("docs/evidence/P05.T01k", { recursive: true });
+  mkdirSync("docs/evidence/P05.T01m", { recursive: true });
   writeFileSync(
-    "docs/evidence/P05.T01k/selection-workers-lab.json",
+    "docs/evidence/P05.T01m/legacy-selection-workers-lab.json",
     JSON.stringify(
       {
         task: "P05.T01k",

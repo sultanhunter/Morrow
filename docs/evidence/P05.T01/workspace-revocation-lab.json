@@ -1,7 +1,7 @@
 {
   "task": "P05.T01c",
-  "canonical_sequence": 78,
-  "observed_at": "2026-10-15T16:09:25.502Z",
+  "canonical_sequence": 81,
+  "observed_at": "2026-10-15T19:35:42.881Z",
   "scope": "Actual application lifecycle transaction and shared identity/policy read boundary on isolated PostgreSQL17.11. Synthetic owner-seeded receipts, approvals, sessions and constraint facts only; no production issuer or hosted identity.",
   "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
   "version": "17.11 (Debian 17.11-1.pgdg13+2)",
@@ -33,6 +33,10 @@
     {
       "file": "0007.provider-subject-resolution.sql",
       "sha256": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103"
+    },
+    {
+      "file": "0008.browser-session-admission.sql",
+      "sha256": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0"
     }
   ],
   "checks": [
