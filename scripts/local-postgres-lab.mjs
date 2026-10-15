@@ -2,6 +2,58 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 // Local-only test adapter. No cloud, host ports/mounts, merchant records or
 // credential arguments. All command failures expose fixed codes only.
+const commandKinds = new Set(["exec", "run", "inspect", "rm", "image"]);
+const processErrors = new Set([
+  "ETIMEDOUT",
+  "ENOBUFS",
+  "EAGAIN",
+  "ENOENT",
+  "EACCES",
+  "EPERM",
+  "ENOMEM",
+  "EMFILE",
+  "ENFILE",
+]);
+const processSignals = new Set([
+  "SIGTERM",
+  "SIGKILL",
+  "SIGINT",
+  "SIGABRT",
+  "SIGSEGV",
+  "SIGHUP",
+  "SIGPIPE",
+  "SIGQUIT",
+]);
+const expiryCases = new Set([
+  "handoff_expiry_after_wait",
+  "review_expiry_after_wait",
+  "proof_expiry_after_wait",
+  "session_expiry_after_wait",
+  "grant_expiry_after_wait",
+]);
+// Only primitive, closed projections cross the diagnostic boundary. In
+// particular, never stringify an Error, command arguments, SQL or process I/O.
+export function localPostgresFailureDiagnostic(command, processError, exitCode, signal) {
+  return Object.freeze({
+    commandKind: typeof command === "string" && commandKinds.has(command) ? command : "other",
+    processError:
+      processError === null || processError === undefined
+        ? null
+        : typeof processError === "string" && processErrors.has(processError)
+          ? processError
+          : "other",
+    exitCode: Number.isInteger(exitCode) && exitCode >= 0 && exitCode <= 255 ? exitCode : null,
+    signal:
+      signal === null || signal === undefined
+        ? null
+        : typeof signal === "string" && processSignals.has(signal)
+          ? signal
+          : "other",
+  });
+}
+export function localPostgresWaitingCaseDiagnostic(value) {
+  return typeof value === "string" && expiryCases.has(value) ? value : "other_case";
+}
 export function containerCommand(args, input, allowFailure = false) {
   const result = spawnSync("docker", args, {
     encoding: "utf8",
@@ -9,8 +61,24 @@ export function containerCommand(args, input, allowFailure = false) {
     timeout: 10000,
     maxBuffer: 8 * 1024 * 1024,
   });
-  if (!allowFailure && (result.error || result.status !== 0))
+  if (!allowFailure && (result.error || result.status !== 0)) {
+    try {
+      console.error(
+        "LOCAL_LAB_DIAGNOSTIC " +
+          JSON.stringify(
+            localPostgresFailureDiagnostic(
+              args[0],
+              result.error ? result.error.code : null,
+              result.status,
+              result.signal,
+            ),
+          ),
+      );
+    } catch {
+      // Diagnostics must not replace the original failure or prevent cleanup.
+    }
     throw Error("LOCAL_LAB_COMMAND_FAILED:" + args[0]);
+  }
   return result;
 }
 export async function localPostgresLab(packet, use) {

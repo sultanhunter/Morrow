@@ -810,6 +810,10 @@
       "sha256": "e2d00938c88c9393da3143c40423437be05171559fa61a01636cb687fc04bdca"
     },
     {
+      "path": "docs/evidence/P05.T01f/ci-process-diagnostic.json",
+      "sha256": "6ddda3e6ece37e0929612746cab92de01e1e997b37d3bbd6c3f1ea668dfd894a"
+    },
+    {
       "path": "docs/evidence/P05.T01f/local-validation.json",
       "sha256": "5d0a561fb404fe082fd499987f9a633de7ced82d1c0fb0cc121ff098afb80511"
     },
@@ -859,7 +863,7 @@
     },
     {
       "path": "docs/evidence/P05.T03/workspace-store-linking-lab.json",
-      "sha256": "6a84fb9411a5242e715e1792efb936f3958698729aad67ab332972fd13c929b4"
+      "sha256": "b1745e4a85ab9c9c9b55a16136390ed3906633502ea66a633a7fe6ce1bbb0a13"
     },
     {
       "path": "docs/evidence/P05.T03/workspace-store-linking-review.json",

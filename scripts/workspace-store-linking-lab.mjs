@@ -2,7 +2,11 @@ import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import canonicalize from "canonicalize";
-import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
+import {
+  localPostgresLab,
+  containerCommand,
+  localPostgresWaitingCaseDiagnostic,
+} from "./local-postgres-lab.mjs";
 import { localStoreLinkingPool } from "./local-store-linking-sql.mjs";
 import {
   createWorkspaceStoreLinks,
@@ -375,6 +379,13 @@ VALUES(${literal(input.handoffId)},${literal(org)},${literal(workspace)},${liter
           links(f) === "0" &&
           count(f) === "1",
       );
+    } catch (error) {
+      try {
+        console.error("LOCAL_LAB_WAITING_CASE " + localPostgresWaitingCaseDiagnostic(name));
+      } catch {
+        // Preserve the original failure even when the diagnostic sink fails.
+      }
+      throw error;
     } finally {
       await h.close();
     }

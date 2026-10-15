@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01f",
+  "source_plan_sequence": 72,
+  "current_canonical_sequence": 74,
+  "predecessor_commit": "e19a23491f96185b99ec775810afd355bdd0298a",
+  "failed_hosted_run": 38722453693,
+  "failed_step": "Existing workspace-store-linking SQL lab, before frozen71 regression",
+  "observed_failure": "LOCAL_LAB_COMMAND_FAILED:exec during expiry-after-wait owner reason read",
+  "observed_root_cause": "Unproven; not reproduced in local366 checks",
+  "diagnostic_scope": "Closed command kind, allowlisted process error, numeric exit status, allowlisted signal and five fixed expiry-case names; no process I/O/SQL/argument/error reflection",
+  "focused_privacy_tests_passed": 10,
+  "actual_postgresql_linking_checks_passed": 366,
+  "source_report_hashes_match": 5,
+  "local_test_containers_after_cleanup": 0,
+  "independent_review": "Separate reviewer reran10 tests and compared lifecycle function against frozen71; no material finding",
+  "engine_probe": "Existing isolated pinned localPostgresLab prints only public image and server_version; cleanup/failure remain enforced",
+  "assertions_or_timeouts_changed": false,
+  "acceptance_relaxed": false,
+  "new_provider_effects": false,
+  "source_digests": {
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "scripts/workspace-store-linking-lab.mjs": "e4ff7357b5efb0d008fdaf625d099e069338282efc3f7b0be12873de82606670",
+    "tests/local-postgres-diagnostics.test.mjs": "e0ad71ed2cd69c06c4d9a37683e4d0ca9c603a2d607d49f7856e08216b7b6d3a",
+    ".github/workflows/ci.yml": "d8542bdb6c2f242b29cd52f4852d365ab6709d68f0cb33ffc62ad246eea9566e",
+    "package.json": "1bf41bd56c420f2faa2538944b48a85ff89a18323ece7927f41f70c27703ac55",
+    "docs/evidence/P05.T03/workspace-store-linking-lab.json": "b1745e4a85ab9c9c9b55a16136390ed3906633502ea66a633a7fe6ce1bbb0a13"
+  },
+  "full_pipeline": "Passed1353 repository tests,0 failures, all type/build/verification/lab/infra checks;9scaffold guards passed",
+  "restricted_first_attempt": "Two localhost bind EPERM environment failures; permitted-loopback unchanged rerun passed",
+  "logs_sha256": {
+    "pipeline": "2c8eb90e9f07cf2c16c3962ede3ece0b393ea1108216c53a1532a4cdcc93651d",
+    "scaffold": "bcc2234352824df18b4011b56963c5e0c56c7252b7147d213f31299191f48afa",
+    "linking": "80a4168d51baa59bcfea8fca0d553da6631fd3c19f1cc608c73e46ee2da040c9"
+  }
+}

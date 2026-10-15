@@ -33,6 +33,9 @@ jobs:
         run: npm run lab:authentication-exchange-workers
       - name: Exercise offline session-token verification in the local Workers runtime
         run: npm run lab:workos-session-token-workers
+      - name: Record the isolated pinned PostgreSQL engine build
+        run: >-
+          node --input-type=module --eval 'import {localPostgresLab} from "./scripts/local-postgres-lab.mjs"; await localPostgresLab("P04.engine-diagnostic", async ({image,version}) => console.log(JSON.stringify({image,version})));'
       - name: Exercise isolated PostgreSQL identity, linking, authentication, rotation and quarantined restore
         run: |
           npm run lab:operations
