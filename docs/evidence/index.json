@@ -247,7 +247,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/delivery.json",
-      "sha256": "b6fde7d6bcfc1900ff2dd90f52bf1ada75a970e9f7d9266da8ada46c17844d2d"
+      "sha256": "359f02fc670642e030d6632e09463ea80d1f9a290bea636096b3116cf98f9985"
     },
     {
       "path": "docs/evidence/P03.T04/dependency-audit.json",
@@ -830,8 +830,12 @@
       "sha256": "47b155619ed9d199e6bfe0b36fea631c49f35677be868a62647c600e85338945"
     },
     {
+      "path": "docs/evidence/P05.T01g/ci-fixture-diagnostic.json",
+      "sha256": "89f61cae4f82ba5787c0fdcf368decaa026d54147fc34ce47339e0615ed4a73b"
+    },
+    {
       "path": "docs/evidence/P05.T01g/local-validation.json",
-      "sha256": "56bf6546363e2a6cda27a5279d7f29812d66dbe76cbf4bfd9d64a99c085295aa"
+      "sha256": "f1b04cf7110b3eaa0f866a9cd8b39c015ba2ef2b93735d93ad9c88678f6a6b45"
     },
     {
       "path": "docs/evidence/P05.T01g/operator-preparation.json",

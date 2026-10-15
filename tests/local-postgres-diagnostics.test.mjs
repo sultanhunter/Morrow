@@ -90,16 +90,23 @@ test("waiting-case diagnostics disclose only the five fixed expiry cases", () =>
 
 // Run the actual driver in a fresh process with only a temporary fake docker on
 // PATH. This exercises its failure/allowFailure behavior without Docker/network.
-function runDriver(t, script, allowFailure = false, breakDiagnosticSink = false) {
+function runDriver(t, script, allowFailure = false, breakDiagnosticSink = false, inputBytes = 23) {
   const root = mkdtempSync(join(tmpdir(), "morrow-local-diagnostic-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  if (script !== null) writeFileSync(join(root, "docker"), "#!/bin/sh\n" + script, { mode: 0o700 });
+  // Drain the fixture input before its chosen outcome. Otherwise an early exit
+  // can add an unrelated EPIPE while spawnSync is still writing to stdin.
+  if (script !== null)
+    writeFileSync(
+      join(root, "docker"),
+      "#!/bin/sh\nwhile IFS= read -r fixture_stdin; do :; done\n" + script,
+      { mode: 0o700 },
+    );
   const moduleUrl = new URL("../scripts/local-postgres-lab.mjs", import.meta.url).href;
   const program = `
     import { containerCommand } from ${JSON.stringify(moduleUrl)};
     ${breakDiagnosticSink ? 'console.error = () => { throw Error("private sink failure"); };' : ""}
     try {
-      const result = containerCommand(["exec", "synthetic-private-argument"], "synthetic-private-stdin", ${allowFailure});
+      const result = containerCommand(["exec", "synthetic-private-argument"], "synthetic-private-stdin".padEnd(${inputBytes}, "x"), ${allowFailure});
       console.log(JSON.stringify({ returned: true, status: result.status }));
     } catch (error) {
       console.log(JSON.stringify({ originalFailure: error.message === "LOCAL_LAB_COMMAND_FAILED:exec" }));
@@ -119,10 +126,13 @@ function diagnostic(stderr) {
   return JSON.parse(stderr.slice("LOCAL_LAB_DIAGNOSTIC ".length));
 }
 
-test("real driver reports exit3 without exposing process I/O, SQL or argument canaries", (t) => {
+test("real driver reports exit3 after large stdin without exposing I/O, SQL or argument canaries", (t) => {
   const child = runDriver(
     t,
     "printf 'synthetic-private-stdout\\n'\nprintf 'synthetic-private-stderr\\n' >&2\nexit 3\n",
+    false,
+    false,
+    512 * 1024,
   );
   assert.deepEqual(child.result, { originalFailure: true });
   assert.deepEqual(diagnostic(child.stderr), {

@@ -83,5 +83,7 @@
   "actual_jwt_qualified": false,
   "provider_session_liveness_qualified": false,
   "durable_identity_or_session_issuer_qualified": false,
-  "hosted_ci": "Exact final commit and successful checks required before fresh actual approval; final receipt outside repository avoids self-reference"
+  "hosted_ci": "Exact final commit and successful checks required before fresh actual approval; final receipt outside repository avoids self-reference",
+  "full_pipeline_baseline_commit": "341548e193e905de1bc1d3191036dee8d792068e",
+  "test_only_diagnostic_follow_up": "docs/evidence/P05.T01g/ci-fixture-diagnostic.json"
 }
