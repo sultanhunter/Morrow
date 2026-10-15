@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 79,
-  "plan_digest": "51e13e3f2f8a1e78d9fda95488597d4962562dde4e46ec4cd8a792c568691ccc",
+  "plan_sequence": 80,
+  "plan_digest": "7983b440c0b202207cc4510c21f7c88bb308c339898e2ae3ca68cfc6b993d5fe",
   "tasks": [
     {
       "id": "P01.T01",
@@ -95,7 +95,7 @@
     },
     {
       "path": "docs/evidence/P01.T01/verification.json",
-      "sha256": "63d36283d7cca5fadfa3ac298330906062efeb4942c5ca98fd1b0fb7987f1ea9"
+      "sha256": "4a070c5a0d86786c6f35df25aed5398a00a246684f10b8b73685311eebabc5ac"
     },
     {
       "path": "docs/evidence/P01.T02/review.md",
@@ -107,7 +107,7 @@
     },
     {
       "path": "docs/evidence/P01.T02/verification.json",
-      "sha256": "cce869df6d6130fb287d64b308cf99c31a76d80c1d164a6830601397f71ce94b"
+      "sha256": "cfe8fb04861d227eb7cc3d852a6041ab35fdf21d0f9837cbaa2ef0240579701f"
     },
     {
       "path": "docs/evidence/P01.T03/review.md",
@@ -119,7 +119,7 @@
     },
     {
       "path": "docs/evidence/P01.T03/verification.json",
-      "sha256": "ddd1a093a9d4092abe7c3c6a177024b5943578f9f30508b84c7f406b4a8145d2"
+      "sha256": "7b0d412c9303d0f6d5df3395dae416deb7c3b5f98437faa143908a7a75bffa1c"
     },
     {
       "path": "docs/evidence/P01.T04/review.md",
@@ -131,7 +131,7 @@
     },
     {
       "path": "docs/evidence/P01.T04/verification.json",
-      "sha256": "0b0ea72f62ff1c1dca113ece6b43be35feb3d75ca45da7f7b99764f94cf57e6e"
+      "sha256": "83f28fadbebb83a3e2b4973de5ac2385d4f9c23d6809b735838fa9554c52e47f"
     },
     {
       "path": "docs/evidence/P02.T01/review.md",
@@ -175,7 +175,7 @@
     },
     {
       "path": "docs/evidence/P02.T02/verification.json",
-      "sha256": "62188ec8d41c7eded5b59cc4f88d20e82f789fd69d8d6c269dc48bad78914444"
+      "sha256": "c826af4179a89944d5bf2b851c07a7193375bc994bf78848337b0f3234e5e458"
     },
     {
       "path": "docs/evidence/P02.T03/browser-checks.json",
@@ -207,7 +207,7 @@
     },
     {
       "path": "docs/evidence/P03.T01/smoke.json",
-      "sha256": "2c707248d937beb4e148073aa1d7b79c2769f2d64b794082fa8018e3393d5162"
+      "sha256": "5b4d20f891b0040579cbf659769e2fe4fec20d9d5ab61bad3d74e868b69d4735"
     },
     {
       "path": "docs/evidence/P03.T02/boundaries.json",
@@ -247,7 +247,7 @@
     },
     {
       "path": "docs/evidence/P03.T04/delivery.json",
-      "sha256": "1c3b7e3339cd6cb45e0912deee3bebde2d389b2e8dea08703d865a20d626c6c2"
+      "sha256": "ed34e7d902f2cee4d582796f81d7873c7f3a5e16e3f9adcf6ff250ae070cd6db"
     },
     {
       "path": "docs/evidence/P03.T04/dependency-audit.json",
@@ -307,15 +307,15 @@
     },
     {
       "path": "docs/evidence/P04.T01a/permissions.json",
-      "sha256": "15d152992a88159e358c48a26ed7497289d91de5607f91fb48bbffdc95d21742"
+      "sha256": "0f666933770fe0b663873fa0683088afbf2c81cbbea875a3b07e2d73580f2342"
     },
     {
       "path": "docs/evidence/P04.T01a/readiness.json",
-      "sha256": "8bc811cc6a300e27b96176ada14d426c7257f3ce79fff23812120edf1240d488"
+      "sha256": "8046fe2f872c9ca36f9fe346ad22810e3c2e464d4a44f5a66e59c63892227a9c"
     },
     {
       "path": "docs/evidence/P04.T01a/synth.json",
-      "sha256": "ac4dd92d4e1e275e3ae12310f15c1449e94b8e529c946ef3b003451509fd0bcd"
+      "sha256": "bb6b4e8d480b94a7b4d8c4df71810a0e2f1df9b00bbf1062754f9ead903337a0"
     },
     {
       "path": "docs/evidence/P04.T01b/verification.json",
@@ -363,11 +363,11 @@
     },
     {
       "path": "docs/evidence/P04.T01f/archive.json",
-      "sha256": "bfdd044520590dced2754ada036bbf324812c2093270b657c00664fa58cd77d9"
+      "sha256": "ef434dc81990022b65d708fe09f8db569ab29b64a3d951914808a0d9d72e4f54"
     },
     {
       "path": "docs/evidence/P04.T01f/cleanup.json",
-      "sha256": "a4d2404e34b684625db94143bc7bb15295cc225a5f07729f812fae9c28332f28"
+      "sha256": "32f561ebbbb76d4d02cc73e0817411f5701af1e6bc19fcb7072b82f3fcb3c1f4"
     },
     {
       "path": "docs/evidence/P04.T01f/dependencies.json",
@@ -783,7 +783,7 @@
     },
     {
       "path": "docs/evidence/P05.T01e/frozen-regression.json",
-      "sha256": "a3356252ca21634b2df21713d60369aa91c24f87db0b51047881f70c2968cd11"
+      "sha256": "f591bb23be222a435bae7fa133c974e37ea82a949a2f614e313eb694a432bce4"
     },
     {
       "path": "docs/evidence/P05.T01e/local-validation.json",
@@ -839,7 +839,7 @@
     },
     {
       "path": "docs/evidence/P05.T01g/frozen74-regression.json",
-      "sha256": "f58d8ce0cccc9430c3828c5fc6a28a6a79d3b1441a6b34c4a08b62f897b8a05a"
+      "sha256": "237c89dcc86c89bf838c47673a1678d2fee4534445440944175e99f5393b45f9"
     },
     {
       "path": "docs/evidence/P05.T01g/local-validation.json",
@@ -875,7 +875,7 @@
     },
     {
       "path": "docs/evidence/P05.T01h/frozen75-regression.json",
-      "sha256": "a3156d64d7ec57c2a63c26e3e482fcfefa3452c026bcdcb2bec4cd2955feec0a"
+      "sha256": "6ba49d6f7deca0b2318900af3f46b6c33955a0ae1edeb776b2984500fff25713"
     },
     {
       "path": "docs/evidence/P05.T01h/local-validation.json",
@@ -956,6 +956,18 @@
     {
       "path": "docs/evidence/P05.T01k/source-research.json",
       "sha256": "321a9c26746266043918b644e49e3f05a54fbac85ba95237d8d606dc1c7c4fce"
+    },
+    {
+      "path": "docs/evidence/P05.T01l/local-validation.json",
+      "sha256": "39dc648603ba4ad9715ae36b62fded55d971cf915d3266ee7d5dfe23096a4252"
+    },
+    {
+      "path": "docs/evidence/P05.T01l/postgresql-loopback-lab.json",
+      "sha256": "10bc935344daeff48e618f400ff4f15a15379688f5b3cefedbe6c5f2fb994e85"
+    },
+    {
+      "path": "docs/evidence/P05.T01l/review.json",
+      "sha256": "e10c52655b208f68bf30e1bec71991b976c908d345d167069bbf9479da479d75"
     },
     {
       "path": "docs/evidence/P05.T02/clean-build.json",

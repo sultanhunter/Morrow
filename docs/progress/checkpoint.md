@@ -1,3 +1,23 @@
+# Current continuation: reviewed full-evidence engineering, publication pending
+
+Canonical revision80 remains synchronized at 453 blocks. Active packet: docs/packets/P05.T01l.md. The maintained scripts-only operator passes the full local pipeline (1,547 tests), all nine scaffold guards, 181 actual isolated PostgreSQL/HTTP checks and the preserved copied43/59/99 regressions. The 72 new operator units cover protected claims/journals/controller, native crypto and freshness, strict listener and CLI. All provider replies and keys in these engineering tests are synthetic; zero real provider requests or new key access occurred.
+
+The final 37-input source digest is 974598e9c3e407f18f375ac0b0d53e87db4373e4ea59b8cd65e64409c0a8c4f8. All 43 laboratory-bound source/test hashes and all 464 protected files match. Independent implementation and evidence reviews are clear. Normal cleanup separately observes host-child closure, zero preauthentication backends and owned-container absence; the two injected faults retain explicit uncertainty with independent container fences. Port4110 is closed. The earlier passing180-check report/source/log remain separately attributed outside Git; the final fixture adds a scheduling-independent gated303 proof without changing runtime logic.
+
+Evidence: docs/evidence/P05.T01l/{postgresql-loopback-lab,local-validation,review}.json. Preserve published79 reports and all earlier native/runtime histories, consumed approvals and cleanup records. This operator invokes no subject mapping, local principal, organization, membership, session or grant. ParentP05.T01 remains In progress.
+
+Next publish to existing draft PR1, require successful full hosted CI on the exact head, then perform guarded clean Desktop alignment. Publication receipts live outside Git. Only after those gates prepare a fresh false proposal and controlled-user baseline, then request the new bundled source-bound owner approval/manual availability for one positive WorkOS trial and exact-session cleanup. No current or historical allowance authorizes new provider/key/sign-in access. No merge or deployment.
+
+# Historical80 implementation start
+
+Canonical revision80 is saved and fully read back:453blocks, all443prior blocks unchanged and ten exact paragraphs added. The snapshot is synchronized before code. Active packet: docs/packets/P05.T01l.md.
+
+PrerequisiteK79 is published as12673c79eb56449131fa539550f86982b1e466fb, exact-headCI38770377643 successful. All1,043published files match SOURCE and clean Desktop/publisher Git. Local qualification passed1,475tests, nine scaffold guards,248Workers cases/2,682checks/zero outbound,211selectionSQL checks,38challenge checks and ten unaffected preserved laboratories, including43/59/99. All456protected files and original reports were exact. Receipt: work/morrow-p01/publication-receipt-79.json, outsideGit.
+
+Implement one maintained scripts-only full-evidence operator using unchanged core modules and SQL69. No mappings, local identities/sessions/grants, provider/key/sign-in or merchant effects. New native flow remains disabled until code, independent review, exactCI, cleanDesktop, fresh protected baseline and a new concrete owner approval/manual availability. Earlier74/75allowances remain consumed and the temporary75key was removed. Public templates/digests only; owned identifiers stay protected. ParentP05.T01 remains In progress.
+
+# Historical79 local qualification snapshot
+
 # Current continuation: local qualification passed, publication pending
 
 Canonical revision 79 is saved, fully read back and synchronized. P05.T01k passes the full local pipeline: 1,475 tests, nine scaffold guards, 248 Workers cases with 2,682 checks and zero outbound requests, 211 selection SQL checks and 38 challenge checks. The ten unaffected preserved laboratories also pass, including the 43/59/99 checked-copy regressions. The copied75 report retains its earlier execution sequence78.

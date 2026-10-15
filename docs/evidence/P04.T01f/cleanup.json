@@ -1,7 +1,7 @@
 {
   "task": "P04.T01f",
   "plan_sequence": 54,
-  "current_plan_sequence": 79,
+  "current_plan_sequence": 80,
   "scope": "Synthetic operator container lab only; no merchant/VM/production qualification",
   "profile_sha256": "f1d77ebc18ae056f83e873abc73627e8b35256904c103760d7a3a561e4d84595",
   "source_sha256": "dd30f664e1c32e69b3760470ec4c1c0e475c8d184466652ad58eafcfd8c2da32",

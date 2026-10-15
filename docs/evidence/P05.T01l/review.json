@@ -1,0 +1,129 @@
+{
+  "task": "P05.T01l",
+  "canonical_sequence": 80,
+  "observed_at": "2026-10-15T17:24:57.776757+00:00",
+  "scope": "Maintained scripts-only authentication evidence operator; independent semantic and source/evidence review, separate from actual provider qualification.",
+  "source_digest": "974598e9c3e407f18f375ac0b0d53e87db4373e4ea59b8cd65e64409c0a8c4f8",
+  "source_digests": {
+    "scripts/workos-authentication-operator-input.mjs": "6dac4d42746810af2c3ea53343e9bc98f2abfb0b051d4dc5534267e3269001d4",
+    "scripts/workos-authentication-operator-journal.mjs": "188ab85ac27c0df5443a3efb59df7b3a0487c750a6401a3d44b275a1064aa45a",
+    "scripts/workos-authentication-operator-controller.mjs": "04df11e5e03bdd84264a028812e94e0899da6ac6a67f53653b20cd1172252f8a",
+    "scripts/workos-authentication-operator-native.mjs": "e9cf7d9038b7bf890dcd114b21dfe56e27eb7dac8267fba2c428db380c19a778",
+    "scripts/workos-authentication-operator-listener.mjs": "427d81c1edb9995de2cc05736e26f774264af4ea5f27f15697977874c0b8189e",
+    "scripts/workos-authentication-operator-database.mjs": "21841a7a275987040dbdb389d150ebe10c29760156eacfa51a2951a5b0bd1533",
+    "scripts/workos-authentication-operator-lab.mjs": "3c6cb43b77da910aab570d1df999801a22f4dc9c6478c1dbac72257fa8eb04a8",
+    "scripts/workos-authentication-operator.mjs": "8aef09e8e1919146808481da499061d93af1c1459844045a390599a4dea23375",
+    "docs/decisions/workos-authentication-operator-qualification.json": "e776be1808fea93034febefd96966996447322924629239968e77096d15a4b33",
+    "docs/plan/build-plan.md": "7983b440c0b202207cc4510c21f7c88bb308c339898e2ae3ca68cfc6b993d5fe",
+    "docs/plan/source.json": "91410bc94ee60c701e329ee65e7a253c693f1324ef0c59ab7c1301e8acb94a2a",
+    "docs/packets/P05.T01l.md": "d3ac12033ee32423461668085a788c5951f77fa911f9d51702ab14d4f91ade6c",
+    "AGENTS.md": "54f3dc0b7c91e31d58dcea642e0ceb5c59c9e97c5736259f8944a697db28c37f",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "packages/identity/package.json": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3",
+    "packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "infra/identity-role-prerequisites.sql": "2c166df1d5b18eda1b4be14c94a26fb31828292833ed110655608400b29fe9af",
+    "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "migrations/manifest.json": "e115ec9e3326dd75542fc28edecc7de9f37d44c92d975388d58c2cdeda760e9f",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    ".nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "package.json": "60b87f587bc49483919aa0ba51db4c8992687c8f405a8000cec318dbad1d9067",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+    "tests/workos-authentication-operator-listener.test.mjs": "8d840358c2b7f814adba9f5bf8563caa14b056c2e593ff096760d4fa6b0e1b96",
+    "tests/workos-authentication-operator-input.test.mjs": "335fe42987ab7f85b58ecacd82d256d5dd7438ccb7243e99c9333cfb8c1d69ea",
+    "tests/workos-authentication-operator-controller.test.mjs": "fd1140298c757e57dc18dcf165d204fad0acef7312584c4464066a166bd7d0a2",
+    "tests/workos-authentication-operator-journal.test.mjs": "e26217f686d00b93e94f1b37ae1916e359ec604b95bdfa66515ef6cc9106165d",
+    "tests/workos-authentication-operator-native.test.mjs": "acf1a317e6063116884ce1b5f033de0c0d3b0a5b35dbf76b41284a317cad2703",
+    "tests/workos-authentication-operator-cli.test.mjs": "4c4c4d3e2589e41bf2a67ae04b7a5b6c8e91f71755c69f9dd75d2310b7491d59"
+  },
+  "additional_reviewed_source_digests": {
+    ".github/workflows/ci.yml": "11157a5ed40e715f4d92882d9d7f98240fbf1528299d23bff31ffd1418053594"
+  },
+  "reviews": [
+    {
+      "area": "protected input, durable journal and controller",
+      "author": "dev_runtime_review",
+      "independent_reviewers": [
+        "root",
+        "e2b_stack_reconciliation"
+      ],
+      "result": "clear",
+      "focused_tests": 30
+    },
+    {
+      "area": "native RSA, bounded fixed transport and own evidence freshness",
+      "author": "e2b_stack_reconciliation",
+      "independent_reviewers": [
+        "root",
+        "dev_runtime_review"
+      ],
+      "result": "clear",
+      "focused_tests": 23
+    },
+    {
+      "area": "strict loopback, six-migration SQL69 bridge and integration/fault measurements",
+      "author": "harness_design",
+      "independent_reviewers": [
+        "root",
+        "dev_runtime_review",
+        "e2b_stack_reconciliation"
+      ],
+      "result": "clear",
+      "focused_listener_tests": 16,
+      "actual_postgresql_http_checks": 181
+    },
+    {
+      "area": "CLI claim-before-allocation, synchronous signal cancellation and teardown ordering",
+      "author": "root",
+      "independent_reviewers": [
+        "dev_runtime_review",
+        "harness_design",
+        "e2b_stack_reconciliation"
+      ],
+      "result": "clear",
+      "focused_tests": 3
+    },
+    {
+      "area": "report inputs, historical attribution and preserved source bytes",
+      "independent_reviewers": [
+        "root",
+        "dev_runtime_review",
+        "e2b_stack_reconciliation"
+      ],
+      "result": "clear",
+      "runtime_inputs": 37,
+      "report_bound_inputs": 43,
+      "protected_files": 464
+    }
+  ],
+  "repaired_findings": [
+    "Reject unapproved or invalid preparation before lock mutation, then revalidate under the exclusive lock.",
+    "Require owner0700 protected parents, regular no-follow files, byte and identity checkpoints.",
+    "Recheck baseline freshness immediately before and after the durable claim; preserve a consumed uncertain claim.",
+    "Abort the active controller synchronously on process cancellation before pending send gates can resume.",
+    "Start native phase budgets at entry and settle close promptly even for abort-ignoring requests.",
+    "Compare own evidence expiry after the final source checkpoint as well as after awaited journal work.",
+    "Assert response-before-completion only in the deliberately gated integration case; keep all clean303/path/header checks."
+  ],
+  "remaining_material_findings": [],
+  "reports": {
+    "postgresql-loopback-lab.json": "10bc935344daeff48e618f400ff4f15a15379688f5b3cefedbe6c5f2fb994e85",
+    "local-validation.json": "39dc648603ba4ad9715ae36b62fded55d971cf915d3266ee7d5dfe23096a4252"
+  },
+  "preserved_files_unchanged": 464,
+  "new_live_provider_or_key_authority": false,
+  "release_status": "Draft; hosted exact-head checks, Desktop alignment, fresh baseline and new concrete owner activation remain required."
+}

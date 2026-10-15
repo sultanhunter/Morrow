@@ -59,3 +59,5 @@ jobs:
         run: npm run lab:workos-operator
       - name: Exercise preserved74 WorkOS signature operator with synthetic providers only
         run: npm run lab:workos-operator-frozen74
+      - name: Exercise current full authentication evidence operator with synthetic providers only
+        run: npm run lab:workos-authentication-operator
