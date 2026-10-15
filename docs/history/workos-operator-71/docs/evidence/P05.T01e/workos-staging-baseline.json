@@ -1,0 +1,22 @@
+{
+  "task": "P05.T01e",
+  "observed_on": "2026-10-15",
+  "scope": "Read-only dashboard baseline for a proposed operator trial; no authority to register a callback, start Hosted AuthKit or send a code exchange",
+  "project": "Morrow",
+  "environment_id": "environment_01M4HG7FV7X8EFXE1J9S6GG00R",
+  "application_id": "app_01M4HG7GEJJWTKG4W16RB98VZE",
+  "client_id": "client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+  "users_dashboard_observation": "No users have been created in this environment",
+  "observed_existing_users": 0,
+  "callback_status": "Registered and read back",
+  "proposed_callback": "http://127.0.0.1:4110/operator/workos/callback",
+  "configuration_changes": 1,
+  "hosted_authkit_visits": 0,
+  "native_exchange_requests": 0,
+  "credentials_copied": false,
+  "cleanup_scope": "After separately approved manual test, identify only attributable new controlled staging sessions, revoke and verify through the dashboard. Preserve existing unrelated sessions/users. A fresh baseline is required before live activation; token drop/local cleanup is not provider revocation. Unknown identification or revocation stays cleanup_pending.",
+  "user_dashboard_url": "https://dashboard.workos.com/environment_01M4HG7FV7X8EFXE1J9S6GG00R/users",
+  "canonical_sequence": 71,
+  "after_original_process_closed_users": 0,
+  "original_approval_provider_allowance_unspent": true
+}

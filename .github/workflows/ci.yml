@@ -31,6 +31,8 @@ jobs:
         run: npm run lab:workspace-store-linking-workers
       - name: Exercise private PKCE and code admission in the local Workers runtime
         run: npm run lab:authentication-exchange-workers
+      - name: Exercise offline session-token verification in the local Workers runtime
+        run: npm run lab:workos-session-token-workers
       - name: Exercise isolated PostgreSQL identity, linking, authentication, rotation and quarantined restore
         run: |
           npm run lab:operations

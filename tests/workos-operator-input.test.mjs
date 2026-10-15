@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   linkSync,
   mkdirSync,
   mkdtempSync,
@@ -191,17 +192,16 @@ test("caller proxy scope is rejected before coercion or private file creation", 
   );
   assert.equal(traps, 0);
 });
-test("unapproved actual CLI start holds before journal, database or listener work", async (t) => {
+test("current canonical72 denies the completed native71 scope and fresh preparation", async (t) => {
   const root = join(privateParent(t), "operator");
-  // Uses current exact source and profile, never a mocked activation validator.
-  prepareWorkosOperatorActivation(root);
-  const result = await runWorkosOperatorCommand("start", root);
-  assert.deepEqual(result, {
-    state: "held",
-    reason: "owner_activation_required",
-    providerSessionCleanup: "unknown",
-  });
-  assert.deepEqual(readdirSync(root), ["activation.json"]);
+  assert.throws(() => loadPublicWorkosOperatorScope(), /WORKOS_OPERATOR_INPUT_UNAVAILABLE/);
+  assert.throws(() => prepareWorkosOperatorActivation(root), /WORKOS_OPERATOR_INPUT_UNAVAILABLE/);
+  assert.equal(existsSync(root), false);
+  await assert.rejects(
+    runWorkosOperatorCommand("prepare", root),
+    /WORKOS_OPERATOR_INPUT_UNAVAILABLE/,
+  );
+  assert.equal(existsSync(root), false);
 });
 test("execution source-directory predicate rejects an unrelated cwd", (t) => {
   const original = process.cwd(),

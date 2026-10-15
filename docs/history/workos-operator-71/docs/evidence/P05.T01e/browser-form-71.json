@@ -1,0 +1,30 @@
+{
+  "task": "P05.T01e",
+  "canonical_sequence": 71,
+  "source_digest": "501cd90033d6c85e0c959026f0b2499e7c194c18d70d94dd78fccf248373b250",
+  "scope": "Actual browser GET/native HTML form POST with synthetic controller and in-memory synthetic proofs only. Authorization link was rendered but not followed; no real WorkOS request.",
+  "observed_on": "2026-10-15",
+  "observations": [
+    {
+      "stage": "bootstrap",
+      "status": 200,
+      "policy": "same-origin",
+      "realProviderRequests": 0
+    },
+    {
+      "originClass": "exact_origin",
+      "referrerClass": "clean_same_origin",
+      "contentTypeExact": true,
+      "bootstrapCookiePresent": true,
+      "realProviderRequests": 0,
+      "status": 200,
+      "policy": "no-referrer",
+      "syntheticStartCalls": 1
+    }
+  ],
+  "continuation_visible": true,
+  "authorization_link_followed": false,
+  "real_provider_requests": 0,
+  "diagnostic_script_sha256": "bee190369fe63df81b47c1f8238175f409764238fd8ce825c773faf9f2a28772",
+  "diagnostic_log_sha256": "53e6af3f64678fe84f8882ec905b5d6b289b9089cebc2f3b68a68f7180fccf70"
+}
