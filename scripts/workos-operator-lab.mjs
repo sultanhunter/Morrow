@@ -160,7 +160,7 @@ export async function runWorkosOperatorLab() {
             activationId: randomUUID(),
             beginCommandId: randomUUID(),
             callbackCommandId: randomUUID(),
-            planSequence: 70,
+            planSequence: 71,
             planDigest: scope.planDigest,
             sourceDigest: scope.sourceDigest,
             profileDigest: scope.profileDigest,
@@ -280,7 +280,7 @@ export async function runWorkosOperatorLab() {
           check(
             "actual_privacy_headers",
             first.headers["cache-control"] === "no-store" &&
-              first.headers["referrer-policy"] === "no-referrer" &&
+              first.headers["referrer-policy"] === "same-origin" &&
               first.headers["x-content-type-options"] === "nosniff" &&
               first.headers["x-frame-options"] === "DENY" &&
               !first.headers["access-control-allow-origin"],
@@ -678,7 +678,7 @@ export async function runWorkosOperatorLab() {
     const report = {
       schema_version: 1,
       packet: "P05.T01e",
-      plan_sequence: 70,
+      plan_sequence: 71,
       generated_at: new Date().toISOString(),
       status: "synthetic_local_qualified_not_provider_qualified",
       engine: result,

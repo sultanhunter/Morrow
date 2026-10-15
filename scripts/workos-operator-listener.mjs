@@ -169,6 +169,9 @@ export function createWorkosOperatorHandler(profileJson, controller, options = {
         c = cookies(request);
       if (request.method === "GET" && request.url === profile.start_path) {
         if (started) return invalidResponse(response, 409);
+        // Only the clean, pre-authentication form preserves its same-origin POST
+        // Origin. Callback, continuation, result and denial responses stay private.
+        response.setHeader("Referrer-Policy", "same-origin");
         response.setHeader("Set-Cookie", cookie(bootstrapName, bootstrap));
         return render(
           response,

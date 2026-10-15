@@ -31,7 +31,7 @@ const bindingJson = JSON.stringify({
 });
 const scope = {
   schemaVersion: 1,
-  planSequence: 70,
+  planSequence: 71,
   planDigest: "a".repeat(64),
   sourceDigest: "b".repeat(64),
   profileDigest: hash(profileJson),
@@ -52,7 +52,7 @@ async function fixture(t, options = {}) {
     activationId: randomUUID(),
     beginCommandId: randomUUID(),
     callbackCommandId: randomUUID(),
-    planSequence: 70,
+    planSequence: 71,
     planDigest: scope.planDigest,
     sourceDigest: scope.sourceDigest,
     profileDigest: scope.profileDigest,

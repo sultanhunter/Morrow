@@ -2,7 +2,7 @@
 const nativeFetch = globalThis.fetch.bind(globalThis);
 const fixedProfile = Object.freeze({
   schema_version: 1,
-  plan_sequence: 70,
+  plan_sequence: 71,
   provider_id: "workos",
   environment_kind: "staging",
   environment_id: "environment_01M4HG7FV7X8EFXE1J9S6GG00R",

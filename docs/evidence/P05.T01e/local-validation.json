@@ -1,46 +1,38 @@
 {
   "task": "P05.T01e",
-  "canonical_sequence": 70,
-  "observed_at": "2026-10-15T00:18:25.361879Z",
-  "scope": "Local engineering only. Actual local SQL and HTTP are distinct from synthetic outbound responses; no real provider or hosted identity qualification.",
-  "source_digest": "9249b0398dc01e1d71f3d11e0e85919660dbf5c8651e41093650e8b6f63847ec",
+  "canonical_sequence": 71,
+  "observed_at": "2026-10-15T09:29:21.230741+00:00",
+  "scope": "Current local engineering qualification: actual isolated SQL/HTTP and actual native browser form with synthetic-only controller/outbound responses. No native WorkOS authorization or code exchange.",
+  "source_digest": "501cd90033d6c85e0c959026f0b2499e7c194c18d70d94dd78fccf248373b250",
   "repository_pipeline": {
     "passed": true,
-    "tests": 1306,
+    "tests": 1307,
     "failed": 0,
-    "includes_operator_unit_tests": 78,
+    "includes_operator_unit_tests": 79,
     "types_format_validators_boundaries_builds_inventories": true
   },
   "scaffold_guards": {
     "passed": 9,
     "failed": 0
   },
-  "preserved_sql_laboratories": [
-    "lab:operations",
-    "lab:restore",
-    "lab:identity",
-    "lab:permissions",
-    "lab:authentication",
-    "lab:workspace-revocation",
-    "lab:workspace-store-linking",
-    "lab:authentication-exchange"
-  ],
-  "actual_local_workers_laboratories": [
-    "lab:workers",
-    "lab:agent-authority-workers",
-    "lab:workspace-store-linking-workers",
-    "lab:authentication-exchange-workers"
-  ],
   "operator_actual_postgresql_loopback_checks": 59,
   "synthetic_provider_requests": 2,
   "real_provider_requests": 0,
-  "independent_material_findings": 0,
-  "log_sha256": {
-    "repository_pipeline": "7f3b457e38eb4dcc28da312208908633bc7a52ace8673325d6a1df9d7d918107",
-    "scaffold": "bcc2234352824df18b4011b56963c5e0c56c7252b7147d213f31299191f48afa",
-    "preserved_regressions": "9604c25a773f56d463a690da3eaf699fd53a157e5d582cc1d01da4f8c82fdb17"
+  "actual_native_browser_form": {
+    "passed": true,
+    "synthetic_controller_starts": 1,
+    "workos_link_followed": false,
+    "report": "docs/evidence/P05.T01e/browser-form-71.json"
   },
-  "hosted_ci": "Exact current PR head checks are authoritative; publication receipt is outside the repository to avoid a self-referential commit.",
+  "independent_material_findings": 0,
+  "preserved_sql_workers_regressions": "Unchanged previous laboratory sources retain exact70 results; all eight SQL and four Workers labs are required again by exact-head hosted CI.",
+  "hosted_ci": "Exact current PR-head checks and outside-repository publication-receipt-71.json are authoritative.",
+  "log_sha256": {
+    "repository_pipeline": "f59f617ee07b9a2d35d9bcbda84f89726988abb5b4f6af774065f624f70bdadc",
+    "scaffold": "bcc2234352824df18b4011b56963c5e0c56c7252b7147d213f31299191f48afa",
+    "operator_sql_http": "a582a5de0288567ba4c7ebc83b0fc6aec6e60d6145dbc4115273cbb8976c62b0",
+    "focused_operator": "3b261a879d16418bbe3dbe7ec9774e7a188332594ee74b9daf2ba10c71a7a67e"
+  },
   "provider_qualified": false,
   "merchant_login_enabled": false
 }

@@ -82,7 +82,7 @@ const activationKeys = [
 ];
 const profileValues = Object.freeze({
   schema_version: 1,
-  plan_sequence: 70,
+  plan_sequence: 71,
   provider_id: "workos",
   environment_kind: "staging",
   environment_id: "environment_01M4HG7FV7X8EFXE1J9S6GG00R",
@@ -115,7 +115,7 @@ function scopeOf(value) {
   const s = parse(value, scopeKeys);
   if (
     s.schemaVersion !== 1 ||
-    s.planSequence !== 70 ||
+    s.planSequence !== 71 ||
     ![s.planDigest, s.sourceDigest, s.profileDigest, s.bindingDigest].every(sha)
   )
     throw invalid();
@@ -156,7 +156,7 @@ export function validateWorkosOperatorActivation(scopeJson, activationJson) {
     !["native", "synthetic"].includes(a.mode) ||
     ![a.operationId, a.activationId, a.beginCommandId, a.callbackCommandId].every(id) ||
     new Set([a.operationId, a.activationId, a.beginCommandId, a.callbackCommandId]).size !== 4 ||
-    a.planSequence !== 70 ||
+    a.planSequence !== 71 ||
     ["planDigest", "sourceDigest", "profileDigest", "bindingDigest"].some((k) => a[k] !== s[k]) ||
     a.environmentId !== b.environmentId ||
     a.applicationId !== b.applicationId ||

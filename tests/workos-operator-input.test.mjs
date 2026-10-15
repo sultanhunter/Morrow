@@ -48,7 +48,7 @@ function fixture(t) {
       sources: {
         plan: {
           page_id: "page_b1ef27b80b788191b91e67cbb52f1037",
-          sequence: 70,
+          sequence: 71,
           sha256: createHash("sha256").update(plan).digest("hex"),
         },
       },
@@ -65,7 +65,7 @@ test("scope pins exact owned profile, code closure and validated canonical plan"
   const root = fixture(t),
     first = loadPublicWorkosOperatorScope(root);
   const parsed = JSON.parse(first);
-  assert.equal(parsed.planSequence, 70);
+  assert.equal(parsed.planSequence, 71);
   assert.equal(
     JSON.parse(parsed.bindingJson).redirectUri,
     "http://127.0.0.1:4110/operator/workos/callback",
@@ -83,7 +83,7 @@ test("same canonical read capture time cannot silently rebind source authority",
   manifest.captured_at = "2026-10-15T01:00:00.000Z";
   writeFileSync(path, JSON.stringify(manifest));
   assert.equal(loadPublicWorkosOperatorScope(root), before);
-  manifest.sources.plan.sequence = 71;
+  manifest.sources.plan.sequence = 70;
   writeFileSync(path, JSON.stringify(manifest));
   assert.throws(() => loadPublicWorkosOperatorScope(root), /WORKOS_OPERATOR_INPUT_UNAVAILABLE/);
 });

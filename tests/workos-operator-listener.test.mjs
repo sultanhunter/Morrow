@@ -105,6 +105,12 @@ async function dispatch(
   const pending = f.handler(request, response);
   queueMicrotask(() => request.end(body));
   await pending;
+  assert.equal(
+    response.headers["referrer-policy"],
+    method === "GET" && url === p.start_path && response.statusCode === 200
+      ? "same-origin"
+      : "no-referrer",
+  );
   return response;
 }
 function cookieValue(response, name) {
@@ -128,9 +134,9 @@ async function start(f) {
 }
 const callbackUrl = (code = "opaque code", suffix = "") =>
   `${p.callback_path}?code=${encodeURIComponent(code)}&state=${state}${suffix}`;
-function privateHeaders(response) {
+function privateHeaders(response, referrerPolicy = "no-referrer") {
   assert.equal(response.headers["cache-control"], "no-store");
-  assert.equal(response.headers["referrer-policy"], "no-referrer");
+  assert.equal(response.headers["referrer-policy"], referrerPolicy);
   assert.equal(response.headers["x-content-type-options"], "nosniff");
   assert.equal(response.headers["x-frame-options"], "DENY");
   assert.ok(response.headers["content-security-policy"].includes("default-src 'none'"));
@@ -141,11 +147,12 @@ test("GET start is only a protected form; valid POST begins once and presents a 
     landing = await dispatch(f);
   assert.equal(landing.statusCode, 200);
   assert.equal(f.starts, 0);
-  privateHeaders(landing);
+  privateHeaders(landing, "same-origin");
   const { begun, csrf, bootstrap } = await start(f);
   assert.equal(begun.statusCode, 200);
   assert.equal(f.starts, 1);
   assert.ok(begun.body.includes("Continue to WorkOS"));
+  assert.ok(begun.body.includes('rel="noreferrer"'));
   assert.ok(!begun.body.includes(browserProof));
   assert.ok(!begun.body.includes(csrf));
   assert.match(begun.headers["set-cookie"][0], /HttpOnly; SameSite=Lax/);
@@ -167,6 +174,7 @@ test("GET start is only a protected form; valid POST begins once and presents a 
 test("start requires exact Origin, bootstrap and CSRF without consuming an invalid initiation", async () => {
   for (const patch of [
     { origin: undefined },
+    { origin: "null" },
     { origin: "https://foreign.example" },
     { cookie: undefined },
     { csrf: "wrong" },
@@ -192,6 +200,49 @@ test("start requires exact Origin, bootstrap and CSRF without consuming an inval
     assert.equal((await start(f)).begun.statusCode, 200);
     assert.equal(f.starts, 1);
   }
+});
+test("same-origin policy applies only to the successful clean start form; null Origin remains denied", async () => {
+  const f = fixture(),
+    landing = await dispatch(f),
+    csrf = landing.body.match(/name="csrf" value="([A-Za-z0-9_-]{43})"/)[1],
+    bootstrap = cookieValue(landing, "morrow_operator_bootstrap");
+  privateHeaders(landing, "same-origin");
+  for (const request of [
+    { url: p.start_path + "?" },
+    { url: p.start_path + "?code=not-a-clean-start" },
+    { url: p.start_path + "/" },
+    { host: "localhost:4110" },
+  ]) {
+    const rejected = await dispatch(f, request);
+    assert.ok(rejected.statusCode >= 400);
+    privateHeaders(rejected);
+  }
+  const rejected = await dispatch(f, {
+    method: "POST",
+    headers: [
+      ["Origin", "null"],
+      ["Cookie", bootstrap],
+      ["Content-Type", "application/x-www-form-urlencoded"],
+    ],
+    body: "csrf=" + csrf,
+  });
+  assert.equal(rejected.statusCode, 400);
+  privateHeaders(rejected);
+  assert.equal(f.starts, 0);
+  const { begun, proof } = await start(f);
+  privateHeaders(begun);
+  const noLongerClean = await dispatch(f);
+  assert.equal(noLongerClean.statusCode, 409);
+  privateHeaders(noLongerClean);
+  const callback = await dispatch(f, {
+    url: callbackUrl(),
+    headers: [["Cookie", proof]],
+  });
+  assert.equal(callback.statusCode, 303);
+  privateHeaders(callback);
+  privateHeaders(await dispatch(f, { url: p.result_path }));
+  assert.equal(f.starts, 1);
+  assert.equal(f.callbacks, 1);
 });
 test("concurrent valid start requests latch once before the controller await", async () => {
   let finish;

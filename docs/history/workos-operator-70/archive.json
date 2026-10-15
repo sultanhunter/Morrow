@@ -1,0 +1,168 @@
+{
+  "plan_sequence": 70,
+  "commit": "c4068a1f3a36c30292be554df26fa1af2903dc5c",
+  "operator_source_digest": "9249b0398dc01e1d71f3d11e0e85919660dbf5c8651e41093650e8b6f63847ec",
+  "scope": "Exact published70 source closure/tests/plan/packet/evidence before the browser form repair. Actual local failure has a separate retained protected root; no provider initiation occurred.",
+  "files": [
+    {
+      "path": ".nvmrc",
+      "sha256": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c"
+    },
+    {
+      "path": "package.json",
+      "sha256": "c68be38f4d8a078dc53304e324625162971417a212b8d4c1429e198cfe8b7a5d"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "sha256": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d"
+    },
+    {
+      "path": "packages/contracts/package.json",
+      "sha256": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6"
+    },
+    {
+      "path": "packages/identity/package.json",
+      "sha256": "8ab41fa37ceedb0ca134a9d88010c0a1025c9d2982716f7210b21e406f9c0a9d"
+    },
+    {
+      "path": "infra/local-engine.json",
+      "sha256": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b"
+    },
+    {
+      "path": "infra/identity-role-prerequisites.sql",
+      "sha256": "8908ee3f90d1f48dffc21c72879357dff2bc845f1cea2851f31152bd86494a22"
+    },
+    {
+      "path": "migrations/manifest.json",
+      "sha256": "e857148fe90182961498596386c387798cb8fb5355adac0ce0e75529fc1e4c4d"
+    },
+    {
+      "path": "migrations/0001.identity-foundation.sql",
+      "sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491"
+    },
+    {
+      "path": "migrations/0002.identity-grants.sql",
+      "sha256": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7"
+    },
+    {
+      "path": "migrations/0003.authentication-challenges.sql",
+      "sha256": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f"
+    },
+    {
+      "path": "migrations/0004.workspace-access-revocation.sql",
+      "sha256": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038"
+    },
+    {
+      "path": "migrations/0005.workspace-store-linking.sql",
+      "sha256": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92"
+    },
+    {
+      "path": "migrations/0006.authentication-exchange-admission.sql",
+      "sha256": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87"
+    },
+    {
+      "path": "packages/identity/src/authentication-exchange-admission.ts",
+      "sha256": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa"
+    },
+    {
+      "path": "packages/contracts/src/validation.ts",
+      "sha256": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb"
+    },
+    {
+      "path": "packages/contracts/src/generated/runtime-validators.mjs",
+      "sha256": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6"
+    },
+    {
+      "path": "scripts/local-postgres-lab.mjs",
+      "sha256": "c511655343742b1d946faa18d8a5f70340b46565d506e23ac4e53a7071ee6269"
+    },
+    {
+      "path": "scripts/local-authentication-exchange-sql.mjs",
+      "sha256": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9"
+    },
+    {
+      "path": "scripts/workos-operator-input.mjs",
+      "sha256": "ef1d97be3c8920c436019f73922958427d4340df4b1a0c4ef096ac7e89195588"
+    },
+    {
+      "path": "scripts/workos-operator.mjs",
+      "sha256": "ead4b03f1d4942e2654a538d17b1d7fdf282103fbcb2fdc2bb5c9a392e8aa521"
+    },
+    {
+      "path": "scripts/workos-operator-journal.mjs",
+      "sha256": "11d2bcb313576f55e290ea6192f2a837e0b3c2633433122e86b18d8d9a78696e"
+    },
+    {
+      "path": "scripts/workos-operator-controller.mjs",
+      "sha256": "59c238025e2eb1b42fedd6f10ee1649272c5dacfb3d0dd839f315f47ca299526"
+    },
+    {
+      "path": "scripts/workos-operator-transport.mjs",
+      "sha256": "bbc1d9606acfe8b7d58451e9059c43fafddf831592a8c771801d212a91a37573"
+    },
+    {
+      "path": "scripts/workos-operator-listener.mjs",
+      "sha256": "045ab7b090af8b01d110cc975c3a0876357a700c3e554a3bc54511f1741c42d4"
+    },
+    {
+      "path": "scripts/workos-operator-lab.mjs",
+      "sha256": "8c07e4b27e2001beffbca398eb79173ab8fc276bbf26b235b08c213ab2085288"
+    },
+    {
+      "path": "docs/decisions/workos-operator-qualification.json",
+      "sha256": "48046e77ccf2c41dd8d4b6ad27b48ec01cecdfa75a5ac11ec348d6ed75c99c72"
+    },
+    {
+      "path": "tests/workos-operator-controller.test.mjs",
+      "sha256": "c9c78f803f5aeb4df9654b2833d79c41ddca188b142724c142f2b7af02f3583c"
+    },
+    {
+      "path": "tests/workos-operator-input.test.mjs",
+      "sha256": "f51f2a09b36cf5319974110a8a5689dff251fbb54ccdc89ed4b7098d38d58163"
+    },
+    {
+      "path": "tests/workos-operator-listener.test.mjs",
+      "sha256": "92e17edb3bd7aad69a2420a71f266fcb00310845ee73a5c69ecb92787ccb2741"
+    },
+    {
+      "path": "tests/workos-operator-transport.test.mjs",
+      "sha256": "3e99552b43894407fb4f1a5faf2396be358bbc82e9c9c243128d1d7fe367c367"
+    },
+    {
+      "path": "docs/plan/build-plan.md",
+      "sha256": "5cd9b1e4065d869ff61af613f1bec31ac6c1b3b88bbf205a791dcea92522d150"
+    },
+    {
+      "path": "docs/plan/source.json",
+      "sha256": "15a5c35470681be98db4fb55dd83073a374410afd5dce784f6a8127a80e15433"
+    },
+    {
+      "path": "docs/packets/P05.T01e.md",
+      "sha256": "24c6c86bf756f896c099c5b49ae84e602f91c61e517c12af654469a8db81801a"
+    },
+    {
+      "path": "docs/evidence/P05.T01e/operator-preparation.json",
+      "sha256": "c2a93e51c2fe8f6c475245e15a1044a3660110abd2d73a8088789594e033f7fd"
+    },
+    {
+      "path": "docs/evidence/P05.T01e/workos-staging-baseline.json",
+      "sha256": "6397710dea2037df67eb5f6eda0be75eb02b448394e3ccbec0da208b0aef553f"
+    },
+    {
+      "path": "docs/evidence/P05.T01e/postgresql-loopback-lab.json",
+      "sha256": "045023f48c488c341ba865fcda788a6aba2af053b60384865658c5cebd90b557"
+    },
+    {
+      "path": "docs/evidence/P05.T01e/local-validation.json",
+      "sha256": "fa945db534e02a1ee33ee0e632b69fa364254e65d691f17c2185b8a8f32faa98"
+    },
+    {
+      "path": "docs/evidence/P05.T01e/review.json",
+      "sha256": "b8714be832955d03c7dc3ef08a433d1e39dbfc38fe5cb2f0c5c1efc0d24d2a31"
+    }
+  ]
+}

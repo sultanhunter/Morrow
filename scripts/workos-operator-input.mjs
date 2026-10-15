@@ -58,7 +58,7 @@ export const workosOperatorSourcePaths = Object.freeze([
 ]);
 const expectedProfile = Object.freeze({
   schema_version: 1,
-  plan_sequence: 70,
+  plan_sequence: 71,
   provider_id: "workos",
   environment_kind: "staging",
   environment_id: "environment_01M4HG7FV7X8EFXE1J9S6GG00R",
@@ -120,7 +120,7 @@ export function loadPublicWorkosOperatorScope(root = repositoryRoot) {
     const planDigest = sha(sourceBytes(root, "docs/plan/build-plan.md"));
     if (
       plan?.page_id !== "page_b1ef27b80b788191b91e67cbb52f1037" ||
-      plan.sequence !== 70 ||
+      plan.sequence !== 71 ||
       plan.sha256 !== planDigest
     )
       throw unavailable();
@@ -145,7 +145,7 @@ export function loadPublicWorkosOperatorScope(root = repositoryRoot) {
     const sources = workosOperatorSourcePaths.map((path) => [path, sha(sourceBytes(root, path))]);
     return JSON.stringify({
       schemaVersion: 1,
-      planSequence: 70,
+      planSequence: 71,
       planDigest,
       sourceDigest: sha(JSON.stringify(sources)),
       profileDigest: sha(profileJson),
@@ -254,7 +254,7 @@ export function prepareWorkosOperatorActivation(root, scopeJson = loadPublicWork
       profile = JSON.parse(scope.profileJson);
     if (
       scope.schemaVersion !== 1 ||
-      scope.planSequence !== 70 ||
+      scope.planSequence !== 71 ||
       ![scope.planDigest, scope.sourceDigest, scope.profileDigest, scope.bindingDigest].every(
         (v) => typeof v === "string" && /^[a-f0-9]{64}$/.test(v),
       ) ||
