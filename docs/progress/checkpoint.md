@@ -1,3 +1,13 @@
+# Current continuation: live staging sign-in verified and cleaned up
+
+Canonical82 remains the authority. On16October2026 the source qualified at reviewed commit2d4218f345c6e2dbafed0cb1267034236212accc and exact-head hostedCI38801655675 completed the fresh owner-approved P05.T01n controlled WorkOS Staging trial. The user opened the direct preparation link and clicked Prepare/Continue, avoiding the inconsistent automatic Browser panel selection. One initiation, one anonymous JWKS GET, one keyless token POST and one session-catalogue GET produced verified_active_evidence with signature-verified token and expected-only client binding. No retries or Morrow local session were issued.
+
+Only the exact new session derived from the verified signed token was revoked. A fresh dashboard reload and exact-session detail confirmed Revoked; all three controlled-user sessions are revoked, with the two old sessions unchanged. The native result's providerSessionCleanup remains unknown and is preserved; separate manual cleanup evidence records the verified dashboard revocation. Temporary key and controller lock are absent, listener4110 is closed, host child closure observed, database backend namespace and owned container absent. Local cold-Docker startup holds and the prior hidden-panel window expiry remain separate immutable observations; their uncertain cleanup records are not overwritten.
+
+Evidence: docs/evidence/P05.T01n/actual-staging-trial.json. This is positive controlled Staging evidence only. ParentP05.T01 remains In progress: public login/cookie/refresh, hosted identity, SSO/SCIM/provisioning and merchant activation still need their planned qualification. P05.T01m already qualifies the local session admission primitives separately. The current live allowance is consumed; no new provider/key/sign-in action is authorized. Next publish this reviewed evidence and checkpoint, verify exact-headCI and clean Desktop alignment, then resume the canonical identity/session-to-workspace/store integration dependency. Do not promote historical provider observations into local authority.
+
+# Historical82 pre-publication checkpoint
+
 # Current continuation: current source qualification passed, publication pending
 
 Canonical82 remains synchronized,465blocks. Active packet P05.T01n.md. The narrow six-selector update retains wire80/profile/limits and all native/controller/listener/journal/database/domain/migration bodies. Current37-source digest7e8bf99d334161155a88296abe5bd393fa76d2903358f7bacd5cae934d268cc4; selected53-input digest9a4efd640e160d885f2ccc2b2289166597b7a13044e9e3c5b57b165765f20920. New N evidence preserves original80/81 reports;458 protected files remain byte-exact.
