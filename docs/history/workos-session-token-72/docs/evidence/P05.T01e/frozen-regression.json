@@ -1,0 +1,306 @@
+{
+  "schema_version": 1,
+  "packet": "P05.T01e",
+  "status": "frozen71_synthetic_regression_passed_not_new_provider_qualification",
+  "generated_at": "2026-10-15T10:16:48.457Z",
+  "current_plan_sequence": 72,
+  "current_plan_digest": "e2050f722a1e3a90cc28e433bbf0e8013f324c635b13a95898ad0b5d118fba01",
+  "archived_plan_sequence": 71,
+  "operator_source_digest": "501cd90033d6c85e0c959026f0b2499e7c194c18d70d94dd78fccf248373b250",
+  "archive_manifest_digest": "a86e13e0c081696949ee54b787cc5e8fffa25d7bb0cd2c36ff5d3a85c08702ae",
+  "archive_files_verified": 42,
+  "archive_unchanged": true,
+  "workspace_resolution": "copied_archived_packages_only",
+  "tooling": {
+    "node": "v24.13.0",
+    "lock_digest": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "portable_tooling_digest": "a82a4da19cc5bc86ef8eb3385843c17bc5874a2d84a6fdf2e0f9d5a61d85ea0a",
+    "platform_package": "@esbuild/darwin-arm64",
+    "platform_binary_digest": "3e030ee2aa86ad3c33e5e95ae0e53bb03de40e0da35c9b1180a67de4a497cae5",
+    "platform_package_integrity": "sha512-N3zl+lxHCifgIlcMUP5016ESkeQjLj/959RxxNYIthIg+CQHInujFuXeWbWMgnTo4cp5XVHqFPmpyu9J65C1Yg==",
+    "platform_package_url": "https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.25.12.tgz",
+    "native_binary_provenance": "official_tarball_full_SRI_verified_before_pinning"
+  },
+  "actual_postgresql": true,
+  "actual_loopback_origin": "http://127.0.0.1:4110",
+  "engine": {
+    "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+    "version": "17.11 (Debian 17.11-1.pgdg13+2)"
+  },
+  "real_provider_requests": 0,
+  "synthetic_provider_requests": 2,
+  "checks": [
+    {
+      "name": "local_role_only_preauth_enabled",
+      "passed": true
+    },
+    {
+      "name": "local_role_has_no_elevation",
+      "passed": true
+    },
+    {
+      "name": "before_claim_database_empty",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_1",
+      "passed": true
+    },
+    {
+      "name": "claim_before_sql_begin",
+      "passed": true
+    },
+    {
+      "name": "actual_get_bootstrap_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_bootstrap_form_and_cookie",
+      "passed": true
+    },
+    {
+      "name": "actual_privacy_headers",
+      "passed": true
+    },
+    {
+      "name": "actual_duplicate_host_denied",
+      "passed": true
+    },
+    {
+      "name": "actual_foreign_origin_denied",
+      "passed": true
+    },
+    {
+      "name": "actual_bad_csrf_denied",
+      "passed": true
+    },
+    {
+      "name": "invalid_start_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_start_uses_sql69",
+      "passed": true
+    },
+    {
+      "name": "actual_static_authorization_continuation",
+      "passed": true
+    },
+    {
+      "name": "actual_browser_cookie_scoped",
+      "passed": true
+    },
+    {
+      "name": "initiation_marker_precedes_link",
+      "passed": true
+    },
+    {
+      "name": "actual_missing_cookie_denied",
+      "passed": true
+    },
+    {
+      "name": "actual_duplicate_cookie_denied",
+      "passed": true
+    },
+    {
+      "name": "actual_malformed_utf8_denied",
+      "passed": true
+    },
+    {
+      "name": "actual_unknown_callback_field_denied",
+      "passed": true
+    },
+    {
+      "name": "invalid_callbacks_no_admission",
+      "passed": true
+    },
+    {
+      "name": "concurrent_callbacks_one_quick_clean_redirect",
+      "passed": true
+    },
+    {
+      "name": "synthetic_request_fixed_endpoint_1",
+      "passed": true
+    },
+    {
+      "name": "synthetic_request_closed_fields_1",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_post_1",
+      "passed": true
+    },
+    {
+      "name": "one_real_sql_reservation_one_fake_post",
+      "passed": true
+    },
+    {
+      "name": "result_read_during_provider_wait",
+      "passed": true
+    },
+    {
+      "name": "synthetic_shape_not_identity",
+      "passed": true
+    },
+    {
+      "name": "result_contains_no_callback_secrets",
+      "passed": true
+    },
+    {
+      "name": "repeat_callback_never_resends",
+      "passed": true
+    },
+    {
+      "name": "inspection_held_after_observation",
+      "passed": true
+    },
+    {
+      "name": "inspection_preserves_files",
+      "passed": true
+    },
+    {
+      "name": "restart_cannot_recreate_send_handle",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_2",
+      "passed": true
+    },
+    {
+      "name": "config_drift_after_admission_holds",
+      "passed": true
+    },
+    {
+      "name": "config_drift_no_send_marker",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_3",
+      "passed": true
+    },
+    {
+      "name": "controller_deadline_holds_before_actual_sql_admission",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_4",
+      "passed": true
+    },
+    {
+      "name": "real_commit_ack_loss_holds",
+      "passed": true
+    },
+    {
+      "name": "commit_loss_has_one_durable_reservation",
+      "passed": true
+    },
+    {
+      "name": "commit_loss_restart_no_retry",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_5",
+      "passed": true
+    },
+    {
+      "name": "synthetic_request_fixed_endpoint_2",
+      "passed": true
+    },
+    {
+      "name": "synthetic_request_closed_fields_2",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_post_2",
+      "passed": true
+    },
+    {
+      "name": "observation_ack_loss_holds_sent_attempt",
+      "passed": true
+    },
+    {
+      "name": "observation_loss_restart_no_second_post",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_6",
+      "passed": true
+    },
+    {
+      "name": "actual_listener_expiry_denied",
+      "passed": true
+    },
+    {
+      "name": "listener_expiry_no_post",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_7",
+      "passed": true
+    },
+    {
+      "name": "actual_listener_invalid_request_budget",
+      "passed": true
+    },
+    {
+      "name": "listener_rate_no_post",
+      "passed": true
+    },
+    {
+      "name": "actual_recreated_database_has_no_admission",
+      "passed": true
+    },
+    {
+      "name": "retained_journal_blocks_recreated_database",
+      "passed": true
+    },
+    {
+      "name": "all_journals_exclude_raw_proofs_codes_tokens",
+      "passed": true
+    },
+    {
+      "name": "actual_sql_output_excludes_raw_proofs_codes",
+      "passed": true
+    },
+    {
+      "name": "only_synthetic_injected_provider_transport",
+      "passed": true
+    }
+  ],
+  "sources": {
+    ".nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "package.json": "c68be38f4d8a078dc53304e324625162971417a212b8d4c1429e198cfe8b7a5d",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+    "packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "packages/identity/package.json": "8ab41fa37ceedb0ca134a9d88010c0a1025c9d2982716f7210b21e406f9c0a9d",
+    "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "infra/identity-role-prerequisites.sql": "8908ee3f90d1f48dffc21c72879357dff2bc845f1cea2851f31152bd86494a22",
+    "migrations/manifest.json": "e857148fe90182961498596386c387798cb8fb5355adac0ce0e75529fc1e4c4d",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "scripts/local-postgres-lab.mjs": "c511655343742b1d946faa18d8a5f70340b46565d506e23ac4e53a7071ee6269",
+    "scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "scripts/workos-operator-input.mjs": "1a75578936f4ec9ea06201a8be6a83f28841ec025a4e7aff0f3079166a3b0a1a",
+    "scripts/workos-operator.mjs": "ead4b03f1d4942e2654a538d17b1d7fdf282103fbcb2fdc2bb5c9a392e8aa521",
+    "scripts/workos-operator-journal.mjs": "11d2bcb313576f55e290ea6192f2a837e0b3c2633433122e86b18d8d9a78696e",
+    "scripts/workos-operator-controller.mjs": "71b5a17560764251e04b7db7c2325d27e37c741e46386f3d1b8a037f713f76fa",
+    "scripts/workos-operator-transport.mjs": "eba3213fa813c56500a829625d96c2c4603681f4b7b2ac66065f83426c5d41c6",
+    "scripts/workos-operator-listener.mjs": "b8d7f3982a5a453171de94c9a6ac5c8e2d748cb247549a9494acdf7644f367df",
+    "scripts/workos-operator-lab.mjs": "ce8db2ab9091ca2b8a238250ab23fac4e6c30ac83fd05755a2d52b8c24c00c6c",
+    "docs/decisions/workos-operator-qualification.json": "e58067013ae47be37a14a63c366c39bdff5d53406858eda917c6f43e850c0430",
+    "tests/workos-operator-controller.test.mjs": "12b22d9bbc5e8f82265d3cec3f92a30b8f6e533dc24c36b0ede00bac68ad228e"
+  },
+  "regression_sources": {
+    "scripts/workos-operator-regression.mjs": "bc164804c7b7709dfb1481dc65e24f8143108db33095c8e34f0c6b66f34019ec",
+    "tests/workos-operator-regression.test.mjs": "bebcd2b285998b7bbfd60f34a7cac7f5a6e51910ff6864ee52076839e4234e86",
+    "tests/workos-operator-input.test.mjs": "0b375f80c6cacb8807678a4f47a7440cc5099494a34be0c95673d8dacb50a730"
+  }
+}

@@ -32,5 +32,15 @@
     "pipeline": "2c8eb90e9f07cf2c16c3962ede3ece0b393ea1108216c53a1532a4cdcc93651d",
     "scaffold": "bcc2234352824df18b4011b56963c5e0c56c7252b7147d213f31299191f48afa",
     "linking": "80a4168d51baa59bcfea8fca0d553da6631fd3c19f1cc608c73e46ee2da040c9"
+  },
+  "hosted_follow_up_result": {
+    "commit": "9b899d0eef90f0a210c7e81d4c6907e0188c18cf",
+    "run": 38726242689,
+    "conclusion": "success",
+    "all_steps_passed": true,
+    "linux_engine_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+    "desktop_exact_files": 805,
+    "desktop_clean_aligned": true,
+    "earlier_failure_cause": "Unproven; not reproduced; acceptance unchanged"
   }
 }

@@ -303,7 +303,7 @@ export function createWorkosOperatorHandler(profileJson, controller, options = {
             "starting",
             "awaiting_callback",
             "processing",
-            "response_shape_received",
+            "cryptographically_verified_candidate",
             "authorization_not_completed",
             "held",
           ].includes(status.state) ||

@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import { readFileSync, realpathSync } from "node:fs";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, generateKeyPairSync, sign as rsaSign } from "node:crypto";
 import { request as httpRequest } from "node:http";
 import { connect as socketConnect } from "node:net";
 import os from "node:os";
@@ -43,7 +43,7 @@ function databaseInputs() {
 // listener. No hosted database, credential, provider, session or grant is used.
 export async function withWorkosOperatorDatabase(use) {
   const { scope, migrations, binding } = databaseInputs();
-  return localPostgresLab("P05.T01e", async ({ id, sql, image, version }) => {
+  return localPostgresLab("P05.T01g", async ({ id, sql, image, version }) => {
     sql("CREATE DATABASE morrow;");
     sql(readFileSync("infra/identity-role-prerequisites.sql", "utf8"), "morrow");
     const install = () => {
@@ -123,7 +123,51 @@ export async function runWorkosOperatorLab() {
   const scopeJson = loadPublicWorkosOperatorScope(),
     scope = JSON.parse(scopeJson),
     profile = JSON.parse(scope.profileJson);
-  let fakePosts = 0;
+  let fakePosts = 0,
+    fakeGets = 0;
+  // Independent Node RSA signing exercises the unchanged WebCrypto verifier.
+  // Private keys, JWKS, claims and tokens stay in this synthetic process only.
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicExponent: 65537,
+  });
+  // Metadata encodings only, not a certificate or PKI trust fixture. The
+  // independently generated RSA key and signature remain the authority input.
+  const certificateMetadata = Buffer.from("synthetic certificate metadata for encoding only");
+  const publicJwk = {
+    ...publicKey.export({ format: "jwk" }),
+    kid: "synthetic-operator-74",
+    alg: "RS256",
+    use: "sig",
+    key_ops: ["verify"],
+    x5c: [certificateMetadata.toString("base64")],
+    "x5t#S256": createHash("sha256").update(certificateMetadata).digest("base64url"),
+  };
+  const jwks = JSON.stringify({ keys: [publicJwk] });
+  const subjectId = "user_" + "D".repeat(26),
+    sessionId = "session_" + "E".repeat(26);
+  secrets.push(jwks, publicJwk.n, subjectId, sessionId);
+  const signToken = (clock) => {
+    const header = Buffer.from(
+      JSON.stringify({ alg: "RS256", kid: publicJwk.kid, typ: "JWT" }),
+    ).toString("base64url");
+    const claims = Buffer.from(
+      JSON.stringify({
+        iss: profile.issuer,
+        client_id: profile.client_id,
+        sub: subjectId,
+        sid: sessionId,
+        iat: Math.floor(clock / 1000) - 5,
+        exp: Math.floor(clock / 1000) + 120,
+      }),
+    ).toString("base64url");
+    const input = header + "." + claims;
+    return (
+      input +
+      "." +
+      rsaSign("RSA-SHA256", Buffer.from(input, "ascii"), privateKey).toString("base64url")
+    );
+  };
   try {
     const result = await withWorkosOperatorDatabase(
       async ({ admission, pool, id, sql, image, version, binding, install }) => {
@@ -152,7 +196,8 @@ export async function runWorkosOperatorLab() {
           await fs.chmod(root, 0o700);
           const meta = await fs.stat(root, { bigint: true });
           let clock = Date.now(),
-            current = scopeJson;
+            current = scopeJson,
+            activationCurrent = true;
           const activation = {
             schemaVersion: 1,
             mode: "synthetic",
@@ -160,7 +205,7 @@ export async function runWorkosOperatorLab() {
             activationId: randomUUID(),
             beginCommandId: randomUUID(),
             callbackCommandId: randomUUID(),
-            planSequence: 71,
+            planSequence: 74,
             planDigest: scope.planDigest,
             sourceDigest: scope.sourceDigest,
             profileDigest: scope.profileDigest,
@@ -177,15 +222,39 @@ export async function runWorkosOperatorLab() {
             tokenEndpoint: profile.token_endpoint,
             maxInitiations: 1,
             maxPosts: 1,
+            maxJwksReads: 1,
             ownerApproved: true,
             callbackRegistered: true,
             cleanupBaseline: true,
           };
-          let posts = 0;
+          let posts = 0,
+            gets = 0;
           const transport = createWorkosOperatorTransport(scope.profileJson, {
             mode: "synthetic",
             clock: () => clock,
             fetch: async (url, init) => {
+              if (init.method === "GET") {
+                gets++;
+                fakeGets++;
+                check(
+                  "synthetic_jwks_fixed_endpoint_" + fakeGets,
+                  url === profile.jwks_endpoint &&
+                    init.redirect === "error" &&
+                    init.body === undefined,
+                );
+                check(
+                  "durable_send_precedes_fake_get_" + fakeGets,
+                  JSON.parse(await fs.readFile(path.join(root, "send_requested.json"), "utf8"))
+                    .record === "send_requested",
+                );
+                if (options.onGet) await options.onGet();
+                const response = new Response(jwks, {
+                  status: 200,
+                  headers: { "content-type": "application/json" },
+                });
+                Object.defineProperty(response, "url", { value: profile.jwks_endpoint });
+                return response;
+              }
               posts++;
               fakePosts++;
               check(
@@ -210,11 +279,14 @@ export async function runWorkosOperatorLab() {
                 marker.codeDigest === hash(body.code),
               );
               if (options.fetch) await options.fetch();
+              const token = signToken(clock),
+                refresh = ["synthetic", "refresh", "token", "only"].join("-");
+              secrets.push(token, refresh);
               const response = new Response(
                 JSON.stringify({
-                  access_token: ["synthetic", "access", "token", "only"].join("-"),
-                  refresh_token: "synthetic-refresh-token-only",
-                  user: { id: "user_00000000000000000000000001" },
+                  access_token: token,
+                  refresh_token: refresh,
+                  user: { id: subjectId },
                 }),
                 { status: 200, headers: { "content-type": "application/json" } },
               );
@@ -228,7 +300,10 @@ export async function runWorkosOperatorLab() {
             journalRoot: root,
             admission: options.admission ?? admission,
             transport,
-            currentScope: async () => current,
+            currentScope: async () => {
+              if (!activationCurrent) throw Error("SYNTHETIC_ACTIVATION_CHANGED");
+              return current;
+            },
             clock: () => clock,
             journalFault: options.journalFault,
           };
@@ -244,6 +319,10 @@ export async function runWorkosOperatorLab() {
             configuration,
             controller,
             posts: () => posts,
+            gets: () => gets,
+            revokeActivation() {
+              activationCurrent = false;
+            },
             setClock(v) {
               clock = v;
             },
@@ -416,8 +495,8 @@ export async function runWorkosOperatorLab() {
           releasePost();
           await until(() => f.controller.status().state !== "processing");
           check(
-            "synthetic_shape_not_identity",
-            f.controller.status().state === "response_shape_received" &&
+            "independent_rsa_candidate_not_local_identity",
+            f.controller.status().state === "cryptographically_verified_candidate" &&
               f.controller.status().providerSessionCleanup === "unknown",
           );
           const resultPage = await request("GET", profile.result_path);
@@ -498,6 +577,75 @@ export async function runWorkosOperatorLab() {
         admin(
           `UPDATE morrow_identity.authentication_exchange_bindings SET active=true WHERE binding_id=${literal(binding.bindingId)};`,
         );
+        // A real committed reservation and durable marker exist before the
+        // delayed synthetic GET. Each drift happens while that GET is awaiting.
+        for (const scenario of [
+          "source",
+          "activation",
+          "admission",
+          "time",
+          "journal_bytes",
+          "journal_inode",
+          "cancel",
+        ]) {
+          let arrived, release;
+          const entered = new Promise((r) => {
+            arrived = r;
+          });
+          const gate = new Promise((r) => {
+            release = r;
+          });
+          const gap = await fixture({
+            onGet: async () => {
+              arrived();
+              await gate;
+            },
+          });
+          const started = await gap.controller.start();
+          secrets.push(started.state, started.browserProof);
+          const completion = gap.controller.complete(
+            JSON.stringify({
+              state: started.state,
+              browserProof: started.browserProof,
+              code: "synthetic-after-get-" + scenario,
+            }),
+          );
+          await Promise.race([
+            entered,
+            completion.then(() => {
+              throw Error("WORKOS_OPERATOR_LAB_FAILED:post_get_" + scenario + "_not_reached");
+            }),
+          ]);
+          if (scenario === "source")
+            gap.setScope(JSON.stringify({ ...scope, sourceDigest: "c".repeat(64) }));
+          if (scenario === "activation") gap.revokeActivation();
+          if (scenario === "admission")
+            admin(
+              `UPDATE morrow_identity.authentication_exchange_bindings SET active=false WHERE binding_id=${literal(binding.bindingId)};`,
+            );
+          if (scenario === "time") gap.setClock(gap.time() + 300001);
+          const marker = path.join(gap.root, "send_requested.json");
+          if (scenario === "journal_bytes") await fs.appendFile(marker, " ");
+          if (scenario === "journal_inode") {
+            await fs.writeFile(marker + ".replacement", await fs.readFile(marker), { mode: 0o600 });
+            await fs.rename(marker + ".replacement", marker);
+          }
+          if (scenario === "cancel") await gap.controller.close();
+          release();
+          check(
+            "post_get_" + scenario + "_holds_zero_post",
+            (await completion).state === "held" && gap.gets() === 1 && gap.posts() === 0,
+          );
+          check(
+            "post_get_" + scenario + "_restart_never_repeats_get",
+            (await createWorkosOperatorController(gap.configuration)).status().state === "held" &&
+              gap.gets() === 1,
+          );
+          if (scenario === "admission")
+            admin(
+              `UPDATE morrow_identity.authentication_exchange_bindings SET active=true WHERE binding_id=${literal(binding.bindingId)};`,
+            );
+        }
         const expired = await fixture(),
           em = await expired.controller.start();
         secrets.push(em.state, em.browserProof);
@@ -665,7 +813,8 @@ export async function runWorkosOperatorLab() {
           "actual_sql_output_excludes_raw_proofs_codes",
           !secrets.filter(Boolean).some((s) => sqlOutput.includes(s)),
         );
-        check("only_synthetic_injected_provider_transport", fakePosts === 2);
+        check("only_synthetic_injected_provider_posts", fakePosts === 2);
+        check("bounded_synthetic_jwks_reads", fakeGets === 9);
         return { image, version };
       },
     );
@@ -677,8 +826,8 @@ export async function runWorkosOperatorLab() {
     );
     const report = {
       schema_version: 1,
-      packet: "P05.T01e",
-      plan_sequence: 71,
+      packet: "P05.T01g",
+      plan_sequence: 74,
       generated_at: new Date().toISOString(),
       status: "synthetic_local_qualified_not_provider_qualified",
       engine: result,
@@ -686,13 +835,14 @@ export async function runWorkosOperatorLab() {
       actual_postgresql: true,
       real_provider_requests: 0,
       synthetic_provider_requests: fakePosts,
+      synthetic_jwks_reads: fakeGets,
       provider_session_cleanup: "unknown",
       checks,
       sources,
     };
-    await fs.mkdir("docs/evidence/P05.T01e", { recursive: true });
+    await fs.mkdir("docs/evidence/P05.T01g", { recursive: true });
     await fs.writeFile(
-      "docs/evidence/P05.T01e/postgresql-loopback-lab.json",
+      "docs/evidence/P05.T01g/postgresql-loopback-lab.json",
       JSON.stringify(report, null, 2) + "\n",
     );
     return report;
@@ -710,6 +860,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         checks: report.checks.length,
         realProviderRequests: 0,
         syntheticProviderRequests: report.synthetic_provider_requests,
+        syntheticJwksReads: report.synthetic_jwks_reads,
         status: report.status,
       }),
     );

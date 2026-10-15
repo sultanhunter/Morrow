@@ -1,8 +1,10 @@
-// Scripts-only operator adapter. No merchant caller, identity issuer or SDK.
+// Scripts-only single-attempt adapter. Sensitive provider values never leave it.
+import { parseWorkosOperatorJson } from "./workos-operator-json.mjs";
+import { createWorkosSessionTokenVerifier } from "../packages/identity/src/workos-session-token.ts";
 const nativeFetch = globalThis.fetch.bind(globalThis);
 const fixedProfile = Object.freeze({
   schema_version: 1,
-  plan_sequence: 71,
+  plan_sequence: 74,
   provider_id: "workos",
   environment_kind: "staging",
   environment_id: "environment_01M4HG7FV7X8EFXE1J9S6GG00R",
@@ -30,12 +32,15 @@ const fixedProfile = Object.freeze({
   keyless_only: true,
   merchant_routes_enabled: false,
   actual_provider_status: "awaiting_owner_activation",
+  issuer: "https://api.workos.com/user_management/client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+  jwks_endpoint: "https://api.workos.com/sso/jwks/client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+  max_jwks_reads: 1,
+  max_jwks_response_bytes: 65536,
 });
 const deny = () => Error("WORKOS_OPERATOR_TRANSPORT_DENIED");
 export function parseWorkosOperatorProfile(value) {
-  if (typeof value !== "string" || value.length > 8192) throw deny();
   try {
-    const profile = JSON.parse(value);
+    const profile = parseWorkosOperatorJson(value, 8192);
     if (
       !profile ||
       Array.isArray(profile) ||
@@ -51,7 +56,7 @@ export function parseWorkosOperatorProfile(value) {
 }
 const observation = (category, statusClass = null) =>
   Object.freeze({
-    outcome: category === "response_shape_received" ? "response_shape_received" : "held",
+    outcome: category === "cryptographically_verified_candidate" ? category : "held",
     category,
     statusClass,
     providerSessionCleanup: "unknown",
@@ -69,19 +74,65 @@ export function workosOperatorEnvironmentAllowed() {
     )
   );
 }
-function pairedUtf16(value) {
-  for (let i = 0; i < value.length; i++) {
-    const unit = value.charCodeAt(i);
-    if (unit >= 0xd800 && unit <= 0xdbff) {
-      const next = value.charCodeAt(++i);
-      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
-    } else if (unit >= 0xdc00 && unit <= 0xdfff) return false;
-  }
-  return true;
+function projectedPublicJwks(value) {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).join(",") !== "keys" ||
+    !Array.isArray(value.keys) ||
+    !value.keys.length ||
+    value.keys.length > 16
+  )
+    throw deny();
+  const verifierFields = ["kty", "kid", "n", "e", "alg", "use", "key_ops"];
+  const allowed = [...verifierFields, "x5c", "x5t#S256"];
+  return {
+    keys: value.keys.map((key) => {
+      if (
+        !key ||
+        typeof key !== "object" ||
+        Array.isArray(key) ||
+        Object.keys(key).some((name) => !allowed.includes(name))
+      )
+        throw deny();
+      if (Object.hasOwn(key, "x5c")) {
+        if (!Array.isArray(key.x5c) || key.x5c.length < 1 || key.x5c.length > 4) throw deny();
+        let total = 0;
+        for (const certificate of key.x5c) {
+          if (
+            typeof certificate !== "string" ||
+            !certificate.length ||
+            certificate.length > 10924 ||
+            !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(certificate)
+          )
+            throw deny();
+          const bytes = Buffer.from(certificate, "base64");
+          if (
+            !bytes.length ||
+            bytes.length > 8192 ||
+            bytes.toString("base64") !== certificate ||
+            (total += bytes.length) > 16384
+          )
+            throw deny();
+        }
+      }
+      if (Object.hasOwn(key, "x5t#S256")) {
+        const thumbprint = key["x5t#S256"];
+        if (typeof thumbprint !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(thumbprint)) throw deny();
+        const bytes = Buffer.from(thumbprint, "base64url");
+        if (bytes.length !== 32 || bytes.toString("base64url") !== thumbprint) throw deny();
+      }
+      // Encoding checks do not establish PKI trust. Only these two observed
+      // metadata members are discarded; the verifier receives key values unchanged.
+      const projected = {};
+      for (const name of verifierFields) if (Object.hasOwn(key, name)) projected[name] = key[name];
+      return projected;
+    }),
+  };
 }
 function privateInput(value) {
-  if (typeof value !== "string" || value.length > 32768) throw deny();
-  const p = JSON.parse(value);
+  const p = parseWorkosOperatorJson(value, 32768);
   if (
     !p ||
     typeof p !== "object" ||
@@ -90,7 +141,6 @@ function privateInput(value) {
     typeof p.code !== "string" ||
     !p.code.length ||
     p.code.length > 4096 ||
-    !pairedUtf16(p.code) ||
     typeof p.verifier !== "string" ||
     !/^[A-Za-z0-9_-]{43}$/.test(p.verifier) ||
     Buffer.from(p.verifier, "base64url").toString("base64url") !== p.verifier
@@ -102,14 +152,13 @@ function cancel(body) {
   try {
     void body?.cancel().catch(() => {});
   } catch {
-    /* No diagnostic failure or disposal wait. */
+    /* Disposal is never awaited. */
   }
 }
 const coarseStatus = (status) =>
   Number.isInteger(status) && status >= 200 && status <= 599
     ? `${Math.floor(status / 100)}xx`
     : null;
-
 export function createWorkosOperatorTransport(profileJson, options) {
   const profile = parseWorkosOperatorProfile(profileJson);
   if (
@@ -118,12 +167,23 @@ export function createWorkosOperatorTransport(profileJson, options) {
     Object.keys(options).some((key) => !["mode", "fetch", "clock"].includes(key)) ||
     (options.mode === "synthetic" && typeof options.fetch !== "function") ||
     (options.mode === "native" &&
-      (Object.hasOwn(options, "fetch") || Object.hasOwn(options, "clock")))
+      (Object.hasOwn(options, "fetch") || Object.hasOwn(options, "clock"))) ||
+    (Object.hasOwn(options, "clock") && typeof options.clock !== "function")
   )
     throw deny();
   const mode = options.mode,
     fetcher = mode === "native" ? nativeFetch : options.fetch,
     clock = options.clock ?? Date.now;
+  const verificationProfile = JSON.stringify({
+    schemaVersion: 1,
+    providerId: "workos",
+    environmentId: profile.environment_id,
+    applicationId: profile.application_id,
+    clientId: profile.client_id,
+    issuer: profile.issuer,
+    revision: profile.binding_revision,
+    audiencePolicy: "absent",
+  });
   let used = false;
   return Object.freeze({
     mode,
@@ -137,128 +197,195 @@ export function createWorkosOperatorTransport(profileJson, options) {
         return observation("input_denied");
       }
       if (!workosOperatorEnvironmentAllowed()) return observation("configuration_denied");
-      let milliseconds, signal;
+      let signal, beforePost, openedAt, endAt;
       try {
-        const now = clock();
         signal = control.signal;
-        if (!Number.isFinite(now) || (signal !== undefined && !(signal instanceof AbortSignal)))
+        beforePost = control.beforePost;
+        openedAt = clock();
+        if (typeof beforePost !== "function") return observation("before_post_denied");
+        if (
+          !Number.isSafeInteger(openedAt) ||
+          openedAt < 0 ||
+          (signal !== undefined && !(signal instanceof AbortSignal))
+        )
           return observation("configuration_denied");
-        milliseconds = Math.min(
-          profile.max_post_seconds * 1000,
-          control.deadlineMs === undefined ? 15000 : control.deadlineMs - now,
+        endAt = Math.min(
+          openedAt + profile.max_post_seconds * 1000,
+          control.deadlineMs === undefined ? openedAt + 15000 : control.deadlineMs,
         );
-        if (!Number.isFinite(milliseconds) || milliseconds <= 0) return observation("timeout");
+        if (!Number.isSafeInteger(endAt) || endAt <= openedAt) return observation("timeout");
         if (signal?.aborted) return observation("cancelled");
       } catch {
         return observation("configuration_denied");
       }
       const aborter = new AbortController();
       let finished = false,
-        timer,
-        finish,
+        lastClock = openedAt,
         activeReader,
-        activeBody;
+        activeBody,
+        interruptCategory = null,
+        finish;
       const interrupted = new Promise((resolve) => {
         finish = resolve;
       });
-      const abort = () => {
+      const interrupt = (category) => {
+        interruptCategory = category;
         aborter.abort();
-        finish(observation("cancelled"));
+        finish(observation(category));
       };
+      const abort = () => interrupt("cancelled");
       signal?.addEventListener("abort", abort, { once: true });
-      timer = setTimeout(() => {
-        aborter.abort();
-        finish(observation("timeout"));
-      }, milliseconds);
+      const timer = setTimeout(() => interrupt("timeout"), endAt - openedAt);
+      const check = () => {
+        if (finished || aborter.signal.aborted) return interruptCategory ?? "cancelled";
+        if (!workosOperatorEnvironmentAllowed()) return "configuration_denied";
+        const now = clock();
+        if (!Number.isSafeInteger(now) || now < lastClock) return "configuration_denied";
+        lastClock = now;
+        if (!workosOperatorEnvironmentAllowed()) return "configuration_denied";
+        if (finished || aborter.signal.aborted) return interruptCategory ?? "cancelled";
+        return now >= endAt ? "timeout" : null;
+      };
       const request = async () => {
-        let response,
-          reader,
-          statusClass = null,
+        let category = "transport_failed",
+          statusClass = null;
+        const checked = () => {
+          const error = check();
+          if (error) {
+            category = error;
+            throw deny();
+          }
+        };
+        const readJson = async (url, method, cap, body) => {
+          checked();
           category = "transport_failed";
-        try {
-          if (!workosOperatorEnvironmentAllowed()) return observation("configuration_denied");
-          // No headers, cookies, client secret, proxy configuration or URL is caller-supplied.
-          response = await fetcher(profile.token_endpoint, {
-            method: "POST",
+          statusClass = null;
+          const response = await fetcher(url, {
+            method,
             redirect: "error",
+            credentials: "omit",
             signal: aborter.signal,
-            headers: { "content-type": "application/json", accept: "application/json" },
-            body: JSON.stringify({
+            headers:
+              method === "POST"
+                ? { "content-type": "application/json", accept: "application/json" }
+                : { accept: "application/json" },
+            ...(body === undefined ? {} : { body }),
+          });
+          if (!(response instanceof Response)) {
+            category = "shape_denied";
+            throw deny();
+          }
+          activeBody = response.body;
+          try {
+            checked();
+          } catch {
+            // The outer timeout may already have disposed its then-known body.
+            // A response arriving later still owns a body that must be canceled.
+            cancel(response.body);
+            throw deny();
+          }
+          if (response.url !== url || response.redirected) {
+            category = "response_origin_denied";
+            cancel(response.body);
+            throw deny();
+          }
+          statusClass = coarseStatus(response.status);
+          if (response.status !== 200) {
+            category = "http_rejected";
+            cancel(response.body);
+            throw deny();
+          }
+          const type = response.headers.get("content-type");
+          if (!type || !/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(type)) {
+            category = "content_denied";
+            cancel(response.body);
+            throw deny();
+          }
+          const length = response.headers.get("content-length");
+          if (length !== null && (!/^(?:0|[1-9][0-9]*)$/.test(length) || Number(length) > cap)) {
+            category = "body_denied";
+            cancel(response.body);
+            throw deny();
+          }
+          if (!response.body) {
+            category = "shape_denied";
+            throw deny();
+          }
+          const reader = response.body.getReader();
+          activeReader = reader;
+          category = "body_denied";
+          try {
+            const chunks = [];
+            let bytes = 0;
+            while (true) {
+              const part = await reader.read();
+              checked();
+              if (part.done) break;
+              if (!(part.value instanceof Uint8Array) || (bytes += part.value.byteLength) > cap) {
+                void reader.cancel().catch(() => {});
+                throw deny();
+              }
+              chunks.push(part.value);
+            }
+            const joined = new Uint8Array(bytes);
+            let offset = 0;
+            for (const chunk of chunks) {
+              joined.set(chunk, offset);
+              offset += chunk.byteLength;
+            }
+            category = "shape_denied";
+            return parseWorkosOperatorJson(
+              new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(joined),
+              cap,
+            );
+          } finally {
+            try {
+              reader.releaseLock();
+            } catch {}
+            activeReader = undefined;
+          }
+        };
+        try {
+          const jwks = projectedPublicJwks(
+            await readJson(profile.jwks_endpoint, "GET", profile.max_jwks_response_bytes),
+          );
+          checked();
+          const observedAtMs = clock();
+          const verifier = createWorkosSessionTokenVerifier(
+            verificationProfile,
+            JSON.stringify({
+              schemaVersion: 1,
+              profileRevision: profile.binding_revision,
+              environmentId: profile.environment_id,
+              applicationId: profile.application_id,
+              clientId: profile.client_id,
+              observedAtMs,
+              expiresAtMs: observedAtMs + 300000,
+              jwks,
+            }),
+            clock,
+          );
+          category = "before_post_denied";
+          if ((await beforePost()) !== true) throw deny();
+          checked();
+          const data = await readJson(
+            profile.token_endpoint,
+            "POST",
+            profile.max_response_bytes,
+            JSON.stringify({
               client_id: profile.client_id,
               grant_type: "authorization_code",
               code: input.code,
               code_verifier: input.verifier,
             }),
-          });
-          activeBody = response?.body;
-          if (finished || aborter.signal.aborted) {
-            cancel(response?.body);
-            return observation("cancelled");
-          }
-          if (!(response instanceof Response)) return observation("shape_denied");
-          if (response.url !== profile.token_endpoint || response.redirected) {
-            cancel(response.body);
-            return observation("response_origin_denied");
-          }
-          statusClass = coarseStatus(response.status);
-          if (response.status !== 200) {
-            cancel(response.body);
-            return observation("http_rejected", statusClass);
-          }
-          const contentType = response.headers.get("content-type");
-          if (!contentType || !/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(contentType)) {
-            cancel(response.body);
-            return observation("content_denied", statusClass);
-          }
-          const declared = response.headers.get("content-length");
-          if (
-            declared !== null &&
-            (!/^(?:0|[1-9][0-9]*)$/.test(declared) || Number(declared) > profile.max_response_bytes)
-          ) {
-            cancel(response.body);
-            return observation("body_denied", statusClass);
-          }
-          if (!response.body) return observation("shape_denied", statusClass);
-          reader = response.body.getReader();
-          activeReader = reader;
-          category = "body_denied";
-          const chunks = [];
-          let bytes = 0;
-          while (true) {
-            const part = await reader.read();
-            if (finished || aborter.signal.aborted) {
-              try {
-                void reader.cancel().catch(() => {});
-              } catch {}
-              return observation("cancelled", statusClass);
-            }
-            if (part.done) break;
-            if (
-              !(part.value instanceof Uint8Array) ||
-              (bytes += part.value.byteLength) > profile.max_response_bytes
-            ) {
-              try {
-                void reader.cancel().catch(() => {});
-              } catch {}
-              return observation("body_denied", statusClass);
-            }
-            chunks.push(part.value);
-          }
-          category = "shape_denied";
-          const joined = new Uint8Array(bytes);
-          let offset = 0;
-          for (const chunk of chunks) {
-            joined.set(chunk, offset);
-            offset += chunk.byteLength;
-          }
-          const data = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(joined));
+          );
           if (
             !data ||
             typeof data !== "object" ||
             Array.isArray(data) ||
             typeof data.access_token !== "string" ||
             !data.access_token.length ||
-            data.access_token.length > 65536 ||
+            data.access_token.length > 16384 ||
             typeof data.refresh_token !== "string" ||
             !data.refresh_token.length ||
             data.refresh_token.length > 65536 ||
@@ -269,15 +396,18 @@ export function createWorkosOperatorTransport(profileJson, options) {
             !/^user_[A-Z0-9]{26}$/.test(data.user.id)
           )
             return observation("shape_denied", statusClass);
-          // Token/user values never leave this scope. No JWT is decoded or trusted.
-          return observation("response_shape_received", statusClass);
+          checked();
+          category = "token_denied";
+          const verified = await verifier.verify(data.access_token);
+          checked();
+          const candidate =
+            verified.outcome === "verified" ? verifier.readCandidate(verified.handle) : null;
+          if (!candidate || candidate.subjectId !== data.user.id)
+            return observation("token_denied", statusClass);
+          checked();
+          return observation("cryptographically_verified_candidate", statusClass);
         } catch {
           return observation(category, statusClass);
-        } finally {
-          if (reader)
-            try {
-              reader.releaseLock();
-            } catch {}
         }
       };
       try {
@@ -287,11 +417,11 @@ export function createWorkosOperatorTransport(profileJson, options) {
         clearTimeout(timer);
         signal?.removeEventListener("abort", abort);
         aborter.abort();
-        if (activeReader)
+        if (activeReader) {
           try {
             void activeReader.cancel().catch(() => {});
           } catch {}
-        else cancel(activeBody);
+        } else cancel(activeBody);
       }
     },
   });

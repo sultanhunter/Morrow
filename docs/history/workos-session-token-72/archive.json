@@ -1,0 +1,103 @@
+{
+  "plan_sequence": 72,
+  "commit": "90fe4aa667f81cea669fbe2b3c3b820e3cc39c96",
+  "scope": "Exact published72 offline verifier, regression wrapper, tests, plan and reports. Never execute inside this archive. Actual71 source and receipts remain separately preserved.",
+  "files": [
+    {
+      "path": "packages/identity/src/workos-session-token.ts",
+      "sha256": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966"
+    },
+    {
+      "path": "packages/identity/package.json",
+      "sha256": "2f616769f0366b4742aab1ca7e26857fe443a23a2aefbc9962fa361a20a9563b"
+    },
+    {
+      "path": "tests/workos-session-token.test.mjs",
+      "sha256": "51b95f9d9b76438eacf95c40c9f7ce493f6de1983fe5613c19b4e657a9345316"
+    },
+    {
+      "path": "tests/fixtures/workos-session-token.mjs",
+      "sha256": "ef1005fea94abf924b1355cbb03eab34063890bb3a7aea4322aaab125255b05a"
+    },
+    {
+      "path": "scripts/fixtures/workos-session-token-worker.ts",
+      "sha256": "e7e8078c2e7657346aea1d556e8c09d51652ffc4c122f3f4ba13c49628f3dd74"
+    },
+    {
+      "path": "scripts/workos-session-token-workers-lab.mjs",
+      "sha256": "4553823deba74175208a439f380d19e0a1767c16817fe78f48188435491ee6e0"
+    },
+    {
+      "path": "scripts/workos-operator-regression.mjs",
+      "sha256": "bc164804c7b7709dfb1481dc65e24f8143108db33095c8e34f0c6b66f34019ec"
+    },
+    {
+      "path": "tests/workos-operator-regression.test.mjs",
+      "sha256": "bebcd2b285998b7bbfd60f34a7cac7f5a6e51910ff6864ee52076839e4234e86"
+    },
+    {
+      "path": "tests/workos-operator-input.test.mjs",
+      "sha256": "0b375f80c6cacb8807678a4f47a7440cc5099494a34be0c95673d8dacb50a730"
+    },
+    {
+      "path": "package.json",
+      "sha256": "41e4ad6a0fb2ad9d908d8ce255f2ea88f7d470db128b38097192749f3bc39de2"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "6dc74848462ced611251c893c1b31a3efb609ca5f76ffade618e1172fb7d38cf"
+    },
+    {
+      "path": "docs/evidence/P05.T01f/review.json",
+      "sha256": "0c5ac13d22c25753a80769814d16cbdb92e2e8893c181436cd7ea7774181354c"
+    },
+    {
+      "path": "docs/evidence/P05.T01f/local-validation.json",
+      "sha256": "5f59fb1d92117cc3652cfe622bed8377c854eb1e1c1e1661b5cce25de9968ace"
+    },
+    {
+      "path": "docs/evidence/P05.T01f/workers-lab.json",
+      "sha256": "d56489205add6ae8b84a37a8269b70f8d43c0bb7cc4ea9ceb201ddaca062ea61"
+    },
+    {
+      "path": "docs/evidence/P05.T01f/workos-public-metadata.json",
+      "sha256": "47b155619ed9d199e6bfe0b36fea631c49f35677be868a62647c600e85338945"
+    },
+    {
+      "path": "docs/evidence/P05.T01e/frozen-regression.json",
+      "sha256": "306969437aa9845a8f5854d8c850065fbbcc0838fed93c30a4c224dd8d284b11"
+    },
+    {
+      "path": "docs/evidence/P05.T01e/actual-workos-71.json",
+      "sha256": "d462d441e831c0df93a85d3a351cdf1d1a956cac6af754c57a3b6c576cec8faf"
+    },
+    {
+      "path": "docs/plan/source.json",
+      "sha256": "73a382852ddb50da6d96d3763f8eaf37fca287b4e3c80eb09781a0f56e3546ca"
+    },
+    {
+      "path": "docs/plan/build-plan.md",
+      "sha256": "e2050f722a1e3a90cc28e433bbf0e8013f324c635b13a95898ad0b5d118fba01"
+    },
+    {
+      "path": "docs/packets/P05.T01f.md",
+      "sha256": "b23b6fc103882de5549e3ba1e3f2053105850a12f308f87fc92a4a88fdab1c65"
+    },
+    {
+      "path": "docs/packets/P05.T01e.md",
+      "sha256": "3014d46d7965761e49ec58b1832e71e14fffa455f33981bb72e7361a1c5f32d8"
+    },
+    {
+      "path": "docs/progress/checkpoint.md",
+      "sha256": "df599153d20a5694e1b5dff8d97ac25ea4a757442b9c1b1d457b2340f71bc755"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "6898236c62c92bfa61f5428e0fbeca6cb7b52a01d391a148a559acfaba42774d"
+    }
+  ]
+}

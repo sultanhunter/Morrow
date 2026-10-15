@@ -1,7 +1,7 @@
 {
   "task": "P05.T01f",
-  "canonical_sequence": 72,
-  "observed_at": "2026-10-15T10:11:03.584Z",
+  "canonical_sequence": 74,
+  "observed_at": "2026-10-15T11:22:34.521Z",
   "scope": "Actual pinned local workerd; independent native synthetic RSA signer; no real provider token, keyset, network, session, membership or grant",
   "runtime": "miniflare4.20260730.0",
   "compatibility_date": "2026-07-30",

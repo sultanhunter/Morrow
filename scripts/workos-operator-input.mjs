@@ -43,6 +43,7 @@ export const workosOperatorSourcePaths = Object.freeze([
   "migrations/0005.workspace-store-linking.sql",
   "migrations/0006.authentication-exchange-admission.sql",
   "packages/identity/src/authentication-exchange-admission.ts",
+  "packages/identity/src/workos-session-token.ts",
   "packages/contracts/src/validation.ts",
   "packages/contracts/src/generated/runtime-validators.mjs",
   "scripts/local-postgres-lab.mjs",
@@ -52,13 +53,14 @@ export const workosOperatorSourcePaths = Object.freeze([
   "scripts/workos-operator-journal.mjs",
   "scripts/workos-operator-controller.mjs",
   "scripts/workos-operator-transport.mjs",
+  "scripts/workos-operator-json.mjs",
   "scripts/workos-operator-listener.mjs",
   "scripts/workos-operator-lab.mjs",
   profilePath,
 ]);
 const expectedProfile = Object.freeze({
   schema_version: 1,
-  plan_sequence: 71,
+  plan_sequence: 74,
   provider_id: "workos",
   environment_kind: "staging",
   environment_id: "environment_01M4HG7FV7X8EFXE1J9S6GG00R",
@@ -86,6 +88,10 @@ const expectedProfile = Object.freeze({
   keyless_only: true,
   merchant_routes_enabled: false,
   actual_provider_status: "awaiting_owner_activation",
+  issuer: "https://api.workos.com/user_management/client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+  jwks_endpoint: "https://api.workos.com/sso/jwks/client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+  max_jwks_reads: 1,
+  max_jwks_response_bytes: 65536,
 });
 function sourceBytes(root, name) {
   const path = resolve(root, name);
@@ -120,7 +126,7 @@ export function loadPublicWorkosOperatorScope(root = repositoryRoot) {
     const planDigest = sha(sourceBytes(root, "docs/plan/build-plan.md"));
     if (
       plan?.page_id !== "page_b1ef27b80b788191b91e67cbb52f1037" ||
-      plan.sequence !== 71 ||
+      plan.sequence !== 74 ||
       plan.sha256 !== planDigest
     )
       throw unavailable();
@@ -145,7 +151,7 @@ export function loadPublicWorkosOperatorScope(root = repositoryRoot) {
     const sources = workosOperatorSourcePaths.map((path) => [path, sha(sourceBytes(root, path))]);
     return JSON.stringify({
       schemaVersion: 1,
-      planSequence: 71,
+      planSequence: 74,
       planDigest,
       sourceDigest: sha(JSON.stringify(sources)),
       profileDigest: sha(profileJson),
@@ -254,7 +260,7 @@ export function prepareWorkosOperatorActivation(root, scopeJson = loadPublicWork
       profile = JSON.parse(scope.profileJson);
     if (
       scope.schemaVersion !== 1 ||
-      scope.planSequence !== 71 ||
+      scope.planSequence !== 74 ||
       ![scope.planDigest, scope.sourceDigest, scope.profileDigest, scope.bindingDigest].every(
         (v) => typeof v === "string" && /^[a-f0-9]{64}$/.test(v),
       ) ||
@@ -310,6 +316,7 @@ export function prepareWorkosOperatorActivation(root, scopeJson = loadPublicWork
       tokenEndpoint: profile.token_endpoint,
       maxInitiations: 1,
       maxPosts: 1,
+      maxJwksReads: 1,
       ownerApproved: false,
       callbackRegistered: false,
       cleanupBaseline: false,

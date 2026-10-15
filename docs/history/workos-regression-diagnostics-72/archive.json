@@ -1,0 +1,35 @@
+{
+  "source_plan_sequence": 72,
+  "commit": "e19a23491f96185b99ec775810afd355bdd0298a",
+  "scope": "Exact seven-file diagnostic-only follow-up to published72. Synthetic acceptance remains unchanged. Never execute in this archive.",
+  "files": [
+    {
+      "path": "docs/evidence/P05.T01e/frozen-regression.json",
+      "sha256": "b54f24c427387d5b165b435a8aed0bf9bcfb9a9319a57e456a6c1468e7320db1"
+    },
+    {
+      "path": "docs/evidence/P05.T01f/ci-portability-diagnostic.json",
+      "sha256": "e2d00938c88c9393da3143c40423437be05171559fa61a01636cb687fc04bdca"
+    },
+    {
+      "path": "docs/evidence/P05.T01f/local-validation.json",
+      "sha256": "5d0a561fb404fe082fd499987f9a633de7ced82d1c0fb0cc121ff098afb80511"
+    },
+    {
+      "path": "docs/evidence/P05.T01f/review.json",
+      "sha256": "80ee42d8501a5eee3bd7c4062d0d4e80f8be71f5e8a0ee7583414df732fbcb00"
+    },
+    {
+      "path": "docs/evidence/index.json",
+      "sha256": "ce50818f7e265d2e6b818331224f843c456a8fb57bd44fbedf66b4a1f001ddf5"
+    },
+    {
+      "path": "scripts/workos-operator-regression.mjs",
+      "sha256": "a9e896d9c36812a59fb274895d38f491a2ac01b738541659c9ed59cc4d97f6a2"
+    },
+    {
+      "path": "tests/workos-operator-regression.test.mjs",
+      "sha256": "bfd19089ff67698b8f24a53930f4e24d2cb80d07893d2bef3693d9bdcdaa95bb"
+    }
+  ]
+}

@@ -31,7 +31,7 @@ const bindingJson = JSON.stringify({
 });
 const scope = {
   schemaVersion: 1,
-  planSequence: 71,
+  planSequence: 74,
   planDigest: "a".repeat(64),
   sourceDigest: "b".repeat(64),
   profileDigest: hash(profileJson),
@@ -52,7 +52,7 @@ async function fixture(t, options = {}) {
     activationId: randomUUID(),
     beginCommandId: randomUUID(),
     callbackCommandId: randomUUID(),
-    planSequence: 71,
+    planSequence: 74,
     planDigest: scope.planDigest,
     sourceDigest: scope.sourceDigest,
     profileDigest: scope.profileDigest,
@@ -69,6 +69,7 @@ async function fixture(t, options = {}) {
     tokenEndpoint: p.token_endpoint,
     maxInitiations: 1,
     maxPosts: 1,
+    maxJwksReads: 1,
     ownerApproved: true,
     callbackRegistered: true,
     cleanupBaseline: true,
@@ -105,18 +106,20 @@ async function fixture(t, options = {}) {
   };
   const transport = {
     mode: "synthetic",
-    async exchangeOnce() {
+    async exchangeOnce(_input, control) {
+      assert.equal(await control.beforePost(), true);
       calls.post++;
       return {
-        outcome: "response_shape_received",
-        category: "response_shape_received",
+        outcome: "cryptographically_verified_candidate",
+        category: "cryptographically_verified_candidate",
         statusClass: "2xx",
         providerSessionCleanup: "unknown",
       };
     },
     ...options.transport,
   };
-  let scopeJson = JSON.stringify(scope);
+  let scopeJson = JSON.stringify(scope),
+    activationCurrent = true;
   const config = {
     scopeJson,
     activationJson: JSON.stringify(activation),
@@ -125,6 +128,7 @@ async function fixture(t, options = {}) {
     transport,
     currentScope: async () => {
       calls.current++;
+      if (!activationCurrent) throw Error("SYNTHETIC_ACTIVATION_CHANGED");
       return scopeJson;
     },
     clock: () => time,
@@ -144,6 +148,9 @@ async function fixture(t, options = {}) {
     time: () => time,
     setScope(v) {
       scopeJson = JSON.stringify(v);
+    },
+    revokeActivation() {
+      activationCurrent = false;
     },
     callback: (code = "synthetic opaque code+%/雪") =>
       JSON.stringify({ state, browserProof, code }),
@@ -184,8 +191,8 @@ test("qualified fresh controller uses real durability order and preserves secret
     );
     return beforePost(...args);
   };
-  assert.equal((await c.complete(f.callback())).state, "response_shape_received");
-  assert.deepEqual(f.calls, { begin: 1, admit: 1, reconcile: 2, post: 1, current: 8 });
+  assert.equal((await c.complete(f.callback())).state, "cryptographically_verified_candidate");
+  assert.deepEqual(f.calls, { begin: 1, admit: 1, reconcile: 3, post: 1, current: 13 });
   const saved = (
     await Promise.all(
       (await fs.readdir(f.root)).map((n) => fs.readFile(path.join(f.root, n), "utf8")),
@@ -244,6 +251,9 @@ test("wrong closure selectors root owner identity and mode cannot claim", async 
     { rootInode: "0" },
     { ownerUid: process.getuid() + 1 },
     { mode: "native" },
+    { maxJwksReads: 0 },
+    { maxJwksReads: 2 },
+    { planSequence: 73 },
   ]) {
     const f = await fixture(t, { activation: change });
     try {
@@ -331,7 +341,7 @@ test("malformed and boxed callback data cannot consume the valid callback", asyn
     assert.throws(() => c.complete(v), { code: "WORKOS_OPERATOR_INPUT_INVALID" });
   assert.equal(traps, 0);
   assert.equal(f.calls.admit, 0);
-  assert.equal((await c.complete(f.callback())).state, "response_shape_received");
+  assert.equal((await c.complete(f.callback())).state, "cryptographically_verified_candidate");
 });
 for (const outcome of ["held", "denied", "conflict", "uncertain"])
   test(`SQL ${outcome} never produces send marker`, async (t) => {
@@ -449,15 +459,23 @@ test("authorization error is final redacted observation without admission or POS
   assert.equal((await pending).state, "authorization_not_completed");
   assert.equal(f.calls.admit + f.calls.post, 0);
 });
-test("transport failure and malformed response are held without retry or leaked data", async (t) => {
-  for (const response of ["throw", "malformed", "rejected"]) {
+test("transport failure malformed or legacy shape-only response cannot claim verification", async (t) => {
+  for (const response of ["throw", "malformed", "rejected", "legacy_shape"]) {
     const f = await fixture(t),
       c = await f.create();
     await c.start();
-    f.transport.exchangeOnce = async () => {
+    f.transport.exchangeOnce = async (_input, control) => {
+      await control.beforePost();
       f.calls.post++;
       if (response === "throw") throw Error("raw-provider-secret");
       if (response === "malformed") return { token: "secret" };
+      if (response === "legacy_shape")
+        return {
+          outcome: "response_shape_received",
+          category: "response_shape_received",
+          statusClass: "2xx",
+          providerSessionCleanup: "unknown",
+        };
       return {
         outcome: "held",
         category: "http_rejected",
@@ -469,6 +487,97 @@ test("transport failure and malformed response are held without retry or leaked 
     assert.equal(f.calls.post, 1);
     assert.equal((await f.create()).status().state, "held");
   }
+});
+test("delayed JWKS boundary rechecks source activation SQL time cancellation and journal continuity", async (t) => {
+  for (const kind of [
+    "source",
+    "activation",
+    "admission",
+    "time",
+    "cancel",
+    "bytes",
+    "inode",
+    "root",
+  ]) {
+    const f = await fixture(t),
+      c = await f.create();
+    await c.start();
+    let arrive, release;
+    const entered = new Promise((r) => {
+      arrive = r;
+    });
+    const waiting = new Promise((r) => {
+      release = r;
+    });
+    f.transport.exchangeOnce = async (_input, control) => {
+      arrive();
+      await waiting;
+      await control.beforePost();
+      f.calls.post++;
+      return {
+        outcome: "cryptographically_verified_candidate",
+        category: "cryptographically_verified_candidate",
+        statusClass: "2xx",
+        providerSessionCleanup: "unknown",
+      };
+    };
+    const pending = c.complete(f.callback());
+    await entered;
+    if (kind === "source") f.setScope({ ...scope, sourceDigest: "c".repeat(64) });
+    if (kind === "activation") f.revokeActivation();
+    if (kind === "admission")
+      f.admission.reconcile = async () => ({
+        outcome: "held",
+        admissionId: null,
+        commandId: f.activation.callbackCommandId,
+      });
+    if (kind === "time") f.setTime(f.time() + 300001);
+    if (kind === "cancel") await c.close();
+    const marker = path.join(f.root, "send_requested.json");
+    if (kind === "bytes") await fs.appendFile(marker, " ");
+    if (kind === "inode") {
+      await fs.writeFile(marker + ".replacement", await fs.readFile(marker), { mode: 0o600 });
+      await fs.rename(marker + ".replacement", marker);
+    }
+    if (kind === "root") {
+      const old = f.root + "-old";
+      await fs.rename(f.root, old);
+      await fs.mkdir(f.root, { mode: 0o700 });
+      t.after(() => fs.rm(old, { recursive: true, force: true }));
+    }
+    release();
+    assert.equal((await pending).state, "held", kind);
+    assert.equal(f.calls.post, 0, kind);
+    assert.throws(() => c.complete(f.callback()));
+  }
+});
+test("beforePost continuation is one-use and shape-only results cannot bypass it", async (t) => {
+  const f = await fixture(t),
+    c = await f.create();
+  await c.start();
+  f.transport.exchangeOnce = async (_input, control) => {
+    assert.equal(await control.beforePost(), true);
+    await assert.rejects(control.beforePost());
+    f.calls.post++;
+    return {
+      outcome: "cryptographically_verified_candidate",
+      category: "cryptographically_verified_candidate",
+      statusClass: "2xx",
+      providerSessionCleanup: "unknown",
+    };
+  };
+  assert.equal((await c.complete(f.callback())).state, "cryptographically_verified_candidate");
+  assert.equal(f.calls.post, 1);
+  const missing = await fixture(t),
+    other = await missing.create();
+  await other.start();
+  missing.transport.exchangeOnce = async () => ({
+    outcome: "cryptographically_verified_candidate",
+    category: "cryptographically_verified_candidate",
+    statusClass: "2xx",
+    providerSessionCleanup: "unknown",
+  });
+  assert.equal((await other.complete(missing.callback())).state, "held");
 });
 test("unsafe files directories links and a partial marker are held without SQL", async (t) => {
   for (const kind of ["directory_mode", "symlink", "hardlink", "partial", "late_marker"]) {

@@ -48,3 +48,5 @@ jobs:
           npm run lab:authentication-exchange
       - name: Exercise isolated WorkOS operator with SQL and loopback only
         run: npm run lab:workos-operator
+      - name: Exercise current WorkOS signature operator with synthetic providers only
+        run: npm run lab:workos-operator-current

@@ -1,0 +1,47 @@
+name: Morrow foundation
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: foundation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run ci
+      - run: npm run smoke:scaffold
+      - name: Exercise identity and validators in the local Workers runtime
+        run: npm run lab:workers
+      - name: Exercise delegated and automation permissions in the local Workers runtime
+        run: npm run lab:agent-authority-workers
+      - name: Exercise controlled workspace and store linking in the local Workers runtime
+        run: npm run lab:workspace-store-linking-workers
+      - name: Exercise private PKCE and code admission in the local Workers runtime
+        run: npm run lab:authentication-exchange-workers
+      - name: Exercise offline session-token verification in the local Workers runtime
+        run: npm run lab:workos-session-token-workers
+      - name: Exercise isolated PostgreSQL identity, linking, authentication, rotation and quarantined restore
+        run: |
+          npm run lab:operations
+          npm run lab:restore
+          npm run lab:identity
+          npm run lab:permissions
+          npm run lab:authentication
+          npm run lab:workspace-revocation
+          npm run lab:workspace-store-linking
+          npm run lab:authentication-exchange
+      - name: Exercise isolated WorkOS operator with SQL and loopback only
+        run: npm run lab:workos-operator

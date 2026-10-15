@@ -410,3 +410,12 @@ test("report diagnostics distinguish engine drift without relaxing the archived 
     },
   );
 });
+
+test("completed71 input rejects the active later plan without reading a private activation", async (t) => {
+  const f = await fixture(t);
+  const input = await import(pathToFileURL(join(f.root, "scripts/workos-operator-input.mjs")));
+  assert.throws(
+    () => input.loadPublicWorkosOperatorScope(source),
+    /WORKOS_OPERATOR_INPUT_UNAVAILABLE/,
+  );
+});

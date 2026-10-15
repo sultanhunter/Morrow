@@ -76,13 +76,14 @@ const activationKeys = [
   "tokenEndpoint",
   "maxInitiations",
   "maxPosts",
+  "maxJwksReads",
   "ownerApproved",
   "callbackRegistered",
   "cleanupBaseline",
 ];
 const profileValues = Object.freeze({
   schema_version: 1,
-  plan_sequence: 71,
+  plan_sequence: 74,
   provider_id: "workos",
   environment_kind: "staging",
   environment_id: "environment_01M4HG7FV7X8EFXE1J9S6GG00R",
@@ -110,12 +111,16 @@ const profileValues = Object.freeze({
   keyless_only: true,
   merchant_routes_enabled: false,
   actual_provider_status: "awaiting_owner_activation",
+  issuer: "https://api.workos.com/user_management/client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+  jwks_endpoint: "https://api.workos.com/sso/jwks/client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+  max_jwks_reads: 1,
+  max_jwks_response_bytes: 65536,
 });
 function scopeOf(value) {
   const s = parse(value, scopeKeys);
   if (
     s.schemaVersion !== 1 ||
-    s.planSequence !== 71 ||
+    s.planSequence !== 74 ||
     ![s.planDigest, s.sourceDigest, s.profileDigest, s.bindingDigest].every(sha)
   )
     throw invalid();
@@ -156,7 +161,7 @@ export function validateWorkosOperatorActivation(scopeJson, activationJson) {
     !["native", "synthetic"].includes(a.mode) ||
     ![a.operationId, a.activationId, a.beginCommandId, a.callbackCommandId].every(id) ||
     new Set([a.operationId, a.activationId, a.beginCommandId, a.callbackCommandId]).size !== 4 ||
-    a.planSequence !== 71 ||
+    a.planSequence !== 74 ||
     ["planDigest", "sourceDigest", "profileDigest", "bindingDigest"].some((k) => a[k] !== s[k]) ||
     a.environmentId !== b.environmentId ||
     a.applicationId !== b.applicationId ||
@@ -170,6 +175,7 @@ export function validateWorkosOperatorActivation(scopeJson, activationJson) {
     a.tokenEndpoint !== p.token_endpoint ||
     a.maxInitiations !== 1 ||
     a.maxPosts !== 1 ||
+    a.maxJwksReads !== 1 ||
     [a.ownerApproved, a.callbackRegistered, a.cleanupBaseline].some((v) => typeof v !== "boolean")
   )
     throw invalid();
@@ -182,7 +188,7 @@ export function validateWorkosOperatorActivation(scopeJson, activationJson) {
   });
 }
 const categories = new Set([
-  "response_shape_received",
+  "cryptographically_verified_candidate",
   "already_used",
   "input_denied",
   "configuration_denied",
@@ -194,6 +200,8 @@ const categories = new Set([
   "content_denied",
   "body_denied",
   "shape_denied",
+  "before_post_denied",
+  "token_denied",
 ]);
 function observationOf(value) {
   // This is a trusted adapter output, still copied to a closed coarse shape.
@@ -204,12 +212,13 @@ function observationOf(value) {
     "providerSessionCleanup",
   ]);
   if (
-    !["response_shape_received", "held"].includes(o.outcome) ||
+    !["cryptographically_verified_candidate", "held"].includes(o.outcome) ||
     !categories.has(o.category) ||
     ![null, "2xx", "3xx", "4xx", "5xx"].includes(o.statusClass) ||
     o.providerSessionCleanup !== "unknown" ||
-    (o.outcome === "response_shape_received" &&
-      (o.category !== "response_shape_received" || o.statusClass !== "2xx"))
+    (o.outcome === "held" && o.category === "cryptographically_verified_candidate") ||
+    (o.outcome === "cryptographically_verified_candidate" &&
+      (o.category !== "cryptographically_verified_candidate" || o.statusClass !== "2xx"))
   )
     throw invalid();
   return o;
@@ -388,6 +397,7 @@ export async function createWorkosOperatorController({
               clock() >= material.deadline
             )
               throw new WorkosOperatorError();
+            await current();
           };
           await recheck();
           const handle = await journal.markSendRequested(
@@ -411,13 +421,24 @@ export async function createWorkosOperatorController({
             }),
           );
           await recheck();
-          await journal.consumeSend(handle);
           if (!alive() || clock() >= material.deadline) throw new WorkosOperatorError();
+          let beforePostUsed = false;
           const observation = observationOf(
             await transport.exchangeOnce(
               JSON.stringify({ code: input.code, verifier: material.verifier }),
               {
                 signal: cancellation.signal,
+                beforePost: async () => {
+                  if (beforePostUsed) throw new WorkosOperatorError();
+                  beforePostUsed = true;
+                  await recheck();
+                  // The new JWKS await cannot detach the POST from the original
+                  // inode/content-bound journal or recreate a consumed handle.
+                  await journal.consumeSend(handle);
+                  await current();
+                  if (!alive() || clock() >= material.deadline) throw new WorkosOperatorError();
+                  return true;
+                },
                 deadlineMs: Math.min(
                   deadline,
                   material.deadline,

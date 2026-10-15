@@ -81,7 +81,9 @@ export async function runWorkosOperatorCommand(command, journalRoot) {
       while (Date.now() < deadline) {
         const status = controller.status();
         if (
-          ["response_shape_received", "authorization_not_completed", "held"].includes(status.state)
+          ["cryptographically_verified_candidate", "authorization_not_completed", "held"].includes(
+            status.state,
+          )
         ) {
           // Let the owner's browser read the clean result. No provider polling.
           await new Promise((resolve) => setTimeout(resolve, 3000));

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "plan_sequence": 71,
+  "plan_sequence": 74,
   "provider_id": "workos",
   "environment_kind": "staging",
   "environment_id": "environment_01M4HG7FV7X8EFXE1J9S6GG00R",
@@ -27,5 +27,9 @@
   "max_initiations": 1,
   "keyless_only": true,
   "merchant_routes_enabled": false,
-  "actual_provider_status": "awaiting_owner_activation"
+  "actual_provider_status": "awaiting_owner_activation",
+  "issuer": "https://api.workos.com/user_management/client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+  "jwks_endpoint": "https://api.workos.com/sso/jwks/client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+  "max_jwks_reads": 1,
+  "max_jwks_response_bytes": 65536
 }

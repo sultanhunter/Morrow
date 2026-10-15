@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01e",
+  "source_plan_sequence": 71,
+  "observed_on": "2026-10-15",
+  "source_commit": "987414cc41862f8f95f24b0780dad49a682901b6",
+  "source_digest": "501cd90033d6c85e0c959026f0b2499e7c194c18d70d94dd78fccf248373b250",
+  "plan_digest": "6d00ad57a47355b7406c000f85e9345ca95bf3063943b19c2b769a383de9c032",
+  "profile_digest": "e58067013ae47be37a14a63c366c39bdff5d53406858eda917c6f43e850c0430",
+  "binding_digest": "56608c192cf456e4e5ecf41363100ebe259ac89a9c8c67d57841416771bc7ff4",
+  "scope": "One owner-approved, manually completed WorkOS staging AuthKit sign-in and keyless code exchange, followed by exact attributable provider session revocation and fresh authenticated-dashboard readback. This is wire/cleanup qualification only.",
+  "same_original_approval_continuation": true,
+  "logical_authorization_initiations": 1,
+  "application_keyless_post_calls": 1,
+  "native_transport_outcome": "response_shape_received",
+  "native_transport_category": "response_shape_received",
+  "native_transport_status_class": "2xx",
+  "provider_response_values_discarded": true,
+  "provider_identity_from_unverified_jwt": false,
+  "dashboard_attribution": {
+    "baseline_users": 0,
+    "after_users": 1,
+    "approved_identity_match": true,
+    "signin_count": 1,
+    "new_attributable_sessions": 1,
+    "exact_owned_application_match": true,
+    "authentication_method": "Google OAuth"
+  },
+  "session_cleanup": {
+    "scope": "Only the exact new attributable staging session",
+    "before": "Active",
+    "after": "Revoked",
+    "fresh_dashboard_reload": "Revoked",
+    "remaining_active_test_user_sessions": 0,
+    "user_record_retained": true,
+    "other_users_sessions_affected": 0,
+    "local_token_discard_is_not_cleanup": true
+  },
+  "operator_exit_code": 0,
+  "retained_journal_records": 4,
+  "local_cleanup": {
+    "packet_container_count": 0,
+    "loopback_4110_listening": false
+  },
+  "approval_fully_consumed": true,
+  "further_native_initiation_or_post_allowed": false,
+  "protected_cleanup_receipt_sha256": "1d3b1dbf92ebbb5963b7986cae59d7062a73a3cf3d98b874d56d756d4f36b771",
+  "protected_continuation_receipt_sha256": "3793fdddb1c3a1568eb081e754540f3cea2bfd2e5b3431c7bf82168330ff6c6c",
+  "journal_sha256": {
+    "claim.json": "4c166d2ff4115bd026ba1b772678361db13037065c2fb52ba8c526d3317288fd",
+    "initiation_started.json": "4e496650ef8134b4bd285eed1c0aa59471d0a5982befd04990d338fd066a9ff8",
+    "send_requested.json": "2bc420085fdd668a115a4fece9500b4d0b6c8d8b40408dee99fca0b255898f82",
+    "observation.json": "eafdb682d0260da71f77257709eab8e527b0307b30057c6bb86967bb7206e08a"
+  },
+  "independent_review": {
+    "private_receipt_journal_consistency": true,
+    "original_predecessor_unchanged": true,
+    "dashboard_cleanup_observation": "Root operator; separate from independent byte/hash review"
+  },
+  "not_qualified": [
+    "JWT cryptographic/issuer/client verification",
+    "current provider-session liveness or revocation during later requests",
+    "trusted provider user mapping",
+    "Morrow session/principal/membership/grant issuance",
+    "SSO/SCIM or merchant/hosted production activation"
+  ]
+}

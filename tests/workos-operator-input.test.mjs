@@ -49,7 +49,7 @@ function fixture(t) {
       sources: {
         plan: {
           page_id: "page_b1ef27b80b788191b91e67cbb52f1037",
-          sequence: 71,
+          sequence: 74,
           sha256: createHash("sha256").update(plan).digest("hex"),
         },
       },
@@ -66,7 +66,7 @@ test("scope pins exact owned profile, code closure and validated canonical plan"
   const root = fixture(t),
     first = loadPublicWorkosOperatorScope(root);
   const parsed = JSON.parse(first);
-  assert.equal(parsed.planSequence, 71);
+  assert.equal(parsed.planSequence, 74);
   assert.equal(
     JSON.parse(parsed.bindingJson).redirectUri,
     "http://127.0.0.1:4110/operator/workos/callback",
@@ -84,7 +84,7 @@ test("same canonical read capture time cannot silently rebind source authority",
   manifest.captured_at = "2026-10-15T01:00:00.000Z";
   writeFileSync(path, JSON.stringify(manifest));
   assert.equal(loadPublicWorkosOperatorScope(root), before);
-  manifest.sources.plan.sequence = 70;
+  manifest.sources.plan.sequence = 73;
   writeFileSync(path, JSON.stringify(manifest));
   assert.throws(() => loadPublicWorkosOperatorScope(root), /WORKOS_OPERATOR_INPUT_UNAVAILABLE/);
 });
@@ -134,6 +134,7 @@ test("prepare writes only unapproved private proposal and never overwrites it", 
   assert.equal(statSync(join(root, "activation.json")).mode & 0o777, 0o600);
   const raw = readWorkosOperatorActivation(root),
     activation = JSON.parse(raw);
+  assert.equal(activation.maxJwksReads, 1);
   for (const key of ["ownerApproved", "callbackRegistered", "cleanupBaseline"])
     assert.equal(activation[key], false);
   assert.equal(
@@ -192,16 +193,18 @@ test("caller proxy scope is rejected before coercion or private file creation", 
   );
   assert.equal(traps, 0);
 });
-test("current canonical72 denies the completed native71 scope and fresh preparation", async (t) => {
+test("fresh74 exact source prepares only false approval and denies native activation", async (t) => {
   const root = join(privateParent(t), "operator");
-  assert.throws(() => loadPublicWorkosOperatorScope(), /WORKOS_OPERATOR_INPUT_UNAVAILABLE/);
-  assert.throws(() => prepareWorkosOperatorActivation(root), /WORKOS_OPERATOR_INPUT_UNAVAILABLE/);
-  assert.equal(existsSync(root), false);
-  await assert.rejects(
-    runWorkosOperatorCommand("prepare", root),
-    /WORKOS_OPERATOR_INPUT_UNAVAILABLE/,
-  );
-  assert.equal(existsSync(root), false);
+  assert.equal(JSON.parse(loadPublicWorkosOperatorScope()).planSequence, 74);
+  prepareWorkosOperatorActivation(root);
+  assert.equal(JSON.parse(readWorkosOperatorActivation(root)).maxJwksReads, 1);
+  assert.deepEqual(await runWorkosOperatorCommand("start", root), {
+    state: "held",
+    reason: "owner_activation_required",
+    providerSessionCleanup: "unknown",
+  });
+  assert.equal(existsSync(join(root, "claim.json")), false);
+  assert.deepEqual(readdirSync(root), ["activation.json"]);
 });
 test("execution source-directory predicate rejects an unrelated cwd", (t) => {
   const original = process.cwd(),

@@ -23,7 +23,7 @@ const uuid = (v) =>
   typeof v === "string" && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v);
 const sha = (v) => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
 const categories = new Set([
-  "response_shape_received",
+  "cryptographically_verified_candidate",
   "already_used",
   "input_denied",
   "configuration_denied",
@@ -35,6 +35,8 @@ const categories = new Set([
   "content_denied",
   "body_denied",
   "shape_denied",
+  "before_post_denied",
+  "token_denied",
 ]);
 function closed(value, keys) {
   if (typeof value !== "string" || value.length > 16384) throw fail();
@@ -97,12 +99,13 @@ function observation(value) {
   } else {
     p = closed(value, ["outcome", "category", "statusClass", "providerSessionCleanup"]);
     if (
-      !["held", "response_shape_received"].includes(p.outcome) ||
+      !["held", "cryptographically_verified_candidate"].includes(p.outcome) ||
       !categories.has(p.category) ||
       ![null, "2xx", "3xx", "4xx", "5xx"].includes(p.statusClass) ||
       p.providerSessionCleanup !== "unknown" ||
-      (p.outcome === "response_shape_received" &&
-        (p.category !== "response_shape_received" || p.statusClass !== "2xx"))
+      (p.outcome === "held" && p.category === "cryptographically_verified_candidate") ||
+      (p.outcome === "cryptographically_verified_candidate" &&
+        (p.category !== "cryptographically_verified_candidate" || p.statusClass !== "2xx"))
     )
       throw fail();
   }
@@ -359,8 +362,13 @@ export async function createWorkosOperatorJournal(rootPath, claimJson, { fault =
       }
     },
     async observe(value) {
-      if (!["initiated", "send_consumed"].includes(state)) throw fail();
       const payload = observation(value);
+      if (
+        !["initiated", "send_ready", "send_consumed"].includes(state) ||
+        (state === "send_ready" && payload.outcome !== "held") ||
+        (payload.outcome === "cryptographically_verified_candidate" && state !== "send_consumed")
+      )
+        throw fail();
       state = "observing";
       await append("observation.json", {
         schemaVersion: 1,

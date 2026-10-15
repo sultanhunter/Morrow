@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01f",
+  "canonical_sequence": 72,
+  "scope": "Local engineering and actual local workerd; public metadata does not qualify real JWTs",
+  "repository_tests_passed": 1339,
+  "repository_tests_failed": 0,
+  "verifier_tests": 15,
+  "wrapper_input_tests": 26,
+  "scaffold_guards_passed": 9,
+  "actual_workers_checks": 71,
+  "actual_workers_cases": 48,
+  "actual_workers_outbound_requests": 0,
+  "copied_frozen71_sql_http_checks": 59,
+  "copied_synthetic_posts": 2,
+  "new_provider_signin_initiations": 0,
+  "new_keyless_posts": 0,
+  "source_digests": {
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/package.json": "2f616769f0366b4742aab1ca7e26857fe443a23a2aefbc9962fa361a20a9563b",
+    "tests/workos-session-token.test.mjs": "51b95f9d9b76438eacf95c40c9f7ce493f6de1983fe5613c19b4e657a9345316",
+    "tests/fixtures/workos-session-token.mjs": "ef1005fea94abf924b1355cbb03eab34063890bb3a7aea4322aaab125255b05a",
+    "scripts/fixtures/workos-session-token-worker.ts": "e7e8078c2e7657346aea1d556e8c09d51652ffc4c122f3f4ba13c49628f3dd74",
+    "scripts/workos-session-token-workers-lab.mjs": "4553823deba74175208a439f380d19e0a1767c16817fe78f48188435491ee6e0",
+    "scripts/workos-operator-regression.mjs": "bc164804c7b7709dfb1481dc65e24f8143108db33095c8e34f0c6b66f34019ec",
+    "tests/workos-operator-regression.test.mjs": "bebcd2b285998b7bbfd60f34a7cac7f5a6e51910ff6864ee52076839e4234e86",
+    "tests/workos-operator-input.test.mjs": "0b375f80c6cacb8807678a4f47a7440cc5099494a34be0c95673d8dacb50a730",
+    "package.json": "41e4ad6a0fb2ad9d908d8ce255f2ea88f7d470db128b38097192749f3bc39de2",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    ".github/workflows/ci.yml": "6dc74848462ced611251c893c1b31a3efb609ca5f76ffade618e1172fb7d38cf"
+  },
+  "log_sha256": {
+    "pipeline": "f7edeb43a00ad6aff5b8ac603deff88e0ba49d71ec8ed4f280c84330159b5281",
+    "scaffold": "bcc2234352824df18b4011b56963c5e0c56c7252b7147d213f31299191f48afa",
+    "verifier_tests": "24cc7ec0cd3e21e30dc0a9a01c82634ecf6c65e9458c12484fdde93753838e9c",
+    "workers": "fa141a64b418fc0e840a42391ca2069b66918ff8b19dfa384b12f6c833dc51fa",
+    "copied_regression": "6b5c92444d710b2498bbf71b5ae4e1235e1d19d017ce1a666c0e99504a8c5947"
+  },
+  "first_pipeline_attempt": "One old active71 test expected current preparation to succeed. Current-plan denial was correct; moved positive test into copied fixture and full pipeline passed. Initial Workers run hit restricted-loopback EPERM; permitted run passed unchanged runtime guards.",
+  "hosted_ci": "Exact publication head checks exercise all preserved laboratories; final receipt outside repository avoids self-reference.",
+  "merchant_routes_enabled": false,
+  "provider_qualified": false
+}

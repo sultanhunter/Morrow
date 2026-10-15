@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01f",
+  "canonical_sequence": 72,
+  "observed_on": "2026-10-15",
+  "request": "Unauthenticated GET; exact documented existing client URL; no redirect; 10 second deadline; 16KiB response cap",
+  "url": "https://api.workos.com/user_management/client_01M4HG7GA0DX8C3PFSQHBP4BN3/.well-known/openid-configuration",
+  "status": 200,
+  "metadata": {
+    "issuer": "https://api.workos.com/user_management/client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+    "authorization_endpoint": "https://api.workos.com/user_management/authorize",
+    "token_endpoint": "https://api.workos.com/user_management/authenticate",
+    "response_types_supported": [
+      "code"
+    ],
+    "jwks_uri": "https://api.workos.com/sso/jwks/client_01M4HG7GA0DX8C3PFSQHBP4BN3"
+  },
+  "qualification": "Public discovery metadata only; no token, keyset, account ownership, session or signature qualification",
+  "primary_reference": "https://workos.com/docs/cli/emulate#oidc-discovery",
+  "real_authentication_calls": 0,
+  "public_jwks_observation": {
+    "url": "https://api.workos.com/sso/jwks/client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+    "request": "Anonymous no-redirect GET; 10 second deadline; streamed 64KiB cap",
+    "status": 200,
+    "body_sha256": "a17d5f80cb972c9302e2eefb712218a46f1777150c912a6aa106768dda77bde1",
+    "key_count": 1,
+    "key_shape": {
+      "kty": "RSA",
+      "alg": "RS256",
+      "use": "sig",
+      "kid_type": "string",
+      "modulus_bytes": 256,
+      "exponent": "AQAB",
+      "private_material": false
+    },
+    "raw_keys_retained": false,
+    "qualification": "Observed public shape only; no actual token or identity/signature qualification; not a reusable current keyset lease"
+  }
+}
