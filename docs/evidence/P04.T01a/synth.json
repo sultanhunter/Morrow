@@ -8,10 +8,10 @@
   "environments": [
     {
       "environment": "development",
-      "configuration_sha256": "d20bbcd06a610ad7cb7682c673e9b45efa50b32148fe7e5181dc78b48f4cfe86",
+      "configuration_sha256": "aad6182e5f9eb0b831031b1aa6ab428b50f335f77edb5887ee0042e47b108831",
       "configuration": {
         "schema_version": 1,
-        "plan_sequence": 76,
+        "plan_sequence": 77,
         "stack": "cloudflare-neon-runtime",
         "environment": "development",
         "status": "design_candidate",
@@ -83,10 +83,10 @@
     },
     {
       "environment": "staging",
-      "configuration_sha256": "8f684dcc0f7e1a5e4e8bc20879a9505d71d4d0fd9f2fb8c486caf2cb6876282e",
+      "configuration_sha256": "81547906c68710553a4b6ccd93b83a519419001680775a11f4a2ada9012c045b",
       "configuration": {
         "schema_version": 1,
-        "plan_sequence": 76,
+        "plan_sequence": 77,
         "stack": "cloudflare-neon-runtime",
         "environment": "staging",
         "status": "design_candidate",
@@ -158,10 +158,10 @@
     },
     {
       "environment": "production",
-      "configuration_sha256": "e8535787596b2a59c299402770cb8359c4667d49e4277845221f19a940eacb99",
+      "configuration_sha256": "18241bfe4a33117939905cc5533e3490c6cb3ac070545b5623a2476198b26d4a",
       "configuration": {
         "schema_version": 1,
-        "plan_sequence": 76,
+        "plan_sequence": 77,
         "stack": "cloudflare-neon-runtime",
         "environment": "production",
         "status": "design_candidate",

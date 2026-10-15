@@ -1,7 +1,7 @@
 {
   "task": "P05.T01b",
-  "canonical_sequence": 70,
-  "observed_at": "2026-10-15T00:14:13.424Z",
+  "canonical_sequence": 77,
+  "observed_at": "2026-10-15T15:11:23.747Z",
   "scope": "Actual application pre-authentication challenge transaction on isolated PostgreSQL17.11, synthetic owner bindings; not WorkOS authentication/session issuance or production SQL/IAM/TLS.",
   "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
   "version": "17.11 (Debian 17.11-1.pgdg13+2)",
@@ -41,6 +41,12 @@
       "file": "0006.authentication-exchange-admission.sql",
       "sha256": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
       "reviewRef": "docs/evidence/P05.T01d/review.json"
+    },
+    {
+      "sequence": 7,
+      "file": "0007.provider-subject-resolution.sql",
+      "sha256": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+      "reviewRef": "docs/evidence/P05.T01j/review.json"
     }
   ],
   "checks": [
