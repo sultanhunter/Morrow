@@ -1,0 +1,27 @@
+{
+  "plan_sequence": 69,
+  "commit": "d78489b07e9e024c84c627f2ec771bf28376bd2c",
+  "scope": "Exact saved69localengineering evidence; sourcebindings retainedunchanged",
+  "files": [
+    {
+      "path": "docs/evidence/P05.T01d/postgresql-lab.json",
+      "saved_as": "postgresql-lab.json",
+      "sha256": "edfd123cdaf31ceb86b2a6107a135b64aeff73359f4668169a2aa27a55c88aa2"
+    },
+    {
+      "path": "docs/evidence/P05.T01d/review.json",
+      "saved_as": "review.json",
+      "sha256": "582f4b653d1355be080f8463d51aaae5c676516af7901a0325b0ad2eb2f05e20"
+    },
+    {
+      "path": "docs/evidence/P05.T01d/workers-lab.json",
+      "saved_as": "workers-lab.json",
+      "sha256": "a66cfa3a439059f805248c4c3c2bb2cf907c5ccf295ac80e670d6f0b57eddeb5"
+    },
+    {
+      "path": "docs/evidence/P05.T01d/workos-staging-observation.json",
+      "saved_as": "workos-staging-observation.json",
+      "sha256": "2967b7d0344d628017862b33b649697a26ebbe973d474ba65e73f6e0cbfabfee"
+    }
+  ]
+}

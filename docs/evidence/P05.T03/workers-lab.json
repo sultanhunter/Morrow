@@ -1,12 +1,12 @@
 {
   "task": "P05.T03a",
-  "canonical_sequence": 68,
-  "observed_at": "2026-10-14T23:08:03.046Z",
+  "canonical_sequence": 70,
+  "observed_at": "2026-10-15T00:18:00.876Z",
   "scope": "Actual pinned local workerd with synthetic SQL replies and current permission facts; not PostgreSQL, Shopify/WorkOS authentication, review issuance, hosted deployment or linking qualification",
   "runtime": "miniflare4.20260730.0",
   "compatibility_date": "2026-07-30",
   "provider_calls": 0,
-  "bundle_sha256": "3c5a3bad0df6be1c7e8eec52ddc441030678e3df5931c76f6a2e4351fc5c9b63",
+  "bundle_sha256": "a050d686bc14a79b983c93a917d543e5652de19fd8726184c269087c8e93933d",
   "input_digests": {
     "packages/identity/src/workspace-store-linking.ts": "0b951ebb12d4e68f5421c9a19df9ba691166399fe247aa56c39ede0176574a53",
     "packages/policy/src/index.ts": "d26c57c71889dd7c6369d90745ebc1a531dcfd555e4d2484b4d0d471924b0b59",

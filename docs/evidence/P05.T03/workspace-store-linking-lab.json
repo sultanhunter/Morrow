@@ -1,6 +1,6 @@
 {
   "task": "P05.T03a",
-  "observed_at": "2026-10-14T23:38:13.568Z",
+  "observed_at": "2026-10-15T00:16:39.530Z",
   "scope": "Actual isolated PostgreSQL with controlled fixture proofs/reviews only; no production issuer, provider authentication, merchant data or public route",
   "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
   "version": "17.11 (Debian 17.11-1.pgdg13+2)",

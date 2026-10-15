@@ -1,7 +1,7 @@
 {
   "task": "P05.T02b",
-  "canonical_sequence": 69,
-  "observed_at": "2026-10-14T23:36:02.973Z",
+  "canonical_sequence": 70,
+  "observed_at": "2026-10-15T00:13:50.102Z",
   "scope": "Actual application identity read transaction and shared permission kernel against owned isolated PostgreSQL17.11 grant/workspace records. Scripts-only psql adapter and synthetic session issuer/provider/entitlement facts; no production driver/WorkOS/HTTP/dispatch qualification.",
   "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
   "version": "17.11 (Debian 17.11-1.pgdg13+2)",

@@ -41,3 +41,5 @@ jobs:
           npm run lab:workspace-revocation
           npm run lab:workspace-store-linking
           npm run lab:authentication-exchange
+      - name: Exercise isolated WorkOS operator with SQL and loopback only
+        run: npm run lab:workos-operator

@@ -1,7 +1,7 @@
 {
   "task": "P05.T01d",
-  "canonical_sequence": 69,
-  "observed_at": "2026-10-14T23:36:10.683Z",
+  "canonical_sequence": 70,
+  "observed_at": "2026-10-15T00:18:03.135Z",
   "scope": "Actual pinned local workerd with synthetic SQL replies; no provider exchange, PostgreSQL qualification, reusable permit, authenticated identity, session issuance, public route or hosted deployment",
   "runtime": "miniflare4.20260730.0",
   "compatibility_date": "2026-07-30",

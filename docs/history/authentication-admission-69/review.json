@@ -1,0 +1,56 @@
+{
+  "task": "P05.T01d",
+  "canonical_sequence": 69,
+  "status": "local_engineering_candidate",
+  "scope": "Provider-free pre-authentication correlation and one-time reservation only; no external exchange permission, identity/session/grant issuer, raw-secret persistence or public route",
+  "review": "Same-implementer semantic review plus delegated independent read-only engineering review; not actual provider or production acceptance",
+  "actual_postgresql_checks": 154,
+  "findings_resolved": [
+    "Three private FORCE RLS sidecars bind exact current owned application/configuration revision, immutable S256 commitments and one-time redacted admission ledger",
+    "Dedicated actual preauth login and safe role flags/memberships are checked in port and definer; no API/runtime/lifecycle/linking role assumption, function access or direct table privileges",
+    "Migration prerequisite retains safe owner/API baseline including transitive owner-role membership rejection",
+    "Atomic begin has no legacy-only committed gap; duplicate begin returns no old or regenerated private material",
+    "Separate command and canonical provider/environment/client/code advisory namespaces serialize aliases; command/challenge/client-code uniqueness remains a backstop",
+    "Different callback commands and codes racing for one challenge produce one reservation; same callback replay and read-only reconciliation return only held correlation",
+    "Database wall time is rechecked after advisory/configuration/challenge waits and potentially blocking UNIQUE insertion; private expiry subtransaction rollback removes both reservation and consumption",
+    "Legacy consume is replaced append-only with unchanged signature/legacy behavior and excludes managed PKCE challenges; protected original fields, PKCE records and ledger are immutable",
+    "Actual COMMIT acknowledgement/release loss is uncertain and never returns fresh correlation; absent read-only reconciliation cannot create an admission",
+    "First five migration bytes and frozen v1 schemas remain unchanged; no provider call, key, callback configuration, authenticated HTTP route or production issuer added"
+  ],
+  "remaining": [
+    "Qualified browser transport and cookie/CSRF/origin/rate/cleanup controls",
+    "Private WorkOS broker with separately qualified durable pre-send/unknown-outcome handling and actual staging exchange",
+    "WorkOS issuer/JWKS/application verification and immutable provider-ID mapping",
+    "Audited identity/session issuance, refresh/logout, provisioning/SSO and hosted infrastructure",
+    "Merchant activation and production launch qualification; reservation correlation never authorizes a provider request"
+  ],
+  "source_digests": {
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "infra/identity-role-prerequisites.sql": "8908ee3f90d1f48dffc21c72879357dff2bc845f1cea2851f31152bd86494a22",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "scripts/authentication-exchange-admission-lab.mjs": "afea149efa7b1a3f798b58a7f3275bd8919d4e01bc30e8679307e5b7befe888c"
+  },
+  "application_unit_tests": 17,
+  "actual_workers_checks": 25,
+  "targeted_preserved_e2b_core_and_admission_tests": 262,
+  "full_repository_tests": 1228,
+  "full_pipeline": "passed",
+  "existing_sql_regressions": {
+    "operations": "passed",
+    "restore": "passed",
+    "identity": 31,
+    "permissions": 22,
+    "legacy_authentication": 31,
+    "workspace_revocation": 109,
+    "controlled_linking": 366
+  },
+  "independent_peer_review": {
+    "remaining_material_findings": 0,
+    "application_tests_rerun": 17,
+    "postgresql_checks_and_five_hashes_verified": 154,
+    "workers_checks_and_five_hashes_verified": 25,
+    "provider_or_launch_acceptance": false
+  },
+  "scaffold_guards": 9
+}

@@ -1,12 +1,12 @@
 {
   "task": "P05.T04a",
-  "canonical_sequence": 64,
-  "observed_at": "2026-10-14T21:04:24.133Z",
+  "canonical_sequence": 70,
+  "observed_at": "2026-10-15T00:17:58.251Z",
   "scope": "Actual pinned local workerd with synthetic agent authority readers; no hosted deployment, SQL ownership, provider authentication or dispatch qualification",
   "runtime": "miniflare4.20260730.0",
   "compatibility_date": "2026-07-30",
   "provider_calls": 0,
-  "bundle_sha256": "f0a8a9ac2e0e3e230ddc165415d645c106b717066b1dca49bb1321621904e6ea",
+  "bundle_sha256": "a214befe3eebb8eef3eb0f32b1435730ad47d08826822ae9b3d987c1a840b64a",
   "input_digests": {
     "packages/policy/src/agent-authority.ts": "b50aeb76832533a182c48dee4690df04d79747b90bc12d23bcb2859ff729be04",
     "packages/policy/src/agent-authority-facts.ts": "a65c51e7891dc065fc22984f6e6f320f188b8296ec8b080058e5f7f832add79c",

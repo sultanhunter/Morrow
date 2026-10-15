@@ -1,6 +1,6 @@
 {
   "task": "P05.T01d",
-  "observed_at": "2026-10-14T23:38:18.328Z",
+  "observed_at": "2026-10-15T00:17:51.372Z",
   "scope": "Actual isolated PostgreSQL with synthetic pre-authentication correlation only; no provider request, exchange permission, identity/session/grant issuance or public route",
   "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
   "version": "17.11 (Debian 17.11-1.pgdg13+2)",
