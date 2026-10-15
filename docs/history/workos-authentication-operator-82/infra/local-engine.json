@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "source": "Docker Official Image library/postgres; tag17 resolved once to immutable digest",
+  "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+  "major": 17,
+  "observed_version": "17.11",
+  "user": "999:999",
+  "network": "none",
+  "listen_addresses": "",
+  "host_ports": [],
+  "host_mounts": [],
+  "data": "synthetic_ephemeral_tmpfs",
+  "aurora_minor_qualification": "not_established_by_local_PostgreSQL"
+}

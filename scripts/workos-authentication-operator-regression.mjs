@@ -23,8 +23,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { verifyFrozenWorkosOperatorToolchain } from "./workos-operator-regression.mjs";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const archiveRelative = "docs/history/workos-authentication-operator-80";
-const labReport = "docs/evidence/P05.T01l/postgresql-loopback-lab.json";
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 export const frozenWorkosAuthenticationOperator80 = Object.freeze({
   manifestDigest: "a9ad2225a4ca8472906c196f7a7979ba00d6a1648f7742679098ab7f8c0374a5",
@@ -44,6 +42,52 @@ const regressionFiles = Object.freeze([
   "scripts/workos-authentication-operator-regression.mjs",
   "tests/workos-authentication-operator-regression.test.mjs",
   "scripts/workos-operator-regression.mjs",
+]);
+export const frozenWorkosAuthenticationOperator82 = Object.freeze({
+  manifestDigest: "881e0c374ba01cba2afd0c677f5a7f4a4beca250cc38a4b1cd232d05c5905d64",
+  sourceDigest: "7e8bf99d334161155a88296abe5bd393fa76d2903358f7bacd5cae934d268cc4",
+  commit: "586136d44110a7c5eddc086f2ee50e13fd4fa5f2",
+  archiveFiles: 45,
+  sourceFiles: 37,
+  tests: 72,
+  checks: 181,
+});
+// Only these source-owned descriptors select a copied synthetic recipe. Public
+// wrappers below never accept a descriptor, execution mode or native input.
+const descriptor80 = Object.freeze({
+  ...frozenWorkosAuthenticationOperator80,
+  sequence: 80,
+  minimumCurrentSequence: 81,
+  archiveRelative: "docs/history/workos-authentication-operator-80",
+  labReport: "docs/evidence/P05.T01l/postgresql-loopback-lab.json",
+  reportPath: "docs/evidence/P05.T01o/frozen80-regression.json",
+  task: "P05.T01o",
+  regressionFiles,
+});
+const descriptor82 = Object.freeze({
+  ...frozenWorkosAuthenticationOperator82,
+  sequence: 82,
+  minimumCurrentSequence: 83,
+  archiveRelative: "docs/history/workos-authentication-operator-82",
+  labReport: "docs/evidence/P05.T01n/postgresql-loopback-lab.json",
+  reportPath: "docs/evidence/P05.T01o/frozen82-regression.json",
+  task: "P05.T01o",
+  regressionFiles: Object.freeze([
+    ...regressionFiles,
+    "scripts/workos-authentication-operator82-regression.mjs",
+    "tests/workos-authentication-operator82-regression.test.mjs",
+  ]),
+});
+const historicalReportPaths = Object.freeze([
+  "docs/evidence/P05.T01l/postgresql-loopback-lab.json",
+  "docs/evidence/P05.T01l/frozen80-regression.json",
+  "docs/evidence/P05.T01l/local-validation.json",
+  "docs/evidence/P05.T01l/review.json",
+  "docs/evidence/P05.T01l/actual-staging-trial.json",
+  "docs/evidence/P05.T01n/postgresql-loopback-lab.json",
+  "docs/evidence/P05.T01n/local-validation.json",
+  "docs/evidence/P05.T01n/review.json",
+  "docs/evidence/P05.T01n/actual-staging-trial.json",
 ]);
 const failures = new WeakMap();
 function fail(code) {
@@ -90,17 +134,17 @@ function bytes(root, name, limit = 16 * 1024 * 1024) {
     closeSync(fd);
   }
 }
-export function verifyFrozenWorkosAuthenticationArchive(root = join(repository, archiveRelative)) {
+function verifyArchive(descriptor, root = join(repository, descriptor.archiveRelative)) {
   try {
     exactRoot(root);
     const raw = bytes(root, "archive.json", 32768);
-    if (sha(raw) !== frozenWorkosAuthenticationOperator80.manifestDigest) fail("ARCHIVE_INVALID");
+    if (sha(raw) !== descriptor.manifestDigest) fail("ARCHIVE_INVALID");
     const manifest = JSON.parse(raw);
     if (
       manifest.schema_version !== 1 ||
-      manifest.plan_sequence !== 80 ||
-      manifest.commit !== frozenWorkosAuthenticationOperator80.commit ||
-      manifest.operator_source_digest !== frozenWorkosAuthenticationOperator80.sourceDigest ||
+      manifest.plan_sequence !== descriptor.sequence ||
+      manifest.commit !== descriptor.commit ||
+      manifest.operator_source_digest !== descriptor.sourceDigest ||
       manifest.files.length !== 45 ||
       manifest.runtime_files !== 37 ||
       manifest.test_files !== 6 ||
@@ -122,12 +166,12 @@ export function verifyFrozenWorkosAuthenticationArchive(root = join(repository, 
     fail("ARCHIVE_INVALID");
   }
 }
-function currentPlan(root) {
+function currentPlan(root, minimumSequence) {
   const p = JSON.parse(bytes(root, "docs/plan/source.json", 65536)).sources?.plan;
   if (
     p?.page_id !== "page_b1ef27b80b788191b91e67cbb52f1037" ||
     !Number.isSafeInteger(p.sequence) ||
-    p.sequence < 81 ||
+    p.sequence < minimumSequence ||
     p.sha256 !== sha(bytes(root, "docs/plan/build-plan.md"))
   )
     fail("PLAN_INVALID");
@@ -176,17 +220,19 @@ function expectedNames(root) {
 }
 // Overrides are public roots for negative fixture tests only. The runnable
 // entrypoint has no caller-selected source, test, lab, private input or mode.
-export async function createFrozenWorkosAuthenticationFixture({
-  source = repository,
-  archive = join(source, archiveRelative),
-} = {}) {
+async function createFixture(
+  descriptor,
+  { source = repository, archive = join(source, descriptor.archiveRelative) } = {},
+) {
   let root;
   try {
     exactRoot(source);
-    const current = currentPlan(source),
-      manifest = verifyFrozenWorkosAuthenticationArchive(archive);
+    const current = currentPlan(source, descriptor.minimumCurrentSequence),
+      manifest = verifyArchive(descriptor, archive);
     const tooling = verifyFrozenWorkosOperatorToolchain(source);
-    root = realpathSync(mkdtempSync(join(tmpdir(), "morrow-frozen-authentication80-")));
+    root = realpathSync(
+      mkdtempSync(join(tmpdir(), `morrow-frozen-authentication${descriptor.sequence}-`)),
+    );
     for (const file of manifest.files) {
       const target = join(root, file.path);
       mkdirSync(dirname(target), { recursive: true });
@@ -201,16 +247,16 @@ export async function createFrozenWorkosAuthenticationFixture({
       pathToFileURL(join(root, "scripts/workos-authentication-operator-input.mjs"))
     );
     const verify = (afterLab = false) => {
-      verifyFrozenWorkosAuthenticationArchive(archive);
+      verifyArchive(descriptor, archive);
       for (const file of manifest.files) {
-        if (afterLab && file.path === labReport) continue;
+        if (afterLab && file.path === descriptor.labReport) continue;
         if (sha(bytes(root, file.path)) !== file.sha256) fail("COPY_INVALID");
       }
       verifyFrozenWorkosAuthenticationWorkspace(root, tooling.loader);
       const scope = JSON.parse(input.loadWorkosAuthenticationOperatorScope());
       if (
-        scope.planSequence !== 80 ||
-        scope.sourceDigest !== frozenWorkosAuthenticationOperator80.sourceDigest ||
+        scope.planSequence !== descriptor.sequence ||
+        scope.sourceDigest !== descriptor.sourceDigest ||
         input.workosAuthenticationOperatorSourcePaths.length !== 37
       )
         fail("COPY_INVALID");
@@ -339,14 +385,11 @@ export function verifyFrozenWorkosAuthenticationTests(result, expected) {
     fail("TEST_RESULT_INVALID");
   }
 }
-export function verifyFrozenWorkosAuthenticationReport(
-  root,
-  archive = join(repository, archiveRelative),
-) {
+function verifyReport(descriptor, root, archive = join(repository, descriptor.archiveRelative)) {
   try {
-    verifyFrozenWorkosAuthenticationArchive(archive);
-    const report = JSON.parse(bytes(root, labReport)),
-      original = JSON.parse(bytes(archive, labReport));
+    verifyArchive(descriptor, archive);
+    const report = JSON.parse(bytes(root, descriptor.labReport)),
+      original = JSON.parse(bytes(archive, descriptor.labReport));
     if (
       Object.keys(report).sort().join(",") !== Object.keys(original).sort().join(",") ||
       typeof report.observedAt !== "string" ||
@@ -371,14 +414,17 @@ export function verifyFrozenWorkosAuthenticationReport(
     fail("LAB_RESULT_INVALID");
   }
 }
-export async function runWorkosAuthenticationOperatorRegression() {
+async function runRegression(descriptor) {
   let fixture;
   try {
-    const initialSources = Object.fromEntries(
-      regressionFiles.map((file) => [file, sha(bytes(repository, file))]),
+    const historicalReports = Object.fromEntries(
+      historicalReportPaths.map((file) => [file, sha(bytes(repository, file))]),
     );
-    fixture = await createFrozenWorkosAuthenticationFixture();
-    const runner = ".morrow-authentication80-unit-runner.mjs";
+    const initialSources = Object.fromEntries(
+      descriptor.regressionFiles.map((file) => [file, sha(bytes(repository, file))]),
+    );
+    fixture = await createFixture(descriptor);
+    const runner = `.morrow-authentication${descriptor.sequence}-unit-runner.mjs`;
     writeFileSync(join(fixture.root, runner), childProgram, { flag: "wx", mode: 0o600 });
     const units = JSON.parse(await runChild(fixture, runner, false));
     verifyFrozenWorkosAuthenticationTests(units, fixture.expected);
@@ -390,9 +436,12 @@ export async function runWorkosAuthenticationOperatorRegression() {
     )
       fail("LAB_RESULT_INVALID");
     fixture.verify(true);
-    const lab = verifyFrozenWorkosAuthenticationReport(fixture.root);
+    const lab = verifyReport(descriptor, fixture.root);
     verifyFrozenWorkosOperatorToolchain(repository);
-    if (JSON.stringify(currentPlan(repository)) !== JSON.stringify(fixture.current))
+    if (
+      JSON.stringify(currentPlan(repository, descriptor.minimumCurrentSequence)) !==
+      JSON.stringify(fixture.current)
+    )
       fail("PLAN_INVALID");
     if (
       Object.entries(initialSources).some(
@@ -400,19 +449,25 @@ export async function runWorkosAuthenticationOperatorRegression() {
       )
     )
       fail("SOURCE_CHANGED");
-    const manifest = verifyFrozenWorkosAuthenticationArchive();
+    if (
+      Object.entries(historicalReports).some(
+        ([file, digest]) => sha(bytes(repository, file)) !== digest,
+      )
+    )
+      fail("HISTORICAL_REPORT_CHANGED");
+    const manifest = verifyArchive(descriptor);
     fixture.dispose();
     if (existsSync(fixture.root)) fail("CLEANUP_FAILED");
     const report = {
-      task: "P05.T01m",
+      task: descriptor.task,
       observed_at: new Date().toISOString(),
-      status: "frozen80_synthetic_regression_passed_not_provider_qualification",
+      status: `frozen${descriptor.sequence}_synthetic_regression_passed_not_provider_qualification`,
       current_plan_sequence: fixture.current.sequence,
       current_plan_digest: fixture.current.digest,
-      preserved_plan_sequence: 80,
-      source_commit: frozenWorkosAuthenticationOperator80.commit,
-      operator_source_digest: frozenWorkosAuthenticationOperator80.sourceDigest,
-      archive_manifest_sha256: frozenWorkosAuthenticationOperator80.manifestDigest,
+      preserved_plan_sequence: descriptor.sequence,
+      source_commit: descriptor.commit,
+      operator_source_digest: descriptor.sourceDigest,
+      archive_manifest_sha256: descriptor.manifestDigest,
       archive_files: Object.fromEntries(manifest.files.map((x) => [x.path, x.sha256])),
       tooling: {
         node: process.version,
@@ -429,14 +484,16 @@ export async function runWorkosAuthenticationOperatorRegression() {
       cleanup_faults: lab.cleanupFaults,
       source_digests: lab.sourceDigests,
       regression_sources: initialSources,
+      preserved_reports: historicalReports,
+      historical_reports_unchanged: true,
       archive_unchanged: true,
       copied_execution_sources_unchanged: true,
       temporary_copy_removed: true,
       workspace_resolution: "copied_archived_packages_only",
       scope:
-        "Original72 synthetic operator units and181 real isolated SQL/loopback checks in a verified copy. No native activation, actual provider request, private input or new provider qualification. Original actual held trial is not rerun.",
+        "Original72 synthetic operator units and181 real isolated SQL/loopback checks in a verified copy. No native activation, actual provider request, private input or new provider qualification. Historical actual trials are not rerun.",
     };
-    const target = join(repository, "docs/evidence/P05.T01l/frozen80-regression.json"),
+    const target = join(repository, descriptor.reportPath),
       staged = target + "." + randomUUID();
     mkdirSync(dirname(target), { recursive: true });
     try {
@@ -452,6 +509,31 @@ export async function runWorkosAuthenticationOperatorRegression() {
   } finally {
     fixture?.dispose();
   }
+}
+// Stable80 wrappers preserve their original fixed recipe and public signatures.
+export function verifyFrozenWorkosAuthenticationArchive(root = undefined) {
+  return verifyArchive(descriptor80, root);
+}
+export function createFrozenWorkosAuthenticationFixture(options = {}) {
+  return createFixture(descriptor80, options);
+}
+export function verifyFrozenWorkosAuthenticationReport(root, archive = undefined) {
+  return verifyReport(descriptor80, root, archive);
+}
+export function runWorkosAuthenticationOperatorRegression() {
+  return runRegression(descriptor80);
+}
+export function verifyFrozenWorkosAuthentication82Archive(root = undefined) {
+  return verifyArchive(descriptor82, root);
+}
+export function createFrozenWorkosAuthentication82Fixture(options = {}) {
+  return createFixture(descriptor82, options);
+}
+export function verifyFrozenWorkosAuthentication82Report(root, archive = undefined) {
+  return verifyReport(descriptor82, root, archive);
+}
+export function runWorkosAuthenticationOperator82Regression() {
+  return runRegression(descriptor82);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {

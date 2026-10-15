@@ -41,6 +41,10 @@ jobs:
         run: npm run lab:workos-workspace-selection-workers
       - name: Exercise private local browser session admission in Workers
         run: npm run lab:browser-session-admission-workers
+      - name: Exercise browser cookie to workspace request authentication in Workers
+        run: npm run lab:standalone-workspace-workers
+      - name: Exercise authenticated controlled store linking in Workers
+        run: npm run lab:standalone-store-linking-workers
       - name: Exercise preserved75 session observation with synthetic providers only
         run: npm run lab:workos-session-status-frozen75
       - name: Record the isolated pinned PostgreSQL engine build
@@ -64,5 +68,11 @@ jobs:
         run: npm run lab:workos-operator-frozen74
       - name: Exercise preserved80 full authentication operator with synthetic providers only
         run: npm run lab:workos-authentication-operator
-      - name: Exercise current source full authentication operator with synthetic providers only
+      - name: Exercise preserved82 full authentication operator with synthetic providers only
         run: npm run lab:workos-authentication-operator-current
+      - name: Exercise actual browser request to workspace HTTP and PostgreSQL
+        run: npm run lab:standalone-workspace-http
+      - name: Exercise private linking lookup and read-only reconciliation in PostgreSQL
+        run: npm run lab:workspace-linking-read
+      - name: Exercise actual authenticated controlled linking HTTP and PostgreSQL
+        run: npm run lab:standalone-store-linking-http

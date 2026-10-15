@@ -1,0 +1,632 @@
+{
+  "task": "P05.T01d",
+  "observed_at": "2026-10-15T22:16:48.958Z",
+  "scope": "Actual isolated PostgreSQL with synthetic pre-authentication correlation only; no provider request, exchange permission, identity/session/grant issuance or public route",
+  "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+  "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "checks": [
+    {
+      "name": "dedicated_role_starts_nologin_safe",
+      "passed": true
+    },
+    {
+      "name": "fixture_1_created",
+      "passed": true
+    },
+    {
+      "name": "begin_atomic_both_records",
+      "passed": true
+    },
+    {
+      "name": "duplicate_begin_no_old_secret_or_new_challenge",
+      "passed": true
+    },
+    {
+      "name": "s256_of_exact_verifier_ascii",
+      "passed": true
+    },
+    {
+      "name": "absent_readonly_reconciliation_held_without_write",
+      "passed": true
+    },
+    {
+      "name": "legacy_consume_excludes_managed_challenge",
+      "passed": true
+    },
+    {
+      "name": "fresh_committed_admission_only_correlation",
+      "passed": true
+    },
+    {
+      "name": "exact_replay_and_reconcile_only_held",
+      "passed": true
+    },
+    {
+      "name": "changed_commandId_no_new_or_private_correlation",
+      "passed": true
+    },
+    {
+      "name": "changed_code_no_new_or_private_correlation",
+      "passed": true
+    },
+    {
+      "name": "changed_state_no_new_or_private_correlation",
+      "passed": true
+    },
+    {
+      "name": "changed_browserProof_no_new_or_private_correlation",
+      "passed": true
+    },
+    {
+      "name": "changed_verifier_no_new_or_private_correlation",
+      "passed": true
+    },
+    {
+      "name": "changed_challengeId_no_new_or_private_correlation",
+      "passed": true
+    },
+    {
+      "name": "wrong_binding_applicationId_denies",
+      "passed": true
+    },
+    {
+      "name": "wrong_binding_environmentId_denies",
+      "passed": true
+    },
+    {
+      "name": "wrong_binding_clientId_denies",
+      "passed": true
+    },
+    {
+      "name": "wrong_binding_bindingId_denies",
+      "passed": true
+    },
+    {
+      "name": "wrong_binding_bindingRevision_denies",
+      "passed": true
+    },
+    {
+      "name": "wrong_binding_redirectUri_denies",
+      "passed": true
+    },
+    {
+      "name": "wrong_binding_returnPath_denies",
+      "passed": true
+    },
+    {
+      "name": "fixture_2_created",
+      "passed": true
+    },
+    {
+      "name": "legacy_created_not_new_admission",
+      "passed": true
+    },
+    {
+      "name": "legacy_still_consumes_own_challenge",
+      "passed": true
+    },
+    {
+      "name": "legacy_consumed_result_not_admission",
+      "passed": true
+    },
+    {
+      "name": "fixture_3_created",
+      "passed": true
+    },
+    {
+      "name": "same_callback_race_one_new_one_held",
+      "passed": true
+    },
+    {
+      "name": "fixture_4_created",
+      "passed": true
+    },
+    {
+      "name": "different_commands_and_codes_one_challenge_winner",
+      "passed": true
+    },
+    {
+      "name": "fixture_5_created",
+      "passed": true
+    },
+    {
+      "name": "fixture_6_created",
+      "passed": true
+    },
+    {
+      "name": "binding_callback_aliases_one_client_code_reservation",
+      "passed": true
+    },
+    {
+      "name": "fixture_7_created",
+      "passed": true
+    },
+    {
+      "name": "fixture_8_created",
+      "passed": true
+    },
+    {
+      "name": "command_reserved_for_exact_challenge",
+      "passed": true
+    },
+    {
+      "name": "fixture_9_created",
+      "passed": true
+    },
+    {
+      "name": "expiry_after_binding_wait",
+      "passed": true
+    },
+    {
+      "name": "fixture_10_created",
+      "passed": true
+    },
+    {
+      "name": "expiry_after_application_wait",
+      "passed": true
+    },
+    {
+      "name": "fixture_11_created",
+      "passed": true
+    },
+    {
+      "name": "expiry_after_challenge_wait",
+      "passed": true
+    },
+    {
+      "name": "fixture_12_created",
+      "passed": true
+    },
+    {
+      "name": "expiry_after_command_wait",
+      "passed": true
+    },
+    {
+      "name": "fixture_13_created",
+      "passed": true
+    },
+    {
+      "name": "expiry_after_code_wait",
+      "passed": true
+    },
+    {
+      "name": "fixture_14_created",
+      "passed": true
+    },
+    {
+      "name": "fixture_15_created",
+      "passed": true
+    },
+    {
+      "name": "expiry_after_unique_owner_rollback_undoes_successful_insert",
+      "passed": true
+    },
+    {
+      "name": "fixture_16_created",
+      "passed": true
+    },
+    {
+      "name": "binding_disabled_after_wait_denies",
+      "passed": true
+    },
+    {
+      "name": "fixture_17_created",
+      "passed": true
+    },
+    {
+      "name": "callback_changed_after_wait_denies",
+      "passed": true
+    },
+    {
+      "name": "fixture_18_created",
+      "passed": true
+    },
+    {
+      "name": "application_disabled_after_wait_denies",
+      "passed": true
+    },
+    {
+      "name": "fixture_19_created",
+      "passed": true
+    },
+    {
+      "name": "application_revision_after_wait_denies",
+      "passed": true
+    },
+    {
+      "name": "fixture_20_created",
+      "passed": true
+    },
+    {
+      "name": "application_identity_after_wait_denies",
+      "passed": true
+    },
+    {
+      "name": "begin_sidecar_failure_rolls_back_original_challenge",
+      "passed": true
+    },
+    {
+      "name": "fixture_21_created",
+      "passed": true
+    },
+    {
+      "name": "audit_failure_preserves_unconsumed_challenge",
+      "passed": true
+    },
+    {
+      "name": "fixture_22_created",
+      "passed": true
+    },
+    {
+      "name": "explicit_rollback_no_reservation_or_consumption",
+      "passed": true
+    },
+    {
+      "name": "fixture_23_created",
+      "passed": true
+    },
+    {
+      "name": "commit_ack_uncertain_then_only_held",
+      "passed": true
+    },
+    {
+      "name": "fixture_24_created",
+      "passed": true
+    },
+    {
+      "name": "release_uncertain_then_only_held",
+      "passed": true
+    },
+    {
+      "name": "fixture_25_created",
+      "passed": true
+    },
+    {
+      "name": "unknown_rolled_back_reconcile_never_creates",
+      "passed": true
+    },
+    {
+      "name": "begin_lost_commit_withholds_private_material_and_duplicate",
+      "passed": true
+    },
+    {
+      "name": "fixture_26_created",
+      "passed": true
+    },
+    {
+      "name": "current_disabled_config_hides_existing_correlation",
+      "passed": true
+    },
+    {
+      "name": "reconcile_runs_in_actual_readonly_transaction",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_SELECT_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_INSERT_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_UPDATE_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_DELETE_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_SELECT_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_INSERT_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_UPDATE_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_DELETE_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_SELECT_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_INSERT_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_UPDATE_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_DELETE_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_assume_morrow_identity_owner",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_assume_morrow_identity_preauth",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_begin",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_admit",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_reconcile",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_SELECT_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_INSERT_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_UPDATE_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_DELETE_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_SELECT_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_INSERT_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_UPDATE_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_DELETE_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_SELECT_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_INSERT_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_UPDATE_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_DELETE_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_assume_morrow_identity_owner",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_assume_morrow_identity_preauth",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_begin",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_admit",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_reconcile",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_SELECT_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_INSERT_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_UPDATE_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_DELETE_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_SELECT_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_INSERT_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_UPDATE_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_DELETE_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_SELECT_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_INSERT_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_UPDATE_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_private_DELETE_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_assume_morrow_identity_owner",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_assume_morrow_identity_preauth",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_begin",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_admit",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_reconcile",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_SELECT_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_INSERT_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_UPDATE_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_DELETE_authentication_exchange_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_SELECT_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_INSERT_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_UPDATE_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_DELETE_authentication_pkce_challenges",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_SELECT_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_INSERT_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_UPDATE_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_private_DELETE_authentication_exchange_admissions",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_cannot_assume_morrow_identity_owner",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_unsafe_membership_direct_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_unsafe_membership_direct_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "owner_login_cannot_substitute_for_executor",
+      "passed": true
+    },
+    {
+      "name": "public_has_no_new_function_execution",
+      "passed": true
+    },
+    {
+      "name": "authentication_pkce_challenges_immutable_UPDATE",
+      "passed": true
+    },
+    {
+      "name": "authentication_pkce_challenges_immutable_DELETE",
+      "passed": true
+    },
+    {
+      "name": "authentication_exchange_admissions_immutable_UPDATE",
+      "passed": true
+    },
+    {
+      "name": "authentication_exchange_admissions_immutable_DELETE",
+      "passed": true
+    },
+    {
+      "name": "authentication_challenges_immutable_UPDATE",
+      "passed": true
+    },
+    {
+      "name": "authentication_challenges_immutable_DELETE",
+      "passed": true
+    },
+    {
+      "name": "three_sidecars_force_rls",
+      "passed": true
+    },
+    {
+      "name": "migration_failure_rolls_back_new_objects_and_legacy_replace",
+      "passed": true
+    },
+    {
+      "name": "unsafe_owner_login_migration_rejected",
+      "passed": true
+    },
+    {
+      "name": "api_owner_membership_migration_rejected",
+      "passed": true
+    },
+    {
+      "name": "executor_membership_migration_rejected",
+      "passed": true
+    },
+    {
+      "name": "no_raw_code_or_proofs_in_application_output",
+      "passed": true
+    }
+  ],
+  "source_digests": {
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "infra/identity-role-prerequisites.sql": "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "scripts/authentication-exchange-admission-lab.mjs": "afea149efa7b1a3f798b58a7f3275bd8919d4e01bc30e8679307e5b7befe888c"
+  }
+}

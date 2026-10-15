@@ -50,6 +50,12 @@
       "file": "0008.browser-session-admission.sql",
       "sha256": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
       "reviewRef": "docs/evidence/P05.T01m/review.json"
+    },
+    {
+      "sequence": 9,
+      "file": "0009.workspace-linking-read-boundaries.sql",
+      "sha256": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2",
+      "reviewRef": "docs/evidence/P05.T03b/review.json"
     }
   ]
 }

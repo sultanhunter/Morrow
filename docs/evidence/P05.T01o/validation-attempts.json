@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01o",
+  "current_plan_sequence": 83,
+  "attempts": [
+    {
+      "attempt": "O_initial_held",
+      "log_sha256": "44b26bf53b225c816909d68386ca08ca05feccf4246c9cd4d937ae5d9da1c9cf",
+      "observation": "Fresh synthetic issuance did not return newly_admitted; cause unclassified; no protected HTTP success claimed"
+    },
+    {
+      "attempt": "O_fixture_error",
+      "log_sha256": "4e99b136d1d63864cc96ae44fdea3262aed41b8c651870fa8cbcf97bba7f9171",
+      "observation": "Lab check-name rejected camelCase injected fault label; no runtime defect established"
+    },
+    {
+      "attempt": "O_pass_before_format",
+      "log_sha256": "59a9cc2829bf75741fdf907c284eec580dcc0b299793e0d4d322cd808af76080",
+      "observation": "116 checks passed against its then-selected source; final formatted-source refresh recorded separately"
+    },
+    {
+      "attempt": "B_fixture_error",
+      "log_sha256": "e2aa0d18889902980fff8ad6e43fc40af46a8b1a15d42cd3ea709b0723d6a7e0",
+      "observation": "Rollback probe JavaScript replacement changed SQL dollar quoting; probe repaired without changing migration"
+    },
+    {
+      "attempt": "CI_restricted_environment_failed",
+      "log_sha256": "685ecb7fc261f7841c932d26325d096391575751c87da66691dbbe438e3c9814",
+      "observation": "Default sandbox denied local listen with EPERM; no relaxation of assertions"
+    },
+    {
+      "attempt": "CI_pass",
+      "log_sha256": "b33cd42175a63088b94ae6666e580011403008f1b6847747eba07c0108412852",
+      "observation": "Same suite with authorized local loopback:1704 tests and full pipeline passed"
+    },
+    {
+      "attempt": "O_final_pass",
+      "log_sha256": "59a9cc2829bf75741fdf907c284eec580dcc0b299793e0d4d322cd808af76080",
+      "observation": "116 actual HTTP/PostgreSQL checks against final formatted sources"
+    },
+    {
+      "attempt": "B_SQL_final_pass",
+      "log_sha256": "d71a92079532bf5ba222d3300e6dd30888c7aa57f20dd67b6c86eb9e5b71f009",
+      "observation": "121 actual SQL checks against final source"
+    },
+    {
+      "attempt": "B_HTTP_final_pass",
+      "log_sha256": "550031396562c4c55cf2aaf5b2752ca0864af11f3cd0fa88ed8401898cf64304",
+      "observation": "96 actual HTTP/PostgreSQL checks; original-command reconciliation after uncertainty"
+    }
+  ],
+  "logs": "Retained outside repository; only commitments and coarse observations are public",
+  "provider_requests": 0,
+  "retry_authority": "Local disposable synthetic labs only; no provider operation retried"
+}

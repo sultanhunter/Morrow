@@ -14,7 +14,10 @@
     "./workos-session-status": "./src/workos-session-status.ts",
     "./workos-authentication-evidence": "./src/workos-authentication-evidence.ts",
     "./workos-workspace-selection": "./src/workos-workspace-selection.ts",
-    "./workos-browser-session-admission": "./src/workos-browser-session-admission.ts"
+    "./workos-browser-session-admission": "./src/workos-browser-session-admission.ts",
+    "./standalone-workspace-bootstrap": "./src/standalone-workspace-bootstrap.ts",
+    "./standalone-store-linking": "./src/standalone-store-linking.ts",
+    "./workspace-store-linking-control": "./src/workspace-store-linking-control.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
