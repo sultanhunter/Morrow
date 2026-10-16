@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 87,
+  "reviewer": "root",
+  "author": "fixed_provider_https",
+  "review_kind": "independent_outside_Git_helper_source_and_pure_guard_review",
+  "helper": "work/prepare-ci-candidate87.py",
+  "helper_sha256": "bac6f9c90535caf2d9ac9d053074341b105b248588b5e49b25c57e29fd3dc2b8",
+  "blocking_findings": [],
+  "source_scope_checks": [
+    "Exact published86 baseline1503 inventory, receipt and before87 saved bytes/modes",
+    "All497 old reports and history/SQL preserved; no deletion, arbitrary new app code, key or entry activation",
+    "Strict current87 Page and packet pins; current source/review closure; pending is not qualification",
+    "No implicit stage/commit/push/network/provider/Docker/Desktop operation"
+  ],
+  "guard_tests": {
+    "actual_exit": 0,
+    "count": 19,
+    "owning_chunk": "821c62",
+    "log_sha256": "9294670b83c04a05f1477e964ec431f5474481fa5456cc89d1049c50a190c585"
+  },
+  "input_and_write_guards": [
+    "Fixed Publisher only behind explicit apply; baseline/index/source/Desktop readback"
+  ],
+  "limitations": [
+    "Trusted local authoring, not a hostile-writer security fence",
+    "Source-reviewed pending manifests do not confer provider or deployment authority",
+    "No actual candidate/CI qualification inferred from pure guard tests"
+  ],
+  "source_or_provider_mutation_by_review": false
+}

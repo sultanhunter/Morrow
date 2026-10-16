@@ -1,0 +1,14 @@
+{
+  "actual_exit": 1,
+  "owning_session": 92085,
+  "completion_chunk": "c9175a",
+  "failed_stage": "verify_foundation_task_inventory_order",
+  "tests_started": false,
+  "generated_paths": [
+    "docs/evidence/P01.T01/verification.json"
+  ],
+  "formatting_and_typecheck_passed": true,
+  "initial_outside_restoration_preparation_held": "DIRECTORY_INVALID_relative_path_before_Source_write",
+  "code_or_provider_retries": false,
+  "log_sha256": "21c0ac2af445403520e54e50ae8d1659ecf6bee3f1e3d6b035a55809ed4bf64d"
+}

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01s",
+  "current_plan_sequence": 87,
+  "qualification_status": "pending_hosted_CI_and_artifact_review",
+  "author": "root",
+  "self_review_separate_from_independent": true,
+  "local_pipeline": {
+    "tests": 2065,
+    "passed": 2065,
+    "failed": 0,
+    "actual_exit": 0,
+    "owning_session": 93178,
+    "completion_chunk": "f8c156",
+    "receipt_sha256": "39bd05be2c2b67a0d21e3f14cb48db64af98481427e4e9482f9c0860465b0469"
+  },
+  "scaffold": {
+    "guards": 11,
+    "actual_exit": 0,
+    "owning_session": 23811,
+    "completion_chunk": "adcd4a",
+    "receipt_sha256": "8f2aa42205bbdf47bbee69b9571a924f83de52846232ab71836d54db1fbede67"
+  },
+  "actual_platform": {
+    "cases": 91,
+    "checks": 1511,
+    "intercepted_requests": 87,
+    "actualInternetRequests": 0,
+    "actualProviderRequests": 0,
+    "runtime_disposal_acknowledged": true,
+    "intentionally_unverified_credential_cases": 2,
+    "local_reader_cancel_acknowledgements_directly_instrumented": false,
+    "current_report_sha256": "4d9e206be72d03263f45fffe340caeb990861080e9bf047f5a2a94c2efa2ca8b",
+    "owning_session": 96012,
+    "completion_chunk": "1c7720",
+    "actual_exit": 0
+  },
+  "preservation": {
+    "all497_historical_records_exact": true,
+    "all11_migrations_unchanged": true,
+    "public_exports_and_domain_app_bodies_unchanged": true,
+    "first_native_hold_and_prior_success_preserved": true,
+    "first_local_CI_task_inventory_hold_preserved": true
+  },
+  "source_digests": {
+    "packages/identity/src/fixed-workos-login-port.ts": "415c00a69f74626ca2962357c7754c4f9d1a7837f034f7e74c82b5f59576e14f",
+    "tests/fixed-workos-login-port.test.mjs": "deef648458fc549f29204984c00aa5dfcd3ce6ef94c59cec404fec6c927a46c6",
+    "scripts/fixtures/fixed-workos-platform-provider.mjs": "821d874777f2bec89d62dfb32739d7f858ac2632595f753dc699c4c733a60b15",
+    "scripts/fixtures/fixed-workos-platform-worker.ts": "9f2cb904ed48b419afb25b240e62f6ebd88a7156cd0f4aab3ab7c0d0b454047d",
+    "scripts/fixed-workos-platform-workers-lab.mjs": "df251c68c982757b14b502d5d76b6b166655b8809bc0fe7861fa2e6673a667d7",
+    "tests/fixed-workos-platform-provider.test.mjs": "5b8a1bc63fc104ff05a7046fc9dfea6120b7f6bb68ce0d7d1e3c43bd3ae515aa",
+    "docs/plan/build-plan.md": "ea80aecc40cfc4a39f6fa2db08a89cacaf06b5147cdf7483e5b86d9470db6b94",
+    "docs/plan/source.json": "1da47e2809ee3681632b04c8d4d27b312b8b1313000ca802333b657c5b8d5cd7",
+    "docs/packets/P05.T01s.md": "f1c523af6b3485b0de72e678947625688ec47edb95b2fce51a0949cdb526ae07",
+    "docs/progress/tasks.json": "e7b6062862eb040513a1953dc58c3fc2d6996447257bc2b977d917f032ddd14f",
+    "package.json": "d7a307e503ddd72eda50b6fd65660fa6296290b38ad606ea80c350bdc2632c6c",
+    ".github/workflows/ci.yml": "86d45b05f82964d0e7502ac889b8a0dcf91089c0a5e2214e565ce0d71187ffaa",
+    "scripts/ci-validation-evidence.mjs": "dc9f4971aab7f6b8fb9e825266860005231c1df85a7e1fb1de7649f83b6ecd95",
+    "tests/ci-validation-evidence.test.mjs": "ee0d6a0b21ba3ed4c6feaec8110337947d859a334f27dbe72ebe14fdbc249971"
+  },
+  "provider_key_or_account_actions": 0,
+  "merchant_activation": false,
+  "limits": [
+    "Fully intercepted local platform proof, no WorkOS DNS/TLS/account or hosted secrets qualification",
+    "Synthetic SQL in the new native platform chain; maintained real PostgreSQL/HTTPS run remains pending on isolated hosted CI",
+    "Two intentionally unacknowledged synthetic leases and uninstrumented local reader cancellation remain explicit"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "scope": "only_append_new_Worker_to_existing_strict_typecheck_command",
+  "before_package_sha256": "63129942b3c6c1b6418be79f43bd6117a5e6c2ce4f21821807ce2d0fff06c21e",
+  "after_package_sha256": "d7a307e503ddd72eda50b6fd65660fa6296290b38ad606ea80c350bdc2632c6c",
+  "previous_actual_platform_report_sha256": "820985e70beb635a6add5332c56042f5b3d4ad3ce61698c5e79c41fb0b8c0d02",
+  "source_or_runtime_behavior_changes": false,
+  "fresh_current_package_platform_recheck": "pending"
+}

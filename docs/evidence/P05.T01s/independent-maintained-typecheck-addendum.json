@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "currentPlanSequence": 87,
+  "reviewer": "/root/fixed_provider_core",
+  "reviewKind": "independent_maintained_metadata_package_typecheck_registration_addendum",
+  "reviewedAt": "2026-10-16T12:11:30.223106+00:00",
+  "previous_review": "work/morrow-p01/independent-maintained-runners87.json",
+  "previous_review_sha256": "e2b4e04e5481fea7084fed99166e2c8a295f82307406d91f107818c63bbd2a6c",
+  "source_digests": {
+    "scripts/login-flow-custody-lab.mjs": "b97d0957b776944f41c10060d948712647a5f5644488584730877ca4657c8efd",
+    "scripts/self-logout-sql-lab.mjs": "490a8a29e53ecc5332063346f5c62011bd139528895bc5371e55db7905ad97f2",
+    "scripts/standalone-login-https-lab.mjs": "59df768fa84cee2c6a3fbc3cd1f15ff710640b7620e81cded5a470697c194b9b",
+    "scripts/standalone-login-workers-lab.mjs": "6089fe7e33ba8b29bfcd92fd4236f48304a165036439fc0371ce9c01e0bf9b94",
+    "scripts/standalone-logout-https-lab.mjs": "d9e42eca36c48272fa5c732487edf3629b4cc9a5fda5b7ae00bc22fda46c051c",
+    "scripts/standalone-logout-workers-lab.mjs": "f66748c12637f13ffc387d1c29615e0198c6f44f60348d6d104eef82c494f421",
+    "scripts/standalone-store-linking-http-lab.mjs": "d9af025901fcbc12bd6ac66cc43a4a31a28f712f12b5cc91ebf9a0b0c30063b6",
+    "scripts/standalone-store-linking-workers-lab.mjs": "28a17ad7cc4fa1075a16e86e3613b52077ec7c17965a18af2e27709439c48da2",
+    "scripts/standalone-workspace-http-lab.mjs": "c97d185d0d292db56fc067ada20f830d1c40b64dd2ab2d0c8aa5cf660159d70e",
+    "scripts/standalone-workspace-workers-lab.mjs": "9f07eb28dd386b08bc09e97da29c488ebeb0b79cba065c22e65e07090dd626fc",
+    "scripts/workspace-store-linking-read-lab.mjs": "07d50eb9d39b97f5ce9031658f470f30358c78660b4dc8ef05ffacb88a551a98",
+    "scripts/fixed-workos-login-https-lab.mjs": "a2911d650a3e708072a30fc3fdfd2ea62a73affaacfebc8aca74d646f416bf23",
+    "scripts/fixed-workos-login-workers-lab.mjs": "30c5ab7089695649e02bedaedff740e9eb1c14a65aa6e3366efab3f751a98b17",
+    "scripts/ci-validation-evidence.mjs": "dc9f4971aab7f6b8fb9e825266860005231c1df85a7e1fb1de7649f83b6ecd95",
+    "tests/ci-validation-evidence.test.mjs": "ee0d6a0b21ba3ed4c6feaec8110337947d859a334f27dbe72ebe14fdbc249971",
+    ".github/workflows/ci.yml": "86d45b05f82964d0e7502ac889b8a0dcf91089c0a5e2214e565ce0d71187ffaa",
+    "package.json": "d7a307e503ddd72eda50b6fd65660fa6296290b38ad606ea80c350bdc2632c6c",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "packages/identity/package.json": "024c219f2f7ed978a0bf5fedca3184b68170f023edb9b88b8a4e25006e1fe5d6",
+    "packages/identity/src/index.ts": "041952d82c134a04487b9e9648c2a648879fa069220c9d37eb9113509a7c3643",
+    "migrations/manifest.json": "8e8a905da33278f9f3996f001236ad9bf4b6090c88e55f01c1a112bc30e92eeb",
+    "docs/packets/P05.T01s.md": "f1c523af6b3485b0de72e678947625688ec47edb95b2fce51a0949cdb526ae07",
+    "docs/plan/build-plan.md": "ea80aecc40cfc4a39f6fa2db08a89cacaf06b5147cdf7483e5b86d9470db6b94",
+    "docs/plan/source.json": "1da47e2809ee3681632b04c8d4d27b312b8b1313000ca802333b657c5b8d5cd7"
+  },
+  "delta": {
+    "only_changed_field": "scripts.typecheck",
+    "change": "Append scripts/fixtures/fixed-workos-platform-worker.ts to existing strict fixture typecheck list",
+    "before_package_sha256": "63129942b3c6c1b6418be79f43bd6117a5e6c2ce4f21821807ce2d0fff06c21e",
+    "after_package_sha256": "d7a307e503ddd72eda50b6fd65660fa6296290b38ad606ea80c350bdc2632c6c",
+    "other_fields_exact": true,
+    "other_previous_review_source_pins_exact": true
+  },
+  "blocking_findings": [],
+  "limits": [
+    "Read-only exact JSON comparison and source hashes; no tests/runtime execution. Original maintained13 runner AST,8 owning PostgreSQL callback and CI collector/workflow review remains immutable and unchanged. No assertion/domain/SQL/dependency/export/CI order changes from this addendum."
+  ]
+}

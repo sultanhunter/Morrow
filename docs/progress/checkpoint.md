@@ -1,3 +1,23 @@
+# Current continuation: captured Workers Fetch prepared for isolated CI
+
+Canonical87 is fresh/read back at503blocks with all497priorblocks unchanged. The private Workers constructor selects manual internally while Node and86synthetic remain error. Current local2,065tests/zero failures and11scaffold guards passed; all regenerated prior outputs were preserved outsideGit and every497historical report restored byte/mode exact. The initial fullCI stopped before tests on task-index first-appearance order; its original failure is preserved. Reconciliation only swaps80-record inventory positions17/18, with identical IDs/statuses/dependencies and unchanged canonical text.
+
+Actual pinned platform Fetch passes91cases/1,511checks with87intercepted requests and zeroInternet/WorkOS account requests; runtime disposal acknowledged. Unsupported error rejects before transport, real manual200/302 URL and gzip behavior measured inside Worker. Same long-lived private port passes after fixture parent/per-lease abort signals are created in the using request. Original native hold and pre-typecheck metadata pass remain separate. Two deliberate broker release failures retain unknown acknowledgement; no local reader-cancel acknowledgement is inferred from remote fixture observations.
+
+Independent core/native/source/evidence and maintained13runner/CI reviews are clear, with original check/SQL callback bodies preserved. Source/authority/SQL1–11/lock/exports remain within S scope. Next prepare a separately marked pending candidate to existing draftPR1, then exact-head isolated fullCI/maintainedSQL-HTTPS, digest/source/cleanup/artifact review, final evidence-only exact-head CI and guarded Desktop alignment. Desktop stays on published86 b296c1296b674f29f3fe96f5caabfc31751d7319 until then. ParentP05.T01/P05.T03 remain In progress. No current user input or provider/key/sign-in/account/hosted secret/driver/migration/deployment/merchant action is included.
+
+# Historical87 implementation checkpoint
+
+# Current continuation: captured Workers Fetch binding
+
+Canonical87 is saved/read back at503blocks; all497old blocks are byte-equivalent and six bounded S paragraphs added. Published86 b296c1296b674f29f3fe96f5caabfc31751d7319 passed final exactCI38894173530 all50steps, 2,050tests/11scaffold, 90Workers cases/995checks and151HTTPS/PostgreSQL checks. Its downloaded54payload/50report artifact, exact Source/restoration and cleanup were verified. All106SQL clients closed;41merchant clients/42server sockets closed. Intentional lease failures remain unverified. Desktop/Publisher/SOURCE were clean and matched1503files; original evidence and failedA outcomes preserved.
+
+Read P05.T01s and current Page before work. The new increment adds source-owned manual policy only for a private captured Workers Fetch constructor, preserving Node/synthetic error and all existing authority/custody/deadline/parser rules. Qualify actual pinned platform Fetch through an independent fully intercepted HTTP/PKCE/RSA oracle, with native response attributes observed inside the Worker. Do not fabricate unavailable native faults or report positive interceptions as zero transport. Keep84/85/domain/SQL1–11 and all497historical records exact; new current measurements use S paths. Parent P05.T01/P05.T03 remain In progress.
+
+Implementation/tests are pending. Current S requires no user/provider input. No provider/key/sign-in/account, hosted secret/migration/driver, native application binding, deployment or merchant activation is included. The controlled Neon role-client work remains later preparation. Preserve the full before87 inventory and all prior Mac holds/consumed receipts. Desktop stays on published86 until S exact-head qualification and guarded alignment.
+
+# Historical86 final publication checkpoint
+
 # Current continuation: fixed provider engineering passed; final publication pending
 
 Canonical86 remains saved at497 blocks; fresh full Page read exactly matches the synchronized snapshot. Repaired candidate44d36a73edf744c52cc2d3a4631ec57b12ba371e passed isolated CI38891244630 attempt1 with all50 final API steps successful. The actual log records2,050tests/zero failures and11scaffold guards. Strict verification binds the356,400-byte downloaded artifact SHA25695a064af8d10cbfb5ccf2f941b552759bbacbbcdc7718f181c5f73de5e0e176a to54allowlisted payloads/50fresh reports, exact tested source and restoration.

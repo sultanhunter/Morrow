@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   createFixedWorkosLoginPort,
   createSyntheticFixedWorkosLoginPort,
+  createWorkersFixedWorkosLoginPort,
 } from "../packages/identity/src/fixed-workos-login-port.ts";
 
 const at = 1800000000000;
@@ -702,4 +703,43 @@ test("getter-based lease is rejected without executing getter or sending credent
   assert.equal(read, 0);
   assert.equal(f.calls.length, 0);
   assert.equal(f.releases.length, 1);
+});
+
+test("private captured Workers constructor is inert and cannot borrow with an expired control", async () => {
+  const f = fixture();
+  const { fetch: unused, ...dependencies } = f.dependencies;
+  const port = await createWorkersFixedWorkosLoginPort(dependencies);
+  assert(Object.isFrozen(port));
+  assert.deepEqual(Object.keys(port).sort(), ["exchange", "readPublicKeyset", "readSessionPage"]);
+  assert.equal(f.borrows.length, 0);
+  await rejectsHeld(port.readSessionPage(JSON.stringify(selector), f.control(at)));
+  await rejectsHeld(port.readPublicKeyset(f.control(at)));
+  f.parent.abort();
+  await rejectsHeld(port.exchange(JSON.stringify(exchange), f.control()));
+  assert.equal(f.borrows.length, 0);
+  // No provider method can reach captured Fetch after these original controls
+  // have held. Actual platform interception is measured by the separate S lab.
+});
+for (const [name, override] of Object.entries({
+  injectedFetch: {
+    fetch: () => {
+      throw Error("must not be called");
+    },
+  },
+  callerRuntime: { runtime: "node", redirect: "follow" },
+  foreignEndpoint: { url: "https://foreign.invalid/", headers: { authorization: "forbidden" } },
+}))
+  test(`Workers constructor rejects ${name} instead of accepting transport policy`, async () => {
+    const f = fixture();
+    const { fetch: unused, ...dependencies } = f.dependencies;
+    await rejectsHeld(createWorkersFixedWorkosLoginPort({ ...dependencies, ...override }));
+    assert.equal(f.borrows.length, 0);
+  });
+test("Workers constructor retains the existing84 closed configuration parser", async () => {
+  const f = fixture({
+    configurationJson: JSON.stringify({ ...configuration, redirect: "manual" }),
+  });
+  const { fetch: unused, ...dependencies } = f.dependencies;
+  await rejectsHeld(createWorkersFixedWorkosLoginPort(dependencies));
+  assert.equal(f.borrows.length, 0);
 });

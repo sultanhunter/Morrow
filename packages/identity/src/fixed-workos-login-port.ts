@@ -10,7 +10,7 @@ import {
 } from "./standalone-login-protocol.js";
 import { parseWorkosSessionStatusJson } from "./workos-session-status-json.js";
 
-// Private composition dependency. Neither constructor is a package entrypoint.
+// These constructors are private composition dependencies, not package entrypoints.
 export interface SessionCredentialBroker {
   borrow(selectorJson: string, control: Readonly<LoginControl>): Promise<unknown>;
 }
@@ -362,6 +362,7 @@ async function create(
   dependencies: Dependencies,
   fetcher: typeof fetch,
   guard: () => void,
+  redirect: "error" | "manual",
 ): Promise<Readonly<FixedWorkosLoginPort>> {
   try {
     guard();
@@ -421,7 +422,7 @@ async function create(
         ...(credential === undefined ? {} : { authorization: "Bearer " + credential }),
       },
       ...(body === undefined ? {} : { body }),
-      redirect: "error",
+      redirect,
       credentials: "omit",
       cache: "no-store",
       referrer: "",
@@ -575,7 +576,7 @@ export async function createFixedWorkosLoginPort(
     ownData(dependencies, ["configurationJson", "sessionCredentialBroker", "now"]);
     nativeEnvironment();
     const fetcher = globalThis.fetch.bind(globalThis);
-    return await create(dependencies, fetcher, nativeEnvironment);
+    return await create(dependencies, fetcher, nativeEnvironment, "error");
   } catch {
     throw held();
   }
@@ -585,7 +586,18 @@ export async function createSyntheticFixedWorkosLoginPort(
 ): Promise<Readonly<FixedWorkosLoginPort>> {
   try {
     ownData(dependencies, ["configurationJson", "sessionCredentialBroker", "now", "fetch"]);
-    return await create(dependencies, dependencies.fetch, () => {});
+    return await create(dependencies, dependencies.fetch, () => {}, "error");
+  } catch {
+    throw held();
+  }
+}
+export async function createWorkersFixedWorkosLoginPort(
+  dependencies: Dependencies,
+): Promise<Readonly<FixedWorkosLoginPort>> {
+  try {
+    ownData(dependencies, ["configurationJson", "sessionCredentialBroker", "now"]);
+    const fetcher = globalThis.fetch.bind(globalThis);
+    return await create(dependencies, fetcher, () => {}, "manual");
   } catch {
     throw held();
   }

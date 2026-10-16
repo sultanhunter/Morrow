@@ -1,0 +1,702 @@
+{
+  "task": "P05.T01s",
+  "current_plan_sequence": 87,
+  "status": "held",
+  "failure": "PLATFORM_LAB_HELD:exchange_native_success:expected_outcome",
+  "qualification": "local_pinned_captured_Workers_Fetch_fully_intercepted_independent_HTTP_PKCE_RSA_unchanged84_owning76_77_M_synthetic_SQL",
+  "observedAt": "2026-10-16T12:01:34.752Z",
+  "runtime": {
+    "node": "v24.13.0",
+    "miniflare": "4.20260730.0",
+    "workerd": "1.20260730.1",
+    "compatibilityDate": "2026-07-30",
+    "compatibilityFlags": [
+      "nodejs_compat"
+    ]
+  },
+  "cases": 91,
+  "completedCases": 4,
+  "checks": [
+    {
+      "name": "no_runtime_schema_compilation",
+      "passed": true
+    },
+    {
+      "name": "only_existing_crypto_external",
+      "passed": true
+    },
+    {
+      "name": "dispatch_characterize_2",
+      "passed": true
+    },
+    {
+      "name": "unsupported_error_oracle_valid",
+      "passed": true
+    },
+    {
+      "name": "unsupported_error_rejected_before_interception",
+      "passed": true
+    },
+    {
+      "name": "dispatch_characterize_5",
+      "passed": true
+    },
+    {
+      "name": "manual200_oracle_valid",
+      "passed": true
+    },
+    {
+      "name": "manual200_real_final_url",
+      "passed": true
+    },
+    {
+      "name": "manual200_one_intercept",
+      "passed": true
+    },
+    {
+      "name": "manual200_actual_status_and_json",
+      "passed": true
+    },
+    {
+      "name": "dispatch_characterize_10",
+      "passed": true
+    },
+    {
+      "name": "manual302_oracle_valid",
+      "passed": true
+    },
+    {
+      "name": "manual302_real_final_url",
+      "passed": true
+    },
+    {
+      "name": "manual302_one_intercept",
+      "passed": true
+    },
+    {
+      "name": "manual302_actual_status_and_json",
+      "passed": true
+    },
+    {
+      "name": "dispatch_characterize_15",
+      "passed": true
+    },
+    {
+      "name": "actual_gzip_oracle_valid",
+      "passed": true
+    },
+    {
+      "name": "actual_gzip_real_final_url",
+      "passed": true
+    },
+    {
+      "name": "actual_gzip_one_intercept",
+      "passed": true
+    },
+    {
+      "name": "actual_gzip_actual_status_and_json",
+      "passed": true
+    },
+    {
+      "name": "actual_gzip_decompressed_json_bytes",
+      "passed": true
+    },
+    {
+      "name": "actual_gzip_length_header_observed",
+      "passed": true
+    },
+    {
+      "name": "dispatch_initialize_22",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:inert_construction_no_intercept",
+      "passed": true
+    },
+    {
+      "name": "dispatch_run_24",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:frozen_three_method_port",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:constructor_zero_borrow",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:expected_outcome",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:independent_HTTP_oracle_valid",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:exact_intercept_count",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:no_retry_or_follow",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:management_marker_isolation",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:no_native_provider_or_internet",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:host_service_timers_finished",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:public_no_credential_borrow",
+      "passed": true
+    },
+    {
+      "name": "inert_constructor:credential_handle_closed_or_not_acquired",
+      "passed": true
+    },
+    {
+      "name": "dispatch_initialize_36",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:inert_construction_no_intercept",
+      "passed": true
+    },
+    {
+      "name": "dispatch_run_38",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:fixed_constructor_error",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:constructor_zero_borrow",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:fixed_held_error",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:expected_outcome",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:independent_HTTP_oracle_valid",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:exact_intercept_count",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:no_retry_or_follow",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:management_marker_isolation",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:no_native_provider_or_internet",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:host_service_timers_finished",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:public_no_credential_borrow",
+      "passed": true
+    },
+    {
+      "name": "extra_fetch:credential_handle_closed_or_not_acquired",
+      "passed": true
+    },
+    {
+      "name": "dispatch_initialize_51",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:inert_construction_no_intercept",
+      "passed": true
+    },
+    {
+      "name": "dispatch_run_53",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:fixed_constructor_error",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:constructor_zero_borrow",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:fixed_held_error",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:expected_outcome",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:independent_HTTP_oracle_valid",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:exact_intercept_count",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:no_retry_or_follow",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:management_marker_isolation",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:no_native_provider_or_internet",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:host_service_timers_finished",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:public_no_credential_borrow",
+      "passed": true
+    },
+    {
+      "name": "extra_redirect:credential_handle_closed_or_not_acquired",
+      "passed": true
+    },
+    {
+      "name": "dispatch_initialize_66",
+      "passed": true
+    },
+    {
+      "name": "extra_url:inert_construction_no_intercept",
+      "passed": true
+    },
+    {
+      "name": "dispatch_run_68",
+      "passed": true
+    },
+    {
+      "name": "extra_url:fixed_constructor_error",
+      "passed": true
+    },
+    {
+      "name": "extra_url:constructor_zero_borrow",
+      "passed": true
+    },
+    {
+      "name": "extra_url:fixed_held_error",
+      "passed": true
+    },
+    {
+      "name": "extra_url:expected_outcome",
+      "passed": true
+    },
+    {
+      "name": "extra_url:independent_HTTP_oracle_valid",
+      "passed": true
+    },
+    {
+      "name": "extra_url:exact_intercept_count",
+      "passed": true
+    },
+    {
+      "name": "extra_url:no_retry_or_follow",
+      "passed": true
+    },
+    {
+      "name": "extra_url:management_marker_isolation",
+      "passed": true
+    },
+    {
+      "name": "extra_url:no_native_provider_or_internet",
+      "passed": true
+    },
+    {
+      "name": "extra_url:host_service_timers_finished",
+      "passed": true
+    },
+    {
+      "name": "extra_url:public_no_credential_borrow",
+      "passed": true
+    },
+    {
+      "name": "extra_url:credential_handle_closed_or_not_acquired",
+      "passed": true
+    },
+    {
+      "name": "dispatch_initialize_81",
+      "passed": true
+    },
+    {
+      "name": "exchange_native_success:inert_construction_no_intercept",
+      "passed": true
+    },
+    {
+      "name": "dispatch_run_83",
+      "passed": true
+    },
+    {
+      "name": "exchange_native_success:frozen_three_method_port",
+      "passed": true
+    },
+    {
+      "name": "exchange_native_success:constructor_zero_borrow",
+      "passed": true
+    },
+    {
+      "name": "exchange_native_success:fixed_held_error",
+      "passed": true
+    },
+    {
+      "name": "exchange_native_success:expected_outcome",
+      "passed": false
+    },
+    {
+      "name": "source_unchanged:.github/workflows/ci.yml",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:docs/packets/P05.T01r.md",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:docs/packets/P05.T01s.md",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:docs/plan/build-plan.md",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:docs/plan/source.json",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:package-lock.json",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:package.json",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:packages/identity/src/fixed-workos-login-port.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:packages/identity/src/login-flow-custody.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:packages/identity/src/login-preauth-control.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:packages/identity/src/standalone-login-protocol.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:packages/identity/src/standalone-login.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:packages/identity/src/workos-authentication-evidence.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:packages/identity/src/workos-browser-session-admission.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:packages/identity/src/workos-session-status-json.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:packages/identity/src/workos-session-status.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:packages/identity/src/workos-session-token.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:packages/identity/src/workos-workspace-selection.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:scripts/fixed-workos-platform-workers-lab.mjs",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:scripts/fixtures/fixed-workos-platform-provider.mjs",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:scripts/fixtures/fixed-workos-platform-worker.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:scripts/fixtures/fixed-workos-provider.mjs",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:scripts/fixtures/standalone-login-fixture.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:tests/fixed-workos-platform-provider.test.mjs",
+      "passed": true
+    }
+  ],
+  "nativeResponseObservations": [
+    {
+      "name": "unsupported_error",
+      "rejected": true,
+      "interceptedRequests": 0
+    },
+    {
+      "name": "manual200",
+      "rejected": false,
+      "expectedUrl": true,
+      "redirected": false,
+      "status": 200,
+      "jsonMedia": true,
+      "gzip": false,
+      "lengthPresent": false,
+      "decodedBytes": 473,
+      "jsonBody": true,
+      "interceptedRequests": 1
+    },
+    {
+      "name": "manual302",
+      "rejected": false,
+      "expectedUrl": true,
+      "redirected": false,
+      "status": 302,
+      "jsonMedia": true,
+      "gzip": false,
+      "lengthPresent": false,
+      "decodedBytes": 473,
+      "jsonBody": true,
+      "interceptedRequests": 1
+    },
+    {
+      "name": "actual_gzip",
+      "rejected": false,
+      "expectedUrl": true,
+      "redirected": false,
+      "status": 200,
+      "jsonMedia": true,
+      "gzip": true,
+      "lengthPresent": false,
+      "decodedBytes": 473,
+      "jsonBody": true,
+      "interceptedRequests": 1
+    }
+  ],
+  "metrics": [
+    {
+      "name": "inert_constructor",
+      "expected": "pass",
+      "held": false,
+      "transport": {
+        "interceptedRequests": 0,
+        "exchange": 0,
+        "publicKeyset": 0,
+        "sessionPage": 0,
+        "oracleFailures": 0,
+        "delayedRepliesCompleted": 0,
+        "remoteStreamCancelAttempts": 0,
+        "activeResponseTimers": 0,
+        "streamCompletionAttempts": 0,
+        "actualInternetRequests": 0,
+        "actualProviderRequests": 0
+      },
+      "credentialAndSyntheticSql": {
+        "borrows": 0,
+        "releaseAttempts": 0,
+        "releaseCompletions": 0,
+        "timelyReleaseCompletions": 0,
+        "lateReleaseCompletions": 0,
+        "activeLeases": 0,
+        "sqlCalls": 0,
+        "sqlReleases": 0,
+        "admittedFamilies": 0
+      },
+      "cleanupState": "not_acquired",
+      "stages": [],
+      "platformHeaderNames": [],
+      "coverage": "captured_platform_fetch_and_trusted_broker_clock_seams"
+    },
+    {
+      "name": "extra_fetch",
+      "expected": "held",
+      "held": true,
+      "transport": {
+        "interceptedRequests": 0,
+        "exchange": 0,
+        "publicKeyset": 0,
+        "sessionPage": 0,
+        "oracleFailures": 0,
+        "delayedRepliesCompleted": 0,
+        "remoteStreamCancelAttempts": 0,
+        "activeResponseTimers": 0,
+        "streamCompletionAttempts": 0,
+        "actualInternetRequests": 0,
+        "actualProviderRequests": 0
+      },
+      "credentialAndSyntheticSql": {
+        "borrows": 0,
+        "releaseAttempts": 0,
+        "releaseCompletions": 0,
+        "timelyReleaseCompletions": 0,
+        "lateReleaseCompletions": 0,
+        "activeLeases": 0,
+        "sqlCalls": 0,
+        "sqlReleases": 0,
+        "admittedFamilies": 0
+      },
+      "cleanupState": "not_acquired",
+      "stages": [],
+      "platformHeaderNames": [],
+      "coverage": "captured_platform_fetch_and_trusted_broker_clock_seams"
+    },
+    {
+      "name": "extra_redirect",
+      "expected": "held",
+      "held": true,
+      "transport": {
+        "interceptedRequests": 0,
+        "exchange": 0,
+        "publicKeyset": 0,
+        "sessionPage": 0,
+        "oracleFailures": 0,
+        "delayedRepliesCompleted": 0,
+        "remoteStreamCancelAttempts": 0,
+        "activeResponseTimers": 0,
+        "streamCompletionAttempts": 0,
+        "actualInternetRequests": 0,
+        "actualProviderRequests": 0
+      },
+      "credentialAndSyntheticSql": {
+        "borrows": 0,
+        "releaseAttempts": 0,
+        "releaseCompletions": 0,
+        "timelyReleaseCompletions": 0,
+        "lateReleaseCompletions": 0,
+        "activeLeases": 0,
+        "sqlCalls": 0,
+        "sqlReleases": 0,
+        "admittedFamilies": 0
+      },
+      "cleanupState": "not_acquired",
+      "stages": [],
+      "platformHeaderNames": [],
+      "coverage": "captured_platform_fetch_and_trusted_broker_clock_seams"
+    },
+    {
+      "name": "extra_url",
+      "expected": "held",
+      "held": true,
+      "transport": {
+        "interceptedRequests": 0,
+        "exchange": 0,
+        "publicKeyset": 0,
+        "sessionPage": 0,
+        "oracleFailures": 0,
+        "delayedRepliesCompleted": 0,
+        "remoteStreamCancelAttempts": 0,
+        "activeResponseTimers": 0,
+        "streamCompletionAttempts": 0,
+        "actualInternetRequests": 0,
+        "actualProviderRequests": 0
+      },
+      "credentialAndSyntheticSql": {
+        "borrows": 0,
+        "releaseAttempts": 0,
+        "releaseCompletions": 0,
+        "timelyReleaseCompletions": 0,
+        "lateReleaseCompletions": 0,
+        "activeLeases": 0,
+        "sqlCalls": 0,
+        "sqlReleases": 0,
+        "admittedFamilies": 0
+      },
+      "cleanupState": "not_acquired",
+      "stages": [],
+      "platformHeaderNames": [],
+      "coverage": "captured_platform_fetch_and_trusted_broker_clock_seams"
+    }
+  ],
+  "interceptedPlatformRequests": 3,
+  "actualInternetRequests": 0,
+  "actualProviderRequests": 0,
+  "cleanup": {
+    "workerRuntimeDisposalAcknowledged": true,
+    "databaseResourcesCreated": false,
+    "credentialProvisioning": false,
+    "localReaderCancellationAcknowledgementsDirectlyInstrumented": false,
+    "remoteStreamCancellationIsSeparateObservation": true,
+    "unverifiedCredentialCases": 0
+  },
+  "source_digests": {
+    ".github/workflows/ci.yml": "86d45b05f82964d0e7502ac889b8a0dcf91089c0a5e2214e565ce0d71187ffaa",
+    "docs/packets/P05.T01r.md": "cc3ef16a1c019aa42650533bed96001693d1da4fe6a2675a84fe488f7a337544",
+    "docs/packets/P05.T01s.md": "f1c523af6b3485b0de72e678947625688ec47edb95b2fce51a0949cdb526ae07",
+    "docs/plan/build-plan.md": "ea80aecc40cfc4a39f6fa2db08a89cacaf06b5147cdf7483e5b86d9470db6b94",
+    "docs/plan/source.json": "1da47e2809ee3681632b04c8d4d27b312b8b1313000ca802333b657c5b8d5cd7",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "package.json": "63129942b3c6c1b6418be79f43bd6117a5e6c2ce4f21821807ce2d0fff06c21e",
+    "packages/identity/src/fixed-workos-login-port.ts": "415c00a69f74626ca2962357c7754c4f9d1a7837f034f7e74c82b5f59576e14f",
+    "packages/identity/src/login-flow-custody.ts": "5ab4256c9269886b83578669ec15ee263a51ed72b0eb04892fecc600aa56d503",
+    "packages/identity/src/login-preauth-control.ts": "372b5720cde644e9acf8458baa378fb1cf9bd879e6a4a2742dec30aada1c397f",
+    "packages/identity/src/standalone-login-protocol.ts": "0420c72e73f93a1f5f625a640f5cd1d9207931cf41e8a23ff96c6f26dc5cf01b",
+    "packages/identity/src/standalone-login.ts": "12a5b7e9eeff006998d46f4119d87f86eb1d37b15ad271e16aae404bf370a6df",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-browser-session-admission.ts": "6b9f443c3bfd4c5d661615c9f4f311c4a4d3034f2259896b951aa3afa8f587ca",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+    "scripts/fixed-workos-platform-workers-lab.mjs": "1c9c76e61d44faf6661413bc648247eb4083b35e01048fc0a0eb2e63a096751b",
+    "scripts/fixtures/fixed-workos-platform-provider.mjs": "821d874777f2bec89d62dfb32739d7f858ac2632595f753dc699c4c733a60b15",
+    "scripts/fixtures/fixed-workos-platform-worker.ts": "e1a0c33b6e09ef7868cd5cf3e904ee4e5915d46dfbc6e49e29272103a1581d45",
+    "scripts/fixtures/fixed-workos-provider.mjs": "f374a8e04578565f5ae3afe8873183344f7111356c4a6b6c9229ccc92fc01b26",
+    "scripts/fixtures/standalone-login-fixture.ts": "5084b09062b4842378fd70114cfd6f78aa8cfca883aafd587cac0355b8853a82",
+    "tests/fixed-workos-platform-provider.test.mjs": "5b8a1bc63fc104ff05a7046fc9dfea6120b7f6bb68ce0d7d1e3c43bd3ae515aa"
+  },
+  "source_inventory_digest": "3156285d0cc8880c0265e1fcd0b35a6dfdd16713fd7865120e08ab4449699020",
+  "retainedSyntheticOnlyCoverage": [
+    "foreign_or_empty_Response_url",
+    "forced_redirected_true",
+    "non_Response_Fetch_result",
+    "nonbyte_reader_chunk",
+    "rejected_or_stalled_local_reader_cancel"
+  ],
+  "limitations": [
+    "The actual platform Fetch runs locally through Miniflare's fully intercepted HTTP service; WorkOS DNS/TLS/account access, hosted secrets and Internet HTTP remain unqualified.",
+    "Response URL and redirected observations come from inside the Worker, never the Node callback Response. The Node callback Request.redirect/signal is not used to attest the original options/control.",
+    "The bridge supplies the actual single gzip encoding pass and may remove Content-Length. Invalid declared-length refusal is not attributed to a parser unless directly observed.",
+    "Native RSA and unchanged owning crypto/controller/session code execute, but the four SQL-role replies are synthetic and prove no Workers-to-Neon or backend cleanup.",
+    "Remote fixture stream cancellation differs from the Worker's reader.cancel acknowledgement. No unobservable local acknowledgement, remote no-effect, secure erasure or late release completion is inferred.",
+    "Two intentional rejected/stalled synthetic credential releases remain unverified. No merchant entry, deployed application, browser-engine cookie enforcement or consumed82 allowance is activated."
+  ]
+}

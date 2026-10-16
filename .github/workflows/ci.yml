@@ -77,6 +77,9 @@ jobs:
       - name: Exercise fixed WorkOS wire adapter with synthetic providers in Workers
         id: workers_fixed_provider
         run: npm run lab:fixed-workos-login-workers
+      - name: Exercise captured fixed WorkOS Fetch through the local Workers platform
+        id: workers_platform_provider
+        run: npm run lab:fixed-workos-platform-workers
       - name: Exercise preserved75 session observation with synthetic providers only
         id: frozen75
         run: npm run lab:workos-session-status-frozen75
