@@ -1,0 +1,54 @@
+{
+  "owning_tool_chunk": "23bdd3",
+  "completion_chunk": "ccf6c2",
+  "actual_exit_code": 0,
+  "report_sha256": "7ca5845a3631d2c1e5cb56a33f3759aed46916817d4dc6a77ee2e597e4a4127d",
+  "log_sha256": "b87526352a773b46dddf747a9de2ebbeddfdedff89c7ccf66c0ae47474bf5e43",
+  "status": "passed",
+  "cases": 81,
+  "checks": 960,
+  "intercepts": 101,
+  "localCoordinationCalls": 7,
+  "actualInternetRequests": 0,
+  "actualProviderRequests": 0,
+  "cleanup": {
+    "workerRuntimeDisposalAcknowledged": true,
+    "pendingTimers": 0,
+    "serverEndpoints": 79,
+    "serverClosed": 79,
+    "pairClientClosed": 79,
+    "forcedFixtureCloses": 3,
+    "forcedClientAcceptAttempts": 3,
+    "forcedClientAcceptSuccesses": 2,
+    "forcedClientAcceptRejections": 1,
+    "forcedClientCloseAttempts": 3,
+    "forcedClientCloseRejections": 1
+  },
+  "deliberatelyUnacknowledgedCredentialLeases": [
+    {
+      "case": "sdk_release_reject",
+      "attempts": 1,
+      "acknowledgements": 0,
+      "active": 1
+    },
+    {
+      "case": "sdk_release_pending",
+      "attempts": 1,
+      "acknowledgements": 0,
+      "active": 1
+    }
+  ],
+  "observationHorizonUsedCases": [
+    "sdk_non101_200_same_host",
+    "sdk_non101_301_same_host",
+    "sdk_non101_301_foreign",
+    "sdk_non101_302_same_host",
+    "sdk_non101_302_foreign",
+    "sdk_non101_303_same_host",
+    "sdk_non101_303_foreign",
+    "sdk_non101_307_same_host",
+    "sdk_non101_307_foreign",
+    "sdk_non101_308_same_host",
+    "sdk_non101_308_foreign"
+  ]
+}

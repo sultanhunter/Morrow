@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "reviewer": "fixed_provider_core",
+  "kind": "independent_actual_native_matrix_source_control_cleanup_review",
+  "report_path": "work/morrow-p01/sdk-88-matrix-recheck2-execution/workers-lab.json",
+  "report_sha256": "7ca5845a3631d2c1e5cb56a33f3759aed46916817d4dc6a77ee2e597e4a4127d",
+  "source_digests": {
+    "docs/packets/P05.T01t.md": "8d4f348ec3ebeac4756944e9e0d2e720b25f4de596945b8e21c7d4f147c1ea7e",
+    "docs/plan/build-plan.md": "434489742e46422e8bf03d06251091a27ae7403e06f4d8551ce37f255c3067b1",
+    "docs/plan/source.json": "aecff6b3ff90d8452ec9a918f0b6d5560ff79f72403161de82c23c892c9e37bd",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/identity/src/controlled-neon-login-pool.ts": "c0a6b091c2fb2f9dbc7c8be7b557b11687d201586ba381297aa28e413608a02a",
+    "packages/identity/src/controlled-neon-login-profiles.ts": "16645b5091135424192dc40cf548d3c5fee74b7a88527f23685dc550bdbcdeee",
+    "packages/identity/src/controlled-neon-transport.ts": "b87761b89fbbd72ae80088412e18dabd1ff1706e547583d9064d520dcfa3c43e",
+    "packages/identity/src/login-flow-custody.ts": "5ab4256c9269886b83578669ec15ee263a51ed72b0eb04892fecc600aa56d503",
+    "packages/identity/src/workos-browser-session-admission.ts": "6b9f443c3bfd4c5d661615c9f4f311c4a4d3034f2259896b951aa3afa8f587ca",
+    "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+    "scripts/controlled-neon-workers-lab.mjs": "a908195293b731986be62c55fbaa3a047de668880ee2524bde7affd6fbb420fa",
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+    "scripts/fixtures/controlled-neon-worker.ts": "526184d08ab43ec8d0b1f790f5ed69936e3a8f9c56ad1328e2494ab0316c1aa4",
+    "tests/controlled-neon-pg-wire-oracle.test.mjs": "e49b215518a82a844c9437aab4c567510122561174a4af405a381d13748560b0"
+  },
+  "runtime_dependency_digests": {
+    "node_modules/@neondatabase/serverless/package.json": "918affae421d21e41b19dcc0fa10fdfa5e5df196eb556265263926a8c2999e5a",
+    "node_modules/@neondatabase/serverless/index.mjs": "50f98b3540f02327ebe4d5423509fe15b820af87c512cee1b2b7322a8ef77699",
+    "node_modules/miniflare/package.json": "f0025bdc4b9b70199ea393572c23ca35ea58efa3d81b270f19f5e8c8d27771f4",
+    "node_modules/workerd/package.json": "5edae90469333c86e194a75358e80dbe5b1d3c259860794850e53ce8f240f762"
+  },
+  "execution_provenance": {
+    "owning_tool_chunk": "23bdd3",
+    "completion_chunk": "ccf6c2",
+    "actual_exit_code": 0,
+    "report_sha256": "7ca5845a3631d2c1e5cb56a33f3759aed46916817d4dc6a77ee2e597e4a4127d",
+    "log_sha256": "b87526352a773b46dddf747a9de2ebbeddfdedff89c7ccf66c0ae47474bf5e43",
+    "status": "passed",
+    "cases": 81,
+    "checks": 960,
+    "intercepts": 101,
+    "localCoordinationCalls": 7,
+    "actualInternetRequests": 0,
+    "actualProviderRequests": 0,
+    "cleanup": {
+      "workerRuntimeDisposalAcknowledged": true,
+      "pendingTimers": 0,
+      "serverEndpoints": 79,
+      "serverClosed": 79,
+      "pairClientClosed": 79,
+      "forcedFixtureCloses": 3,
+      "forcedClientAcceptAttempts": 3,
+      "forcedClientAcceptSuccesses": 2,
+      "forcedClientAcceptRejections": 1,
+      "forcedClientCloseAttempts": 3,
+      "forcedClientCloseRejections": 1
+    },
+    "deliberatelyUnacknowledgedCredentialLeases": [
+      {
+        "case": "sdk_release_reject",
+        "attempts": 1,
+        "acknowledgements": 0,
+        "active": 1
+      },
+      {
+        "case": "sdk_release_pending",
+        "attempts": 1,
+        "acknowledgements": 0,
+        "active": 1
+      }
+    ],
+    "observationHorizonUsedCases": [
+      "sdk_non101_200_same_host",
+      "sdk_non101_301_same_host",
+      "sdk_non101_301_foreign",
+      "sdk_non101_302_same_host",
+      "sdk_non101_302_foreign",
+      "sdk_non101_303_same_host",
+      "sdk_non101_303_foreign",
+      "sdk_non101_307_same_host",
+      "sdk_non101_307_foreign",
+      "sdk_non101_308_same_host",
+      "sdk_non101_308_foreign"
+    ]
+  },
+  "execution_log_sha256": "b87526352a773b46dddf747a9de2ebbeddfdedff89c7ccf66c0ae47474bf5e43",
+  "domain_predicates_sha256": "8d9fec2a812087639f271b47ced79ea4aecfb91aa7d6bd4a6e04f3126b22e83d",
+  "summary": {
+    "cases": 81,
+    "checks": 960,
+    "native_websocket_intercepts": 101,
+    "local_coordination_calls": 7,
+    "owned_pair_endpoints": 79,
+    "intentional_unknown_credential_cases": [
+      "sdk_release_pending",
+      "sdk_release_reject"
+    ],
+    "observer_negative_cases": [
+      "sdk_observer_empty",
+      "sdk_observer_hidden_self",
+      "sdk_observer_millisecond_timestamp",
+      "sdk_observer_null_field",
+      "sdk_observer_primary_present",
+      "sdk_observer_wrong_app",
+      "sdk_observer_wrong_database",
+      "sdk_observer_wrong_pid",
+      "sdk_observer_wrong_role"
+    ],
+    "accepted_pending_query_negative_cases": [
+      "sdk_pending_concurrent_query",
+      "sdk_pending_parent_abort",
+      "sdk_pending_query_abort",
+      "sdk_pending_query_deadline",
+      "sdk_pending_release"
+    ],
+    "held_disposal_observation_cases": [
+      "sdk_non101_200_same_host",
+      "sdk_non101_301_same_host",
+      "sdk_non101_301_foreign",
+      "sdk_non101_302_same_host",
+      "sdk_non101_302_foreign",
+      "sdk_non101_303_same_host",
+      "sdk_non101_303_foreign",
+      "sdk_non101_307_same_host",
+      "sdk_non101_307_foreign",
+      "sdk_non101_308_same_host",
+      "sdk_non101_308_foreign"
+    ],
+    "fixture_pair_disposals": 3,
+    "actual_internet_requests": 0,
+    "actual_provider_requests": 0,
+    "runtime_disposal_acknowledged": true,
+    "real_SQL_or_backend_absence_qualified": false,
+    "application_request_lifetime_wiring_qualified": false
+  },
+  "blocking_findings": [],
+  "result": "clear_for_measured_native_local_engineering_scope_only",
+  "authorship_and_limits": [
+    "Reviewer authored the private pool implementation and focused units. This review independently reads other-authored oracle/harness/evidence; it does not claim independent source approval of that own implementation, which has separate root review.",
+    "All81 cases/960 unique true checks,15 source commitments, installed runtime module hashes and actual exit0/rawlog bind this precise saved pre-marker-repair snapshot. New same-byte marker representation has a separate source review and must receive a fresh source-binding run before current-source publication.",
+    "101 native WebSocket interceptions and7 closed local CONTROL calls are distinct from0 Internet/provider requests;79 host pair endpoints each acknowledged closed. Three explicit fixture orphan/withheld-close disposals are not native cancellation proof.",
+    "Twelve positive SDK scenarios, nine observer negatives and five independently accepted pending-query faults retain their actual measured outcomes. Exactly two deliberately rejected/pending credential disposals remain1attempt/0ack/1active; no cleanup step converts them into normal release.",
+    "Eleven non101 rows retain immediate and next-task pending metrics, then one fixed1050ms disposal-only observation and final zero waits. Physical socket close and custody ack do not prove Client.end resolved or normal release succeeded.",
+    "Connect failure may return before detached cleanup settles. The fixture intentionally keeps the request alive through existing C observation; T does not qualify application waitUntil/request-lifetime ownership. Future native entry binding must own that cleanup lifetime.",
+    "Synthetic PG wire and catalog are not real SQL, SCRAM, transaction commit or backend-absence authority. Real PostgreSQL/full-owning-chain qualification remains separate and pending.",
+    "No hosted Neon DNS/TLS/proxy/account/role/migration, native Node production WSS, hosted WorkOS/browser/Shopify/merchant/deployment qualification."
+  ],
+  "reviewer_execution": {
+    "runtime_or_database": 0,
+    "provider_network": 0,
+    "source_or_git_mutations": 0,
+    "read_only_predicate_exit_code": 0,
+    "owning_predicate_chunk": "7c16e3"
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "task": "P05.T01t",
+  "kind": "initial_private_core_local_CPU_candidate_not_integrated_qualification",
+  "author": "/root/fixed_provider_core",
+  "observedAt": "2026-10-16T13:20:56.013847+00:00",
+  "source_digests": {
+    "packages/identity/src/controlled-neon-login-pool.ts": "a20a600e890bd467ce776f5923eada3987b4c0b75417ef37b9aaed4dbe2c281d",
+    "packages/identity/src/controlled-neon-login-profiles.ts": "16645b5091135424192dc40cf548d3c5fee74b7a88527f23685dc550bdbcdeee",
+    "packages/identity/src/controlled-neon-transport.ts": "b87761b89fbbd72ae80088412e18dabd1ff1706e547583d9064d520dcfa3c43e",
+    "tests/controlled-neon-login-pool.test.mjs": "91735cacbb86dccb62d28cad2d138e6b6eb97e5243112c28b0ee87e2bf2547ef"
+  },
+  "authority": {
+    "current_page_successful_full_read_sequence": 88,
+    "current_page_blocks": 512,
+    "current_page_read_guidance": "initial editing-sized read returned no content; full read succeeded; no Page/source snapshot rewrite",
+    "packet_sha256": "8d4f348ec3ebeac4756944e9e0d2e720b25f4de596945b8e21c7d4f147c1ea7e",
+    "plan_sha256": "434489742e46422e8bf03d06251091a27ae7403e06f4d8551ce37f255c3067b1",
+    "source_manifest_sha256": "aecff6b3ff90d8452ec9a918f0b6d5560ff79f72403161de82c23c892c9e37bd"
+  },
+  "checks": {
+    "focused_CPU_units": {
+      "count": 50,
+      "passed": 50,
+      "failed": 0,
+      "actual_exit_code": 0,
+      "owning_tool_chunk": "4514e7",
+      "log": "morrow88-controlled-neon-current-units.log"
+    },
+    "identity_noEmit_typecheck": {
+      "actual_exit_code": 0,
+      "owning_tool_chunk": "2955d8",
+      "log": "morrow88-controlled-neon-current-types.log"
+    }
+  },
+  "preserved_earlier_failures": [
+    {
+      "tool_chunk": "e8cdc1",
+      "actual_exit_code": 2,
+      "kind": "TypeScript array descriptor typing",
+      "repair": "cast own property descriptor map to Record<string,PropertyDescriptor>; no change to own-data checks"
+    },
+    {
+      "tool_chunks": [
+        "1e9e85",
+        "fbaa62",
+        "a7ec0f"
+      ],
+      "actual_exit_code": 1,
+      "kind": "wrong working-directory harness command did not locate local tsx/tsc/tests",
+      "repair": "explicit SOURCE workdir for following commands"
+    },
+    {
+      "tool_chunk": "c91132",
+      "actual_exit_code": 1,
+      "tests": 50,
+      "passed": 10,
+      "failed": 40,
+      "kind": "assertion harness anchored regex matched Error.toString instead of error.message",
+      "repair": "use exact Error.message predicate; no production predicate weakened",
+      "log": "morrow88-controlled-neon-focused-units.log"
+    }
+  ],
+  "logs": {
+    "morrow88-controlled-neon-first-units.log": {
+      "sha256": "77e138ad608eee3ce863d401ff72670cb8b51d79cb2dddf3f10957089d62c308",
+      "preserved_path": "work/morrow-p01/core88-initial/morrow88-controlled-neon-first-units.log"
+    },
+    "morrow88-controlled-neon-focused-units.log": {
+      "sha256": "e75f4b74c92fcd068edafa6ad529ef28b081cc80fd3653334ddf96f24d42e4cd",
+      "preserved_path": "work/morrow-p01/core88-initial/morrow88-controlled-neon-focused-units.log"
+    },
+    "morrow88-controlled-neon-focused-recheck.log": {
+      "sha256": "9e85a22577f900fa3981458907259f37d81fdb0c31065a12fbe49316b4f8460f",
+      "preserved_path": "work/morrow-p01/core88-initial/morrow88-controlled-neon-focused-recheck.log"
+    },
+    "morrow88-controlled-neon-current-units.log": {
+      "sha256": "cfe2b44f8f347ab9d82bb4f4d98bbb2afa6bec08648921140b05ce9386678b6c",
+      "preserved_path": "work/morrow-p01/core88-initial/morrow88-controlled-neon-current-units.log"
+    },
+    "morrow88-controlled-neon-current-types.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "preserved_path": "work/morrow-p01/core88-initial/morrow88-controlled-neon-current-types.log"
+    }
+  },
+  "api": {
+    "native": "createWorkersControlledNeonLoginPools({bindingJson,credentialBroker,now})",
+    "synthetic_node": "createSyntheticNodeControlledNeonLoginPools({bindingJson,credentialBroker,now,loopbackWsUrl})",
+    "metrics": "snapshotControlledNeonLoginPoolMetrics(pools), private aggregate only no callback or raw tuple",
+    "pools": [
+      "loginPool",
+      "preauthPool",
+      "selectionPool",
+      "sessionPool"
+    ]
+  },
+  "self_review": [
+    "Source literal roles and owner SQL/arity maps; custody maintain excluded, internal metadata unreachable through owner query",
+    "Bounded one-query state; persistent original/lease abort listeners and absolute deadline timer close retained idle clients",
+    "No injected native ctor/driver/Fetch, endpoint override or global/SDK mutation; separate fixed Node test path",
+    "Attribution and observer self row require private canonical six-microsecond tuple; no JS Date conversion or production cancellation SQL",
+    "Normal originalD distinct from latched cleanupC; early/late known resources enter once-only disposal, unknowns never restore operation success",
+    "Metrics distinguish generic ack, cleanup ack withinC and late ack outsideC; actual endpoint closure is not fabricated for absent/throwing transports"
+  ],
+  "limits": [
+    "Self-review and pure CPU validation only; independent source review and actual realSDK/native101/wire/PG/fullowner measurements are pending",
+    "No Docker, provider/hosted/account/key/merchant/network operations by author; helper direct synthetic constructor tests do not qualify actual captured platform transport",
+    "Only the four listed owned new private source/test files were edited; no existing domain/SQL/lock/public-export or historical output edits"
+  ]
+}

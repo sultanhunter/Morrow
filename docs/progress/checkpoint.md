@@ -1,3 +1,21 @@
+# Current continuation: controlled Neon prepared for isolated integration
+
+Canonical88 remains fresh at512blocks. The private four-role controlled Neon mechanism, captured Workers WebSocket transport, independent PG-wire oracle and separate realPG fixture are source-reviewed. Local fullCI passes2,138tests/zero failures and11scaffold guards; all580historical reports and the complete prior source inventory were restored byte/mode exact. The first local pipeline hold was the unchanged secret-pattern guard matching three known synthetic marker literals; exact same-byte fixture construction fixes it without weakening the guard or changing production modules. Original native holds and both source-bound successful runs remain preserved.
+
+Current actual native SDK matrix passes81cases/960checks with101fixedWSintercepts plus7separate local coordination calls, zeroInternet/provider requests,79closed endpoint pairs and acknowledged runtime disposal. Two deliberate credential-release failures stay unknown; three explicit fixture endpoint disposals are separate from normal release. Held-only disposal observation keeps this test request alive; production application waitUntil/lifetime wiring is unqualified.
+
+Next prepare a pending candidate on existing draftPR1 for actual isolated Linux PostgreSQL17 topology/SCRAM/four-role/full84 owning-chain measurement and all53CIsteps, then inspect the actual artifact/domain/cleanup, form evidence-only finalB and qualify its exact-head CI before guarded Desktop alignment. No realPG result is inferred from protocol simulation. Desktop and Publisher remain at published87 until the controlled pending copy; Desktop stays87 until final qualification. ParentP05.T01/P05.T03 remain In progress. No current user input is needed; no hosted Neon/WorkOS/account/Shopify/merchant/deployment action is included.
+
+# Historical88 initial preparation checkpoint
+
+# Current continuation: controlled Neon mechanism begins after qualified87
+
+Published87 dbb0f5bedd86574e77aab6b19318d1556bc41c9e passed final exactCI38902047319/attempt1 all51steps, 2,065tests/zero failures and11scaffold guards. The downloaded55payload/51report artifact539c2d4de01a4a927e6fcf7f0083ce3f1965564dbb5530321d5558c52db936a5 passed strict exact-source/restoration and independent all51domain review. Native Workers91cases/1,511checks/87fullyintercepted requests and HTTPS152checks/41requests/106SQL physical closures remain measured; deliberate unknown cleanup is preserved. All1592Source/Publisher/Desktop files aligned clean, inventorye92b5bb19f2eb475ff999e8626736b2353ad38e2e3d009be764d46f7ce50bdd7. Original failures/receipts and every580evidence record are preserved in before88.
+
+Canonical88 is saved/read back at512blocks, preserving all503priorblocks and adding nine T paragraphs. The synchronized plan and P05.T01t packet are active. Build one shared private mechanism with four fixed login profiles; qualify native101 first, actualSDK/independentPGwire, then realPG17/unchanged84owningchain through a new fixture-only isolated loopbackTCP topology. Old network-none regressions remain exact. Controls, lease/poisoning and same-role observer self-visibility/freshabsence are required; no production cancellation or post-authority observer work. Hosted Neon/WorkOS/account/merchant activation remain unqualified. No current user input is needed. Desktop/Publisher stay at published87 while T source work proceeds.
+
+# Historical87 final publication checkpoint
+
 # Current continuation: captured Workers Fetch passed isolated integration
 
 Canonical87 remains fresh at503blocks; the complete current Page content is identical to the synchronized snapshot. Candidate659253a9d6b7d8f5df5a632c57d42a3ce4aedb2b passed exact CI38899912138/attempt1 with all51final API steps successful, 2,065tests/zero failures and11scaffold guards. The digest-verified381,560-byte artifact234cb94252b11ba90bfadc62786474b9b5f8add504ba3938a123f68aea460f74 contains55allowlisted payloads/51fresh reports, exact1531-file source/restoration and all497historical evidence records preserved.

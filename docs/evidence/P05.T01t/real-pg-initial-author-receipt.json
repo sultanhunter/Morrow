@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "planSequence": 88,
+  "task": "P05.T01t",
+  "author": "/root/fixed_provider_https",
+  "kind": "author_initial_source_freeze_and_focused_checks_not_independent_or_integration_review",
+  "observedAt": "2026-10-16T13:30:29.307852+00:00",
+  "source_digests": {
+    "scripts/fixtures/controlled-neon-postgresql.mjs": "7fe1e5dac6b4dac87b44cb9771f8d25102000048fd6b998c956c249b6014ab7d",
+    "scripts/fixtures/controlled-neon-tcp-bridge.mjs": "c658506e896b7206e2e4f256ef43006cdc8cf6374f3d37519e0a16c86f48cd30",
+    "scripts/fixtures/controlled-neon-postgresql-worker.ts": "cad6bd2b6c101bfde304f5de9344c91918eb8cc66d823753a1b45bbbdc16c469",
+    "scripts/controlled-neon-postgresql-lab.mjs": "2e519317f9795b92a8836eb173ecb68cb31a2d999c97ead6a3b795e929dfd3ca",
+    "tests/controlled-neon-tcp-bridge.test.mjs": "4e86cf4401ab51d4068e38d044cca58f2991ac2337417bec4373108e5a24800b"
+  },
+  "authority": {
+    "pageRead": "Direct Pages connector full read sequence88/512blocks, including all nine T paragraphs; root owns synchronized plan/source.",
+    "packetSha256": "8d4f348ec3ebeac4756944e9e0d2e720b25f4de596945b8e21c7d4f147c1ea7e",
+    "planSha256": "434489742e46422e8bf03d06251091a27ae7403e06f4d8551ce37f255c3067b1",
+    "sourceManifestSha256": "aecff6b3ff90d8452ec9a918f0b6d5560ff79f72403161de82c23c892c9e37bd"
+  },
+  "checks": [
+    {
+      "command": "node --test tests/controlled-neon-tcp-bridge.test.mjs",
+      "actualExitCode": 0,
+      "owningToolChunk": "418ce8",
+      "tests": 5,
+      "passed": 5,
+      "log": "/private/tmp/morrow88-tcp-bridge-final-focused.log",
+      "logSha256": "64119bd378a9572ab3e2521dd4950b4ad677a394d7160caa4e1522ad2d90e0db",
+      "scope": "Authorized actual local loopback TCP and Miniflare WebSocketPair object unit tests; no workerd runtime or Docker."
+    },
+    {
+      "command": "node node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --resolveJsonModule --target ES2022 --module ESNext --moduleResolution Bundler scripts/fixtures/controlled-neon-postgresql-worker.ts",
+      "actualExitCode": 0,
+      "log": "/private/tmp/morrow88-real-pg-worker-freeze-typecheck.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "owningToolChunk": "287c04"
+    },
+    {
+      "command": "node --check scripts/fixtures/controlled-neon-postgresql.mjs",
+      "actualExitCode": 0,
+      "owningToolChunk": "874a14"
+    },
+    {
+      "command": "node --check scripts/controlled-neon-postgresql-lab.mjs",
+      "actualExitCode": 0,
+      "owningToolChunk": "f034e2"
+    }
+  ],
+  "preservedAttempts": [
+    {
+      "log": "/private/tmp/morrow88-tcp-bridge-focused.log",
+      "logSha256": "3bb18060f3a6cc87d848b9fd43c969cf9bdf287aba401d13ceeae01bdde0875f",
+      "actualExitCode": 1,
+      "scope": "Initial sandbox loopback listen EPERM; one endpoint-denial unit passed, two listener cases did not execute."
+    },
+    {
+      "log": "/private/tmp/morrow88-tcp-bridge-focused-loopback.log",
+      "logSha256": "57b7fc9112180f917b2eb0e368fd503810737be921af9c47645338039f416214",
+      "actualExitCode": 1,
+      "scope": "Direct CPU WebSocketPair test lacked close-handshake reply; retained original failure/interruption, then fixture peer repaired to match real coupling acknowledgment."
+    }
+  ],
+  "designFacts": [
+    "Dedicated nonce-labelled internal network and loopback-only ephemeral PG17 TCP fixture; initial reject HBA, setup-only Unix administrator, four ephemeral role SCRAM secrets; measured no-default-route and exact single endpoint.",
+    "Attempted unique resource names latched before allocation; exact owned label/name/ID reconciliation after unknown CLI result, no allocation retry; container and network cleanup independent and execution/cleanup holds separate.",
+    "Transparent bounded binary bridge with source-fixed256 connection cap and pre-TCP socket/listener validation; copied observation bytes cannot alter forwarded data or PG verdicts.",
+    "Native Worker drives core four pools, full unchanged84 login/crypto76/77/M, concurrency/replay, actual same-role visibility and privilege denials, deliberate session lease-ack failure plus real M/flow reconciliation without fresh secret.",
+    "All primary request observations precede final host-admin namespace cleanup; unknown lease release is not relabelled from teardown."
+  ],
+  "limits": [
+    "No Mac Docker, hosted/account/provider operation, new secret access, actual workerd/native101 or real PostgreSQL integration run by this author.",
+    "Runtime/topology/auth/deadline/cookie/SQL/cleanup claims remain pending isolated GitHub measurement and independent review.",
+    "Current core and independently authored oracle are dependencies, not authored or independently qualified by this receipt."
+  ]
+}

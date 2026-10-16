@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-10-16T13:45:30.480Z",
+  "scope": "Known-pattern secret guard, dependency locking (bundles bound to integrity-checked parent tarballs), migration metadata/checksum/envelope only; not complete secret assurance or PostgreSQL execution. Hosted CI evidenced separately; release protection pending.",
+  "scanned_files": 1594,
+  "dependency_records": 575,
+  "migrations": 11,
+  "negative_checks": [
+    {
+      "name": "leaked_fixture_key",
+      "passed": true
+    },
+    {
+      "name": "private_key_header",
+      "passed": true
+    },
+    {
+      "name": "broken_migration_checksum",
+      "passed": true
+    }
+  ],
+  "secret_findings": [
+    {
+      "path": "scripts/controlled-neon-workers-lab.mjs",
+      "kind": "credential_literal"
+    },
+    {
+      "path": "scripts/fixtures/controlled-neon-worker.ts",
+      "kind": "credential_literal"
+    },
+    {
+      "path": "tests/controlled-neon-login-pool.test.mjs",
+      "kind": "credential_literal"
+    }
+  ],
+  "migration_errors": []
+}

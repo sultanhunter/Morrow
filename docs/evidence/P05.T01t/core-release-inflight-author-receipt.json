@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "author": "fixed_provider_core",
+  "kind": "narrow_inflight_release_guard_author_addendum",
+  "original_author_receipt_sha256": "32fa61207532cbcb706683339d28a3cdd0a98e4041f374adc378f7d9e8671e11",
+  "source_digests": {
+    "packages/identity/src/controlled-neon-login-pool.ts": "c0a6b091c2fb2f9dbc7c8be7b557b11687d201586ba381297aa28e413608a02a"
+  },
+  "delta": "At first release(), an outstanding owner query synchronously latches held before any normal close/observer work. Existing once-only release promise remains unchanged.",
+  "verification": [
+    {
+      "command": "Node24.13 --import tsx --test tests/controlled-neon-login-pool.test.mjs",
+      "tests": 50,
+      "actualExitCode": 0,
+      "owningToolChunk": "b6d0bb",
+      "log": "units.log",
+      "logSha256": "ea026f17a242047ea6babd4dc780197483e7f00b29e4751995ceed18cb548b54"
+    },
+    {
+      "command": "Node24.13 tsc --noEmit -p packages/identity/tsconfig.json",
+      "actualExitCode": 0,
+      "owningToolChunk": "94bf5a",
+      "log": "types.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "limits": [
+    "The 50 CPU cases are existing constructor/grammar/transport tests; this addendum does not pretend they directly execute the new pending-query lifecycle branch.",
+    "Independent actual-SDK oracle regression assigned to fixed_provider_workers; no native/runtime result claimed by this author."
+  ],
+  "providerRequests": 0,
+  "sourceChanges": [
+    "packages/identity/src/controlled-neon-login-pool.ts"
+  ]
+}

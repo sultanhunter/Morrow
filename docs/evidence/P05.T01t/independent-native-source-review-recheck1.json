@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "reviewer": "fixed_provider_core",
+  "kind": "independent_source_review_native_Workers_real_SDK_and_independent_PG_wire_fixture",
+  "reviewed_source_digests": {
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+    "scripts/fixtures/controlled-neon-worker.ts": "6fbeedb322bffecf080c28f0efcc766b05abdf7eb560ab138c4adef6aa09169d",
+    "scripts/controlled-neon-workers-lab.mjs": "39b334b940bd6371271f502d12ea53821ddc1d7cae7ca5ee94f5f4b88f5a67b6",
+    "tests/controlled-neon-pg-wire-oracle.test.mjs": "e49b215518a82a844c9437aab4c567510122561174a4af405a381d13748560b0"
+  },
+  "author_snapshot": {
+    "path": "work/morrow-p01/sdk-88-matrix-recheck1/source-manifest.json",
+    "sha256": "a33a38cd70f3bd280e20ea4e7c2a617225f1c99d49fcdfbfb086a44b1be8ac62"
+  },
+  "active_packet": {
+    "path": "docs/packets/P05.T01t.md",
+    "sha256": "8d4f348ec3ebeac4756944e9e0d2e720b25f4de596945b8e21c7d4f147c1ea7e"
+  },
+  "blocking_findings": [],
+  "resolved_review_findings": [
+    "Replace preconstruction10ms late101 abort timing with closed local CONTROL handshake-admission gate. Native and SDK probes now require actual admitted request before abort; late endpoint cleanup remains separately counted.",
+    "Check aggregate host timer, pair endpoint/listener and runtime closure instead of recording unasserted cleanup.",
+    "Explicitly check installed Neon SDK1.2.0 and actual SDK bundle input; record separate SDK/package/Miniflare/workerd dependency digests.",
+    "Record immediate metricsAtOutcome before one next0ms local task allows already-published held disposal continuations to settle. No absolute pool deadline, counter or verdict is renewed or modified.",
+    "Exercise eight actual-SDK observer-specific empty/hidden/null/millisecond/wrong-role/database/PID/app negative replies; each requires one observer read/two fixed sockets, no absence claim and an unverified release."
+  ],
+  "observations": [
+    "Read all four complete initial files and each exact follow-up diff against preserved snapshots. Oracle imports only node assert and owns its own bounded startup/frontend parser, backend encoders, static expected SQL/arity/order/registered parameter values, authentication challenge and primary tuple catalog. No SDK, production SQL builder/parser or adapter success callback is imported into the oracle.",
+    "Independent oracle requires exact role/database/app/session limits/UTF8 startup, copies strict text parameters including BOM/emoji, compares exact preregistered arrays, handles simple/extended Parse/Bind/Describe/Execute/Flush/Sync without inventing Flush completion, and distinguishes actual transportClosed from receipt of Terminate. Pre-authentication Terminate is cleanup only, never authentication/query success.",
+    "Worker calls the captured-native production factory. It has no injected SDK/driver/WebSocket/Fetch/observer source dependency. Native raw101 characterization remains a separate fixture endpoint. All exact WSS upgrades are intercepted locally, arbitrary outbound requests denied/counted, local coordination service cannot select production destinations or supply PG/cleanup verdicts.",
+    "Native characterization covers binary roundtrip, all same/foreign redirect statuses, non101200, invalid constructor, server close and attributable late101 after abort. Explicit accept/close of an orphan returned pair is fixture disposal and never claimed as native abort/no-allocation proof.",
+    "Real SDK positive rows cover each fixed profile, fragmented backend messages, all four concurrent pools, exact startup/session options, fixed selected transaction/domain SQL, copied parameter mutation, joined release and post-release refusal. Normal positive release requires one closed primary plus one same-role observer, exact primary tuple parameters and once-only broker acknowledgement.",
+    "Held matrix covers binding/lease/namespace/password/expiry/revocation/late borrow/query controls, primary and observer projection faults, malformed/text/oversize protocol, withheld close, uncertain COMMIT, rejected/pending credential release, exact accepted-query abort/deadline/concurrent/release and late101. Source-fixed SQL cannot be replayed after poison; known host handles are separately disposed.",
+    "Accepted-BEGIN CONTROL gate resolves only after independent oracle validates that first statement. It avoids guessing request timing and directly demonstrates held concurrent release, held pending query, no restored late output, no observer and no second statement.",
+    "Per-case and final closure checks require actual both-endpoint events, no oracle active transport/catalog entry, zero host timers and zero owned private wait timers/listeners in settled snapshot. Two deliberately unacknowledged credential cases remain active/unknown with no normal success. Counters and raw socket/frame/protocol counts remain distinct.",
+    "Reports contain only bounded aggregate/closed metadata projections, no raw password, app tuple/PID, frame bytes or domain parameters. Source pins are rechecked after execution; installed SDK source/runtime evidence is separate from public source map. Native-wire qualification explicitly excludes real SQL/RLS/backend absence, which is owned by separate actual PostgreSQL lab."
+  ],
+  "actual_execution_by_reviewer": {
+    "units": 0,
+    "runtime": 0,
+    "Docker": 0,
+    "database": 0,
+    "network": 0,
+    "sourceWrites": 0,
+    "gitWrites": 0
+  },
+  "own_authored_modules_excluded": [
+    "packages/identity/src/controlled-neon-login-pool.ts",
+    "packages/identity/src/controlled-neon-login-profiles.ts",
+    "packages/identity/src/controlled-neon-transport.ts",
+    "tests/controlled-neon-login-pool.test.mjs"
+  ],
+  "limits": [
+    "Source-only verdict binds recheck1 frozen four files. Actual full native matrix is pending and may hold; prior actual failures stay immutable.",
+    "Reviewer authored the private controlled pool modules and focused units. They have separate root review and are excluded from this independent source verdict.",
+    "Synthetic PostgreSQL responses prove protocol/control behavior only. Password challenge does not prove SCRAM; catalog absence does not prove a real backend absent; simulated COMMIT does not prove a committed SQL effect.",
+    "Source guards/nonthrowing facade and installed SDK binding support no-alternate-transport reasoning; outboundService metadata alone cannot identify every internal platform decision. Native constructor/setup fault cases needing replacement remain separately labelled pure-unit evidence.",
+    "No hosted Neon DNS/TLS/proxy/account/role/migration, native Node production WSS, hosted WorkOS, browser-engine, Shopify/merchant activation or deployment claim."
+  ]
+}

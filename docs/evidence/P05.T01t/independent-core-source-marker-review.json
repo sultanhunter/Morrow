@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "reviewer": "root",
+  "kind": "independent_core_source_review_synthetic_marker_addendum",
+  "reviewed_source_digests": {
+    "packages/identity/src/controlled-neon-login-pool.ts": "c0a6b091c2fb2f9dbc7c8be7b557b11687d201586ba381297aa28e413608a02a",
+    "packages/identity/src/controlled-neon-login-profiles.ts": "16645b5091135424192dc40cf548d3c5fee74b7a88527f23685dc550bdbcdeee",
+    "packages/identity/src/controlled-neon-transport.ts": "b87761b89fbbd72ae80088412e18dabd1ff1706e547583d9064d520dcfa3c43e",
+    "tests/controlled-neon-login-pool.test.mjs": "3198a990fb1fcdf9870e3acada4cbe50881a0bfeece861bfb1bb5f09caeb117d",
+    "docs/packets/P05.T01t.md": "8d4f348ec3ebeac4756944e9e0d2e720b25f4de596945b8e21c7d4f147c1ea7e",
+    "docs/plan/build-plan.md": "434489742e46422e8bf03d06251091a27ae7403e06f4d8551ce37f255c3067b1",
+    "docs/plan/source.json": "aecff6b3ff90d8452ec9a918f0b6d5560ff79f72403161de82c23c892c9e37bd"
+  },
+  "blocking_findings": [],
+  "original_detailed_review_sha256": "40d4aef65a1838f348ba7588c4525484d6c16c374429084774193c9726b33b11",
+  "author_addendum_sha256": "8a679ce80d8d41a11ea127490e0ff54dacd845cd98ff374abcb0769dfce4bd92",
+  "observations": [
+    "Exact reversal of the inserted synthetic constant and two references reproduces the original focused unit source byte-for-byte. The joined known short segments produce the same synthetic marker bytes.",
+    "All original unit assertions and three production modules remain unchanged. The unchanged repository delivery guard is retained.",
+    "Author focused50 units and identity types passed; root will separately execute the full repository pipeline on the final source."
+  ],
+  "runtime_or_tests_by_root": 0,
+  "limitations": [
+    "Source delta only; the earlier actual81/960 matrix binds its original source, and a fresh source-binding native run is pending.",
+    "Actual isolated realPG and hosted/app qualification remain separate."
+  ]
+}

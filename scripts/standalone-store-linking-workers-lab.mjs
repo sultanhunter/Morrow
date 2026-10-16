@@ -195,6 +195,7 @@ const paths = [
   "docs/packets/P05.T01q.md",
   "docs/packets/P05.T01r.md",
   "docs/packets/P05.T01s.md",
+  "docs/packets/P05.T01t.md",
   "docs/packets/P05.T01o.md",
   "docs/packets/P05.T03b.md",
   "migrations/0009.workspace-linking-read-boundaries.sql",
@@ -206,7 +207,7 @@ const paths = [
 ];
 // The SQL file is provenance only: this laboratory never installs or executes it.
 const sourceDigests = Object.fromEntries(paths.map((path) => [path, hash(readFileSync(path))]));
-assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 87);
+assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 88);
 const bundle = await build({
   entryPoints: ["scripts/fixtures/standalone-store-linking-worker.ts"],
   bundle: true,
@@ -254,7 +255,7 @@ try {
     assert.equal(hash(readFileSync(path)), digest, "Source changed during qualification: " + path);
   const report = {
     task: "P05.T03b",
-    canonicalSequence: 87,
+    canonicalSequence: 88,
     qualification:
       "actual_local_workerd_HTTP_guard_controlled_linking_composition_WebCrypto_and_synthetic_SQL",
     compatibilityDate: "2026-07-30",
@@ -274,8 +275,8 @@ try {
   const text = JSON.stringify(report, null, 2) + "\n";
   for (const privateValue of [secret, token, hash(secret), hash(token), csrf])
     assert.ok(!text.includes(privateValue));
-  mkdirSync("docs/evidence/P05.T01s/regressions", { recursive: true });
-  writeFileSync("docs/evidence/P05.T01s/regressions/standalone-store-linking-workers.json", text);
+  mkdirSync("docs/evidence/P05.T01t/regressions", { recursive: true });
+  writeFileSync("docs/evidence/P05.T01t/regressions/standalone-store-linking-workers.json", text);
   console.log(
     `PASS: ${cases.length} standalone store-linking Workers cases; ${result.checks.length} checks; zero outbound requests.`,
   );

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "reviewer": "fixed_provider_core",
+  "kind": "independent_native_synthetic_marker_representation_source_addendum",
+  "original_source_review_sha256": "5a098d9ff3015a186523f17b6a71d3f7ceff4b29249a7ed792bfd8581466470f",
+  "disposal_source_review_addendum_sha256": "49f7f80bb482f1b594cc873dee477d1a0a6cba310e39d3e79bdf409723077510",
+  "reviewed_source_digests": {
+    "scripts/fixtures/controlled-neon-worker.ts": "ed4c77c06db10c1569a59cd652039576d1f7e02c560f7af600c58b1c60070baa",
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+    "scripts/controlled-neon-workers-lab.mjs": "4d46685a50b9e1cda14e026a3fd054f7ab606a5c114abd79ff7f1011d9bf892a",
+    "tests/controlled-neon-pg-wire-oracle.test.mjs": "e49b215518a82a844c9437aab4c567510122561174a4af405a381d13748560b0"
+  },
+  "blocking_findings": [],
+  "exact_delta": "Worker assembles same known public synthetic marker from five explicit short segments; runner reuses one identical marker constant for oracle password and existing report fence. No guard, whitelist, protocol, test assertion, authority or runtime marker bytes change.",
+  "limits": [
+    "Source-only. Fresh source-binding native run remains necessary; previous actual81/960 report remains bound to its saved pre-repair source.",
+    "Reviewer owns private production implementation and excludes it from independent source verdict. App waitUntil/lifetime wiring remains unqualified."
+  ]
+}

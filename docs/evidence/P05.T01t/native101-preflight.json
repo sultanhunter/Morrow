@@ -1,0 +1,897 @@
+{
+  "task": "P05.T01t",
+  "current_plan_sequence": 88,
+  "phase": "native101_characterization_only_preliminary_not_integrated_T_acceptance",
+  "status": "held",
+  "failure": "CONTROLLED_NEON_LAB_HELD:native_late101_after_abort:all_attributable_pair_endpoints_closed",
+  "cases": [
+    {
+      "name": "native_binary_roundtrip",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": true,
+        "errorEvents": 0,
+        "closeEvents": 1,
+        "binaryMessages": 1,
+        "correctBinaryRoundtrip": true,
+        "abortLatched": false,
+        "applicationBytesSent": 4,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 1,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_binary_roundtrip",
+        "mode": "echo",
+        "status": 101,
+        "intercepts": 1,
+        "pairs": 1,
+        "serverAccepted": 1,
+        "serverClosed": 1,
+        "pairClientClosed": 1,
+        "frames": 1,
+        "bytes": 4,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_non101_200",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": false,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 0,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_non101_200",
+        "mode": "status",
+        "status": 200,
+        "intercepts": 1,
+        "pairs": 0,
+        "serverAccepted": 0,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_non101_301_same_host",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": false,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 0,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_non101_301_same_host",
+        "mode": "status",
+        "status": 301,
+        "foreign": false,
+        "intercepts": 1,
+        "pairs": 0,
+        "serverAccepted": 0,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_non101_301_foreign",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": false,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 0,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_non101_301_foreign",
+        "mode": "status",
+        "status": 301,
+        "foreign": true,
+        "intercepts": 1,
+        "pairs": 0,
+        "serverAccepted": 0,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_non101_302_same_host",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": false,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 0,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_non101_302_same_host",
+        "mode": "status",
+        "status": 302,
+        "foreign": false,
+        "intercepts": 1,
+        "pairs": 0,
+        "serverAccepted": 0,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_non101_302_foreign",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": false,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 0,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_non101_302_foreign",
+        "mode": "status",
+        "status": 302,
+        "foreign": true,
+        "intercepts": 1,
+        "pairs": 0,
+        "serverAccepted": 0,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_non101_303_same_host",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": false,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 0,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_non101_303_same_host",
+        "mode": "status",
+        "status": 303,
+        "foreign": false,
+        "intercepts": 1,
+        "pairs": 0,
+        "serverAccepted": 0,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_non101_303_foreign",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": false,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 0,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_non101_303_foreign",
+        "mode": "status",
+        "status": 303,
+        "foreign": true,
+        "intercepts": 1,
+        "pairs": 0,
+        "serverAccepted": 0,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_non101_307_same_host",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": false,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 0,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_non101_307_same_host",
+        "mode": "status",
+        "status": 307,
+        "foreign": false,
+        "intercepts": 1,
+        "pairs": 0,
+        "serverAccepted": 0,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_non101_307_foreign",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": false,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 0,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_non101_307_foreign",
+        "mode": "status",
+        "status": 307,
+        "foreign": true,
+        "intercepts": 1,
+        "pairs": 0,
+        "serverAccepted": 0,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_non101_308_same_host",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": false,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 0,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_non101_308_same_host",
+        "mode": "status",
+        "status": 308,
+        "foreign": false,
+        "intercepts": 1,
+        "pairs": 0,
+        "serverAccepted": 0,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_non101_308_foreign",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": false,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 0,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_non101_308_foreign",
+        "mode": "status",
+        "status": 308,
+        "foreign": true,
+        "intercepts": 1,
+        "pairs": 0,
+        "serverAccepted": 0,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 0,
+        "listeners": 0
+      }
+    },
+    {
+      "name": "native_late101_after_abort",
+      "native": {
+        "constructed": true,
+        "constructorRejected": false,
+        "opened": false,
+        "errorEvents": 1,
+        "closeEvents": 1,
+        "binaryMessages": 0,
+        "correctBinaryRoundtrip": false,
+        "abortLatched": true,
+        "applicationBytesSent": 0,
+        "bytesSentAfterAbort": 0,
+        "closeAttempts": 1,
+        "closeThrows": 0,
+        "timedOut": false,
+        "listenersRemoved": true
+      },
+      "service": {
+        "name": "native_late101_after_abort",
+        "mode": "late_abort",
+        "status": 101,
+        "intercepts": 1,
+        "pairs": 1,
+        "serverAccepted": 1,
+        "serverClosed": 0,
+        "pairClientClosed": 0,
+        "frames": 0,
+        "bytes": 0,
+        "invalidFrames": 0,
+        "forcedFixtureCloses": 1,
+        "listeners": 3
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "native_binary_roundtrip:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_binary_roundtrip:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_binary_roundtrip:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_binary_roundtrip:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_binary_roundtrip:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_binary_roundtrip:real_binary_roundtrip",
+      "passed": true
+    },
+    {
+      "name": "native_binary_roundtrip:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_200:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_non101_200:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_non101_200:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_non101_200:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_non101_200:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_200:no_redirect_follow_or_pg_bytes",
+      "passed": true
+    },
+    {
+      "name": "native_non101_200:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_same_host:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_same_host:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_same_host:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_same_host:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_same_host:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_same_host:no_redirect_follow_or_pg_bytes",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_same_host:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_foreign:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_foreign:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_foreign:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_foreign:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_foreign:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_foreign:no_redirect_follow_or_pg_bytes",
+      "passed": true
+    },
+    {
+      "name": "native_non101_301_foreign:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_same_host:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_same_host:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_same_host:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_same_host:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_same_host:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_same_host:no_redirect_follow_or_pg_bytes",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_same_host:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_foreign:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_foreign:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_foreign:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_foreign:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_foreign:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_foreign:no_redirect_follow_or_pg_bytes",
+      "passed": true
+    },
+    {
+      "name": "native_non101_302_foreign:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_same_host:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_same_host:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_same_host:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_same_host:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_same_host:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_same_host:no_redirect_follow_or_pg_bytes",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_same_host:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_foreign:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_foreign:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_foreign:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_foreign:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_foreign:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_foreign:no_redirect_follow_or_pg_bytes",
+      "passed": true
+    },
+    {
+      "name": "native_non101_303_foreign:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_same_host:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_same_host:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_same_host:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_same_host:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_same_host:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_same_host:no_redirect_follow_or_pg_bytes",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_same_host:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_foreign:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_foreign:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_foreign:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_foreign:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_foreign:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_foreign:no_redirect_follow_or_pg_bytes",
+      "passed": true
+    },
+    {
+      "name": "native_non101_307_foreign:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_same_host:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_same_host:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_same_host:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_same_host:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_same_host:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_same_host:no_redirect_follow_or_pg_bytes",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_same_host:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_foreign:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_foreign:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_foreign:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_foreign:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_foreign:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_foreign:no_redirect_follow_or_pg_bytes",
+      "passed": true
+    },
+    {
+      "name": "native_non101_308_foreign:all_attributable_pair_endpoints_closed",
+      "passed": true
+    },
+    {
+      "name": "native_late101_after_abort:fixture_response",
+      "passed": true
+    },
+    {
+      "name": "native_late101_after_abort:one_or_zero_fixed_intercept",
+      "passed": true
+    },
+    {
+      "name": "native_late101_after_abort:no_unexpected_target_or_fallback",
+      "passed": true
+    },
+    {
+      "name": "native_late101_after_abort:native_listener_cleanup",
+      "passed": true
+    },
+    {
+      "name": "native_late101_after_abort:native_closed",
+      "passed": true
+    },
+    {
+      "name": "native_late101_after_abort:no_application_send_after_abort",
+      "passed": true
+    },
+    {
+      "name": "native_late101_after_abort:all_attributable_pair_endpoints_closed",
+      "passed": false
+    },
+    {
+      "name": "source_unchanged:docs/packets/P05.T01t.md",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:docs/plan/build-plan.md",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:docs/plan/source.json",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:package-lock.json",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:scripts/controlled-neon-workers-lab.mjs",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:scripts/fixtures/controlled-neon-pg-wire-oracle.mjs",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:scripts/fixtures/controlled-neon-worker.ts",
+      "passed": true
+    },
+    {
+      "name": "source_unchanged:tests/controlled-neon-pg-wire-oracle.test.mjs",
+      "passed": true
+    }
+  ],
+  "nativeWebSocketIntercepts": 13,
+  "unexpectedRequests": 0,
+  "actualInternetRequests": 0,
+  "actualProviderRequests": 0,
+  "runtime": {
+    "node": "v24.13.0",
+    "miniflare": "4.20260730.0",
+    "workerd": "1.20260730.1",
+    "compatibilityDate": "2026-07-30",
+    "compatibilityFlags": [
+      "nodejs_compat"
+    ]
+  },
+  "cleanup": {
+    "workerRuntimeDisposalAcknowledged": true,
+    "pendingTimers": 0,
+    "serverEndpoints": 2,
+    "serverClosed": 1,
+    "pairClientClosed": 1,
+    "forcedFixtureCloses": 1
+  },
+  "source_digests": {
+    "docs/packets/P05.T01t.md": "8d4f348ec3ebeac4756944e9e0d2e720b25f4de596945b8e21c7d4f147c1ea7e",
+    "docs/plan/build-plan.md": "434489742e46422e8bf03d06251091a27ae7403e06f4d8551ce37f255c3067b1",
+    "docs/plan/source.json": "aecff6b3ff90d8452ec9a918f0b6d5560ff79f72403161de82c23c892c9e37bd",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "scripts/controlled-neon-workers-lab.mjs": "1b256622997602f82e8cbbd8426e4568f10645efb6884ded24e1a5c1a35422ec",
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "bc4c712c10a464c534b80fb01638a2b8b45febb1336be9fd4b49add6182cf6b3",
+    "scripts/fixtures/controlled-neon-worker.ts": "a3caf8f60c51e96245451223b71e3caf8f2f00eee8c819d4ab05bf5f3c14cf11",
+    "tests/controlled-neon-pg-wire-oracle.test.mjs": "70af03a90391869acd45886d69ffd5488ce533fed8d4b9adc193aad647557408"
+  },
+  "source_inventory_digest": "7d77644c08fc8e7d07caa56abd897614e98d5cb68014c533590c76e5a688870f",
+  "limitations": [
+    "Actual local native constructor and HTTP101/pair traffic only; actualSDK, PG-wire protocol and realPG four-role/owning-flow acceptance remain pending.",
+    "Constructor-created sockets expose no caller HTTP Response URL/status. Service-side handshake observations are separately counted.",
+    "Late native open and explicit fixture endpoint cleanup are distinct; no cancellation/no-effect claim follows.",
+    "All requests are locally intercepted; no Neon DNS/TLS/account, hosted secret, Node native productionWSS, browser-engine or merchant qualification."
+  ]
+}

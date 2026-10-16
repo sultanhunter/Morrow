@@ -102,6 +102,7 @@ const paths = [
   "docs/plan/build-plan.md",
   "docs/packets/P05.T01r.md",
   "docs/packets/P05.T01s.md",
+  "docs/packets/P05.T01t.md",
   ".nvmrc",
   "package.json",
   "package-lock.json",
@@ -112,7 +113,7 @@ const paths = [
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
 if (
   process.version !== "v24.13.0" ||
-  plan.sequence !== 87 ||
+  plan.sequence !== 88 ||
   plan.path !== "docs/plan/build-plan.md" ||
   hash(readFileSync(plan.path)) !== plan.sha256
 )
@@ -852,7 +853,7 @@ for (const [path, digest] of Object.entries(sourceDigests))
 const report = {
   schemaVersion: 1,
   task: "P05.T01r",
-  canonicalSequence: 87,
+  canonicalSequence: 88,
   qualification:
     "private_fixed_workos_port_independent_synthetic_fetch_real_postgresql_merchant_https_jar_o_b_q",
   observedAt: new Date().toISOString(),
@@ -892,8 +893,8 @@ const privateValues = [
 ];
 if (privateValues.some((value) => text.includes(value)))
   throw Error("FIXED_PROVIDER_HTTPS_REPORT_PRIVACY");
-mkdirSync("docs/evidence/P05.T01s/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01s/regressions/fixed-provider-https.json", text);
+mkdirSync("docs/evidence/P05.T01t/regressions", { recursive: true });
+writeFileSync("docs/evidence/P05.T01t/regressions/fixed-provider-https.json", text);
 console.log(
   "PASS: " +
     checks.length +

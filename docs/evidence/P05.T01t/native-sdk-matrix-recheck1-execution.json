@@ -1,0 +1,25 @@
+{
+  "owning_tool_chunk": "1b1203",
+  "completion_chunk": "697f0d",
+  "actual_exit_code": 1,
+  "report_sha256": "3433f5d6fc6d4f05b0992b23443e46214b0e6916acbd7cb96fb6f0c3ff02859a",
+  "log_sha256": "670b7706cb1ccc241ff28a3bbbfdd256d71df622db8f42afa8ba6798e47ee725",
+  "status": "held",
+  "failure": "CONTROLLED_NEON_LAB_HELD:sdk_non101_200_same_host:no_live_adapter_waits",
+  "cases": 71,
+  "checks": 813,
+  "intercepts": 91,
+  "cleanup": {
+    "workerRuntimeDisposalAcknowledged": true,
+    "pendingTimers": 0,
+    "serverEndpoints": 79,
+    "serverClosed": 79,
+    "pairClientClosed": 79,
+    "forcedFixtureCloses": 3,
+    "forcedClientAcceptAttempts": 3,
+    "forcedClientAcceptSuccesses": 2,
+    "forcedClientAcceptRejections": 1,
+    "forcedClientCloseAttempts": 3,
+    "forcedClientCloseRejections": 1
+  }
+}

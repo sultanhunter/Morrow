@@ -80,6 +80,9 @@ jobs:
       - name: Exercise captured fixed WorkOS Fetch through the local Workers platform
         id: workers_platform_provider
         run: npm run lab:fixed-workos-platform-workers
+      - name: Exercise controlled Neon profiles through native Workers WebSocket and PG wire
+        id: workers_controlled_neon
+        run: npm run lab:controlled-neon-workers
       - name: Exercise preserved75 session observation with synthetic providers only
         id: frozen75
         run: npm run lab:workos-session-status-frozen75
@@ -153,6 +156,9 @@ jobs:
       - name: Exercise fixed WorkOS wire to local HTTPS login and logout
         id: https_fixed_provider
         run: npm run lab:fixed-workos-login-https
+      - name: Exercise controlled Neon profiles and login against isolated PostgreSQL
+        id: postgresql_controlled_neon
+        run: npm run lab:controlled-neon-postgresql
       - name: Collect pending validation evidence
         id: validation_evidence_collect
         if: always()

@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "kind": "first_full_local_pipeline_held_classification",
+  "owning_session": 55738,
+  "completion_chunk": "b8f4f6",
+  "actual_exit_code": 1,
+  "pipeline_stopped_before_repository_tests": true,
+  "failure_stage": "verify_delivery_existing_literal_secret_pattern_guard",
+  "finding_kinds": [
+    {
+      "path": "scripts/controlled-neon-workers-lab.mjs",
+      "kind": "credential_literal"
+    },
+    {
+      "path": "scripts/fixtures/controlled-neon-worker.ts",
+      "kind": "credential_literal"
+    },
+    {
+      "path": "tests/controlled-neon-login-pool.test.mjs",
+      "kind": "credential_literal"
+    }
+  ],
+  "new_source_synthetic_markers_only": true,
+  "existing_guard_unchanged": true,
+  "restored_whole_source_and580historical_reports_exactly": true,
+  "original_receipt_sha256": "67beb6bbe790f2145de89531195856f6253bc156fcd6a477f4542b68e83c1764",
+  "changed_output_digests": {
+    "docs/evidence/P01.T01/verification.json": "fb03efacb7f0b889ac91617707f590dd00d97bc8c9fcb78da43ca3a8b121c0fe",
+    "docs/evidence/P01.T02/verification.json": "9f89e533eec47ab4e58c84396999155fb0095c772e92bcd1962deb869422d82d",
+    "docs/evidence/P01.T03/verification.json": "4356bead237f0d4ad4d83243188348040aafa77f3a8bc89c83a467d06b712f72",
+    "docs/evidence/P01.T04/verification.json": "4b437b8d0a669ed0f492b9aff832808f84e6d42e200051c2c95f0b67215be951",
+    "docs/evidence/P02.T02/verification.json": "424c87f9132386d1ade25aaa4808b715805292d31d37a3b5635fbc6088d394ff",
+    "docs/evidence/P03.T02/boundaries.json": "8a3925f8251534639b034594e7193d9c6f84f6729444dabf087b266cc8788c2a",
+    "docs/evidence/P03.T04/delivery.json": "94edf1a7aaace133a81701446b6fb9b87572b4420051e146635f87811db2de68"
+  },
+  "original_receipt_field_caveat": "fresh_generated_reports copied every fixed allowed output after the failed command. That field does not prove that all fifteen producers ran. This classification preserves the original receipt and lists only byte-changed outputs. Repository tests/build/later producers did not run.",
+  "proposed_repair": "Assemble the identical synthetic marker bytes from clearly named short segments in the three new fixture/unit files; preserve existing delivery guard and every production module."
+}

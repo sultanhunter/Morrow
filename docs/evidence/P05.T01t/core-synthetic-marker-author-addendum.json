@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "author": "fixed_provider_core",
+  "kind": "synthetic_unit_marker_representation_only",
+  "before_sha256": "91735cacbb86dccb62d28cad2d138e6b6eb97e5243112c28b0ee87e2bf2547ef",
+  "source_digests": {
+    "tests/controlled-neon-login-pool.test.mjs": "3198a990fb1fcdf9870e3acada4cbe50881a0bfeece861bfb1bb5f09caeb117d"
+  },
+  "exact_delta_verified": true,
+  "same_runtime_marker_bytes": true,
+  "production_modules_unchanged": {
+    "packages/identity/src/controlled-neon-login-pool.ts": "c0a6b091c2fb2f9dbc7c8be7b557b11687d201586ba381297aa28e413608a02a",
+    "packages/identity/src/controlled-neon-login-profiles.ts": "16645b5091135424192dc40cf548d3c5fee74b7a88527f23685dc550bdbcdeee",
+    "packages/identity/src/controlled-neon-transport.ts": "b87761b89fbbd72ae80088412e18dabd1ff1706e547583d9064d520dcfa3c43e"
+  },
+  "tests": [
+    {
+      "kind": "50_focused_CPU_units",
+      "actualExitCode": 0,
+      "owningToolChunk": "d1a46e",
+      "logSha256": "80655cfd90c7b22d47cd83b1003c2c7c763adead2de724cae74530423c3655ac"
+    },
+    {
+      "kind": "identity_typecheck",
+      "actualExitCode": 0,
+      "owningToolChunk": "b79557",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "limits": [
+    "Only a known synthetic test marker literal is assembled from short explicit segments; test assertions, generated marker bytes, delivery guard and product behavior are unchanged.",
+    "No runtime/provider/Docker/CI or publication qualification inferred."
+  ]
+}

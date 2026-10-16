@@ -51,6 +51,7 @@ const paths = [
   "docs/packets/P05.T01q.md",
   "docs/packets/P05.T01r.md",
   "docs/packets/P05.T01s.md",
+  "docs/packets/P05.T01t.md",
   "docs/plan/build-plan.md",
   ".nvmrc",
   "package-lock.json",
@@ -59,7 +60,7 @@ const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 for (const m of manifest.migrations.slice(0, 9)) paths.push("migrations/" + m.file);
 const sourceDigests = Object.fromEntries(paths.map((p) => [p, hash(readFileSync(p))]));
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
-assert.equal(plan.sequence, 87);
+assert.equal(plan.sequence, 88);
 assert.equal(plan.sha256, hash(readFileSync("docs/plan/build-plan.md")));
 const queryTrace = [],
   allPools = [],
@@ -484,7 +485,7 @@ check(
 const report = {
   schemaVersion: 1,
   task: "P05.T03b",
-  canonicalSequence: 87,
+  canonicalSequence: 88,
   qualification: "actual_local_http_and_postgresql",
   checks,
   sourceDigests,
@@ -505,8 +506,8 @@ assert.equal(
   privateSecrets.some((s) => text.includes(s)),
   false,
 );
-mkdirSync("docs/evidence/P05.T01s/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01s/regressions/standalone-store-linking-http.json", text);
+mkdirSync("docs/evidence/P05.T01t/regressions", { recursive: true });
+writeFileSync("docs/evidence/P05.T01t/regressions/standalone-store-linking-http.json", text);
 console.log(
   "PASS: " +
     checks.length +

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "reviewer": "root",
+  "kind": "independent_native_source_synthetic_marker_addendum",
+  "reviewed_source_digests": {
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+    "scripts/fixtures/controlled-neon-worker.ts": "ed4c77c06db10c1569a59cd652039576d1f7e02c560f7af600c58b1c60070baa",
+    "scripts/controlled-neon-workers-lab.mjs": "4d46685a50b9e1cda14e026a3fd054f7ab606a5c114abd79ff7f1011d9bf892a",
+    "tests/controlled-neon-pg-wire-oracle.test.mjs": "e49b215518a82a844c9437aab4c567510122561174a4af405a381d13748560b0"
+  },
+  "blocking_findings": [],
+  "original_root_review_sha256": "2fc616a947bd208bb8874481f2c38c56afa29bbfbf3fcb95add3b8a64961c469",
+  "observations": [
+    "Read exact two-file diff. Both fixture paths join the same five named synthetic segments to byte-identical markers; runner reuses its marker in independent-oracle configuration and report fence.",
+    "No production module, oracle, protocol assertion, lifecycle limit or report outcome changes. Existing repository secret-pattern guard remains unchanged.",
+    "The author reran the actual full source-bound native matrix:81 cases/960 checks/101 fixed interceptions, with its new report a01829fd242456d3306c57cf3a8159e1f0233cb9bde82b872434041e7d958d5b. This root addendum is source review; independent actual evidence remains separately attributed."
+  ],
+  "runtime_or_tests_by_root": 0,
+  "limitations": [
+    "Full current native source-binding run is author-observed; isolated realPG and fullCI remain pending.",
+    "Simulated PG replies prove protocol/control behavior only; actual PostgreSQL must establish role privileges, committed effects and shared backend absence.",
+    "No hosted Neon/WorkOS, native remote DNS/TLS, production app lifetime, browser, Shopify or merchant activation qualification."
+  ]
+}

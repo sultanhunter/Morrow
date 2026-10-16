@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "reviewer": "root",
+  "kind": "independent_core_source_review_not_runtime_qualification",
+  "source_digests": {
+    "packages/identity/src/controlled-neon-login-pool.ts": "c0a6b091c2fb2f9dbc7c8be7b557b11687d201586ba381297aa28e413608a02a",
+    "packages/identity/src/controlled-neon-login-profiles.ts": "16645b5091135424192dc40cf548d3c5fee74b7a88527f23685dc550bdbcdeee",
+    "packages/identity/src/controlled-neon-transport.ts": "b87761b89fbbd72ae80088412e18dabd1ff1706e547583d9064d520dcfa3c43e",
+    "tests/controlled-neon-login-pool.test.mjs": "91735cacbb86dccb62d28cad2d138e6b6eb97e5243112c28b0ee87e2bf2547ef",
+    "docs/packets/P05.T01t.md": "8d4f348ec3ebeac4756944e9e0d2e720b25f4de596945b8e21c7d4f147c1ea7e",
+    "docs/plan/build-plan.md": "434489742e46422e8bf03d06251091a27ae7403e06f4d8551ce37f255c3067b1",
+    "docs/plan/source.json": "aecff6b3ff90d8452ec9a918f0b6d5560ff79f72403161de82c23c892c9e37bd",
+    "node_modules/@neondatabase/serverless/index.mjs": "50f98b3540f02327ebe4d5423509fe15b820af87c512cee1b2b7322a8ef77699"
+  },
+  "blocking_findings": [],
+  "statement_placeholder_checks": [
+    {
+      "pool": "loginPool",
+      "statement": "begin",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "loginPool",
+      "statement": "readOnlyBegin",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "loginPool",
+      "statement": "role",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "loginPool",
+      "statement": "timeout",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "loginPool",
+      "statement": "idleTimeout",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "loginPool",
+      "statement": "createIntent",
+      "placeholderArity": 6
+    },
+    {
+      "pool": "loginPool",
+      "statement": "bindBegin",
+      "placeholderArity": 12
+    },
+    {
+      "pool": "loginPool",
+      "statement": "claimCallback",
+      "placeholderArity": 4
+    },
+    {
+      "pool": "loginPool",
+      "statement": "observeEligibility",
+      "placeholderArity": 2
+    },
+    {
+      "pool": "loginPool",
+      "statement": "reconcile",
+      "placeholderArity": 5
+    },
+    {
+      "pool": "loginPool",
+      "statement": "commit",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "loginPool",
+      "statement": "rollback",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "preauthPool",
+      "statement": "begin",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "preauthPool",
+      "statement": "beginReadOnly",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "preauthPool",
+      "statement": "role",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "preauthPool",
+      "statement": "timeout",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "preauthPool",
+      "statement": "idleTimeout",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "preauthPool",
+      "statement": "create",
+      "placeholderArity": 12
+    },
+    {
+      "pool": "preauthPool",
+      "statement": "admit",
+      "placeholderArity": 13
+    },
+    {
+      "pool": "preauthPool",
+      "statement": "reconcile",
+      "placeholderArity": 13
+    },
+    {
+      "pool": "preauthPool",
+      "statement": "commit",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "preauthPool",
+      "statement": "rollback",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "selectionPool",
+      "statement": "begin",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "selectionPool",
+      "statement": "role",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "selectionPool",
+      "statement": "timeout",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "selectionPool",
+      "statement": "idleTimeout",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "selectionPool",
+      "statement": "resolve",
+      "placeholderArity": 9
+    },
+    {
+      "pool": "selectionPool",
+      "statement": "commit",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "selectionPool",
+      "statement": "rollback",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "sessionPool",
+      "statement": "begin",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "sessionPool",
+      "statement": "readOnlyBegin",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "sessionPool",
+      "statement": "role",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "sessionPool",
+      "statement": "timeout",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "sessionPool",
+      "statement": "idleTimeout",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "sessionPool",
+      "statement": "admit",
+      "placeholderArity": 27
+    },
+    {
+      "pool": "sessionPool",
+      "statement": "reconcile",
+      "placeholderArity": 2
+    },
+    {
+      "pool": "sessionPool",
+      "statement": "commit",
+      "placeholderArity": 0
+    },
+    {
+      "pool": "sessionPool",
+      "statement": "rollback",
+      "placeholderArity": 0
+    }
+  ],
+  "reviewed_contracts": [
+    "Closed private native constructor versus explicit syntheticNode composition, capturedSocket and no caller driver/URL override",
+    "Four fixed SQL/arity profiles; maintain and owner-facing metadata SQL denied; original role-specific statement/idle limits",
+    "Dedicated clients, original connect deadline+25s ceiling, copied bounded strings, per-query control, persistent lifetime/lease revocation and permanent poison",
+    "Once-latched release, synchronous in-flight-query hold, original normalD versus separate cleanupC, late-resource custody and external revocation distinct from self disposal",
+    "Canonical UTC microsecond primary attribution, one same-role self-validating fresh observer, exactprimary absence, no cancellation/termination SQL and separate observertransport closure",
+    "SDK constructor/configuration/send/listener failure containment, no invented acquired/close acknowledgement, source byte caps and late-event suppression"
+  ],
+  "author_observations": {
+    "CPU_units": 50,
+    "CPU_units_independently_rerun_by_this_reviewer": false,
+    "strict_types": "author receipt observed; not independently rerun"
+  },
+  "limitations": [
+    "Actual SDK/native matrix, pending-query release race, independent full owning-flow and realPG authority/cleanup remain pending.",
+    "Source review does not qualify hosted endpoint/DNS/TLS/account/credential ownership, app binding or merchant activation.",
+    "Source-owned facade callback functions are trusted internal functions; direct synthetic helper tests may inject constructors but native factory cannot."
+  ]
+}

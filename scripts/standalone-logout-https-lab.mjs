@@ -96,6 +96,7 @@ const paths = [
   "docs/packets/P05.T01q.md",
   "docs/packets/P05.T01r.md",
   "docs/packets/P05.T01s.md",
+  "docs/packets/P05.T01t.md",
   ".nvmrc",
   "package.json",
   "package-lock.json",
@@ -106,7 +107,7 @@ const paths = [
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
 if (
   process.version !== "v24.13.0" ||
-  plan.sequence !== 87 ||
+  plan.sequence !== 88 ||
   plan.path !== "docs/plan/build-plan.md" ||
   hash(readFileSync(plan.path)) !== plan.sha256
 )
@@ -822,7 +823,7 @@ for (const [p, d] of Object.entries(sources))
 const report = {
   schemaVersion: 1,
   task: "P05.T01q",
-  canonicalSequence: 87,
+  canonicalSequence: 88,
   qualification: "synthetic_full_login_to_https_jar_current_family_logout_to_o_b_postgresql",
   observedAt: new Date().toISOString(),
   sourceDigests: sources,
@@ -842,8 +843,8 @@ const report = {
   ],
 };
 const text = JSON.stringify(report, null, 2) + "\n";
-mkdirSync("docs/evidence/P05.T01s/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01s/regressions/logout-https-postgresql-lab.json", text);
+mkdirSync("docs/evidence/P05.T01t/regressions", { recursive: true });
+writeFileSync("docs/evidence/P05.T01t/regressions/logout-https-postgresql-lab.json", text);
 console.log(
   "PASS: " +
     checks.length +

@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "task": "P05.T01t",
+  "authorship": "Author receipt for independently authored local PG-wire oracle/parser/encoder and native/actualSDK fixture. Not independent source or domain review.",
+  "source_digests": {
+    "scripts/fixtures/controlled-neon-worker.ts": "526184d08ab43ec8d0b1f790f5ed69936e3a8f9c56ad1328e2494ab0316c1aa4",
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+    "scripts/controlled-neon-workers-lab.mjs": "a908195293b731986be62c55fbaa3a047de668880ee2524bde7affd6fbb420fa",
+    "tests/controlled-neon-pg-wire-oracle.test.mjs": "e49b215518a82a844c9437aab4c567510122561174a4af405a381d13748560b0"
+  },
+  "final_report": {
+    "path": "docs/evidence/P05.T01t/workers-lab.json",
+    "sha256": "7ca5845a3631d2c1e5cb56a33f3759aed46916817d4dc6a77ee2e597e4a4127d",
+    "status": "passed",
+    "cases": 81,
+    "checks": 960,
+    "checks_passed": true,
+    "native_websocket_intercepts": 101,
+    "local_coordination_calls": 7,
+    "actual_internet_requests": 0,
+    "actual_provider_requests": 0
+  },
+  "actual_final_execution": {
+    "owning_tool_chunk": "23bdd3",
+    "completion_chunk": "ccf6c2",
+    "actual_exit_code": 0,
+    "log": "work/morrow-p01/sdk-88-matrix-recheck2-execution/execution.log"
+  },
+  "focused_validation": {
+    "oracle_tests": 18,
+    "oracle_actual_exit_code": 0,
+    "oracle_tool_chunk": "4b2c38",
+    "strict_worker_types_actual_exit_code": 0,
+    "strict_worker_types_tool_chunk": "c788b1"
+  },
+  "preserved_actual_runs": [
+    {
+      "receipt": "work/morrow-p01/native101-88-first/actual-execution.json",
+      "sha256": "275017b95b0357202441a08427e7b22f3cce5efed87fdf08d0ec5156fa149312",
+      "actual_exit_code": 1,
+      "report_sha256": "f15d911a0a3300c3c6def9cff7903ab9b7b41e59aa8e5112ee46a4006b1bdf69",
+      "cases": 13,
+      "checks": 99,
+      "intercepts": 13
+    },
+    {
+      "receipt": "work/morrow-p01/native101-88-recheck/actual-execution.json",
+      "sha256": "621161c92cfd160b2a73b5c47dee5ff8882ca8bb8f08e8fbb6f75fbb5649a684",
+      "actual_exit_code": 0,
+      "report_sha256": "98d544f759fd00a7b3fd9d3fcf8b9ebea6ee3b63389a107b2db378c104e937cc",
+      "cases": 15,
+      "checks": 111,
+      "intercepts": 14
+    },
+    {
+      "receipt": "work/morrow-p01/sdk-88-first/actual-execution.json",
+      "sha256": "3d06f357497dd025d991ecf4a785dc6716bf1461b598d231572ce782b091d7dd",
+      "actual_exit_code": 1,
+      "report_sha256": "be2fcc17c5fc450445688c2ca0cdb4c8664e5a0e5e32201374fddbc451c77b4f",
+      "cases": 16,
+      "checks": 121,
+      "intercepts": 15
+    },
+    {
+      "receipt": "work/morrow-p01/sdk-88-recheck/actual-execution.json",
+      "sha256": "9a8591d98856a24294d2502b5605ccc1e768bb0c38731476d71d81bf74297830",
+      "actual_exit_code": 0,
+      "report_sha256": "53e842ac025167ef7a471a6917811de740460dc65666d13e871585202cc9747a",
+      "cases": 19,
+      "checks": 150,
+      "intercepts": 22
+    },
+    {
+      "receipt": "work/morrow-p01/sdk-88-matrix-initial-execution/actual-execution.json",
+      "sha256": "26d0ba0af34ed7fd55bd5b6d5f8889441ae2d83fe77c34f10cef8f2fabdc4626",
+      "actual_exit_code": 1,
+      "report_sha256": "0ff3f1c1db0bef6e93ae5bcab88c77aedac0696eb384dab89f0148c528303ae9",
+      "cases": 30,
+      "checks": 314,
+      "intercepts": 44
+    },
+    {
+      "receipt": "work/morrow-p01/sdk-88-matrix-recheck1/actual-execution.json",
+      "sha256": "f12ab98d49fb4714578eec979babd9000cf3deedf678a1f4fe73a3c172cfd0b2",
+      "actual_exit_code": 1,
+      "report_sha256": "3433f5d6fc6d4f05b0992b23443e46214b0e6916acbd7cb96fb6f0c3ff02859a",
+      "cases": 71,
+      "checks": 813,
+      "intercepts": 91
+    },
+    {
+      "receipt": "work/morrow-p01/sdk-88-matrix-recheck2-execution/actual-execution.json",
+      "sha256": "69d59cf47fa33f3f95db7435cc865a7d79dc1faed3bb29b44656a0571f0e9366",
+      "actual_exit_code": 0,
+      "report_sha256": "7ca5845a3631d2c1e5cb56a33f3759aed46916817d4dc6a77ee2e597e4a4127d",
+      "cases": 81,
+      "checks": 960,
+      "intercepts": 101
+    }
+  ],
+  "cleanup": {
+    "workerRuntimeDisposalAcknowledged": true,
+    "pendingTimers": 0,
+    "serverEndpoints": 79,
+    "serverClosed": 79,
+    "pairClientClosed": 79,
+    "forcedFixtureCloses": 3,
+    "forcedClientAcceptAttempts": 3,
+    "forcedClientAcceptSuccesses": 2,
+    "forcedClientAcceptRejections": 1,
+    "forcedClientCloseAttempts": 3,
+    "forcedClientCloseRejections": 1
+  },
+  "deliberately_unknown_credentials": [
+    {
+      "case": "sdk_release_reject",
+      "attempts": 1,
+      "acknowledgements": 0,
+      "active": 1
+    },
+    {
+      "case": "sdk_release_pending",
+      "attempts": 1,
+      "acknowledgements": 0,
+      "active": 1
+    }
+  ],
+  "scope_limits": [
+    "Actual native constructor and installed SDK through independently simulated PG-wire; this is not real SQL, RLS, shared-backend absence or owning84 flow qualification. The separate realPG bridge/lab owns those claims.",
+    "Constructor-created sockets expose no caller HTTP Response URL/status. Service-side handshake observations are separately counted.",
+    "Late native open and explicit fixture endpoint cleanup are distinct; no cancellation/no-effect claim follows.",
+    "Connect failure can return before detached cleanup settles. This fixture holds its request alive through disposal-only C observation; application waitUntil/request-lifetime wiring remains unqualified.",
+    "An unresolved Client.end promise, physical socket closure and credential acknowledgement are separate. Held rows remain unverified releases; fixture disposal-only observation never renews core authority.",
+    "Synthetic PG-wire uses an explicit password challenge; SCRAM authentication, real SQL, role privileges and shared backend disappearance are qualified only by the separate realPG lab.",
+    "Native production constructor/setup throw paths cannot all be induced without replacement; the core author's focused source units cover injected-only transport faults separately.",
+    "All requests are locally intercepted; no Neon DNS/TLS/account, hosted secret, Node native productionWSS, browser-engine or merchant qualification."
+  ],
+  "measurement_notes": [
+    "First actual native101 held13/99 due orphan returned pair end not accepted after preopen cancellation; preserved, explicit fixture-only pair disposal repaired without native cancellation claim.",
+    "First actual SDK smoke held16/121 on missing legal frontend Flush H in independent oracle; preserved and fixed with standalone regression.",
+    "First full matrix held30/314 at synchronous metrics snapshot before detached cleanup continuations; immediate outcome snapshot retained, one next local task added.",
+    "Second full matrix held71/813 when non101 Client.end promise outlived one local task; retained raw snapshots and added only held-case one1050ms fixed disposal observation.",
+    "Final positive outcome proves local native101, installed SDK and independent wire contract, not real PostgreSQL SQL/RLS/shared backend absence, hostedNeon or application request-lifetime binding."
+  ],
+  "source_frozen_for_parent_full_ci": true,
+  "no_runtime_active": true
+}

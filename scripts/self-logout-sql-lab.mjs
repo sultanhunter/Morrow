@@ -50,13 +50,14 @@ const sourcePaths = [
   "docs/packets/P05.T01q.md",
   "docs/packets/P05.T01r.md",
   "docs/packets/P05.T01s.md",
+  "docs/packets/P05.T01t.md",
   "docs/plan/source.json",
   "docs/plan/build-plan.md",
   ...manifest.migrations.map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
 if (
-  executionPlan.sequence !== 87 ||
+  executionPlan.sequence !== 88 ||
   executionPlan.path !== "docs/plan/build-plan.md" ||
   executionPlan.sha256 !== hash(readFileSync("docs/plan/build-plan.md")) ||
   manifest.migrations.length !== 11 ||
@@ -770,7 +771,7 @@ check("source_snapshot_unchanged", changedSourcePaths.length === 0);
 const report = {
   schemaVersion: 1,
   task: "P05.T01q",
-  canonicalSequence: 87,
+  canonicalSequence: 88,
   scope: "actual_local_postgresql_captured_cookie_commitment_family_retirement_only",
   sourceHashes,
   checkCount: checks.length,
@@ -788,9 +789,9 @@ const report = {
     "Already-ended acknowledgement correlates original immutable family state, not a new command receipt or browser delivery.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01s/regressions", { recursive: true });
+mkdirSync("docs/evidence/P05.T01t/regressions", { recursive: true });
 writeFileSync(
-  "docs/evidence/P05.T01s/regressions/self-logout-postgresql-lab.json",
+  "docs/evidence/P05.T01t/regressions/self-logout-postgresql-lab.json",
   JSON.stringify(report, null, 2) + "\n",
 );
 console.log(
