@@ -1,0 +1,142 @@
+{
+  "task": "P05.T01a",
+  "plan_sequence": 85,
+  "observed_at": "2026-10-16T01:59:53.136Z",
+  "scope": "Actual isolated PostgreSQL17.11 immutable application migration and unprivileged SQL tenant boundary. Synthetic issuer/session data only; no WorkOS/provider/production authentication or capability authorization.",
+  "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+  "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "migration_sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+  "checks": [
+    {
+      "name": "unprivileged_service_login",
+      "passed": true
+    },
+    {
+      "name": "failed_migration_rolls_back_schema",
+      "passed": true
+    },
+    {
+      "name": "missing_context_returns_no_rows",
+      "passed": true
+    },
+    {
+      "name": "exact_typed_workspace_query_reads_only_eligible_projection",
+      "passed": true
+    },
+    {
+      "name": "valid_session_only_sees_assigned_workspace",
+      "passed": true
+    },
+    {
+      "name": "another_merchant_session_only_sees_their_workspace",
+      "passed": true
+    },
+    {
+      "name": "forged_session_returns_no_rows",
+      "passed": true
+    },
+    {
+      "name": "cross_organization_returns_no_rows",
+      "passed": true
+    },
+    {
+      "name": "unassigned_same_organization_workspace_returns_no_rows",
+      "passed": true
+    },
+    {
+      "name": "expired_session_returns_no_rows",
+      "passed": true
+    },
+    {
+      "name": "client_organization_guc_confers_no_authority",
+      "passed": true
+    },
+    {
+      "name": "transaction_context_cleared_after_commit",
+      "passed": true
+    },
+    {
+      "name": "transaction_context_cleared_after_rollback",
+      "passed": true
+    },
+    {
+      "name": "same_connection_next_merchant_is_isolated",
+      "passed": true
+    },
+    {
+      "name": "private_sessions_read_denied",
+      "passed": true
+    },
+    {
+      "name": "private_memberships_read_denied",
+      "passed": true
+    },
+    {
+      "name": "private_principals_read_denied",
+      "passed": true
+    },
+    {
+      "name": "session_issuer_write_denied",
+      "passed": true
+    },
+    {
+      "name": "workspace_write_denied",
+      "passed": true
+    },
+    {
+      "name": "workspace_truncate_denied",
+      "passed": true
+    },
+    {
+      "name": "owner_role_escalation_denied",
+      "passed": true
+    },
+    {
+      "name": "disable_rls_denied",
+      "passed": true
+    },
+    {
+      "name": "row_security_off_denied",
+      "passed": true
+    },
+    {
+      "name": "create_schema_object_denied",
+      "passed": true
+    },
+    {
+      "name": "force_rls_on_all_identity_tables",
+      "passed": true
+    },
+    {
+      "name": "composite_fk_rejects_cross_organization_membership",
+      "passed": true
+    },
+    {
+      "name": "committed_revocation_denies_next_statement_in_same_transaction",
+      "passed": true
+    },
+    {
+      "name": "concurrent_client_output_contains_no_session_proof",
+      "passed": true
+    },
+    {
+      "name": "revoked_session_returns_no_rows",
+      "passed": true
+    },
+    {
+      "name": "another_merchant_unaffected_by_revocation",
+      "passed": true
+    },
+    {
+      "name": "container_stdout_stderr_contains_no_session_proof",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Private local Unix socket trust is not regional TLS/IAM authentication.",
+    "Typed SQL port has no production pool/WorkOS issuer yet.",
+    "READ COMMITTED statement revocation is not cancellation of already running reads or provider effects.",
+    "Identity-owner maintenance policy is explicitly privileged; actual role graph/hosted policies still require qualification.",
+    "Audited lifecycle commands, teams, SSO/SCIM, linking, grants and automation remain follow-on work."
+  ]
+}

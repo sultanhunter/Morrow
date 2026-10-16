@@ -1,0 +1,1258 @@
+{
+  "task": "P05.T01o",
+  "observed_at": "2026-10-16T02:05:09.453Z",
+  "status": "frozen80_synthetic_regression_passed_not_provider_qualification",
+  "current_plan_sequence": 85,
+  "current_plan_digest": "62ad13ece3999eafa60d68688d34034471c3c0dd357d05de26e483b35ac2fadf",
+  "preserved_plan_sequence": 80,
+  "source_commit": "7c58249c8feae7cccfc53f412ff68d200e9bf6b4",
+  "operator_source_digest": "974598e9c3e407f18f375ac0b0d53e87db4373e4ea59b8cd65e64409c0a8c4f8",
+  "archive_manifest_sha256": "a9ad2225a4ca8472906c196f7a7979ba00d6a1648f7742679098ab7f8c0374a5",
+  "archive_files": {
+    ".nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "AGENTS.md": "54f3dc0b7c91e31d58dcea642e0ceb5c59c9e97c5736259f8944a697db28c37f",
+    "docs/decisions/workos-authentication-operator-qualification.json": "e776be1808fea93034febefd96966996447322924629239968e77096d15a4b33",
+    "docs/evidence/P05.T01l/postgresql-loopback-lab.json": "10bc935344daeff48e618f400ff4f15a15379688f5b3cefedbe6c5f2fb994e85",
+    "docs/packets/P05.T01l.md": "d3ac12033ee32423461668085a788c5951f77fa911f9d51702ab14d4f91ade6c",
+    "docs/plan/build-plan.md": "7983b440c0b202207cc4510c21f7c88bb308c339898e2ae3ca68cfc6b993d5fe",
+    "docs/plan/source.json": "91410bc94ee60c701e329ee65e7a253c693f1324ef0c59ab7c1301e8acb94a2a",
+    "infra/identity-role-prerequisites.sql": "2c166df1d5b18eda1b4be14c94a26fb31828292833ed110655608400b29fe9af",
+    "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "migrations/manifest.json": "e115ec9e3326dd75542fc28edecc7de9f37d44c92d975388d58c2cdeda760e9f",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "package.json": "60b87f587bc49483919aa0ba51db4c8992687c8f405a8000cec318dbad1d9067",
+    "packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "packages/identity/package.json": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "scripts/workos-authentication-operator-controller.mjs": "04df11e5e03bdd84264a028812e94e0899da6ac6a67f53653b20cd1172252f8a",
+    "scripts/workos-authentication-operator-database.mjs": "21841a7a275987040dbdb389d150ebe10c29760156eacfa51a2951a5b0bd1533",
+    "scripts/workos-authentication-operator-input.mjs": "6dac4d42746810af2c3ea53343e9bc98f2abfb0b051d4dc5534267e3269001d4",
+    "scripts/workos-authentication-operator-journal.mjs": "188ab85ac27c0df5443a3efb59df7b3a0487c750a6401a3d44b275a1064aa45a",
+    "scripts/workos-authentication-operator-lab.mjs": "3c6cb43b77da910aab570d1df999801a22f4dc9c6478c1dbac72257fa8eb04a8",
+    "scripts/workos-authentication-operator-listener.mjs": "427d81c1edb9995de2cc05736e26f774264af4ea5f27f15697977874c0b8189e",
+    "scripts/workos-authentication-operator-native.mjs": "e9cf7d9038b7bf890dcd114b21dfe56e27eb7dac8267fba2c428db380c19a778",
+    "scripts/workos-authentication-operator.mjs": "8aef09e8e1919146808481da499061d93af1c1459844045a390599a4dea23375",
+    "tests/fixtures/workos-authentication-evidence.mjs": "1faa18afb5f35fc4740a6f6ae1f08332102c0efb1a42ee42924778b63449af5b",
+    "tests/workos-authentication-operator-cli.test.mjs": "4c4c4d3e2589e41bf2a67ae04b7a5b6c8e91f71755c69f9dd75d2310b7491d59",
+    "tests/workos-authentication-operator-controller.test.mjs": "fd1140298c757e57dc18dcf165d204fad0acef7312584c4464066a166bd7d0a2",
+    "tests/workos-authentication-operator-input.test.mjs": "335fe42987ab7f85b58ecacd82d256d5dd7438ccb7243e99c9333cfb8c1d69ea",
+    "tests/workos-authentication-operator-journal.test.mjs": "e26217f686d00b93e94f1b37ae1916e359ec604b95bdfa66515ef6cc9106165d",
+    "tests/workos-authentication-operator-listener.test.mjs": "8d840358c2b7f814adba9f5bf8563caa14b056c2e593ff096760d4fa6b0e1b96",
+    "tests/workos-authentication-operator-native.test.mjs": "acf1a317e6063116884ce1b5f033de0c0d3b0a5b35dbf76b41284a317cad2703",
+    "tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d"
+  },
+  "tooling": {
+    "node": "v24.13.0",
+    "platform_package": "@esbuild/linux-x64",
+    "platform_binary_digest": "bab29b2ca7a9e89b67cf720b77b2d743f9f31f5cf0d5bd74ee8c8de30ced7014",
+    "platform_package_integrity": "sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw=="
+  },
+  "tests": [
+    {
+      "name": "a durable claim precedes allocation and native credential authority; adoption and child permit are once only",
+      "file": "tests/workos-authentication-operator-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "forged, serialized and hostile run/permit objects confer no authority or getter calls",
+      "file": "tests/workos-authentication-operator-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "false, expired and incorrectly bound approvals fail before lock or claim mutation",
+      "file": "tests/workos-authentication-operator-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "symlink ancestors are rejected before mkdir and private parents/regular files are required",
+      "file": "tests/workos-authentication-operator-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "private byte or same-file identity drift invalidates a run permanently",
+      "file": "tests/workos-authentication-operator-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "current source and clock are checked after the trusted callback and cannot revive",
+      "file": "tests/workos-authentication-operator-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "release removes only the owned temporary key and lock, retaining irreversible claim evidence",
+      "file": "tests/workos-authentication-operator-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "foreign key replacement is never deleted during cleanup",
+      "file": "tests/workos-authentication-operator-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "public profile rejects reflective/nonstring inputs, endpoint changes and extra authority",
+      "file": "tests/workos-authentication-operator-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "baseline freshness is checked at durable claim, including source work and fsync acknowledgment",
+      "file": "tests/workos-authentication-operator-input.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "fixed durable order gates credential reads and historical observation is not a new send handle",
+      "file": "tests/workos-authentication-operator-journal.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "wrong owned target bindings and prior/foreign identities cannot unlock the key",
+      "file": "tests/workos-authentication-operator-journal.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "page intents require exact sequential numbering, owner subject and fresh nonrepeated continuation",
+      "file": "tests/workos-authentication-operator-journal.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "unknown append/fsync acknowledgment permanently holds and retains the attempted record",
+      "file": "tests/workos-authentication-operator-journal.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "claimed roots and tampered records cannot recreate a controller or effect handle",
+      "file": "tests/workos-authentication-operator-journal.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "all stage payloads use closed primitive JSON boundaries without getters or proxy traps",
+      "file": "tests/workos-authentication-operator-journal.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "historical observation rejects impossible counts and malformed authority fields",
+      "file": "tests/workos-authentication-operator-journal.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "full controller protocol persists each intent before exposing a manual link or fake effect",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "start and valid callback latch synchronously before any await",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "malformed and mismatched callbacks do not consume the valid callback",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "replay or uncertain admission never reaches JWKS, POST or key",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "source drift after delayed JWKS prevents the sole POST intent",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "read-only reconciliation denial after admission cannot grant a send",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "closing during pending admission aborts immediately before any initiation",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "manual flow expiry is held without waiting for activation expiry",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "authorization error consumes only the valid local callback and creates no exchange effect",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "claim adoption cannot be reused by a second controller or foreign native factory",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "unknown fsync after a JWKS intent holds permanently without provider send",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "transport cannot assert a positive result without a durable observation",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "close is synchronous and idempotent while a delayed post-admission check resolves",
+      "file": "tests/workos-authentication-operator-controller.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "signed evidence stays private; durable target and page intent precede first key and request",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "native rejects forged or synthetic permits and injected options; synthetic is one-use branded",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "primitive closed input rejects proxy traps, duplicates, malformed Unicode and verifier without requests",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "JWKS observed metadata is projected but unknown/private/invalid keys deny before POST",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "HTTP origin, redirects, status, content, malformed UTF8 and duplicate JSON hold with no POST",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "post-GET intent/source/cancel/TLS drift prevents the single POST",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "token signature, subject, response subject and baseline SID gates precede target/key/catalogue",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "target durability failure, target expiry and page intent failure never read key",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "complete pagination after early match; selected policy accepts each of eight methods",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "unknown/impersonated target, complete miss, malformed later page and fifth page remain held",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "key failure, per-page source drift and malformed session bytes stop further GETs",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "evidence expires during awaited observation: historical success never overrides fresh handle",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "late callbacks after cancellation cannot read keys or issue another effect",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "late GET and POST bodies are disposed locally after the outer timeout",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "hostile thrown objects are never inspected or serialized; cancellation is coarse",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "clock regression, synchronous source-check time and close cannot yield fresh success",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "close promptly settles an abort-ignoring request and cancels its late body",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "shared phase budgets include synchronous callbacks and do not reset after JWKS or target",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "exchange shape and duplicate JSON are denied before verified target or credential",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "session HTTP failures and duplicate or malformed rows do not relax catalogue parsing",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "stalled body cancellation and a late session response are disposed without extra requests",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "beforePage cancellation and TLS drift occur before key reads; observation failure retains target only",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "the final source checkpoint cannot return evidence after its lease expires",
+      "file": "tests/workos-authentication-operator-native.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "GET start is only a protected form; valid POST begins once and presents a static authorization link",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "start requires exact Origin, bootstrap and CSRF without consuming an invalid initiation",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "same-origin policy applies only to the successful clean start form; null Origin remains denied",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "concurrent valid start requests latch once before the controller await",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "valid callback without Origin immediately303s while completion remains pending; replay cannot call twice",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "callback rejects wrong/duplicate proofs, unknown/duplicate query fields and malformed UTF8 without consuming valid flow",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "strict form-plus decoding preserves opaque values without Unicode normalization",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "closed provider-error callback requires valid browser/state and exposes no description",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "exact Host/raw path/method/Origin/cookie cardinality rejects aliases before controller work",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "URI/header/cookie/body/code bounds and live flow expiry reject without SQL/provider calls",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "invalid controller validation cannot consume the listener callback latch",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "result GET is read-only, sanitized and bounded; malformed controller status never echoes",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "foreign authorization URLs are never exposed and fixed listener has no alternate port API",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "unclaimed or serialized runs cannot construct a listener or touch a controller",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "strict form body decoding rejects malformed UTF8 before a start latch",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "a BOM cannot normalize a nonexact CSRF form into an accepted body",
+      "file": "tests/workos-authentication-operator-listener.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "CLI rejects malformed and unexpected arguments before private effects",
+      "file": "tests/workos-authentication-operator-cli.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "native start outside its qualified directory cannot allocate or claim a run",
+      "file": "tests/workos-authentication-operator-cli.test.mjs",
+      "passed": true
+    },
+    {
+      "name": "command-line failures emit fixed JSON without reflecting supplied paths or values",
+      "file": "tests/workos-authentication-operator-cli.test.mjs",
+      "passed": true
+    }
+  ],
+  "unit_counts": {
+    "tests": 72,
+    "failed": 0,
+    "passed": 72,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "topLevel": 72,
+    "suites": 0
+  },
+  "checks": [
+    {
+      "name": "initial_fixed_listener_port_closed",
+      "passed": true
+    },
+    {
+      "name": "claim_precedes_database_allocation",
+      "passed": true
+    },
+    {
+      "name": "database_has_only_authentication_binding",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_exact_shared_synthetic_database_binding",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_clean_bootstrap_only",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_real_begin_then_private_static_link",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_invalid_callback_keeps_valid_flow",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_callback_clean_303",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_callback_303_while_completion_gated",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_duplicate_callback_cannot_reenter",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_jwks_exact_fixed_endpoint",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_post_keyless_exact_tuple",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_session_1_owned_fixed_selector",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_session_1_follows_target_and_durable_intent",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_session_2_owned_fixed_selector",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_session_2_follows_target_and_durable_intent",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_bounded_terminal",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_expected_qualification",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_one_use_effect_counts",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_exact_counts",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_listener_closed",
+      "passed": true
+    },
+    {
+      "name": "positive_complete_two_page_temporary_credential_absent",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_exact_shared_synthetic_database_binding",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_clean_bootstrap_only",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_real_begin_then_private_static_link",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_invalid_callback_keeps_valid_flow",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_callback_clean_303",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_duplicate_callback_cannot_reenter",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_jwks_exact_fixed_endpoint",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_post_keyless_exact_tuple",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_session_1_owned_fixed_selector",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_session_1_follows_target_and_durable_intent",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_bounded_terminal",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_expected_qualification",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_one_use_effect_counts",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_exact_counts",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_held_never_confers_authority",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_listener_closed",
+      "passed": true
+    },
+    {
+      "name": "target_impersonation_held_temporary_credential_absent",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_exact_shared_synthetic_database_binding",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_clean_bootstrap_only",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_real_begin_then_private_static_link",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_invalid_callback_keeps_valid_flow",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_callback_clean_303",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_duplicate_callback_cannot_reenter",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_jwks_exact_fixed_endpoint",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_post_keyless_exact_tuple",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_bounded_terminal",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_expected_qualification",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_one_use_effect_counts",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_exact_counts",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_held_never_confers_authority",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_wrong_subject_no_target_or_key",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_listener_closed",
+      "passed": true
+    },
+    {
+      "name": "wrong_signed_subject_temporary_credential_absent",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_exact_shared_synthetic_database_binding",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_clean_bootstrap_only",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_real_begin_then_private_static_link",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_invalid_callback_keeps_valid_flow",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_callback_clean_303",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_duplicate_callback_cannot_reenter",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_jwks_exact_fixed_endpoint",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_bounded_terminal",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_expected_qualification",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_one_use_effect_counts",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_exact_counts",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_held_never_confers_authority",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_listener_closed",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_admission_drift_temporary_credential_absent",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_exact_shared_synthetic_database_binding",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_clean_bootstrap_only",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_real_begin_then_private_static_link",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_invalid_callback_keeps_valid_flow",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_callback_clean_303",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_duplicate_callback_cannot_reenter",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_jwks_exact_fixed_endpoint",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_bounded_terminal",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_expected_qualification",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_one_use_effect_counts",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_exact_counts",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_held_never_confers_authority",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_listener_closed",
+      "passed": true
+    },
+    {
+      "name": "post_jwks_source_drift_temporary_credential_absent",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_exact_shared_synthetic_database_binding",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_clean_bootstrap_only",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_real_begin_then_private_static_link",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_invalid_callback_keeps_valid_flow",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_callback_clean_303",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_duplicate_callback_cannot_reenter",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_bounded_terminal",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_expected_qualification",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_one_use_effect_counts",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_exact_counts",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_held_never_confers_authority",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_listener_closed",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_no_effect_temporary_credential_absent",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_exact_shared_synthetic_database_binding",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_clean_bootstrap_only",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_real_begin_then_private_static_link",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_invalid_callback_keeps_valid_flow",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_callback_clean_303",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_duplicate_callback_cannot_reenter",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_bounded_terminal",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_expected_qualification",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_one_use_effect_counts",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_exact_counts",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_held_never_confers_authority",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_listener_closed",
+      "passed": true
+    },
+    {
+      "name": "unknown_release_no_effect_temporary_credential_absent",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_exact_shared_synthetic_database_binding",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_clean_bootstrap_only",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_real_begin_then_private_static_link",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_invalid_callback_keeps_valid_flow",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_callback_clean_303",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_duplicate_callback_cannot_reenter",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_jwks_exact_fixed_endpoint",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_post_keyless_exact_tuple",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_session_1_owned_fixed_selector",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_session_1_follows_target_and_durable_intent",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_bounded_terminal",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_expected_qualification",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_one_use_effect_counts",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_exact_counts",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_held_never_confers_authority",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_listener_closed",
+      "passed": true
+    },
+    {
+      "name": "credential_removed_after_page_temporary_credential_absent",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_exact_shared_synthetic_database_binding",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_clean_bootstrap_only",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_real_begin_then_private_static_link",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_invalid_callback_keeps_valid_flow",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_callback_clean_303",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_duplicate_callback_cannot_reenter",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_jwks_exact_fixed_endpoint",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_post_keyless_exact_tuple",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_session_1_owned_fixed_selector",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_session_1_follows_target_and_durable_intent",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_session_2_owned_fixed_selector",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_session_2_follows_target_and_durable_intent",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_bounded_terminal",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_expected_qualification",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_one_use_effect_counts",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_exact_counts",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_held_never_confers_authority",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_listener_closed",
+      "passed": true
+    },
+    {
+      "name": "malformed_later_page_temporary_credential_absent",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_exact_shared_synthetic_database_binding",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_clean_bootstrap_only",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_real_begin_then_private_static_link",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_invalid_callback_keeps_valid_flow",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_callback_clean_303",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_duplicate_callback_cannot_reenter",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_jwks_exact_fixed_endpoint",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_post_keyless_exact_tuple",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_session_1_owned_fixed_selector",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_session_1_follows_target_and_durable_intent",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_bounded_terminal",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_expected_qualification",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_one_use_effect_counts",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_exact_counts",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_held_never_confers_authority",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_historical_observation_does_not_override_expired_handle",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_listener_closed",
+      "passed": true
+    },
+    {
+      "name": "lease_expires_after_journal_temporary_credential_absent",
+      "passed": true
+    },
+    {
+      "name": "all_cases_still_create_no_local_identity_or_mapping",
+      "passed": true
+    },
+    {
+      "name": "ten_real_sql_challenges_and_admissions",
+      "passed": true
+    },
+    {
+      "name": "sql_and_container_output_exclude_private_material",
+      "passed": true
+    },
+    {
+      "name": "observed_host_child_closure_without_graceful_claim",
+      "passed": true
+    },
+    {
+      "name": "fresh_preauth_backend_namespace_absent",
+      "passed": true
+    },
+    {
+      "name": "independent_owned_container_fence_absent",
+      "passed": true
+    },
+    {
+      "name": "database_reentry_rejected",
+      "passed": true
+    },
+    {
+      "name": "retained_claim_after_database_loss_is_not_a_send_handle",
+      "passed": true
+    },
+    {
+      "name": "primary_temporary_key_removed_after_database_teardown",
+      "passed": true
+    },
+    {
+      "name": "host_child_signal_reported_unverified",
+      "passed": true
+    },
+    {
+      "name": "host_child_signal_independent_container_fence",
+      "passed": true
+    },
+    {
+      "name": "host_child_signal_temporary_key_removed",
+      "passed": true
+    },
+    {
+      "name": "backend_inspection_loss_reported_unverified",
+      "passed": true
+    },
+    {
+      "name": "backend_inspection_loss_independent_container_fence",
+      "passed": true
+    },
+    {
+      "name": "backend_inspection_loss_temporary_key_removed",
+      "passed": true
+    },
+    {
+      "name": "final_listener_port_closed",
+      "passed": true
+    },
+    {
+      "name": "source_closure_unchanged",
+      "passed": true
+    },
+    {
+      "name": "public_report_excludes_private_material",
+      "passed": true
+    }
+  ],
+  "counts": {
+    "syntheticJwksGets": 8,
+    "syntheticCodePosts": 6,
+    "syntheticSessionGets": 7,
+    "realProviderRequests": 0
+  },
+  "engine": {
+    "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+    "version": "17.11 (Debian 17.11-1.pgdg13+2)"
+  },
+  "cleanup": {
+    "hostChildClosure": "observed",
+    "backendNamespace": "absent",
+    "containerFence": "absent"
+  },
+  "cleanup_faults": [
+    {
+      "kind": "host_child_signal",
+      "hostChildClosure": "unverified",
+      "backendNamespace": "absent",
+      "containerFence": "absent"
+    },
+    {
+      "kind": "backend_inspection_loss",
+      "hostChildClosure": "observed",
+      "backendNamespace": "unverified",
+      "containerFence": "absent"
+    }
+  ],
+  "source_digests": {
+    "scripts/workos-authentication-operator-input.mjs": "6dac4d42746810af2c3ea53343e9bc98f2abfb0b051d4dc5534267e3269001d4",
+    "scripts/workos-authentication-operator-journal.mjs": "188ab85ac27c0df5443a3efb59df7b3a0487c750a6401a3d44b275a1064aa45a",
+    "scripts/workos-authentication-operator-controller.mjs": "04df11e5e03bdd84264a028812e94e0899da6ac6a67f53653b20cd1172252f8a",
+    "scripts/workos-authentication-operator-native.mjs": "e9cf7d9038b7bf890dcd114b21dfe56e27eb7dac8267fba2c428db380c19a778",
+    "scripts/workos-authentication-operator-listener.mjs": "427d81c1edb9995de2cc05736e26f774264af4ea5f27f15697977874c0b8189e",
+    "scripts/workos-authentication-operator-database.mjs": "21841a7a275987040dbdb389d150ebe10c29760156eacfa51a2951a5b0bd1533",
+    "scripts/workos-authentication-operator-lab.mjs": "3c6cb43b77da910aab570d1df999801a22f4dc9c6478c1dbac72257fa8eb04a8",
+    "scripts/workos-authentication-operator.mjs": "8aef09e8e1919146808481da499061d93af1c1459844045a390599a4dea23375",
+    "docs/decisions/workos-authentication-operator-qualification.json": "e776be1808fea93034febefd96966996447322924629239968e77096d15a4b33",
+    "docs/plan/build-plan.md": "7983b440c0b202207cc4510c21f7c88bb308c339898e2ae3ca68cfc6b993d5fe",
+    "docs/plan/source.json": "91410bc94ee60c701e329ee65e7a253c693f1324ef0c59ab7c1301e8acb94a2a",
+    "docs/packets/P05.T01l.md": "d3ac12033ee32423461668085a788c5951f77fa911f9d51702ab14d4f91ade6c",
+    "AGENTS.md": "54f3dc0b7c91e31d58dcea642e0ceb5c59c9e97c5736259f8944a697db28c37f",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "packages/identity/package.json": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3",
+    "packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "infra/identity-role-prerequisites.sql": "2c166df1d5b18eda1b4be14c94a26fb31828292833ed110655608400b29fe9af",
+    "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "migrations/manifest.json": "e115ec9e3326dd75542fc28edecc7de9f37d44c92d975388d58c2cdeda760e9f",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    ".nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "package.json": "60b87f587bc49483919aa0ba51db4c8992687c8f405a8000cec318dbad1d9067",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+    "tests/workos-authentication-operator-listener.test.mjs": "8d840358c2b7f814adba9f5bf8563caa14b056c2e593ff096760d4fa6b0e1b96",
+    "tests/workos-authentication-operator-input.test.mjs": "335fe42987ab7f85b58ecacd82d256d5dd7438ccb7243e99c9333cfb8c1d69ea",
+    "tests/workos-authentication-operator-controller.test.mjs": "fd1140298c757e57dc18dcf165d204fad0acef7312584c4464066a166bd7d0a2",
+    "tests/workos-authentication-operator-journal.test.mjs": "e26217f686d00b93e94f1b37ae1916e359ec604b95bdfa66515ef6cc9106165d",
+    "tests/workos-authentication-operator-native.test.mjs": "acf1a317e6063116884ce1b5f033de0c0d3b0a5b35dbf76b41284a317cad2703",
+    "tests/workos-authentication-operator-cli.test.mjs": "4c4c4d3e2589e41bf2a67ae04b7a5b6c8e91f71755c69f9dd75d2310b7491d59"
+  },
+  "regression_sources": {
+    "scripts/workos-authentication-operator-regression.mjs": "8224863667d89fe2400652d2869871396bce716d89611cf31e81886636fe4c73",
+    "tests/workos-authentication-operator-regression.test.mjs": "6c8246c1690190929181e7b1a79becc6ee251ac15deaec85ab77606ccd89ed96",
+    "scripts/workos-operator-regression.mjs": "439d960400acc9f2ea3a17f22b063acbb415db13d3c848656266928b93b8d26b"
+  },
+  "preserved_reports": {
+    "docs/evidence/P05.T01l/postgresql-loopback-lab.json": "10bc935344daeff48e618f400ff4f15a15379688f5b3cefedbe6c5f2fb994e85",
+    "docs/evidence/P05.T01l/frozen80-regression.json": "74ab8e1090b65c3e2788fefdd24f62871176538b835b59632106655c460a341d",
+    "docs/evidence/P05.T01l/local-validation.json": "39dc648603ba4ad9715ae36b62fded55d971cf915d3266ee7d5dfe23096a4252",
+    "docs/evidence/P05.T01l/review.json": "e10c52655b208f68bf30e1bec71991b976c908d345d167069bbf9479da479d75",
+    "docs/evidence/P05.T01l/actual-staging-trial.json": "6191d880a1e713982c951c7bc6e5baa6bb988965fb10d8d42ef5eada58fba14c",
+    "docs/evidence/P05.T01n/postgresql-loopback-lab.json": "6031a7083b71b59ab2b4651dd7923a078bff8c0a5175eecd43abf1cc0e185132",
+    "docs/evidence/P05.T01n/local-validation.json": "b6fcf85af971576b65edd5bdd6ab4eeff4cda4d4366fac91be56d4dcceeebefa",
+    "docs/evidence/P05.T01n/review.json": "26d87758acf11cf70228ce314ca61a93534ee834544ff1fc04d7c66f9817833d",
+    "docs/evidence/P05.T01n/actual-staging-trial.json": "7b3b95df108fb4ecf62dbb7c7643737c5e967c364f31992a6afa67e53b3271eb"
+  },
+  "historical_reports_unchanged": true,
+  "archive_unchanged": true,
+  "copied_execution_sources_unchanged": true,
+  "temporary_copy_removed": true,
+  "workspace_resolution": "copied_archived_packages_only",
+  "scope": "Original72 synthetic operator units and181 real isolated SQL/loopback checks in a verified copy. No native activation, actual provider request, private input or new provider qualification. Historical actual trials are not rerun."
+}

@@ -1,3 +1,15 @@
+# Current continuation: self-logout engineering passed; final publication pending
+
+Canonical85 remains current at489 blocks; the fresh full Page read and no-op snapshot refresh match the saved authority. Pending candidate ac9f1c6f7414add3b094a1eb0f0f7d087077e1c0 completed exact-head isolated GitHub CI38837737312 attempt1 with all48 final API steps successful. The run log records1,957 repository tests passed, zero failed, and11 scaffold guards. The earlier1,943-test Mac baseline is retained separately.
+
+The downloaded329,056-byte artifact matches GitHub's SHA25692ecd2b5c0f3725eb4268873cd5f53239fceefb830abae9c095b2604d704e6bb. Its52 allowlisted files contain48 fresh reports, actual tested-head/source commitments and exact source restoration. Provider-free checks passed: logout SQL114, logout HTTPS157 across80requests/14cases and177 physical/backend client closures, logout Workers60cases/415checks; maintained login custody106, HTTPS98 and Workers627; workspace HTTP117/Workers382 and linking SQL121/HTTP96/Workers590. All prior serial provider-free regressions passed. No real provider request occurred.
+
+Independent source and actual report/domain/cleanup review precede the final evidence parents. Preserve all352 historical evidence files and every existing Mac report byte-exact; store fresh Linux reports under P05.T01q/ci-current-reports. Earlier Mac holds remain historical observations, never relabeled as passes. Current logout retires only the captured family, never clears a newer cookie and does not revoke the provider session.
+
+The separate evidence-only final commit still needs its own exact-head hosted CI and guarded clean Desktop alignment before publication is complete. Publisher is the pending candidate; Desktop stays on verified84 until that gate passes. Parent P05.T01/P05.T03 remain In progress. No native WorkOS/key/sign-in, hosted identity, merchant migration, real Shopify or merchant activation is included. Only after completed85 publication may the proposed private fixed provider-port dependency be recorded in the canonical Page before implementation.
+
+# Historical85 pending candidate checkpoint
+
 # Current continuation: isolated CI validation pending
 
 The user requested unattended continuation. No user input is required for the current provider-free work. A fresh full canonical Page read still matches85/489 blocks and the saved snapshot exactly; the no-op refresh receipt is outside Git. The logout implementation and independent source reviews remain current. The previous Mac engineering baseline passed1,943 tests/11 scaffold guards, but it does not qualify subsequent CI evidence tooling changes.
