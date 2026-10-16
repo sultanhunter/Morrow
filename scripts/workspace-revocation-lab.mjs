@@ -22,9 +22,14 @@ const check = (name, condition) => {
 const literal = (s) => "'" + s.replaceAll("'", "''") + "'";
 const hash = (s) => createHash("sha256").update(s).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-const migrations = manifest.migrations.map((m) => {
+// This preserved regression keeps its qualified pre-login-custody schema.
+if (!Array.isArray(manifest.migrations) || manifest.migrations.length < 9)
+  throw Error("PRESERVED_MIGRATIONS_1_TO_9_REQUIRED");
+const selectedMigrations = manifest.migrations.slice(0, 9);
+if (selectedMigrations.length !== 9) throw Error("PRESERVED_MIGRATIONS_1_TO_9_REQUIRED");
+const migrations = selectedMigrations.map((m, index) => {
   const text = readFileSync("migrations/" + m.file, "utf8");
-  if (hash(text) !== m.sha256) throw Error("MIGRATION_CHECKSUM");
+  if (m.sequence !== index + 1 || hash(text) !== m.sha256) throw Error("MIGRATION_CHECKSUM");
   return { record: m, text };
 });
 if (migrations.length < 4 || migrations[3].record.sequence !== 4)
@@ -786,6 +791,7 @@ writeFileSync(
       migrations: migrations.map((m) => ({ file: m.record.file, sha256: m.record.sha256 })),
       checks,
       limitations: [
+        "Only the preserved migrations1–9 are installed; migration10 login custody is not installed or qualified by this regression.",
         "No WorkOS authentication, public lifecycle route, grant issuance, production approval receipt issuer or merchant activation.",
         "Workspace-only access revocation preserves organization sessions and other workspaces; no affected-run cancellation or dispatch claim.",
         "Scripts-only psql adapter is not a production lifecycle credential or driver qualification.",

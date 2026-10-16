@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-10-15T23:56:38.911Z",
+  "scope": "Candidate artifact integrity, JavaScript syntax and specified contrast pairs; browser receipt is retained evidence, not rerun by this command. Not full accessibility or usability qualification.",
+  "contrasts": [
+    {
+      "foreground": "text",
+      "background": "surface",
+      "minimum": 4.5,
+      "ratio": 15.975704102241814
+    },
+    {
+      "foreground": "subdued",
+      "background": "surface",
+      "minimum": 4.5,
+      "ratio": 5.869412169235336
+    },
+    {
+      "foreground": "subdued",
+      "background": "canvas",
+      "minimum": 4.5,
+      "ratio": 5.380479656753046
+    },
+    {
+      "foreground": "accent",
+      "background": "accentSurface",
+      "minimum": 4.5,
+      "ratio": 5.016347429849848
+    },
+    {
+      "foreground": "success",
+      "background": "successSurface",
+      "minimum": 4.5,
+      "ratio": 6.51200197372905
+    },
+    {
+      "foreground": "warning",
+      "background": "warningSurface",
+      "minimum": 4.5,
+      "ratio": 5.772555486478631
+    },
+    {
+      "foreground": "danger",
+      "background": "dangerSurface",
+      "minimum": 4.5,
+      "ratio": 6.580194427330693
+    },
+    {
+      "foreground": "focus",
+      "background": "surface",
+      "minimum": 3,
+      "ratio": 7.180395781982851
+    },
+    {
+      "foreground": "controlBorder",
+      "background": "surface",
+      "minimum": 3,
+      "ratio": 3.1790961720265543
+    }
+  ],
+  "browser_cases": 54,
+  "baseline_qualification": "pending_real_participants_and_reviewer",
+  "input_digests": {
+    "docs/design/prototype.html": "4f9e5abaef48c4ff4a9094335f57f8dde70ec06ad2827a3f17cb40accb78feeb",
+    "docs/design/tokens.json": "f04e760faf336d8120c4b59733179f4c1ba051d7e810cc31bb2242b90afef27f",
+    "docs/design/component-baseline.md": "dd43701476d5584420050df291780fd146654794136ecb9678ae6753431428ed",
+    "docs/design/prototype-guide.md": "0ab5b259c2c8ecc262c74ff6dbd6ad85c6797f833427abab916623d65ec79416",
+    "docs/acceptance/P02.md": "078c25236d3bb7010f9fd70625c21e275bc0e275320e49285e952d79a056ee2b",
+    "docs/evidence/P02.T03/browser-checks.json": "5bdd7fc6d328f8c586371efae07ca9a6e5a28445c4b8c12cd28fe5d11eecbbcc"
+  }
+}

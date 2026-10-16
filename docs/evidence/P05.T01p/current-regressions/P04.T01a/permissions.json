@@ -1,0 +1,109 @@
+{
+  "scope": "Selected-stack local design inventory; not provider deployment, identity/network proof or authenticated approval",
+  "stack": "cloudflare-neon-runtime",
+  "runtime_provider": "e2b",
+  "mode": "permissions",
+  "paid_resources_created": false,
+  "deployment_entrypoint": false,
+  "environments": [
+    {
+      "environment": "development",
+      "configuration_sha256": "e6cf2b7ee66f6b2de39bc16019d984f3eaaa2faa3a3835e7b0c2740c7065dc4e",
+      "profiles": {
+        "api": [
+          "current_identity_and_policy_reads",
+          "authorized_artifact_gateway",
+          "submit_bounded_commands"
+        ],
+        "connector": [
+          "verify_install_webhook_origin",
+          "submit_scoped_connector_commands"
+        ],
+        "orchestrator": [
+          "opaque_queue_workflow_references",
+          "request_current_authority_and_budget"
+        ],
+        "credential_broker": [
+          "tenant_environment_bound_credential_records",
+          "approved_provider_calls_only"
+        ],
+        "execution": [
+          "leased_broker_artifact_capabilities_only"
+        ],
+        "deployment": [
+          "reviewed_environment_configuration_only"
+        ],
+        "recovery": [
+          "quarantined_restore_and_marker_replay_only"
+        ]
+      },
+      "effective_provider_permissions": "not_tested"
+    },
+    {
+      "environment": "staging",
+      "configuration_sha256": "a221c210a2ab03c4bde60add2ad55832d536f37002f4668464702f36afb39043",
+      "profiles": {
+        "api": [
+          "current_identity_and_policy_reads",
+          "authorized_artifact_gateway",
+          "submit_bounded_commands"
+        ],
+        "connector": [
+          "verify_install_webhook_origin",
+          "submit_scoped_connector_commands"
+        ],
+        "orchestrator": [
+          "opaque_queue_workflow_references",
+          "request_current_authority_and_budget"
+        ],
+        "credential_broker": [
+          "tenant_environment_bound_credential_records",
+          "approved_provider_calls_only"
+        ],
+        "execution": [
+          "leased_broker_artifact_capabilities_only"
+        ],
+        "deployment": [
+          "reviewed_environment_configuration_only"
+        ],
+        "recovery": [
+          "quarantined_restore_and_marker_replay_only"
+        ]
+      },
+      "effective_provider_permissions": "not_tested"
+    },
+    {
+      "environment": "production",
+      "configuration_sha256": "ebd53c1a861609350aa1a5a488e10100cee8073689b89c38d6de887c14f7c08f",
+      "profiles": {
+        "api": [
+          "current_identity_and_policy_reads",
+          "authorized_artifact_gateway",
+          "submit_bounded_commands"
+        ],
+        "connector": [
+          "verify_install_webhook_origin",
+          "submit_scoped_connector_commands"
+        ],
+        "orchestrator": [
+          "opaque_queue_workflow_references",
+          "request_current_authority_and_budget"
+        ],
+        "credential_broker": [
+          "tenant_environment_bound_credential_records",
+          "approved_provider_calls_only"
+        ],
+        "execution": [
+          "leased_broker_artifact_capabilities_only"
+        ],
+        "deployment": [
+          "reviewed_environment_configuration_only"
+        ],
+        "recovery": [
+          "quarantined_restore_and_marker_replay_only"
+        ]
+      },
+      "effective_provider_permissions": "not_tested"
+    }
+  ]
+}

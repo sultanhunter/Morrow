@@ -10,9 +10,14 @@ const check = (name, condition) => {
 };
 const literal = (s) => "'" + s.replaceAll("'", "''") + "'";
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-const migrations = manifest.migrations.map((m) => {
+// This preserved regression keeps its qualified pre-login-custody schema.
+if (!Array.isArray(manifest.migrations) || manifest.migrations.length < 9)
+  throw Error("PRESERVED_MIGRATIONS_1_TO_9_REQUIRED");
+const selectedMigrations = manifest.migrations.slice(0, 9);
+if (selectedMigrations.length !== 9) throw Error("PRESERVED_MIGRATIONS_1_TO_9_REQUIRED");
+const migrations = selectedMigrations.map((m, index) => {
   const text = readFileSync("migrations/" + m.file, "utf8");
-  if (createHash("sha256").update(text).digest("hex") !== m.sha256)
+  if (m.sequence !== index + 1 || createHash("sha256").update(text).digest("hex") !== m.sha256)
     throw Error("MIGRATION_CHECKSUM");
   return { record: m, text };
 });
@@ -339,6 +344,7 @@ writeFileSync(
       migrations: migrations.map((m) => ({ file: m.record.file, sha256: m.record.sha256 })),
       checks,
       limitations: [
+        "Only the preserved migrations1–9 are installed; migration10 login custody is not installed or qualified by this regression.",
         "Grant issuance/audited lifecycle commands and dispatch serialization remain pending.",
         "Only identity-owned workspace resources resolve; other domain resource ownership awaits its integration.",
         "psql protocol adapter is local test-only, not a production pool, TLS/IAM proof or authenticator.",

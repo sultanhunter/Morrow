@@ -1,0 +1,85 @@
+{
+  "task": "P05.T01p",
+  "current_plan_sequence": 84,
+  "reviewer": "next_identity_packet",
+  "review_scope": "independent_other_author_SQL10_roles_custody_controlled_driver_and_isolated_seeder",
+  "observed_at": "2026-10-15T23:51:30.454494+00:00",
+  "conclusion": "clear_for_reviewed_source_units_and_final_actual_SQL_evidence",
+  "source_digests": {
+    "migrations/0010.login-flow-custody.sql": "51c6d7ca9e31a897352c4a8b2e85824eb4a7b58506629246bce63c9d92070475",
+    "infra/identity-login-role-prerequisites.sql": "17c25b456d85d6b0a70fe312be885f4543339da9ebaf04122b585ccc2d4c541b",
+    "packages/identity/src/login-flow-custody.ts": "5ab4256c9269886b83578669ec15ee263a51ed72b0eb04892fecc600aa56d503",
+    "scripts/local-login-flow-sql.mjs": "93a8b1085e89b1516c39b061c05c70869e10a612b6418e3ff10c882abd755eab",
+    "scripts/fixtures/standalone-login-fixture.mjs": "672a9b3234080a4fb5e4b02379c46f21aa374187db69d26e58be08adff99817e",
+    "tests/login-flow-custody.test.mjs": "b2ca5e823b825d1b4c29908d0191aed98c1ecbf26ee714b260ac13db1eeb4cfa",
+    "docs/packets/P05.T01p.md": "6557f00627f4c92101890c615c564b1a26003f15cd558d2317f765a2c57b66e0",
+    "scripts/login-flow-custody-lab.mjs": "67375d22ffb692463d043f56279e9d2cf035f52a44ee373622c84f5075aec194"
+  },
+  "source_inventory_digest": "13c23ae67914a6f1cdc53efb1642e1a537d6cd2d0dbc250219267ad0a5228b6c",
+  "material_findings": [],
+  "resolved_findings": [
+    {
+      "id": "cipher_canonical_bits",
+      "severity": "P2",
+      "problem": "Port input/result validation accepted base64url alphabet/length with noncanonical trailing bits before SQL acquisition; SQL and controller already denied them.",
+      "resolution": "Owner added bounded atob/btoa canonical roundtrip and17th zero-connect negative; independently inspected current implementation and ran17 units."
+    },
+    {
+      "id": "cleanup_all_attempts",
+      "severity": "P2",
+      "problem": "Driver.close Promise.all could report rejection before another started disposal settled.",
+      "resolution": "Owner now awaits Promise.allSettled of every owned client and then raises one fixed failure if any rejected; uncertainty is not relabeled success."
+    }
+  ],
+  "reviewed_invariants": [
+    "FORCE RLS and owner-only policy on all six private tables; exact distinct safe session_user checks and no executor table/role privileges.",
+    "Configuration and command guards/tombstones are immutable; lifecycle transitions only intent\u2192awaiting_callback\u2192claimed, with append-only events and no generic phase setter.",
+    "Fresh claim atomically erases stored ciphertext, returns its old value only once, and application withholds the result until COMMIT acknowledgement and awaited physical disposal.",
+    "Create/bind/claim recheck DB time/config after guarded inserts/updates/event waits. Cross-configuration rate/quota serializes one environment/profile quota row.",
+    "Eligibility and historical reconciliation use genuine READ ONLY transactions/SELECT bodies and cannot return capsules or create authority.",
+    "Unresolved claimed detail compacts after7/30days only after immutable minimum tombstone insertion; three command guards remain; pseudonymized audit expiry is365days, not effect closure.",
+    "Isolated driver uses fixed parameterized statements and dedicated processes; cleanup terminates only generated app-name/role namespace and freshly checks backend absence, with host-signal uncertainty separate.",
+    "Three final actual waits capture the exact warmed login consumer and exact holder blocking PID before original expiry; profile revocation/400ms DB-clock expiry/locked-quota profile drift deny SQL output without capsule consumption or partial intent guards. All original83 checks are unchanged and23 additional checks remain separately identified."
+  ],
+  "validation": [
+    {
+      "command": "/opt/homebrew/opt/node@24/bin/node --import tsx --test tests/login-flow-custody.test.mjs",
+      "exit_code": 0,
+      "tests_passed": 17,
+      "log": "/private/tmp/morrow84-independent-custody-units.log"
+    },
+    {
+      "kind": "independent_read_only_final_report_audit",
+      "checks": 106,
+      "selected_source_hashes_recomputed": 33,
+      "normal_connections": 59,
+      "fault_connections": 1,
+      "holders": 3,
+      "original83_check_preservation": true
+    }
+  ],
+  "limits": [
+    "This is independent source/unit review, not an independently executed PostgreSQL qualification; SQL owner/dev own real engine evidence.",
+    "The reviewer authored the login controller/protocol/facade and does not claim those independently reviewed.",
+    "Reconciliation verifies historical fixed-command/config/workspace occupancy and receipt consistency, not an unpersisted original JWT subject or HTTP delivery.",
+    "No hosted/provider/browser/merchant operations performed.",
+    "Earlier source-bound83-check measurement is preserved outsideGit; it is not relabeled as current. Current106 checks are the only final custody evidence audited here."
+  ],
+  "actual_evidence_review": {
+    "path": "docs/evidence/P05.T01p/postgresql-custody-lab.json",
+    "sha256": "2a28590d7fe3ce9189d9c5177231512578af436d002c7288c7efb53e5200eec3",
+    "checks": 106,
+    "all_checks_true": true,
+    "unique_checks": true,
+    "original83_checks_identical": true,
+    "added_checks": 23,
+    "selected_sources": 33,
+    "selected_sources_fresh": true,
+    "normal_connections_physically_verified": 59,
+    "fault_connections_physically_verified": 1,
+    "three_wait_holders_normal_and_backend_absent": true,
+    "container_absent": true,
+    "provider_requests": 0,
+    "scope": "synthetic_private_login_custody_actual_postgresql"
+  }
+}

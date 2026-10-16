@@ -1,0 +1,49 @@
+{
+  "scope": "Selected-stack local design inventory; not provider deployment, identity/network proof or authenticated approval",
+  "stack": "cloudflare-neon-runtime",
+  "runtime_provider": "e2b",
+  "mode": "readiness",
+  "paid_resources_created": false,
+  "deployment_entrypoint": false,
+  "environments": [
+    {
+      "environment": "development",
+      "configuration_sha256": "e6cf2b7ee66f6b2de39bc16019d984f3eaaa2faa3a3835e7b0c2740c7065dc4e",
+      "status": "pending",
+      "paid_creation_authorized": false,
+      "reasons": [
+        "OWNED_PROVIDER_BINDINGS_REQUIRED",
+        "ACTUAL_PROVIDER_QUALIFICATION_REQUIRED",
+        "COMPLETE_BOUND_QUOTE_REQUIRED",
+        "BOUND_OWNER_COST_AUTHORIZATION_REQUIRED",
+        "AUTHENTICATED_DEPLOYMENT_PORT_NOT_IMPLEMENTED"
+      ]
+    },
+    {
+      "environment": "staging",
+      "configuration_sha256": "a221c210a2ab03c4bde60add2ad55832d536f37002f4668464702f36afb39043",
+      "status": "pending",
+      "paid_creation_authorized": false,
+      "reasons": [
+        "OWNED_PROVIDER_BINDINGS_REQUIRED",
+        "ACTUAL_PROVIDER_QUALIFICATION_REQUIRED",
+        "COMPLETE_BOUND_QUOTE_REQUIRED",
+        "BOUND_OWNER_COST_AUTHORIZATION_REQUIRED",
+        "AUTHENTICATED_DEPLOYMENT_PORT_NOT_IMPLEMENTED"
+      ]
+    },
+    {
+      "environment": "production",
+      "configuration_sha256": "ebd53c1a861609350aa1a5a488e10100cee8073689b89c38d6de887c14f7c08f",
+      "status": "pending",
+      "paid_creation_authorized": false,
+      "reasons": [
+        "OWNED_PROVIDER_BINDINGS_REQUIRED",
+        "ACTUAL_PROVIDER_QUALIFICATION_REQUIRED",
+        "COMPLETE_BOUND_QUOTE_REQUIRED",
+        "BOUND_OWNER_COST_AUTHORIZATION_REQUIRED",
+        "AUTHENTICATED_DEPLOYMENT_PORT_NOT_IMPLEMENTED"
+      ]
+    }
+  ]
+}

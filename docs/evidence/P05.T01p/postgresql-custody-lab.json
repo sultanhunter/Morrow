@@ -1,0 +1,794 @@
+{
+  "schema_version": 1,
+  "packet": "P05.T01p",
+  "canonical_sequence": 84,
+  "scope": "synthetic_private_login_custody_actual_postgresql",
+  "provider_requests": 0,
+  "source_hashes": {
+    "scripts/login-flow-custody-lab.mjs": "67375d22ffb692463d043f56279e9d2cf035f52a44ee373622c84f5075aec194",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "scripts/local-login-flow-sql.mjs": "93a8b1085e89b1516c39b061c05c70869e10a612b6418e3ff10c882abd755eab",
+    "scripts/local-browser-session-sql.mjs": "9c101d9fc3b796b662e924c29b2fb4a417a0ec5ec97ff58b3d68302354daa9fc",
+    "scripts/standalone-session-fixtures.mjs": "377e6bc6c23a74ff49e1b5b27274f4cdf3ee922cdc7a1c98ea93bf2dac0af515",
+    "scripts/fixtures/standalone-login-fixture.mjs": "672a9b3234080a4fb5e4b02379c46f21aa374187db69d26e58be08adff99817e",
+    "packages/identity/src/login-flow-custody.ts": "5ab4256c9269886b83578669ec15ee263a51ed72b0eb04892fecc600aa56d503",
+    "packages/identity/src/login-preauth-control.ts": "372b5720cde644e9acf8458baa378fb1cf9bd879e6a4a2742dec30aada1c397f",
+    "packages/identity/src/standalone-login-protocol.ts": "0420c72e73f93a1f5f625a640f5cd1d9207931cf41e8a23ff96c6f26dc5cf01b",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/identity/src/workos-browser-session-admission.ts": "6b9f443c3bfd4c5d661615c9f4f311c4a4d3034f2259896b951aa3afa8f587ca",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "tests/fixtures/workos-authentication-evidence.mjs": "1faa18afb5f35fc4740a6f6ae1f08332102c0efb1a42ee42924778b63449af5b",
+    "infra/identity-role-prerequisites.sql": "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581",
+    "infra/identity-login-role-prerequisites.sql": "17c25b456d85d6b0a70fe312be885f4543339da9ebaf04122b585ccc2d4c541b",
+    "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "migrations/manifest.json": "987d068dcfd01b548be11f00665c9f84c5f1fba769f0cde86e540c784401ec50",
+    "docs/plan/source.json": "95a4143a0b7d1d32ba59fb2d815c6906d6bb15559852946e0bc30ac89a2c6c65",
+    "docs/plan/build-plan.md": "25f268447a567a6c85dd600cb8ca5fefd403ed8063070ec2e302bfcc5cc5b33f",
+    "docs/packets/P05.T01p.md": "6557f00627f4c92101890c615c564b1a26003f15cd558d2317f765a2c57b66e0",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "migrations/0007.provider-subject-resolution.sql": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+    "migrations/0008.browser-session-admission.sql": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
+    "migrations/0009.workspace-linking-read-boundaries.sql": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2",
+    "migrations/0010.login-flow-custody.sql": "51c6d7ca9e31a897352c4a8b2e85824eb4a7b58506629246bce63c9d92070475"
+  },
+  "checks": [
+    {
+      "name": "ten_exact_immutable_migrations",
+      "passed": true
+    },
+    {
+      "name": "six_force_rls_owner_tables",
+      "passed": true
+    },
+    {
+      "name": "login_exact_five_executes",
+      "passed": true
+    },
+    {
+      "name": "maintenance_exact_one_execute",
+      "passed": true
+    },
+    {
+      "name": "login_no_table_login_controller_configurations",
+      "passed": true
+    },
+    {
+      "name": "maintenance_no_table_login_controller_configurations",
+      "passed": true
+    },
+    {
+      "name": "login_no_table_login_flow_quotas",
+      "passed": true
+    },
+    {
+      "name": "maintenance_no_table_login_flow_quotas",
+      "passed": true
+    },
+    {
+      "name": "login_no_table_login_command_guards",
+      "passed": true
+    },
+    {
+      "name": "maintenance_no_table_login_command_guards",
+      "passed": true
+    },
+    {
+      "name": "login_no_table_login_flows",
+      "passed": true
+    },
+    {
+      "name": "maintenance_no_table_login_flows",
+      "passed": true
+    },
+    {
+      "name": "login_no_table_login_flow_events",
+      "passed": true
+    },
+    {
+      "name": "maintenance_no_table_login_flow_events",
+      "passed": true
+    },
+    {
+      "name": "login_no_table_login_flow_tombstones",
+      "passed": true
+    },
+    {
+      "name": "maintenance_no_table_login_flow_tombstones",
+      "passed": true
+    },
+    {
+      "name": "create_16",
+      "passed": true
+    },
+    {
+      "name": "begin_17",
+      "passed": true
+    },
+    {
+      "name": "ready_18",
+      "passed": true
+    },
+    {
+      "name": "owner_no_flow_reset",
+      "passed": true
+    },
+    {
+      "name": "owner_no_command_delete",
+      "passed": true
+    },
+    {
+      "name": "owner_no_event_delete",
+      "passed": true
+    },
+    {
+      "name": "owner_no_grouped_truncate",
+      "passed": true
+    },
+    {
+      "name": "not_claimed_ineligible",
+      "passed": true
+    },
+    {
+      "name": "wrong_cookie_held",
+      "passed": true
+    },
+    {
+      "name": "concurrent_claim_exactly_one_capsule",
+      "passed": true
+    },
+    {
+      "name": "claim_cipher_physically_null",
+      "passed": true
+    },
+    {
+      "name": "claimed_eligibility_true",
+      "passed": true
+    },
+    {
+      "name": "replayed_bind_never_returns_capsule",
+      "passed": true
+    },
+    {
+      "name": "reconcile_claim_only_historical",
+      "passed": true
+    },
+    {
+      "name": "different_code_receipt_not_attributed",
+      "passed": true
+    },
+    {
+      "name": "create_31",
+      "passed": true
+    },
+    {
+      "name": "begin_32",
+      "passed": true
+    },
+    {
+      "name": "ready_33",
+      "passed": true
+    },
+    {
+      "name": "original_69_reservation",
+      "passed": true
+    },
+    {
+      "name": "exact_69_receipt_attribution",
+      "passed": true
+    },
+    {
+      "name": "owning_76_M_issuer",
+      "passed": true
+    },
+    {
+      "name": "exact_M_admitted_attribution",
+      "passed": true
+    },
+    {
+      "name": "revoked_M_stays_historical",
+      "passed": true
+    },
+    {
+      "name": "create_39",
+      "passed": true
+    },
+    {
+      "name": "begin_40",
+      "passed": true
+    },
+    {
+      "name": "ready_41",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_denies_claim",
+      "passed": true
+    },
+    {
+      "name": "profile_drift_does_not_erase_capsule",
+      "passed": true
+    },
+    {
+      "name": "locked_rolling_ten_starts",
+      "passed": true
+    },
+    {
+      "name": "commit_ack_loss_holds",
+      "passed": true
+    },
+    {
+      "name": "lost_creation_no_retry_new_material",
+      "passed": true
+    },
+    {
+      "name": "create_47",
+      "passed": true
+    },
+    {
+      "name": "begin_48",
+      "passed": true
+    },
+    {
+      "name": "ready_49",
+      "passed": true
+    },
+    {
+      "name": "expired_capsule_inaccessible",
+      "passed": true
+    },
+    {
+      "name": "bounded_expiry_sweep",
+      "passed": true
+    },
+    {
+      "name": "expired_cipher_erased",
+      "passed": true
+    },
+    {
+      "name": "create_53",
+      "passed": true
+    },
+    {
+      "name": "begin_54",
+      "passed": true
+    },
+    {
+      "name": "ready_55",
+      "passed": true
+    },
+    {
+      "name": "safe_old_detail_pruned",
+      "passed": true
+    },
+    {
+      "name": "reserved_commands_never_age_deleted",
+      "passed": true
+    },
+    {
+      "name": "create_58",
+      "passed": true
+    },
+    {
+      "name": "begin_59",
+      "passed": true
+    },
+    {
+      "name": "ready_60",
+      "passed": true
+    },
+    {
+      "name": "unresolved_detail_compacted_never_closed",
+      "passed": true
+    },
+    {
+      "name": "minimal_uncertainty_guard_persists",
+      "passed": true
+    },
+    {
+      "name": "compact_guard_three_reservations_untouched",
+      "passed": true
+    },
+    {
+      "name": "compacted_reconciliation_never_resume",
+      "passed": true
+    },
+    {
+      "name": "safe_audit_association_pseudonymized",
+      "passed": true
+    },
+    {
+      "name": "repeat_maintenance_keeps_uncertainty",
+      "passed": true
+    },
+    {
+      "name": "compacted_commands_not_reusable",
+      "passed": true
+    },
+    {
+      "name": "owner_no_tombstone_delete",
+      "passed": true
+    },
+    {
+      "name": "owner_no_tombstone_reset",
+      "passed": true
+    },
+    {
+      "name": "owner_no_tombstone_truncate",
+      "passed": true
+    },
+    {
+      "name": "content_free_old_audits_pruned",
+      "passed": true
+    },
+    {
+      "name": "hundred_unexpired_rows_quota_bound",
+      "passed": true
+    },
+    {
+      "name": "set_role_is_not_exact_login",
+      "passed": true
+    },
+    {
+      "name": "malformed_historical_tuple_2",
+      "passed": true
+    },
+    {
+      "name": "malformed_historical_tuple_10",
+      "passed": true
+    },
+    {
+      "name": "malformed_historical_tuple_17",
+      "passed": true
+    },
+    {
+      "name": "owning_M_client_physically_closed",
+      "passed": true
+    },
+    {
+      "name": "create_78",
+      "passed": true
+    },
+    {
+      "name": "begin_79",
+      "passed": true
+    },
+    {
+      "name": "ready_80",
+      "passed": true
+    },
+    {
+      "name": "wait_claim_profile_unique_warmed_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_claim_profile_actual_blocked_before_expiry",
+      "passed": true
+    },
+    {
+      "name": "wait_claim_profile_SQL_denied_no_capsule",
+      "passed": true
+    },
+    {
+      "name": "wait_claim_profile_original_capsule_not_consumed",
+      "passed": true
+    },
+    {
+      "name": "create_85",
+      "passed": true
+    },
+    {
+      "name": "begin_86",
+      "passed": true
+    },
+    {
+      "name": "ready_87",
+      "passed": true
+    },
+    {
+      "name": "wait_claim_expiry_unique_warmed_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_claim_expiry_actual_blocked_before_expiry",
+      "passed": true
+    },
+    {
+      "name": "wait_claim_expiry_independent_DB_clock",
+      "passed": true
+    },
+    {
+      "name": "wait_claim_expiry_SQL_denied_no_capsule",
+      "passed": true
+    },
+    {
+      "name": "wait_claim_expiry_original_capsule_not_consumed",
+      "passed": true
+    },
+    {
+      "name": "create_93",
+      "passed": true
+    },
+    {
+      "name": "begin_94",
+      "passed": true
+    },
+    {
+      "name": "ready_95",
+      "passed": true
+    },
+    {
+      "name": "wait_intent_profile_unique_warmed_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_intent_profile_actual_blocked_before_expiry",
+      "passed": true
+    },
+    {
+      "name": "wait_intent_profile_SQL_denied_no_capsule",
+      "passed": true
+    },
+    {
+      "name": "wait_intent_profile_all_new_rows_rolled_back",
+      "passed": true
+    },
+    {
+      "name": "no_raw69_material_in_SQL",
+      "passed": true
+    },
+    {
+      "name": "all_source_bytes_stable",
+      "passed": true
+    },
+    {
+      "name": "normal_disposable_clients_physically_closed",
+      "passed": true
+    },
+    {
+      "name": "fault_clients_physical_cleanup_separate",
+      "passed": true
+    },
+    {
+      "name": "owned_container_absent",
+      "passed": true
+    },
+    {
+      "name": "all_wait_holders_closed_and_backend_absent",
+      "passed": true
+    }
+  ],
+  "checks_passed": 106,
+  "normal_cleanup": [
+    {
+      "connections": 9,
+      "released": 9,
+      "closed": 9,
+      "discarded": 9,
+      "cancelled": 0,
+      "backendCleanupVerified": 9,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 9,
+      "released": 9,
+      "closed": 9,
+      "discarded": 9,
+      "cancelled": 0,
+      "backendCleanupVerified": 9,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 3,
+      "released": 3,
+      "closed": 3,
+      "discarded": 3,
+      "cancelled": 0,
+      "backendCleanupVerified": 3,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 3,
+      "released": 3,
+      "closed": 3,
+      "discarded": 3,
+      "cancelled": 0,
+      "backendCleanupVerified": 3,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 4,
+      "released": 4,
+      "closed": 4,
+      "discarded": 4,
+      "cancelled": 0,
+      "backendCleanupVerified": 4,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    }
+  ],
+  "fault_cleanup": [
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    }
+  ],
+  "container_absent": true,
+  "engine": {
+    "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+    "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b"
+  },
+  "holder_cleanup": [
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    },
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    },
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    }
+  ],
+  "limitations": [
+    "Synthetic owner-seeded identities only; no native/provider or hosted activation.",
+    "Controlled age fixtures qualify retention predicates, not elapsed production time.",
+    "Historical receipt attribution never proves dispatch, delivery, or current authority."
+  ]
+}

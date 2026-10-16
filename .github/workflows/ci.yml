@@ -11,7 +11,7 @@ concurrency:
 jobs:
   foundation:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -45,6 +45,8 @@ jobs:
         run: npm run lab:standalone-workspace-workers
       - name: Exercise authenticated controlled store linking in Workers
         run: npm run lab:standalone-store-linking-workers
+      - name: Exercise initial login and cookie composition with synthetic providers in Workers
+        run: npm run lab:standalone-login-workers
       - name: Exercise preserved75 session observation with synthetic providers only
         run: npm run lab:workos-session-status-frozen75
       - name: Record the isolated pinned PostgreSQL engine build
@@ -76,3 +78,7 @@ jobs:
         run: npm run lab:workspace-linking-read
       - name: Exercise actual authenticated controlled linking HTTP and PostgreSQL
         run: npm run lab:standalone-store-linking-http
+      - name: Exercise isolated login custody, one-use claims and maintenance in PostgreSQL
+        run: npm run lab:login-flow-custody
+      - name: Exercise local HTTPS login cookie to workspace and store linking
+        run: npm run lab:standalone-login-https

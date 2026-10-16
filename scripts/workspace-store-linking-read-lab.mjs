@@ -14,9 +14,13 @@ import {
 } from "../packages/identity/src/workspace-store-linking-control.ts";
 import { workspaceStoreLinkingSql } from "../packages/identity/src/workspace-store-linking.ts";
 const hash = (v) => createHash("sha256").update(v).digest("hex");
+let failedCheck = null;
 const checks = [],
   check = (name, condition) => {
-    if (!condition) throw Error("LINKING_READ_LAB_FAILED:" + name);
+    if (!condition) {
+      failedCheck = name;
+      throw Error("LINKING_READ_LAB_FAILED");
+    }
     checks.push({ name, passed: true });
   };
 const sourcePaths = [
@@ -42,17 +46,18 @@ const sourcePaths = [
   "infra/local-engine.json",
   "migrations/manifest.json",
   "docs/plan/source.json",
+  "docs/packets/P05.T01p.md",
   "docs/plan/build-plan.md",
-  ...JSON.parse(readFileSync("migrations/manifest.json", "utf8")).migrations.map(
-    (m) => "migrations/" + m.file,
-  ),
+  ...JSON.parse(readFileSync("migrations/manifest.json", "utf8"))
+    .migrations.slice(0, 9)
+    .map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
-if (plan.sources.plan.sequence !== 83) throw Error("LINKING_READ_PLAN_REQUIRED");
+if (plan.sources.plan.sequence !== 84) throw Error("LINKING_READ_PLAN_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-if (manifest.migrations.length !== 9) throw Error("LINKING_READ_MIGRATIONS_REQUIRED");
-const migrations = manifest.migrations.map((m) => {
+if (manifest.migrations.length < 9) throw Error("LINKING_READ_MIGRATIONS_REQUIRED");
+const migrations = manifest.migrations.slice(0, 9).map((m) => {
   const text = readFileSync("migrations/" + m.file, "utf8");
   if (hash(text) !== m.sha256) throw Error("LINKING_READ_MIGRATION_HASH");
   return { ...m, text };
@@ -63,6 +68,8 @@ const normalMetrics = [],
 let ownedContainer;
 const observed = await localPostgresLab("P05.T03b", async (context) => {
   ownedContainer = context.id;
+  let phase = "setup",
+    primaryFailed = false;
   const h = createStandaloneFixtureHarness(context, 9),
     pools = [],
     expectedCloseLoss = new WeakSet();
@@ -263,6 +270,7 @@ const observed = await localPostgresLab("P05.T03b", async (context) => {
     );
   };
   try {
+    phase = "prerequisites";
     check(
       "all_nine_exact_migrations_installed",
       context.sql("SELECT count(*) FROM morrow_identity.linking_handoffs;", "morrow") === "0",
@@ -365,6 +373,7 @@ const observed = await localPostgresLab("P05.T03b", async (context) => {
         ) === "t",
       );
     }
+    phase = "fixtures";
     const first = await fixture({ handoffSeconds: 30, reviewSeconds: 30 }),
       s = service(),
       preview = await s.lookup(first.selectorJson, control());
@@ -504,6 +513,7 @@ const observed = await localPostgresLab("P05.T03b", async (context) => {
         result.outcome === "denied" && count(fx, "workspace_store_links") === "0",
       );
     }
+    phase = "waits";
     for (const label of [
       "proof",
       "review",
@@ -611,6 +621,7 @@ const observed = await localPostgresLab("P05.T03b", async (context) => {
           throw Error("LINKING_WAIT_CLEANUP_UNVERIFIED");
       }
     }
+    phase = "concurrency";
     const shared = await fixture(),
       concurrent = await Promise.all([
         service().apply(JSON.stringify(shared.input), control()),
@@ -623,6 +634,7 @@ const observed = await localPostgresLab("P05.T03b", async (context) => {
         count(shared) === "1" &&
         count(shared, "workspace_store_links") === "1",
     );
+    phase = "faults";
     const uncertain = await fixture(),
       traced = [];
     try {
@@ -691,6 +703,7 @@ const observed = await localPostgresLab("P05.T03b", async (context) => {
       "aborted_transaction_not_persisted",
       count(cancelled) === "0" && count(cancelled, "workspace_store_links") === "0",
     );
+    phase = "privileges";
     const unsafe = await fixture();
     context.sql("ALTER ROLE morrow_identity_linking REPLICATION;", "morrow");
     const deniedUnsafe = direct(
@@ -705,6 +718,7 @@ const observed = await localPostgresLab("P05.T03b", async (context) => {
       "session_grant_proof_values_never_public_reported",
       !JSON.stringify({ checks }).includes(unsafe.input.nonceDigest),
     );
+    phase = "final_checks";
     await h.close();
     check(
       "all_nine_wait_holders_host_and_backend_closed",
@@ -746,10 +760,66 @@ const observed = await localPostgresLab("P05.T03b", async (context) => {
       ),
     );
     return { image: context.image, version: context.version };
+  } catch {
+    primaryFailed = true;
+    throw Error("LINKING_READ_PRIMARY_FAILED");
   } finally {
     const cleanup = await Promise.allSettled([closePools(), h.close()]);
-    if (cleanup.some((r) => r.status === "rejected"))
-      throw Error("LINKING_READ_CLEANUP_UNVERIFIED");
+    const cleanupFailed = cleanup.some((r) => r.status === "rejected");
+    if (primaryFailed || cleanupFailed) {
+      // Owned counters only. Never inspect/serialize an Error, process output,
+      // SQL, actor identifier, digest, bearer or database row. Observability
+      // cannot prevent either cleanup attempt or replace the failure state.
+      try {
+        const safeName = (name) =>
+          typeof name === "string" && /^[a-z0-9_]{1,128}$/.test(name) ? name : null;
+        const project = (m) =>
+          Object.fromEntries(
+            [
+              "connections",
+              "released",
+              "closed",
+              "discarded",
+              "cancelled",
+              "backendCleanupVerified",
+              "unverifiedHostClosures",
+            ].map((key) => [
+              key,
+              Number.isSafeInteger(m[key]) && m[key] >= 0 && m[key] <= 10000 ? m[key] : null,
+            ]),
+          );
+        console.error(
+          "LINKING_READ_DIAGNOSTIC " +
+            JSON.stringify({
+              phase,
+              primaryFailed,
+              cleanupFailed,
+              failedCheck: safeName(failedCheck),
+              lastPassedCheck: safeName(checks.at(-1)?.name),
+              cleanupSettled: { linkingPools: cleanup[0].status, issuerPools: cleanup[1].status },
+              linkingPools: pools.slice(0, 256).map((p, index) => ({
+                index,
+                class: faultMetrics.includes(p.metrics) ? "fault" : "normal",
+                knownReleaseAckLoss: expectedCloseLoss.has(p),
+                ...project(p.metrics),
+              })),
+              issuerPools: h.metrics.slice(0, 256).map(project),
+              holders: holderCleanup.slice(0, 16).map((m) => ({
+                hostClosedNormally: m.hostClosedNormally === true,
+                backendAbsent: m.backendAbsent === true,
+              })),
+            }),
+        );
+      } catch {
+        /* Failure-only diagnostics never affect cleanup or acceptance. */
+      }
+    }
+    if (cleanupFailed)
+      throw Error(
+        primaryFailed
+          ? "LINKING_READ_PRIMARY_AND_CLEANUP_UNVERIFIED"
+          : "LINKING_READ_CLEANUP_UNVERIFIED",
+      );
   }
 });
 check(
@@ -769,7 +839,7 @@ check(
 );
 const report = {
   packet: "P05.T03b",
-  canonicalSequence: 83,
+  canonicalSequence: 84,
   scope:
     "controlled owner-seeded synthetic store-linking read boundaries with fresh independently signed owning76 evidence and actual M-family admission",
   providerCalls: 0,
@@ -790,8 +860,11 @@ const report = {
 };
 if (new Set(checks.map((x) => x.name)).size !== checks.length)
   throw Error("LINKING_READ_DUPLICATE_CHECK");
-mkdirSync("docs/evidence/P05.T03b", { recursive: true });
-writeFileSync("docs/evidence/P05.T03b/postgresql-lab.json", JSON.stringify(report, null, 2) + "\n");
+mkdirSync("docs/evidence/P05.T01p/regressions", { recursive: true });
+writeFileSync(
+  "docs/evidence/P05.T01p/regressions/workspace-linking-read.json",
+  JSON.stringify(report, null, 2) + "\n",
+);
 console.log(
   JSON.stringify({
     packet: report.packet,

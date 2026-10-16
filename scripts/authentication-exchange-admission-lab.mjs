@@ -15,9 +15,14 @@ const check = (name, ok) => {
 const literal = (s) => "'" + String(s).replaceAll("'", "''") + "'";
 const hash = (s) => createHash("sha256").update(s).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-const migrations = manifest.migrations.map((m) => {
+// This preserved regression keeps its qualified pre-login-custody schema.
+if (!Array.isArray(manifest.migrations) || manifest.migrations.length < 9)
+  throw Error("PRESERVED_MIGRATIONS_1_TO_9_REQUIRED");
+const selectedMigrations = manifest.migrations.slice(0, 9);
+if (selectedMigrations.length !== 9) throw Error("PRESERVED_MIGRATIONS_1_TO_9_REQUIRED");
+const migrations = selectedMigrations.map((m, index) => {
   const text = readFileSync("migrations/" + m.file, "utf8");
-  if (hash(text) !== m.sha256) throw Error("MIGRATION_CHECKSUM");
+  if (m.sequence !== index + 1 || hash(text) !== m.sha256) throw Error("MIGRATION_CHECKSUM");
   return { m, text };
 });
 if (migrations.length < 6 || migrations[5].m.sequence !== 6)
@@ -891,6 +896,14 @@ writeFileSync(
         "Actual isolated PostgreSQL with synthetic pre-authentication correlation only; no provider request, exchange permission, identity/session/grant issuance or public route",
       ...observed,
       checks,
+      migrations: migrations.map(({ m }) => ({
+        sequence: m.sequence,
+        file: m.file,
+        sha256: m.sha256,
+      })),
+      limitations: [
+        "Only the preserved migrations1–9 are installed; migration10 login custody is not installed or qualified by this regression.",
+      ],
       source_digests: Object.fromEntries(sources.map((p) => [p, hash(readFileSync(p))])),
     },
     null,

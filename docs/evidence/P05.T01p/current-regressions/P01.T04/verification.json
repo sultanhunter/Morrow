@@ -1,0 +1,49 @@
+{
+  "task": "P01.T04",
+  "generated_at": "2026-10-15T23:56:38.752Z",
+  "plan_sequence": 84,
+  "billing_definitions": 12,
+  "checks": [
+    {
+      "name": "small brand retains installation payer",
+      "passed": true
+    },
+    {
+      "name": "specialist team reconciles two payers and one vendor cost",
+      "passed": true
+    },
+    {
+      "name": "unqualified real billing design cannot dispatch",
+      "passed": true
+    },
+    {
+      "name": "local design packet ready with pending external reviews",
+      "passed": true
+    },
+    {
+      "name": "unresolved consumed structural decision blocks Ready",
+      "passed": true
+    },
+    {
+      "name": "missing controlled account still blocks integrated qualification",
+      "passed": true
+    },
+    {
+      "name": "unqualified package still blocks consumers",
+      "passed": true
+    }
+  ],
+  "scope": "Synthetic design, exact arithmetic and semantic walkthroughs only. No concurrent database, rate activation, provider charge, independent review or merchant usability proof.",
+  "input_digests": {
+    "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
+    "docs/contracts/fixtures/P01.A04.json": "ed4c263368333df4762e58fd60c2c7bab0c768c40498e83b3404902be99f2cf2",
+    "docs/contracts/billing-entitlements.md": "4b64d695ed49e2004b61ff122a9ddeb7668c6db71680b09fa1f9d117cbacfb66",
+    "docs/contracts/budgets.md": "ec22e8757eb77a88bbaae6e816730396e3edbcf9887c0cd422f269125119410c",
+    "docs/decisions/billing-ownership.md": "9be90932cc317b6161fd4eeeaac238292f01dde459504cb6a728c3ee0c110358",
+    "docs/decisions/readiness.json": "04e4c30989e4b8d29df454817267163345bd1e9a261c7c52006aeacb86e610c7",
+    "docs/evidence/P01.T04/review.md": "21a7a96df938565a73ffefca5769b55e039b93829c8881898595958de865f65d",
+    "scripts/billing-checks.mjs": "3a4a7e780bec94a1edd5214e5a297b7685e39a1fa6376c895e85618cca5657db",
+    "tests/billing.test.mjs": "5f59704a14dcdd4f86f5689ac80c2a2e2ec20089d068b109adc34e7b58ff3204"
+  },
+  "errors": []
+}

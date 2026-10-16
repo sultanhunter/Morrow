@@ -1,0 +1,119 @@
+{
+  "task": "P05.T01d",
+  "canonical_sequence": 84,
+  "observed_at": "2026-10-15T23:52:00.706Z",
+  "scope": "Actual pinned local workerd with synthetic SQL replies; no provider exchange, PostgreSQL qualification, reusable permit, authenticated identity, session issuance, public route or hosted deployment",
+  "runtime": "miniflare4.20260730.0",
+  "compatibility_date": "2026-07-30",
+  "provider_calls": 0,
+  "bundle_sha256": "d3d33fe70d99819239fda780d172cd9ac23be2b1f6a23253c79c77d67285a5ab",
+  "input_digests": {
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "scripts/fixtures/authentication-exchange-admission-worker.ts": "908ea642dabd52d57f59b74f9d8a838c2da5cc3817b1674163ae05417a8b0873",
+    "scripts/authentication-exchange-admission-workers-lab.mjs": "6f427578e5b390bf5b7c5c5e2bddd806d170c92530e2f99972d8bf6a5ef0e06c",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+  },
+  "checks": [
+    {
+      "name": "independent_private_initiation",
+      "passed": true
+    },
+    {
+      "name": "rfc7636_ascii_vector",
+      "passed": true
+    },
+    {
+      "name": "twelve_ordered_commitments_no_raw_proofs",
+      "passed": true
+    },
+    {
+      "name": "admission_is_correlation_only",
+      "passed": true
+    },
+    {
+      "name": "opaque_code_digest_exact",
+      "passed": true
+    },
+    {
+      "name": "thirteen_ordered_commitments_no_raw_callback",
+      "passed": true
+    },
+    {
+      "name": "reconcile_read_only_no_new_admission",
+      "passed": true
+    },
+    {
+      "name": "duplicate_begin_no_secret_disclosure",
+      "passed": true
+    },
+    {
+      "name": "proxy_zero_reflection",
+      "passed": true
+    },
+    {
+      "name": "getter_zero_reflection",
+      "passed": true
+    },
+    {
+      "name": "raw_object_denied",
+      "passed": true
+    },
+    {
+      "name": "malformed_json_denied",
+      "passed": true
+    },
+    {
+      "name": "malformed_utf16_denied",
+      "passed": true
+    },
+    {
+      "name": "oversized_code_denied",
+      "passed": true
+    },
+    {
+      "name": "caller_authority_denied",
+      "passed": true
+    },
+    {
+      "name": "binding_proxy_zero_reflection",
+      "passed": true
+    },
+    {
+      "name": "api_role_denied",
+      "passed": true
+    },
+    {
+      "name": "membership_denied",
+      "passed": true
+    },
+    {
+      "name": "reconcile_fresh_reply_denied",
+      "passed": true
+    },
+    {
+      "name": "null_new_reservation_denied",
+      "passed": true
+    },
+    {
+      "name": "commit_loss_uncertain",
+      "passed": true
+    },
+    {
+      "name": "release_loss_uncertain",
+      "passed": true
+    },
+    {
+      "name": "private_material_withheld_during_release",
+      "passed": true
+    },
+    {
+      "name": "dynamic_code_generation_denied",
+      "passed": true
+    },
+    {
+      "name": "zero_provider_requests",
+      "passed": true
+    }
+  ]
+}

@@ -13,9 +13,15 @@ const check = (name, ok) => {
 const literal = (s) => "'" + s.replaceAll("'", "''") + "'";
 const hash = (s) => createHash("sha256").update(s).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-const migrations = manifest.migrations.map((record) => {
+// This preserved regression keeps its qualified pre-login-custody schema.
+if (!Array.isArray(manifest.migrations) || manifest.migrations.length < 9)
+  throw Error("PRESERVED_MIGRATIONS_1_TO_9_REQUIRED");
+const selectedMigrations = manifest.migrations.slice(0, 9);
+if (selectedMigrations.length !== 9) throw Error("PRESERVED_MIGRATIONS_1_TO_9_REQUIRED");
+const migrations = selectedMigrations.map((record, index) => {
   const text = readFileSync("migrations/" + record.file, "utf8");
-  if (hash(text) !== record.sha256) throw Error("MIGRATION_CHECKSUM");
+  if (record.sequence !== index + 1 || hash(text) !== record.sha256)
+    throw Error("MIGRATION_CHECKSUM");
   return { record, text };
 });
 const source = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
@@ -658,6 +664,7 @@ writeFileSync(
       migrations: migrations.map((m) => m.record),
       checks,
       limitations: [
+        "Only the preserved migrations1–9 are installed; migration10 login custody is not installed or qualified by this regression.",
         "No provider exchange/PKCE or cookie/origin/rate-qualified HTTP entry.",
         "No principal, session, membership or grant authority conferred.",
         "SQL role is synthetic local login; no cloud activation or production pool.",

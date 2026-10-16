@@ -1,0 +1,3375 @@
+{
+  "task": "P05.T03b",
+  "canonicalSequence": 84,
+  "qualification": "actual_local_workerd_HTTP_guard_controlled_linking_composition_WebCrypto_and_synthetic_SQL",
+  "compatibilityDate": "2026-07-30",
+  "observedAt": "2026-10-15T23:45:08.742Z",
+  "cases": 69,
+  "checks": [
+    {
+      "name": "preview_apply_readonly_status_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_preview_closed_summary",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_derived_tuple_2",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_controlled_connection_3",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_disposable_3",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_applied_closed_result",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_controlled_connection_4",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_disposable_4",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_status_readonly",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_same_pipeline_connections",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_status",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_outcome",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_security_headers",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "preview_apply_readonly_status_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "valid_preview_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "valid_preview_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "valid_preview_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "valid_preview_status",
+      "passed": true
+    },
+    {
+      "name": "valid_preview_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "valid_preview_security_headers",
+      "passed": true
+    },
+    {
+      "name": "valid_preview_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "valid_preview_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_status",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_outcome",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_security_headers",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "valid_apply_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "valid_status_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "valid_status_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "valid_status_status",
+      "passed": true
+    },
+    {
+      "name": "valid_status_outcome",
+      "passed": true
+    },
+    {
+      "name": "valid_status_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "valid_status_security_headers",
+      "passed": true
+    },
+    {
+      "name": "valid_status_status_never_applies",
+      "passed": true
+    },
+    {
+      "name": "valid_status_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "valid_status_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "no_cookie_status",
+      "passed": true
+    },
+    {
+      "name": "no_cookie_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "no_cookie_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "no_cookie_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "no_cookie_security_headers",
+      "passed": true
+    },
+    {
+      "name": "duplicate_cookie_status",
+      "passed": true
+    },
+    {
+      "name": "duplicate_cookie_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "duplicate_cookie_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "duplicate_cookie_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "duplicate_cookie_security_headers",
+      "passed": true
+    },
+    {
+      "name": "bad_cookie_bits_status",
+      "passed": true
+    },
+    {
+      "name": "bad_cookie_bits_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "bad_cookie_bits_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "bad_cookie_bits_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "bad_cookie_bits_security_headers",
+      "passed": true
+    },
+    {
+      "name": "foreign_origin_status",
+      "passed": true
+    },
+    {
+      "name": "foreign_origin_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "foreign_origin_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "foreign_origin_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "foreign_origin_security_headers",
+      "passed": true
+    },
+    {
+      "name": "null_origin_status",
+      "passed": true
+    },
+    {
+      "name": "null_origin_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "null_origin_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "null_origin_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "null_origin_security_headers",
+      "passed": true
+    },
+    {
+      "name": "cross_site_status",
+      "passed": true
+    },
+    {
+      "name": "cross_site_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cross_site_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "cross_site_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "cross_site_security_headers",
+      "passed": true
+    },
+    {
+      "name": "same_site_status",
+      "passed": true
+    },
+    {
+      "name": "same_site_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "same_site_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "same_site_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "same_site_security_headers",
+      "passed": true
+    },
+    {
+      "name": "foreign_host_status",
+      "passed": true
+    },
+    {
+      "name": "foreign_host_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "foreign_host_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "foreign_host_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "foreign_host_security_headers",
+      "passed": true
+    },
+    {
+      "name": "bearer_status",
+      "passed": true
+    },
+    {
+      "name": "bearer_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "bearer_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "bearer_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "bearer_security_headers",
+      "passed": true
+    },
+    {
+      "name": "missing_marker_status",
+      "passed": true
+    },
+    {
+      "name": "missing_marker_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "missing_marker_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "missing_marker_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "missing_marker_security_headers",
+      "passed": true
+    },
+    {
+      "name": "wrong_type_status",
+      "passed": true
+    },
+    {
+      "name": "wrong_type_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "wrong_type_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "wrong_type_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "wrong_type_security_headers",
+      "passed": true
+    },
+    {
+      "name": "missing_command_status",
+      "passed": true
+    },
+    {
+      "name": "missing_command_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "missing_command_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "missing_command_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "missing_command_security_headers",
+      "passed": true
+    },
+    {
+      "name": "merged_command_status",
+      "passed": true
+    },
+    {
+      "name": "merged_command_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "merged_command_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "merged_command_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "merged_command_security_headers",
+      "passed": true
+    },
+    {
+      "name": "missing_csrf_status",
+      "passed": true
+    },
+    {
+      "name": "missing_csrf_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "missing_csrf_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "missing_csrf_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "missing_csrf_security_headers",
+      "passed": true
+    },
+    {
+      "name": "malformed_csrf_status",
+      "passed": true
+    },
+    {
+      "name": "malformed_csrf_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "malformed_csrf_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "malformed_csrf_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "malformed_csrf_security_headers",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_workspace_status",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_workspace_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_workspace_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_workspace_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_workspace_security_headers",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_command_status",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_command_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_command_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_command_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_command_security_headers",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_handoff_status",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_handoff_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_handoff_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_handoff_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_handoff_security_headers",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_session_status",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_session_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_session_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_session_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "HMAC_other_session_security_headers",
+      "passed": true
+    },
+    {
+      "name": "extra_authority_status",
+      "passed": true
+    },
+    {
+      "name": "extra_authority_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "extra_authority_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "extra_authority_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "extra_authority_security_headers",
+      "passed": true
+    },
+    {
+      "name": "duplicate_member_status",
+      "passed": true
+    },
+    {
+      "name": "duplicate_member_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "duplicate_member_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "duplicate_member_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "duplicate_member_security_headers",
+      "passed": true
+    },
+    {
+      "name": "bad_handoff_bits_status",
+      "passed": true
+    },
+    {
+      "name": "bad_handoff_bits_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "bad_handoff_bits_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "bad_handoff_bits_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "bad_handoff_bits_security_headers",
+      "passed": true
+    },
+    {
+      "name": "invalid_UTF8_status",
+      "passed": true
+    },
+    {
+      "name": "invalid_UTF8_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "invalid_UTF8_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "invalid_UTF8_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "invalid_UTF8_security_headers",
+      "passed": true
+    },
+    {
+      "name": "oversized_status",
+      "passed": true
+    },
+    {
+      "name": "oversized_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "oversized_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "oversized_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "oversized_security_headers",
+      "passed": true
+    },
+    {
+      "name": "query_token_status",
+      "passed": true
+    },
+    {
+      "name": "query_token_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "query_token_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "query_token_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "query_token_security_headers",
+      "passed": true
+    },
+    {
+      "name": "unsupported_method_status",
+      "passed": true
+    },
+    {
+      "name": "unsupported_method_zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "unsupported_method_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "unsupported_method_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "unsupported_method_security_headers",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolsuper_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolsuper_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolsuper_status",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolsuper_outcome",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolsuper_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolsuper_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolsuper_security_headers",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolsuper_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolsuper_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolbypassrls_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolbypassrls_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolbypassrls_status",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolbypassrls_outcome",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolbypassrls_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolbypassrls_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolbypassrls_security_headers",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolbypassrls_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolbypassrls_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreatedb_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreatedb_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreatedb_status",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreatedb_outcome",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreatedb_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreatedb_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreatedb_security_headers",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreatedb_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreatedb_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreaterole_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreaterole_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreaterole_status",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreaterole_outcome",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreaterole_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreaterole_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreaterole_security_headers",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreaterole_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolcreaterole_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolinherit_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolinherit_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolinherit_status",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolinherit_outcome",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolinherit_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolinherit_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolinherit_security_headers",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolinherit_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolinherit_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_owner_member_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_owner_member_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_owner_member_status",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_owner_member_outcome",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_owner_member_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_owner_member_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_owner_member_security_headers",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_owner_member_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_owner_member_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_role_member_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_role_member_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_role_member_status",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_role_member_outcome",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_role_member_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_role_member_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_role_member_security_headers",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_role_member_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_role_member_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolreplication_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolreplication_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolreplication_status",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolreplication_outcome",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolreplication_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolreplication_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolreplication_security_headers",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolreplication_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role_rolreplication_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lookup_absent_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_absent_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_absent_status",
+      "passed": true
+    },
+    {
+      "name": "lookup_absent_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lookup_absent_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lookup_absent_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lookup_absent_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lookup_absent_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_workspace_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_workspace_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_workspace_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_workspace_status",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_workspace_outcome",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_workspace_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_workspace_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_workspace_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_workspace_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_workspace_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_session_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_session_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_session_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_session_status",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_session_outcome",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_session_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_session_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_session_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_session_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_session_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_nonce_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_nonce_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_nonce_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_nonce_status",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_nonce_outcome",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_nonce_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_nonce_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_nonce_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_nonce_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_nonce_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_command_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_command_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_command_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_command_status",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_command_outcome",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_command_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_command_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_command_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_command_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lookup_foreign_command_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lookup_unsafe_revision_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_unsafe_revision_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_unsafe_revision_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_unsafe_revision_status",
+      "passed": true
+    },
+    {
+      "name": "lookup_unsafe_revision_outcome",
+      "passed": true
+    },
+    {
+      "name": "lookup_unsafe_revision_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lookup_unsafe_revision_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lookup_unsafe_revision_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lookup_unsafe_revision_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lookup_unsafe_revision_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_status",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_outcome",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_security_headers",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "final_writer_denied_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_status",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_outcome",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_security_headers",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "final_writer_conflict_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_status",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_outcome",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_security_headers",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "final_writer_malformed_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lost_read_begin_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_begin_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_begin_status",
+      "passed": true
+    },
+    {
+      "name": "lost_read_begin_outcome",
+      "passed": true
+    },
+    {
+      "name": "lost_read_begin_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lost_read_begin_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lost_read_begin_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lost_read_begin_no_SQL_after_lost_ack",
+      "passed": true
+    },
+    {
+      "name": "lost_read_begin_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lost_read_begin_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lost_read_role_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_role_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_role_status",
+      "passed": true
+    },
+    {
+      "name": "lost_read_role_outcome",
+      "passed": true
+    },
+    {
+      "name": "lost_read_role_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lost_read_role_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lost_read_role_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lost_read_role_no_SQL_after_lost_ack",
+      "passed": true
+    },
+    {
+      "name": "lost_read_role_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lost_read_role_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lost_read_lookup_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_lookup_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_lookup_status",
+      "passed": true
+    },
+    {
+      "name": "lost_read_lookup_outcome",
+      "passed": true
+    },
+    {
+      "name": "lost_read_lookup_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lost_read_lookup_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lost_read_lookup_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lost_read_lookup_no_SQL_after_lost_ack",
+      "passed": true
+    },
+    {
+      "name": "lost_read_lookup_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lost_read_lookup_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lost_read_commit_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_commit_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_commit_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_commit_status",
+      "passed": true
+    },
+    {
+      "name": "lost_read_commit_outcome",
+      "passed": true
+    },
+    {
+      "name": "lost_read_commit_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lost_read_commit_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lost_read_commit_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lost_read_commit_no_SQL_after_lost_ack",
+      "passed": true
+    },
+    {
+      "name": "lost_read_commit_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lost_read_commit_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lost_read_release_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_release_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_release_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lost_read_release_status",
+      "passed": true
+    },
+    {
+      "name": "lost_read_release_outcome",
+      "passed": true
+    },
+    {
+      "name": "lost_read_release_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lost_read_release_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lost_read_release_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lost_read_release_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lost_read_release_lost_release_ack_retained",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_status",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_outcome",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_no_SQL_after_lost_ack",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_begin_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_status",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_outcome",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_no_SQL_after_lost_ack",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_role_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_status",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_outcome",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_no_SQL_after_lost_ack",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_apply_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_status",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_outcome",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_no_SQL_after_lost_ack",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_commit_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_status",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_outcome",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lost_apply_release_lost_release_ack_retained",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_status",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_outcome",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_security_headers",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_apply_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_status",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_outcome",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_security_headers",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_apply_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_status",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_outcome",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_security_headers",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_commit_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_status",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_outcome",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_security_headers",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_commit_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_status",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_outcome",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_security_headers",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "expiry_apply_release_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_status",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_outcome",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_security_headers",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "abort_apply_release_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_private_11_tuple",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_status",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_outcome",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_security_headers",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "clock_during_apply_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "late_read_acquisition_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "late_read_acquisition_status",
+      "passed": true
+    },
+    {
+      "name": "late_read_acquisition_outcome",
+      "passed": true
+    },
+    {
+      "name": "late_read_acquisition_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "late_read_acquisition_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "late_read_acquisition_security_headers",
+      "passed": true
+    },
+    {
+      "name": "late_read_acquisition_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "late_read_acquisition_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "late_read_acquisition_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "stalled_apply_cancelled_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "stalled_apply_cancelled_derived_tuple_1",
+      "passed": true
+    },
+    {
+      "name": "stalled_apply_cancelled_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "stalled_apply_cancelled_controlled_connection_2",
+      "passed": true
+    },
+    {
+      "name": "stalled_apply_cancelled_disposable_2",
+      "passed": true
+    },
+    {
+      "name": "stalled_apply_cancelled_status",
+      "passed": true
+    },
+    {
+      "name": "stalled_apply_cancelled_outcome",
+      "passed": true
+    },
+    {
+      "name": "stalled_apply_cancelled_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "stalled_apply_cancelled_security_headers",
+      "passed": true
+    },
+    {
+      "name": "stalled_apply_cancelled_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "stalled_apply_cancelled_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "missing_terminal_status_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "missing_terminal_status_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "missing_terminal_status_status",
+      "passed": true
+    },
+    {
+      "name": "missing_terminal_status_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "missing_terminal_status_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "missing_terminal_status_security_headers",
+      "passed": true
+    },
+    {
+      "name": "missing_terminal_status_status_never_applies",
+      "passed": true
+    },
+    {
+      "name": "missing_terminal_status_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "missing_terminal_status_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "malformed_terminal_status_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "malformed_terminal_status_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "malformed_terminal_status_status",
+      "passed": true
+    },
+    {
+      "name": "malformed_terminal_status_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "malformed_terminal_status_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "malformed_terminal_status_security_headers",
+      "passed": true
+    },
+    {
+      "name": "malformed_terminal_status_status_never_applies",
+      "passed": true
+    },
+    {
+      "name": "malformed_terminal_status_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "malformed_terminal_status_release_acknowledgements",
+      "passed": true
+    },
+    {
+      "name": "lost_status_ack_controlled_connection_1",
+      "passed": true
+    },
+    {
+      "name": "lost_status_ack_disposable_1",
+      "passed": true
+    },
+    {
+      "name": "lost_status_ack_status",
+      "passed": true
+    },
+    {
+      "name": "lost_status_ack_zero_apply",
+      "passed": true
+    },
+    {
+      "name": "lost_status_ack_private_material_absent",
+      "passed": true
+    },
+    {
+      "name": "lost_status_ack_security_headers",
+      "passed": true
+    },
+    {
+      "name": "lost_status_ack_no_SQL_after_lost_ack",
+      "passed": true
+    },
+    {
+      "name": "lost_status_ack_status_never_applies",
+      "passed": true
+    },
+    {
+      "name": "lost_status_ack_release_attempts_owned",
+      "passed": true
+    },
+    {
+      "name": "lost_status_ack_release_acknowledgements",
+      "passed": true
+    }
+  ],
+  "outboundRequests": 0,
+  "metrics": [
+    {
+      "name": "preview_apply_readonly_status",
+      "connections": 4,
+      "releaseAttempts": 4,
+      "releaseCompletions": 4,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply",
+        "apply:commit",
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:status",
+        "read:commit"
+      ],
+      "applyStatements": 1,
+      "faultIndex": null
+    },
+    {
+      "name": "valid_preview",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "valid_apply",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply",
+        "apply:commit"
+      ],
+      "applyStatements": 1,
+      "faultIndex": null
+    },
+    {
+      "name": "valid_status",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:status",
+        "read:commit"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "no_cookie",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "duplicate_cookie",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "bad_cookie_bits",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "foreign_origin",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "null_origin",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "cross_site",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "same_site",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "foreign_host",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "bearer",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "missing_marker",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "wrong_type",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "missing_command",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "merged_command",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "missing_csrf",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "malformed_csrf",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "HMAC_other_workspace",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "HMAC_other_command",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "HMAC_other_handoff",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "HMAC_other_session",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "extra_authority",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "duplicate_member",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "bad_handoff_bits",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "invalid_UTF8",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "oversized",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "query_token",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "unsupported_method",
+      "connections": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "unsafe_role_rolsuper",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "unsafe_role_rolbypassrls",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "unsafe_role_rolcreatedb",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "unsafe_role_rolcreaterole",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "unsafe_role_rolinherit",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "unsafe_role_owner_member",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "unsafe_role_role_member",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "unsafe_role_rolreplication",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "lookup_absent",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "lookup_foreign_workspace",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "lookup_foreign_session",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "lookup_foreign_nonce",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "lookup_foreign_command",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "lookup_unsafe_revision",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "final_writer_denied",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply",
+        "apply:commit"
+      ],
+      "applyStatements": 1,
+      "faultIndex": null
+    },
+    {
+      "name": "final_writer_conflict",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply",
+        "apply:commit"
+      ],
+      "applyStatements": 1,
+      "faultIndex": null
+    },
+    {
+      "name": "final_writer_malformed",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply",
+        "apply:rollback"
+      ],
+      "applyStatements": 1,
+      "faultIndex": null
+    },
+    {
+      "name": "lost_read_begin",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin"
+      ],
+      "applyStatements": 0,
+      "faultIndex": 1
+    },
+    {
+      "name": "lost_read_role",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role"
+      ],
+      "applyStatements": 0,
+      "faultIndex": 2
+    },
+    {
+      "name": "lost_read_lookup",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup"
+      ],
+      "applyStatements": 0,
+      "faultIndex": 5
+    },
+    {
+      "name": "lost_read_commit",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit"
+      ],
+      "applyStatements": 0,
+      "faultIndex": 6
+    },
+    {
+      "name": "lost_read_release",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 0,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit"
+      ],
+      "applyStatements": 0,
+      "faultIndex": 6
+    },
+    {
+      "name": "lost_apply_begin",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin"
+      ],
+      "applyStatements": 0,
+      "faultIndex": 7
+    },
+    {
+      "name": "lost_apply_role",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role"
+      ],
+      "applyStatements": 0,
+      "faultIndex": 8
+    },
+    {
+      "name": "lost_apply_apply",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply"
+      ],
+      "applyStatements": 1,
+      "faultIndex": 11
+    },
+    {
+      "name": "lost_apply_commit",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply",
+        "apply:commit"
+      ],
+      "applyStatements": 1,
+      "faultIndex": 12
+    },
+    {
+      "name": "lost_apply_release",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply",
+        "apply:commit"
+      ],
+      "applyStatements": 1,
+      "faultIndex": 12
+    },
+    {
+      "name": "expiry_apply_apply",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply"
+      ],
+      "applyStatements": 1,
+      "faultIndex": 11
+    },
+    {
+      "name": "abort_apply_apply",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply"
+      ],
+      "applyStatements": 1,
+      "faultIndex": 11
+    },
+    {
+      "name": "expiry_apply_commit",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply",
+        "apply:commit"
+      ],
+      "applyStatements": 1,
+      "faultIndex": 12
+    },
+    {
+      "name": "abort_apply_commit",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply",
+        "apply:commit"
+      ],
+      "applyStatements": 1,
+      "faultIndex": 12
+    },
+    {
+      "name": "expiry_apply_release",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply",
+        "apply:commit"
+      ],
+      "applyStatements": 1,
+      "faultIndex": 12
+    },
+    {
+      "name": "abort_apply_release",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply",
+        "apply:commit"
+      ],
+      "applyStatements": 1,
+      "faultIndex": 12
+    },
+    {
+      "name": "clock_during_apply",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply"
+      ],
+      "applyStatements": 1,
+      "faultIndex": 11
+    },
+    {
+      "name": "late_read_acquisition",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [],
+      "applyStatements": 0,
+      "faultIndex": 0
+    },
+    {
+      "name": "stalled_apply_cancelled",
+      "connections": 2,
+      "releaseAttempts": 2,
+      "releaseCompletions": 2,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:lookup",
+        "read:commit",
+        "apply:begin",
+        "apply:role",
+        "apply:timeout",
+        "apply:idleTimeout",
+        "apply:apply"
+      ],
+      "applyStatements": 1,
+      "faultIndex": 11
+    },
+    {
+      "name": "missing_terminal_status",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:status",
+        "read:commit"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "malformed_terminal_status",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:status"
+      ],
+      "applyStatements": 0,
+      "faultIndex": null
+    },
+    {
+      "name": "lost_status_ack",
+      "connections": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "statements": [
+        "read:begin",
+        "read:role",
+        "read:timeout",
+        "read:idleTimeout",
+        "read:status"
+      ],
+      "applyStatements": 0,
+      "faultIndex": 5
+    }
+  ],
+  "sourceDigests": {
+    "packages/identity/src/standalone-store-linking.ts": "6e54c7949e291f0e21e924839624b06a492fc670357e356fc8545b71c814afa2",
+    "packages/identity/src/workspace-store-linking-control.ts": "637154a313b5dbb6f79e0603cf8d1e53ed8792d80e0d2d603403cb48e3bc0a50",
+    "packages/identity/src/workspace-store-linking.ts": "0b951ebb12d4e68f5421c9a19df9ba691166399fe247aa56c39ede0176574a53",
+    "packages/identity/src/standalone-request-guard.ts": "fc19b5f8ac9655dc53f9cb950f74c2c3bf8ff10f40302180f897f585916c928e",
+    "packages/identity/src/standalone-workspace-bootstrap.ts": "d2335e46085b3316e7252341617f01a425af2c4e82516453fc792f9c63d3f998",
+    "packages/identity/src/index.ts": "041952d82c134a04487b9e9648c2a648879fa069220c9d37eb9113509a7c3643",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "packages/contracts/src/generated/domain.ts": "732e5576b4df525b72f99046587bf99902ba8ae05e155839661c768e15aeb6ca",
+    "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
+    "docs/plan/build-plan.md": "25f268447a567a6c85dd600cb8ca5fefd403ed8063070ec2e302bfcc5cc5b33f",
+    "docs/plan/source.json": "95a4143a0b7d1d32ba59fb2d815c6906d6bb15559852946e0bc30ac89a2c6c65",
+    "docs/packets/P05.T01p.md": "6557f00627f4c92101890c615c564b1a26003f15cd558d2317f765a2c57b66e0",
+    "docs/packets/P05.T01o.md": "85fac9abd66fed5c67331651db0b66ddab7bc0b8eee22c0cdb9643185c3e502c",
+    "docs/packets/P05.T03b.md": "3f14dc51108dd7ea133c00ccc7b4b78f88b25396d6e5fc234095abbf1baa195e",
+    "migrations/0009.workspace-linking-read-boundaries.sql": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2",
+    "scripts/standalone-store-linking-workers-lab.mjs": "283f55274609e11194c840ebb9948c8b6f7d42dd02963e0ce6d80846f4b72aa7",
+    "scripts/fixtures/standalone-store-linking-worker.ts": "e880b0a85982a77d3f3ce3fcb64b14441cbec8111df1a28fc96000982b42d246",
+    "tests/workspace-store-linking-control.test.mjs": "c797455c19b567079fc8a17fa23a2aaa8f16befb8c7f46dd9f055d9d03d24b5b",
+    ".nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+  },
+  "selectedSourceDigest": "e921862eccde52ae0477ff4bbf0ad8906f3501cd51b8194ccccdc5283195d510",
+  "limitations": [
+    "SQL replies are synthetic; PostgreSQL locking, grant/review/proof validation, persistence and idempotency qualify separately.",
+    "Release attempts/completions are synthetic adapter observations, not physical database/backend cleanup.",
+    "No live provider credential, Shopify verification, cookie issuance, hosted migration, deployment or merchant activation."
+  ]
+}

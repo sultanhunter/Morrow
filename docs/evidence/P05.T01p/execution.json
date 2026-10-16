@@ -1,0 +1,348 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 84,
+  "full_ci": {
+    "conclusion": "passed",
+    "observed_exit_code": 0,
+    "observation_source": "owning_tool_completion_observed_by_root",
+    "owning_tool_session_id": 78557,
+    "repository_tests": 1834,
+    "log_sha256": "4d4ac1cb162e7a58fa9d59a32f9b972cc7e18192d15550ab2e9f612039b48ba7"
+  },
+  "scaffold": {
+    "conclusion": "passed",
+    "observed_exit_code": 0,
+    "observation_source": "owning_tool_completion_observed_by_root",
+    "owning_tool_session_id": 73693,
+    "guards": 10,
+    "log_sha256": "45521fbe77df7ee9df01ba304b0adc834d83d1642613800f369a6780275ed0c5"
+  },
+  "prior_workers": [
+    {
+      "command": "lab:workers",
+      "exitCode": 0,
+      "elapsedSeconds": 3.174,
+      "state": "passed",
+      "sourceUnchanged": true,
+      "logSha256": "843677748137b42b055e2dbfbfcedfce0133a0038f6fef5da1e64a34a1c643f2",
+      "passLines": [
+        "PASS: local Workers runtime; 4,008 validator cases, SDK settings, dynamic-code denial, two concurrent fixture reads; zero provider calls."
+      ]
+    },
+    {
+      "command": "lab:agent-authority-workers",
+      "exitCode": 0,
+      "elapsedSeconds": 2.312,
+      "state": "passed",
+      "sourceUnchanged": true,
+      "logSha256": "0993c93967693180f031a8bcd3e5ae8be4cd92909066504d0cf83ae094cb81c6",
+      "passLines": [
+        "PASS: 22 actual local Workers agent-authority checks; zero provider requests."
+      ]
+    },
+    {
+      "command": "lab:workspace-store-linking-workers",
+      "exitCode": 0,
+      "elapsedSeconds": 2.615,
+      "state": "passed",
+      "sourceUnchanged": true,
+      "logSha256": "fa6f0a30764f8cabb63a25bab8b0dc3f58511ac7129533466ea490c0c84f3298",
+      "passLines": [
+        "PASS: 20 actual local Workers workspace-store linking checks; zero provider requests."
+      ]
+    },
+    {
+      "command": "lab:authentication-exchange-workers",
+      "exitCode": 0,
+      "elapsedSeconds": 2.418,
+      "state": "passed",
+      "sourceUnchanged": true,
+      "logSha256": "9bacebf7ce0eb35d7bca39ae7915cddc2f29c6384a77db9e8cac8a6bd61e1cc9",
+      "passLines": [
+        "PASS: 25 actual local Workers PKCE admission checks; zero provider requests."
+      ]
+    },
+    {
+      "command": "lab:workos-session-token-workers",
+      "exitCode": 0,
+      "elapsedSeconds": 1.694,
+      "state": "passed",
+      "sourceUnchanged": true,
+      "logSha256": "61ae215c373daba0b510f6d7aac9eed07140593068a3b5f544c55e31b5a70613",
+      "passLines": [
+        "WorkOS session verifier: 71 actual local Workers checks passed; zero outbound requests."
+      ]
+    },
+    {
+      "command": "lab:workos-session-status-workers",
+      "exitCode": 0,
+      "elapsedSeconds": 1.35,
+      "state": "passed",
+      "sourceUnchanged": true,
+      "logSha256": "069c7d0893ca2e6be16619a14df681bb4a1bda7e034f7ac16e1af7d206d041e1",
+      "passLines": [
+        "WorkOS session observations: 60 cases/405 actual Workers checks passed; zero outbound requests."
+      ]
+    },
+    {
+      "command": "lab:workos-authentication-evidence-workers",
+      "exitCode": 0,
+      "elapsedSeconds": 1.702,
+      "state": "passed",
+      "sourceUnchanged": true,
+      "logSha256": "f87ac73731b4bc0b30bc308c007cd7a20972675875a30aa6f9dc2986826d8642",
+      "passLines": [
+        "WorkOS authentication evidence: 63 cases/523 actual Workers checks passed; zero outbound requests."
+      ]
+    },
+    {
+      "command": "lab:workos-workspace-selection-workers",
+      "exitCode": 0,
+      "elapsedSeconds": 2.34,
+      "state": "passed",
+      "sourceUnchanged": true,
+      "logSha256": "e89601deffb38939e4f883d3051b8f2873f5e051578daa4e21e33520f81ef478",
+      "passLines": [
+        "WorkOS workspace selection: 125 cases/1754 actual Workers checks passed; zero outbound requests."
+      ]
+    },
+    {
+      "command": "lab:browser-session-admission-workers",
+      "exitCode": 0,
+      "elapsedSeconds": 1.848,
+      "state": "passed",
+      "sourceUnchanged": true,
+      "logSha256": "810560ab293714fecba7ca421b150db5a039b93176f5e678edda70d0e020a5c2",
+      "passLines": [
+        "PASS: 43 browser-session admission Workers cases; 281 checks; zero outbound requests."
+      ]
+    }
+  ],
+  "prior_sql_and_frozen": [
+    {
+      "command": "lab:operations",
+      "exitCode": 0,
+      "elapsedSeconds": 12.582,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "c12cb8a6a54616a4544dbc54b0d99bb190f2781c787272c8c04226b1b3e0c004",
+      "passLines": [
+        "PASS: actual local SCRAM rotation, abrupt client death, durable committed rows and redacted signals; cloud qualification pending."
+      ],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:restore",
+      "exitCode": 0,
+      "elapsedSeconds": 6.286,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "0946bc99b58f5a1e5c91b2279c2639ee7162d2f617134b631bd0478a2bc8d183",
+      "passLines": [
+        "PASS: actual local database restore, exact object integrity, later erasure/revocation replay and closed quarantine; real integration pending."
+      ],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:identity",
+      "exitCode": 0,
+      "elapsedSeconds": 21.669,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "5f69855dce6d3af848aed1c9426f24499d50906dc04fc52e1eb7300f883e0e16",
+      "passLines": [
+        "PASS: 31 actual PostgreSQL identity boundary checks; provider/hosted acceptance pending."
+      ],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:permissions",
+      "exitCode": 0,
+      "elapsedSeconds": 8.074,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "94e43e9ed9f9f2a3e03495fc878ce875faacf530bfb82595f0789b9707b023c2",
+      "passLines": [
+        "PASS: 22 real application/SQL permission boundary checks; hosted/provider activation pending."
+      ],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:authentication",
+      "exitCode": 0,
+      "elapsedSeconds": 8.63,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "fdeac4b60becf5965120c24a6c0dcafe0aac5a41d6a77e118e6ba458157a3647",
+      "passLines": [
+        "PASS: 38 actual authentication-challenge SQL checks; identity/provider activation pending."
+      ],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:workspace-revocation",
+      "exitCode": 0,
+      "elapsedSeconds": 20.871,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "d4cd26f42f04411bfdd3a2af5849bfaf89cad26b1d48ce0bba9c00cf2084df94",
+      "passLines": [
+        "PASS: 109 real application/SQL workspace revocation checks; hosted identity and production issuance pending."
+      ],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:workspace-store-linking",
+      "exitCode": 0,
+      "elapsedSeconds": 43.443,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "80a4168d51baa59bcfea8fca0d553da6631fd3c19f1cc608c73e46ee2da040c9",
+      "passLines": [
+        "PASS: 366 actual PostgreSQL workspace-store linking checks."
+      ],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:authentication-exchange",
+      "exitCode": 0,
+      "elapsedSeconds": 26.855,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "886e33f9781294deb72de39e984c912124708bbca877d6bed73bd8b7158d6b7a",
+      "passLines": [
+        "PASS: 154 actual PostgreSQL authentication admission checks."
+      ],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:provider-subject-resolution",
+      "exitCode": 0,
+      "elapsedSeconds": 22.132,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "2783ecf1ebdeb08b5381c268200a609cdb02564102a607b556d369ea0bc963a8",
+      "passLines": [],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:browser-session-admission",
+      "exitCode": 0,
+      "elapsedSeconds": 126.042,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "321708f0b89597a8de02ea26f451bb4c4993db22f8d603604f59b97027a93802",
+      "passLines": [
+        "PASS browser session admission PostgreSQL lab 342 checks"
+      ],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:workos-session-status-frozen75",
+      "exitCode": 0,
+      "elapsedSeconds": 4.114,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "8cf520b189608cc69e431ebab32a18a0668b36cc09583ce960f3d23b76961900",
+      "passLines": [],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:workos-operator",
+      "exitCode": 0,
+      "elapsedSeconds": 8.182,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "6b5c92444d710b2498bbf71b5ae4e1235e1d19d017ce1a666c0e99504a8c5947",
+      "passLines": [],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:workos-operator-frozen74",
+      "exitCode": 0,
+      "elapsedSeconds": 7.391,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "624c7ce14c3d054739188ddadc30e4dc8c915f26f7aea6d36a03e9b022854977",
+      "passLines": [],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:workos-authentication-operator",
+      "exitCode": 0,
+      "elapsedSeconds": 54.508,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "d90bb9869da0a879782f372d0db6b9b5b2ebfdd4e263ed3a9540506db379a63c",
+      "passLines": [],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    },
+    {
+      "command": "lab:workos-authentication-operator-current",
+      "exitCode": 0,
+      "elapsedSeconds": 73.68,
+      "conclusion": "passed",
+      "failure": null,
+      "logSha256": "b3e03aa5180d8c991429654ac3d6668ef6dae1e759f763fc6af8ae44d83a3121",
+      "passLines": [],
+      "cleanupFence": {
+        "taggedContainersAbsent": true,
+        "loopback4110Closed": true
+      }
+    }
+  ],
+  "held_predecessor": {
+    "record_sha256": "7205377f2f232c1b4521a91afbdd81b56a280239ed9464b54f29b5fdd412bbb1",
+    "failed_command": "lab:permissions",
+    "cause": "Legacy fixture applied migration10 without the separate login-role prerequisites; five maintained runners now retain exact first-nine scope and unchanged assertions."
+  },
+  "measurement_preservation": {
+    "historical_files_byte_exact": 296,
+    "separate_refreshed_measurements": 37
+  },
+  "provider_requests": 0,
+  "merchant_activation": false,
+  "scope": "Local engineering and provider-free regression execution only. Raw logs remain outside Git; retained historical owner/source labels are not rebased."
+}

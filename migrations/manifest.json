@@ -56,6 +56,12 @@
       "file": "0009.workspace-linking-read-boundaries.sql",
       "sha256": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2",
       "reviewRef": "docs/evidence/P05.T03b/review.json"
+    },
+    {
+      "sequence": 10,
+      "file": "0010.login-flow-custody.sql",
+      "sha256": "51c6d7ca9e31a897352c4a8b2e85824eb4a7b58506629246bce63c9d92070475",
+      "reviewRef": "docs/evidence/P05.T01p/review.json"
     }
   ]
 }

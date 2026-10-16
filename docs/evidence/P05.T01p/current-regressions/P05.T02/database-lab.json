@@ -1,0 +1,143 @@
+{
+  "task": "P05.T02b",
+  "canonical_sequence": 84,
+  "observed_at": "2026-10-16T00:00:49.443Z",
+  "scope": "Actual application identity read transaction and shared permission kernel against owned isolated PostgreSQL17.11 grant/workspace records. Scripts-only psql adapter and synthetic session issuer/provider/entitlement facts; no production driver/WorkOS/HTTP/dispatch qualification.",
+  "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+  "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "migrations": [
+    {
+      "file": "0001.identity-foundation.sql",
+      "sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491"
+    },
+    {
+      "file": "0002.identity-grants.sql",
+      "sha256": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7"
+    },
+    {
+      "file": "0003.authentication-challenges.sql",
+      "sha256": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f"
+    },
+    {
+      "file": "0004.workspace-access-revocation.sql",
+      "sha256": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038"
+    },
+    {
+      "file": "0005.workspace-store-linking.sql",
+      "sha256": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92"
+    },
+    {
+      "file": "0006.authentication-exchange-admission.sql",
+      "sha256": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87"
+    },
+    {
+      "file": "0007.provider-subject-resolution.sql",
+      "sha256": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103"
+    },
+    {
+      "file": "0008.browser-session-admission.sql",
+      "sha256": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0"
+    },
+    {
+      "file": "0009.workspace-linking-read-boundaries.sql",
+      "sha256": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2"
+    }
+  ],
+  "checks": [
+    {
+      "name": "failed_grant_migration_rolls_back_table",
+      "passed": true
+    },
+    {
+      "name": "failed_grant_migration_preserves_prior_schema_and_constraint_set",
+      "passed": true
+    },
+    {
+      "name": "real_application_transaction_and_kernel_allow_exact_sql_grant",
+      "passed": true
+    },
+    {
+      "name": "second_merchant_has_independent_sql_grant",
+      "passed": true
+    },
+    {
+      "name": "foreign_target_denied_before_constraint_lookup",
+      "passed": true
+    },
+    {
+      "name": "foreign_workspace_session_denied_by_actual_sql",
+      "passed": true
+    },
+    {
+      "name": "forged_session_denied_by_actual_application_boundary",
+      "passed": true
+    },
+    {
+      "name": "actual_stored_grant_denies_field_extension",
+      "passed": true
+    },
+    {
+      "name": "actual_committed_grant_revocation_denies_next_call",
+      "passed": true
+    },
+    {
+      "name": "policy_change_during_constraint_wait_cannot_return_stale_allow",
+      "passed": true
+    },
+    {
+      "name": "membership_removed_during_constraint_wait_denies",
+      "passed": true
+    },
+    {
+      "name": "sql_identity_does_not_bypass_provider_constraints",
+      "passed": true
+    },
+    {
+      "name": "sql_identity_does_not_bypass_entitlement_constraints",
+      "passed": true
+    },
+    {
+      "name": "malformed_stored_grant_fails_closed_in_real_read_transaction",
+      "passed": true
+    },
+    {
+      "name": "subsequent_clean_read_still_works_after_denied_transaction",
+      "passed": true
+    },
+    {
+      "name": "actual_revoked_session_denies_application_permission",
+      "passed": true
+    },
+    {
+      "name": "other_merchant_unaffected_by_session_revocation",
+      "passed": true
+    },
+    {
+      "name": "direct_grant_write_denied",
+      "passed": true
+    },
+    {
+      "name": "missing_session_cannot_enumerate_grants",
+      "passed": true
+    },
+    {
+      "name": "relational_and_json_tenant_binding_cannot_drift",
+      "passed": true
+    },
+    {
+      "name": "new_grant_table_force_rls_enabled",
+      "passed": true
+    },
+    {
+      "name": "all_psql_and_container_output_excludes_session_proofs",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Only the preserved migrations1–9 are installed; migration10 login custody is not installed or qualified by this regression.",
+    "Grant issuance/audited lifecycle commands and dispatch serialization remain pending.",
+    "Only identity-owned workspace resources resolve; other domain resource ownership awaits its integration.",
+    "psql protocol adapter is local test-only, not a production pool, TLS/IAM proof or authenticator.",
+    "Provider/entitlement constraints in this lab are explicit synthetic trusted-reader fixtures."
+  ]
+}

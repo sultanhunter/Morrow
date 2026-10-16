@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "canonicalSequence": 84,
+  "packet": "P05.T01p",
+  "reviewer": "e2b_stack_reconciliation",
+  "result": "clear",
+  "reviewType": "independent_source_and_actual_report_binding_review",
+  "report": {
+    "path": "docs/evidence/P05.T01p/https-postgresql-lab.json",
+    "sha256": "8088741e3b5b85c247a936ff3ccce664b80d4d7c597e65c8bea55296621b51a4",
+    "sourceDigest": "48fa87ba4b684ed38eee39819723ec455000a269342e9d3e6d54c1c718e8368f",
+    "computedSourceDigest": "48fa87ba4b684ed38eee39819723ec455000a269342e9d3e6d54c1c718e8368f",
+    "sourceCount": 58,
+    "allCurrent": true,
+    "checks": 98,
+    "uniqueChecks": 98,
+    "allPassed": true,
+    "providerRequests": 0,
+    "actualRequests": 70,
+    "cases": 18,
+    "syntheticPortCalls": {
+      "exchange": 11,
+      "publicKeyset": 11,
+      "sessionPage": 11
+    },
+    "roleClients": {
+      "connections": 151,
+      "allClosed": true
+    },
+    "consumerClients": {
+      "connections": 9,
+      "allClosed": true
+    },
+    "holderCleanup": [
+      {
+        "hostClosedNormally": true,
+        "backendAbsent": true
+      }
+    ],
+    "cleanup": {
+      "hostClients": "closed",
+      "backendNamespace": "absent",
+      "container": "absent",
+      "httpsListener": "closed",
+      "httpListener": "closed",
+      "syntheticTlsDirectory": "absent"
+    }
+  },
+  "sourceHashes": {
+    "apps/api/src/auth-http.ts": "2132dabe4a24d8e430a55399d31ce879613edfde8eb137438b64b27147344a00",
+    "apps/api/src/workspace-router.ts": "d209d695597d65195565bb19e45c08f81ba1749c37fbfad5b1fa58bfe171b717",
+    "scripts/standalone-login-https-lab.mjs": "07d14c734ccf1ab7f87fda93b7f5ec2af27bf19bfdb8ba285aae858e2365d4c6",
+    "scripts/fixtures/login-https.mjs": "8973889c5b19ecc1d8f83aafeced7dd6940542d290b3ea784aed69e9a3432999",
+    "scripts/fixtures/login-provider.mjs": "fb3a717572ef3aff5ca0d5dc5a3cb8855364a025b149d7ea0dacccb485a0e05d"
+  },
+  "materialFindings": [],
+  "resolvedFindings": [
+    "Raw-envelope failures now pause request and disable keepalive instead of unbounded input draining.",
+    "Node auth requires encrypted socket before dispatch; actual plaintext matching HTTPS Host/Origin yields400 and zero dispatch."
+  ],
+  "independentlyChecked": [
+    "Exact-role controlled pools; unchanged69/76/77/M composition; independent nativeRSA/S256 fixture",
+    "Same-cookie O/B uses independently reviewed seeded handoff without fabricated store authority",
+    "Real69 exact consumer/holder wait plus profile revocation suppresses provider ports after newly reserved",
+    "Unknown commit/release/delivery never retries admission or resends cookie",
+    "Synchronous post-M disconnect leaves delivery unknown; physical cleanup is a separate measured fact",
+    "Custom client CA and normal TLS validation; cookie jar explicitly does not qualify browser engine"
+  ],
+  "limitations": [
+    "Source/report inspection only; no Docker/provider/network rerun.",
+    "Authored custodySQL/control excluded from independent source claim.",
+    "Earlier unclassified holds retained without unproven causal assignment.",
+    "Final custody waiter measurement and O/B batch remain separately pending.",
+    "No real provider/key/hosted/merchant activation inferred."
+  ]
+}

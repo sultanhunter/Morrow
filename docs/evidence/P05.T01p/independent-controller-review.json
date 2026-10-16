@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalSequence": 84,
+  "packet": "P05.T01p",
+  "reviewer": "e2b_stack_reconciliation",
+  "reviewType": "independent_source_and_test_oracle_review",
+  "result": "clear",
+  "sourceHashes": {
+    "packages/identity/src/standalone-login.ts": "12a5b7e9eeff006998d46f4119d87f86eb1d37b15ad271e16aae404bf370a6df",
+    "packages/identity/src/standalone-login-protocol.ts": "0420c72e73f93a1f5f625a640f5cd1d9207931cf41e8a23ff96c6f26dc5cf01b",
+    "packages/identity/src/login-preauth-control.ts": "372b5720cde644e9acf8458baa378fb1cf9bd879e6a4a2742dec30aada1c397f",
+    "tests/standalone-login.test.mjs": "f41b05178dc062b8df68a49235293c049e2eb1aadadc7199c0509fedc45a9bca",
+    "scripts/fixtures/standalone-login-fixture.ts": "5084b09062b4842378fd70114cfd6f78aa8cfca883aafd587cac0355b8853a82"
+  },
+  "scope": [
+    "Controller one-use custody/admission composition and provider-negative eligibility boundaries",
+    "Controlled legacy69 facade closure before uncertain-query propagation and awaited physical disposal",
+    "Original76 evidence ownership, composition deadline and independent observation lease",
+    "Final same-stack synchronous frozen transport and no second credential handoff",
+    "Synthetic timing/privacy/concurrency/async-disposal test oracles"
+  ],
+  "resolvedFindings": [
+    {
+      "finding": "The earlier10second composition deadline also truncated later successful76 evidence reads",
+      "resolution": "compositionPending remains true only until fresh verified_active_evidence; unchanged76 five-second lease and outer25second deadline remain enforced",
+      "independentOracle": "Real WebCrypto8second clock advancement then selection at11seconds succeeds;13seconds denies beforeM"
+    },
+    {
+      "finding": "An invalid synchronous sink returning a rejected native Promise could cause an unhandled rejection",
+      "resolution": "Native Promise rejection is suppressed through non-awaited Promise.prototype.then; fixed TRANSPORT_UNKNOWN and one-shot latch remain",
+      "independentOracle": "Rejected and nonsettling native Promise cases assert one invocation, no awaiting, no resend"
+    },
+    {
+      "finding": "Workers header limit counted JavaScript characters",
+      "resolution": "Protocol counts UTF8 bytes",
+      "independentOracle": "NonASCII header exceeding8192bytes denies before SQL"
+    }
+  ],
+  "materialFindings": [],
+  "authorityChecks": [
+    "Exact private configuration and four distinct controlled pool identities",
+    "Claimed capsule never recreated or read from historical status",
+    "Fresh69 newly_reserved is required before one locally latched exchange",
+    "Eligibility read cannot independently authorize or reconstruct dispatch",
+    "77 andM receive only the same fresh owning76 handle and fixed saved issuer command",
+    "FreshM COMMIT/release and final owning evidence precede cookie header construction",
+    "Unknown query/COMMIT/release or delivery never automatically retries or resends"
+  ],
+  "limitations": [
+    "This receipt reviews source and executable oracle design; no independent test rerun was performed during another agent’s timing-sensitive database measurement.",
+    "Actual PostgreSQL/HTTPS/Workers reports must be independently bound after final source freeze.",
+    "Custody SQL/control were authored by this reviewer and are excluded from the independent authorship claim; their separate self-review and other-agent review remain distinct.",
+    "No provider/native call, credential, browser action, hosted migration or merchant activation occurred."
+  ]
+}

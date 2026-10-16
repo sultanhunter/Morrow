@@ -40,6 +40,11 @@ try {
     "http://127.0.0.1:4191/workspace?shop=forged.myshopify.com&host=standalone",
   );
   check("Forged shop/host cannot grant private entry", privateEntry.status === 401);
+  const login = await fetch("http://127.0.0.1:4191/auth/login", { method: "POST" });
+  check(
+    "Unconfigured API cannot start login or issue a cookie",
+    login.status === 404 && login.headers.getSetCookie().length === 0,
+  );
   start(
     "connector",
     ["node_modules/@react-router/serve/bin.js", "apps/shopify-connector/build/server/index.js"],
