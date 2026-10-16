@@ -167,7 +167,7 @@ try {
         return result;
       };
       const harness = createSelfLogoutFixtureHarness({ id: engine.id, sql: setupSql }),
-        origin = "https://morrow.controlled.test";
+        origin = "https://127.0.0.1";
       const configurations = Array.from({ length: 2 }, () => harness.configured({ origin }));
       const oracles = configurations.map((c) =>
         createPlatformWorkosProviderOracle({

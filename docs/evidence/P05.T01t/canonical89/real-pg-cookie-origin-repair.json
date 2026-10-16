@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01t",
+  "current_plan_sequence": 89,
+  "tested_original_candidate": "28f08f316679240507b8b9b55c1e5d81de8b4f83",
+  "original_candidate_inventory_sha256": "5b5a027f1fcb387bae9096b8b7b1d5e84f452473e74efa84b635f054366c5502",
+  "qualification_status": "pending_recheck",
+  "provider_requests": 0,
+  "merchant_activation": false,
+  "desktop_alignment_authorized": false,
+  "changed_runtime_paths": [
+    "scripts/controlled-neon-postgresql-lab.mjs"
+  ],
+  "source_digests": {
+    "scripts/controlled-neon-postgresql-lab.mjs": "35687d1ac0c31354486b0713550acf2972f01ec3ae76c3254e4bc275d6ce75aa"
+  },
+  "repair": "Exactly one fixture-origin literal becomes https://127.0.0.1, matching the unchanged bounded HTTPS cookie jar. No policy/assertion/driver/SQL change.",
+  "observed_failure": {
+    "run_id": 38923286437,
+    "artifact_sha256": "e53ea08890873084654cb6f45465e3f72ae13d75e0e5dee0217f7b75374bc1e9",
+    "failed_check": "actual_84_begin_cookie_1",
+    "partial_reports": 31,
+    "complete_all53_qualified": false
+  },
+  "offline_proof": {
+    "old_host_accepted": 0,
+    "old_host_rejected": 1,
+    "loopback_accepted": 1,
+    "loopback_rejected": 0,
+    "root_actual_exit_code": 0,
+    "root_completion_chunk": "f6f739",
+    "unchanged_remaining_four_PG_files": true,
+    "syntax_and_formatting": {
+      "author_actual_exit_code": 0,
+      "author_receipt_sha256": "a89c16e571c140b611a25cee919440aa05dbbdedd4e41d11dad95ca2cbac01e6"
+    }
+  },
+  "limits": [
+    "Actual repaired integration still pending.",
+    "Original failed response status and cookie count remain unobserved; offline cookie compatibility is not real successful login.",
+    "Original pending draft and all649evidence records remain immutable."
+  ]
+}

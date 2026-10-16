@@ -2342,6 +2342,34 @@
       "sha256": "7408e12216c472e52b6432540d1b962747ad2eb141964e06e87a0e77f3d37dfb"
     },
     {
+      "path": "docs/evidence/P05.T01t/canonical89/held-candidate-A/artifact-api.json",
+      "sha256": "fa712b16d96a7f8f91770fcedf1c0a56dedb9ae9e0e268b2bd3c8cb6ef0702de"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-candidate-A/execution.json",
+      "sha256": "c3721d9bc301fc5b46f38f5a7ccab61ff5268eeb2c2ad6dfbc559f11bb5cd079"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-candidate-A/final-job-api.json",
+      "sha256": "e1540d4f0d23f6d74d3298d6ac717f002ce08c81cd4b3e699d62b116d00f0020"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-candidate-A/final-run-api.json",
+      "sha256": "a9482b7444a96465cc60baef7938ab6f2f39c6ff013916b8402095648e05007c"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-candidate-A/independent-classification.json",
+      "sha256": "0e304c342763926c11c5d0e7eaf46041aa124d0eefd1d6fb5a6a28ead3bf704b"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-candidate-A/partial-payload-map.json",
+      "sha256": "8d5ce3cb899e62cfd2a26c9f17244eb4f75d660451bfa3ad745b855997905964"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-candidate-A/postgresql-workers-lab.json",
+      "sha256": "854d22eec2438f12c2fbb81b6307a5e5cf53f00ed14292eceb850549eda118d9"
+    },
+    {
       "path": "docs/evidence/P05.T01t/canonical89/held-diagnostic88/artifact-api.json",
       "sha256": "0791cf1ed2ca62a3342dd158d95e54cec20f52be0dda47ec5cd887fd3cf1fabc"
     },
@@ -2370,8 +2398,16 @@
       "sha256": "c0910533a325a96aa68c404f198e717298a706f6be62686eb3f2ba45aba42650"
     },
     {
+      "path": "docs/evidence/P05.T01t/canonical89/independent-native-local-actual-review.json",
+      "sha256": "c1c62623de6fd65d84b5607a34efc171a9a87e4cee4040a5492b832ac86e783a"
+    },
+    {
       "path": "docs/evidence/P05.T01t/canonical89/independent-preserved-core-native-source-review.json",
       "sha256": "f8a80d841729eece0fa19a59d161bc2ec2ae5a18c743d00419399a556b7e06c6"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/independent-real-pg-origin-repair-review.json",
+      "sha256": "7fcd4fafae0442e2b26e1942564a86a582256047ee2c347f7e7545358c37300f"
     },
     {
       "path": "docs/evidence/P05.T01t/canonical89/independent-real-pg-source-review.json",
@@ -2388,6 +2424,14 @@
     {
       "path": "docs/evidence/P05.T01t/canonical89/native-local-receipt.json",
       "sha256": "4e0499b899d9473a9ae7a32e6e0ebf046b555055e1e09d4687a39c7830849327"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/real-pg-cookie-origin-repair.json",
+      "sha256": "dcacd33da3bdf511de0d57ffd8386c26ebd56d5b22b57270a81aed2688e20a2e"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/repair-draft-validation.json",
+      "sha256": "09199e4478a6aac2213c2bea15778c00996e12783ff252cad406aa27461b8b71"
     },
     {
       "path": "docs/evidence/P05.T01t/canonical89/root-metadata-self-review.json",

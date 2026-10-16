@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 89,
+  "task": "P05.T01t",
+  "reviewer": "/root/fixed_provider_core",
+  "result": "clear_for_actual_local_native_and_wire_scope_only",
+  "blocking_findings": [],
+  "reviewed_report_sha256": "2c5e3952f19f6d2587b9400295c679d056ff22cb363440941c45643c52be512c",
+  "reviewed_source_digests": {
+    "docs/packets/P05.T01t.md": "9a237f11ad9316d176f645fd7f75da04708236234054c434a93e59cde6bf27dd",
+    "docs/plan/build-plan.md": "fe280f8aab9d7517b7959d1bf47f3edc889f29019714abcb7d9e381047fb6276",
+    "docs/plan/source.json": "9042999ce6659d8725ab5775958ff0308afa1022d033ae78cad5edb48dc4219f",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/identity/src/controlled-neon-login-pool.ts": "c0a6b091c2fb2f9dbc7c8be7b557b11687d201586ba381297aa28e413608a02a",
+    "packages/identity/src/controlled-neon-login-profiles.ts": "16645b5091135424192dc40cf548d3c5fee74b7a88527f23685dc550bdbcdeee",
+    "packages/identity/src/controlled-neon-transport.ts": "b87761b89fbbd72ae80088412e18dabd1ff1706e547583d9064d520dcfa3c43e",
+    "packages/identity/src/login-flow-custody.ts": "5ab4256c9269886b83578669ec15ee263a51ed72b0eb04892fecc600aa56d503",
+    "packages/identity/src/workos-browser-session-admission.ts": "6b9f443c3bfd4c5d661615c9f4f311c4a4d3034f2259896b951aa3afa8f587ca",
+    "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+    "scripts/controlled-neon-workers-lab.mjs": "0aa2f2c8da61a63a2978d176e26e3d00633dc1ac3843a4c94b60033a9e560fbe",
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+    "scripts/fixtures/controlled-neon-worker.ts": "ed4c77c06db10c1569a59cd652039576d1f7e02c560f7af600c58b1c60070baa",
+    "tests/controlled-neon-pg-wire-oracle.test.mjs": "e49b215518a82a844c9437aab4c567510122561174a4af405a381d13748560b0"
+  },
+  "runtimeDependencyDigests": {
+    "node_modules/@neondatabase/serverless/package.json": "918affae421d21e41b19dcc0fa10fdfa5e5df196eb556265263926a8c2999e5a",
+    "node_modules/@neondatabase/serverless/index.mjs": "50f98b3540f02327ebe4d5423509fe15b820af87c512cee1b2b7322a8ef77699",
+    "node_modules/miniflare/package.json": "f0025bdc4b9b70199ea393572c23ca35ea58efa3d81b270f19f5e8c8d27771f4",
+    "node_modules/workerd/package.json": "5edae90469333c86e194a75358e80dbe5b1d3c259860794850e53ce8f240f762"
+  },
+  "runtime": {
+    "node": "v24.13.0",
+    "neonServerless": "1.2.0",
+    "neonInstalledModuleSha256": "50f98b3540f02327ebe4d5423509fe15b820af87c512cee1b2b7322a8ef77699",
+    "esbuild": "0.25.12",
+    "miniflare": "4.20260730.0",
+    "workerd": "1.20260730.1",
+    "compatibilityDate": "2026-07-30",
+    "compatibilityFlags": [
+      "nodejs_compat"
+    ]
+  },
+  "actual_native_domain": {
+    "cases": 81,
+    "checks": 960,
+    "native_websocket_intercepts": 101,
+    "local_coordination_calls": 7,
+    "owned_pair_endpoints": 79,
+    "intentional_unknown_credential_cases": [
+      "sdk_release_pending",
+      "sdk_release_reject"
+    ],
+    "observer_negative_cases": [
+      "sdk_observer_empty",
+      "sdk_observer_hidden_self",
+      "sdk_observer_millisecond_timestamp",
+      "sdk_observer_null_field",
+      "sdk_observer_primary_present",
+      "sdk_observer_wrong_app",
+      "sdk_observer_wrong_database",
+      "sdk_observer_wrong_pid",
+      "sdk_observer_wrong_role"
+    ],
+    "accepted_pending_query_negative_cases": [
+      "sdk_pending_concurrent_query",
+      "sdk_pending_parent_abort",
+      "sdk_pending_query_abort",
+      "sdk_pending_query_deadline",
+      "sdk_pending_release"
+    ],
+    "held_disposal_observation_cases": [
+      "sdk_wrong_pid",
+      "sdk_non101_200_same_host",
+      "sdk_non101_301_same_host",
+      "sdk_non101_301_foreign",
+      "sdk_non101_302_same_host",
+      "sdk_non101_302_foreign",
+      "sdk_non101_303_same_host",
+      "sdk_non101_303_foreign",
+      "sdk_non101_307_same_host",
+      "sdk_non101_307_foreign",
+      "sdk_non101_308_same_host",
+      "sdk_non101_308_foreign"
+    ],
+    "fixture_pair_disposals": 3,
+    "actual_internet_requests": 0,
+    "actual_provider_requests": 0,
+    "runtime_disposal_acknowledged": true,
+    "real_SQL_or_backend_absence_qualified": false,
+    "application_request_lifetime_wiring_qualified": false
+  },
+  "observed_execution": {
+    "environment": "actual local pinned Miniflare/workerd with fully intercepted native WebSocket and real installed Neon SDK",
+    "actual_subprocess_exit": 0,
+    "owning_parent_tool_completion": "a5597e",
+    "parent_runtime_session": 38799,
+    "source_before_sha256": "633443e5cc1b14b64bb5dd7c41c8cbf390e6ea212ca5c0bacb85e4d022268f9d",
+    "subprocess_receipt_sha256": "4e0499b899d9473a9ae7a32e6e0ebf046b555055e1e09d4687a39c7830849327",
+    "actual_log_sha256": "6ac3cba7f69b8bad9b4dba37d5a3e01de9cba0079495c0fdaa165bfae2c073a4",
+    "wrapper_report_matches_exact_Source_bytes": true,
+    "preserved_old_evidence_records": 631
+  },
+  "source_binding": {
+    "source_owned_exact_path_set": 15,
+    "installed_fixed_dependency_files": 4,
+    "all_source_digests_match_execution_snapshot_and_current_bytes": true,
+    "reviewed_domain_checker_sha256": "ef629559e023723dbeef710f8ac9bd116f40b686b51018fa60b15e7857b6dd52",
+    "independent_review_script_sha256": "8495ee321c18f85c8eb5371bf23c6a190929c0c601c6333c76920ff97a8aeb09"
+  },
+  "intentional_unknown_custody": [
+    {
+      "case": "sdk_release_reject",
+      "attempts": 1,
+      "acknowledgements": 0,
+      "active": 1
+    },
+    {
+      "case": "sdk_release_pending",
+      "attempts": 1,
+      "acknowledgements": 0,
+      "active": 1
+    }
+  ],
+  "physical_fixture_cleanup": {
+    "workerRuntimeDisposalAcknowledged": true,
+    "pendingTimers": 0,
+    "serverEndpoints": 79,
+    "serverClosed": 79,
+    "pairClientClosed": 79,
+    "forcedFixtureCloses": 3,
+    "forcedClientAcceptAttempts": 3,
+    "forcedClientAcceptSuccesses": 2,
+    "forcedClientAcceptRejections": 1,
+    "forcedClientCloseAttempts": 3,
+    "forcedClientCloseRejections": 1
+  },
+  "real_PostgreSQL_or_hosted_Neon_qualified": false,
+  "application_request_lifetime_qualified": false,
+  "reviewer_actions": {
+    "new_runtime_or_network_or_provider": false,
+    "Source_Page_Git_or_Desktop_write": false,
+    "outside_new_review_only": true
+  },
+  "limitations": [
+    "Actual native Workers/SDK/independent wire evidence only. Synthetic PG replies do not establish SQL privileges, real SCRAM authentication, committed effects or backend absence. RealPG integrated scope remains unmeasured.",
+    "Two deliberate unknown credential leases retain one attempt/zero acknowledgement/one active handle each; separate fixture endpoint/runtime disposal never promotes custody.",
+    "Three explicit host fixture pair disposal cases are separate from native abort acknowledgement. Cleanup wait observation holds the request through existing C; application waitUntil/lifetime remains unqualified.",
+    "Root obtained local actual execution receipts/logs; reviewer performed offline source/runtime digest and detailed report predicate checks, without repeating runtime.",
+    "Reviewer authored the production controlled Neon modules; independent source approval of those remains root-owned. This review assesses other-author native oracle/fixture and actual measured evidence."
+  ]
+}
