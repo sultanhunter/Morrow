@@ -1,0 +1,1571 @@
+{
+  "schemaVersion": 1,
+  "task": "P05.T01p",
+  "canonicalSequence": 86,
+  "observedAt": "2026-10-16T11:17:14.141Z",
+  "qualification": "synthetic_native_rsa_pkce_to_real_sql_to_https_initial_cookie_jar_and_o_b",
+  "appliedMigrations": 10,
+  "providerRequests": 0,
+  "browserEngineQualified": false,
+  "sourceDigests": {
+    "scripts/standalone-login-https-lab.mjs": "a7e950a6460cadd8ff7c0da1af78cdfc5682ef035e74a152a0a9ca4e1e6f9379",
+    "scripts/fixtures/login-https.mjs": "8973889c5b19ecc1d8f83aafeced7dd6940542d290b3ea784aed69e9a3432999",
+    "scripts/fixtures/login-provider.mjs": "fb3a717572ef3aff5ca0d5dc5a3cb8855364a025b149d7ea0dacccb485a0e05d",
+    "scripts/fixtures/standalone-login-fixture.mjs": "672a9b3234080a4fb5e4b02379c46f21aa374187db69d26e58be08adff99817e",
+    "scripts/fixtures/standalone-linking-fixture.mjs": "5d0dede784bb3817abe557d5c7670ba8b7ee93cf84f3fc6f56f6b68d41535310",
+    "scripts/standalone-session-fixtures.mjs": "377e6bc6c23a74ff49e1b5b27274f4cdf3ee922cdc7a1c98ea93bf2dac0af515",
+    "scripts/local-login-flow-sql.mjs": "93a8b1085e89b1516c39b061c05c70869e10a612b6418e3ff10c882abd755eab",
+    "scripts/local-standalone-sql.mjs": "c03dbcb41cef64cc11a55c93b4ca4ad914e92d1a50aa5bd5f80fea596a05eebf",
+    "scripts/local-browser-session-sql.mjs": "9c101d9fc3b796b662e924c29b2fb4a417a0ec5ec97ff58b3d68302354daa9fc",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "apps/api/src/auth-http.ts": "05bd4b04b51ca6d129a348b79b4789c9005320831087875bab557c2089021999",
+    "apps/api/src/workspace-router.ts": "d81784493ef38f4fbbb360282f1ad2e5a845e3f70e7034e8ceaf2090651b8944",
+    "apps/api/src/workspace-http.ts": "8e6b6750c0fe12fef0e0fde0ef22347b89485bd1a86ff84d3c76d545473053bf",
+    "packages/identity/src/standalone-login.ts": "12a5b7e9eeff006998d46f4119d87f86eb1d37b15ad271e16aae404bf370a6df",
+    "packages/identity/src/standalone-login-protocol.ts": "0420c72e73f93a1f5f625a640f5cd1d9207931cf41e8a23ff96c6f26dc5cf01b",
+    "packages/identity/src/login-preauth-control.ts": "372b5720cde644e9acf8458baa378fb1cf9bd879e6a4a2742dec30aada1c397f",
+    "packages/identity/src/login-flow-custody.ts": "5ab4256c9269886b83578669ec15ee263a51ed72b0eb04892fecc600aa56d503",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+    "packages/identity/src/workos-browser-session-admission.ts": "6b9f443c3bfd4c5d661615c9f4f311c4a4d3034f2259896b951aa3afa8f587ca",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/identity/src/index.ts": "041952d82c134a04487b9e9648c2a648879fa069220c9d37eb9113509a7c3643",
+    "packages/identity/src/standalone-request-guard.ts": "fc19b5f8ac9655dc53f9cb950f74c2c3bf8ff10f40302180f897f585916c928e",
+    "packages/identity/src/standalone-workspace-bootstrap.ts": "d2335e46085b3316e7252341617f01a425af2c4e82516453fc792f9c63d3f998",
+    "packages/identity/src/standalone-store-linking.ts": "6e54c7949e291f0e21e924839624b06a492fc670357e356fc8545b71c814afa2",
+    "packages/identity/src/workspace-store-linking-control.ts": "637154a313b5dbb6f79e0603cf8d1e53ed8792d80e0d2d603403cb48e3bc0a50",
+    "packages/identity/src/workspace-store-linking.ts": "0b951ebb12d4e68f5421c9a19df9ba691166399fe247aa56c39ede0176574a53",
+    "packages/policy/src/index.ts": "d26c57c71889dd7c6369d90745ebc1a531dcfd555e4d2484b4d0d471924b0b59",
+    "packages/contracts/src/index.ts": "571c0da6e2aa11d199d08a8756e04f26d755347c19316f5d4b74af31181dcec2",
+    "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "tests/fixtures/workos-authentication-evidence.mjs": "1faa18afb5f35fc4740a6f6ae1f08332102c0efb1a42ee42924778b63449af5b",
+    "infra/identity-role-prerequisites.sql": "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581",
+    "infra/identity-login-role-prerequisites.sql": "17c25b456d85d6b0a70fe312be885f4543339da9ebaf04122b585ccc2d4c541b",
+    "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "migrations/manifest.json": "8e8a905da33278f9f3996f001236ad9bf4b6090c88e55f01c1a112bc30e92eeb",
+    "docs/plan/source.json": "f79640b8e06767b9e610f68f60faf70d26b45643d5798abbfb2060837d7d4246",
+    "docs/plan/build-plan.md": "87f9c0a372a3f1877b56511c0077019e244e06ec49e546206f79f8ff036d974d",
+    "docs/packets/P05.T01p.md": "6557f00627f4c92101890c615c564b1a26003f15cd558d2317f765a2c57b66e0",
+    "docs/packets/P05.T01r.md": "cc3ef16a1c019aa42650533bed96001693d1da4fe6a2675a84fe488f7a337544",
+    ".nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "package.json": "d83734140d981887c04345c884645db02320b9420ec57d2820b6a349cc7f6f81",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "packages/identity/package.json": "024c219f2f7ed978a0bf5fedca3184b68170f023edb9b88b8a4e25006e1fe5d6",
+    "packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "migrations/0007.provider-subject-resolution.sql": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+    "migrations/0008.browser-session-admission.sql": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
+    "migrations/0009.workspace-linking-read-boundaries.sql": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2",
+    "migrations/0010.login-flow-custody.sql": "51c6d7ca9e31a897352c4a8b2e85824eb4a7b58506629246bce63c9d92070475"
+  },
+  "sourceDigest": "a6beb76e77cb8b459c030152bf45423a59b9b3c834e6eaa6a1009b38cf37662e",
+  "checks": [
+    {
+      "name": "default_router_auth_denied_without_sql_or_cookie",
+      "passed": true
+    },
+    {
+      "name": "actual_https_missing_json_fixed_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_https_duplicate_json_key_fixed_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_https_extra_authority_fixed_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_https_malformed_utf8_fixed_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_https_oversized_json_fixed_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_https_declared_zero_fixed_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_https_chunked_body_fixed_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_https_foreign_origin_fixed_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_https_missing_request_marker_fixed_no_sql",
+      "passed": true
+    },
+    {
+      "name": "malformed_callback_clean_redirect_zero_sql_0",
+      "passed": true
+    },
+    {
+      "name": "malformed_callback_clean_redirect_zero_sql_1",
+      "passed": true
+    },
+    {
+      "name": "malformed_callback_clean_redirect_zero_sql_2",
+      "passed": true
+    },
+    {
+      "name": "malformed_callback_clean_redirect_zero_sql_3",
+      "passed": true
+    },
+    {
+      "name": "malformed_callback_clean_redirect_zero_sql_4",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_1_1",
+      "passed": true
+    },
+    {
+      "name": "successful_start_uses_cookie_only_after_begin_and_custody",
+      "passed": true
+    },
+    {
+      "name": "real_https_full_69_76_77_m_cookie_chain",
+      "passed": true
+    },
+    {
+      "name": "fresh_claim_atomically_erased_stored_capsule",
+      "passed": true
+    },
+    {
+      "name": "delivered_secret_matches_durable_generation",
+      "passed": true
+    },
+    {
+      "name": "database_family_lifetime_exact_fifteen_minutes",
+      "passed": true
+    },
+    {
+      "name": "jar_delivered_cookie_authenticates_actual_o_bootstrap",
+      "passed": true
+    },
+    {
+      "name": "replayed_callback_no_exchange_family_or_cookie",
+      "passed": true
+    },
+    {
+      "name": "login_did_not_create_people_memberships_or_grants",
+      "passed": true
+    },
+    {
+      "name": "same_issued_jar_cookie_b_reviewed_preview_apply_status",
+      "passed": true
+    },
+    {
+      "name": "owner_seeded_principal_stays_single_and_one_family_issued",
+      "passed": true
+    },
+    {
+      "name": "no_logout_route_or_cookie_clear",
+      "passed": true
+    },
+    {
+      "name": "no_refresh_route_or_cookie_clear",
+      "passed": true
+    },
+    {
+      "name": "generic_result_page_static_no_state_or_sql",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_2_1",
+      "passed": true
+    },
+    {
+      "name": "fresh_factory_key_loss_claims_but_never_recovers_capsule",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_3_1",
+      "passed": true
+    },
+    {
+      "name": "concurrent_callbacks_one_cookie_one_exchange_one_family",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_4_1",
+      "passed": true
+    },
+    {
+      "name": "code_alias_first_callback_succeeds",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_4_2",
+      "passed": true
+    },
+    {
+      "name": "same_code_other_flow_irreversible_claim_no_second_exchange",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_5_1",
+      "passed": true
+    },
+    {
+      "name": "signed_unmapped_subject_never_issues_cookie_or_family",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_6_1",
+      "passed": true
+    },
+    {
+      "name": "actual_disconnect_after_committed_issuer_has_no_cookie_delivery",
+      "passed": true
+    },
+    {
+      "name": "disconnect_after_commit_keeps_one_attributable_family_and_disposes",
+      "passed": true
+    },
+    {
+      "name": "disconnect_replayed_callback_cannot_redeliver_secret",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_7_1",
+      "passed": true
+    },
+    {
+      "name": "profile_revocation_after_69_result_before_commit_suppresses_ports",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_8_1",
+      "passed": true
+    },
+    {
+      "name": "actual_69_wait_has_one_warmed_exact_consumer",
+      "passed": true
+    },
+    {
+      "name": "actual_69_reservation_exact_holder_wait_witnessed_before_expiry",
+      "passed": true
+    },
+    {
+      "name": "profile_revoked_while_69_waited_never_reaches_provider",
+      "passed": true
+    },
+    {
+      "name": "actual_69_wait_holder_host_and_backend_absent",
+      "passed": true
+    },
+    {
+      "name": "unknown_begin_commit_no_start_cookie_or_url",
+      "passed": true
+    },
+    {
+      "name": "unknown_begin_commit_no_rollback_after_uncertain_query",
+      "passed": true
+    },
+    {
+      "name": "unknown_custody_bind_commit_no_start_cookie_or_url",
+      "passed": true
+    },
+    {
+      "name": "unknown_custody_bind_commit_no_rollback_after_uncertain_query",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_11_1",
+      "passed": true
+    },
+    {
+      "name": "unknown_claim_commit_no_session_cookie",
+      "passed": true
+    },
+    {
+      "name": "unknown_claim_commit_replay_has_no_retry",
+      "passed": true
+    },
+    {
+      "name": "unknown_claim_commit_no_rollback_after_uncertain_query",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_12_1",
+      "passed": true
+    },
+    {
+      "name": "unknown_reservation_commit_no_session_cookie",
+      "passed": true
+    },
+    {
+      "name": "unknown_reservation_commit_replay_has_no_retry",
+      "passed": true
+    },
+    {
+      "name": "unknown_reservation_commit_no_rollback_after_uncertain_query",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_13_1",
+      "passed": true
+    },
+    {
+      "name": "unknown_issuer_commit_no_session_cookie",
+      "passed": true
+    },
+    {
+      "name": "unknown_issuer_commit_replay_has_no_retry",
+      "passed": true
+    },
+    {
+      "name": "unknown_issuer_commit_committed_family_stays_attributable",
+      "passed": true
+    },
+    {
+      "name": "unknown_issuer_commit_no_rollback_after_uncertain_query",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_14_1",
+      "passed": true
+    },
+    {
+      "name": "unknown_issuer_release_no_session_cookie",
+      "passed": true
+    },
+    {
+      "name": "unknown_issuer_release_replay_has_no_retry",
+      "passed": true
+    },
+    {
+      "name": "unknown_issuer_release_committed_family_stays_attributable",
+      "passed": true
+    },
+    {
+      "name": "unknown_issuer_release_no_rollback_after_uncertain_query",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_15_1",
+      "passed": true
+    },
+    {
+      "name": "revocation_provider_first_issue",
+      "passed": true
+    },
+    {
+      "name": "audited_provider_revocation",
+      "passed": true
+    },
+    {
+      "name": "revoked_provider_cookie_loses_o_authority",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_16_1",
+      "passed": true
+    },
+    {
+      "name": "revocation_family_first_issue",
+      "passed": true
+    },
+    {
+      "name": "audited_family_revocation",
+      "passed": true
+    },
+    {
+      "name": "revoked_family_cookie_loses_o_authority",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_17_1",
+      "passed": true
+    },
+    {
+      "name": "revocation_generation_first_issue",
+      "passed": true
+    },
+    {
+      "name": "audited_generation_revocation",
+      "passed": true
+    },
+    {
+      "name": "revoked_generation_cookie_loses_o_authority",
+      "passed": true
+    },
+    {
+      "name": "start_exact_protocol_response_18_1",
+      "passed": true
+    },
+    {
+      "name": "revocation_workspace_first_issue",
+      "passed": true
+    },
+    {
+      "name": "revoked_workspace_cookie_loses_o_authority",
+      "passed": true
+    },
+    {
+      "name": "invalid_cookie_callback_never_reads_sql",
+      "passed": true
+    },
+    {
+      "name": "all_four_role_pools_physically_closed",
+      "passed": true
+    },
+    {
+      "name": "o_b_consumer_pools_physically_closed",
+      "passed": true
+    },
+    {
+      "name": "fresh_database_all_owned_role_backends_absent",
+      "passed": true
+    },
+    {
+      "name": "raw_proof_tokens_absent_from_general_bodies_and_sql_output",
+      "passed": true
+    },
+    {
+      "name": "actual_plain_http_same_https_authority_denied_before_dispatch",
+      "passed": true
+    },
+    {
+      "name": "actual_http_secure_cookie_cannot_enter_jar",
+      "passed": true
+    },
+    {
+      "name": "exact_owned_database_container_absent",
+      "passed": true
+    },
+    {
+      "name": "https_and_http_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "ephemeral_tls_keys_and_client_resources_removed",
+      "passed": true
+    },
+    {
+      "name": "all_selected_source_bytes_unchanged",
+      "passed": true
+    }
+  ],
+  "checkCount": 98,
+  "result": {
+    "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+    "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+    "requests": 70,
+    "cases": 18,
+    "portCalls": [
+      {
+        "exchange": 1,
+        "publicKeyset": 1,
+        "sessionPage": 1
+      },
+      {
+        "exchange": 0,
+        "publicKeyset": 0,
+        "sessionPage": 0
+      },
+      {
+        "exchange": 1,
+        "publicKeyset": 1,
+        "sessionPage": 1
+      },
+      {
+        "exchange": 1,
+        "publicKeyset": 1,
+        "sessionPage": 1
+      },
+      {
+        "exchange": 1,
+        "publicKeyset": 1,
+        "sessionPage": 1
+      },
+      {
+        "exchange": 1,
+        "publicKeyset": 1,
+        "sessionPage": 1
+      },
+      {
+        "exchange": 0,
+        "publicKeyset": 0,
+        "sessionPage": 0
+      },
+      {
+        "exchange": 0,
+        "publicKeyset": 0,
+        "sessionPage": 0
+      },
+      {
+        "exchange": 0,
+        "publicKeyset": 0,
+        "sessionPage": 0
+      },
+      {
+        "exchange": 0,
+        "publicKeyset": 0,
+        "sessionPage": 0
+      },
+      {
+        "exchange": 0,
+        "publicKeyset": 0,
+        "sessionPage": 0
+      },
+      {
+        "exchange": 0,
+        "publicKeyset": 0,
+        "sessionPage": 0
+      },
+      {
+        "exchange": 1,
+        "publicKeyset": 1,
+        "sessionPage": 1
+      },
+      {
+        "exchange": 1,
+        "publicKeyset": 1,
+        "sessionPage": 1
+      },
+      {
+        "exchange": 1,
+        "publicKeyset": 1,
+        "sessionPage": 1
+      },
+      {
+        "exchange": 1,
+        "publicKeyset": 1,
+        "sessionPage": 1
+      },
+      {
+        "exchange": 1,
+        "publicKeyset": 1,
+        "sessionPage": 1
+      },
+      {
+        "exchange": 1,
+        "publicKeyset": 1,
+        "sessionPage": 1
+      }
+    ],
+    "rolePoolMetrics": [
+      {
+        "connections": 7,
+        "released": 7,
+        "closed": 7,
+        "discarded": 7,
+        "cancelled": 0,
+        "backendCleanupVerified": 7,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 3,
+        "released": 3,
+        "closed": 3,
+        "discarded": 3,
+        "cancelled": 0,
+        "backendCleanupVerified": 3,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 7,
+        "released": 7,
+        "closed": 7,
+        "discarded": 7,
+        "cancelled": 0,
+        "backendCleanupVerified": 7,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 9,
+        "released": 9,
+        "closed": 9,
+        "discarded": 9,
+        "cancelled": 0,
+        "backendCleanupVerified": 9,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 4,
+        "released": 4,
+        "closed": 4,
+        "discarded": 4,
+        "cancelled": 0,
+        "backendCleanupVerified": 4,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 6,
+        "released": 6,
+        "closed": 6,
+        "discarded": 6,
+        "cancelled": 0,
+        "backendCleanupVerified": 6,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 7,
+        "released": 7,
+        "closed": 7,
+        "discarded": 7,
+        "cancelled": 0,
+        "backendCleanupVerified": 7,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 4,
+        "released": 4,
+        "closed": 4,
+        "discarded": 4,
+        "cancelled": 0,
+        "backendCleanupVerified": 4,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 4,
+        "released": 4,
+        "closed": 4,
+        "discarded": 4,
+        "cancelled": 0,
+        "backendCleanupVerified": 4,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 4,
+        "released": 4,
+        "closed": 4,
+        "discarded": 4,
+        "cancelled": 0,
+        "backendCleanupVerified": 4,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 4,
+        "released": 4,
+        "closed": 4,
+        "discarded": 4,
+        "cancelled": 0,
+        "backendCleanupVerified": 4,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 7,
+        "released": 7,
+        "closed": 7,
+        "discarded": 7,
+        "cancelled": 0,
+        "backendCleanupVerified": 7,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 7,
+        "released": 7,
+        "closed": 7,
+        "discarded": 7,
+        "cancelled": 0,
+        "backendCleanupVerified": 7,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 6,
+        "released": 6,
+        "closed": 6,
+        "discarded": 6,
+        "cancelled": 0,
+        "backendCleanupVerified": 6,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 6,
+        "released": 6,
+        "closed": 6,
+        "discarded": 6,
+        "cancelled": 0,
+        "backendCleanupVerified": 6,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 6,
+        "released": 6,
+        "closed": 6,
+        "discarded": 6,
+        "cancelled": 0,
+        "backendCleanupVerified": 6,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 6,
+        "released": 6,
+        "closed": 6,
+        "discarded": 6,
+        "cancelled": 0,
+        "backendCleanupVerified": 6,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 2,
+        "released": 2,
+        "closed": 2,
+        "discarded": 2,
+        "cancelled": 0,
+        "backendCleanupVerified": 2,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      }
+    ],
+    "consumerPoolMetrics": [
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 4,
+        "released": 4,
+        "closed": 4,
+        "discarded": 4,
+        "cancelled": 0,
+        "backendCleanupVerified": 4,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "discarded": 1,
+        "cancelled": 0,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0
+      },
+      {
+        "connections": 0,
+        "released": 0,
+        "closed": 0,
+        "discarded": 0,
+        "cancelled": 0,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 0
+      }
+    ],
+    "holderCleanup": [
+      {
+        "hostClosedNormally": true,
+        "backendAbsent": true
+      }
+    ]
+  },
+  "tls": {
+    "parserPackage": "undici",
+    "parserVersion": "7.29.1",
+    "san": "IP:127.0.0.1",
+    "certificateSha256": "7765b87be0d671e668e6f882dd77ca1f6c6a165a011d14bc52f47ad92394bebc",
+    "caCertificateSha256": "eb184a3367f0acf5eb3175c4a076970622ba7dfdfd29fd53213235b16b9e020a",
+    "tlsValidation": "explicit_ca_and_default_hostname_validation",
+    "browserEngineQualified": false
+  },
+  "cleanup": {
+    "hostClients": "closed",
+    "backendNamespace": "absent",
+    "container": "absent",
+    "httpsListener": "closed",
+    "httpListener": "closed",
+    "syntheticTlsDirectory": "absent"
+  },
+  "limitations": [
+    "In-process independently signed synthetic provider only; authorization URL never followed and no native provider key or request.",
+    "Bounded Undici parser/test jar and actual HTTPS transport are exercised; browser-engine Secure/HttpOnly/SameSite/prefix enforcement remains unqualified.",
+    "Owner-seeded existing identities/profiles/memberships and independent reviewed linking handoffs only; no provisioning, real Shopify, merchant activation, hosted issuer/custody or logout/refresh.",
+    "Lost acknowledgement and family attribution do not prove browser delivery or durable provider liveness.",
+    "Source digests are selected reviewed inputs, not a complete third-party dependency closure."
+  ]
+}

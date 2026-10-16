@@ -1,0 +1,1115 @@
+{
+  "task": "P01.T02",
+  "generated_at": "2026-10-16T11:04:29.731Z",
+  "plan_sequence": 86,
+  "schema_definitions": 116,
+  "capability_bodies": 206,
+  "state_transitions": 94,
+  "routes": 26,
+  "cases": 219,
+  "scope": "Versioned schema and semantic examples only; no production policy/authentication or provider qualification.",
+  "input_digests": {
+    "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
+    "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
+    "docs/contracts/fixtures/P01.A02.json": "29394bf69cdffdf7b5165874ae080a22c4e8a89a5876ed9cfd8c6d5afc653451",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+  },
+  "errors": [],
+  "results": [
+    {
+      "id": "P01.A02.schema.valid.Id",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Revision",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Count",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.UtcTime",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Date",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Digest",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.FieldPath",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.CapabilityId",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Decimal",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Currency",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Money",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ActorRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ResourceRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Scope",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Grant",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.PolicyDecision",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.AnchorRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.AnswerRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ApprovalRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ArtifactRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.AttributionRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.AudienceRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.BudgetRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.CaseRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ConfigRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.CoverageRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.DecisionRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.EvaluationRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.EvidenceRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.FilterRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.FreshnessRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.GrantRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.MandateRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.MoneyRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.PatchRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.PeriodRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.PolicyRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ProofRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ProposalRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.QuerySetRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ReleaseRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ReviewRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ScheduleRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.SchemaRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ScopeRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.SubjectRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.IdList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.FieldList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.StringList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ArtifactList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.EvidenceList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ResourceList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.MoneyList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.UrlList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.CriteriaList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.OptionList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ViewportList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.SnapshotRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.AccountList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.AudienceList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.CostList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.InventoryList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.KnowledgeList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ListingList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.OrderList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ProductList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.SegmentList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.MetricPoint",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.AdMetricList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.LifecycleMetricList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.SearchMetricList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.LiabilityList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.UsageList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.QuestionList",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.QuestionRef",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.TaskStatus",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.GoalStatus",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.RunStatus",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.QuestionStatus",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ApprovalStatus",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.OperationStatus",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.InstallationStatus",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.RoutineStatus",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Goal",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Task",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Run",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Question",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ArtifactRevision",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ArtifactAnchor",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Proposal",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Approval",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Operation",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.AutomationMandate",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Budget",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Reservation",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.StoreInstallation",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.LinkingHandoff",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.PersistedDraft",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.CrossHostResume",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.HostContext",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.EventEnvelope",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.CommandEnvelope",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ErrorEnvelope",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Period",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.MetricDefinition",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Schedule",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.RuntimeProfile",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.PinnedDependency",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.SkillRelease",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.AgentInstallation",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.RunManifest",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.Evidence",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.RetentionPolicy",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.integer",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.string",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.extra_host_authority",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.missing_workspace",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.unknown_host",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.floating_money",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.exponent_money",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.currency_lowercase",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.zero_revision",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.unknown_task_state",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.unknown_operation_state",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.raw_customer_in_event",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.null_event_payload",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.invalid_digest",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.provider_secret_in_run",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.unbounded_runtime",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.unchecked_schema_null",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.wildcard_fields",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.local_event_timestamp",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.invalid.duplicate_grant_verbs",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.exact_identity_store_and_revision.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.exact_identity_store_and_revision.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.selector_change_preserves_proposal_target.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.selector_change_preserves_proposal_target.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.client_cannot_retarget.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.client_cannot_retarget.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.fabricated_host_bootstrap.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.fabricated_host_bootstrap.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.revoked_membership.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.revoked_membership.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.changed_policy.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.changed_policy.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_workspace.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_workspace.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_org.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_org.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.lost_store_access.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.lost_store_access.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.changed_proposal_content.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.changed_proposal_content.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.changed_parameters.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.changed_parameters.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.changed_proposal_revision.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.changed_proposal_revision.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.wrong_proposal_record.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.wrong_proposal_record.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.wrong_approval_digest.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.wrong_approval_digest.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.wrong_scope_digest.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.wrong_scope_digest.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.expired_approval.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.expired_approval.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.ineligible_reviewer.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.ineligible_reviewer.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.unapproved_status.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.unapproved_status.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.expired_session.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.expired_session.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_approval_record.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_approval_record.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.verified_operation_has_readback",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.submitted_not_complete",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.uncertain_cannot_blind_retry",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.uncertain_requires_reconciliation",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.unproven_no_effect_not_failure",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.cancel_with_liabilities_waits",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.cancel_after_reconciliation",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.model_cannot_complete_work",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.accepted_evidence_completes_task",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.early_answer_resumes",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.wrong_respondent_cannot_answer",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.eligible_answer_matches_schema",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.approval_reject_terminal",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.approval_revocation_invalidates",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.submitted_cancel_does_not_erase",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.generation_job_finishes_before_cancel",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.active_installation_can_suspend",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.state.staged_not_automatically_active",
+      "kind": "transition",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.handoff.single_use_link_is_valid",
+      "kind": "handoff",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.handoff.handoff_replay_denied",
+      "kind": "handoff",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.handoff.handoff_expiry_denied",
+      "kind": "handoff",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.handoff.wrong_linking_principal",
+      "kind": "handoff",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.handoff.conflicting_store_ownership",
+      "kind": "handoff",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.handoff.wrong_workspace_for_handoff",
+      "kind": "handoff",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.handoff.stale_ownership_revision",
+      "kind": "handoff",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.fence.current_revision_and_lease",
+      "kind": "fence",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.fence.stale_revision_conflicts",
+      "kind": "fence",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.fence.zombie_generation_denied",
+      "kind": "fence",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.signed_wrong_store_scope.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_parameter_reference.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.wrong_parameter_reference_digest.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_target.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.target_field_outside_scope.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_reviewer.standalone_session_b",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.signed_wrong_store_scope.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_parameter_reference.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.wrong_parameter_reference_digest.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_target.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.target_field_outside_scope.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.binding.foreign_reviewer.standalone",
+      "kind": "binding",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.denied.workspace_surface.shopify_admin",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.denied.workspace_surface.shopify_connector",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.valid.ConnectorContext",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.denied.connector.agent_execution",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.denied.connector.workspace_authority",
+      "kind": "schema",
+      "passed": true
+    },
+    {
+      "id": "P01.A02.schema.denied.connector.credential_smuggling",
+      "kind": "schema",
+      "passed": true
+    }
+  ]
+}

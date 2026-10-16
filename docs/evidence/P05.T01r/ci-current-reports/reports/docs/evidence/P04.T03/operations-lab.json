@@ -1,0 +1,79 @@
+{
+  "scope": "Actual isolated local SCRAM rotation and abrupt client-worker death; not AWS rotation/ECS deployment/Temporal durability/TLS/IAM qualification",
+  "synthetic_only": true,
+  "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+  "server_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "network": "none",
+  "host_mounts": 0,
+  "credentials": "random process-memory AES-GCM fixture; stdin/tmpfs only, not AWS secret storage",
+  "authentication": "actual local Unix socket SCRAM-SHA-256",
+  "unverified_credential_promoted": false,
+  "old_new_connection": "denied after rotation",
+  "new_connection": "succeeded before promotion",
+  "worker_exit": 137,
+  "committed_rows": 1,
+  "uncommitted_rows": 0,
+  "activation": "held by diagnostic; no deployment attempted",
+  "dispatch_enabled": false,
+  "credentials_in_observed_output": false,
+  "events": [
+    {
+      "schemaVersion": 1,
+      "environment": "development",
+      "service": "workers",
+      "code": "CREDENTIAL_ROTATION_FAILED",
+      "correlationId": "31aa97d5-47b2-48df-b893-3427146a8953",
+      "at": "2026-10-16T11:07:22.405Z"
+    },
+    {
+      "schemaVersion": 1,
+      "environment": "development",
+      "service": "workers",
+      "code": "CREDENTIAL_ROTATION_STARTED",
+      "correlationId": "31aa97d5-47b2-48df-b893-3427146a8953",
+      "at": "2026-10-16T11:07:22.771Z"
+    },
+    {
+      "schemaVersion": 1,
+      "environment": "development",
+      "service": "workers",
+      "code": "CREDENTIAL_ROTATION_VERIFIED",
+      "correlationId": "31aa97d5-47b2-48df-b893-3427146a8953",
+      "at": "2026-10-16T11:07:23.092Z"
+    },
+    {
+      "schemaVersion": 1,
+      "environment": "development",
+      "service": "workers",
+      "code": "CREDENTIAL_ROTATION_PROMOTED",
+      "correlationId": "31aa97d5-47b2-48df-b893-3427146a8953",
+      "at": "2026-10-16T11:07:23.092Z"
+    },
+    {
+      "schemaVersion": 1,
+      "environment": "development",
+      "service": "workers",
+      "code": "WORKER_CONNECTION_LOST",
+      "correlationId": "31aa97d5-47b2-48df-b893-3427146a8953",
+      "at": "2026-10-16T11:07:23.236Z"
+    },
+    {
+      "schemaVersion": 1,
+      "environment": "development",
+      "service": "workers",
+      "code": "WORKER_CONNECTION_RECOVERED",
+      "correlationId": "31aa97d5-47b2-48df-b893-3427146a8953",
+      "at": "2026-10-16T11:07:23.502Z"
+    },
+    {
+      "schemaVersion": 1,
+      "environment": "development",
+      "service": "workers",
+      "code": "ACTIVATION_HELD",
+      "correlationId": "31aa97d5-47b2-48df-b893-3427146a8953",
+      "at": "2026-10-16T11:07:23.503Z"
+    }
+  ],
+  "elapsed_ms": 3606,
+  "cleanup": "owned ephemeral container removed"
+}

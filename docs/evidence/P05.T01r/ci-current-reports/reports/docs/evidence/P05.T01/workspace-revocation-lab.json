@@ -1,0 +1,490 @@
+{
+  "task": "P05.T01c",
+  "canonical_sequence": 86,
+  "observed_at": "2026-10-16T11:08:31.316Z",
+  "scope": "Actual application lifecycle transaction and shared identity/policy read boundary on isolated PostgreSQL17.11. Synthetic owner-seeded receipts, approvals, sessions and constraint facts only; no production issuer or hosted identity.",
+  "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+  "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "migrations": [
+    {
+      "file": "0001.identity-foundation.sql",
+      "sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491"
+    },
+    {
+      "file": "0002.identity-grants.sql",
+      "sha256": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7"
+    },
+    {
+      "file": "0003.authentication-challenges.sql",
+      "sha256": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f"
+    },
+    {
+      "file": "0004.workspace-access-revocation.sql",
+      "sha256": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038"
+    },
+    {
+      "file": "0005.workspace-store-linking.sql",
+      "sha256": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92"
+    },
+    {
+      "file": "0006.authentication-exchange-admission.sql",
+      "sha256": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87"
+    },
+    {
+      "file": "0007.provider-subject-resolution.sql",
+      "sha256": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103"
+    },
+    {
+      "file": "0008.browser-session-admission.sql",
+      "sha256": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0"
+    },
+    {
+      "file": "0009.workspace-linking-read-boundaries.sql",
+      "sha256": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2"
+    }
+  ],
+  "checks": [
+    {
+      "name": "executor_starts_nologin_without_memberships",
+      "passed": true
+    },
+    {
+      "name": "fixture_1_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_1_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "fixture_2_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_2_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "before_revocation_actual_shared_sql_policy_allows",
+      "passed": true
+    },
+    {
+      "name": "exact_receipt_applies_once_with_audit",
+      "passed": true
+    },
+    {
+      "name": "current_read_boundary_rejects_revoked_workspace",
+      "passed": true
+    },
+    {
+      "name": "current_sql_policy_rejects_revoked_workspace",
+      "passed": true
+    },
+    {
+      "name": "other_workspace_shared_policy_still_allows_after_revision",
+      "passed": true
+    },
+    {
+      "name": "other_tenant_shared_policy_unchanged",
+      "passed": true
+    },
+    {
+      "name": "organization_membership_principal_sessions_preserved",
+      "passed": true
+    },
+    {
+      "name": "revoked_grant_remains_canonical_valid_UTC",
+      "passed": true
+    },
+    {
+      "name": "only_target_workspace_grants_revoked",
+      "passed": true
+    },
+    {
+      "name": "same_command_reconciliation_returns_original_after_commit",
+      "passed": true
+    },
+    {
+      "name": "wrong_receipt_no_authority_or_audit_disclosure",
+      "passed": true
+    },
+    {
+      "name": "wrong_organization_no_authority_or_audit_disclosure",
+      "passed": true
+    },
+    {
+      "name": "wrong_workspace_no_authority_or_audit_disclosure",
+      "passed": true
+    },
+    {
+      "name": "wrong_target_no_authority_or_audit_disclosure",
+      "passed": true
+    },
+    {
+      "name": "wrong_session_no_authority_or_audit_disclosure",
+      "passed": true
+    },
+    {
+      "name": "changed_expected_revision_no_authority_or_audit_disclosure",
+      "passed": true
+    },
+    {
+      "name": "changed_command_no_authority_or_audit_disclosure",
+      "passed": true
+    },
+    {
+      "name": "changed_digest_no_authority_or_audit_disclosure",
+      "passed": true
+    },
+    {
+      "name": "expired_session_cannot_retrieve_private_replay",
+      "passed": true
+    },
+    {
+      "name": "fixture_3_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_3_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "self_revocation_commits_but_cannot_replay",
+      "passed": true
+    },
+    {
+      "name": "self_revocation_preserves_other_workspace",
+      "passed": true
+    },
+    {
+      "name": "fixture_4_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_4_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "exact_expired_receipt_denial_is_committed_and_attributed",
+      "passed": true
+    },
+    {
+      "name": "fixture_5_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_5_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "inactive_target_commits_denial_without_revision",
+      "passed": true
+    },
+    {
+      "name": "fixture_6_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_6_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "revision_overflow_fails_closed_with_terminal_audit",
+      "passed": true
+    },
+    {
+      "name": "fixture_7_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_7_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "concurrent_duplicate_has_one_mutation_revision_and_audit",
+      "passed": true
+    },
+    {
+      "name": "fixture_8_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_8_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "competing_expected_revisions_have_one_winner",
+      "passed": true
+    },
+    {
+      "name": "fixture_9_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_9_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "receipt_expiry_during_real_lock_wait_denies",
+      "passed": true
+    },
+    {
+      "name": "fixture_10_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_10_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "session_revoked_during_lock_wait_denies",
+      "passed": true
+    },
+    {
+      "name": "fixture_11_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_11_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "actor_membership_revoked_during_lock_wait_denies",
+      "passed": true
+    },
+    {
+      "name": "fixture_12_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_12_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "authorizing_grant_drift_during_lock_wait_denies",
+      "passed": true
+    },
+    {
+      "name": "fixture_13_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_13_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "grant_expiry_after_last_row_lock_denies",
+      "passed": true
+    },
+    {
+      "name": "fixture_14_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_14_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "session_expiry_after_lock_wait_denies",
+      "passed": true
+    },
+    {
+      "name": "fixture_15_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_15_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "stale_policy_revision_is_terminal_denial",
+      "passed": true
+    },
+    {
+      "name": "fixture_16_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_16_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "lost_real_commit_ack_remains_uncertain_without_retry",
+      "passed": true
+    },
+    {
+      "name": "uncertain_commit_reconciles_same_command_once",
+      "passed": true
+    },
+    {
+      "name": "fixture_17_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_17_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "consumed_receipt_without_result_fails_closed",
+      "passed": true
+    },
+    {
+      "name": "fixture_18_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_18_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "audit_write_failure_rolls_back_all_effects",
+      "passed": true
+    },
+    {
+      "name": "same_command_after_definite_rollback_can_apply",
+      "passed": true
+    },
+    {
+      "name": "fixture_19_grant_schema_valid",
+      "passed": true
+    },
+    {
+      "name": "fixture_19_shared_policy_requires_separate_approval",
+      "passed": true
+    },
+    {
+      "name": "explicit_transaction_rollback_reverts_receipt_and_effect",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_10_denied_without_exception",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_1_denied_without_exception",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_3_denied_without_exception",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_16_denied_without_exception",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_100_denied_without_exception",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_receipt_read_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_private_result_read_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_receipt_write_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_membership_write_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_grant_write_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_owner_escalation_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_receipt_insert_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_result_insert_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_result_update_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_receipt_read_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_private_result_read_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_receipt_write_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_membership_write_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_grant_write_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_owner_escalation_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_receipt_insert_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_result_insert_denied",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_result_update_denied",
+      "passed": true
+    },
+    {
+      "name": "api_cannot_execute_lifecycle_function",
+      "passed": true
+    },
+    {
+      "name": "api_cannot_assume_lifecycle_role",
+      "passed": true
+    },
+    {
+      "name": "receipt_bindings_are_immutable_even_for_maintenance",
+      "passed": true
+    },
+    {
+      "name": "terminal_audit_is_immutable_even_for_maintenance",
+      "passed": true
+    },
+    {
+      "name": "both_private_tables_force_rls",
+      "passed": true
+    },
+    {
+      "name": "public_has_no_function_execution",
+      "passed": true
+    },
+    {
+      "name": "failed_migration_rolls_back_all_new_objects",
+      "passed": true
+    },
+    {
+      "name": "proofs_absent_from_database_and_adapter_output",
+      "passed": true
+    }
+  ],
+  "limitations": [
+    "Only the preserved migrations1–9 are installed; migration10 login custody is not installed or qualified by this regression.",
+    "No WorkOS authentication, public lifecycle route, grant issuance, production approval receipt issuer or merchant activation.",
+    "Workspace-only access revocation preserves organization sessions and other workspaces; no affected-run cancellation or dispatch claim.",
+    "Scripts-only psql adapter is not a production lifecycle credential or driver qualification."
+  ]
+}

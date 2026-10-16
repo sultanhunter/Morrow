@@ -1,0 +1,1004 @@
+{
+  "packet": "P05.T03b",
+  "canonicalSequence": 86,
+  "scope": "controlled owner-seeded synthetic store-linking read boundaries with fresh independently signed owning76 evidence and actual M-family admission",
+  "providerCalls": 0,
+  "localNetwork": "none",
+  "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+  "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "sourceHashes": {
+    "scripts/workspace-store-linking-read-lab.mjs": "eb0b071042b217301941e6125f28ffd5c829a0acf3f6aad4eff76035538fc407",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "scripts/local-standalone-sql.mjs": "c03dbcb41cef64cc11a55c93b4ca4ad914e92d1a50aa5bd5f80fea596a05eebf",
+    "scripts/local-browser-session-sql.mjs": "9c101d9fc3b796b662e924c29b2fb4a417a0ec5ec97ff58b3d68302354daa9fc",
+    "scripts/standalone-session-fixtures.mjs": "377e6bc6c23a74ff49e1b5b27274f4cdf3ee922cdc7a1c98ea93bf2dac0af515",
+    "scripts/fixtures/standalone-linking-fixture.mjs": "5d0dede784bb3817abe557d5c7670ba8b7ee93cf84f3fc6f56f6b68d41535310",
+    "packages/identity/src/workspace-store-linking-control.ts": "637154a313b5dbb6f79e0603cf8d1e53ed8792d80e0d2d603403cb48e3bc0a50",
+    "packages/identity/src/workspace-store-linking.ts": "0b951ebb12d4e68f5421c9a19df9ba691166399fe247aa56c39ede0176574a53",
+    "packages/identity/src/standalone-workspace-bootstrap.ts": "d2335e46085b3316e7252341617f01a425af2c4e82516453fc792f9c63d3f998",
+    "packages/identity/src/standalone-request-guard.ts": "fc19b5f8ac9655dc53f9cb950f74c2c3bf8ff10f40302180f897f585916c928e",
+    "packages/identity/src/workos-browser-session-admission.ts": "6b9f443c3bfd4c5d661615c9f4f311c4a4d3034f2259896b951aa3afa8f587ca",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "tests/fixtures/workos-authentication-evidence.mjs": "1faa18afb5f35fc4740a6f6ae1f08332102c0efb1a42ee42924778b63449af5b",
+    "packages/policy/src/index.ts": "d26c57c71889dd7c6369d90745ebc1a531dcfd555e4d2484b4d0d471924b0b59",
+    "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "infra/identity-role-prerequisites.sql": "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581",
+    "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "migrations/manifest.json": "8e8a905da33278f9f3996f001236ad9bf4b6090c88e55f01c1a112bc30e92eeb",
+    "docs/plan/source.json": "f79640b8e06767b9e610f68f60faf70d26b45643d5798abbfb2060837d7d4246",
+    "docs/packets/P05.T01q.md": "2c96b4354fb153147894abf1a5596319ca5f3a67e315b19f2d5d382bba347f4e",
+    "docs/packets/P05.T01r.md": "cc3ef16a1c019aa42650533bed96001693d1da4fe6a2675a84fe488f7a337544",
+    "docs/plan/build-plan.md": "87f9c0a372a3f1877b56511c0077019e244e06ec49e546206f79f8ff036d974d",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "migrations/0007.provider-subject-resolution.sql": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+    "migrations/0008.browser-session-admission.sql": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
+    "migrations/0009.workspace-linking-read-boundaries.sql": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2"
+  },
+  "migrationHashes": {
+    "0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "0007.provider-subject-resolution.sql": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+    "0008.browser-session-admission.sql": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
+    "0009.workspace-linking-read-boundaries.sql": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2"
+  },
+  "checks": [
+    {
+      "name": "all_nine_exact_migrations_installed",
+      "passed": true
+    },
+    {
+      "name": "migration9_failure_rolls_back_all_new_functions",
+      "passed": true
+    },
+    {
+      "name": "read_functions_stable_definer_fixed_path",
+      "passed": true
+    },
+    {
+      "name": "no_read_function_acl_morrow_api",
+      "passed": true
+    },
+    {
+      "name": "no_read_function_acl_morrow_identity_lifecycle",
+      "passed": true
+    },
+    {
+      "name": "no_read_function_acl_morrow_identity_preauth",
+      "passed": true
+    },
+    {
+      "name": "no_read_function_acl_morrow_identity_resolution",
+      "passed": true
+    },
+    {
+      "name": "no_read_function_acl_morrow_identity_sessions",
+      "passed": true
+    },
+    {
+      "name": "linking_has_only_public_read_entries",
+      "passed": true
+    },
+    {
+      "name": "linking_private_table_denied_linking_handoffs",
+      "passed": true
+    },
+    {
+      "name": "force_rls_linking_handoffs",
+      "passed": true
+    },
+    {
+      "name": "linking_private_table_denied_linking_reviews",
+      "passed": true
+    },
+    {
+      "name": "force_rls_linking_reviews",
+      "passed": true
+    },
+    {
+      "name": "linking_private_table_denied_linking_candidates",
+      "passed": true
+    },
+    {
+      "name": "force_rls_linking_candidates",
+      "passed": true
+    },
+    {
+      "name": "linking_private_table_denied_workspace_link_results",
+      "passed": true
+    },
+    {
+      "name": "force_rls_workspace_link_results",
+      "passed": true
+    },
+    {
+      "name": "linking_private_table_denied_workspace_store_links",
+      "passed": true
+    },
+    {
+      "name": "force_rls_workspace_store_links",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_1",
+      "passed": true
+    },
+    {
+      "name": "lookup_exact_immutable_eleven_tuple",
+      "passed": true
+    },
+    {
+      "name": "unconsumed_status_has_no_fabricated_result",
+      "passed": true
+    },
+    {
+      "name": "lookup_and_status_have_no_mutation",
+      "passed": true
+    },
+    {
+      "name": "unchanged_writer_applies_once",
+      "passed": true
+    },
+    {
+      "name": "status_exact_original_terminal_result",
+      "passed": true
+    },
+    {
+      "name": "lookup_after_apply_remains_same_command",
+      "passed": true
+    },
+    {
+      "name": "exact_replay_original_result_no_second_write",
+      "passed": true
+    },
+    {
+      "name": "receipt_and_review_ttls_actually_expired",
+      "passed": true
+    },
+    {
+      "name": "terminal_status_after_old_receipt_expiry_is_readonly",
+      "passed": true
+    },
+    {
+      "name": "old_command_replay_not_new_authority",
+      "passed": true
+    },
+    {
+      "name": "genuine_status_runs_in_readonly_transaction",
+      "passed": true
+    },
+    {
+      "name": "set_role_cannot_substitute_exact_session_user",
+      "passed": true
+    },
+    {
+      "name": "foreign_sessionDigest_has_no_lookup_or_status",
+      "passed": true
+    },
+    {
+      "name": "foreign_workspaceId_has_no_lookup_or_status",
+      "passed": true
+    },
+    {
+      "name": "foreign_nonceDigest_has_no_lookup_or_status",
+      "passed": true
+    },
+    {
+      "name": "foreign_commandId_has_no_lookup_or_status",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_2",
+      "passed": true
+    },
+    {
+      "name": "unconsumed_expired_handoff_never_exposes_command",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_3",
+      "passed": true
+    },
+    {
+      "name": "current_grant_payload_precondition_initially_eligible",
+      "passed": true
+    },
+    {
+      "name": "current_grant_payload_drift_hides_unconsumed_lookup",
+      "passed": true
+    },
+    {
+      "name": "unchanged_locked_writer_rejects_grant_payload_after_lookup",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_4",
+      "passed": true
+    },
+    {
+      "name": "current_review_precondition_initially_eligible",
+      "passed": true
+    },
+    {
+      "name": "current_review_drift_hides_unconsumed_lookup",
+      "passed": true
+    },
+    {
+      "name": "unchanged_locked_writer_rejects_review_after_lookup",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_5",
+      "passed": true
+    },
+    {
+      "name": "current_proof_precondition_initially_eligible",
+      "passed": true
+    },
+    {
+      "name": "current_proof_drift_hides_unconsumed_lookup",
+      "passed": true
+    },
+    {
+      "name": "unchanged_locked_writer_rejects_proof_after_lookup",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_6",
+      "passed": true
+    },
+    {
+      "name": "current_ownership_precondition_initially_eligible",
+      "passed": true
+    },
+    {
+      "name": "current_ownership_drift_hides_unconsumed_lookup",
+      "passed": true
+    },
+    {
+      "name": "unchanged_locked_writer_rejects_ownership_after_lookup",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_7",
+      "passed": true
+    },
+    {
+      "name": "current_membership_precondition_initially_eligible",
+      "passed": true
+    },
+    {
+      "name": "current_membership_drift_hides_unconsumed_lookup",
+      "passed": true
+    },
+    {
+      "name": "unchanged_locked_writer_rejects_membership_after_lookup",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_8",
+      "passed": true
+    },
+    {
+      "name": "current_profile_precondition_initially_eligible",
+      "passed": true
+    },
+    {
+      "name": "current_profile_drift_hides_unconsumed_lookup",
+      "passed": true
+    },
+    {
+      "name": "unchanged_locked_writer_rejects_profile_after_lookup",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_9",
+      "passed": true
+    },
+    {
+      "name": "current_family_precondition_initially_eligible",
+      "passed": true
+    },
+    {
+      "name": "current_family_drift_hides_unconsumed_lookup",
+      "passed": true
+    },
+    {
+      "name": "unchanged_locked_writer_rejects_family_after_lookup",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_10",
+      "passed": true
+    },
+    {
+      "name": "current_policy_precondition_initially_eligible",
+      "passed": true
+    },
+    {
+      "name": "current_policy_drift_hides_unconsumed_lookup",
+      "passed": true
+    },
+    {
+      "name": "unchanged_locked_writer_rejects_policy_after_lookup",
+      "passed": true
+    },
+    {
+      "name": "wait_proof_unique_warmed_real_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_proof_exact_consumer_blocked_by_holder_while_valid",
+      "passed": true
+    },
+    {
+      "name": "wait_proof_sql_denied_not_application_timeout",
+      "passed": true
+    },
+    {
+      "name": "wait_review_unique_warmed_real_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_review_exact_consumer_blocked_by_holder_while_valid",
+      "passed": true
+    },
+    {
+      "name": "wait_review_sql_denied_not_application_timeout",
+      "passed": true
+    },
+    {
+      "name": "wait_grant_unique_warmed_real_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_grant_exact_consumer_blocked_by_holder_while_valid",
+      "passed": true
+    },
+    {
+      "name": "wait_grant_sql_denied_not_application_timeout",
+      "passed": true
+    },
+    {
+      "name": "wait_membership_unique_warmed_real_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_membership_exact_consumer_blocked_by_holder_while_valid",
+      "passed": true
+    },
+    {
+      "name": "wait_membership_sql_denied_not_application_timeout",
+      "passed": true
+    },
+    {
+      "name": "wait_profile_unique_warmed_real_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_profile_exact_consumer_blocked_by_holder_while_valid",
+      "passed": true
+    },
+    {
+      "name": "wait_profile_sql_denied_not_application_timeout",
+      "passed": true
+    },
+    {
+      "name": "wait_session_unique_warmed_real_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_session_exact_consumer_blocked_by_holder_while_valid",
+      "passed": true
+    },
+    {
+      "name": "wait_session_sql_denied_not_application_timeout",
+      "passed": true
+    },
+    {
+      "name": "wait_ownership_unique_warmed_real_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_ownership_exact_consumer_blocked_by_holder_while_valid",
+      "passed": true
+    },
+    {
+      "name": "wait_ownership_sql_denied_not_application_timeout",
+      "passed": true
+    },
+    {
+      "name": "wait_policy_unique_warmed_real_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_policy_exact_consumer_blocked_by_holder_while_valid",
+      "passed": true
+    },
+    {
+      "name": "wait_policy_sql_denied_not_application_timeout",
+      "passed": true
+    },
+    {
+      "name": "wait_expiry_unique_warmed_real_consumer",
+      "passed": true
+    },
+    {
+      "name": "wait_expiry_exact_consumer_blocked_by_holder_while_valid",
+      "passed": true
+    },
+    {
+      "name": "wait_expiry_independent_database_clock_witness",
+      "passed": true
+    },
+    {
+      "name": "wait_expiry_sql_denied_not_application_timeout",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_20",
+      "passed": true
+    },
+    {
+      "name": "concurrent_identical_commands_one_terminal",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_21",
+      "passed": true
+    },
+    {
+      "name": "commit_ack_loss_is_unknown",
+      "passed": true
+    },
+    {
+      "name": "unknown_commit_has_no_rollback_or_retry",
+      "passed": true
+    },
+    {
+      "name": "readonly_status_recovers_unknown_committed_result",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_22",
+      "passed": true
+    },
+    {
+      "name": "release_ack_loss_is_unknown",
+      "passed": true
+    },
+    {
+      "name": "readonly_status_recovers_release_uncertainty",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_23",
+      "passed": true
+    },
+    {
+      "name": "abort_after_reply_holds",
+      "passed": true
+    },
+    {
+      "name": "abort_has_no_next_commit_or_rollback",
+      "passed": true
+    },
+    {
+      "name": "aborted_transaction_not_persisted",
+      "passed": true
+    },
+    {
+      "name": "fresh_owning_evidence_admits_fixture_24",
+      "passed": true
+    },
+    {
+      "name": "database_definer_rechecks_replication_role_drift",
+      "passed": true
+    },
+    {
+      "name": "session_grant_proof_values_never_public_reported",
+      "passed": true
+    },
+    {
+      "name": "all_nine_wait_holders_host_and_backend_closed",
+      "passed": true
+    },
+    {
+      "name": "all_normal_clients_guest_and_host_cleanup_verified",
+      "passed": true
+    },
+    {
+      "name": "fault_outcome_uncertainty_separate_from_cleanup",
+      "passed": true
+    },
+    {
+      "name": "issuer_fixture_clients_cleanup_verified",
+      "passed": true
+    },
+    {
+      "name": "raw_bearer_tokens_never_in_child_output",
+      "passed": true
+    },
+    {
+      "name": "exact_owned_container_absent",
+      "passed": true
+    },
+    {
+      "name": "all_source_hashes_unchanged",
+      "passed": true
+    }
+  ],
+  "checkCount": 121,
+  "normalCleanup": [
+    {
+      "connections": 8,
+      "released": 8,
+      "closed": 8,
+      "discarded": 8,
+      "cancelled": 0,
+      "backendCleanupVerified": 8,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 2,
+      "released": 2,
+      "closed": 2,
+      "discarded": 2,
+      "cancelled": 0,
+      "backendCleanupVerified": 2,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    }
+  ],
+  "holderCleanup": [
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    },
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    },
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    },
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    },
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    },
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    },
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    },
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    },
+    {
+      "hostClosedNormally": true,
+      "backendAbsent": true
+    }
+  ],
+  "faultCleanup": [
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    }
+  ],
+  "containerAbsent": true,
+  "limitations": [
+    "No Shopify verification, handoff/review issuer or merchant activation.",
+    "Fault outcomes remain unknown even when local host/backend cleanup is verified."
+  ]
+}

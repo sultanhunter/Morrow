@@ -1,3 +1,17 @@
+# Current continuation: fixed provider engineering passed; final publication pending
+
+Canonical86 remains saved at497 blocks; fresh full Page read exactly matches the synchronized snapshot. Repaired candidate44d36a73edf744c52cc2d3a4631ec57b12ba371e passed isolated CI38891244630 attempt1 with all50 final API steps successful. The actual log records2,050tests/zero failures and11scaffold guards. Strict verification binds the356,400-byte downloaded artifact SHA25695a064af8d10cbfb5ccf2f941b552759bbacbbcdc7718f181c5f73de5e0e176a to54allowlisted payloads/50fresh reports, exact tested source and restoration.
+
+The private fixed provider chain passes151actual PostgreSQL/HTTPS checks across41merchant requests/eight cases. All106SQL clients have physical closure/backend absence;41merchant clients and42server sockets closed, listener/TLS directory/container absent. Workers passes90cases/995checks with zero actual provider/outbound requests and acknowledged runtime disposal. The new HTTPS report distinguishes threenot_acquired credential rows, four acknowledgedpositive-borrow rows and one intentionallyunverified rejection. Eight Workers release/cancel failures also retain unverified acknowledgement. No native WorkOS DNS/TLS/account/key ownership or browser-engine enforcement is qualified.
+
+All maintained provider-free regressions pass. Their original behavior assertions remain; current logout HTTPS158 and workspace HTTP118 each add exactly one activeRpacket source commitment to prior157/117. Logout SQL114/Workers415, login custody106/HTTPS98/Workers627, linking SQL121/HTTP96/Workers590 and workspace Workers382 remain intact. Independent actual50report/source/domain/cleanup review is clear, with362current/frozen source pins and all426original evidence files byte-exact. Root self-review is separate. Original firstA failure/incomplete49report artifact, all local holds and consumed82native receipts remain preserved, never relabeled passed.
+
+Only new R evidence and a checkpoint prepend may form the final evidence commit. Its own exact-head full CI, downloaded artifact verification and guarded clean Desktop alignment remain required; Desktop stays on published85 until then. ParentP05.T01/P05.T03 remain In progress. No provider/key/sign-in, account, hosted migration, deployment, real Shopify or merchant activation is included. No current user input is needed.
+
+Read-only next-dependency preparation identified that the pinned workerd source supports only follow/manual redirect options;86 qualified synthetic Fetch, and native Workers remains unqualified. After completed86 publication, record a bounded runtime-specific fixed Fetch binding amendment in the canonical Page before implementation, retaining Node error policy and explicit no-follow behavior for Workers. Controlled hosted Neon roles/secret custody and eventual owned HTTPS callback/manual sign-in remain later dependencies. No next-packet code or authority is inferred from the outside preparation.
+
+# Historical86 repaired candidate checkpoint
+
 # Current continuation: classified fixture repair; fresh isolated CI pending
 
 Canonical86 remains current at497 blocks. First candidatea10f1452ebf85210df8dd757ef5ab0a1ae92e9bd completed CI38889019087 with40producer commands successful and the new HTTPS lab failed at callback replay. The collector correctly held with49fresh reports and missing new HTTPS evidence; its API,53payload artifact, exact source/restoration and logs are preserved outsideGit. No new HTTPS cleanup pass is inferred from the incomplete run.

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01r",
+  "current_plan_sequence": 86,
+  "result": "clear_for_provider_free_local_engineering",
+  "tested_commit": "44d36a73edf744c52cc2d3a4631ec57b12ba371e",
+  "independent_domain_review": "docs/evidence/P05.T01r/independent-ci-domain-review.json",
+  "self_review": "Root separately reviews packet, checkpoint and final evidence-only publication closure.",
+  "independent_source_reviews": [
+    {
+      "path": "docs/evidence/P05.T01r/independent-fixed-port-workers86.json",
+      "sha256": "412e301f555ac5a235c5442caee0ddba3640b69b0b2a1c4d3e9e0a988d24a81e"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/independent-fixed-provider86-custody.json",
+      "sha256": "24cd77aa890b66b9578c18b108bd326a50cd2d57ec892fda583859458cfda6fb"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/independent-fixed-provider-workers86.json",
+      "sha256": "3960b21c059e9d17dc9948e75865cb1baf807de6dc579ca2e0ca8ff36cc045f6"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/independent-maintained-runners86.json",
+      "sha256": "59ca4ec16f312dbc5eef77000432ff536b2cba26dba561733c8bae0c3c025d12"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/root-fixed-provider-repair-review86.json",
+      "sha256": "8ffa2a3e7d7f9099bbbe0dcdfbb8acbc01db3eec2d41077158ca3b57488fac83"
+    }
+  ],
+  "source_digests": {
+    "docs/evidence/P05.T01r/independent-ci-domain-review.json": "e07e3ee9e97f373fd3cbbc2dbbf1c48f951ceee0c9da42b786c30a00cb3de6fe",
+    "docs/evidence/P05.T01r/execution.json": "1a6ed778872f763a9054e525af55738af783c7776a448f968d182553a1ec914c"
+  },
+  "limitations": [
+    "Provider-free isolated Linux engineering evidence only; native requests remain denied.",
+    "Synthetic fixed provider URL attestations do not qualify WorkOS DNS, TLS, account or credential ownership.",
+    "No browser-engine, hosted identity, SSO/SCIM, real Shopify, merchant or deployment qualification.",
+    "Final evidence commit still requires exact-head hosted CI and guarded clean Desktop alignment.",
+    "Original85 reports, local86 measurements, Mac holds and consumed82 native receipts remain historical and unchanged."
+  ]
+}
