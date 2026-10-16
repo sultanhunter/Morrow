@@ -1,0 +1,2612 @@
+{
+  "task": "P05.T01q",
+  "current_plan_sequence": 93,
+  "qualification_status": "passed",
+  "qualification": "actual_local_workerd_nodejs_compat_Fetch_WebCrypto_with_synthetic_fixed_SQL_oracle",
+  "compatibilityDate": "2026-07-30",
+  "compatibilityFlags": [
+    "nodejs_compat"
+  ],
+  "observedAt": "2026-10-16T21:37:26.304Z",
+  "cases": 60,
+  "checks": [
+    {
+      "name": "captured_family_retirement:status",
+      "passed": true
+    },
+    {
+      "name": "captured_family_retirement:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "captured_family_retirement:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "captured_family_retirement:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "captured_family_retirement:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "captured_family_retirement:effect_count",
+      "passed": true
+    },
+    {
+      "name": "captured_family_retirement:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "captured_family_retirement:real_crypto_transcripts",
+      "passed": true
+    },
+    {
+      "name": "captured_family_retirement:fixed_security_headers",
+      "passed": true
+    },
+    {
+      "name": "held_physical_disposal:held_not_success",
+      "passed": true
+    },
+    {
+      "name": "held_physical_disposal:status",
+      "passed": true
+    },
+    {
+      "name": "held_physical_disposal:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "held_physical_disposal:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "held_physical_disposal:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "held_physical_disposal:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "held_physical_disposal:effect_count",
+      "passed": true
+    },
+    {
+      "name": "held_physical_disposal:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "held_physical_disposal:real_crypto_transcripts",
+      "passed": true
+    },
+    {
+      "name": "held_physical_disposal:fixed_security_headers",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:held_not_success",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:old_ended",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:new_family_live",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:replay_old_only",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:no_cookie_replay",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:explicit_new_capture",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:status",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:effect_count",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:real_crypto_transcripts",
+      "passed": true
+    },
+    {
+      "name": "old_capture_new_login_replay:fixed_security_headers",
+      "passed": true
+    },
+    {
+      "name": "late_connection_abort_disposal:held_not_success",
+      "passed": true
+    },
+    {
+      "name": "late_connection_abort_disposal:late_connection_disposed",
+      "passed": true
+    },
+    {
+      "name": "late_connection_abort_disposal:no_function",
+      "passed": true
+    },
+    {
+      "name": "late_connection_abort_disposal:status",
+      "passed": true
+    },
+    {
+      "name": "late_connection_abort_disposal:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "late_connection_abort_disposal:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "late_connection_abort_disposal:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "late_connection_abort_disposal:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "late_connection_abort_disposal:effect_count",
+      "passed": true
+    },
+    {
+      "name": "body_extra:status",
+      "passed": true
+    },
+    {
+      "name": "body_extra:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "body_extra:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "body_extra:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "body_extra:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "body_extra:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "body_duplicate:status",
+      "passed": true
+    },
+    {
+      "name": "body_duplicate:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "body_duplicate:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "body_duplicate:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "body_duplicate:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "body_duplicate:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "body_array:status",
+      "passed": true
+    },
+    {
+      "name": "body_array:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "body_array:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "body_array:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "body_array:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "body_array:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "body_null:status",
+      "passed": true
+    },
+    {
+      "name": "body_null:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "body_null:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "body_null:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "body_null:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "body_null:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "body_malformed:status",
+      "passed": true
+    },
+    {
+      "name": "body_malformed:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "body_malformed:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "body_malformed:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "body_malformed:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "body_malformed:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "body_wrongVersion:status",
+      "passed": true
+    },
+    {
+      "name": "body_wrongVersion:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "body_wrongVersion:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "body_wrongVersion:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "body_wrongVersion:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "body_wrongVersion:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "body_large:status",
+      "passed": true
+    },
+    {
+      "name": "body_large:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "body_large:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "body_large:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "body_large:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "body_large:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "body_badUTF8:status",
+      "passed": true
+    },
+    {
+      "name": "body_badUTF8:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "body_badUTF8:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "body_badUTF8:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "body_badUTF8:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "body_badUTF8:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "csrf_origin:status",
+      "passed": true
+    },
+    {
+      "name": "csrf_origin:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "csrf_origin:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "csrf_origin:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "csrf_origin:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "csrf_origin:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "csrf_nullOrigin:status",
+      "passed": true
+    },
+    {
+      "name": "csrf_nullOrigin:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "csrf_nullOrigin:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "csrf_nullOrigin:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "csrf_nullOrigin:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "csrf_nullOrigin:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "csrf_media:status",
+      "passed": true
+    },
+    {
+      "name": "csrf_media:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "csrf_media:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "csrf_media:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "csrf_media:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "csrf_media:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "csrf_marker:status",
+      "passed": true
+    },
+    {
+      "name": "csrf_marker:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "csrf_marker:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "csrf_marker:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "csrf_marker:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "csrf_marker:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "csrf_authorization:status",
+      "passed": true
+    },
+    {
+      "name": "csrf_authorization:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "csrf_authorization:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "csrf_authorization:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "csrf_authorization:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "csrf_authorization:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "csrf_idempotency:status",
+      "passed": true
+    },
+    {
+      "name": "csrf_idempotency:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "csrf_idempotency:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "csrf_idempotency:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "csrf_idempotency:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "csrf_idempotency:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "csrf_site:status",
+      "passed": true
+    },
+    {
+      "name": "csrf_site:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "csrf_site:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "csrf_site:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "csrf_site:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "csrf_site:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "csrf_mode:status",
+      "passed": true
+    },
+    {
+      "name": "csrf_mode:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "csrf_mode:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "csrf_mode:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "csrf_mode:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "csrf_mode:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "csrf_dest:status",
+      "passed": true
+    },
+    {
+      "name": "csrf_dest:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "csrf_dest:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "csrf_dest:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "csrf_dest:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "csrf_dest:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cookie_missing:status",
+      "passed": true
+    },
+    {
+      "name": "cookie_missing:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "cookie_missing:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "cookie_missing:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "cookie_missing:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "cookie_missing:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cookie_duplicate:status",
+      "passed": true
+    },
+    {
+      "name": "cookie_duplicate:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "cookie_duplicate:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "cookie_duplicate:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "cookie_duplicate:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "cookie_duplicate:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cookie_case:status",
+      "passed": true
+    },
+    {
+      "name": "cookie_case:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "cookie_case:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "cookie_case:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "cookie_case:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "cookie_case:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginCase:status",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginCase:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginCase:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginCase:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginCase:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginCase:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginDuplicate:status",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginDuplicate:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginDuplicate:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginDuplicate:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginDuplicate:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "cookie_loginDuplicate:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cookie_paddingBits:status",
+      "passed": true
+    },
+    {
+      "name": "cookie_paddingBits:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "cookie_paddingBits:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "cookie_paddingBits:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "cookie_paddingBits:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "cookie_paddingBits:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cookie_quoted:status",
+      "passed": true
+    },
+    {
+      "name": "cookie_quoted:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "cookie_quoted:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "cookie_quoted:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "cookie_quoted:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "cookie_quoted:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cookie_padded:status",
+      "passed": true
+    },
+    {
+      "name": "cookie_padded:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "cookie_padded:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "cookie_padded:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "cookie_padded:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "cookie_padded:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cookie_encoded:status",
+      "passed": true
+    },
+    {
+      "name": "cookie_encoded:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "cookie_encoded:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "cookie_encoded:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "cookie_encoded:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "cookie_encoded:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cookie_pairs:status",
+      "passed": true
+    },
+    {
+      "name": "cookie_pairs:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "cookie_pairs:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "cookie_pairs:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "cookie_pairs:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "cookie_pairs:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "cookie_large:status",
+      "passed": true
+    },
+    {
+      "name": "cookie_large:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "cookie_large:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "cookie_large:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "cookie_large:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "cookie_large:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "route:status",
+      "passed": true
+    },
+    {
+      "name": "route:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "route:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "route:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "route:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "route:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "method:status",
+      "passed": true
+    },
+    {
+      "name": "method:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "method:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "method:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "method:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "method:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "query:status",
+      "passed": true
+    },
+    {
+      "name": "query:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "query:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "query:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "query:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "query:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "encoded:status",
+      "passed": true
+    },
+    {
+      "name": "encoded:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "encoded:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "encoded:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "encoded:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "encoded:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "host:status",
+      "passed": true
+    },
+    {
+      "name": "host:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "host:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "host:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "host:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "host:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "length:status",
+      "passed": true
+    },
+    {
+      "name": "length:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "length:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "length:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "length:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "length:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "leadingZero:status",
+      "passed": true
+    },
+    {
+      "name": "leadingZero:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "leadingZero:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "leadingZero:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "leadingZero:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "leadingZero:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "ambiguousFraming:status",
+      "passed": true
+    },
+    {
+      "name": "ambiguousFraming:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "ambiguousFraming:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "ambiguousFraming:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "ambiguousFraming:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "ambiguousFraming:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "headerBudget:status",
+      "passed": true
+    },
+    {
+      "name": "headerBudget:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "headerBudget:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "headerBudget:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "headerBudget:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "headerBudget:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "headerCount:status",
+      "passed": true
+    },
+    {
+      "name": "headerCount:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "headerCount:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "headerCount:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "headerCount:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "headerCount:zero_SQL",
+      "passed": true
+    },
+    {
+      "name": "normal_login_cookie_coexists:status",
+      "passed": true
+    },
+    {
+      "name": "normal_login_cookie_coexists:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "normal_login_cookie_coexists:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "normal_login_cookie_coexists:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "normal_login_cookie_coexists:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "normal_login_cookie_coexists:effect_count",
+      "passed": true
+    },
+    {
+      "name": "normal_login_cookie_coexists:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "normal_login_cookie_coexists:real_crypto_transcripts",
+      "passed": true
+    },
+    {
+      "name": "normal_login_cookie_coexists:fixed_security_headers",
+      "passed": true
+    },
+    {
+      "name": "foreign_immutable_namespace:status",
+      "passed": true
+    },
+    {
+      "name": "foreign_immutable_namespace:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "foreign_immutable_namespace:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "foreign_immutable_namespace:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "foreign_immutable_namespace:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "foreign_immutable_namespace:effect_count",
+      "passed": true
+    },
+    {
+      "name": "foreign_immutable_namespace:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role:status",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role:effect_count",
+      "passed": true
+    },
+    {
+      "name": "unsafe_role:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "malformed_result:status",
+      "passed": true
+    },
+    {
+      "name": "malformed_result:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "malformed_result:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "malformed_result:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "malformed_result:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "malformed_result:effect_count",
+      "passed": true
+    },
+    {
+      "name": "malformed_result:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "lost_connect:status",
+      "passed": true
+    },
+    {
+      "name": "lost_connect:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "lost_connect:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "lost_connect:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "lost_connect:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "lost_connect:effect_count",
+      "passed": true
+    },
+    {
+      "name": "lost_connect:no_following_SQL",
+      "passed": true
+    },
+    {
+      "name": "lost_connect:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "lost_begin:status",
+      "passed": true
+    },
+    {
+      "name": "lost_begin:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "lost_begin:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "lost_begin:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "lost_begin:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "lost_begin:effect_count",
+      "passed": true
+    },
+    {
+      "name": "lost_begin:no_following_SQL",
+      "passed": true
+    },
+    {
+      "name": "lost_begin:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "lost_role:status",
+      "passed": true
+    },
+    {
+      "name": "lost_role:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "lost_role:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "lost_role:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "lost_role:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "lost_role:effect_count",
+      "passed": true
+    },
+    {
+      "name": "lost_role:no_following_SQL",
+      "passed": true
+    },
+    {
+      "name": "lost_role:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "lost_timeout:status",
+      "passed": true
+    },
+    {
+      "name": "lost_timeout:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "lost_timeout:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "lost_timeout:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "lost_timeout:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "lost_timeout:effect_count",
+      "passed": true
+    },
+    {
+      "name": "lost_timeout:no_following_SQL",
+      "passed": true
+    },
+    {
+      "name": "lost_timeout:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "lost_idleTimeout:status",
+      "passed": true
+    },
+    {
+      "name": "lost_idleTimeout:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "lost_idleTimeout:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "lost_idleTimeout:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "lost_idleTimeout:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "lost_idleTimeout:effect_count",
+      "passed": true
+    },
+    {
+      "name": "lost_idleTimeout:no_following_SQL",
+      "passed": true
+    },
+    {
+      "name": "lost_idleTimeout:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "lost_end:status",
+      "passed": true
+    },
+    {
+      "name": "lost_end:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "lost_end:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "lost_end:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "lost_end:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "lost_end:effect_count",
+      "passed": true
+    },
+    {
+      "name": "lost_end:no_following_SQL",
+      "passed": true
+    },
+    {
+      "name": "lost_end:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "lost_commit:status",
+      "passed": true
+    },
+    {
+      "name": "lost_commit:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "lost_commit:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "lost_commit:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "lost_commit:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "lost_commit:effect_count",
+      "passed": true
+    },
+    {
+      "name": "lost_commit:no_following_SQL",
+      "passed": true
+    },
+    {
+      "name": "lost_commit:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "lost_release:status",
+      "passed": true
+    },
+    {
+      "name": "lost_release:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "lost_release:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "lost_release:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "lost_release:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "lost_release:effect_count",
+      "passed": true
+    },
+    {
+      "name": "lost_release:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "posteffect_expiry:status",
+      "passed": true
+    },
+    {
+      "name": "posteffect_expiry:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "posteffect_expiry:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "posteffect_expiry:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "posteffect_expiry:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "posteffect_expiry:effect_count",
+      "passed": true
+    },
+    {
+      "name": "posteffect_expiry:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "posteffect_clock:status",
+      "passed": true
+    },
+    {
+      "name": "posteffect_clock:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "posteffect_clock:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "posteffect_clock:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "posteffect_clock:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "posteffect_clock:effect_count",
+      "passed": true
+    },
+    {
+      "name": "posteffect_clock:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "posteffect_abort:status",
+      "passed": true
+    },
+    {
+      "name": "posteffect_abort:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "posteffect_abort:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "posteffect_abort:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "posteffect_abort:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "posteffect_abort:effect_count",
+      "passed": true
+    },
+    {
+      "name": "posteffect_abort:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "sinkThrow:frozen_snapshot",
+      "passed": true
+    },
+    {
+      "name": "sinkThrow:no_cookie_snapshot",
+      "passed": true
+    },
+    {
+      "name": "sinkThrow:single_unknown_transport",
+      "passed": true
+    },
+    {
+      "name": "sinkThrow:status",
+      "passed": true
+    },
+    {
+      "name": "sinkThrow:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "sinkThrow:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "sinkThrow:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "sinkThrow:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "sinkThrow:effect_count",
+      "passed": true
+    },
+    {
+      "name": "sinkThrow:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "sinkReject:frozen_snapshot",
+      "passed": true
+    },
+    {
+      "name": "sinkReject:no_cookie_snapshot",
+      "passed": true
+    },
+    {
+      "name": "sinkReject:single_unknown_transport",
+      "passed": true
+    },
+    {
+      "name": "sinkReject:status",
+      "passed": true
+    },
+    {
+      "name": "sinkReject:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "sinkReject:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "sinkReject:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "sinkReject:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "sinkReject:effect_count",
+      "passed": true
+    },
+    {
+      "name": "sinkReject:separate_disposal_counts",
+      "passed": true
+    },
+    {
+      "name": "sinkPending:frozen_snapshot",
+      "passed": true
+    },
+    {
+      "name": "sinkPending:no_cookie_snapshot",
+      "passed": true
+    },
+    {
+      "name": "sinkPending:single_unknown_transport",
+      "passed": true
+    },
+    {
+      "name": "sinkPending:status",
+      "passed": true
+    },
+    {
+      "name": "sinkPending:fixed_body",
+      "passed": true
+    },
+    {
+      "name": "sinkPending:zero_cookie",
+      "passed": true
+    },
+    {
+      "name": "sinkPending:no_redirect_or_CORS",
+      "passed": true
+    },
+    {
+      "name": "sinkPending:no_private_values",
+      "passed": true
+    },
+    {
+      "name": "sinkPending:effect_count",
+      "passed": true
+    },
+    {
+      "name": "sinkPending:separate_disposal_counts",
+      "passed": true
+    }
+  ],
+  "metrics": [
+    {
+      "name": "captured_family_retirement",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 6,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 1,
+      "invocationCount": 1,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    },
+    {
+      "name": "held_physical_disposal",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 6,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 1,
+      "invocationCount": 1,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    },
+    {
+      "name": "old_capture_new_login_replay",
+      "connections": 3,
+      "queryAttempts": 18,
+      "queryCompletions": 18,
+      "releaseAttempts": 3,
+      "releaseCompletions": 3,
+      "effects": 2,
+      "invocationCount": 3,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release",
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release",
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    },
+    {
+      "name": "late_connection_abort_disposal",
+      "connections": 1,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "release"
+      ]
+    },
+    {
+      "name": "body_extra",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "body_duplicate",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "body_array",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "body_null",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "body_malformed",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "body_wrongVersion",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "body_large",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "body_badUTF8",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "csrf_origin",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "csrf_nullOrigin",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "csrf_media",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "csrf_marker",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "csrf_authorization",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "csrf_idempotency",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "csrf_site",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "csrf_mode",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "csrf_dest",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "cookie_missing",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "cookie_duplicate",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "cookie_case",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "cookie_loginCase",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "cookie_loginDuplicate",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "cookie_paddingBits",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "cookie_quoted",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "cookie_padded",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "cookie_encoded",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "cookie_pairs",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "cookie_large",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "route",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "method",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "query",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "encoded",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "host",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "length",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "leadingZero",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "ambiguousFraming",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "headerBudget",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "headerCount",
+      "connections": 0,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": []
+    },
+    {
+      "name": "normal_login_cookie_coexists",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 6,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 1,
+      "invocationCount": 1,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    },
+    {
+      "name": "foreign_immutable_namespace",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 6,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 0,
+      "invocationCount": 1,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "rollback",
+        "release"
+      ]
+    },
+    {
+      "name": "unsafe_role",
+      "connections": 1,
+      "queryAttempts": 2,
+      "queryCompletions": 2,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "release"
+      ]
+    },
+    {
+      "name": "malformed_result",
+      "connections": 1,
+      "queryAttempts": 5,
+      "queryCompletions": 5,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 0,
+      "invocationCount": 1,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "release"
+      ]
+    },
+    {
+      "name": "lost_connect",
+      "connections": 1,
+      "queryAttempts": 0,
+      "queryCompletions": 0,
+      "releaseAttempts": 0,
+      "releaseCompletions": 0,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect"
+      ]
+    },
+    {
+      "name": "lost_begin",
+      "connections": 1,
+      "queryAttempts": 1,
+      "queryCompletions": 0,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "release"
+      ]
+    },
+    {
+      "name": "lost_role",
+      "connections": 1,
+      "queryAttempts": 2,
+      "queryCompletions": 1,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "release"
+      ]
+    },
+    {
+      "name": "lost_timeout",
+      "connections": 1,
+      "queryAttempts": 3,
+      "queryCompletions": 2,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "release"
+      ]
+    },
+    {
+      "name": "lost_idleTimeout",
+      "connections": 1,
+      "queryAttempts": 4,
+      "queryCompletions": 3,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 0,
+      "invocationCount": 0,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "release"
+      ]
+    },
+    {
+      "name": "lost_end",
+      "connections": 1,
+      "queryAttempts": 5,
+      "queryCompletions": 4,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 0,
+      "invocationCount": 1,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "release"
+      ]
+    },
+    {
+      "name": "lost_commit",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 5,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 1,
+      "invocationCount": 1,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    },
+    {
+      "name": "lost_release",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 6,
+      "releaseAttempts": 1,
+      "releaseCompletions": 0,
+      "effects": 1,
+      "invocationCount": 1,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    },
+    {
+      "name": "posteffect_expiry",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 6,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 1,
+      "invocationCount": 1,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    },
+    {
+      "name": "posteffect_clock",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 6,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 1,
+      "invocationCount": 1,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    },
+    {
+      "name": "posteffect_abort",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 6,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 1,
+      "invocationCount": 1,
+      "sinkInvocations": 0,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    },
+    {
+      "name": "sinkThrow",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 6,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 1,
+      "invocationCount": 1,
+      "sinkInvocations": 1,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    },
+    {
+      "name": "sinkReject",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 6,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 1,
+      "invocationCount": 1,
+      "sinkInvocations": 1,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    },
+    {
+      "name": "sinkPending",
+      "connections": 1,
+      "queryAttempts": 6,
+      "queryCompletions": 6,
+      "releaseAttempts": 1,
+      "releaseCompletions": 1,
+      "effects": 1,
+      "invocationCount": 1,
+      "sinkInvocations": 1,
+      "statements": [
+        "connect",
+        "begin",
+        "role",
+        "timeout",
+        "idleTimeout",
+        "end",
+        "commit",
+        "release"
+      ]
+    }
+  ],
+  "outboundRequests": 0,
+  "source_digests": {
+    ".github/workflows/ci.yml": "1c40d2f730f3d80151a7bd5cdbff0f21d64f71a7e9ca2ff384dfac5e1d068909",
+    "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
+    "docs/packets/P05.T01q.md": "2c96b4354fb153147894abf1a5596319ca5f3a67e315b19f2d5d382bba347f4e",
+    "docs/packets/P05.T01r.md": "cc3ef16a1c019aa42650533bed96001693d1da4fe6a2675a84fe488f7a337544",
+    "docs/packets/P05.T01s.md": "f1c523af6b3485b0de72e678947625688ec47edb95b2fce51a0949cdb526ae07",
+    "docs/packets/P05.T01t.md": "9a237f11ad9316d176f645fd7f75da04708236234054c434a93e59cde6bf27dd",
+    "docs/packets/P05.T01u.md": "4e1ccdcb25ebf69a04bc42c20afa2c7d841bc5c8305e6adb26089c356e9545c3",
+    "docs/packets/P05.T01v.md": "e242b88586c84daf8d2126af4f2f0d3dbdec7321b1315abd5d0ce4c3eb1b13ec",
+    "docs/plan/build-plan.md": "eed8edf1af40d3d9114f0797e795623a2984ddbb70a8ef5a0072fcb5fc5bd321",
+    "docs/plan/source.json": "0fc5bc60856d9a6db0159a660e2324c89c4f84d0a8804447a3856367c85a467d",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "package.json": "04bfaa87ef08d517be038412ed6a210234791c9141bb4f3f22dffc0bba645a4a",
+    "packages/contracts/src/generated/domain.ts": "732e5576b4df525b72f99046587bf99902ba8ae05e155839661c768e15aeb6ca",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "packages/identity/src/index.ts": "041952d82c134a04487b9e9648c2a648879fa069220c9d37eb9113509a7c3643",
+    "packages/identity/src/self-logout-control.ts": "be16714a233b888a809c1bb2ba8a2f2a6bb94ac43dbfc0e5b0bbd4109e028a99",
+    "packages/identity/src/standalone-login-protocol.ts": "0d75b3fd7efda9caf1938086b05fe433109de5a835e404655fb0b7d64b030078",
+    "packages/identity/src/standalone-logout.ts": "bbc3a6dded423cd80da226a34215b5963b3f18403483d0178bec49c4617a8850",
+    "packages/identity/src/standalone-request-guard.ts": "36b709e8a055b1befe89cd5f955cda36939a49973d17b8f4c19b81f862fd5e4e",
+    "packages/identity/src/standalone-workspace-bootstrap.ts": "84a4a438e017c46b1ce280c46ec5eaa467cf9f369fca05ba6456c95eb22bacf3",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "scripts/fixtures/standalone-logout-fixture.ts": "84d5287ce3998f9a62e7679d895c5b723c676f9a1893255c4b80d86f73d3fba0",
+    "scripts/fixtures/standalone-logout-worker.ts": "0a13ff85b444ce54f877feeaeb7d4e7b3889d53e486fa010db5c44e8895e0e80",
+    "scripts/standalone-logout-workers-lab.mjs": "d853f2f2d05367f95b6de57e5a7fe752e227b819eb75dd258b39aebbaf196efe",
+    "tests/standalone-logout.test.mjs": "5dd67b3da63af8ed305891b73f77c1c58f3646b5e39dfff9b19479f8e51d75af"
+  },
+  "source_inventory_digest": "d45068dc4067e29ffb39811fb763776b9e86617386cadfa644f3f439a6860d28",
+  "limitations": [
+    "Synthetic SQL replies do not qualify PostgreSQL, role/locking semantics or physical backend cleanup.",
+    "Worker Fetch response attributes do not qualify browser-engine cookie enforcement, native TLS or HTTP delivery.",
+    "No provider, hosted key/custody, deployment or merchant activation."
+  ]
+}

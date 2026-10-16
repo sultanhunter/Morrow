@@ -1,0 +1,1005 @@
+{
+  "schemaVersion": 1,
+  "kind": "morrow_ci_pending_validation_evidence",
+  "repository": "sultanhunter/Morrow",
+  "runId": "38969900266",
+  "runAttempt": "1",
+  "expectedHead": "d7cf00837c4c85c740b9c3a129aa870649055f08",
+  "nodeVersion": "v24.13.0",
+  "canonicalSequence": 93,
+  "testedHead": "d7cf00837c4c85c740b9c3a129aa870649055f08",
+  "collectionStatus": "complete_pending_external_validation",
+  "qualificationStatus": "pending",
+  "requiresFinalGitHubJobAndStepApi": true,
+  "sourceStable": true,
+  "designatedOutputsRestored": true,
+  "sourceInventoryDigest": "40941cf34b388ed2a2378c4f42892a3f44b9ec275461e212ac5b4f765fa125b7",
+  "snapshotBeforeSha256": "3d61987e1b84295ca0d3b8d26505bc4a9229cbed5a7738e90d1cb6beb5bfcf4b",
+  "snapshotAfterTestsSha256": "cbed8fbc74a7d3d18b1b01c568cea284f7e16b88f569c68b5cbb3a4bba01bd80",
+  "snapshotAfterRestoreSha256": "3d61987e1b84295ca0d3b8d26505bc4a9229cbed5a7738e90d1cb6beb5bfcf4b",
+  "commands": [
+    {
+      "stepId": "install_dependencies",
+      "command": "npm ci --ignore-scripts --no-audit --no-fund",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "baseline_ci",
+      "command": "npm run ci",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "baseline_smoke",
+      "command": "npm run smoke:scaffold",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_managed_login_lifetime",
+      "command": "npm run lab:managed-login-lifetime-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_workspace_api",
+      "command": "npm run lab:workspace-api-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_identity",
+      "command": "npm run lab:workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_agent",
+      "command": "npm run lab:agent-authority-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_linking",
+      "command": "npm run lab:workspace-store-linking-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_pkce",
+      "command": "npm run lab:authentication-exchange-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_token",
+      "command": "npm run lab:workos-session-token-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_status",
+      "command": "npm run lab:workos-session-status-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_evidence",
+      "command": "npm run lab:workos-authentication-evidence-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_selection",
+      "command": "npm run lab:workos-workspace-selection-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_admission",
+      "command": "npm run lab:browser-session-admission-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_workspace",
+      "command": "npm run lab:standalone-workspace-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_store",
+      "command": "npm run lab:standalone-store-linking-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_login",
+      "command": "npm run lab:standalone-login-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_logout",
+      "command": "npm run lab:standalone-logout-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_fixed_provider",
+      "command": "npm run lab:fixed-workos-login-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_platform_provider",
+      "command": "npm run lab:fixed-workos-platform-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_controlled_neon",
+      "command": "npm run lab:controlled-neon-workers",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "frozen75",
+      "command": "npm run lab:workos-session-status-frozen75",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_engine",
+      "command": "pinned isolated PostgreSQL engine diagnostic",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "postgresql_controlled_neon",
+      "command": "npm run lab:controlled-neon-postgresql",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "postgresql_managed_login",
+      "command": "npm run lab:managed-login-postgresql",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "postgresql_workspace_api",
+      "command": "npm run lab:workspace-api-postgresql",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_operations",
+      "command": "npm run lab:operations",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_restore",
+      "command": "npm run lab:restore",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_identity",
+      "command": "npm run lab:identity",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_permissions",
+      "command": "npm run lab:permissions",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_challenge",
+      "command": "npm run lab:authentication",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_revocation",
+      "command": "npm run lab:workspace-revocation",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_linking",
+      "command": "npm run lab:workspace-store-linking",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_pkce",
+      "command": "npm run lab:authentication-exchange",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_selection",
+      "command": "npm run lab:provider-subject-resolution",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_admission",
+      "command": "npm run lab:browser-session-admission",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "frozen71",
+      "command": "npm run lab:workos-operator",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "frozen74",
+      "command": "npm run lab:workos-operator-frozen74",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "frozen80",
+      "command": "npm run lab:workos-authentication-operator",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "frozen82",
+      "command": "npm run lab:workos-authentication-operator-current",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "http_workspace",
+      "command": "npm run lab:standalone-workspace-http",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_link_read",
+      "command": "npm run lab:workspace-linking-read",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "http_linking",
+      "command": "npm run lab:standalone-store-linking-http",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_custody",
+      "command": "npm run lab:login-flow-custody",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "https_login",
+      "command": "npm run lab:standalone-login-https",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_logout",
+      "command": "npm run lab:self-logout-sql",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "https_logout",
+      "command": "npm run lab:standalone-logout-https",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "https_fixed_provider",
+      "command": "npm run lab:fixed-workos-login-https",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    }
+  ],
+  "reports": [
+    {
+      "path": "docs/evidence/P01.T01/verification.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "5c07e706b8db9413799cf010c55f9e302c35e8749befea75107b6ec345fb0a7c"
+    },
+    {
+      "path": "docs/evidence/P01.T02/verification.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "689815c3ecfabb432edef4e8c68ded6c63f15edffd0cf00ccc24c38c25cfdd58"
+    },
+    {
+      "path": "docs/evidence/P01.T03/verification.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "cb61ab4e3b2b7994c9e6d472d828840efb771e98e145e5c9a626a0724851c3dd"
+    },
+    {
+      "path": "docs/evidence/P01.T04/verification.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "18e70d7b026aa4fd2d84308950849e5a8a66af244c86ae67b1ad8ffcf3a0db66"
+    },
+    {
+      "path": "docs/evidence/P02.T02/verification.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "a23d1449f26c37126e5f98a456e3357140cccc5cef8663736d78453347579d65"
+    },
+    {
+      "path": "docs/evidence/P03.T02/boundaries.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "a4bf713000d76b4f2700ad2d250e6c1c87946420a5946edba5af68030e56e723"
+    },
+    {
+      "path": "docs/evidence/P03.T04/delivery.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "2e7c5ae34f8ef9bb1a9dde382172eebdc2a81552e80f9c112f09fd43656216b0"
+    },
+    {
+      "path": "docs/evidence/P04.T01a/synth.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "dd4eef9a5d021002eb4e886d9ef62c85cd1279188dfbba02cd678b0cab7b99cb"
+    },
+    {
+      "path": "docs/evidence/P04.T01a/permissions.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "a52a63644d3bbd89a8b51238e5c32c0945f7785a40f7665692247c36b3476307"
+    },
+    {
+      "path": "docs/evidence/P04.T01a/readiness.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "b8061dfe3884ff1d97782ffef11127c1f2d7865b9970d8b831fd8244698cb285"
+    },
+    {
+      "path": "docs/evidence/P04.T01f/archive.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "281fa9bb88b5f0daaf07169346514dbc4c3259e0cdc83e85c3f7dda92fba186c"
+    },
+    {
+      "path": "docs/evidence/P04.T01f/cleanup.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "c47fb45ae38c8b83201291b18a26432d6f28dee749dcad94f7d233ca193b8133"
+    },
+    {
+      "path": "docs/evidence/P03.T01/smoke.json",
+      "producerStep": "baseline_smoke",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "839f7c0c0ba7fd717f411ccd25acec2fbb1e31cf7323084199443d5c32790203"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/managed-login-lifetime.json",
+      "producerStep": "workers_managed_login_lifetime",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "bdc7aadbcb7df23e13a81536475d02a9eb3b4491e202b7022caa07cc6f24d811"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/workspace-api-workers.json",
+      "producerStep": "workers_workspace_api",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "183d11514d138b920ffe019dcd771823f34bb34ec4955162f0b226cbfd2ba8fb"
+    },
+    {
+      "path": "docs/evidence/P04.T01b/workers.json",
+      "producerStep": "workers_identity",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "927bc5d5f3defd077b6738829823ceb8c5e018dfe31f0768b462d619c318bfc7"
+    },
+    {
+      "path": "docs/evidence/P05.T04/workers-lab.json",
+      "producerStep": "workers_agent",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "fe2b1ea6f14b109ce8333c352eafc6e36ef1a25425d620d4436fe30fc4a5baaf"
+    },
+    {
+      "path": "docs/evidence/P05.T03/workers-lab.json",
+      "producerStep": "workers_linking",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "accbe1eea112ce7c457b204896022acbe1585acdc9599606d7110de2ea1d7912"
+    },
+    {
+      "path": "docs/evidence/P05.T01d/workers-lab.json",
+      "producerStep": "workers_pkce",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "0aadbfb762b0dfa5a3f8d1b6bc7f0d28a0fd1eef9d071d65d1107a385fc68e39"
+    },
+    {
+      "path": "docs/evidence/P05.T01f/workers-lab.json",
+      "producerStep": "workers_token",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "cc695292ea2997096c328c16b65d2833ae25a0315330e2a4aac0d947c0d07df2"
+    },
+    {
+      "path": "docs/evidence/P05.T01m/legacy-reader-workers-lab.json",
+      "producerStep": "workers_status",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "47c91b91d097311332fef692f528c1e326b69896e669eab7431f6c69c37117a8"
+    },
+    {
+      "path": "docs/evidence/P05.T01m/legacy-composition-workers-lab.json",
+      "producerStep": "workers_evidence",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "a676c35a800362bdc687028973d9681039d5771bdd5f4096b777ac53126294ce"
+    },
+    {
+      "path": "docs/evidence/P05.T01m/legacy-selection-workers-lab.json",
+      "producerStep": "workers_selection",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "e4140126d28e4a896a8457ff79114762dc2274e0c8740f97bbbf1b67e27af942"
+    },
+    {
+      "path": "docs/evidence/P05.T01m/workers-lab.json",
+      "producerStep": "workers_admission",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "5e296a2760d673f18ddb7ca6c6327b9def7360fadac601f60ff3be9b8d639665"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/standalone-workspace-workers.json",
+      "producerStep": "workers_workspace",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "0f0fc7c25bd82cf65bdd1469364306ab413fda49b931145d7045f5ffe03afd25"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/standalone-store-linking-workers.json",
+      "producerStep": "workers_store",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "c5623fa479e88bdc7163cd930cd5ce78dfaf5c046c52f6a67c8e45604feac0e2"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/login-workers-lab.json",
+      "producerStep": "workers_login",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "1092d5cd79caf8e6114512d570abb11a4a96082e7057c2caebcbffdfb5229eb0"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/logout-workers-lab.json",
+      "producerStep": "workers_logout",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "a0538b43f720ac0ede3de59a14eac473d3af72e093e8c787f41d5c9f90df50d4"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/fixed-provider-workers.json",
+      "producerStep": "workers_fixed_provider",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "0498cd2e0d02ecafe4ff8816fa9c0308d91a2fa30a0d559c18930aaa0aff3641"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/platform-workers-lab.json",
+      "producerStep": "workers_platform_provider",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "47cbea486ed0736dd4e34636f39ed0608f555e12fbe06a5bc3c01720b5a85a8f"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/controlled-neon-workers.json",
+      "producerStep": "workers_controlled_neon",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "ae543b8dea68fe9fb8711601c3b41dfff15993c0227697d36548f783e36fbd1f"
+    },
+    {
+      "path": "docs/evidence/P05.T01h/frozen75-regression.json",
+      "producerStep": "frozen75",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "bfff3b4bba4237db6c7aa8e7a277a5567f078ba178e6c7596a0c16a0fefa5c65"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/controlled-neon-postgresql.json",
+      "producerStep": "postgresql_controlled_neon",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "5572e5facb412d98e746ba342d82ed42029ae01a3905eb91fdb060f33473debe"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/managed-login-postgresql.json",
+      "producerStep": "postgresql_managed_login",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "46c297d36958c6df549fb59afa0677bdb0c2cf37740f3d78df611bfb577e2294"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/workspace-api-postgresql.json",
+      "producerStep": "postgresql_workspace_api",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "74b53f7d4ce16856d3e8c29e3728c8a6f08d3ab06bea93eb52946425e64a40d9"
+    },
+    {
+      "path": "docs/evidence/P04.T03/operations-lab.json",
+      "producerStep": "sql_operations",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "5c5a951a49071b922ca8cccb0ae1c42de2e330b8d22e533dacca718f6dfce837"
+    },
+    {
+      "path": "docs/evidence/P04.T04/restore-lab.json",
+      "producerStep": "sql_restore",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "e5b6596b692c9cc275c869d66d2ccbb159cffc64789e7fd9ff9db80c13dc44b2"
+    },
+    {
+      "path": "docs/evidence/P05.T01/identity-lab.json",
+      "producerStep": "sql_identity",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "3ad3ad2287bb4c3e1620834991926ff664f1c4bea60e3b3744dc50a081023d9b"
+    },
+    {
+      "path": "docs/evidence/P05.T02/database-lab.json",
+      "producerStep": "sql_permissions",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "2146fffa59756148e93dccb5855d1ddda219a83a1bb8e0bc0dc54854d2d92bf3"
+    },
+    {
+      "path": "docs/evidence/P05.T01k/authentication-challenge-lab.json",
+      "producerStep": "sql_challenge",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "e796f5fca31c76b31cd8f480245cdbe300bac4661ff22b2a619599462683f16d"
+    },
+    {
+      "path": "docs/evidence/P05.T01/workspace-revocation-lab.json",
+      "producerStep": "sql_revocation",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "e7e4315b90957c7ab6e188c8c90953466504190e3321ab4e97e19fb0d23406cc"
+    },
+    {
+      "path": "docs/evidence/P05.T03/workspace-store-linking-lab.json",
+      "producerStep": "sql_linking",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "211971cc8d217d74fd618daac8959a269207ed5b7ffef96a228f024e0e4d8d1a"
+    },
+    {
+      "path": "docs/evidence/P05.T01d/postgresql-lab.json",
+      "producerStep": "sql_pkce",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "acbff3ef99f26202041590203c716737d0d68214ccecf47b33d1668c904e4d01"
+    },
+    {
+      "path": "docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json",
+      "producerStep": "sql_selection",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "5b7bfd55b78eedce276b89a81f8672b8268279f7938e9ea3a52567fabf0181ab"
+    },
+    {
+      "path": "docs/evidence/P05.T01m/postgresql-lab.json",
+      "producerStep": "sql_admission",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "5008e19d3bc3b4cdf073985ae7d95245f10a6e3d1757a35980cccf43726f14ee"
+    },
+    {
+      "path": "docs/evidence/P05.T01e/frozen-regression.json",
+      "producerStep": "frozen71",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "8b9b0650bf80f7c7675654c2c04d72cbfa989a6440266c0ff5bcb2410d13c146"
+    },
+    {
+      "path": "docs/evidence/P05.T01g/frozen74-regression.json",
+      "producerStep": "frozen74",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "d5bbf6ccf038cf9ac6e571af27256caa156fe6d6355fe1e5f4cf81b4da02c531"
+    },
+    {
+      "path": "docs/evidence/P05.T01o/frozen80-regression.json",
+      "producerStep": "frozen80",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "02f6cf255309799433754e5e52f15bba4a9ff5343cb315480ace2be6f07f2af7"
+    },
+    {
+      "path": "docs/evidence/P05.T01o/frozen82-regression.json",
+      "producerStep": "frozen82",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "13875d905faf730be6165582d63de90a0fbaa7bc867ebc8098d74f05b0493332"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/standalone-workspace-http.json",
+      "producerStep": "http_workspace",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "adaaac6535cee01ebf2ac4fc1415ffea028c54028ded1e61c2f17ff2b7429a9e"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/workspace-linking-read.json",
+      "producerStep": "sql_link_read",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "806677d79894625843c11e6555a1982d3d5dc7c4948864f2ff26d6ac5811f6b1"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/standalone-store-linking-http.json",
+      "producerStep": "http_linking",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "a66bd080799896f8d48b898c1d6da35153661980aef73171c931bab497caff80"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/login-flow-custody.json",
+      "producerStep": "sql_custody",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "c2fb97c50d792603ca418d0a1428809525d864710c565eb721c3494a16dcc214"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/login-https-postgresql-lab.json",
+      "producerStep": "https_login",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "575e11b9cdc6089a2256010066cc7729a36c8654dc75ecec39ed2211ea0d226b"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/self-logout-postgresql-lab.json",
+      "producerStep": "sql_logout",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "253f503c9b4f70f577888fc310b9b107624c84e4f63baff7d2fef999111ff4d6"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/logout-https-postgresql-lab.json",
+      "producerStep": "https_logout",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "8d477a639d0dcca2df73599ba36e7e3d5d5125676b94fe9cf75033579d5f37f6"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/fixed-provider-https.json",
+      "producerStep": "https_fixed_provider",
+      "producer": {
+        "outcome": "success",
+        "conclusion": "success",
+        "actualExitCode": null
+      },
+      "status": "fresh_pending_external_validation",
+      "sha256": "556ec8aeb9964f3f2ab7caf305507f782baa82fcbe6ad0a5e2dc3c7c812fe6fd"
+    }
+  ],
+  "auxiliaryOutputs": [
+    {
+      "path": "docs/evidence/index.json",
+      "originalSha256": "cf9302e4adc450f6118da5f987a2b426c0abf5bbff1489abc6166ab23777f908",
+      "afterTestsSha256": "e0eae0795500326acff54aba5e3d9e3dc01ce9821d6599117959a8d7f614ce01"
+    },
+    {
+      "path": "docs/evidence/P03.T03/example.json",
+      "originalSha256": "e001773426e5222702639fc851c1326628bd1bdcb8da02a1c331e605ae1e7453",
+      "afterTestsSha256": "e001773426e5222702639fc851c1326628bd1bdcb8da02a1c331e605ae1e7453"
+    }
+  ],
+  "issues": [],
+  "limitations": [
+    "No qualification or numeric process exit is inferred by this collector; verify the final GitHub run/job/step API.",
+    "Fresh report bytes do not replace their domain checks, current source bindings, physical cleanup or independent review.",
+    "Controlled CI filesystem only, not hostile concurrent filesystem isolation. No provider credentials or account actions."
+  ]
+}

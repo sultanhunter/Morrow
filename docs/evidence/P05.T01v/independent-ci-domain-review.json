@@ -1,0 +1,1744 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01v",
+  "current_plan_sequence": 93,
+  "reviewer": "/root/fixed_provider_core",
+  "tested_commit": "d7cf00837c4c85c740b9c3a129aa870649055f08",
+  "artifact_sha256": "e67b1eee503223845a59e372a0ec5baff508b2f50f2cf938f3705003e372e33e",
+  "reviewed_reports": {
+    "docs/evidence/P01.T01/verification.json": "5c07e706b8db9413799cf010c55f9e302c35e8749befea75107b6ec345fb0a7c",
+    "docs/evidence/P01.T02/verification.json": "689815c3ecfabb432edef4e8c68ded6c63f15edffd0cf00ccc24c38c25cfdd58",
+    "docs/evidence/P01.T03/verification.json": "cb61ab4e3b2b7994c9e6d472d828840efb771e98e145e5c9a626a0724851c3dd",
+    "docs/evidence/P01.T04/verification.json": "18e70d7b026aa4fd2d84308950849e5a8a66af244c86ae67b1ad8ffcf3a0db66",
+    "docs/evidence/P02.T02/verification.json": "a23d1449f26c37126e5f98a456e3357140cccc5cef8663736d78453347579d65",
+    "docs/evidence/P03.T02/boundaries.json": "a4bf713000d76b4f2700ad2d250e6c1c87946420a5946edba5af68030e56e723",
+    "docs/evidence/P03.T04/delivery.json": "2e7c5ae34f8ef9bb1a9dde382172eebdc2a81552e80f9c112f09fd43656216b0",
+    "docs/evidence/P04.T01a/synth.json": "dd4eef9a5d021002eb4e886d9ef62c85cd1279188dfbba02cd678b0cab7b99cb",
+    "docs/evidence/P04.T01a/permissions.json": "a52a63644d3bbd89a8b51238e5c32c0945f7785a40f7665692247c36b3476307",
+    "docs/evidence/P04.T01a/readiness.json": "b8061dfe3884ff1d97782ffef11127c1f2d7865b9970d8b831fd8244698cb285",
+    "docs/evidence/P04.T01f/archive.json": "281fa9bb88b5f0daaf07169346514dbc4c3259e0cdc83e85c3f7dda92fba186c",
+    "docs/evidence/P04.T01f/cleanup.json": "c47fb45ae38c8b83201291b18a26432d6f28dee749dcad94f7d233ca193b8133",
+    "docs/evidence/P03.T01/smoke.json": "839f7c0c0ba7fd717f411ccd25acec2fbb1e31cf7323084199443d5c32790203",
+    "docs/evidence/P05.T01v/regressions/managed-login-lifetime.json": "bdc7aadbcb7df23e13a81536475d02a9eb3b4491e202b7022caa07cc6f24d811",
+    "docs/evidence/P05.T01v/workspace-api-workers.json": "183d11514d138b920ffe019dcd771823f34bb34ec4955162f0b226cbfd2ba8fb",
+    "docs/evidence/P04.T01b/workers.json": "927bc5d5f3defd077b6738829823ceb8c5e018dfe31f0768b462d619c318bfc7",
+    "docs/evidence/P05.T04/workers-lab.json": "fe2b1ea6f14b109ce8333c352eafc6e36ef1a25425d620d4436fe30fc4a5baaf",
+    "docs/evidence/P05.T03/workers-lab.json": "accbe1eea112ce7c457b204896022acbe1585acdc9599606d7110de2ea1d7912",
+    "docs/evidence/P05.T01d/workers-lab.json": "0aadbfb762b0dfa5a3f8d1b6bc7f0d28a0fd1eef9d071d65d1107a385fc68e39",
+    "docs/evidence/P05.T01f/workers-lab.json": "cc695292ea2997096c328c16b65d2833ae25a0315330e2a4aac0d947c0d07df2",
+    "docs/evidence/P05.T01m/legacy-reader-workers-lab.json": "47c91b91d097311332fef692f528c1e326b69896e669eab7431f6c69c37117a8",
+    "docs/evidence/P05.T01m/legacy-composition-workers-lab.json": "a676c35a800362bdc687028973d9681039d5771bdd5f4096b777ac53126294ce",
+    "docs/evidence/P05.T01m/legacy-selection-workers-lab.json": "e4140126d28e4a896a8457ff79114762dc2274e0c8740f97bbbf1b67e27af942",
+    "docs/evidence/P05.T01m/workers-lab.json": "5e296a2760d673f18ddb7ca6c6327b9def7360fadac601f60ff3be9b8d639665",
+    "docs/evidence/P05.T01v/regressions/standalone-workspace-workers.json": "0f0fc7c25bd82cf65bdd1469364306ab413fda49b931145d7045f5ffe03afd25",
+    "docs/evidence/P05.T01v/regressions/standalone-store-linking-workers.json": "c5623fa479e88bdc7163cd930cd5ce78dfaf5c046c52f6a67c8e45604feac0e2",
+    "docs/evidence/P05.T01v/regressions/login-workers-lab.json": "1092d5cd79caf8e6114512d570abb11a4a96082e7057c2caebcbffdfb5229eb0",
+    "docs/evidence/P05.T01v/regressions/logout-workers-lab.json": "a0538b43f720ac0ede3de59a14eac473d3af72e093e8c787f41d5c9f90df50d4",
+    "docs/evidence/P05.T01v/regressions/fixed-provider-workers.json": "0498cd2e0d02ecafe4ff8816fa9c0308d91a2fa30a0d559c18930aaa0aff3641",
+    "docs/evidence/P05.T01v/regressions/platform-workers-lab.json": "47cbea486ed0736dd4e34636f39ed0608f555e12fbe06a5bc3c01720b5a85a8f",
+    "docs/evidence/P05.T01v/regressions/controlled-neon-workers.json": "ae543b8dea68fe9fb8711601c3b41dfff15993c0227697d36548f783e36fbd1f",
+    "docs/evidence/P05.T01h/frozen75-regression.json": "bfff3b4bba4237db6c7aa8e7a277a5567f078ba178e6c7596a0c16a0fefa5c65",
+    "docs/evidence/P05.T01v/regressions/controlled-neon-postgresql.json": "5572e5facb412d98e746ba342d82ed42029ae01a3905eb91fdb060f33473debe",
+    "docs/evidence/P05.T01v/regressions/managed-login-postgresql.json": "46c297d36958c6df549fb59afa0677bdb0c2cf37740f3d78df611bfb577e2294",
+    "docs/evidence/P05.T01v/workspace-api-postgresql.json": "74b53f7d4ce16856d3e8c29e3728c8a6f08d3ab06bea93eb52946425e64a40d9",
+    "docs/evidence/P04.T03/operations-lab.json": "5c5a951a49071b922ca8cccb0ae1c42de2e330b8d22e533dacca718f6dfce837",
+    "docs/evidence/P04.T04/restore-lab.json": "e5b6596b692c9cc275c869d66d2ccbb159cffc64789e7fd9ff9db80c13dc44b2",
+    "docs/evidence/P05.T01/identity-lab.json": "3ad3ad2287bb4c3e1620834991926ff664f1c4bea60e3b3744dc50a081023d9b",
+    "docs/evidence/P05.T02/database-lab.json": "2146fffa59756148e93dccb5855d1ddda219a83a1bb8e0bc0dc54854d2d92bf3",
+    "docs/evidence/P05.T01k/authentication-challenge-lab.json": "e796f5fca31c76b31cd8f480245cdbe300bac4661ff22b2a619599462683f16d",
+    "docs/evidence/P05.T01/workspace-revocation-lab.json": "e7e4315b90957c7ab6e188c8c90953466504190e3321ab4e97e19fb0d23406cc",
+    "docs/evidence/P05.T03/workspace-store-linking-lab.json": "211971cc8d217d74fd618daac8959a269207ed5b7ffef96a228f024e0e4d8d1a",
+    "docs/evidence/P05.T01d/postgresql-lab.json": "acbff3ef99f26202041590203c716737d0d68214ccecf47b33d1668c904e4d01",
+    "docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json": "5b7bfd55b78eedce276b89a81f8672b8268279f7938e9ea3a52567fabf0181ab",
+    "docs/evidence/P05.T01m/postgresql-lab.json": "5008e19d3bc3b4cdf073985ae7d95245f10a6e3d1757a35980cccf43726f14ee",
+    "docs/evidence/P05.T01e/frozen-regression.json": "8b9b0650bf80f7c7675654c2c04d72cbfa989a6440266c0ff5bcb2410d13c146",
+    "docs/evidence/P05.T01g/frozen74-regression.json": "d5bbf6ccf038cf9ac6e571af27256caa156fe6d6355fe1e5f4cf81b4da02c531",
+    "docs/evidence/P05.T01o/frozen80-regression.json": "02f6cf255309799433754e5e52f15bba4a9ff5343cb315480ace2be6f07f2af7",
+    "docs/evidence/P05.T01o/frozen82-regression.json": "13875d905faf730be6165582d63de90a0fbaa7bc867ebc8098d74f05b0493332",
+    "docs/evidence/P05.T01v/regressions/standalone-workspace-http.json": "adaaac6535cee01ebf2ac4fc1415ffea028c54028ded1e61c2f17ff2b7429a9e",
+    "docs/evidence/P05.T01v/regressions/workspace-linking-read.json": "806677d79894625843c11e6555a1982d3d5dc7c4948864f2ff26d6ac5811f6b1",
+    "docs/evidence/P05.T01v/regressions/standalone-store-linking-http.json": "a66bd080799896f8d48b898c1d6da35153661980aef73171c931bab497caff80",
+    "docs/evidence/P05.T01v/regressions/login-flow-custody.json": "c2fb97c50d792603ca418d0a1428809525d864710c565eb721c3494a16dcc214",
+    "docs/evidence/P05.T01v/regressions/login-https-postgresql-lab.json": "575e11b9cdc6089a2256010066cc7729a36c8654dc75ecec39ed2211ea0d226b",
+    "docs/evidence/P05.T01v/regressions/self-logout-postgresql-lab.json": "253f503c9b4f70f577888fc310b9b107624c84e4f63baff7d2fef999111ff4d6",
+    "docs/evidence/P05.T01v/regressions/logout-https-postgresql-lab.json": "8d477a639d0dcca2df73599ba36e7e3d5d5125676b94fe9cf75033579d5f37f6",
+    "docs/evidence/P05.T01v/regressions/fixed-provider-https.json": "556ec8aeb9964f3f2ab7caf305507f782baa82fcbe6ad0a5e2dc3c7c812fe6fd"
+  },
+  "reviewed_source_digests": {
+    ".github/workflows/ci.yml": "1c40d2f730f3d80151a7bd5cdbff0f21d64f71a7e9ca2ff384dfac5e1d068909",
+    ".nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "apps/api/src/auth-http.ts": "05bd4b04b51ca6d129a348b79b4789c9005320831087875bab557c2089021999",
+    "apps/api/src/worker.ts": "e169ada0c044c9172d0e9253c38a3ee0e04ff78db1db4c38db0ea1bbb776fca7",
+    "apps/api/src/workspace-http.ts": "8e6b6750c0fe12fef0e0fde0ef22347b89485bd1a86ff84d3c76d545473053bf",
+    "apps/api/src/workspace-router.ts": "d81784493ef38f4fbbb360282f1ad2e5a845e3f70e7034e8ceaf2090651b8944",
+    "docs/acceptance/P01.A01-fixtures.json": "c5cee8ff337b84e080c0775d0709ef46a8e63d646cfa7505487fce8a1b326786",
+    "docs/acceptance/P02.md": "078c25236d3bb7010f9fd70625c21e275bc0e275320e49285e952d79a056ee2b",
+    "docs/contracts/billing-entitlements.md": "4b64d695ed49e2004b61ff122a9ddeb7668c6db71680b09fa1f9d117cbacfb66",
+    "docs/contracts/budgets.md": "ec22e8757eb77a88bbaae6e816730396e3edbcf9887c0cd422f269125119410c",
+    "docs/contracts/capabilities.json": "40762468445379e1c65d1cbd10527ad1b3dff6e50b41d868a42cb2f04e5111b8",
+    "docs/contracts/fixtures/P01.A02.json": "29394bf69cdffdf7b5165874ae080a22c4e8a89a5876ed9cfd8c6d5afc653451",
+    "docs/contracts/fixtures/P01.A04.json": "ed4c263368333df4762e58fd60c2c7bab0c768c40498e83b3404902be99f2cf2",
+    "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
+    "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
+    "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
+    "docs/decisions/billing-ownership.md": "9be90932cc317b6161fd4eeeaac238292f01dde459504cb6a728c3ee0c110358",
+    "docs/decisions/capacity-targets.json": "4430f79dcd99f3096bc11339cce110f241d929014e2d889259489625412b1b31",
+    "docs/decisions/cost-model.json": "a82ab6d9222f279a170ebcc518f7602c30c7b805114770e19e519d822a87c23c",
+    "docs/decisions/dependencies.json": "5be3303a0144c9df055ad43f1fba7006297dfe52f9058b9b5cf3aa56ded41f44",
+    "docs/decisions/deployment-policy.json": "8cad3d682841843d2b1665ace1a7f286b0c108ab72511bb66f88100decec22c0",
+    "docs/decisions/model-policy.json": "ccfb2b4173bbdf136a52674aa10aa023dff9685a7ec919d6fafe5cbde53a8e8b",
+    "docs/decisions/provider-bindings.json": "93f031b02e9defd503680ac71df1db480d6d5161718f1e09ebb5f6c0135fe39e",
+    "docs/decisions/providers.json": "f63fb6ea591f7900e2905e43276c286a2ecbfafb4c6487ed2c76cbab49b829df",
+    "docs/decisions/readiness.json": "04e4c30989e4b8d29df454817267163345bd1e9a261c7c52006aeacb86e610c7",
+    "docs/design/component-baseline.md": "dd43701476d5584420050df291780fd146654794136ecb9678ae6753431428ed",
+    "docs/design/prototype-guide.md": "0ab5b259c2c8ecc262c74ff6dbd6ad85c6797f833427abab916623d65ec79416",
+    "docs/design/prototype.html": "4f9e5abaef48c4ff4a9094335f57f8dde70ec06ad2827a3f17cb40accb78feeb",
+    "docs/design/tokens.json": "f04e760faf336d8120c4b59733179f4c1ba051d7e810cc31bb2242b90afef27f",
+    "docs/evidence/P01.T04/review.md": "21a7a96df938565a73ffefca5769b55e039b93829c8881898595958de865f65d",
+    "docs/evidence/P02.T03/browser-checks.json": "5bdd7fc6d328f8c586371efae07ca9a6e5a28445c4b8c12cd28fe5d11eecbbcc",
+    "docs/evidence/P05.T01l/actual-staging-trial.json": "6191d880a1e713982c951c7bc6e5baa6bb988965fb10d8d42ef5eada58fba14c",
+    "docs/evidence/P05.T01l/frozen80-regression.json": "74ab8e1090b65c3e2788fefdd24f62871176538b835b59632106655c460a341d",
+    "docs/evidence/P05.T01l/local-validation.json": "39dc648603ba4ad9715ae36b62fded55d971cf915d3266ee7d5dfe23096a4252",
+    "docs/evidence/P05.T01l/postgresql-loopback-lab.json": "10bc935344daeff48e618f400ff4f15a15379688f5b3cefedbe6c5f2fb994e85",
+    "docs/evidence/P05.T01l/review.json": "e10c52655b208f68bf30e1bec71991b976c908d345d167069bbf9479da479d75",
+    "docs/evidence/P05.T01n/actual-staging-trial.json": "7b3b95df108fb4ecf62dbb7c7643737c5e967c364f31992a6afa67e53b3271eb",
+    "docs/evidence/P05.T01n/local-validation.json": "b6fcf85af971576b65edd5bdd6ab4eeff4cda4d4366fac91be56d4dcceeebefa",
+    "docs/evidence/P05.T01n/postgresql-loopback-lab.json": "6031a7083b71b59ab2b4651dd7923a078bff8c0a5175eecd43abf1cc0e185132",
+    "docs/evidence/P05.T01n/review.json": "26d87758acf11cf70228ce314ca61a93534ee834544ff1fc04d7c66f9817833d",
+    "docs/history/workos-authentication-operator-80/.nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "docs/history/workos-authentication-operator-80/AGENTS.md": "54f3dc0b7c91e31d58dcea642e0ceb5c59c9e97c5736259f8944a697db28c37f",
+    "docs/history/workos-authentication-operator-80/docs/decisions/workos-authentication-operator-qualification.json": "e776be1808fea93034febefd96966996447322924629239968e77096d15a4b33",
+    "docs/history/workos-authentication-operator-80/docs/evidence/P05.T01l/postgresql-loopback-lab.json": "10bc935344daeff48e618f400ff4f15a15379688f5b3cefedbe6c5f2fb994e85",
+    "docs/history/workos-authentication-operator-80/docs/packets/P05.T01l.md": "d3ac12033ee32423461668085a788c5951f77fa911f9d51702ab14d4f91ade6c",
+    "docs/history/workos-authentication-operator-80/docs/plan/build-plan.md": "7983b440c0b202207cc4510c21f7c88bb308c339898e2ae3ca68cfc6b993d5fe",
+    "docs/history/workos-authentication-operator-80/docs/plan/source.json": "91410bc94ee60c701e329ee65e7a253c693f1324ef0c59ab7c1301e8acb94a2a",
+    "docs/history/workos-authentication-operator-80/infra/identity-role-prerequisites.sql": "2c166df1d5b18eda1b4be14c94a26fb31828292833ed110655608400b29fe9af",
+    "docs/history/workos-authentication-operator-80/infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "docs/history/workos-authentication-operator-80/migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "docs/history/workos-authentication-operator-80/migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "docs/history/workos-authentication-operator-80/migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "docs/history/workos-authentication-operator-80/migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "docs/history/workos-authentication-operator-80/migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "docs/history/workos-authentication-operator-80/migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "docs/history/workos-authentication-operator-80/migrations/manifest.json": "e115ec9e3326dd75542fc28edecc7de9f37d44c92d975388d58c2cdeda760e9f",
+    "docs/history/workos-authentication-operator-80/package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "docs/history/workos-authentication-operator-80/package.json": "60b87f587bc49483919aa0ba51db4c8992687c8f405a8000cec318dbad1d9067",
+    "docs/history/workos-authentication-operator-80/packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "docs/history/workos-authentication-operator-80/packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "docs/history/workos-authentication-operator-80/packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "docs/history/workos-authentication-operator-80/packages/identity/package.json": "9afb8a21e1b8e01e87185c366d60e0a86514c8112884fcac17f6e3fb30b7fee3",
+    "docs/history/workos-authentication-operator-80/packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "docs/history/workos-authentication-operator-80/packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "docs/history/workos-authentication-operator-80/packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "docs/history/workos-authentication-operator-80/packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "docs/history/workos-authentication-operator-80/packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "docs/history/workos-authentication-operator-80/scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "docs/history/workos-authentication-operator-80/scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "docs/history/workos-authentication-operator-80/scripts/workos-authentication-operator-controller.mjs": "04df11e5e03bdd84264a028812e94e0899da6ac6a67f53653b20cd1172252f8a",
+    "docs/history/workos-authentication-operator-80/scripts/workos-authentication-operator-database.mjs": "21841a7a275987040dbdb389d150ebe10c29760156eacfa51a2951a5b0bd1533",
+    "docs/history/workos-authentication-operator-80/scripts/workos-authentication-operator-input.mjs": "6dac4d42746810af2c3ea53343e9bc98f2abfb0b051d4dc5534267e3269001d4",
+    "docs/history/workos-authentication-operator-80/scripts/workos-authentication-operator-journal.mjs": "188ab85ac27c0df5443a3efb59df7b3a0487c750a6401a3d44b275a1064aa45a",
+    "docs/history/workos-authentication-operator-80/scripts/workos-authentication-operator-lab.mjs": "3c6cb43b77da910aab570d1df999801a22f4dc9c6478c1dbac72257fa8eb04a8",
+    "docs/history/workos-authentication-operator-80/scripts/workos-authentication-operator-listener.mjs": "427d81c1edb9995de2cc05736e26f774264af4ea5f27f15697977874c0b8189e",
+    "docs/history/workos-authentication-operator-80/scripts/workos-authentication-operator-native.mjs": "e9cf7d9038b7bf890dcd114b21dfe56e27eb7dac8267fba2c428db380c19a778",
+    "docs/history/workos-authentication-operator-80/scripts/workos-authentication-operator.mjs": "8aef09e8e1919146808481da499061d93af1c1459844045a390599a4dea23375",
+    "docs/history/workos-authentication-operator-80/tests/fixtures/workos-authentication-evidence.mjs": "1faa18afb5f35fc4740a6f6ae1f08332102c0efb1a42ee42924778b63449af5b",
+    "docs/history/workos-authentication-operator-80/tests/workos-authentication-operator-cli.test.mjs": "4c4c4d3e2589e41bf2a67ae04b7a5b6c8e91f71755c69f9dd75d2310b7491d59",
+    "docs/history/workos-authentication-operator-80/tests/workos-authentication-operator-controller.test.mjs": "fd1140298c757e57dc18dcf165d204fad0acef7312584c4464066a166bd7d0a2",
+    "docs/history/workos-authentication-operator-80/tests/workos-authentication-operator-input.test.mjs": "335fe42987ab7f85b58ecacd82d256d5dd7438ccb7243e99c9333cfb8c1d69ea",
+    "docs/history/workos-authentication-operator-80/tests/workos-authentication-operator-journal.test.mjs": "e26217f686d00b93e94f1b37ae1916e359ec604b95bdfa66515ef6cc9106165d",
+    "docs/history/workos-authentication-operator-80/tests/workos-authentication-operator-listener.test.mjs": "8d840358c2b7f814adba9f5bf8563caa14b056c2e593ff096760d4fa6b0e1b96",
+    "docs/history/workos-authentication-operator-80/tests/workos-authentication-operator-native.test.mjs": "acf1a317e6063116884ce1b5f033de0c0d3b0a5b35dbf76b41284a317cad2703",
+    "docs/history/workos-authentication-operator-80/tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+    "docs/history/workos-authentication-operator-82/.nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "docs/history/workos-authentication-operator-82/AGENTS.md": "37923934fda01753fe710dfb3d4af0274e26e3871e6c99caaa7765ee7f0925de",
+    "docs/history/workos-authentication-operator-82/docs/decisions/workos-authentication-operator-qualification.json": "e776be1808fea93034febefd96966996447322924629239968e77096d15a4b33",
+    "docs/history/workos-authentication-operator-82/docs/evidence/P05.T01n/postgresql-loopback-lab.json": "6031a7083b71b59ab2b4651dd7923a078bff8c0a5175eecd43abf1cc0e185132",
+    "docs/history/workos-authentication-operator-82/docs/packets/P05.T01l.md": "49622611b0eda05924dbc86dfd6a362e8cd31b0e47cc97879cd39d824aef0f83",
+    "docs/history/workos-authentication-operator-82/docs/plan/build-plan.md": "8ddc449fc306fa0cc7163d81adbc6755a24915e4b436b7b858c99d0444f15024",
+    "docs/history/workos-authentication-operator-82/docs/plan/source.json": "bbc2c85f653b2e3c4c174843f06c2dfa4295a7441d9f26de3d78305df9cf9c2f",
+    "docs/history/workos-authentication-operator-82/infra/identity-role-prerequisites.sql": "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581",
+    "docs/history/workos-authentication-operator-82/infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "docs/history/workos-authentication-operator-82/migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "docs/history/workos-authentication-operator-82/migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "docs/history/workos-authentication-operator-82/migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "docs/history/workos-authentication-operator-82/migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "docs/history/workos-authentication-operator-82/migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "docs/history/workos-authentication-operator-82/migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "docs/history/workos-authentication-operator-82/migrations/manifest.json": "d1b64e477df332d095792d8a9d317bec56eb0f4f2a62e1911b0ef4cd93eed243",
+    "docs/history/workos-authentication-operator-82/package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "docs/history/workos-authentication-operator-82/package.json": "cae32debae5c0f06487a0a258ee8cf422cf56bbc92bdf15dce7ed9a400fc266a",
+    "docs/history/workos-authentication-operator-82/packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "docs/history/workos-authentication-operator-82/packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "docs/history/workos-authentication-operator-82/packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "docs/history/workos-authentication-operator-82/packages/identity/package.json": "537058e5e0bb63f878986fd63e9e439a80a014076027711fa0b53ecb56e46647",
+    "docs/history/workos-authentication-operator-82/packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "docs/history/workos-authentication-operator-82/packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "docs/history/workos-authentication-operator-82/packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "docs/history/workos-authentication-operator-82/packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "docs/history/workos-authentication-operator-82/packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "docs/history/workos-authentication-operator-82/scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "docs/history/workos-authentication-operator-82/scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "docs/history/workos-authentication-operator-82/scripts/workos-authentication-operator-controller.mjs": "04df11e5e03bdd84264a028812e94e0899da6ac6a67f53653b20cd1172252f8a",
+    "docs/history/workos-authentication-operator-82/scripts/workos-authentication-operator-database.mjs": "21841a7a275987040dbdb389d150ebe10c29760156eacfa51a2951a5b0bd1533",
+    "docs/history/workos-authentication-operator-82/scripts/workos-authentication-operator-input.mjs": "1b6b0913f654670d85281c825da5072dc2258f466766ec3bb64660f912a5f6c7",
+    "docs/history/workos-authentication-operator-82/scripts/workos-authentication-operator-journal.mjs": "188ab85ac27c0df5443a3efb59df7b3a0487c750a6401a3d44b275a1064aa45a",
+    "docs/history/workos-authentication-operator-82/scripts/workos-authentication-operator-lab.mjs": "91ee1f9379b031eb6c82a66ab95ee7e05725f44ed95ef074636aaa32ba29db03",
+    "docs/history/workos-authentication-operator-82/scripts/workos-authentication-operator-listener.mjs": "427d81c1edb9995de2cc05736e26f774264af4ea5f27f15697977874c0b8189e",
+    "docs/history/workos-authentication-operator-82/scripts/workos-authentication-operator-native.mjs": "e9cf7d9038b7bf890dcd114b21dfe56e27eb7dac8267fba2c428db380c19a778",
+    "docs/history/workos-authentication-operator-82/scripts/workos-authentication-operator.mjs": "8aef09e8e1919146808481da499061d93af1c1459844045a390599a4dea23375",
+    "docs/history/workos-authentication-operator-82/tests/fixtures/workos-authentication-evidence.mjs": "1faa18afb5f35fc4740a6f6ae1f08332102c0efb1a42ee42924778b63449af5b",
+    "docs/history/workos-authentication-operator-82/tests/workos-authentication-operator-cli.test.mjs": "4c4c4d3e2589e41bf2a67ae04b7a5b6c8e91f71755c69f9dd75d2310b7491d59",
+    "docs/history/workos-authentication-operator-82/tests/workos-authentication-operator-controller.test.mjs": "fd1140298c757e57dc18dcf165d204fad0acef7312584c4464066a166bd7d0a2",
+    "docs/history/workos-authentication-operator-82/tests/workos-authentication-operator-input.test.mjs": "95740fb76a80fc65e5ae4c2b1239445fd35125ecf67f5e6e699ecbf25d01d027",
+    "docs/history/workos-authentication-operator-82/tests/workos-authentication-operator-journal.test.mjs": "e26217f686d00b93e94f1b37ae1916e359ec604b95bdfa66515ef6cc9106165d",
+    "docs/history/workos-authentication-operator-82/tests/workos-authentication-operator-listener.test.mjs": "8d840358c2b7f814adba9f5bf8563caa14b056c2e593ff096760d4fa6b0e1b96",
+    "docs/history/workos-authentication-operator-82/tests/workos-authentication-operator-native.test.mjs": "acf1a317e6063116884ce1b5f033de0c0d3b0a5b35dbf76b41284a317cad2703",
+    "docs/history/workos-authentication-operator-82/tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+    "docs/history/workos-operator-71/.nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "docs/history/workos-operator-71/docs/decisions/workos-operator-qualification.json": "e58067013ae47be37a14a63c366c39bdff5d53406858eda917c6f43e850c0430",
+    "docs/history/workos-operator-71/infra/identity-role-prerequisites.sql": "8908ee3f90d1f48dffc21c72879357dff2bc845f1cea2851f31152bd86494a22",
+    "docs/history/workos-operator-71/infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "docs/history/workos-operator-71/migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "docs/history/workos-operator-71/migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "docs/history/workos-operator-71/migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "docs/history/workos-operator-71/migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "docs/history/workos-operator-71/migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "docs/history/workos-operator-71/migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "docs/history/workos-operator-71/migrations/manifest.json": "e857148fe90182961498596386c387798cb8fb5355adac0ce0e75529fc1e4c4d",
+    "docs/history/workos-operator-71/package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "docs/history/workos-operator-71/package.json": "c68be38f4d8a078dc53304e324625162971417a212b8d4c1429e198cfe8b7a5d",
+    "docs/history/workos-operator-71/packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "docs/history/workos-operator-71/packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "docs/history/workos-operator-71/packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "docs/history/workos-operator-71/packages/identity/package.json": "8ab41fa37ceedb0ca134a9d88010c0a1025c9d2982716f7210b21e406f9c0a9d",
+    "docs/history/workos-operator-71/packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "docs/history/workos-operator-71/scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "docs/history/workos-operator-71/scripts/local-postgres-lab.mjs": "c511655343742b1d946faa18d8a5f70340b46565d506e23ac4e53a7071ee6269",
+    "docs/history/workos-operator-71/scripts/workos-operator-controller.mjs": "71b5a17560764251e04b7db7c2325d27e37c741e46386f3d1b8a037f713f76fa",
+    "docs/history/workos-operator-71/scripts/workos-operator-input.mjs": "1a75578936f4ec9ea06201a8be6a83f28841ec025a4e7aff0f3079166a3b0a1a",
+    "docs/history/workos-operator-71/scripts/workos-operator-journal.mjs": "11d2bcb313576f55e290ea6192f2a837e0b3c2633433122e86b18d8d9a78696e",
+    "docs/history/workos-operator-71/scripts/workos-operator-lab.mjs": "ce8db2ab9091ca2b8a238250ab23fac4e6c30ac83fd05755a2d52b8c24c00c6c",
+    "docs/history/workos-operator-71/scripts/workos-operator-listener.mjs": "b8d7f3982a5a453171de94c9a6ac5c8e2d748cb247549a9494acdf7644f367df",
+    "docs/history/workos-operator-71/scripts/workos-operator-transport.mjs": "eba3213fa813c56500a829625d96c2c4603681f4b7b2ac66065f83426c5d41c6",
+    "docs/history/workos-operator-71/scripts/workos-operator.mjs": "ead4b03f1d4942e2654a538d17b1d7fdf282103fbcb2fdc2bb5c9a392e8aa521",
+    "docs/history/workos-operator-71/tests/workos-operator-controller.test.mjs": "12b22d9bbc5e8f82265d3cec3f92a30b8f6e533dc24c36b0ede00bac68ad228e",
+    "docs/history/workos-operator-71/tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+    "docs/history/workos-operator-74/.nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "docs/history/workos-operator-74/docs/decisions/workos-operator-qualification.json": "ceed5364d4ab44ec19dfc4925bbbf1d9b90bc1c7125568ec9b106254542bdcc9",
+    "docs/history/workos-operator-74/infra/identity-role-prerequisites.sql": "8908ee3f90d1f48dffc21c72879357dff2bc845f1cea2851f31152bd86494a22",
+    "docs/history/workos-operator-74/infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "docs/history/workos-operator-74/migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "docs/history/workos-operator-74/migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "docs/history/workos-operator-74/migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "docs/history/workos-operator-74/migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "docs/history/workos-operator-74/migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "docs/history/workos-operator-74/migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "docs/history/workos-operator-74/migrations/manifest.json": "e857148fe90182961498596386c387798cb8fb5355adac0ce0e75529fc1e4c4d",
+    "docs/history/workos-operator-74/package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "docs/history/workos-operator-74/package.json": "1bada55e92017c0bfb603895c26a75f5d03de432d38929a6cf98c63dcdbf3f1d",
+    "docs/history/workos-operator-74/packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "docs/history/workos-operator-74/packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "docs/history/workos-operator-74/packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "docs/history/workos-operator-74/packages/identity/package.json": "2f616769f0366b4742aab1ca7e26857fe443a23a2aefbc9962fa361a20a9563b",
+    "docs/history/workos-operator-74/packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "docs/history/workos-operator-74/packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "docs/history/workos-operator-74/scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "docs/history/workos-operator-74/scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "docs/history/workos-operator-74/scripts/workos-operator-controller.mjs": "16393e75f7e96bca2194f2441fda2c4f2ee8e4e801c91e3b621d2d704fb1d2b2",
+    "docs/history/workos-operator-74/scripts/workos-operator-input.mjs": "8f7d6177c71ac234c0307d1a43f48e638d78348aa34c1b9cfa73f35a81f77844",
+    "docs/history/workos-operator-74/scripts/workos-operator-journal.mjs": "821102b906c789fc907e0a63003ddcb09cbb5ef0b40c10d823a140c8d75e95fd",
+    "docs/history/workos-operator-74/scripts/workos-operator-json.mjs": "f179547a667b1ef20dca45f035f2924108ae9dfc170c37862f506aca807acf23",
+    "docs/history/workos-operator-74/scripts/workos-operator-lab.mjs": "ba6ca93df1dd9380dbf3dac5cf66fdf0bb8a453fa50c06a637cea4cd2c947cc3",
+    "docs/history/workos-operator-74/scripts/workos-operator-listener.mjs": "96a08b26f30b7a0dfcee598cc83fe5cad00690a605d1cd4a8ef13f7ed733ebcd",
+    "docs/history/workos-operator-74/scripts/workos-operator-transport.mjs": "89608097916d7ba8ce820df5352c67cf8c9f113a4c7d69af7d598d54f56d8f70",
+    "docs/history/workos-operator-74/scripts/workos-operator.mjs": "b0f15116d48307f4620c558a864da8ea2329733139759f521f600d98d688244a",
+    "docs/history/workos-operator-74/tests/workos-operator-controller.test.mjs": "dabdb554a9cecc3abc7bc71553a971531b15d86f0f86d5b25acf4031e505f12e",
+    "docs/history/workos-operator-74/tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+    "docs/history/workos-session-status-75/.nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "docs/history/workos-session-status-75/docs/decisions/workos-session-status-qualification.json": "ed0124c1d586287964c211f95f1a349ba86b76119647e69551eacc5cf9bb3c06",
+    "docs/history/workos-session-status-75/docs/evidence/P05.T01h/actual-workos-75.json": "a633ddd200444673db54a3b831174fbedc8ffd96626d8fa2fc8b6f7e0e203054",
+    "docs/history/workos-session-status-75/docs/evidence/P05.T01h/local-validation.json": "3d9ee058f76ce05b19477be5e9ac9d5e710446b8087eea4e6f5b2c7ab28d7de8",
+    "docs/history/workos-session-status-75/docs/evidence/P05.T01h/preparation.json": "90cb701333ecf5b56146d21364dc1fa9f569cf4a54c5fa20fe500641f36da565",
+    "docs/history/workos-session-status-75/docs/evidence/P05.T01h/review.json": "7d157e9578a40e7af8c6995b924d50ef86af9783359213dcbecdfd77307a9414",
+    "docs/history/workos-session-status-75/docs/evidence/P05.T01h/workers-lab.json": "a22e986952f0f3eaf95bd3ffe9ed9e01803b55805fd3f799d940a3d61cc953e5",
+    "docs/history/workos-session-status-75/docs/packets/P05.T01h.md": "3cb2dc20ccc6ef25ba33d2f3b97e79dd8d9b7ade8aaed7d781922a9496add4cc",
+    "docs/history/workos-session-status-75/docs/plan/build-plan.md": "d9d2170c6af190338260449736d7bb331321e81b949aac399f390eea7212fea5",
+    "docs/history/workos-session-status-75/docs/plan/source.json": "444311eca1ef5e5e4d1b6dcdccf9026760da071353be4ef74e1eba5312c39360",
+    "docs/history/workos-session-status-75/package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "docs/history/workos-session-status-75/package.json": "8a1cc52771f2f71fd5971625c6f4b79b70aacd9c03fc5a5647ad71fd587901aa",
+    "docs/history/workos-session-status-75/packages/identity/package.json": "55ced72c28df4b3d4e9e85f5bae4af8d95d325dec9be81ac492a45d9a2d83a55",
+    "docs/history/workos-session-status-75/packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "docs/history/workos-session-status-75/packages/identity/src/workos-session-status.ts": "1c6d48b633354e2c7059439dd920591787aadd8b3afae8b88610bf803b9dd579",
+    "docs/history/workos-session-status-75/scripts/fixtures/workos-session-status-worker.ts": "861bd88c4160bf7eb2c85716a9ef7bf7a23aefba410c5ffabf1766d48a96f1a3",
+    "docs/history/workos-session-status-75/scripts/workos-session-status-input.mjs": "184423675d1111e4e8ea285ef3aeff425583c2007961243b7d814526ff7b9610",
+    "docs/history/workos-session-status-75/scripts/workos-session-status-operator.mjs": "ac29e0ce026be7d55862b58026120d9326a6c18a905619988f02e458f74b5161",
+    "docs/history/workos-session-status-75/scripts/workos-session-status-transport.mjs": "f4edc4732e72127ae5819a5a9b8cf40171c7e1a5074d77136fc27e7099a8048e",
+    "docs/history/workos-session-status-75/scripts/workos-session-status-workers-lab.mjs": "5abcc65021c7cfaada03a34c69c3c1b0a93c37922f2da934fb0ac12ce2077df9",
+    "docs/history/workos-session-status-75/tests/fixtures/workos-session-status.mjs": "c71601c2ac42da7851857492b792fca665df541073477b11acb0185098b688de",
+    "docs/history/workos-session-status-75/tests/workos-session-status-input.test.mjs": "bfd46f51243c5f55caf548af3d20165c640d417b2e66fa684373a92ecec58e4f",
+    "docs/history/workos-session-status-75/tests/workos-session-status-transport.test.mjs": "992d88be6d6b4cee75235a5b8dba80348466778bb46ca0f7653eb7c0372f83bc",
+    "docs/history/workos-session-status-75/tests/workos-session-status.test.mjs": "880703cba923aa395777d6b689bc56d73258c968705dc769fac53bc750a32c83",
+    "docs/history/workos-session-status-75/tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+    "docs/packets/P05.T01o.md": "85fac9abd66fed5c67331651db0b66ddab7bc0b8eee22c0cdb9643185c3e502c",
+    "docs/packets/P05.T01p.md": "6557f00627f4c92101890c615c564b1a26003f15cd558d2317f765a2c57b66e0",
+    "docs/packets/P05.T01q.md": "2c96b4354fb153147894abf1a5596319ca5f3a67e315b19f2d5d382bba347f4e",
+    "docs/packets/P05.T01r.md": "cc3ef16a1c019aa42650533bed96001693d1da4fe6a2675a84fe488f7a337544",
+    "docs/packets/P05.T01s.md": "f1c523af6b3485b0de72e678947625688ec47edb95b2fce51a0949cdb526ae07",
+    "docs/packets/P05.T01t.md": "9a237f11ad9316d176f645fd7f75da04708236234054c434a93e59cde6bf27dd",
+    "docs/packets/P05.T01u.md": "4e1ccdcb25ebf69a04bc42c20afa2c7d841bc5c8305e6adb26089c356e9545c3",
+    "docs/packets/P05.T01v.md": "e242b88586c84daf8d2126af4f2f0d3dbdec7321b1315abd5d0ce4c3eb1b13ec",
+    "docs/packets/P05.T03b.md": "3f14dc51108dd7ea133c00ccc7b4b78f88b25396d6e5fc234095abbf1baa195e",
+    "docs/plan/build-plan.md": "eed8edf1af40d3d9114f0797e795623a2984ddbb70a8ef5a0072fcb5fc5bd321",
+    "docs/plan/source.json": "0fc5bc60856d9a6db0159a660e2324c89c4f84d0a8804447a3856367c85a467d",
+    "docs/research/sources.json": "820edaafc1276671d004ae0b261c378d8c70eb4a9b72ea1ce2d7a5e673a3f371",
+    "infra/identity-login-role-prerequisites.sql": "17c25b456d85d6b0a70fe312be885f4543339da9ebaf04122b585ccc2d4c541b",
+    "infra/identity-logout-role-prerequisites.sql": "1eb98c94b51d4d2b1c2580fc402234110536ae6a84c185116676766460a0193d",
+    "infra/identity-role-prerequisites.sql": "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581",
+    "infra/labs/daytona-development.json": "b8c413669eb64e8ac42cd08b6f9b0bb1a1bef28e3a5c6e6d8a424e8e8308f619",
+    "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "migrations/0007.provider-subject-resolution.sql": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+    "migrations/0008.browser-session-admission.sql": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
+    "migrations/0009.workspace-linking-read-boundaries.sql": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2",
+    "migrations/0010.login-flow-custody.sql": "51c6d7ca9e31a897352c4a8b2e85824eb4a7b58506629246bce63c9d92070475",
+    "migrations/0011.self-browser-family-logout.sql": "089ff5487030df8f085045f37f523522540759752b7fde25abf91629396f28c4",
+    "migrations/manifest.json": "8e8a905da33278f9f3996f001236ad9bf4b6090c88e55f01c1a112bc30e92eeb",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "package.json": "04bfaa87ef08d517be038412ed6a210234791c9141bb4f3f22dffc0bba645a4a",
+    "packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "packages/contracts/src/generated/domain.ts": "732e5576b4df525b72f99046587bf99902ba8ae05e155839661c768e15aeb6ca",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "packages/contracts/src/index.ts": "571c0da6e2aa11d199d08a8756e04f26d755347c19316f5d4b74af31181dcec2",
+    "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "packages/identity/package.json": "024c219f2f7ed978a0bf5fedca3184b68170f023edb9b88b8a4e25006e1fe5d6",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/identity/src/controlled-neon-login-pool.ts": "d7610d06e82a002fa19c74e9694ec0f68ab97fd086839dda8c31566a4de4fb12",
+    "packages/identity/src/controlled-neon-login-profiles.ts": "16645b5091135424192dc40cf548d3c5fee74b7a88527f23685dc550bdbcdeee",
+    "packages/identity/src/controlled-neon-transport.ts": "b87761b89fbbd72ae80088412e18dabd1ff1706e547583d9064d520dcfa3c43e",
+    "packages/identity/src/controlled-neon-workspace-profiles.ts": "81f7dffe148d7e2eecff0e418ddbaf9e9b7b519fae51a5bff634ce3a62106592",
+    "packages/identity/src/fixed-workos-login-port.ts": "415c00a69f74626ca2962357c7754c4f9d1a7837f034f7e74c82b5f59576e14f",
+    "packages/identity/src/index.ts": "041952d82c134a04487b9e9648c2a648879fa069220c9d37eb9113509a7c3643",
+    "packages/identity/src/login-flow-custody.ts": "5ab4256c9269886b83578669ec15ee263a51ed72b0eb04892fecc600aa56d503",
+    "packages/identity/src/login-preauth-control.ts": "372b5720cde644e9acf8458baa378fb1cf9bd879e6a4a2742dec30aada1c397f",
+    "packages/identity/src/managed-login-capsule.ts": "24d46628c8717fe3a936f94b12dcf56c6a559d6895bbc4a388a41e87912d3153",
+    "packages/identity/src/managed-login-request-scope.ts": "a4699a12cfd8cc895b0369ffeaf54ede92a5584783c70c7dbf2d33aa74a690f3",
+    "packages/identity/src/managed-login-request.ts": "87d729f32b8c4deaca7d7f0cefc18ef0ec679ffba8e87fe46c8ca74297148c51",
+    "packages/identity/src/managed-workspace-api.ts": "6ed58f9f27019f1bd3d7ba4051d2a5a3d85695252ed84e93e5c226b5608fc7d9",
+    "packages/identity/src/managed-workspace-binding.ts": "9f7f9d788091dcc44788f0dd2a1966ed3f53209cbd1d85d8dd684f2557e55796",
+    "packages/identity/src/managed-workspace-request.ts": "d91d736d322c668a1737cede4d72be3997ebb4036bc9bfb3b8bfbebb2943b08e",
+    "packages/identity/src/neon-request.ts": "8e36e14303f602e239ffe2a57921eb18df2483b0bd9654eee6783abd5a43b651",
+    "packages/identity/src/neon.ts": "0904219a4d8a09303cfe00940f2536549f35d16e94ad76ffa1b81685996f3ecf",
+    "packages/identity/src/self-logout-control.ts": "be16714a233b888a809c1bb2ba8a2f2a6bb94ac43dbfc0e5b0bbd4109e028a99",
+    "packages/identity/src/standalone-login-protocol.ts": "0d75b3fd7efda9caf1938086b05fe433109de5a835e404655fb0b7d64b030078",
+    "packages/identity/src/standalone-login.ts": "61456a4e1c4a8f213e060e4b74cf936c41bafac3a634747d82388460ae6d9563",
+    "packages/identity/src/standalone-logout.ts": "bbc3a6dded423cd80da226a34215b5963b3f18403483d0178bec49c4617a8850",
+    "packages/identity/src/standalone-request-guard.ts": "36b709e8a055b1befe89cd5f955cda36939a49973d17b8f4c19b81f862fd5e4e",
+    "packages/identity/src/standalone-store-linking.ts": "ac8942d457b9a588c860997d81d7dd24c4b1e7a124f63aa1365079b14235ba3d",
+    "packages/identity/src/standalone-workspace-bootstrap.ts": "84a4a438e017c46b1ce280c46ec5eaa467cf9f369fca05ba6456c95eb22bacf3",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-browser-session-admission.ts": "6b9f443c3bfd4c5d661615c9f4f311c4a4d3034f2259896b951aa3afa8f587ca",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+    "packages/identity/src/workspace-access-revocation.ts": "3a95fa19bd1b667a731afdd6ffad730d0ee4376cfe0baa057cfaad58f9c6798d",
+    "packages/identity/src/workspace-store-linking-control.ts": "637154a313b5dbb6f79e0603cf8d1e53ed8792d80e0d2d603403cb48e3bc0a50",
+    "packages/identity/src/workspace-store-linking.ts": "0b951ebb12d4e68f5421c9a19df9ba691166399fe247aa56c39ede0176574a53",
+    "packages/infrastructure/src/daytona-development-lab.ts": "08d0dacaa362744bab452d20adaccf665ddca1d4e62b6979210e4602fcaced09",
+    "packages/policy/src/agent-authority-facts.ts": "a65c51e7891dc065fc22984f6e6f320f188b8296ec8b080058e5f7f832add79c",
+    "packages/policy/src/agent-authority.ts": "b50aeb76832533a182c48dee4690df04d79747b90bc12d23bcb2859ff729be04",
+    "packages/policy/src/index.ts": "d26c57c71889dd7c6369d90745ebc1a531dcfd555e4d2484b4d0d471924b0b59",
+    "scripts/agent-authority-workers-lab.mjs": "2e0278a9481216d6d0187b5121569d34f77e2cf518d9949e6a797bc7aad95fbb",
+    "scripts/authentication-exchange-admission-lab.mjs": "189242d430d19201e77d4d762383b65d6ade8df4bd9e7e68fd7d153005695ce9",
+    "scripts/authentication-exchange-admission-workers-lab.mjs": "6f427578e5b390bf5b7c5c5e2bddd806d170c92530e2f99972d8bf6a5ef0e06c",
+    "scripts/billing-checks.mjs": "3a4a7e780bec94a1edd5214e5a297b7685e39a1fa6376c895e85618cca5657db",
+    "scripts/browser-session-admission-lab.mjs": "c12c103d101b919f1c0a647b59877ffcf7e75df7030618738847f52f87156dcb",
+    "scripts/controlled-neon-postgresql-lab.mjs": "227ca55887bada524c0c6c76725c2baeead89f8d94a2ea770dc5fa7e294ba1fb",
+    "scripts/controlled-neon-workers-lab.mjs": "9bbf5641d3dbf9fd540e8137e654de98762309d8db1b15f92828aeb29dff29c3",
+    "scripts/daytona-development-input.mjs": "2b666a1b1053063873ee8d1a12434ea5105011cb3d2835dc19c2e9f365d8d1d4",
+    "scripts/daytona-development-lab.mjs": "6412afc9be4f6e6e157d8f3fa15c2c5e5ac46c453201a1d6fe11fb25bf0a8682",
+    "scripts/daytona-development-transport.mjs": "4617144f8058d471cb0cdf0b78edb1ce0cc6685994a6efc134d75b4508ebc94d",
+    "scripts/fixed-workos-login-https-lab.mjs": "99b8e49c38477b5c28713ab773bd1a21ab247d4f22b19d22fa00c69f31d7c461",
+    "scripts/fixed-workos-login-workers-lab.mjs": "ed51ea231197c0ebab16a7a00c68e9a8992d10e0eb0fc5f71b9f4b573e2d6193",
+    "scripts/fixed-workos-platform-workers-lab.mjs": "bdd01eba1cab0ec3bf7ccb76082e6f37f418337bc852ab2da844682594eac45a",
+    "scripts/fixtures/agent-authority-worker.ts": "e6a9682350aada88a7a99496019879638a097c4a460759398c69698d20e6e33e",
+    "scripts/fixtures/authentication-exchange-admission-worker.ts": "908ea642dabd52d57f59b74f9d8a838c2da5cc3817b1674163ae05417a8b0873",
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+    "scripts/fixtures/controlled-neon-postgresql-worker.ts": "550b24685c50a129c2d7f5ada88585f9048cf277a60d94d52ba0c378d3eced6f",
+    "scripts/fixtures/controlled-neon-postgresql.mjs": "98eb525d1106c6a4def59df436dce77077ef50ae8596c624e042c102cd4631f8",
+    "scripts/fixtures/controlled-neon-tcp-bridge.mjs": "07d4898ee63128ed9414901d3dafa3f7bc83e9f713f67eca3c49a5ab90985ac2",
+    "scripts/fixtures/controlled-neon-worker.ts": "ed4c77c06db10c1569a59cd652039576d1f7e02c560f7af600c58b1c60070baa",
+    "scripts/fixtures/fixed-workos-login-https.mjs": "f5ab76a22b787542930c25de053c25b1195d3f986b73b41646cb88d740b3c384",
+    "scripts/fixtures/fixed-workos-login-worker.ts": "b144e5734219797cac8a3ccb40d11dde831a236ca5b92f68bf7bbd31c4c9a5ff",
+    "scripts/fixtures/fixed-workos-platform-provider.mjs": "821d874777f2bec89d62dfb32739d7f858ac2632595f753dc699c4c733a60b15",
+    "scripts/fixtures/fixed-workos-platform-worker.ts": "9f2cb904ed48b419afb25b240e62f6ebd88a7156cd0f4aab3ab7c0d0b454047d",
+    "scripts/fixtures/fixed-workos-provider.mjs": "f374a8e04578565f5ae3afe8873183344f7111356c4a6b6c9229ccc92fc01b26",
+    "scripts/fixtures/login-https.mjs": "8973889c5b19ecc1d8f83aafeced7dd6940542d290b3ea784aed69e9a3432999",
+    "scripts/fixtures/login-provider.mjs": "fb3a717572ef3aff5ca0d5dc5a3cb8855364a025b149d7ea0dacccb485a0e05d",
+    "scripts/fixtures/managed-login-cleanup-gate.mjs": "7cfbf50014124b057dc4a63d2d00848e071c119b25a5e21bae82f8ec017d2520",
+    "scripts/fixtures/managed-login-lifetime-worker.ts": "a9c1802628442f27c7774b1cda75abd85c10ed43d1554f818aa9beaad2e5e557",
+    "scripts/fixtures/managed-login-request-worker.ts": "d7c67a67b92ad0860faf8ed6cb57ffba38cca3c392e2c8e960894fa8d08836c0",
+    "scripts/fixtures/managed-workspace-api-worker.ts": "7303be86ec906df576b1b9b4f17389b9546b012e095ac7257e41390fcda539d4",
+    "scripts/fixtures/managed-workspace-pg-oracle.mjs": "463c2a650d8e710a272038f3f9ab414d4e8c5b7751050e42175b29d9cb6113a7",
+    "scripts/fixtures/neon-worker.ts": "7b1718a70424cb95186f78e8d26619c7ea0dc8315cc8bb9c6829428c4c0c267d",
+    "scripts/fixtures/self-logout-fixture.mjs": "b7e2154fcbcc1b29ac765f42266c353c3e59ae3e863fd46e0858ab9d6a966bb1",
+    "scripts/fixtures/standalone-linking-fixture.mjs": "5d0dede784bb3817abe557d5c7670ba8b7ee93cf84f3fc6f56f6b68d41535310",
+    "scripts/fixtures/standalone-login-fixture.mjs": "672a9b3234080a4fb5e4b02379c46f21aa374187db69d26e58be08adff99817e",
+    "scripts/fixtures/standalone-login-fixture.ts": "5084b09062b4842378fd70114cfd6f78aa8cfca883aafd587cac0355b8853a82",
+    "scripts/fixtures/standalone-login-worker.ts": "68e8b377954de2194023704e79502540f150f157054a47b1021374715aa4363e",
+    "scripts/fixtures/standalone-logout-fixture.ts": "84d5287ce3998f9a62e7679d895c5b723c676f9a1893255c4b80d86f73d3fba0",
+    "scripts/fixtures/standalone-logout-worker.ts": "0a13ff85b444ce54f877feeaeb7d4e7b3889d53e486fa010db5c44e8895e0e80",
+    "scripts/fixtures/standalone-store-linking-worker.ts": "e880b0a85982a77d3f3ce3fcb64b14441cbec8111df1a28fc96000982b42d246",
+    "scripts/fixtures/standalone-workspace-worker.ts": "01fdbb838feee17f40fca5606fb0f9de0ff12f2f7153b1945e39cb21d3be6aa2",
+    "scripts/fixtures/workos-authentication-evidence-worker.ts": "051bc03ca0e6d2dcc05bea061341f12c808d2574017fd2d0e5f4dd3aa8b42500",
+    "scripts/fixtures/workos-browser-session-admission-worker.ts": "5a0d5e97122754511c138f5c5bd3832028458df32e0c8572c2b6f0256beefecd",
+    "scripts/fixtures/workos-session-status-worker.ts": "861bd88c4160bf7eb2c85716a9ef7bf7a23aefba410c5ffabf1766d48a96f1a3",
+    "scripts/fixtures/workos-session-token-worker.ts": "e7e8078c2e7657346aea1d556e8c09d51652ffc4c122f3f4ba13c49628f3dd74",
+    "scripts/fixtures/workos-workspace-selection-worker.ts": "795adf5e4dae727b621905917aff3610ba6633d57bb3dc909fdd3474c726641f",
+    "scripts/fixtures/workspace-store-linking-worker.ts": "50786327be0ddeeff2094b2ddaebb2dee48fd5f74e6fe751df29da62fe360784",
+    "scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "scripts/local-browser-session-sql.mjs": "9c101d9fc3b796b662e924c29b2fb4a417a0ec5ec97ff58b3d68302354daa9fc",
+    "scripts/local-identity-sql.mjs": "a2054bcf8ad288373fce50697154cebc1e0fa9e6c6e8090f51b15a0e0dd92278",
+    "scripts/local-lifecycle-sql.mjs": "98817faf7ec9cd24a8d2c14b8a4edd17b14b952e0cfe0b05f22ef0bb3e6305a3",
+    "scripts/local-login-flow-sql.mjs": "93a8b1085e89b1516c39b061c05c70869e10a612b6418e3ff10c882abd755eab",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "scripts/local-provider-subject-sql.mjs": "03ee4c0f79b225348a1fe88a7750775efcfb8ea05f0eb8865e96324ed790fa85",
+    "scripts/local-self-logout-sql.mjs": "7e62a077a43470d2d46936317ea089e62de2da4e8ef10fd7e39ac49bbcb85c0f",
+    "scripts/local-standalone-sql.mjs": "c03dbcb41cef64cc11a55c93b4ca4ad914e92d1a50aa5bd5f80fea596a05eebf",
+    "scripts/local-store-linking-sql.mjs": "591ada6d2a5d4ee0dbe086456a534ecd57c5524f78c8be09e213e51a078fcb4e",
+    "scripts/login-flow-custody-lab.mjs": "cea450b50693ef620c1ccb9f0be1a367fa53cbca6a23ebe2db777acad5f273e1",
+    "scripts/managed-login-lifetime-workers-lab.mjs": "cc2c58160a6fbc209a0695d3c13565e46ff33813337fce8acee62343ad3140a3",
+    "scripts/managed-login-postgresql-lab.mjs": "9f77ef92b4a8b930a1757e5489a5d39dcc2a4f0b275c622316472ecd00e41c32",
+    "scripts/managed-workspace-api-postgresql-lab.mjs": "a4ee42775a419dde5fa1b56832c92a5b5008399a1e1b4970dbfcfe368f2a95a9",
+    "scripts/managed-workspace-api-workers-lab.mjs": "fc941ab1095506c21ee1e89e8289801ff9a014a605c267a99a2c79070106780d",
+    "scripts/provider-subject-resolution-lab.mjs": "11d2d204effb5e12ec4e3c75e58a4339e20937c5e544331e6fc5a407eef146d4",
+    "scripts/self-logout-sql-lab.mjs": "fa8e22cfeec92a1aacbcc156b32ccb21092d18b8b56f67d9aea87db5973612ea",
+    "scripts/standalone-login-https-lab.mjs": "a7bc8ec88fde2af2e88890d4786c6014027a222036faad8f9846d5482ccd1436",
+    "scripts/standalone-login-workers-lab.mjs": "b68894cb5be5a632427d2a0cfae4b3fb5eb3d5de07cb1064e1f4c7cff908c811",
+    "scripts/standalone-logout-https-lab.mjs": "94edb78db15638698652f3c4be122e985a1ea04e5259cb898daf929ea0f067ee",
+    "scripts/standalone-logout-workers-lab.mjs": "d853f2f2d05367f95b6de57e5a7fe752e227b819eb75dd258b39aebbaf196efe",
+    "scripts/standalone-session-fixtures.mjs": "377e6bc6c23a74ff49e1b5b27274f4cdf3ee922cdc7a1c98ea93bf2dac0af515",
+    "scripts/standalone-store-linking-http-lab.mjs": "0da6613d057e8a16cbf23721b8b0dd77c66ef6d25fe11cc3b663033931d8f2e9",
+    "scripts/standalone-store-linking-workers-lab.mjs": "93ceb7254e9196857cedcd55e2a5c196c86df385775d7973f7379867ddfc8ea6",
+    "scripts/standalone-workspace-http-lab.mjs": "6e62f181c8b551203f1ea9a68a6f52814aeda3c699c040e070027dd00da433c3",
+    "scripts/standalone-workspace-workers-lab.mjs": "75c307f1f6b35588c46148fc068b700d592f1889c2e9c5ba22cc059d08f10c7a",
+    "scripts/workers-identity-lab.mjs": "744a6bbf35d61ddf47ca49e67659b7f6719819422e99ca281f9b26847c552d53",
+    "scripts/workos-authentication-evidence-workers-lab.mjs": "c418004c5b2d7339451186ac7fadc41320790972c2200b30d80579c825125869",
+    "scripts/workos-authentication-operator-regression.mjs": "8224863667d89fe2400652d2869871396bce716d89611cf31e81886636fe4c73",
+    "scripts/workos-authentication-operator82-regression.mjs": "958162c74404a771011c06f57163094cc35d29d26b2cf5f23d1db99b7ad865f8",
+    "scripts/workos-browser-session-admission-workers-lab.mjs": "58c6b21d84767543044e1a7073083fa585f672d8dd41367a475c21ea15babb93",
+    "scripts/workos-operator-regression.mjs": "439d960400acc9f2ea3a17f22b063acbb415db13d3c848656266928b93b8d26b",
+    "scripts/workos-operator74-regression.mjs": "7e5edbbc557a1d7c6f0ac239154577771f1c58188d1729a9f66ae7dfc5c04daa",
+    "scripts/workos-session-status-regression.mjs": "d5495838341e14e3326dc29b599dde17b299e4a717ddfb66148e83fd0ff7fecc",
+    "scripts/workos-session-status-workers-lab.mjs": "a096a5fc46ef3c9ee4cf2e047f35ec9d30ae9d9ad96bac318f9c1466e51fa459",
+    "scripts/workos-session-token-workers-lab.mjs": "4553823deba74175208a439f380d19e0a1767c16817fe78f48188435491ee6e0",
+    "scripts/workos-workspace-selection-workers-lab.mjs": "18dd24f61a46c5a91e415312180247d42cd8696d468449c54fbe681f7c1f76c3",
+    "scripts/workspace-store-linking-lab.mjs": "cf10014ae71df6305a74126a5fcb648d1935ccd3da1ebfe9086066892b9710b8",
+    "scripts/workspace-store-linking-read-lab.mjs": "99d14d12a48e4964a01f63f7302e1fc26f6dad34fb6b2222faa1b88210d6fba6",
+    "scripts/workspace-store-linking-workers-lab.mjs": "1ea2ce31c6d8a778750f7e5350b4cb4d43406b85faeef78422e2d3a78c470adb",
+    "tests/billing.test.mjs": "5f59704a14dcdd4f86f5689ac80c2a2e2ec20089d068b109adc34e7b58ff3204",
+    "tests/controlled-neon-pg-wire-oracle.test.mjs": "e49b215518a82a844c9437aab4c567510122561174a4af405a381d13748560b0",
+    "tests/controlled-neon-tcp-bridge.test.mjs": "24bf1754b1e82dc6ffefbf943de5dd884f61ad107a10b2aec4c731051551121e",
+    "tests/fixed-workos-login-port.test.mjs": "deef648458fc549f29204984c00aa5dfcd3ce6ef94c59cec404fec6c927a46c6",
+    "tests/fixed-workos-platform-provider.test.mjs": "5b8a1bc63fc104ff05a7046fc9dfea6120b7f6bb68ce0d7d1e3c43bd3ae515aa",
+    "tests/fixed-workos-provider.test.mjs": "07dd5fd1d0f92e51d5e231f5935a99ac5e47770e3e8c867725413be95f9a4cce",
+    "tests/fixtures/agent-authority.mjs": "b34305793a2debeb8058f6e79e3436ec781738ffb9727451696560c34fde0669",
+    "tests/fixtures/browser-session-admission-sql-faults.mjs": "837da48ab966cd0d4d9a0da682500d69503d3560c4834a265601f7bb2932b29b",
+    "tests/fixtures/workos-authentication-evidence.mjs": "1faa18afb5f35fc4740a6f6ae1f08332102c0efb1a42ee42924778b63449af5b",
+    "tests/managed-login-cleanup-gate.test.mjs": "708a26168b34a58dbb5e7cb37272097619f4f727e12844338978961016ebbba6",
+    "tests/managed-workspace-pg-oracle.test.mjs": "c0e8245fb001263822ac10b5fac195850f1926ffe7d1d14b0e48d6f4a08a2fa4",
+    "tests/standalone-login.test.mjs": "f41b05178dc062b8df68a49235293c049e2eb1aadadc7199c0509fedc45a9bca",
+    "tests/standalone-logout.test.mjs": "5dd67b3da63af8ed305891b73f77c1c58f3646b5e39dfff9b19479f8e51d75af",
+    "tests/standalone-workspace-bootstrap.test.mjs": "9a8dd9fc8abfe368c5061e3899e51b51997134f05555d7502dceb973f600c679",
+    "tests/workos-authentication-operator-regression.test.mjs": "6c8246c1690190929181e7b1a79becc6ee251ac15deaec85ab77606ccd89ed96",
+    "tests/workos-authentication-operator82-regression.test.mjs": "4008ed25c6b3875e78e8c85bbb17281e58a3fd8a80c1f417b610496d7701316d",
+    "tests/workos-browser-session-admission.test.mjs": "c034db0f57a78c3748fdc4c68f0f4950b85e2cdb070a2a57d113d4b771aa3bb6",
+    "tests/workos-operator-input.test.mjs": "c499d8189b7d331b2ff5ffde5f2ebbc8d46a1a4190cb737174a8fa69a70bc93e",
+    "tests/workos-operator-regression.test.mjs": "b11a7d2f4a5571d3bc26889dc7007081d48b170f39d317e9180bdc62b44e2103",
+    "tests/workos-operator74-regression.test.mjs": "763f175840578576526d6815a1cabbd73f2b10ac60ed36812bd6b14c494e33bf",
+    "tests/workos-session-status-input.test.mjs": "d1421b08394e2668caabf8cc701e07fe44c5b1be66fcb77a8e07cd2f0ac55903",
+    "tests/workos-session-status-regression.test.mjs": "6d79c36777d8bee2953a98905638229a71cac379d0a122c3d446c29d4173d383",
+    "tests/workspace-store-linking-control.test.mjs": "c797455c19b567079fc8a17fa23a2aaa8f16befb8c7f46dd9f055d9d03d24b5b",
+    "tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d"
+  },
+  "blocking_findings": [],
+  "result": "clear_for_provider_free_local_engineering_evidence_review",
+  "execution_provenance": {
+    "platform": "GitHub Actions ubuntu-latest Linux runner",
+    "run_id": 38969900266,
+    "attempt": 1,
+    "artifact_id": 12076717862,
+    "all_final_api_steps_success": true,
+    "actual_numeric_process_exit_codes": null,
+    "inspection_receipt_sha256": "34c6809cd0430c0bfce29f4df1f60135e1ae6bca5460ea1f6c1b317500aa7920",
+    "inspector_sha256": "cef5966d585c22c239de82225ceb5a30acc2df2aa8f1f0e6175e00aa2d2fe5d6"
+  },
+  "current_V_checks": {
+    "regressions/managed-login-lifetime.json": 128,
+    "workspace-api-workers.json": 388,
+    "regressions/standalone-workspace-workers.json": 382,
+    "regressions/standalone-store-linking-workers.json": 590,
+    "regressions/login-workers-lab.json": 627,
+    "regressions/logout-workers-lab.json": 415,
+    "regressions/fixed-provider-workers.json": 995,
+    "regressions/platform-workers-lab.json": 1514,
+    "regressions/controlled-neon-workers.json": 962,
+    "regressions/controlled-neon-postgresql.json": 236,
+    "regressions/managed-login-postgresql.json": 210,
+    "workspace-api-postgresql.json": 190,
+    "regressions/standalone-workspace-http.json": 122,
+    "regressions/workspace-linking-read.json": 121,
+    "regressions/standalone-store-linking-http.json": 96,
+    "regressions/login-flow-custody.json": 106,
+    "regressions/login-https-postgresql-lab.json": 98,
+    "regressions/self-logout-postgresql-lab.json": 114,
+    "regressions/logout-https-postgresql-lab.json": 162,
+    "regressions/fixed-provider-https.json": 155
+  },
+  "maintained_check_names": {
+    "regressions/self-logout-postgresql-lab.json": {
+      "previous": 114,
+      "current": 114,
+      "only_added": [],
+      "removed": []
+    },
+    "regressions/logout-https-postgresql-lab.json": {
+      "previous": 161,
+      "current": 162,
+      "only_added": [
+        "source_unchanged_docs_packets_p05_t01v_md"
+      ],
+      "removed": []
+    },
+    "regressions/logout-workers-lab.json": {
+      "previous": 415,
+      "current": 415,
+      "only_added": [],
+      "removed": []
+    },
+    "regressions/login-flow-custody.json": {
+      "previous": 106,
+      "current": 106,
+      "only_added": [],
+      "removed": []
+    },
+    "regressions/login-https-postgresql-lab.json": {
+      "previous": 98,
+      "current": 98,
+      "only_added": [],
+      "removed": []
+    },
+    "regressions/login-workers-lab.json": {
+      "previous": 627,
+      "current": 627,
+      "only_added": [],
+      "removed": []
+    },
+    "regressions/standalone-workspace-http.json": {
+      "previous": 121,
+      "current": 122,
+      "only_added": [
+        "source_unchanged_docs_packets_p05_t01v_md"
+      ],
+      "removed": []
+    },
+    "regressions/standalone-workspace-workers.json": {
+      "previous": 382,
+      "current": 382,
+      "only_added": [],
+      "removed": []
+    },
+    "regressions/workspace-linking-read.json": {
+      "previous": 121,
+      "current": 121,
+      "only_added": [],
+      "removed": []
+    },
+    "regressions/standalone-store-linking-http.json": {
+      "previous": 96,
+      "current": 96,
+      "only_added": [],
+      "removed": []
+    },
+    "regressions/standalone-store-linking-workers.json": {
+      "previous": 590,
+      "current": 590,
+      "only_added": [],
+      "removed": []
+    },
+    "regressions/fixed-provider-workers.json": {
+      "previous": 995,
+      "current": 995,
+      "only_added": [],
+      "removed": []
+    },
+    "regressions/fixed-provider-https.json": {
+      "previous": 154,
+      "current": 155,
+      "only_added": [
+        "source_unchanged_docs_packets_p05_t01v_md"
+      ],
+      "removed": []
+    },
+    "regressions/platform-workers-lab.json": {
+      "previous": 1513,
+      "current": 1514,
+      "only_added": [
+        "source_unchanged:docs/packets/P05.T01v.md"
+      ],
+      "removed": []
+    },
+    "regressions/controlled-neon-workers.json": {
+      "previous": 961,
+      "current": 962,
+      "only_added": [
+        "source_unchanged:docs/packets/P05.T01v.md"
+      ],
+      "removed": []
+    },
+    "regressions/controlled-neon-postgresql.json": {
+      "previous": 235,
+      "current": 236,
+      "only_added": [
+        "source_unchanged_docs_packets_p05_t01v_md"
+      ],
+      "removed": []
+    },
+    "regressions/managed-login-lifetime.json": {
+      "previous": 128,
+      "current": 128,
+      "only_added": [],
+      "removed": []
+    },
+    "regressions/managed-login-postgresql.json": {
+      "previous": 209,
+      "current": 210,
+      "only_added": [
+        "source_unchanged_docs_packets_p05_t01v_md"
+      ],
+      "removed": []
+    }
+  },
+  "workspace_native": {
+    "checks": 388,
+    "cases": 41,
+    "generic_controls": 4,
+    "managed_cases": 37,
+    "native_outbound_intercepts": 67,
+    "actual_internet_requests": 0,
+    "actual_provider_requests": 0,
+    "deliberate_unknown_cases": [
+      "identityPool_pending_query_after_C_open_outcome",
+      "identityPool_pending_query_rejected_ack",
+      "identityPool_pending_query_stalled_ack",
+      "identityPool_rejected_credential_disposal",
+      "linkingPool_pending_query_after_C_open_outcome",
+      "linkingPool_pending_query_rejected_ack",
+      "linkingPool_pending_query_stalled_ack",
+      "linkingPool_rejected_credential_disposal",
+      "logoutPool_pending_query_after_C_open_outcome",
+      "logoutPool_pending_query_rejected_ack",
+      "logoutPool_pending_query_stalled_ack",
+      "logoutPool_rejected_credential_disposal"
+    ],
+    "post_response_ack_within_original_C": true,
+    "scope_settlement_is_not_post_settlement_pool_metrics": true,
+    "real_PostgreSQL_qualified": false,
+    "browser_or_hosted_qualified": false
+  },
+  "workspace_postgresql": {
+    "checks": 190,
+    "cases": 6,
+    "native_websocket_intercepts": 70,
+    "restricted_roles": 7,
+    "actual_completed_SCRAM_roles": 7,
+    "same_native_cookie_workspace_link_logout": true,
+    "concurrent_one_durable_effect": true,
+    "original_commit_unknown_fresh_reconciliation_separate": true,
+    "unknown_credential_before_cleanup": true,
+    "authority_count_ceiling": 1000,
+    "native_oversize_held": true,
+    "namespace_absent_before_forced_cleanup": true,
+    "actual_internet_requests": 0,
+    "actual_provider_requests": 0,
+    "browser_hosted_or_Shopify_qualified": false
+  },
+  "normal_physical_cleanup": {
+    "docs/evidence/P05.T01v/regressions/managed-login-postgresql.json": {
+      "observations": 2,
+      "connections": 2,
+      "backend_absence_verified": 2,
+      "unverified_host_closures": 0
+    },
+    "docs/evidence/P05.T01v/workspace-api-postgresql.json": {
+      "observations": 1,
+      "connections": 1,
+      "backend_absence_verified": 1,
+      "unverified_host_closures": 0
+    },
+    "docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json": {
+      "observations": 13,
+      "connections": 13,
+      "backend_absence_verified": 13,
+      "unverified_host_closures": 0
+    },
+    "docs/evidence/P05.T01m/postgresql-lab.json": {
+      "observations": 47,
+      "connections": 48,
+      "backend_absence_verified": 48,
+      "unverified_host_closures": 0
+    },
+    "docs/evidence/P05.T01v/regressions/standalone-workspace-http.json": {
+      "observations": 81,
+      "connections": 85,
+      "backend_absence_verified": 85,
+      "unverified_host_closures": 0
+    },
+    "docs/evidence/P05.T01v/regressions/workspace-linking-read.json": {
+      "observations": 43,
+      "connections": 63,
+      "backend_absence_verified": 63,
+      "unverified_host_closures": 0
+    },
+    "docs/evidence/P05.T01v/regressions/standalone-store-linking-http.json": {
+      "observations": 11,
+      "connections": 34,
+      "backend_absence_verified": 34,
+      "unverified_host_closures": 0
+    },
+    "docs/evidence/P05.T01v/regressions/login-flow-custody.json": {
+      "observations": 32,
+      "connections": 59,
+      "backend_absence_verified": 59,
+      "unverified_host_closures": 0
+    },
+    "docs/evidence/P05.T01v/regressions/login-https-postgresql-lab.json": {
+      "observations": 108,
+      "connections": 160,
+      "backend_absence_verified": 160,
+      "unverified_host_closures": 0
+    },
+    "docs/evidence/P05.T01v/regressions/self-logout-postgresql-lab.json": {
+      "observations": 27,
+      "connections": 27,
+      "backend_absence_verified": 27,
+      "unverified_host_closures": 0
+    },
+    "docs/evidence/P05.T01v/regressions/logout-https-postgresql-lab.json": {
+      "observations": 98,
+      "connections": 177,
+      "backend_absence_verified": 177,
+      "unverified_host_closures": 0
+    },
+    "docs/evidence/P05.T01v/regressions/fixed-provider-https.json": {
+      "observations": 56,
+      "connections": 106,
+      "backend_absence_verified": 106,
+      "unverified_host_closures": 0
+    }
+  },
+  "fault_cleanup_preserved": {
+    "docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json": [
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 1,
+        "location": "faultInjectionMetrics.0"
+      }
+    ],
+    "docs/evidence/P05.T01m/postgresql-lab.json": [
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0,
+        "location": "engine.faultMetrics.0.metrics"
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0,
+        "location": "engine.faultMetrics.1.metrics"
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "backendCleanupVerified": 0,
+        "unverifiedHostClosures": 1,
+        "location": "engine.faultMetrics.2.metrics"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/workspace-linking-read.json": [
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0,
+        "location": "faultCleanup.0"
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0,
+        "location": "faultCleanup.1"
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0,
+        "location": "faultCleanup.2"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/login-flow-custody.json": [
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0,
+        "location": "fault_cleanup.0"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/self-logout-postgresql-lab.json": [
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0,
+        "location": "faultCleanup.0"
+      },
+      {
+        "connections": 1,
+        "released": 1,
+        "closed": 1,
+        "backendCleanupVerified": 1,
+        "unverifiedHostClosures": 0,
+        "location": "faultCleanup.1"
+      }
+    ]
+  },
+  "all_report_assertions": {
+    "docs/evidence/P01.T01/verification.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P01.T02/verification.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P01.T03/verification.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P01.T04/verification.json": {
+      "named_passed_entries": 7,
+      "checks": 7,
+      "tests": null
+    },
+    "docs/evidence/P02.T02/verification.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P03.T02/boundaries.json": {
+      "named_passed_entries": 29,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P03.T04/delivery.json": {
+      "named_passed_entries": 3,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P04.T01a/synth.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P04.T01a/permissions.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P04.T01a/readiness.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P04.T01f/archive.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P04.T01f/cleanup.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P03.T01/smoke.json": {
+      "named_passed_entries": 11,
+      "checks": 11,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/managed-login-lifetime.json": {
+      "named_passed_entries": 128,
+      "checks": 128,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/workspace-api-workers.json": {
+      "named_passed_entries": 388,
+      "checks": 388,
+      "tests": null
+    },
+    "docs/evidence/P04.T01b/workers.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P05.T04/workers-lab.json": {
+      "named_passed_entries": 22,
+      "checks": 22,
+      "tests": null
+    },
+    "docs/evidence/P05.T03/workers-lab.json": {
+      "named_passed_entries": 20,
+      "checks": 20,
+      "tests": null
+    },
+    "docs/evidence/P05.T01d/workers-lab.json": {
+      "named_passed_entries": 25,
+      "checks": 25,
+      "tests": null
+    },
+    "docs/evidence/P05.T01f/workers-lab.json": {
+      "named_passed_entries": 71,
+      "checks": 71,
+      "tests": null
+    },
+    "docs/evidence/P05.T01m/legacy-reader-workers-lab.json": {
+      "named_passed_entries": 405,
+      "checks": 405,
+      "tests": null
+    },
+    "docs/evidence/P05.T01m/legacy-composition-workers-lab.json": {
+      "named_passed_entries": 523,
+      "checks": 523,
+      "tests": null
+    },
+    "docs/evidence/P05.T01m/legacy-selection-workers-lab.json": {
+      "named_passed_entries": 1754,
+      "checks": 1754,
+      "tests": null
+    },
+    "docs/evidence/P05.T01m/workers-lab.json": {
+      "named_passed_entries": 281,
+      "checks": 281,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/standalone-workspace-workers.json": {
+      "named_passed_entries": 382,
+      "checks": 382,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/standalone-store-linking-workers.json": {
+      "named_passed_entries": 590,
+      "checks": 590,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/login-workers-lab.json": {
+      "named_passed_entries": 627,
+      "checks": 627,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/logout-workers-lab.json": {
+      "named_passed_entries": 415,
+      "checks": 415,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/fixed-provider-workers.json": {
+      "named_passed_entries": 995,
+      "checks": 995,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/platform-workers-lab.json": {
+      "named_passed_entries": 1514,
+      "checks": 1514,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/controlled-neon-workers.json": {
+      "named_passed_entries": 962,
+      "checks": 962,
+      "tests": null
+    },
+    "docs/evidence/P05.T01h/frozen75-regression.json": {
+      "named_passed_entries": 43,
+      "checks": null,
+      "tests": 43
+    },
+    "docs/evidence/P05.T01v/regressions/controlled-neon-postgresql.json": {
+      "named_passed_entries": 236,
+      "checks": 236,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/managed-login-postgresql.json": {
+      "named_passed_entries": 220,
+      "checks": 210,
+      "tests": null,
+      "closed_source_replay_pairs": {
+        "managed_callback_finite_delivery_1": {
+          "positions": [
+            28,
+            33
+          ],
+          "entry_witnesses": [
+            {
+              "name": "real_entry_same_original_attempt_1",
+              "position": 27
+            },
+            {
+              "name": "real_entry_same_original_attempt_2",
+              "position": 32
+            }
+          ]
+        },
+        "managed_callback_finite_delivery_4": {
+          "positions": [
+            56,
+            58
+          ],
+          "entry_witnesses": [
+            {
+              "name": "real_entry_same_original_attempt_8",
+              "position": 55
+            },
+            {
+              "name": "real_entry_same_original_attempt_9",
+              "position": 57
+            }
+          ]
+        },
+        "managed_callback_finite_delivery_5": {
+          "positions": [
+            68,
+            70
+          ],
+          "entry_witnesses": [
+            {
+              "name": "real_entry_same_original_attempt_11",
+              "position": 67
+            },
+            {
+              "name": "real_entry_same_original_attempt_12",
+              "position": 69
+            }
+          ]
+        },
+        "managed_callback_finite_delivery_6": {
+          "positions": [
+            78,
+            80
+          ],
+          "entry_witnesses": [
+            {
+              "name": "real_entry_same_original_attempt_14",
+              "position": 77
+            },
+            {
+              "name": "real_entry_same_original_attempt_15",
+              "position": 79
+            }
+          ]
+        },
+        "managed_callback_finite_delivery_preseed_tampered_tag": {
+          "positions": [
+            87,
+            89
+          ],
+          "entry_witnesses": [
+            {
+              "name": "real_entry_same_original_attempt_16",
+              "position": 86
+            },
+            {
+              "name": "real_entry_same_original_attempt_17",
+              "position": 88
+            }
+          ]
+        },
+        "managed_callback_finite_delivery_preseed_different_AAD": {
+          "positions": [
+            95,
+            97
+          ],
+          "entry_witnesses": [
+            {
+              "name": "real_entry_same_original_attempt_18",
+              "position": 94
+            },
+            {
+              "name": "real_entry_same_original_attempt_19",
+              "position": 96
+            }
+          ]
+        },
+        "managed_callback_finite_delivery_preseed_wrong_claimed_key": {
+          "positions": [
+            103,
+            105
+          ],
+          "entry_witnesses": [
+            {
+              "name": "real_entry_same_original_attempt_20",
+              "position": 102
+            },
+            {
+              "name": "real_entry_same_original_attempt_21",
+              "position": 104
+            }
+          ]
+        },
+        "managed_callback_finite_delivery_preseed_expired_key": {
+          "positions": [
+            111,
+            113
+          ],
+          "entry_witnesses": [
+            {
+              "name": "real_entry_same_original_attempt_22",
+              "position": 110
+            },
+            {
+              "name": "real_entry_same_original_attempt_23",
+              "position": 112
+            }
+          ]
+        }
+      }
+    },
+    "docs/evidence/P05.T01v/workspace-api-postgresql.json": {
+      "named_passed_entries": 196,
+      "checks": 190,
+      "tests": null
+    },
+    "docs/evidence/P04.T03/operations-lab.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P04.T04/restore-lab.json": {
+      "named_passed_entries": 0,
+      "checks": null,
+      "tests": null
+    },
+    "docs/evidence/P05.T01/identity-lab.json": {
+      "named_passed_entries": 31,
+      "checks": 31,
+      "tests": null
+    },
+    "docs/evidence/P05.T02/database-lab.json": {
+      "named_passed_entries": 22,
+      "checks": 22,
+      "tests": null
+    },
+    "docs/evidence/P05.T01k/authentication-challenge-lab.json": {
+      "named_passed_entries": 38,
+      "checks": 38,
+      "tests": null
+    },
+    "docs/evidence/P05.T01/workspace-revocation-lab.json": {
+      "named_passed_entries": 109,
+      "checks": 109,
+      "tests": null
+    },
+    "docs/evidence/P05.T03/workspace-store-linking-lab.json": {
+      "named_passed_entries": 366,
+      "checks": 366,
+      "tests": null
+    },
+    "docs/evidence/P05.T01d/postgresql-lab.json": {
+      "named_passed_entries": 154,
+      "checks": 154,
+      "tests": null
+    },
+    "docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json": {
+      "named_passed_entries": 211,
+      "checks": 211,
+      "tests": null
+    },
+    "docs/evidence/P05.T01m/postgresql-lab.json": {
+      "named_passed_entries": 342,
+      "checks": 342,
+      "tests": null
+    },
+    "docs/evidence/P05.T01e/frozen-regression.json": {
+      "named_passed_entries": 59,
+      "checks": 59,
+      "tests": null
+    },
+    "docs/evidence/P05.T01g/frozen74-regression.json": {
+      "named_passed_entries": 99,
+      "checks": 99,
+      "tests": null
+    },
+    "docs/evidence/P05.T01o/frozen80-regression.json": {
+      "named_passed_entries": 253,
+      "checks": 181,
+      "tests": 72
+    },
+    "docs/evidence/P05.T01o/frozen82-regression.json": {
+      "named_passed_entries": 253,
+      "checks": 181,
+      "tests": 72
+    },
+    "docs/evidence/P05.T01v/regressions/standalone-workspace-http.json": {
+      "named_passed_entries": 122,
+      "checks": 122,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/workspace-linking-read.json": {
+      "named_passed_entries": 121,
+      "checks": 121,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/standalone-store-linking-http.json": {
+      "named_passed_entries": 96,
+      "checks": 96,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/login-flow-custody.json": {
+      "named_passed_entries": 106,
+      "checks": 106,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/login-https-postgresql-lab.json": {
+      "named_passed_entries": 98,
+      "checks": 98,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/self-logout-postgresql-lab.json": {
+      "named_passed_entries": 114,
+      "checks": 114,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/logout-https-postgresql-lab.json": {
+      "named_passed_entries": 162,
+      "checks": 162,
+      "tests": null
+    },
+    "docs/evidence/P05.T01v/regressions/fixed-provider-https.json": {
+      "named_passed_entries": 155,
+      "checks": 155,
+      "tests": null
+    }
+  },
+  "source_closure": {
+    "docs/evidence/P01.T01/verification.json": [
+      {
+        "field": "input_digests",
+        "file_count": 3,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P01.T02/verification.json": [
+      {
+        "field": "input_digests",
+        "file_count": 4,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P01.T03/verification.json": [
+      {
+        "field": "input_digests",
+        "file_count": 7,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P01.T04/verification.json": [
+      {
+        "field": "input_digests",
+        "file_count": 9,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P02.T02/verification.json": [
+      {
+        "field": "input_digests",
+        "file_count": 6,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P03.T02/boundaries.json": [],
+    "docs/evidence/P03.T04/delivery.json": [],
+    "docs/evidence/P04.T01a/synth.json": [],
+    "docs/evidence/P04.T01a/permissions.json": [],
+    "docs/evidence/P04.T01a/readiness.json": [],
+    "docs/evidence/P04.T01f/archive.json": [
+      {
+        "field": "controller_source_digests",
+        "file_count": 6,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P04.T01f/cleanup.json": [
+      {
+        "field": "controller_source_digests",
+        "file_count": 6,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P03.T01/smoke.json": [],
+    "docs/evidence/P05.T01v/regressions/managed-login-lifetime.json": [
+      {
+        "field": "source_digests",
+        "file_count": 31,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/workspace-api-workers.json": [
+      {
+        "field": "source_digests",
+        "file_count": 42,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P04.T01b/workers.json": [
+      {
+        "field": "input_digests",
+        "file_count": 7,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T04/workers-lab.json": [
+      {
+        "field": "input_digests",
+        "file_count": 6,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T03/workers-lab.json": [
+      {
+        "field": "input_digests",
+        "file_count": 6,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01d/workers-lab.json": [
+      {
+        "field": "input_digests",
+        "file_count": 5,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01f/workers-lab.json": [
+      {
+        "field": "input_digests",
+        "file_count": 5,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01m/legacy-reader-workers-lab.json": [
+      {
+        "field": "input_digests",
+        "file_count": 6,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01m/legacy-composition-workers-lab.json": [
+      {
+        "field": "input_digests",
+        "file_count": 8,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01m/legacy-selection-workers-lab.json": [
+      {
+        "field": "input_digests",
+        "file_count": 9,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01m/workers-lab.json": [
+      {
+        "field": "sourceDigests",
+        "file_count": 10,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/standalone-workspace-workers.json": [
+      {
+        "field": "sourceDigests",
+        "file_count": 23,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/standalone-store-linking-workers.json": [
+      {
+        "field": "sourceDigests",
+        "file_count": 27,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/login-workers-lab.json": [
+      {
+        "field": "source_digests",
+        "file_count": 33,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/logout-workers-lab.json": [
+      {
+        "field": "source_digests",
+        "file_count": 26,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/fixed-provider-workers.json": [
+      {
+        "field": "source_digests",
+        "file_count": 27,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/platform-workers-lab.json": [
+      {
+        "field": "source_digests",
+        "file_count": 27,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/controlled-neon-workers.json": [
+      {
+        "field": "source_digests",
+        "file_count": 17,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01h/frozen75-regression.json": [
+      {
+        "field": "archive_files",
+        "file_count": 25,
+        "root": "docs/history/workos-session-status-75/"
+      },
+      {
+        "field": "regression_sources",
+        "file_count": 4,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/controlled-neon-postgresql.json": [
+      {
+        "field": "source_digests",
+        "file_count": 48,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/managed-login-postgresql.json": [
+      {
+        "field": "source_digests",
+        "file_count": 53,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/workspace-api-postgresql.json": [
+      {
+        "field": "source_digests",
+        "file_count": 66,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P04.T03/operations-lab.json": [],
+    "docs/evidence/P04.T04/restore-lab.json": [],
+    "docs/evidence/P05.T01/identity-lab.json": [],
+    "docs/evidence/P05.T02/database-lab.json": [],
+    "docs/evidence/P05.T01k/authentication-challenge-lab.json": [],
+    "docs/evidence/P05.T01/workspace-revocation-lab.json": [],
+    "docs/evidence/P05.T03/workspace-store-linking-lab.json": [
+      {
+        "field": "source_digests",
+        "file_count": 5,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01d/postgresql-lab.json": [
+      {
+        "field": "source_digests",
+        "file_count": 5,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json": [
+      {
+        "field": "sourceDigests",
+        "file_count": 19,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01m/postgresql-lab.json": [
+      {
+        "field": "sources",
+        "file_count": 30,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01e/frozen-regression.json": [
+      {
+        "field": "sources",
+        "file_count": 29,
+        "root": "docs/history/workos-operator-71/"
+      },
+      {
+        "field": "regression_sources",
+        "file_count": 3,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01g/frozen74-regression.json": [
+      {
+        "field": "sources",
+        "file_count": 31,
+        "root": "docs/history/workos-operator-74/"
+      },
+      {
+        "field": "regression_sources",
+        "file_count": 4,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01o/frozen80-regression.json": [
+      {
+        "field": "archive_files",
+        "file_count": 45,
+        "root": "docs/history/workos-authentication-operator-80/"
+      },
+      {
+        "field": "source_digests",
+        "file_count": 43,
+        "root": "docs/history/workos-authentication-operator-80/"
+      },
+      {
+        "field": "regression_sources",
+        "file_count": 3,
+        "root": "candidate"
+      },
+      {
+        "field": "preserved_reports",
+        "file_count": 9,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01o/frozen82-regression.json": [
+      {
+        "field": "archive_files",
+        "file_count": 45,
+        "root": "docs/history/workos-authentication-operator-82/"
+      },
+      {
+        "field": "source_digests",
+        "file_count": 43,
+        "root": "docs/history/workos-authentication-operator-82/"
+      },
+      {
+        "field": "regression_sources",
+        "file_count": 5,
+        "root": "candidate"
+      },
+      {
+        "field": "preserved_reports",
+        "file_count": 9,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/standalone-workspace-http.json": [
+      {
+        "field": "sources",
+        "file_count": 43,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/workspace-linking-read.json": [
+      {
+        "field": "sourceHashes",
+        "file_count": 38,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/standalone-store-linking-http.json": [
+      {
+        "field": "sourceDigests",
+        "file_count": 42,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/login-flow-custody.json": [
+      {
+        "field": "source_hashes",
+        "file_count": 38,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/login-https-postgresql-lab.json": [
+      {
+        "field": "sourceDigests",
+        "file_count": 63,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/self-logout-postgresql-lab.json": [
+      {
+        "field": "sourceHashes",
+        "file_count": 39,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/logout-https-postgresql-lab.json": [
+      {
+        "field": "sourceDigests",
+        "file_count": 70,
+        "root": "candidate"
+      }
+    ],
+    "docs/evidence/P05.T01v/regressions/fixed-provider-https.json": [
+      {
+        "field": "sourceDigests",
+        "file_count": 70,
+        "root": "candidate"
+      }
+    ]
+  },
+  "reports_without_direct_source_map": [
+    "docs/evidence/P03.T02/boundaries.json",
+    "docs/evidence/P03.T04/delivery.json",
+    "docs/evidence/P04.T01a/synth.json",
+    "docs/evidence/P04.T01a/permissions.json",
+    "docs/evidence/P04.T01a/readiness.json",
+    "docs/evidence/P03.T01/smoke.json",
+    "docs/evidence/P04.T03/operations-lab.json",
+    "docs/evidence/P04.T04/restore-lab.json",
+    "docs/evidence/P05.T01/identity-lab.json",
+    "docs/evidence/P05.T02/database-lab.json",
+    "docs/evidence/P05.T01k/authentication-challenge-lab.json",
+    "docs/evidence/P05.T01/workspace-revocation-lab.json"
+  ],
+  "provider_and_egress_fields": {
+    "docs/evidence/P05.T01v/regressions/managed-login-lifetime.json": {
+      "actualProviderRequests": 0
+    },
+    "docs/evidence/P05.T01v/workspace-api-workers.json": {
+      "actualProviderRequests": 0
+    },
+    "docs/evidence/P05.T01f/workers-lab.json": {
+      "outbound_requests": 0
+    },
+    "docs/evidence/P05.T01m/legacy-reader-workers-lab.json": {
+      "outbound_requests": 0
+    },
+    "docs/evidence/P05.T01m/legacy-composition-workers-lab.json": {
+      "outbound_requests": 0
+    },
+    "docs/evidence/P05.T01m/legacy-selection-workers-lab.json": {
+      "outbound_requests": 0
+    },
+    "docs/evidence/P05.T01m/workers-lab.json": {
+      "outboundRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/standalone-workspace-workers.json": {
+      "outboundRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/standalone-store-linking-workers.json": {
+      "outboundRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/login-workers-lab.json": {
+      "outboundRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/logout-workers-lab.json": {
+      "outboundRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/fixed-provider-workers.json": {
+      "outboundRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/platform-workers-lab.json": {
+      "actualProviderRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/controlled-neon-workers.json": {
+      "actualProviderRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/controlled-neon-postgresql.json": {
+      "actualProviderRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/managed-login-postgresql.json": {
+      "actualProviderRequests": 0
+    },
+    "docs/evidence/P05.T01v/workspace-api-postgresql.json": {
+      "actualProviderRequests": 0
+    },
+    "docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json": {
+      "providerRequests": 0
+    },
+    "docs/evidence/P05.T01m/postgresql-lab.json": {
+      "realProviderRequests": 0
+    },
+    "docs/evidence/P05.T01e/frozen-regression.json": {
+      "real_provider_requests": 0
+    },
+    "docs/evidence/P05.T01g/frozen74-regression.json": {
+      "real_provider_requests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/standalone-workspace-http.json": {
+      "realProviderRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/workspace-linking-read.json": {
+      "providerCalls": 0
+    },
+    "docs/evidence/P05.T01v/regressions/standalone-store-linking-http.json": {
+      "providerRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/login-flow-custody.json": {
+      "provider_requests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/login-https-postgresql-lab.json": {
+      "providerRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/self-logout-postgresql-lab.json": {
+      "providerRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/logout-https-postgresql-lab.json": {
+      "providerRequests": 0
+    },
+    "docs/evidence/P05.T01v/regressions/fixed-provider-https.json": {
+      "providerRequests": 0
+    }
+  },
+  "preserved_historical_reports": 900,
+  "authorship_and_review_separation": [
+    "Reviewer authored private pool/scope modules and earlier provider port. This is not independent approval of those sources; preserved other-author reviews cover them.",
+    "New native and PostgreSQL producers, common core, capsule and CI were authored by other agents; actual measured report and source commitments are independently reviewed here."
+  ],
+  "limitations": [
+    "Read-only actual strict-artifact review; no runtime, tests, provider/network, Source or Git writes.",
+    "Original V11041 held and588183 known-length actual reports remain immutable. Fresh CI default is captured only inside quarantine/restoration and archive; Source default remains11041. All old U holds and repeated-label source profile remain preserved.",
+    "Source scope-settlement log contains closed scope counters, not a post-settlement pool snapshot; exact waitUntil Promise identity relies on separately reviewed source and real ctx module wiring.",
+    "Settled or physically disposed resources never confer credential acknowledgement or normal authority; rejected/stalled/after-C outcomes stay unknown.",
+    "Local Workers/native SDK/real owned PostgreSQL only; no browser-engine, hosted identity/Neon/WorkOS, Shopify, merchant, deployment or Desktop qualification."
+  ]
+}

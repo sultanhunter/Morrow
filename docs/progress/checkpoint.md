@@ -1,3 +1,13 @@
+# Current continuation: native workspace API passes isolated integration; final publication pending
+
+Canonical93 remains current571blocks. Exact candidated7cf00837c4c85c740b9c3a129aa870649055f08 passed CI38969900266/attempt1/all57 final steps. Raw REST/digest verification binds artifact12076717862,544226bytes/SHAe67b1eee503223845a59e372a0ec5baff508b2f50f2cf938f3705003e372e33e,61payloads/57fresh reports and complete2005-file before/restored source. Repository2448tests/zero failures and11scaffold guards passed. All900historical records and both original V native outcomes stay immutable.
+
+Actual configured native workspace factory passes388checks/41cases with67intercepted calls; the same-app seven-role PostgreSQL journey passes190checks/6cases with70native wire endpoints. Login/cookie/bootstrap/controlled handoff/apply/status/logout, fresh revocation, concurrent replay with one durable effect, 1000count acceptance/1001denial and existing directional-limit oversize hold are measured. An interrupted commit remains outcome_unknown despite separate fresh reconciliation; unknown leases remain unknown despite physical cleanup. All owned isolates, handles, namespace, container and network close under their separately observed bounds.
+
+Strict transport/source/restoration inspection34c6809c and all57-domain review862ea14d are clear; additional independent actual raw/source review is preserved as independent-ci93-A-actual-review.json SHA555c19965a5c5240aa01f567cf4f7747d969597f6d15941bca5b524e000ecb6a. Only new V evidence, this checkpoint prepend and index form the final commit. Its own exact-head complete CI, strict artifact/fresh independent domain review and guarded Desktop alignment from qualified91 remain required. ParentP05.T01/P05.T03 remain In progress. No browser-engine, hosted WorkOS/Neon, Shopify, merchant, merge or deployment qualification is claimed.
+
+# Earlier pending-A checkpoint
+
 # Current continuation: configured native workspace API qualified locally
 
 Canonical93 remains current571blocks after a fresh full read with every block/Markdown identical. Known-length fixture repair retained every production policy/owner and the original held Source report11041d68. Guarded replay actualexit0 44dac9 produced workspace-api-workers-known-length.json SHA58818327218098ac3503e0eac14bbcc1fbf166891fff84318d4581a573e545de:388checks/zero failures/41cases (4generic+37managed),67positive intercepted calls,zero unexpected/Internet/provider requests and host watchdogs. All1984preexisting files,900historical records+index and first hold stay exact. Independent raw/source/domain253checks review cc5d238ef5f0c901851b9bcc12e6976a09ce171cf9a0cf1a120a30bbd668d36b is clear.
