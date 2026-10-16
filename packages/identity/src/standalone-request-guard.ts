@@ -1,3 +1,4 @@
+import { createLoginAttempt, type LoginAttempt } from "./standalone-login-protocol.js";
 import { validateDefinition } from "@morrow/contracts/validation";
 import { parseWorkosSessionStatusJson } from "./workos-session-status-json.js";
 
@@ -148,7 +149,86 @@ async function bodyText(
   }
 }
 
-export function createStandaloneRequestGuard(configurationJson: unknown, now: () => number) {
+type GuardWait = <T>(pending: Promise<T>) => Promise<T>;
+type GuardExecute = (context: Readonly<GuardedStandaloneRequest>) => Promise<Response>;
+
+// A managed result stays owned even when the wait postcheck rejects before the
+// caller receives it. This continuation only clears bytes; it grants no work.
+async function ownedGuardBuffer(
+  pending: Promise<ArrayBuffer>,
+  check: () => number,
+  wait: GuardWait,
+  consume: (buffer: ArrayBuffer) => string,
+): Promise<string> {
+  let abandoned = false,
+    completed: ArrayBuffer | undefined;
+  const owned = pending.then((buffer) => {
+    if (abandoned) new Uint8Array(buffer).fill(0);
+    else completed = buffer;
+    return buffer;
+  });
+  void owned.catch(() => {});
+  try {
+    const buffer = await wait(owned);
+    check();
+    return consume(buffer);
+  } finally {
+    abandoned = true;
+    if (completed) new Uint8Array(completed).fill(0);
+    completed = undefined;
+  }
+}
+async function guardDigest(value: string, check: () => number, wait: GuardWait, managed: boolean) {
+  if (managed) check();
+  const bytes = encoder.encode(value);
+  try {
+    if (managed) check();
+    const pending = crypto.subtle.digest("SHA-256", bytes);
+    return managed ? await ownedGuardBuffer(pending, check, wait, hex) : hex(await wait(pending));
+  } finally {
+    if (managed) bytes.fill(0);
+  }
+}
+async function guardHmacKey(value: string, check: () => number, wait: GuardWait, managed: boolean) {
+  if (managed) check();
+  const bytes = secretBytes(value);
+  try {
+    if (managed) check();
+    const pending = crypto.subtle.importKey(
+      "raw",
+      bytes,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const key = await wait(pending);
+    if (managed) check();
+    return key;
+  } finally {
+    if (managed) bytes.fill(0);
+  }
+}
+async function guardCsrf(
+  key: CryptoKey,
+  value: string,
+  check: () => number,
+  wait: GuardWait,
+  managed: boolean,
+) {
+  if (managed) check();
+  const bytes = encoder.encode(value);
+  try {
+    if (managed) check();
+    const pending = crypto.subtle.sign("HMAC", key, bytes);
+    const consume = (buffer: ArrayBuffer) => base64url(new Uint8Array(buffer));
+    return managed
+      ? await ownedGuardBuffer(pending, check, wait, consume)
+      : consume(await wait(pending));
+  } finally {
+    if (managed) bytes.fill(0);
+  }
+}
+function captureGuard(configurationJson: unknown, now: () => number) {
   const origin = configuration(configurationJson);
   if (typeof now !== "function") throw Error("STANDALONE_REQUEST_CONFIG_INVALID");
   let lastTime = -1,
@@ -164,11 +244,151 @@ export function createStandaloneRequestGuard(configurationJson: unknown, now: ()
       return failure(503);
     }
   };
+  return Object.freeze({ origin, clock });
+}
+async function runGuard(
+  origin: string,
+  request: Request,
+  route: StandaloneRequestRoute,
+  execute: GuardExecute,
+  control: Readonly<StandaloneWorkspaceSqlControl>,
+  check: () => number,
+  wait: GuardWait,
+  managed: boolean,
+): Promise<Response> {
+  let executionStarted = false;
+  try {
+    if (managed) check();
+    if (request.url.length > 2048) return failure(400);
+    const url = new URL(request.url),
+      match = /^\/workspace\/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})(\/.*)$/.exec(url.pathname),
+      method = route === "bootstrap" ? "GET" : "POST";
+    if (
+      url.origin !== origin ||
+      url.href !== `${origin}${url.pathname}` ||
+      url.username ||
+      url.password
+    )
+      return failure(403);
+    if (!match || match[2] !== routePath(route) || !validateDefinition("core", "Id", match[1]))
+      return failure(404);
+    if (request.method !== method) return failure(405);
+    const host = request.headers.get("Host"),
+      suppliedOrigin = request.headers.get("Origin"),
+      fetchSite = request.headers.get("Sec-Fetch-Site");
+    if (host !== null && host !== url.host) return failure(403);
+    if (suppliedOrigin !== null && suppliedOrigin !== origin) return failure(403);
+    if (
+      fetchSite !== null &&
+      fetchSite !== "same-origin" &&
+      !(route === "bootstrap" && fetchSite === "none")
+    )
+      return failure(403);
+    if (request.headers.has("Authorization") || request.headers.has("Proxy-Authorization"))
+      return failure(401);
+    if (request.headers.has("Transfer-Encoding")) return failure(400);
+    let secret = cookieSecret(request.headers.get("Cookie"));
+    let commandId: string | null = null,
+      nonceDigest: string | null = null,
+      csrfToken: string | null = null;
+    const sessionDigest = await guardDigest(secret, check, wait, managed);
+    if (route === "bootstrap") {
+      const length = request.headers.get("Content-Length");
+      if (
+        request.body !== null ||
+        (length !== null && length !== "0") ||
+        request.headers.has("Content-Type") ||
+        request.headers.has("Idempotency-Key") ||
+        request.headers.has("X-Morrow-CSRF")
+      )
+        return failure(400);
+    } else {
+      if (suppliedOrigin !== origin || request.headers.get("Content-Type") !== "application/json")
+        return failure(403);
+      if (request.headers.get("X-Morrow-Request") !== "1") return failure(403);
+      commandId = request.headers.get("Idempotency-Key");
+      if (!commandId || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(commandId))
+        return failure(400);
+      let handoffToken: string;
+      try {
+        const parsed = parseWorkosSessionStatusJson(await bodyText(request, wait), 256);
+        if (
+          !parsed ||
+          typeof parsed !== "object" ||
+          Array.isArray(parsed) ||
+          Object.keys(parsed).join(",") !== "handoffToken" ||
+          !canonicalSecret((parsed as Record<string, unknown>).handoffToken)
+        )
+          throw Error();
+        handoffToken = (parsed as { handoffToken: string }).handoffToken;
+      } catch (error) {
+        if (error instanceof StandaloneRequestError) throw error;
+        return failure(400);
+      }
+      nonceDigest = await guardDigest(handoffToken, check, wait, managed);
+      const key = await guardHmacKey(secret, check, wait, managed);
+      // JSON array encoding is unambiguous and versioned; no delimiters can
+      // alias another workspace, command or nonce transcript.
+      const transcript = JSON.stringify([
+        "morrow.store-links.csrf",
+        1,
+        match[1],
+        commandId,
+        handoffToken,
+      ]);
+      csrfToken = await guardCsrf(key, transcript, check, wait, managed);
+      if (route === "apply") {
+        const received = request.headers.get("X-Morrow-CSRF");
+        if (!canonicalSecret(received)) return failure(403);
+        let different = 0;
+        for (let i = 0; i < 43; i++) different |= received.charCodeAt(i) ^ csrfToken.charCodeAt(i);
+        if (different !== 0) return failure(403);
+      } else if (request.headers.has("X-Morrow-CSRF")) return failure(400);
+      handoffToken = "";
+    }
+    secret = "";
+    check();
+    const context = Object.freeze({
+      workspaceId: match[1]!,
+      sessionDigest,
+      commandId,
+      nonceDigest,
+      csrfToken,
+      control,
+      check,
+      wait,
+    });
+    executionStarted = true;
+    const response = await wait(Promise.resolve(execute(context)));
+    check();
+    if (!(response instanceof Response)) return failure(503);
+    return response;
+  } catch (error) {
+    // Once the mutation callback has begun, an interrupted response cannot
+    // prove whether its durable operation committed. Never turn that loss
+    // into a retryable denial or disclose a late successful reply.
+    if (route === "apply" && executionStarted)
+      return standaloneJson(503, { schemaVersion: 1, outcome: "outcome_unknown" });
+    const status = error instanceof StandaloneRequestError ? error.status : 503;
+    const code =
+      status === 401
+        ? "authentication_required"
+        : status === 503
+          ? "unavailable"
+          : "request_denied";
+    const response = standaloneJson(status, { code });
+    if (status === 405) response.headers.set("Allow", route === "bootstrap" ? "GET" : "POST");
+    return response;
+  }
+}
+
+export function createStandaloneRequestGuard(configurationJson: unknown, now: () => number) {
+  const { origin, clock } = captureGuard(configurationJson, now);
   return Object.freeze({
     async handle(
       request: Request,
       route: StandaloneRequestRoute,
-      execute: (context: Readonly<GuardedStandaloneRequest>) => Promise<Response>,
+      execute: GuardExecute,
     ): Promise<Response> {
       let timer: ReturnType<typeof setTimeout> | undefined;
       let requestSignal: AbortSignal | undefined;
@@ -207,128 +427,7 @@ export function createStandaloneRequestGuard(configurationJson: unknown, now: ()
         requestSignal.addEventListener("abort", stop, { once: true });
         timer = setTimeout(stop, 5000);
         check();
-        if (request.url.length > 2048) return failure(400);
-        const url = new URL(request.url),
-          match = /^\/workspace\/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})(\/.*)$/.exec(url.pathname),
-          method = route === "bootstrap" ? "GET" : "POST";
-        if (
-          url.origin !== origin ||
-          url.href !== `${origin}${url.pathname}` ||
-          url.username ||
-          url.password
-        )
-          return failure(403);
-        if (!match || match[2] !== routePath(route) || !validateDefinition("core", "Id", match[1]))
-          return failure(404);
-        if (request.method !== method) return failure(405);
-        const host = request.headers.get("Host"),
-          suppliedOrigin = request.headers.get("Origin"),
-          fetchSite = request.headers.get("Sec-Fetch-Site");
-        if (host !== null && host !== url.host) return failure(403);
-        if (suppliedOrigin !== null && suppliedOrigin !== origin) return failure(403);
-        if (
-          fetchSite !== null &&
-          fetchSite !== "same-origin" &&
-          !(route === "bootstrap" && fetchSite === "none")
-        )
-          return failure(403);
-        if (request.headers.has("Authorization") || request.headers.has("Proxy-Authorization"))
-          return failure(401);
-        if (request.headers.has("Transfer-Encoding")) return failure(400);
-        let secret = cookieSecret(request.headers.get("Cookie"));
-        let commandId: string | null = null,
-          nonceDigest: string | null = null,
-          csrfToken: string | null = null;
-        const sessionDigest = hex(
-          await wait(crypto.subtle.digest("SHA-256", encoder.encode(secret))),
-        );
-        if (route === "bootstrap") {
-          const length = request.headers.get("Content-Length");
-          if (
-            request.body !== null ||
-            (length !== null && length !== "0") ||
-            request.headers.has("Content-Type") ||
-            request.headers.has("Idempotency-Key") ||
-            request.headers.has("X-Morrow-CSRF")
-          )
-            return failure(400);
-        } else {
-          if (
-            suppliedOrigin !== origin ||
-            request.headers.get("Content-Type") !== "application/json"
-          )
-            return failure(403);
-          if (request.headers.get("X-Morrow-Request") !== "1") return failure(403);
-          commandId = request.headers.get("Idempotency-Key");
-          if (!commandId || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(commandId))
-            return failure(400);
-          let handoffToken: string;
-          try {
-            const parsed = parseWorkosSessionStatusJson(await bodyText(request, wait), 256);
-            if (
-              !parsed ||
-              typeof parsed !== "object" ||
-              Array.isArray(parsed) ||
-              Object.keys(parsed).join(",") !== "handoffToken" ||
-              !canonicalSecret((parsed as Record<string, unknown>).handoffToken)
-            )
-              throw Error();
-            handoffToken = (parsed as { handoffToken: string }).handoffToken;
-          } catch (error) {
-            if (error instanceof StandaloneRequestError) throw error;
-            return failure(400);
-          }
-          nonceDigest = hex(
-            await wait(crypto.subtle.digest("SHA-256", encoder.encode(handoffToken))),
-          );
-          const key = await wait(
-            crypto.subtle.importKey(
-              "raw",
-              secretBytes(secret),
-              { name: "HMAC", hash: "SHA-256" },
-              false,
-              ["sign"],
-            ),
-          );
-          // JSON array encoding is unambiguous and versioned; no delimiters can
-          // alias another workspace, command or nonce transcript.
-          const transcript = JSON.stringify([
-            "morrow.store-links.csrf",
-            1,
-            match[1],
-            commandId,
-            handoffToken,
-          ]);
-          csrfToken = base64url(
-            new Uint8Array(await wait(crypto.subtle.sign("HMAC", key, encoder.encode(transcript)))),
-          );
-          if (route === "apply") {
-            const received = request.headers.get("X-Morrow-CSRF");
-            if (!canonicalSecret(received)) return failure(403);
-            let different = 0;
-            for (let i = 0; i < 43; i++)
-              different |= received.charCodeAt(i) ^ csrfToken.charCodeAt(i);
-            if (different !== 0) return failure(403);
-          } else if (request.headers.has("X-Morrow-CSRF")) return failure(400);
-          handoffToken = "";
-        }
-        secret = "";
-        check();
-        const context = Object.freeze({
-          workspaceId: match[1]!,
-          sessionDigest,
-          commandId,
-          nonceDigest,
-          csrfToken,
-          control,
-          check,
-          wait,
-        });
-        executionStarted = true;
-        const response = await wait(Promise.resolve(execute(context)));
-        check();
-        if (!(response instanceof Response)) return failure(503);
-        return response;
+        return await runGuard(origin, request, route, execute, control, check, wait, false);
       } catch (error) {
         // Once the mutation callback has begun, an interrupted response cannot
         // prove whether its durable operation committed. Never turn that loss
@@ -350,6 +449,36 @@ export function createStandaloneRequestGuard(configurationJson: unknown, now: ()
         requestSignal?.removeEventListener("abort", stop);
         stop();
       }
+    },
+  });
+}
+
+// Source-private constructor. The entry starts this guard's one original5s
+// attempt before any async configuration. Only the outer managed fetch ends it.
+export function createManagedStandaloneRequestGuard(configurationJson: unknown, now: () => number) {
+  const { origin, clock } = captureGuard(configurationJson, now);
+  return Object.freeze({
+    begin(request: Request) {
+      if (!(request instanceof Request)) return failure(400);
+      const attempt: LoginAttempt = createLoginAttempt(clock, request.signal, 5000);
+      let invoked = false;
+      return Object.freeze({
+        attempt,
+        async handle(route: StandaloneRequestRoute, execute: GuardExecute): Promise<Response> {
+          if (invoked) return standaloneJson(503, { code: "unavailable" });
+          invoked = true;
+          return runGuard(
+            origin,
+            request,
+            route,
+            execute,
+            attempt.control(),
+            attempt.check,
+            attempt.wait,
+            true,
+          );
+        },
+      });
     },
   });
 }

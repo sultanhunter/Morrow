@@ -1,0 +1,85 @@
+{
+  "actual_exit_code": 0,
+  "error_type": null,
+  "stopped": true,
+  "owned_termination_attempted": false,
+  "name": "ci",
+  "command": [
+    "/opt/homebrew/opt/node@24/bin/npm",
+    "run",
+    "ci"
+  ],
+  "log_sha256": "0db564d12bfff864f5b320d5f7275d1035ce40378a2db92e566e81fb2d286129",
+  "outputs": {
+    "docs/evidence/P01.T01/verification.json": {
+      "status": "fresh_observed",
+      "sha256": "adb6c96a3403acc03bb643329488bd685a8880f6c3e07dd8a8bb3ded5adfe716",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P01.T02/verification.json": {
+      "status": "fresh_observed",
+      "sha256": "47622b06baa929549dcdbbc37547b08b05c66081aaea2e031fecc0fa36cc9379",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P01.T03/verification.json": {
+      "status": "fresh_observed",
+      "sha256": "999cd4efdf4a80337e55b51be8d9804148d3fb476ee278dda0982f4c138b337f",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P01.T04/verification.json": {
+      "status": "fresh_observed",
+      "sha256": "2d311ef5ff839ba7bdb195ff4a39f15135307bd3c87d3c4efb35a12c026f4bff",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P02.T02/verification.json": {
+      "status": "fresh_observed",
+      "sha256": "3ecbe35ef46b37bde3bd770a431aee1d7cc9b5ee57bfb88ee464d2c72dfdb779",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P03.T02/boundaries.json": {
+      "status": "fresh_observed",
+      "sha256": "a4bf713000d76b4f2700ad2d250e6c1c87946420a5946edba5af68030e56e723",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P03.T04/delivery.json": {
+      "status": "fresh_observed",
+      "sha256": "91eae94a73d0f9b485fa57ab8721eec651bfed3af6134c1fd3eb045d6f719b3e",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P04.T01a/synth.json": {
+      "status": "fresh_observed",
+      "sha256": "dd4eef9a5d021002eb4e886d9ef62c85cd1279188dfbba02cd678b0cab7b99cb",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P04.T01a/permissions.json": {
+      "status": "fresh_observed",
+      "sha256": "a52a63644d3bbd89a8b51238e5c32c0945f7785a40f7665692247c36b3476307",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P04.T01a/readiness.json": {
+      "status": "fresh_observed",
+      "sha256": "b8061dfe3884ff1d97782ffef11127c1f2d7865b9970d8b831fd8244698cb285",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P04.T01f/archive.json": {
+      "status": "fresh_observed",
+      "sha256": "281fa9bb88b5f0daaf07169346514dbc4c3259e0cdc83e85c3f7dda92fba186c",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P04.T01f/cleanup.json": {
+      "status": "fresh_observed",
+      "sha256": "c47fb45ae38c8b83201291b18a26432d6f28dee749dcad94f7d233ca193b8133",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/P03.T03/example.json": {
+      "status": "fresh_observed",
+      "sha256": "e001773426e5222702639fc851c1326628bd1bdcb8da02a1c331e605ae1e7453",
+      "filesystem_mode": "644"
+    },
+    "docs/evidence/index.json": {
+      "status": "fresh_observed",
+      "sha256": "f82553db160e603440cfc9c6325e3d9a0886749760a9be5d95119f667475f37d",
+      "filesystem_mode": "644"
+    }
+  }
+}

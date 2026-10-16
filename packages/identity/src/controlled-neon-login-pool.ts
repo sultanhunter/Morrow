@@ -12,6 +12,11 @@ import {
   type ControlledNeonProfile,
 } from "./controlled-neon-login-profiles.js";
 import {
+  controlledNeonWorkspaceProfiles,
+  snapshotControlledNeonWorkspaceParameters,
+  type ControlledNeonWorkspacePoolName,
+} from "./controlled-neon-workspace-profiles.js";
+import {
   createControlledNeonSocketClass,
   type NeonSocketConstructor,
   type NeonOwnedSocket,
@@ -59,8 +64,15 @@ export type ControlledNeonLoginPools = Readonly<
     Readonly<{ connect(control: Control): Promise<ControlledNeonLoginClient> }>
   >
 >;
+export type ControlledNeonWorkspacePools = Readonly<
+  Record<
+    ControlledNeonWorkspacePoolName,
+    Readonly<{ connect(control: Control): Promise<ControlledNeonLoginClient> }>
+  >
+>;
 type Counters = Record<string, number>;
 const metrics = new WeakMap<object, Record<ControlledNeonPoolName, Counters>>();
+const workspaceMetrics = new WeakMap<object, Record<ControlledNeonWorkspacePoolName, Counters>>();
 const time = (n: unknown): n is number =>
   typeof n === "number" && Number.isSafeInteger(n) && n >= 0 && n <= 8640000000000000;
 function control(value: unknown): Control {
@@ -150,11 +162,32 @@ export function snapshotControlledNeonLoginPoolMetrics(pools: unknown) {
     Object.fromEntries(Object.entries(value).map(([k, v]) => [k, Object.freeze({ ...v })])),
   );
 }
+export function snapshotControlledNeonWorkspacePoolMetrics(pools: unknown) {
+  const value =
+    typeof pools === "object" && pools !== null ? workspaceMetrics.get(pools) : undefined;
+  if (!value) throw controlledNeonHeld();
+  return Object.freeze(
+    Object.fromEntries(Object.entries(value).map(([k, v]) => [k, Object.freeze({ ...v })])),
+  );
+}
+function create(
+  dependencies: unknown,
+  synthetic: boolean,
+  ownedRequest?: OwnedRequest,
+  workspace?: false,
+): Promise<ControlledNeonLoginPools>;
+function create(
+  dependencies: unknown,
+  synthetic: false,
+  ownedRequest: OwnedRequest,
+  workspace: true,
+): Promise<ControlledNeonWorkspacePools>;
 async function create(
   dependencies: unknown,
   synthetic: boolean,
   ownedRequest?: OwnedRequest,
-): Promise<ControlledNeonLoginPools> {
+  workspace = false,
+): Promise<ControlledNeonLoginPools | ControlledNeonWorkspacePools> {
   try {
     const parentControl = () =>
       ownedRequest
@@ -212,21 +245,28 @@ async function create(
     };
     clock();
     const runtimeNow = performance.now.bind(performance);
-    const all = Object.fromEntries(
-      Object.keys(controlledNeonLoginProfiles).map((k) => [k, counters()]),
-    ) as Record<ControlledNeonPoolName, Counters>;
+    const profiles = workspace ? controlledNeonWorkspaceProfiles : controlledNeonLoginProfiles;
+    const all = Object.fromEntries(Object.keys(profiles).map((k) => [k, counters()])) as Record<
+      ControlledNeonPoolName | ControlledNeonWorkspacePoolName,
+      Counters
+    >;
     const pools = Object.freeze(
       Object.fromEntries(
-        Object.entries(controlledNeonLoginProfiles).map(([name, p]) => [
+        Object.entries(profiles).map(([name, p]) => [
           name,
           Object.freeze({
             connect: (input: Control) =>
-              connectOwned(p, input, all[name as ControlledNeonPoolName]),
+              connectOwned(
+                p,
+                input,
+                all[name as ControlledNeonPoolName | ControlledNeonWorkspacePoolName],
+              ),
           }),
         ]),
       ),
-    ) as ControlledNeonLoginPools;
-    metrics.set(pools, all);
+    ) as ControlledNeonLoginPools | ControlledNeonWorkspacePools;
+    if (workspace) workspaceMetrics.set(pools, all);
+    else metrics.set(pools, all);
     return pools;
 
     async function connectOwned(
@@ -273,7 +313,9 @@ async function create(
         hostname: b.hostname,
         database: b.database,
         role: profile.role,
-        purpose: "primary_and_one_same_role_observer",
+        purpose: workspace
+          ? "workspace_primary_and_one_same_role_observer"
+          : "primary_and_one_same_role_observer",
       });
       const check = (deadline = D, signal?: AbortSignal) => {
         const parent = parentControl();
@@ -685,7 +727,9 @@ async function create(
             try {
               if (releasing || inFlight) throw controlledNeonHeld();
               const c = control(supplied),
-                copied = snapshotControlledNeonParameters(profile, text, values),
+                copied = workspace
+                  ? snapshotControlledNeonWorkspaceParameters(profile, text, values)
+                  : snapshotControlledNeonParameters(profile, text, values),
                 deadline = Math.min(D, c.deadlineMs);
               check(deadline, c.signal);
               inFlight = true;
@@ -737,4 +781,16 @@ export const createWorkersRequestBoundNeonLoginPools = (
     dependencies,
     false,
     Object.freeze({ scope, ownerToken: expectedOwnerToken, configurationDigest }),
+  );
+export const createWorkersRequestBoundNeonWorkspacePools = (
+  dependencies: unknown,
+  scope: ManagedLoginRequestScope,
+  expectedOwnerToken: ManagedLoginRequestOwnerToken,
+  configurationDigest: string,
+) =>
+  create(
+    dependencies,
+    false,
+    Object.freeze({ scope, ownerToken: expectedOwnerToken, configurationDigest }),
+    true,
   );

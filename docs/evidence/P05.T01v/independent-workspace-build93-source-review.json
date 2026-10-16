@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 93,
+  "task": "P05.T01v",
+  "reviewer": "fixed_provider_https",
+  "result": "clear_for_source_review_of_ordinary_Worker_build_and_unbound_preview",
+  "source_review_clear": true,
+  "findings": [],
+  "authority": {
+    "page_sequence": 93,
+    "blocks": 571,
+    "packet_sha256": "e242b88586c84daf8d2126af4f2f0d3dbdec7321b1315abd5d0ce4c3eb1b13ec",
+    "plan_sha256": "eed8edf1af40d3d9114f0797e795623a2984ddbb70a8ef5a0072fcb5fc5bd321"
+  },
+  "reviewed_source_digests": {
+    "apps/api/package.json": "8fd2955e4b56719e64f5bdb105cd4937b8ad971c399c5b100a499d91d49715f0",
+    "scripts/preview-workspace-api.mjs": "0a67a3b63783874c89db2b7d336881374b805cbdc60f5260b8bd6f71a35f8db8",
+    "tests/workspace-api-build.test.mjs": "f60b51f9460756d7e2c8ef280f50406c542609287722121a1efc96461ef787c7"
+  },
+  "Core_root_package_build_slice": {
+    "frozen_path": "work/morrow-p01/workspace-build93-author-freeze/package.json",
+    "frozen_sha256": "d20b4ffa97a1bf814eda69f6377e7d6b4ca8796c6d7fe024f05c4544688071f8",
+    "current_source_package_sha256": "5e55c3af1957c978da9d342a25adda61742e2e7b7bcb7e6eaeadcf359358d947",
+    "before_reviewer_registration_byte_exact": true,
+    "old_Node_build_exact_prefix": true,
+    "Core_only_adds_worker_build_suffix_and_preview_script": true,
+    "exclusion": "Reviewer-authored current format/typecheck/two lab registrations are excluded from independent assurance; root independently reviews those."
+  },
+  "checks": [
+    "Full three current source files and frozen root-package build slice read; exact API package inverse to qualified91 contains only new build:worker; Core root-package inverse contains only old build suffix plus preview script. Dependencies, exports and original Node/scaffold build remain unchanged.",
+    "Actual browser ESM/ES2022 esbuild write:false test resolves the exact native Worker entry and exports default plus configured constructor; no Node server entry or runtime schema compiler is bundled. node:* externals require nodejs_compat; actual native execution remains separate.",
+    "Preview module import/help are inert; only explicit canonical bounded --port flag is accepted and host is fixed127.0.0.1. Artifact path, runtime version/date, no-account/no-service bindings and outbound503 are source-fixed.",
+    "Preview supported disposal is once-latched before await; concurrent signals/readiness failures join the same Promise, including rejected acknowledgement. No retry or success promotion occurs after disposal rejection.",
+    "CLI tracks stopping while startup/readiness pending, suppresses ready output after stop request, disposes a late-created runtime and removes its signal handlers. Readiness error remains held after cleanup; imported helper has no listener side effects.",
+    "Independent12-case CPU rerun used real browser bundling and actual source extracted inert runtime/signal logic. It did not construct Miniflare/workerd or a TCP listener."
+  ],
+  "verification": {
+    "command": "node --test --test-concurrency=1 tests/workspace-api-build.test.mjs",
+    "actual_exit_code": 0,
+    "tests": 12,
+    "passed": 12,
+    "failed": 0,
+    "start_chunk": "082a66",
+    "session_id": 26984,
+    "completion_chunk": "2b7f5e",
+    "log_path": "work/morrow-p01/independent-workspace-build93-units.log",
+    "log_sha256": "7586edef1eeda864ac2423c7ef76dafa358bd71e8b4478019160864e1e6b2e99",
+    "execution_receipt_sha256": "9e6753b64219e4ba0d0b1aca7932698bba9862f04450aa1b45e0202094cdb8d4"
+  },
+  "limitations": [
+    "This clears source/CPU review before the ordinary artifact preview probe; actual workerd import/readiness/default-denial/resource disposal remain unmeasured by this review.",
+    "Configured native factory, actual ctx, SQL/lifetime, real browser cookies, provider and deployment remain separate.",
+    "Whole current root package is not in reviewed_source_digests because this reviewer authored its later V05 registration slice."
+  ],
+  "effects": {
+    "Source_edits": 0,
+    "native_runtime_runs": 0,
+    "SQL_runs": 0,
+    "provider_calls": 0,
+    "preview_listener_starts": 0
+  }
+}

@@ -79,7 +79,7 @@ function fixture(t, absent = []) {
   return { base, sourceRoot, runnerTemp, options, service, head, originals, write, fresh };
 }
 
-test("fixed report inventory preserves37 fixed outputs and sixteen U regressions plus two U reports", () => {
+test("fixed report inventory preserves37 fixed outputs and eighteen V regressions plus two V reports", () => {
   const provenance = JSON.parse(
     readFileSync(
       new URL("../docs/evidence/P05.T01p/current-regressions/provenance.json", import.meta.url),
@@ -87,8 +87,10 @@ test("fixed report inventory preserves37 fixed outputs and sixteen U regressions
   );
   const prior = provenance.measurements.map((m) => m.original_path);
   const current = [
-    "lifetime-workers-lab.json",
-    "postgresql-workers-lab.json",
+    "workspace-api-workers.json",
+    "workspace-api-postgresql.json",
+    "regressions/managed-login-lifetime.json",
+    "regressions/managed-login-postgresql.json",
     "regressions/controlled-neon-workers.json",
     "regressions/controlled-neon-postgresql.json",
     ...[
@@ -107,10 +109,10 @@ test("fixed report inventory preserves37 fixed outputs and sixteen U regressions
       "login-flow-custody.json",
       "login-https-postgresql-lab.json",
     ].map((p) => "regressions/" + p),
-  ].map((p) => "docs/evidence/P05.T01u/" + p);
+  ].map((p) => "docs/evidence/P05.T01v/" + p);
   assert.equal(prior.length, 37);
   assert.deepEqual([...ciValidationReportPaths].sort(), [...prior, ...current].sort());
-  assert.equal(new Set(ciValidationReportPaths).size, 55);
+  assert.equal(new Set(ciValidationReportPaths).size, 57);
   assert.ok(
     ciValidationReportPaths.every(
       (p) => !/(?:history|actual-|local-validation|qualification|provenance)/.test(p),
@@ -165,7 +167,9 @@ test("new PostgreSQL producer follows the engine without changing the 42 older p
     "https_logout",
     "https_fixed_provider",
   ];
-  const ids = ciValidationCommands.map((c) => c.id);
+  const ids = ciValidationCommands
+    .map((c) => c.id)
+    .filter((id) => !["workers_workspace_api", "postgresql_workspace_api"].includes(id));
   assert.equal(ids.length, 46);
   assert.equal(new Set(ids).size, 46);
   assert.deepEqual(
@@ -203,6 +207,41 @@ test("new PostgreSQL producer follows the engine without changing the 42 older p
     "workers_managed_login_lifetime",
     "workers_identity",
   ]);
+});
+
+test("two workspace API producers extend the unchanged46 serial commands at their fixed owner positions", () => {
+  const ids = ciValidationCommands.map((c) => c.id);
+  assert.equal(ids.length, 48);
+  assert.equal(new Set(ids).size, 48);
+  assert.deepEqual(
+    ids.slice(
+      ids.indexOf("workers_managed_login_lifetime"),
+      ids.indexOf("workers_managed_login_lifetime") + 3,
+    ),
+    ["workers_managed_login_lifetime", "workers_workspace_api", "workers_identity"],
+  );
+  assert.deepEqual(ids.slice(ids.indexOf("sql_engine"), ids.indexOf("sql_engine") + 5), [
+    "sql_engine",
+    "postgresql_controlled_neon",
+    "postgresql_managed_login",
+    "postgresql_workspace_api",
+    "sql_operations",
+  ]);
+  assert.equal(
+    ciValidationCommands.find((c) => c.id === "workers_workspace_api").run,
+    "npm run lab:workspace-api-workers",
+  );
+  assert.equal(
+    ciValidationCommands.find((c) => c.id === "postgresql_workspace_api").run,
+    "npm run lab:workspace-api-postgresql",
+  );
+  // Four fixed archive payloads are manifest plus three exact source snapshots.
+  assert.equal(ciValidationReportPaths.length + 4, 61);
+  // The existing workflow has five explicit non-producer steps and GitHub adds
+  // four setup/post-job API steps. This is configured inventory, not a run result.
+  const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+  assert.equal((workflow.match(/^      - (?:name|uses):/gm) ?? []).length, 53);
+  assert.equal(ids.length + 5 + 4, 57);
 });
 
 test("workflow gives each original command a unique serial step and binds exact PR head/artifact action", () => {
@@ -244,7 +283,7 @@ test("workflow gives each original command a unique serial step and binds exact 
 
 test("prepare removes every stale output before tests, leaves auxiliary inputs, then restores exact originals", (t) => {
   const f = fixture(t);
-  assert.deepEqual(f.service.prepare(), { status: "prepared", reportCount: 55 });
+  assert.deepEqual(f.service.prepare(), { status: "prepared", reportCount: 57 });
   const stateText = readFileSync(join(f.service.runRoot, "preparation.json"), "utf8");
   const state = JSON.parse(stateText);
   assert.equal(state.status, "prepared");
@@ -284,7 +323,7 @@ test("fresh full evidence captures exact JSON/snapshots and still awaits final e
   assert.equal(result.manifest.testedHead, f.head);
   assert.equal(result.manifest.sourceStable, true);
   assert.equal(result.manifest.designatedOutputsRestored, true);
-  assert.equal(result.manifest.reports.length, 55);
+  assert.equal(result.manifest.reports.length, 57);
   assert.ok(result.manifest.commands.every((c) => c.actualExitCode === null));
   assert.ok(result.manifest.reports.every((r) => r.status === "fresh_pending_external_validation"));
   for (const r of result.manifest.reports)

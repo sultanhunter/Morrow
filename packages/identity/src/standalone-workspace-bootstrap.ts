@@ -119,6 +119,21 @@ async function readBootstrap(
   }
 }
 
+// Private same-guard callback; the unchanged SQL owner and disposal path above
+// are shared by legacy and managed request entries.
+export async function executeStandaloneWorkspaceBootstrap(
+  pool: StandaloneWorkspaceSqlPool,
+  context: Readonly<GuardedStandaloneRequest>,
+): Promise<Response> {
+  try {
+    return standaloneJson(200, await readBootstrap(pool, context));
+  } catch (error) {
+    if (error instanceof IdentityAccessError && error.code === "IDENTITY_DENIED")
+      return standaloneJson(401, { code: "authentication_required" });
+    return standaloneJson(503, { code: "unavailable" });
+  }
+}
+
 export function createStandaloneWorkspaceBootstrap(
   dependencies: StandaloneWorkspaceBootstrapDependencies,
 ) {
@@ -128,13 +143,7 @@ export function createStandaloneWorkspaceBootstrap(
   return Object.freeze({
     fetch(request: Request): Promise<Response> {
       return guard.handle(request, "bootstrap", async (context) => {
-        try {
-          return standaloneJson(200, await readBootstrap(pool, context));
-        } catch (error) {
-          if (error instanceof IdentityAccessError && error.code === "IDENTITY_DENIED")
-            return standaloneJson(401, { code: "authentication_required" });
-          return standaloneJson(503, { code: "unavailable" });
-        }
+        return executeStandaloneWorkspaceBootstrap(pool, context);
       });
     },
   });

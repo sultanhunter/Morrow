@@ -1,6 +1,72 @@
 import { createControlledWorkspaceStoreLinking } from "./workspace-store-linking-control.js";
-import { createStandaloneRequestGuard, standaloneJson } from "./standalone-request-guard.js";
+import {
+  createStandaloneRequestGuard,
+  standaloneJson,
+  type GuardedStandaloneRequest,
+} from "./standalone-request-guard.js";
 import type { StandaloneWorkspaceBootstrapDependencies } from "./standalone-workspace-bootstrap.js";
+
+export type StandaloneStoreLinkingRoute = "preview" | "apply" | "status";
+
+// Captured once for each owning construction. Legacy callers retain their
+// original shared service; managed callers supply their request-bound pool.
+export function createStandaloneStoreLinkingExecution(
+  dependencies: StandaloneWorkspaceBootstrapDependencies,
+) {
+  const service = createControlledWorkspaceStoreLinking({
+    pool: dependencies.pool,
+    now: dependencies.now,
+  });
+  return Object.freeze({
+    async execute(
+      route: StandaloneStoreLinkingRoute,
+      context: Readonly<GuardedStandaloneRequest>,
+    ): Promise<Response> {
+      const selector = JSON.stringify({
+        sessionDigest: context.sessionDigest,
+        workspaceId: context.workspaceId,
+        nonceDigest: context.nonceDigest,
+        commandId: context.commandId,
+      });
+      try {
+        if (route === "status") {
+          const result = await context.wait(service.status(selector, context.control));
+          context.check();
+          return result
+            ? standaloneJson(200, { schemaVersion: 1, ...result })
+            : standaloneJson(404, { code: "linking_not_found" });
+        }
+        const input = await context.wait(service.lookup(selector, context.control));
+        context.check();
+        if (!input) return standaloneJson(404, { code: "linking_not_found" });
+        if (route === "preview") {
+          return standaloneJson(200, {
+            schemaVersion: 1,
+            link: {
+              installationId: input.installationId,
+              purpose: input.purpose,
+              expectedPolicyRevision: input.expectedPolicyRevision,
+              expectedOwnershipRevision: input.expectedOwnershipRevision,
+            },
+            csrfToken: context.csrfToken,
+          });
+        }
+        const result = await context.wait(service.apply(JSON.stringify(input), context.control));
+        context.check();
+        if (result.outcome === "applied")
+          return standaloneJson(200, { schemaVersion: 1, ...result });
+        return standaloneJson(result.outcome === "conflict" ? 409 : 403, {
+          schemaVersion: 1,
+          outcome: result.outcome,
+        });
+      } catch {
+        return route === "apply"
+          ? standaloneJson(503, { schemaVersion: 1, outcome: "outcome_unknown" })
+          : standaloneJson(503, { code: "unavailable" });
+      }
+    },
+  });
+}
 
 // HTTP supplies only an opaque nonce and immutable command key. All authority,
 // target, proof and review fields are obtained from the private SQL boundary.
@@ -8,13 +74,10 @@ export function createStandaloneStoreLinking(
   dependencies: StandaloneWorkspaceBootstrapDependencies,
 ) {
   const guard = createStandaloneRequestGuard(dependencies.configurationJson, dependencies.now);
-  const service = createControlledWorkspaceStoreLinking({
-    pool: dependencies.pool,
-    now: dependencies.now,
-  });
+  const execution = createStandaloneStoreLinkingExecution(dependencies);
   return Object.freeze({
     async fetch(request: Request): Promise<Response> {
-      let route: "preview" | "apply" | "status";
+      let route: StandaloneStoreLinkingRoute;
       try {
         const path = new URL(request.url).pathname;
         route = path.endsWith("/preview")
@@ -25,50 +88,7 @@ export function createStandaloneStoreLinking(
       } catch {
         return standaloneJson(400, { code: "invalid_request" });
       }
-      return guard.handle(request, route, async (context) => {
-        const selector = JSON.stringify({
-          sessionDigest: context.sessionDigest,
-          workspaceId: context.workspaceId,
-          nonceDigest: context.nonceDigest,
-          commandId: context.commandId,
-        });
-        try {
-          if (route === "status") {
-            const result = await context.wait(service.status(selector, context.control));
-            context.check();
-            return result
-              ? standaloneJson(200, { schemaVersion: 1, ...result })
-              : standaloneJson(404, { code: "linking_not_found" });
-          }
-          const input = await context.wait(service.lookup(selector, context.control));
-          context.check();
-          if (!input) return standaloneJson(404, { code: "linking_not_found" });
-          if (route === "preview") {
-            return standaloneJson(200, {
-              schemaVersion: 1,
-              link: {
-                installationId: input.installationId,
-                purpose: input.purpose,
-                expectedPolicyRevision: input.expectedPolicyRevision,
-                expectedOwnershipRevision: input.expectedOwnershipRevision,
-              },
-              csrfToken: context.csrfToken,
-            });
-          }
-          const result = await context.wait(service.apply(JSON.stringify(input), context.control));
-          context.check();
-          if (result.outcome === "applied")
-            return standaloneJson(200, { schemaVersion: 1, ...result });
-          return standaloneJson(result.outcome === "conflict" ? 409 : 403, {
-            schemaVersion: 1,
-            outcome: result.outcome,
-          });
-        } catch {
-          return route === "apply"
-            ? standaloneJson(503, { schemaVersion: 1, outcome: "outcome_unknown" })
-            : standaloneJson(503, { code: "unavailable" });
-        }
-      });
+      return guard.handle(request, route, (context) => execution.execute(route, context));
     },
   });
 }

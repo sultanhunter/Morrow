@@ -38,6 +38,9 @@ jobs:
       - name: Managed login native request lifetime
         id: workers_managed_login_lifetime
         run: npm run lab:managed-login-lifetime-workers
+      - name: Exercise configured native workspace API and request-owned lifetime
+        id: workers_workspace_api
+        run: npm run lab:workspace-api-workers
       - name: Exercise identity and validators in the local Workers runtime
         id: workers_identity
         run: npm run lab:workers
@@ -99,6 +102,9 @@ jobs:
       - name: Managed login cross-isolate PostgreSQL continuity
         id: postgresql_managed_login
         run: npm run lab:managed-login-postgresql
+      - name: Exercise same-entry seven-role workspace API PostgreSQL journey
+        id: postgresql_workspace_api
+        run: npm run lab:workspace-api-postgresql
       - name: Exercise isolated PostgreSQL operations
         id: sql_operations
         run: npm run lab:operations

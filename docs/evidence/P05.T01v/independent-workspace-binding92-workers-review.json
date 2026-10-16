@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01v",
+  "current_plan_sequence": 92,
+  "reviewer": "/root/fixed_provider_workers",
+  "result": "clear_for_bounded_source_and_CPU_integration_review",
+  "blocking_findings": [],
+  "reviewed_source_digests": {
+    "packages/identity/src/standalone-logout.ts": "bbc3a6dded423cd80da226a34215b5963b3f18403483d0178bec49c4617a8850",
+    "packages/identity/src/managed-workspace-binding.ts": "9f7f9d788091dcc44788f0dd2a1966ed3f53209cbd1d85d8dd684f2557e55796",
+    "tests/managed-workspace-binding.test.mjs": "72a59630a1efac5e4e5e21c037307e762f552c59e53b13628c02a3a9c9a08119"
+  },
+  "baseline_logout_sha256": "8f1c55a0daf244ebff842355be0c581c477c2ceb4710774a5236478282f983e8",
+  "author_receipt_sha256": "270f303b51f65a66dd7405285a964ed2b0db4a9bee4553d4e8b471187b049231",
+  "reviewed_properties": [
+    "Synchronous application capture retains only frozen primitive configuration strings/origin, rejects bounded closed-record/duplicate/UTF/selector drift before hashing, and has no broker/provider/keyring or pending request state.",
+    "All existing WorkOS client/environment/application/profile and HTTPS origin relationships are cross-matched, with direct Neon tuple grammar and explicit trailing-line-terminator rejection; the owning validators still run under the original request attempt.",
+    "Resolution uses controlled login parser, controlled logout parser and exact saved app digest transcript in four real hash stages. Checks precede hash creation and surround waits; rejection sinks cover already-created late work. No second budget, end call or pending cache is introduced.",
+    "Original logout configuration purpose and ordered digest transcript, cookie capture/CSRF/body validation, response headers/no-cookie plan, same-stack sink rules and service request transcript remain unchanged.",
+    "Normalized common logout core is AST-exact to baseline dispatch after reversing only the source-owned legacy/provided-attempt selector, managed precrypto checks and legacy-only end guard. Managed supplied attempt is never ended or renewed there.",
+    "Unknown after invoked effect and transport-abort withholding behavior remain the original source logic; cleanup acknowledgement is still awaited by unchanged owner, not inferred from P settlement."
+  ],
+  "independent_checks": [
+    {
+      "command": "pinned Node24.13.0 --import tsx --test --test-concurrency=1 tests/managed-workspace-binding.test.mjs tests/standalone-logout.test.mjs",
+      "actual_exit_code": 0,
+      "tests": 101,
+      "new_tests": 36,
+      "old_tests": 65,
+      "tool_chunk": "ba1bd9"
+    },
+    {
+      "command": "pinned Node24.13.0 work/review-workspace92-logout-ast.mjs",
+      "actual_exit_code": 0,
+      "guards": 16,
+      "helper_sha256": "00b69afc5791c627dc9b88e6ae69a0250dbd3a85fd55b84a558b929291fc98a4",
+      "tool_chunk": "1d4d6e",
+      "first_checker_hold": "Initial outside AST comparison mixed baseline node positions with current-source printing and emitted an incorrect numeric token. Original checker bytes are preserved at workspace92-logout-ast-first-check.mjs. A synthetic AST numeric literal fixed only the checker; reviewed Source stayed unchanged."
+    }
+  ],
+  "limitations": [
+    "Independent review of other-author binding/logout code and focusedCPU behavior only; no actual Worker lifetime, PostgreSQL, browser, provider, account, deployment or all-source CI verdict.",
+    "Root application orchestration WIP and Core pool/guard changes are outside this review. Strict types were author-reported0; this reviewer independently reran the focusedCPU/AST checks, not a moving whole-package typecheck.",
+    "No Page, Source, Git, runtime, provider or credential effect occurred. Only new outside review/proof files were written."
+  ]
+}

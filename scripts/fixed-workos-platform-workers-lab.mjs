@@ -6,8 +6,8 @@ import { createPlatformWorkosProviderOracle } from "./fixtures/fixed-workos-plat
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 if (process.version !== "v24.13.0") throw Error("PINNED_NODE_REQUIRED");
-if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 91)
-  throw Error("CURRENT91_REQUIRED");
+if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 93)
+  throw Error("CURRENT93_REQUIRED");
 const paths = [
   "packages/identity/src/fixed-workos-login-port.ts",
   "packages/identity/src/standalone-login.ts",
@@ -31,6 +31,7 @@ const paths = [
   "docs/packets/P05.T01s.md",
   "docs/packets/P05.T01t.md",
   "docs/packets/P05.T01u.md",
+  "docs/packets/P05.T01v.md",
   "docs/packets/P05.T01r.md",
   "package.json",
   "package-lock.json",
@@ -375,7 +376,7 @@ for (const [path, digest] of Object.entries(sourceDigests)) {
 }
 const report = {
   task: "P05.T01s",
-  current_plan_sequence: 91,
+  current_plan_sequence: 93,
   status: failure ? "held" : "passed",
   failure,
   qualification:
@@ -425,8 +426,8 @@ const report = {
 const text = JSON.stringify(report, null, 2) + "\n";
 for (const secret of secrets)
   if (secret && text.includes(secret)) throw Error("REPORT_SECRET_FENCE_HELD");
-mkdirSync("docs/evidence/P05.T01u/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01u/regressions/platform-workers-lab.json", text, {
+mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
+writeFileSync("docs/evidence/P05.T01v/regressions/platform-workers-lab.json", text, {
   flag: "wx",
 });
 if (failure) {

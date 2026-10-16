@@ -121,6 +121,7 @@ const paths = [
   "docs/packets/P05.T01s.md",
   "docs/packets/P05.T01t.md",
   "docs/packets/P05.T01u.md",
+  "docs/packets/P05.T01v.md",
   "docs/packets/P05.T01o.md",
   "docs/packets/P05.T03b.md",
   "scripts/standalone-workspace-workers-lab.mjs",
@@ -130,7 +131,7 @@ const paths = [
   "package-lock.json",
 ];
 const sourceDigests = Object.fromEntries(paths.map((path) => [path, hash(readFileSync(path))]));
-assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 91);
+assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 93);
 const bundled = await build({
   entryPoints: ["scripts/fixtures/standalone-workspace-worker.ts"],
   bundle: true,
@@ -178,7 +179,7 @@ try {
     assert.equal(hash(readFileSync(path)), digest, "Source changed during qualification: " + path);
   const report = {
     task: "P05.T01o",
-    canonicalSequence: 91,
+    canonicalSequence: 93,
     qualification:
       "actual_local_workerd_Fetch_WebCrypto_with_synthetic_SQL_and_independent_native_HMAC_oracle",
     compatibilityDate: "2026-07-30",
@@ -198,8 +199,8 @@ try {
   const publicText = JSON.stringify(report, null, 2) + "\n";
   for (const privateValue of [secret, token, hash(secret), hash(token), csrf])
     assert.ok(!publicText.includes(privateValue));
-  mkdirSync("docs/evidence/P05.T01u/regressions", { recursive: true });
-  writeFileSync("docs/evidence/P05.T01u/regressions/standalone-workspace-workers.json", publicText);
+  mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
+  writeFileSync("docs/evidence/P05.T01v/regressions/standalone-workspace-workers.json", publicText);
   console.log(
     `PASS: ${cases.length} standalone workspace Workers cases; ${result.checks.length} checks; zero outbound requests.`,
   );

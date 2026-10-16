@@ -25,14 +25,14 @@ const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const held = () => Error("MANAGED_LOGIN_POSTGRESQL_HELD");
 if (
   process.version !== "v24.13.0" ||
-  JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 91
+  JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 93
 )
   throw held();
 const args = process.argv.slice(2);
 if (args.length > 1 || (args.length && !/^--attempt=[a-z][a-z0-9-]{0,31}$/.test(args[0])))
   throw held();
 const reportPath =
-  "docs/evidence/P05.T01u/postgresql-workers-lab" +
+  "docs/evidence/P05.T01v/regressions/managed-login-postgresql" +
   (args.length ? "-" + args[0].slice(10) : "") +
   ".json";
 if (existsSync(reportPath)) throw Error("MANAGED_LOGIN_IMMUTABLE_REPORT_EXISTS");
@@ -57,6 +57,7 @@ const paths = [
   "infra/identity-logout-role-prerequisites.sql",
   "migrations/manifest.json",
   "docs/packets/P05.T01u.md",
+  "docs/packets/P05.T01v.md",
   "docs/plan/build-plan.md",
   "docs/plan/source.json",
   "package.json",
@@ -1175,7 +1176,7 @@ for (const [path, digest] of Object.entries(sourceDigests))
 const report = {
   schema_version: 1,
   task: "P05.T01u",
-  current_plan_sequence: 91,
+  current_plan_sequence: 93,
   status: failure || cleanupFailures.length ? "held" : "passed",
   scope:
     "independent_managed_Workers_capsule_keys_real_PostgreSQL17_fixed_four_role_native_transport",
@@ -1215,7 +1216,7 @@ const report = {
 const text = JSON.stringify(report, null, 2) + "\n";
 if (privateMarkers.some((marker) => marker && text.includes(marker)))
   throw Error("MANAGED_LOGIN_PG_SECRET_FENCE");
-mkdirSync("docs/evidence/P05.T01u", { recursive: true });
+mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
 writeFileSync(reportPath, text, { flag: "wx" });
 process.stdout.write(
   JSON.stringify({

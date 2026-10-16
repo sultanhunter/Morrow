@@ -51,6 +51,7 @@ const sourcePaths = [
   "docs/packets/P05.T01s.md",
   "docs/packets/P05.T01t.md",
   "docs/packets/P05.T01u.md",
+  "docs/packets/P05.T01v.md",
   "docs/plan/build-plan.md",
   ...JSON.parse(readFileSync("migrations/manifest.json", "utf8"))
     .migrations.slice(0, 9)
@@ -58,7 +59,7 @@ const sourcePaths = [
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
-if (plan.sources.plan.sequence !== 91) throw Error("LINKING_READ_PLAN_REQUIRED");
+if (plan.sources.plan.sequence !== 93) throw Error("LINKING_READ_PLAN_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 if (manifest.migrations.length < 9) throw Error("LINKING_READ_MIGRATIONS_REQUIRED");
 const migrations = manifest.migrations.slice(0, 9).map((m) => {
@@ -843,7 +844,7 @@ check(
 );
 const report = {
   packet: "P05.T03b",
-  canonicalSequence: 91,
+  canonicalSequence: 93,
   scope:
     "controlled owner-seeded synthetic store-linking read boundaries with fresh independently signed owning76 evidence and actual M-family admission",
   providerCalls: 0,
@@ -864,9 +865,9 @@ const report = {
 };
 if (new Set(checks.map((x) => x.name)).size !== checks.length)
   throw Error("LINKING_READ_DUPLICATE_CHECK");
-mkdirSync("docs/evidence/P05.T01u/regressions", { recursive: true });
+mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
 writeFileSync(
-  "docs/evidence/P05.T01u/regressions/workspace-linking-read.json",
+  "docs/evidence/P05.T01v/regressions/workspace-linking-read.json",
   JSON.stringify(report, null, 2) + "\n",
 );
 console.log(

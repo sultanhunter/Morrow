@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01v",
+  "current_plan_sequence": 92,
+  "reviewer": "fixed_provider_core",
+  "source_review_clear": true,
+  "result": "clear_for_private_shared_guard_and_workspace_owner_source_and_focused_CPU_evidence",
+  "reviewed_source_digests": {
+    "packages/identity/src/standalone-request-guard.ts": "36b709e8a055b1befe89cd5f955cda36939a49973d17b8f4c19b81f862fd5e4e",
+    "packages/identity/src/standalone-workspace-bootstrap.ts": "84a4a438e017c46b1ce280c46ec5eaa467cf9f369fca05ba6456c95eb22bacf3",
+    "packages/identity/src/standalone-store-linking.ts": "ac8942d457b9a588c860997d81d7dd24c4b1e7a124f63aa1365079b14235ba3d",
+    "tests/managed-workspace-request.test.mjs": "d332cec708c4dbe1180f63772579b1e37253bf75ae7b498f00c5706038d751a3"
+  },
+  "blocking_findings": [],
+  "baseline_commit": "b88f9fe2c8f072864742f163359376b1f3910f71",
+  "canonical_page_block_count": 568,
+  "review_scope": [
+    "One managed original5000ms LoginAttempt supplied to same private validation/execution core; outer managed fetch remains responsible for end.",
+    "Shared sticky clock/legacy transport,cookie,route,CSRF/status behavior and mutation-unknown classification retained.",
+    "Managed crypto preinvocation checks, real HMAC derivation, owned input/result wipe and late rejection sinks, no work after expiry.",
+    "Bootstrap readBootstrap/withIdentityRead callback and asynchronous disposal unchanged.",
+    "Linking selector/domain callback retained with one captured legacy service and separate source-private request-bound execution constructor."
+  ],
+  "structural_proof": {
+    "path": "work/morrow-p01/independent-workspace-guard92-preservation-complete.json",
+    "sha256": "d165e609702e25f174055ed6199765b52e8428d22262620c2443ce9db93c185b",
+    "exact_retained_bodies": [
+      "standaloneJson",
+      "hex",
+      "base64url",
+      "secretBytes",
+      "configuration",
+      "cookieSecret",
+      "routePath",
+      "bodyText",
+      "readBootstrap",
+      "linking_guard_callback_to_execute",
+      "shared_sticky_clock",
+      "entire_policy_execution_core_after_four_crypto_seam_replacements",
+      "legacy_attempt_setup_wait_control",
+      "legacy_outer_catch_finally"
+    ],
+    "method": "TypeScript AST/leaf-literal comparison for moved callback and complete policy core after four explicit crypto expression replacements; byte-exact original lifecycle/functions otherwise.",
+    "complete_AST_actual_exit_code": 0,
+    "complete_AST_owning_chunk": "dcd350",
+    "helper_sha256": "87eb3ae8b9c067b5a876da2eb703b1aa4bf843461f62077127dad2c5005db0d2"
+  },
+  "actual_cpu_evidence": {
+    "command": "node --import tsx --test --test-concurrency=1 tests/managed-workspace-request.test.mjs tests/standalone-workspace-bootstrap.test.mjs tests/workspace-store-linking-control.test.mjs",
+    "node_version": "24.13.0",
+    "initial_chunk": "04a12f",
+    "session_id": 17986,
+    "completion_chunk": "37465c",
+    "exit_code": 0,
+    "tests": 123,
+    "pass": 123,
+    "fail": 0,
+    "log": "/private/tmp/morrow92-independent-guard-core.log",
+    "log_sha256": "c43ba0642324c23b07d9bec8c0e7e89d31046c84fc346d7f03589e48809c1fc2"
+  },
+  "actual_typecheck": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "es2022",
+    "strict": true,
+    "skipLibCheck": true,
+    "initial_chunk": "4720fb",
+    "session_id": 18972,
+    "exit_code": 0,
+    "log": "/private/tmp/morrow92-independent-guard-types-bundler.log",
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "completion_chunk": "c70d45"
+  },
+  "retained_inspection_errors": [
+    {
+      "kind": "outside proof first byte comparison rejected moved callback indentation; replaced by exact parsed AST/literal comparison",
+      "actual_exit_code": 1,
+      "chunk": "3df4ef",
+      "source_effect": false
+    },
+    {
+      "kind": "outside proof plain scanner lacks parser template/regexp context; replaced by parsed AST/literal comparison",
+      "actual_exit_code": 1,
+      "chunk": "9f919e",
+      "source_effect": false
+    },
+    {
+      "kind": "first direct typecheck used nodenext instead of repository bundler resolver; contracts extension resolution held; corrected flags only",
+      "actual_exit_code": 2,
+      "completion_chunk": "4deda7",
+      "log_sha256": "e6a3ae73f3767fcd189e4a20afb6076f578322590898a17ae9a2ee3243e947cb",
+      "source_effect": false
+    },
+    {
+      "kind": "outside helper traversal Array.push return fixed to void full recursion before final review delivery",
+      "prior_proof_retained": true,
+      "source_effect": false
+    }
+  ],
+  "limits": [
+    "Independent of root authoring; my workspace-profile/pool modules are excluded from this source verdict.",
+    "CPU source/compatibility only; no actual configured native app, PostgreSQL, browser, provider, deployment or merchant qualification.",
+    "No Source edits, fullCI/report generation, network, runtime, account, credential or Git effects."
+  ],
+  "supersedes_inspection_receipt": {
+    "path": "work/morrow-p01/independent-workspace-request92-source-review.json",
+    "sha256": "d32078d1d89052ebc45ee5ced091a62e809f4b271480613666ede4315d287657",
+    "reason": "Outside helper traversal callback returned Array.push numeric truthy; changed to void block and reran full recursive AST comparison. Manual source reading and all CPU/type results unchanged."
+  }
+}

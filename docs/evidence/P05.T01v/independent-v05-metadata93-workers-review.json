@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 93,
+  "reviewer": "fixed_provider_workers",
+  "result": "clear_for_configured_local_V05_metadata_and_CI_registration",
+  "blocking_findings": [],
+  "author_receipt_sha256": "5617b2b939025b282a1f9c923f2e823f5fc3d0545185ab77daa39edf1240768e",
+  "reviewed_H_freeze_digests": {
+    "scripts/controlled-neon-postgresql-lab.mjs": "227ca55887bada524c0c6c76725c2baeead89f8d94a2ea770dc5fa7e294ba1fb",
+    "scripts/controlled-neon-workers-lab.mjs": "9bbf5641d3dbf9fd540e8137e654de98762309d8db1b15f92828aeb29dff29c3",
+    "scripts/fixed-workos-platform-workers-lab.mjs": "bdd01eba1cab0ec3bf7ccb76082e6f37f418337bc852ab2da844682594eac45a",
+    "scripts/fixed-workos-login-workers-lab.mjs": "ed51ea231197c0ebab16a7a00c68e9a8992d10e0eb0fc5f71b9f4b573e2d6193",
+    "scripts/fixed-workos-login-https-lab.mjs": "99b8e49c38477b5c28713ab773bd1a21ab247d4f22b19d22fa00c69f31d7c461",
+    "scripts/standalone-login-workers-lab.mjs": "b68894cb5be5a632427d2a0cfae4b3fb5eb3d5de07cb1064e1f4c7cff908c811",
+    "scripts/standalone-login-https-lab.mjs": "a7bc8ec88fde2af2e88890d4786c6014027a222036faad8f9846d5482ccd1436",
+    "scripts/standalone-logout-workers-lab.mjs": "d853f2f2d05367f95b6de57e5a7fe752e227b819eb75dd258b39aebbaf196efe",
+    "scripts/self-logout-sql-lab.mjs": "fa8e22cfeec92a1aacbcc156b32ccb21092d18b8b56f67d9aea87db5973612ea",
+    "scripts/standalone-logout-https-lab.mjs": "94edb78db15638698652f3c4be122e985a1ea04e5259cb898daf929ea0f067ee",
+    "scripts/standalone-workspace-workers-lab.mjs": "75c307f1f6b35588c46148fc068b700d592f1889c2e9c5ba22cc059d08f10c7a",
+    "scripts/standalone-workspace-http-lab.mjs": "6e62f181c8b551203f1ea9a68a6f52814aeda3c699c040e070027dd00da433c3",
+    "scripts/standalone-store-linking-workers-lab.mjs": "93ceb7254e9196857cedcd55e2a5c196c86df385775d7973f7379867ddfc8ea6",
+    "scripts/standalone-store-linking-http-lab.mjs": "0da6613d057e8a16cbf23721b8b0dd77c66ef6d25fe11cc3b663033931d8f2e9",
+    "scripts/workspace-store-linking-read-lab.mjs": "99d14d12a48e4964a01f63f7302e1fc26f6dad34fb6b2222faa1b88210d6fba6",
+    "scripts/login-flow-custody-lab.mjs": "cea450b50693ef620c1ccb9f0be1a367fa53cbca6a23ebe2db777acad5f273e1",
+    "scripts/managed-login-lifetime-workers-lab.mjs": "cc2c58160a6fbc209a0695d3c13565e46ff33813337fce8acee62343ad3140a3",
+    "scripts/managed-login-postgresql-lab.mjs": "9f77ef92b4a8b930a1757e5489a5d39dcc2a4f0b275c622316472ecd00e41c32",
+    "scripts/ci-validation-evidence.mjs": "dbebd7507c2fe1a865fbef64cfca0c0b1a817fe96325666cd386ad4e11966a5a",
+    "tests/ci-validation-evidence.test.mjs": "13c38779bbc786f5b749f9334e48702cac77d3c90c97787e277e04caff8357c0",
+    ".github/workflows/ci.yml": "1c40d2f730f3d80151a7bd5cdbff0f21d64f71a7e9ca2ff384dfac5e1d068909",
+    "package.json": "5e55c3af1957c978da9d342a25adda61742e2e7b7bcb7e6eaeadcf359358d947"
+  },
+  "reviewed_current_root_package_sha256": "04bfaa87ef08d517be038412ed6a210234791c9141bb4f3f22dffc0bba645a4a",
+  "outside_proof_digests": {
+    "work/verify-v05-metadata93.mjs": "b70f2556514482f48dc3c4c89a9481ef0b76de57abab44c67bf4e9fa2bad1e3b",
+    "work/verify-v05-metadata93-independent-workers.mjs": "f321581bcdb5ebb4f7ce801a4c4ba1e857e921e00ac065ae2164876e13312a10",
+    "work/morrow-p01/v05-metadata93-independent-workers-source-proof.json": "8911df2f5926f89113d816b18c347ec1f810260ca1902214f935afc99d6ef4ec",
+    "work/morrow-p01/v05-metadata93-independent-workers-extra-proof.json": "cec1f865af70017eea35fdd4378498e408d96b0e298799698a147005488a28ec"
+  },
+  "independent_checks": [
+    {
+      "tool_chunk": "ad2aed",
+      "actual_exit": 0,
+      "kind": "Reviewed author verifier reused only with new exclusive outside target; all18 metadata inverse/completeAST checks,900 records+exact index,collector/workflow byte inverses passed. Original proof preserved."
+    },
+    {
+      "tool_start": "8ba0e4",
+      "session_id": 6352,
+      "tool_completion": "2adb16",
+      "actual_exit": 0,
+      "tests": 16,
+      "kind": "Collector inert controls on isolated temporary fixture trees; no Source/GitPublisher/report/runtime effects."
+    },
+    {
+      "tool_chunk": "2e7f22",
+      "actual_exit": 0,
+      "kind": "Independent fixed baseline binding for all21 original paths,22 frozen current hash checks,package exact inverse and root single test-format registration."
+    }
+  ],
+  "source_observations": [
+    "Every18 runner complete AST matches its metadata-adjusted preformat source; reversing only the explicit current sequence/output/guard and one active packet commitment recreates qualified91 bytes. Original task tags and callbacks/cases/assertions remain exact.",
+    "Old U packet source commitment remains; V packet is additive. Source hash loops may produce one new observation; achieved current check counts must be read from actual future reports.",
+    "Collector core recreates qualified91 exactly after two fixed producer additions and current metadata reversal. Forty-six prior producer commands retain order. New native follows prior managed lifetime, new SQL follows prior managed PostgreSQL, with pinned engine adjacency retained.",
+    "Configured inventory derives48commands/57freshreports/61archivepayloads/53explicitworkflowsteps plus4GitHubautomatic steps=57API. Every producer has one serial id/run; exact-head/action pins/quarantine/restoration behavior unchanged.",
+    "H package delta is exact after restoring two lab commands,one strict fixture registration and11 format:check paths. format was already complete in captured Core package. Root later added only one SQL focused test to format:check; separately inverse-proven. Core build/preview and dependencies retained.",
+    "All900 historical records plus index bytes and modes match qualified91. Tests produce only temporary inert fixtures; no producer/reporting CLI was run."
+  ],
+  "limitations": [
+    "Configured source/CPU qualification only; no achieved native/SQL/fullCI/GitHub/artifact/hosted status follows.",
+    "This reviewer authored new native runner/Worker/oracle; those bodies are excluded from independent approval in this metadata review.",
+    "Actual source-map loop counts and all provider/cleanup/domain outcomes still require fresh reports and independent domain review."
+  ],
+  "effects": {
+    "Source_writes": 0,
+    "public_evidence_writes": 0,
+    "provider_actions": 0,
+    "database_runs": 0,
+    "native_runtime_runs": 0,
+    "GitPublisher_or_Desktop_mutations": 0
+  }
+}

@@ -64,6 +64,15 @@ const roles = Object.freeze([
   "morrow_identity_resolution",
   "morrow_identity_sessions",
 ]);
+const loginProfile = Object.freeze({ roles });
+const workspaceProfile = Object.freeze({
+  roles: Object.freeze([
+    ...roles,
+    "morrow_api",
+    "morrow_identity_linking",
+    "morrow_identity_logout",
+  ]),
+});
 const held = () => Error("CONTROLLED_NEON_POSTGRESQL_HELD");
 const require = (value) => {
   if (!value) throw held();
@@ -182,6 +191,14 @@ async function authenticationProbe(target, user) {
   });
 }
 export async function controlledNeonPostgresqlLab(use) {
+  return ownedPostgresqlLab(use, loginProfile);
+}
+export async function managedWorkspacePostgresqlLab(use) {
+  return ownedPostgresqlLab(use, workspaceProfile);
+}
+async function ownedPostgresqlLab(use, profile) {
+  require(profile === loginProfile || profile === workspaceProfile);
+  const roles = profile.roles;
   // Importing this fixture never starts Docker. Integration is isolated Linux CI only.
   require(
     process.platform === "linux" &&
@@ -623,16 +640,24 @@ export async function controlledNeonPostgresqlLab(use) {
         }
         require(loaded);
         setupPhase("role_authentication");
-        for (const role of roles) require((await authenticationProbe(target, role)) === "scram");
+        let scramOfferedRoles = 0,
+          probeConnectionsClosed = 0;
+        for (const role of roles) {
+          require((await authenticationProbe(target, role)) === "scram");
+          scramOfferedRoles++;
+          probeConnectionsClosed++;
+        }
         require((await authenticationProbe(target, "postgres")) === "rejected");
+        probeConnectionsClosed++;
         require((await authenticationProbe(target, "morrow_identity_owner")) === "rejected");
+        probeConnectionsClosed++;
         phase = "requests";
         setupPhase("requests_callback");
         return Object.freeze({
-          scramOfferedRoles: 4,
+          scramOfferedRoles,
           tcpAdministratorRejected: true,
           tcpOwnerRejected: true,
-          probeConnectionsClosed: 6,
+          probeConnectionsClosed,
         });
       },
       async observeFinalNamespace() {

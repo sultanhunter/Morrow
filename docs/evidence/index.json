@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 91,
-  "plan_digest": "b7a87e1f20a9b337ba6bc9ed1ef4d58746fcb5a97430e2f1ff39188305802ede",
+  "plan_sequence": 93,
+  "plan_digest": "eed8edf1af40d3d9114f0797e795623a2984ddbb70a8ef5a0072fcb5fc5bd321",
   "tasks": [
     {
       "id": "P01.T01",
@@ -3612,6 +3612,94 @@
     {
       "path": "docs/evidence/P05.T01u/sql-validation.json",
       "sha256": "910efcb5e8cb4b6938b5072a4900be92c9bd2415cc1fd55aa14dbb31da50244f"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/ci-result.json",
+      "sha256": "983074c42ddc6a7873299e0c51856bca1f338738267cbbc304324c3c95041f96"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/draft-validation.json",
+      "sha256": "6b9ab371bfe5df91d5fd853b7521228b63f91a1a820c62234b5c47536d23c0a4"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/independent-current-metadata93-https-review.json",
+      "sha256": "220f81a376ef6b1eb8cefded788cbfedfea9c5d35a99d7d7ec77aa584363649c"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/independent-local-ci93-actual-review.json",
+      "sha256": "5b2eb9ca1f606f9a02302483c9c8615e8ff1212d79621b48ebbc4ad588e33fc7"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/independent-root-workspace-orchestration92-source-review.json",
+      "sha256": "6f974e7f9a8b95da70f6691de878baba5cef5c9787ddef98b258bf5fcb95fd3f"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/independent-v05-metadata93-workers-review.json",
+      "sha256": "09d78dad5279226977bc0eb48d29e4d6f38fadabdfb0ecee10ba9a5e80a57000"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/independent-workspace-binding92-workers-review.json",
+      "sha256": "be6d4e2a929d53797190ac1d6b5d3cd0603b380386ee787d75f368bf2170911e"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/independent-workspace-build93-source-review.json",
+      "sha256": "d3b0fb2dde66ac3ec19bb43107b31f47182828d2164a37596a00e47d9936a443"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/independent-workspace-fixture92-source-review.json",
+      "sha256": "dfec7d61a3306345363762ee553ad48e6dec650a18ca1f6505a2808b16eaeb34"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/independent-workspace-pools92-source-review.json",
+      "sha256": "4df1e63232d719589acf0b8359c60d2c4365057c89ecee39823b96599f868d67"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/independent-workspace-request92-complete-source-review.json",
+      "sha256": "c1e23ff7e65fd6438ba40c978f6521f2d1d102bf5e26272bcc3b56a206ca5149"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/independent-workspace93-known-length-source-review.json",
+      "sha256": "161ade9b54d556df6110e27a0007c15a59f8b9f6ab73e9edd431c94a80f85eb7"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/independent-workspace93-postgresql-source-review.json",
+      "sha256": "4f6ecf1a46c6ea0241b8532db359a16c578fcc71f284076845851b8f7f6e76b1"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/repository_ci-preflight.json",
+      "sha256": "77dcc4ab8a7c525be193b8eebfeeb7fc5da8a6f2302e3d1adc98ddef5ea5718b"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/scaffold_smoke-preflight.json",
+      "sha256": "baea16f6c7e203dbe9b4b6f25422b19af7cc997375faa68d05f15ade30779c7b"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/smoke-result.json",
+      "sha256": "20011817b6513da2ed2ba3bcb4d3369d5307cdd53956b6f2852e0dc0780d473d"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/source-after-restoration.json",
+      "sha256": "31b16fcbbdae314890b71debbfda4f7718acb86e98bf3572fa7de9e78c28f49f"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/source-before.json",
+      "sha256": "c55e893d85d7370b6ab89a6ed5055bf652d985a8f1c5f1631aada501905d0cb5"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/source-review93-coverage.json",
+      "sha256": "077248680f5fd7bc8c181869ce652246f9d0151de26152a7a49d0a3469bc374c"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/subprocess-receipt.json",
+      "sha256": "bde0848b8f7e0e8c6912c40f22ff560b7a493ad0b88b0e515c894c4279de9cdc"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/workspace-api-workers-known-length.json",
+      "sha256": "58818327218098ac3503e0eac14bbcc1fbf166891fff84318d4581a573e545de"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/workspace-api-workers.json",
+      "sha256": "11041d68902d2cb4b3c902cb08e57ef4b80b8bbfe340798a3e9fca9ea166617e"
     },
     {
       "path": "docs/evidence/P05.T02/clean-build.json",
