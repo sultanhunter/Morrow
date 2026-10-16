@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "author": "/root/fixed_provider_core",
+  "status": "frozen_for_independent_review_before_operational_retry",
+  "source_digests": {
+    "review-ci-domains91-measured-profile.py": "96e3e1dc8396daf0d0f7c1bdc5ea23af3efee31485b9493453299f319bb184d0",
+    "domain-managed91-measured-profile.py": "6a0c6ed8e6d1a98c31e6f4486c8e594dd680b1812809ec67b98eb732e5e82eb1",
+    "test-review-ci-domains91-measured-profile.py": "78adc37f193259d53f0fd1a7f6684cfa1907641b4f33664ef4be635da73e0dd4"
+  },
+  "preserved_original_helpers": {
+    "review-ci-domains91.py": "c02fec32cd995ae33ccd0037acc2388bdfdb4bf82fcdfe1d1384b026d1361c7a",
+    "domain-managed91.py": "448b126946ee0f3de7f13936d585effe51d90a330a1fb9c58991668423eb69b2"
+  },
+  "preserved_actual_initial_review": {
+    "path": "work/morrow-p01/ci-domain-review91-A.json",
+    "sha256": "7141a557591d91baea7c064893f1b4d9598181b5799030808ebfa8052e785d59",
+    "actual_exit_code": 1,
+    "initial_tool_chunk": "73bcf2",
+    "session_id": 59122,
+    "completion_tool_chunk": "9cac2a"
+  },
+  "actual_A_inputs": {
+    "head": "660314bb4e6258a8c23859d406d9c4e018491c36",
+    "run_id": 38952979257,
+    "attempt": 1,
+    "artifact_id": 12069988369,
+    "artifact_sha256": "43114db8e442062ebe1b3a679343e47422d67dc3055cf9b916606c16a2ee35a8",
+    "source_changed": false
+  },
+  "reader_only_changes": [
+    "Only retained controlled-Neon PostgreSQL source aggregate uses its original sorted Object.entries formula at that exact path; other source aggregates stay insertion-order.",
+    "Only the new managed PostgreSQL check list permits the exact eight source-defined labels to appear twice, requiring all209 raw assertions true, all other labels unique, fixed stage anchors and distinct source-original entry witnesses.",
+    "Serial groups preserve original-entry\u2192first\u2192original-entry\u2192replay order. Concurrent group permits exactly D,D,C orD,C,D delivery/cookie branches with ordered distinct entry8/9 witnesses; the winner is not predetermined.",
+    "Review output exposes actual pair and witness positions. No source assertion, role/SQL/control/deadline/custody/cleanup/provider semantic predicate changes."
+  ],
+  "source_trace": {
+    "producer": "scripts/managed-login-postgresql-lab.mjs",
+    "producer_sha256": "dcad4c25d7ecee090a06a7efe46f7a9ced81d5cb3f8cafdbcd6da4254402ea54",
+    "finish_source": "same managed_callback_finite_delivery_<flow.serial> predicate called for first/replay; two concurrent originals share flow.serial4.",
+    "ordered_witness_ids": {
+      "1": [
+        1,
+        2
+      ],
+      "4": [
+        8,
+        9
+      ],
+      "5": [
+        11,
+        12
+      ],
+      "6": [
+        14,
+        15
+      ],
+      "preseed_tampered_tag": [
+        16,
+        17
+      ],
+      "preseed_different_AAD": [
+        18,
+        19
+      ],
+      "preseed_wrong_claimed_key": [
+        20,
+        21
+      ],
+      "preseed_expired_key": [
+        22,
+        23
+      ]
+    }
+  },
+  "actual_inert_tests": {
+    "count": 44,
+    "exit_code": 0,
+    "owning_tool_chunk": "568368",
+    "command": "python3 -E -B work/test-review-ci-domains91-measured-profile.py"
+  },
+  "prior_drafts_preserved": [
+    "domain91-measured-profile-before-entry-anchors",
+    "domain91-measured-profile-before-witness-output",
+    "domain91-measured-profile-before-concurrent-branches"
+  ],
+  "operational_new_main_run": false,
+  "actual_overall_qualification": false,
+  "Source_or_Git_mutation": false,
+  "runtime_or_network": false
+}

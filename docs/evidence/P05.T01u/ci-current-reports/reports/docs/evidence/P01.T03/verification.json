@@ -1,0 +1,71 @@
+{
+  "task": "P01.T03",
+  "generated_at": "2026-10-16T19:12:01.999Z",
+  "plan_sequence": 91,
+  "providers": 12,
+  "bindings": 103,
+  "scope": "Documentary feasibility and selected design consistency only; no real provider, runtime, billing, merchant or production qualification.",
+  "input_digests": {
+    "docs/decisions/providers.json": "f63fb6ea591f7900e2905e43276c286a2ecbfafb4c6487ed2c76cbab49b829df",
+    "docs/decisions/provider-bindings.json": "93f031b02e9defd503680ac71df1db480d6d5161718f1e09ebb5f6c0135fe39e",
+    "docs/decisions/deployment-policy.json": "8cad3d682841843d2b1665ace1a7f286b0c108ab72511bb66f88100decec22c0",
+    "docs/decisions/capacity-targets.json": "4430f79dcd99f3096bc11339cce110f241d929014e2d889259489625412b1b31",
+    "docs/decisions/cost-model.json": "a82ab6d9222f279a170ebcc518f7602c30c7b805114770e19e519d822a87c23c",
+    "docs/decisions/model-policy.json": "ccfb2b4173bbdf136a52674aa10aa023dff9685a7ec919d6fafe5cbde53a8e8b",
+    "docs/research/sources.json": "820edaafc1276671d004ae0b261c378d8c70eb4a9b72ea1ce2d7a5e673a3f371"
+  },
+  "cost_components": {
+    "currency": "USD",
+    "status": "component_estimate_runtime_unbound",
+    "components": {
+      "workers_base": "5.000000000",
+      "workers_requests": "0.000000000",
+      "workers_cpu": "4.500000000",
+      "workflow_steps": "12.000000000",
+      "workflow_state": "0.800000000",
+      "queue_operations": "0.000000000",
+      "r2_storage": "7.350000000",
+      "r2_writes": "0.000000000",
+      "r2_reads": "0.000000000",
+      "neon_compute": "159.840000000",
+      "neon_storage": "17.500000000",
+      "neon_restore_history": "10.000000000",
+      "neon_snapshots": "0.000000000",
+      "neon_transfer": "0.000000000",
+      "runtime_cpu": "201.600000000",
+      "runtime_memory": "129.600000000"
+    },
+    "subtotal": "548.190000000",
+    "subtotalScope": "known_components_only_runtime_subscription_and_other_meters_omitted",
+    "runtimeProvider": "e2b",
+    "runtimePlan": null,
+    "runtimeSubscriptionAmount": null,
+    "runtimeQuoteBound": false,
+    "missingRuntimeCosts": [
+      "ACTUAL_OWNED_RUNTIME_PLAN_AND_ENTITLEMENT",
+      "BOUND_RUNTIME_SUBSCRIPTION",
+      "PINNED_TEMPLATE_RESOURCE_AND_ACCOUNT_QUOTE",
+      "PAUSED_RESOURCE_AND_OTHER_RUNTIME_METERS"
+    ],
+    "completeQuote": false,
+    "provisioningAuthorized": false,
+    "exclusions": [
+      "Unbound E2B subscription/plan, actual template/build/resources, quotas and production commercial terms",
+      "E2B paused-resource/storage/snapshot/build/transfer/transition and other unqualified meters; included running disk is not a claim of zero paused-workspace cost",
+      "Managed model APIs and paid tools",
+      "Additional environments, email, monitoring, alerting and support",
+      "Thirty-five-day daily recovery storage beyond included example; actual changed/snapshot bytes need measurement",
+      "Extra database replicas/branches/private transfer; runtime snapshots/images and other provider meters not modeled",
+      "Enterprise SSO/DirectorySync/contracts, provider quota funding requirements, taxes and any enterprise commitments"
+    ],
+    "assumptions": [
+      "100 merchants, twenty total active sandbox hours each; illustrative 2vCPU/4GiB. Actual immutable template/build resources remain unqualified.",
+      "Neon average1CU;50GB database and50GB billable restore history; no replicas",
+      "5GB R2 per merchant; API/workflow CPU and operation counts are illustrative aggregate inputs, not measured",
+      "Ordinary Cloudflare/Neon included usage applied; no trial/startup credit discount assumed",
+      "Queue input is billable operations, not message count. CPU/RAM quantities are explicit active seconds; pause/resume transition metering requires actual qualification.",
+      "No E2B production plan is selected or bound. Hobby advertises $0 subscription; Pro is $150/month plus usage. Neither entitlement nor paused-resource zero cost is inferred."
+    ]
+  },
+  "errors": []
+}

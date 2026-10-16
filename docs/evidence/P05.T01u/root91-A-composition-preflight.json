@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "/root",
+  "tested_commit": "660314bb4e6258a8c23859d406d9c4e018491c36",
+  "result": "actual_A_root_composition_preflight_clear_pending_final_composer_peer_review",
+  "source_Publisher_exact_files": 1880,
+  "source_inventory_sha256": "616803c10476b3be8a43dab67ef1381b828fa62ab4586d4cf90a8c46089d38b0",
+  "Desktop_clean_qualified89": true,
+  "actual_preflight_exit_code": 0,
+  "actual_tool_chunk": "ab8370",
+  "reviewed_receipts": {
+    "ci-domain-review91-A.json": "7141a557591d91baea7c064893f1b4d9598181b5799030808ebfa8052e785d59",
+    "independent-ci91-A-managed-actual-review.json": "ec99af1d364673137081e342ebabb2e3dab675dcf3b9baff0f80b036c6d16b65",
+    "independent-ci91-A-manual-closure.json": "261a2065bda4d3e63374b06b12f9f6707ebb10e4307960a1958e07e836e24eb9",
+    "independent-domain91-measured-profile-review.json": "5798655d664e1ae687a5cfa2c33929eae7a2b10722c2d1e006edcb308871132f",
+    "independent-measured-profile91-workers-review.json": "f8a037fc7be00472adf345ceacc20881e5192d70f237e71466e4494831fcfa60",
+    "independent-publication91-measured-profile-review.json": "c17b07ffe402d7a68073cbfcef4a0f2b2e938b872f0af417124fcfeb236198df",
+    "domain91-measured-profile-author-receipt.json": "0f5ff29c3420c1268bd895ed7c0d2197d3888a073235e935fdb03f3f0954fca0",
+    "publication91-measured-profile-author-receipt.json": "dd9728768525dd77de1fca8b2f553efaa2c4c058f3c8c889173ae2968f384b62",
+    "composer91-measured-profile-author-receipt.json": "f6b58ac535e0edc79be753882f77ecc2e0772b4ad3d1f0253c545323d57e44f4"
+  },
+  "source_modified": false,
+  "limitations": [
+    "Root self-review is separate from the cited source/artifact peer reviews.",
+    "Exact final-B CI and fresh domain/cleanup/source review precede guarded Desktop alignment.",
+    "Original unknown credential acknowledgements and original held default source reports remain preserved."
+  ]
+}

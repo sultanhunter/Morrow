@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "/root/fixed_provider_core",
+  "result": "clear_for_actual_A_domain_and_execution_closure_before_evidence_only_composition",
+  "blocking_findings": [],
+  "tested_commit": "660314bb4e6258a8c23859d406d9c4e018491c36",
+  "actual_execution": {
+    "run_id": 38952979257,
+    "attempt": 1,
+    "job_id": 117148723481,
+    "final_successful_API_steps": 55,
+    "producer_commands": 46,
+    "artifact_id": 12069988369,
+    "artifact_sha256": "43114db8e442062ebe1b3a679343e47422d67dc3055cf9b916606c16a2ee35a8",
+    "artifact_bytes": 489681,
+    "payloads": 59,
+    "fresh_reports": 55,
+    "actual_numeric_process_exit_codes": null,
+    "repository_tests": 2252,
+    "repository_passed": 2252,
+    "repository_failed": 0,
+    "scaffold_guards": 11
+  },
+  "operational_review": {
+    "path": "work/morrow-p01/ci-domain-review91-A-measured-profile.json",
+    "sha256": "06e723bf82d5ddd2a71eba7759374f892329753e5d78f9c4ccef7229d0121796",
+    "helper": "work/review-ci-domains91-measured-profile.py",
+    "helper_sha256": "96e3e1dc8396daf0d0f7c1bdc5ea23af3efee31485b9493453299f319bb184d0",
+    "actual_exit_code": 0,
+    "initial_tool_chunk": "3df822",
+    "session_id": 86451,
+    "completion_tool_chunk": "093513"
+  },
+  "raw_input_digests": {
+    "capture-receipt.json": "e8cc103bbd4cf45057487bd0e9f36806647ebdf1c93d890d9282c4ea90fb101a",
+    "run-rest.json": "39a34e379fe586f6508127b0e429d086d23bf5c58470b498a6fe04febd2d9583",
+    "jobs-rest.json": "64ce1c990a9ebdd0116f1d3af2fb47766999d646a6f0e594cefd84f3fd582eec",
+    "artifact-rest.json": "14804ee0ff8ad7e9841b8818584cc86e0252582ad11f8a6267fb631f7925be4b",
+    "artifact.zip": "43114db8e442062ebe1b3a679343e47422d67dc3055cf9b916606c16a2ee35a8",
+    "run.log": "61f5d4f42dcfe519a71e9902be8136c5dc762e68c33b8b7ebff539d1e7f343de"
+  },
+  "strict_inspection": {
+    "path": "work/morrow-p01/ci-artifact91-38952979257-1-12069988369-inspection.json",
+    "sha256": "3df78f0a337c261b8bc2a40a2883aa8bd8bc09d8407e6566da055c01c3a70ba1"
+  },
+  "source_closure": {
+    "actual_A_files": 1880,
+    "full_source_before_equals_restored_bytes_and_modes": true,
+    "direct_source_digest_bindings": 390,
+    "all_report_closure_profiles": 55,
+    "reports_without_direct_input_maps": 12,
+    "historical_records_byte_mode_exact": 754,
+    "authority_first_proof_archive_files_exact": 17,
+    "current_maintained_families": 16,
+    "normal_physical_cleanup_report_families": 11,
+    "normal_connection_observations": 774,
+    "unverified_normal_host_closures": 0,
+    "original_source_default_held_sha256": "cfc135a00b6da7003fcee12a00f66987dba29a3a7c18eff9714b226c09c67f55",
+    "fresh_CI_default_native_sha256": "737e888470e1ef3d993a8e913560bbd8ef1fbf7abbf2f6addf4d35d77d8818d6",
+    "source_default_was_restored_not_relabelled": true
+  },
+  "manual_native_findings": [
+    "Four direct/routed generic controls distinguish premature unfinished-response cancellation from post-body normally completed gate-read marker.",
+    "Nine managed cases show finite503/no-cookie, exact once-published sourceP, actual source settlement and separate custody events. Positive single/concurrent lease acknowledgement follows body/read within original C; rejected/stalled/after-C/disposal-rejected cases remain unknown.",
+    "Late101 has zero PostgreSQL startup and exactly one separate fixture orphan close; that physical cleanup supplies no source backend-absence or custody acknowledgement.",
+    "Native128checks/13cases/29intercepted calls, zero Internet/provider/unexpected calls/timers; all runtimes/owned endpoints disposed."
+  ],
+  "manual_real_PostgreSQL": {
+    "checks": 209,
+    "cases": 10,
+    "native_wire_endpoints": 146,
+    "peak_independent_isolates": 2,
+    "actual_claim_rows": 11,
+    "actual_SCRAM_roles": 4,
+    "source_metric_rows": 29,
+    "preinit_denied_rows": 2,
+    "cross_isolate_K1_and_K2_previous_rotation": true,
+    "preseeded_proof_loss_cases": 4,
+    "bind_committed_before_key_cutoff_cookie_withheld_inside_original_D": true,
+    "unknown_before_final_admin": {
+      "normalReleaseDenied": true,
+      "credentialAcknowledgements": 0,
+      "activeLeases": 1
+    },
+    "fresh_restricted_reconciliation_keeps_claimed_admitted_effect_without_secret": true,
+    "final_namespace": {
+      "presentBeforeFinalCleanup": 0,
+      "absentAfterFinalCleanup": true,
+      "forcedFinalCleanup": false
+    },
+    "engine_container_network_cleanup": {
+      "container": "absent",
+      "network": "absent",
+      "finalNamespace": "absent",
+      "forcedFinalCleanup": false
+    },
+    "locally_intercepted_provider_exchange_keyset_session_pages": [
+      5,
+      5,
+      5
+    ],
+    "actual_Internet_provider_calls": 0,
+    "namespace_absent_before_admin_cleanup": true
+  },
+  "reader_schema_reconciliation": {
+    "original_held_review_sha256": "7141a557591d91baea7c064893f1b4d9598181b5799030808ebfa8052e785d59",
+    "original_c02_helper_unchanged": true,
+    "Source_A_unchanged_no_CI_rerun": true,
+    "retained_T_PG_digest": "Exact original sorted-entries formula at its sole source-owned path.",
+    "new_PG_repeated_labels": "Exactly eight source-traced first/replay/concurrent pairs, each with two distinct original-entry witnesses, all209 assertions true, all other labels/reports unique; actual pair/witness positions are retained in the domain review.",
+    "concurrent_profile": "Exactly two legal finite-delivery/cookie winner branches; no fixed winner or global position hardcode.",
+    "independent_reader_reviews": [
+      "5798655d664e1ae687a5cfa2c33929eae7a2b10722c2d1e006edcb308871132f",
+      "f8a037fc7be00472adf345ceacc20881e5192d70f237e71466e4494831fcfa60"
+    ]
+  },
+  "authorship_limits": [
+    "Reviewer authored pool/scope and earlier provider port; separate other-author source reviews cover those implementations. This is independent review of other-authored producers and actual artifacts, not own-source approval.",
+    "No runtime, SQL, provider/account/network, Source/Git or Desktop operation was executed by reviewer. Only outside review JSON was created.",
+    "Candidate-A local engineering evidence only. Detailed evidence-only composition, exact final-B CI/artifact/domain closure and guarded Desktop alignment remain separate. No browser, hosted Neon/WorkOS, Shopify, merchant or deployment qualification."
+  ]
+}

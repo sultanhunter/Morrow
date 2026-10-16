@@ -3058,12 +3058,272 @@
       "sha256": "2dd88ba0d3bf64a33c96e378634e8d6859f80b86ff0c5cf975b6f4034737e491"
     },
     {
+      "path": "docs/evidence/P05.T01u/ci-artifact-inspection.json",
+      "sha256": "3df78f0a337c261b8bc2a40a2883aa8bd8bc09d8407e6566da055c01c3a70ba1"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/manifest.json",
+      "sha256": "9c0fead20a869b1c665da58d572ef8e32b01bea110cd41d34d6d6acbb32324c4"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P01.T01/verification.json",
+      "sha256": "4acb6523fc88c0d81838becfce5965d5f4bcf96e68ec35238ed3650528f5900a"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P01.T02/verification.json",
+      "sha256": "bc52ce43867150321d191f630ad8313f87f250d5c77e2169e662ef8b9360ef0d"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P01.T03/verification.json",
+      "sha256": "3be542427d5706cd510975af71f852bce9608d076576544cb45bd45c65687adf"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P01.T04/verification.json",
+      "sha256": "49aaec61a42ea966066ecf911e89297464d14457021037ee9ef14f70c6194a71"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P02.T02/verification.json",
+      "sha256": "a5deea282e4e9c4c07625d21fd84623450ce4a327f4c254f8ce114e8150e3d95"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P03.T01/smoke.json",
+      "sha256": "07f013ea8cb43a8416ed5bb5ee210c5d75f34b76b3b713ea01fc62e1b0d15237"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P03.T02/boundaries.json",
+      "sha256": "f4d802acd3f7bbd7e86f7786ab3eef6c741a9588606ce226d97ae09f997d3629"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P03.T04/delivery.json",
+      "sha256": "ea3865cc74e01e7274b50219ceb42d4516fb1d3afebfa1cd741a86851acc2773"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P04.T01a/permissions.json",
+      "sha256": "172c5d5f0f3620e5ea8d93ae8e9d635a5adf5f6865ff789c7b19e224b98c4d73"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P04.T01a/readiness.json",
+      "sha256": "dbf757d5a0191ee812c137cec4e9ad0fd62c5a447fe73cd5425ee25572843377"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P04.T01a/synth.json",
+      "sha256": "22c268223ea8ed2385193f0bfbbaa7f3f73460945ed42871152c25ee58967f8c"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P04.T01b/workers.json",
+      "sha256": "99fcc50d2c4899a4a1296e5e73fdddb61a7e6faddd0e9bd0c03ba23d492bf6a7"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P04.T01f/archive.json",
+      "sha256": "013799f7241ed64445ed48526c81214b47a7cf83e37286ee7af66e63e4482918"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P04.T01f/cleanup.json",
+      "sha256": "d734c7945d33639b260b7c9340835c86e9801b5190c43ee9af927a1d097fb4d0"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P04.T03/operations-lab.json",
+      "sha256": "4bc0c4277ef31c17a2736fc80c4997dccd23c97d4cbee3cbd013326b06db82db"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P04.T04/restore-lab.json",
+      "sha256": "f5a496a24a4d5d954775d41ff72570dbc0432d4fd34383e4c9c181607a7ac0af"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01/identity-lab.json",
+      "sha256": "1608aafb5559312c36995aa9f5efaa8db380574660d689ecc3775d9df6d84f1d"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01/workspace-revocation-lab.json",
+      "sha256": "321d7208e5354b799dae1f38830148045edddca67b7779276e3a555267a75baf"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01d/postgresql-lab.json",
+      "sha256": "f53e1314fd66d4e2ec6123dc7b1d76b3cd2c136afd2ca0b6684760b9891185bb"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01d/workers-lab.json",
+      "sha256": "48904b3accb61d38fdacc0cbb7a33b209351f24e63020f841c13c5affaf2f3d3"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01e/frozen-regression.json",
+      "sha256": "ec83e4f262ed9a1674849d0c2b2dcb8d4e8b30a4f559f4b22b5f1a561b82abb4"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01f/workers-lab.json",
+      "sha256": "040a879ce02ff802db372f87db98ef833355383632db4d4c9e51e75c949e15c5"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01g/frozen74-regression.json",
+      "sha256": "0e50b6b115a508fc472449e6726e32326fe86e6df6df7d2afcdef5ca083ec712"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01h/frozen75-regression.json",
+      "sha256": "cb977acb9202dfe23cc9b01bbe6e65fa34f44ea477f052431cc187349a65c1b3"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01k/authentication-challenge-lab.json",
+      "sha256": "da9562888e407075c2275b27276a98b6c79b8c321cc77d03538dc90f60a53efd"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01m/legacy-composition-workers-lab.json",
+      "sha256": "66ff49459f69612a55c0bc8510eee0de43de5d4bf51d2da031f162c7d420b888"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json",
+      "sha256": "3bfa3cb2bcd93aaba9bb61e48ee29b52367e44d4ffa71997a30c621ee0f5de35"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01m/legacy-reader-workers-lab.json",
+      "sha256": "94f8acfcc94cea6aeeb03336028b2083705fc6d0ac0273a56c5ad1843738b819"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01m/legacy-selection-workers-lab.json",
+      "sha256": "fe6c85604e442597ab7bc7f2bb695d1f8b4bd2eb679494979683d44e0bbbd712"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01m/postgresql-lab.json",
+      "sha256": "5e454e579d9587bdc2de41b37ae26718b7b937cfc49e4d391f5dfbb5fa8bc9a5"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01m/workers-lab.json",
+      "sha256": "fde92a7002bfcfd56f211eb3a38e4972b18d3f9e87f29751d0e5e53d68b29a5d"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01o/frozen80-regression.json",
+      "sha256": "8a0afedb6213bc99af2d857270e175779b2c84d9bbe434ae5d5ada00eb492441"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01o/frozen82-regression.json",
+      "sha256": "b4f2171f42595ba49e4a60b87c2990709343befd19a3f6cb6fe36303479ff1eb"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/lifetime-workers-lab.json",
+      "sha256": "737e888470e1ef3d993a8e913560bbd8ef1fbf7abbf2f6addf4d35d77d8818d6"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/postgresql-workers-lab.json",
+      "sha256": "02a6898e5de941fa3147a18a8eb5f0509ce557ec52dade026dc87d68c7bfe80d"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/controlled-neon-postgresql.json",
+      "sha256": "427cd53cff99afd420a0f7389f7a8a5fb847f4524daa3a0148f6f5c929c8abc2"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/controlled-neon-workers.json",
+      "sha256": "0b186e581f816a30a634d2aa107e29f39e317b9031c6260f3cebc91872f827de"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/fixed-provider-https.json",
+      "sha256": "e8dddd694bdfad57d1dd2080bd4596ecaf1f0c2d2d936aa1dcb1541d1e82b4a3"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/fixed-provider-workers.json",
+      "sha256": "d61430bdb2f5f40a46283aba5f1ab12e4bf87736ae4380e92c2b323414762de6"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/login-flow-custody.json",
+      "sha256": "9668d584664f53f499b6b5960a45c26f3d7609b0f4d337bd37baccdf30b1a82f"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/login-https-postgresql-lab.json",
+      "sha256": "b1086bc8a4b885d051d781a3156ab9f74aa0b0c6a7aeaa03f31192acd0f84396"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/login-workers-lab.json",
+      "sha256": "bcf9152e1a56ce9ce2d6956cb6a66fe3eeba181207f461653e5815ccc771424a"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/logout-https-postgresql-lab.json",
+      "sha256": "0cb7abe6cf3696813cce9b8d974fa6f05713dcb4df7e9951d903bb7df84e31cd"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/logout-workers-lab.json",
+      "sha256": "a8abcaf958c3d4e7f0131d3f474cc968a2aa640a6078f7319d3eaa42b9ede8c3"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/platform-workers-lab.json",
+      "sha256": "900687f67c1cf6f143c4316ed5ec00ce4fb4d213d0fe48357227d03c1334c7e9"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/self-logout-postgresql-lab.json",
+      "sha256": "f787abe0b4f2db5beee2bd8527041ef83aa1f0d862811ac07ed76ed9419c1d6e"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/standalone-store-linking-http.json",
+      "sha256": "52872003ebd8c46590471bf0dda002b21548b25729997bbd68beca9aee2b3b44"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/standalone-store-linking-workers.json",
+      "sha256": "226d0c91895a63ddbb85f9fd7304df1b917bbe01998c5ded8a2eca5b2ae45160"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/standalone-workspace-http.json",
+      "sha256": "61f3f1634f5c99aa28785b09db94fcceaabaa1539d19849f118482f5f885cede"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/standalone-workspace-workers.json",
+      "sha256": "8695bac78d81140850d4b1aeb712414bada1975f4363fca4f6cd9ad929b20645"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T01u/regressions/workspace-linking-read.json",
+      "sha256": "04531e4564e05d53e6487f3bb26e1a5e06bbc11d829c08fff0a076113c58878d"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T02/database-lab.json",
+      "sha256": "4661b1ec85a78bc39b2cdb1e0f35780634946c18b399cbd4ea167c9e5160e6eb"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T03/workers-lab.json",
+      "sha256": "761ad732b021f3c56868ec72e547ef3b4c33cb1b2dd639844a20efe85c97036a"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T03/workspace-store-linking-lab.json",
+      "sha256": "fda101caf40a64c0171c141e0f4a06c3f6e08a2eb5f5e86c2f733d3cff313c54"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/reports/docs/evidence/P05.T04/workers-lab.json",
+      "sha256": "deb7dc9f409f0698b4f6089ba581423e6a841934a9d46c5a2e834b13a203cc89"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/source.after-restore.json",
+      "sha256": "d7bea84fcfafd3aa3d5c3d20a75cbd01db59835816e4701e96db628c1685691a"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/source.after-tests.json",
+      "sha256": "7969d77d10b7ad204f9f9e318d1b3a485bfa607a86b6a34062c5e9762089421d"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-current-reports/source.before.json",
+      "sha256": "d7bea84fcfafd3aa3d5c3d20a75cbd01db59835816e4701e96db628c1685691a"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci-domain-review91-A.json",
+      "sha256": "7141a557591d91baea7c064893f1b4d9598181b5799030808ebfa8052e785d59"
+    },
+    {
       "path": "docs/evidence/P05.T01u/ci91-serial-file-registration-author.json",
       "sha256": "233b91acce94e12631166230ce9cff24195a08d34324acf5c456fbf2a840a8c4"
     },
     {
+      "path": "docs/evidence/P05.T01u/composer91-measured-profile-author-receipt.json",
+      "sha256": "f6b58ac535e0edc79be753882f77ecc2e0772b4ad3d1f0253c545323d57e44f4"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/composition-actual-receipt.json",
+      "sha256": "37ff8c4da2bdac230c49d1857cba95b5491f8e457f4d212e43d53eb2ce88675a"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/domain91-measured-profile-author-receipt.json",
+      "sha256": "0f5ff29c3420c1268bd895ed7c0d2197d3888a073235e935fdb03f3f0954fca0"
+    },
+    {
       "path": "docs/evidence/P05.T01u/draft-validation.json",
       "sha256": "35d7948a39e321bb9cd5d2f4e9addc80278d81e8e459b0752e6c6bdd78534fd0"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/execution.json",
+      "sha256": "31663d809e19afc774d2e4dcc269b781d8a4eca2a7f33d750d3c0c4aad19cc74"
     },
     {
       "path": "docs/evidence/P05.T01u/first-proof-execution.json",
@@ -3082,8 +3342,24 @@
       "sha256": "9e4f8df676de2e4f3dc6b7c4de72468d3ad5abdfc6616199d5124535df591ae0"
     },
     {
+      "path": "docs/evidence/P05.T01u/independent-ci-domain-review.json",
+      "sha256": "06e723bf82d5ddd2a71eba7759374f892329753e5d78f9c4ccef7229d0121796"
+    },
+    {
       "path": "docs/evidence/P05.T01u/independent-ci-metadata91-source-review.json",
       "sha256": "06192c30962fc9cf3879ef05ec1a05a809fe517a7d5ac00d285df6b6c9651f89"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-ci91-A-managed-actual-closure.json",
+      "sha256": "f0eed49673e2153d48cd0e4d27bc5a5c63e6cf68f9c443454b98c95d63e2f5cc"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-ci91-A-managed-actual-review.json",
+      "sha256": "ec99af1d364673137081e342ebabb2e3dab675dcf3b9baff0f80b036c6d16b65"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-ci91-A-manual-closure.json",
+      "sha256": "261a2065bda4d3e63374b06b12f9f6707ebb10e4307960a1958e07e836e24eb9"
     },
     {
       "path": "docs/evidence/P05.T01u/independent-common90-buffer-sink-race.json",
@@ -3096,6 +3372,14 @@
     {
       "path": "docs/evidence/P05.T01u/independent-common91-digest-batch-recheck.json",
       "sha256": "90adba1c332216a58d5e18e2e05498b638cc147af18b24cfc6c47468b7a5b049"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-domain91-measured-profile-review.json",
+      "sha256": "5798655d664e1ae687a5cfa2c33929eae7a2b10722c2d1e006edcb308871132f"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-final91-measured-profile-helper-review.json",
+      "sha256": "98bfd2888ade467b5aeaba911e04199cc050175c4885c7c4b5f602a6682de310"
     },
     {
       "path": "docs/evidence/P05.T01u/independent-infra-env-helper91-current-review.json",
@@ -3122,6 +3406,10 @@
       "sha256": "e893a07ad95fd6e1c957e29c328bebe19e997e9b0c3722dbffbb5e7adb20384a"
     },
     {
+      "path": "docs/evidence/P05.T01u/independent-measured-profile91-workers-review.json",
+      "sha256": "f8a037fc7be00472adf345ceacc20881e5192d70f237e71466e4494831fcfa60"
+    },
+    {
       "path": "docs/evidence/P05.T01u/independent-native91-event-wait-actual-review.json",
       "sha256": "b7fe8bc7bb8714b608b06be445a0985b49a4e6bed38e4c25ec90c228f2bee219"
     },
@@ -3132,6 +3420,10 @@
     {
       "path": "docs/evidence/P05.T01u/independent-pool-native91-cleanup-console-review.json",
       "sha256": "2fa64d1dc189a2e942367fdf331a7707b656c051933caa0b844a2a85ad54be7b"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-publication91-measured-profile-review.json",
+      "sha256": "c17b07ffe402d7a68073cbfcef4a0f2b2e938b872f0af417124fcfeb236198df"
     },
     {
       "path": "docs/evidence/P05.T01u/infra-sequence91-metadata-author.json",
@@ -3156,6 +3448,10 @@
     {
       "path": "docs/evidence/P05.T01u/lifetime-workers-lab.json",
       "sha256": "cfc135a00b6da7003fcee12a00f66987dba29a3a7c18eff9714b226c09c67f55"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/local-validation.json",
+      "sha256": "74a5c415b2762e64ce11415269fd353de5dad8d472207cc7f5976a7966472f45"
     },
     {
       "path": "docs/evidence/P05.T01u/local91-serial-held-execution.json",
@@ -3278,8 +3574,20 @@
       "sha256": "26f08a0778001ab14f357e14edbb2fcf455d81e576521c63f773b7c934351002"
     },
     {
+      "path": "docs/evidence/P05.T01u/publication91-measured-profile-author-receipt.json",
+      "sha256": "dd9728768525dd77de1fca8b2f553efaa2c4c058f3c8c889173ae2968f384b62"
+    },
+    {
       "path": "docs/evidence/P05.T01u/repository_ci-preflight.json",
       "sha256": "73c4ce09178cf1f0b39a38b51cffed7e0d6b3609ed85100af3e8f53480dd2a5e"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/review.json",
+      "sha256": "d563abbb44de028993f64bb696c5c847c5e2449635b60f96aef1f4ac8101824b"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/root91-A-composition-preflight.json",
+      "sha256": "5084aa8d8639d216133b0e10c00644a69b3b5261ae9e6dc79940342b00da38de"
     },
     {
       "path": "docs/evidence/P05.T01u/scaffold_smoke-preflight.json",
@@ -3300,6 +3608,10 @@
     {
       "path": "docs/evidence/P05.T01u/source-artifact-profile91-review.json",
       "sha256": "1e4aee520da904487fd111497c343b947427822d0836eb99fefb4e6ef4f41bda"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/sql-validation.json",
+      "sha256": "910efcb5e8cb4b6938b5072a4900be92c9bd2415cc1fd55aa14dbb31da50244f"
     },
     {
       "path": "docs/evidence/P05.T02/clean-build.json",

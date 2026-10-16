@@ -1,0 +1,470 @@
+{
+  "schema_version": 1,
+  "packet": "P05.T01g",
+  "status": "frozen74_synthetic_regression_passed_not_new_provider_qualification",
+  "generated_at": "2026-10-16T19:22:37.450Z",
+  "current_plan_sequence": 91,
+  "current_plan_digest": "b7a87e1f20a9b337ba6bc9ed1ef4d58746fcb5a97430e2f1ff39188305802ede",
+  "archived_plan_sequence": 74,
+  "operator_source_digest": "32bfc0f328e1cc43cfaaa12a9a90ad1fa91f48642a3da8eef3558f05f2972554",
+  "archive_manifest_digest": "67bd6361a6a3cf4ca03af737f8d5e4e201f8d21b390369368965e2c04923c055",
+  "archive_files_verified": 45,
+  "archive_unchanged": true,
+  "workspace_resolution": "copied_archived_packages_only",
+  "tooling": {
+    "node": "v24.13.0",
+    "lock_digest": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "portable_tooling_digest": "a82a4da19cc5bc86ef8eb3385843c17bc5874a2d84a6fdf2e0f9d5a61d85ea0a",
+    "platform_package": "@esbuild/linux-x64",
+    "platform_binary_digest": "bab29b2ca7a9e89b67cf720b77b2d743f9f31f5cf0d5bd74ee8c8de30ced7014",
+    "platform_package_integrity": "sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw==",
+    "platform_package_url": "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.25.12.tgz",
+    "native_binary_provenance": "official_tarball_full_SRI_verified_before_pinning"
+  },
+  "actual_postgresql": true,
+  "actual_loopback_origin": "http://127.0.0.1:4110",
+  "engine": {
+    "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+    "version": "17.11 (Debian 17.11-1.pgdg13+2)"
+  },
+  "real_provider_requests": 0,
+  "synthetic_provider_requests": 2,
+  "synthetic_jwks_reads": 9,
+  "checks": [
+    {
+      "name": "local_role_only_preauth_enabled",
+      "passed": true
+    },
+    {
+      "name": "local_role_has_no_elevation",
+      "passed": true
+    },
+    {
+      "name": "before_claim_database_empty",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_1",
+      "passed": true
+    },
+    {
+      "name": "claim_before_sql_begin",
+      "passed": true
+    },
+    {
+      "name": "actual_get_bootstrap_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_bootstrap_form_and_cookie",
+      "passed": true
+    },
+    {
+      "name": "actual_privacy_headers",
+      "passed": true
+    },
+    {
+      "name": "actual_duplicate_host_denied",
+      "passed": true
+    },
+    {
+      "name": "actual_foreign_origin_denied",
+      "passed": true
+    },
+    {
+      "name": "actual_bad_csrf_denied",
+      "passed": true
+    },
+    {
+      "name": "invalid_start_no_sql",
+      "passed": true
+    },
+    {
+      "name": "actual_start_uses_sql69",
+      "passed": true
+    },
+    {
+      "name": "actual_static_authorization_continuation",
+      "passed": true
+    },
+    {
+      "name": "actual_browser_cookie_scoped",
+      "passed": true
+    },
+    {
+      "name": "initiation_marker_precedes_link",
+      "passed": true
+    },
+    {
+      "name": "actual_missing_cookie_denied",
+      "passed": true
+    },
+    {
+      "name": "actual_duplicate_cookie_denied",
+      "passed": true
+    },
+    {
+      "name": "actual_malformed_utf8_denied",
+      "passed": true
+    },
+    {
+      "name": "actual_unknown_callback_field_denied",
+      "passed": true
+    },
+    {
+      "name": "invalid_callbacks_no_admission",
+      "passed": true
+    },
+    {
+      "name": "concurrent_callbacks_one_quick_clean_redirect",
+      "passed": true
+    },
+    {
+      "name": "synthetic_jwks_fixed_endpoint_1",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_get_1",
+      "passed": true
+    },
+    {
+      "name": "synthetic_request_fixed_endpoint_1",
+      "passed": true
+    },
+    {
+      "name": "synthetic_request_closed_fields_1",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_post_1",
+      "passed": true
+    },
+    {
+      "name": "one_real_sql_reservation_one_fake_post",
+      "passed": true
+    },
+    {
+      "name": "result_read_during_provider_wait",
+      "passed": true
+    },
+    {
+      "name": "independent_rsa_candidate_not_local_identity",
+      "passed": true
+    },
+    {
+      "name": "result_contains_no_callback_secrets",
+      "passed": true
+    },
+    {
+      "name": "repeat_callback_never_resends",
+      "passed": true
+    },
+    {
+      "name": "inspection_held_after_observation",
+      "passed": true
+    },
+    {
+      "name": "inspection_preserves_files",
+      "passed": true
+    },
+    {
+      "name": "restart_cannot_recreate_send_handle",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_2",
+      "passed": true
+    },
+    {
+      "name": "config_drift_after_admission_holds",
+      "passed": true
+    },
+    {
+      "name": "config_drift_no_send_marker",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_3",
+      "passed": true
+    },
+    {
+      "name": "synthetic_jwks_fixed_endpoint_2",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_get_2",
+      "passed": true
+    },
+    {
+      "name": "post_get_source_holds_zero_post",
+      "passed": true
+    },
+    {
+      "name": "post_get_source_restart_never_repeats_get",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_4",
+      "passed": true
+    },
+    {
+      "name": "synthetic_jwks_fixed_endpoint_3",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_get_3",
+      "passed": true
+    },
+    {
+      "name": "post_get_activation_holds_zero_post",
+      "passed": true
+    },
+    {
+      "name": "post_get_activation_restart_never_repeats_get",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_5",
+      "passed": true
+    },
+    {
+      "name": "synthetic_jwks_fixed_endpoint_4",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_get_4",
+      "passed": true
+    },
+    {
+      "name": "post_get_admission_holds_zero_post",
+      "passed": true
+    },
+    {
+      "name": "post_get_admission_restart_never_repeats_get",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_6",
+      "passed": true
+    },
+    {
+      "name": "synthetic_jwks_fixed_endpoint_5",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_get_5",
+      "passed": true
+    },
+    {
+      "name": "post_get_time_holds_zero_post",
+      "passed": true
+    },
+    {
+      "name": "post_get_time_restart_never_repeats_get",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_7",
+      "passed": true
+    },
+    {
+      "name": "synthetic_jwks_fixed_endpoint_6",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_get_6",
+      "passed": true
+    },
+    {
+      "name": "post_get_journal_bytes_holds_zero_post",
+      "passed": true
+    },
+    {
+      "name": "post_get_journal_bytes_restart_never_repeats_get",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_8",
+      "passed": true
+    },
+    {
+      "name": "synthetic_jwks_fixed_endpoint_7",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_get_7",
+      "passed": true
+    },
+    {
+      "name": "post_get_journal_inode_holds_zero_post",
+      "passed": true
+    },
+    {
+      "name": "post_get_journal_inode_restart_never_repeats_get",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_9",
+      "passed": true
+    },
+    {
+      "name": "synthetic_jwks_fixed_endpoint_8",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_get_8",
+      "passed": true
+    },
+    {
+      "name": "post_get_cancel_holds_zero_post",
+      "passed": true
+    },
+    {
+      "name": "post_get_cancel_restart_never_repeats_get",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_10",
+      "passed": true
+    },
+    {
+      "name": "controller_deadline_holds_before_actual_sql_admission",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_11",
+      "passed": true
+    },
+    {
+      "name": "real_commit_ack_loss_holds",
+      "passed": true
+    },
+    {
+      "name": "commit_loss_has_one_durable_reservation",
+      "passed": true
+    },
+    {
+      "name": "commit_loss_restart_no_retry",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_12",
+      "passed": true
+    },
+    {
+      "name": "synthetic_jwks_fixed_endpoint_9",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_get_9",
+      "passed": true
+    },
+    {
+      "name": "synthetic_request_fixed_endpoint_2",
+      "passed": true
+    },
+    {
+      "name": "synthetic_request_closed_fields_2",
+      "passed": true
+    },
+    {
+      "name": "durable_send_precedes_fake_post_2",
+      "passed": true
+    },
+    {
+      "name": "observation_ack_loss_holds_sent_attempt",
+      "passed": true
+    },
+    {
+      "name": "observation_loss_restart_no_second_post",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_13",
+      "passed": true
+    },
+    {
+      "name": "actual_listener_expiry_denied",
+      "passed": true
+    },
+    {
+      "name": "listener_expiry_no_post",
+      "passed": true
+    },
+    {
+      "name": "fresh_synthetic_claim_ready_14",
+      "passed": true
+    },
+    {
+      "name": "actual_listener_invalid_request_budget",
+      "passed": true
+    },
+    {
+      "name": "listener_rate_no_post",
+      "passed": true
+    },
+    {
+      "name": "actual_recreated_database_has_no_admission",
+      "passed": true
+    },
+    {
+      "name": "retained_journal_blocks_recreated_database",
+      "passed": true
+    },
+    {
+      "name": "all_journals_exclude_raw_proofs_codes_tokens",
+      "passed": true
+    },
+    {
+      "name": "actual_sql_output_excludes_raw_proofs_codes",
+      "passed": true
+    },
+    {
+      "name": "only_synthetic_injected_provider_posts",
+      "passed": true
+    },
+    {
+      "name": "bounded_synthetic_jwks_reads",
+      "passed": true
+    }
+  ],
+  "sources": {
+    ".nvmrc": "55ce66383dffcaf804e6d3b03993b0d332cb5d7c38e26e9f92fb78ab040dc70c",
+    "package.json": "1bada55e92017c0bfb603895c26a75f5d03de432d38929a6cf98c63dcdbf3f1d",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "tsconfig.base.json": "011325de478cc6428343b2a317d8c32ed328540dbfda49e85748d586f4eeb47d",
+    "packages/contracts/package.json": "ac4457593bffb572f880f38b3e38efc138de281eb0d0d3c7d2b90be32db66ed6",
+    "packages/identity/package.json": "2f616769f0366b4742aab1ca7e26857fe443a23a2aefbc9962fa361a20a9563b",
+    "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "infra/identity-role-prerequisites.sql": "8908ee3f90d1f48dffc21c72879357dff2bc845f1cea2851f31152bd86494a22",
+    "migrations/manifest.json": "e857148fe90182961498596386c387798cb8fb5355adac0ce0e75529fc1e4c4d",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/contracts/src/validation.ts": "e0dbcc6150ef381dd07b730921bdf08f0b8e23844349fff83e7f2b3b4e9e6abb",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "scripts/local-authentication-exchange-sql.mjs": "6cd56386ccb90ee550cb1b4ce1113feea8c81e82a810876c77c5c184af2b78f9",
+    "scripts/workos-operator-input.mjs": "8f7d6177c71ac234c0307d1a43f48e638d78348aa34c1b9cfa73f35a81f77844",
+    "scripts/workos-operator.mjs": "b0f15116d48307f4620c558a864da8ea2329733139759f521f600d98d688244a",
+    "scripts/workos-operator-journal.mjs": "821102b906c789fc907e0a63003ddcb09cbb5ef0b40c10d823a140c8d75e95fd",
+    "scripts/workos-operator-controller.mjs": "16393e75f7e96bca2194f2441fda2c4f2ee8e4e801c91e3b621d2d704fb1d2b2",
+    "scripts/workos-operator-transport.mjs": "89608097916d7ba8ce820df5352c67cf8c9f113a4c7d69af7d598d54f56d8f70",
+    "scripts/workos-operator-json.mjs": "f179547a667b1ef20dca45f035f2924108ae9dfc170c37862f506aca807acf23",
+    "scripts/workos-operator-listener.mjs": "96a08b26f30b7a0dfcee598cc83fe5cad00690a605d1cd4a8ef13f7ed733ebcd",
+    "scripts/workos-operator-lab.mjs": "ba6ca93df1dd9380dbf3dac5cf66fdf0bb8a453fa50c06a637cea4cd2c947cc3",
+    "docs/decisions/workos-operator-qualification.json": "ceed5364d4ab44ec19dfc4925bbbf1d9b90bc1c7125568ec9b106254542bdcc9",
+    "tests/workos-operator-controller.test.mjs": "dabdb554a9cecc3abc7bc71553a971531b15d86f0f86d5b25acf4031e505f12e"
+  },
+  "regression_sources": {
+    "scripts/workos-operator-regression.mjs": "439d960400acc9f2ea3a17f22b063acbb415db13d3c848656266928b93b8d26b",
+    "scripts/workos-operator74-regression.mjs": "7e5edbbc557a1d7c6f0ac239154577771f1c58188d1729a9f66ae7dfc5c04daa",
+    "tests/workos-operator74-regression.test.mjs": "763f175840578576526d6815a1cabbd73f2b10ac60ed36812bd6b14c494e33bf",
+    "tests/workos-operator-input.test.mjs": "c499d8189b7d331b2ff5ffde5f2ebbc8d46a1a4190cb737174a8fa69a70bc93e"
+  }
+}

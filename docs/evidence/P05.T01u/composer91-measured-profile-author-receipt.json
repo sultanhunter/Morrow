@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "author": "/root/fixed_provider_core",
+  "scope": "New named outside composer variant only; pinned dependency propagation to independently reviewed measured reader.",
+  "source_digests": {
+    "compose-ci-final91-measured-profile.py": "164268b0eff2d339c9cd01aec09fc3e71592962a79d75a6a4d6f41443316c8bb",
+    "test-compose-ci-final91-measured-profile.py": "4cce5f12a9638b9d717075b0dbaeb9f9a9c7ecd2189ba5baa6b996ad702a497f"
+  },
+  "preserved_originals": {
+    "compose-ci-final91.py": "ed36f1ad7b5afc40f562fb5abf727763abbe43d64c12914107e798572f4aac31",
+    "test-compose-ci-final91.py": "3dff52ce6137781866773653381a7b7620a40fc90cc9bec62902a4e123a819e1"
+  },
+  "pinned_publisher_sha256": "060c4fe56164b813ac45d88c9d547977b97c4270a4eb3fcaa11d63a0d24484c5",
+  "exact_inverse": true,
+  "unchanged_function_bodies_except_dependency_binding": true,
+  "actual_inert_guards": {
+    "count": 9,
+    "exit_code": 0,
+    "tool_chunk": "7598c8"
+  },
+  "full_pinned_help": {
+    "exit_code": 0,
+    "tool_chunk": "1890ab"
+  },
+  "actual_saved_A_domain_review": {
+    "sha256": "06e723bf82d5ddd2a71eba7759374f892329753e5d78f9c4ccef7229d0121796",
+    "actual_exit_code": 0,
+    "overall55findings": []
+  },
+  "operational_composer_main": false,
+  "Source_Git_Desktop_mutation": false,
+  "runtime_network_effects": false,
+  "limitations": [
+    "Only the saved actual A domain checker was operationally run. This new composer has not composed/applied evidence.",
+    "Actual final-B source/artifact/domain review and guarded publication remain required."
+  ]
+}

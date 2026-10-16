@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_https",
+  "result": "clear_for_narrow_final_measured_profile_helper_chain",
+  "source_review_clear": true,
+  "blocking_findings": [],
+  "outside_helper_digests": {
+    "compose-ci-final91-measured-profile.py": "164268b0eff2d339c9cd01aec09fc3e71592962a79d75a6a4d6f41443316c8bb",
+    "test-compose-ci-final91-measured-profile.py": "4cce5f12a9638b9d717075b0dbaeb9f9a9c7ecd2189ba5baa6b996ad702a497f",
+    "publish-ci-final91-measured-profile.py": "060c4fe56164b813ac45d88c9d547977b97c4270a4eb3fcaa11d63a0d24484c5",
+    "align-publication91-measured-profile.py": "f4d4a132c7e507ac445eb1f71a9dfa0503d691bc5bd27108aea366806a6885c6",
+    "test-publication91-measured-profile-guards.py": "5e7ab59e9f8f36cc2e79518875fb95d409420c47e9f1a01224dfd503521a2d26"
+  },
+  "previous_reviews": [
+    {
+      "path": "work/morrow-p01/independent-final91-helper-review.json",
+      "sha256": "c3e7fcf3f2f94986c2686e1862ae299d100263903841071d3130832f5417df0f"
+    },
+    {
+      "path": "work/morrow-p01/independent-domain91-measured-profile-review.json",
+      "sha256": "5798655d664e1ae687a5cfa2c33929eae7a2b10722c2d1e006edcb308871132f"
+    },
+    {
+      "path": "work/morrow-p01/independent-publication91-measured-profile-review.json",
+      "sha256": "c17b07ffe402d7a68073cbfcef4a0f2b2e938b872f0af417124fcfeb236198df"
+    }
+  ],
+  "composer_author_receipt": {
+    "path": "work/morrow-p01/composer91-measured-profile-author-receipt.json",
+    "sha256": "f6b58ac535e0edc79be753882f77ecc2e0772b4ad3d1f0253c545323d57e44f4"
+  },
+  "independent_checks": {
+    "complete_composer_and_test_diffs_read": true,
+    "all_five_files_exact_inverse_to_reviewed_originals": true,
+    "composer_inert_guards": 9,
+    "composer_inert_actual_exit_code": 0,
+    "composer_inert_chunk": "1bd9cc",
+    "composer_full_help_exit_code": 0,
+    "composer_help_chunk": "970ee7",
+    "publisher_alignment_guards": 16,
+    "publisher_alignment_actual_exit_code": 0,
+    "publisher_alignment_chunk": "e33ef1",
+    "publisher_help_exit_code": 0,
+    "publisher_help_chunk": "3d6314",
+    "alignment_help_exit_code": 0,
+    "alignment_help_chunk": "12c292"
+  },
+  "delta": "Composer changes only exact publisher filename and digest; test imports point to the new measured-profile names. Exact inverse restores ed36f1ad composer and3dff52ce test bytes. Publisher/alignment likewise retain their previous exact logic after dependency-name/hash inverse. No count, raw archive, actual identity, independent review, A-to-B, evidence-only scope or guarded Desktop requirement is changed.",
+  "limits": [
+    "Outside tooling source/inert review only; no operational main/apply, Source/Page/Git/Desktop/network/provider/native/SQL effect by reviewer.",
+    "Actual A reader recheck and all qualification receipts must be independently clear and bound before composition. Final-B fresh exactCI/artifact/domain review precedes Desktop publication.",
+    "Initial c02 domain schema hold and original helpers remain immutable; a compatibility reader does not rewrite the actual source, checks or initial result."
+  ]
+}

@@ -1,0 +1,4869 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "phase": "U01_unchanged_generic_and_U05_managed_native_request_lifetime",
+  "status": "passed",
+  "source_digests": {
+    "docs/packets/P05.T01u.md": "4e1ccdcb25ebf69a04bc42c20afa2c7d841bc5c8305e6adb26089c356e9545c3",
+    "docs/plan/build-plan.md": "b7a87e1f20a9b337ba6bc9ed1ef4d58746fcb5a97430e2f1ff39188305802ede",
+    "docs/plan/source.json": "b53f03408def89fe6f2c8cf46a779e07dfb9cdcf8cce71f6fc07d1d14c7bad68",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "package.json": "3f72d49320ccd224479e0d5eb639e3ff8a9946b4d1ce5c27f8be005a58fab4e6",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/identity/src/controlled-neon-login-pool.ts": "c0aad7e65fcf30c913ff24c90cba9b40d303c988be1b80a3f1d6ce1aefd710ac",
+    "packages/identity/src/controlled-neon-login-profiles.ts": "16645b5091135424192dc40cf548d3c5fee74b7a88527f23685dc550bdbcdeee",
+    "packages/identity/src/controlled-neon-transport.ts": "b87761b89fbbd72ae80088412e18dabd1ff1706e547583d9064d520dcfa3c43e",
+    "packages/identity/src/fixed-workos-login-port.ts": "415c00a69f74626ca2962357c7754c4f9d1a7837f034f7e74c82b5f59576e14f",
+    "packages/identity/src/login-flow-custody.ts": "5ab4256c9269886b83578669ec15ee263a51ed72b0eb04892fecc600aa56d503",
+    "packages/identity/src/login-preauth-control.ts": "372b5720cde644e9acf8458baa378fb1cf9bd879e6a4a2742dec30aada1c397f",
+    "packages/identity/src/managed-login-capsule.ts": "24d46628c8717fe3a936f94b12dcf56c6a559d6895bbc4a388a41e87912d3153",
+    "packages/identity/src/managed-login-request-scope.ts": "a4699a12cfd8cc895b0369ffeaf54ede92a5584783c70c7dbf2d33aa74a690f3",
+    "packages/identity/src/managed-login-request.ts": "87d729f32b8c4deaca7d7f0cefc18ef0ec679ffba8e87fe46c8ca74297148c51",
+    "packages/identity/src/standalone-login-protocol.ts": "0d75b3fd7efda9caf1938086b05fe433109de5a835e404655fb0b7d64b030078",
+    "packages/identity/src/standalone-login.ts": "61456a4e1c4a8f213e060e4b74cf936c41bafac3a634747d82388460ae6d9563",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-browser-session-admission.ts": "6b9f443c3bfd4c5d661615c9f4f311c4a4d3034f2259896b951aa3afa8f587ca",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+    "scripts/fixtures/fixed-workos-platform-provider.mjs": "821d874777f2bec89d62dfb32739d7f858ac2632595f753dc699c4c733a60b15",
+    "scripts/fixtures/fixed-workos-provider.mjs": "f374a8e04578565f5ae3afe8873183344f7111356c4a6b6c9229ccc92fc01b26",
+    "scripts/fixtures/managed-login-cleanup-gate.mjs": "7cfbf50014124b057dc4a63d2d00848e071c119b25a5e21bae82f8ec017d2520",
+    "scripts/fixtures/managed-login-lifetime-worker.ts": "a9c1802628442f27c7774b1cda75abd85c10ed43d1554f818aa9beaad2e5e557",
+    "scripts/fixtures/managed-login-request-worker.ts": "d7c67a67b92ad0860faf8ed6cb57ffba38cca3c392e2c8e960894fa8d08836c0",
+    "scripts/managed-login-lifetime-workers-lab.mjs": "f97b09356d6ee2a887d477cbb5f327ec5c8491fb8141467f2fd02c5d66552e10",
+    "tests/managed-login-cleanup-gate.test.mjs": "708a26168b34a58dbb5e7cb37272097619f4f727e12844338978961016ebbba6"
+  },
+  "source_inventory_digest": "17af5c8ad0f56a786a4458d9625b53a704e3139d5a8930e2a61a8f200c6c3abf",
+  "runtimeDependencyDigests": {
+    "node_modules/miniflare/package.json": "f0025bdc4b9b70199ea393572c23ca35ea58efa3d81b270f19f5e8c8d27771f4",
+    "node_modules/miniflare/dist/src/index.js": "25f0935c66e24b503a64561e77625b1dd163995ce2177485e3be48d05bde7d45",
+    "node_modules/workerd/package.json": "5edae90469333c86e194a75358e80dbe5b1d3c259860794850e53ce8f240f762",
+    "node_modules/@neondatabase/serverless/package.json": "918affae421d21e41b19dcc0fa10fdfa5e5df196eb556265263926a8c2999e5a",
+    "node_modules/@neondatabase/serverless/index.mjs": "50f98b3540f02327ebe4d5423509fe15b820af87c512cee1b2b7322a8ef77699"
+  },
+  "runtime": {
+    "node": "v24.13.0",
+    "miniflare": "4.20260730.0",
+    "workerd": "1.20260730.1",
+    "compatibilityDate": "2026-07-30",
+    "compatibilityFlags": [
+      "nodejs_compat"
+    ]
+  },
+  "checks": [
+    {
+      "name": "generic_worker_has_only_its_own_source",
+      "passed": true
+    },
+    {
+      "name": "negative:same_finite_owner_body",
+      "passed": true
+    },
+    {
+      "name": "negative:gate_and_ack_admitted_before_body",
+      "passed": true
+    },
+    {
+      "name": "negative:native_distinction",
+      "passed": true
+    },
+    {
+      "name": "negative:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "negative:owned_handles_and_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "positive:same_finite_owner_body",
+      "passed": true
+    },
+    {
+      "name": "positive:gate_and_ack_admitted_before_body",
+      "passed": true
+    },
+    {
+      "name": "positive:gate_still_pending_after_body",
+      "passed": true
+    },
+    {
+      "name": "positive:native_distinction",
+      "passed": true
+    },
+    {
+      "name": "positive:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "positive:owned_handles_and_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "routed_negative:same_finite_owner_body",
+      "passed": true
+    },
+    {
+      "name": "routed_negative:gate_and_ack_admitted_before_body",
+      "passed": true
+    },
+    {
+      "name": "routed_negative:native_distinction",
+      "passed": true
+    },
+    {
+      "name": "routed_negative:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "routed_negative:owned_handles_and_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "routed_positive:same_finite_owner_body",
+      "passed": true
+    },
+    {
+      "name": "routed_positive:gate_and_ack_admitted_before_body",
+      "passed": true
+    },
+    {
+      "name": "routed_positive:gate_still_pending_after_body",
+      "passed": true
+    },
+    {
+      "name": "routed_positive:native_distinction",
+      "passed": true
+    },
+    {
+      "name": "routed_positive:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "routed_positive:owned_handles_and_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "actual_sdk_version_1_2_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:no_runtime_schema_compiler",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:same_original_attempt_and_registered_cleanup_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:source_P_pending_at_handoff_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:finite_held_no_cookie_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:held_while_source_cleanup_pending",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:exact_source_P_settled_once",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:post_response_read_ack_then_P_settlement",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:no_post_hold_observer_or_retry",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:independent_protocol_fault_classification",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:independently_accepted_business_query",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:no_unexpected_egress",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_post_response_ack:all_owned_gate_handles_and_pair_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:no_runtime_schema_compiler",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:same_original_attempt_and_registered_cleanup_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:source_P_pending_at_handoff_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:finite_held_no_cookie_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:held_while_source_cleanup_pending",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:exact_source_P_settled_once",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:no_post_hold_observer_or_retry",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:independent_protocol_fault_classification",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:independently_accepted_business_query",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:no_unexpected_egress",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack:all_owned_gate_handles_and_pair_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:no_runtime_schema_compiler",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:same_original_attempt_and_registered_cleanup_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:source_P_pending_at_handoff_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:finite_held_no_cookie_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:held_while_source_cleanup_pending",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:exact_source_P_settled_once",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:no_post_hold_observer_or_retry",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:independent_protocol_fault_classification",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:independently_accepted_business_query",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:no_unexpected_egress",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack:all_owned_gate_handles_and_pair_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:no_runtime_schema_compiler",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:same_original_attempt_and_registered_cleanup_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:source_P_pending_at_handoff_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:finite_held_no_cookie_0",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:held_while_source_cleanup_pending",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:exact_source_P_settled_once",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:no_post_hold_observer_or_retry",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:independent_protocol_fault_classification",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:independently_accepted_business_query",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:no_unexpected_egress",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome:all_owned_gate_handles_and_pair_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:no_runtime_schema_compiler",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:same_original_attempt_and_registered_cleanup_0",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:source_P_pending_at_handoff_0",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:finite_held_no_cookie_0",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:same_original_attempt_and_registered_cleanup_1",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:source_P_pending_at_handoff_1",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:finite_held_no_cookie_1",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:held_while_source_cleanup_pending",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:exact_source_P_settled_once",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:post_response_read_ack_then_P_settlement",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:no_post_hold_observer_or_retry",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:independent_protocol_fault_classification",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:independently_accepted_business_query",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:no_unexpected_egress",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "managed_concurrent_scopes:all_owned_gate_handles_and_pair_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "managed_non101_failed_connect:no_runtime_schema_compiler",
+      "passed": true
+    },
+    {
+      "name": "managed_non101_failed_connect:same_original_attempt_and_registered_cleanup_0",
+      "passed": true
+    },
+    {
+      "name": "managed_non101_failed_connect:finite_held_no_cookie_0",
+      "passed": true
+    },
+    {
+      "name": "managed_non101_failed_connect:exact_source_P_settled_once",
+      "passed": true
+    },
+    {
+      "name": "managed_non101_failed_connect:no_post_hold_observer_or_retry",
+      "passed": true
+    },
+    {
+      "name": "managed_non101_failed_connect:independent_protocol_fault_classification",
+      "passed": true
+    },
+    {
+      "name": "managed_non101_failed_connect:no_unexpected_egress",
+      "passed": true
+    },
+    {
+      "name": "managed_non101_failed_connect:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "managed_non101_failed_connect:all_owned_gate_handles_and_pair_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect:no_runtime_schema_compiler",
+      "passed": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect:same_original_attempt_and_registered_cleanup_0",
+      "passed": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect:finite_held_no_cookie_0",
+      "passed": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect:exact_source_P_settled_once",
+      "passed": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect:no_post_hold_observer_or_retry",
+      "passed": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect:independent_protocol_fault_classification",
+      "passed": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect:no_unexpected_egress",
+      "passed": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect:all_owned_gate_handles_and_pair_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal:no_runtime_schema_compiler",
+      "passed": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal:same_original_attempt_and_registered_cleanup_0",
+      "passed": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal:finite_held_no_cookie_0",
+      "passed": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal:exact_source_P_settled_once",
+      "passed": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal:no_post_hold_observer_or_retry",
+      "passed": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal:independent_protocol_fault_classification",
+      "passed": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal:no_unexpected_egress",
+      "passed": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal:all_owned_gate_handles_and_pair_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "managed_late_101_handle:no_runtime_schema_compiler",
+      "passed": true
+    },
+    {
+      "name": "managed_late_101_handle:same_original_attempt_and_registered_cleanup_0",
+      "passed": true
+    },
+    {
+      "name": "managed_late_101_handle:finite_held_no_cookie_0",
+      "passed": true
+    },
+    {
+      "name": "managed_late_101_handle:exact_source_P_settled_once",
+      "passed": true
+    },
+    {
+      "name": "managed_late_101_handle:no_post_hold_observer_or_retry",
+      "passed": true
+    },
+    {
+      "name": "managed_late_101_handle:independent_protocol_fault_classification",
+      "passed": true
+    },
+    {
+      "name": "managed_late_101_handle:late_native_handle_after_finite_body_without_application_bytes",
+      "passed": true
+    },
+    {
+      "name": "managed_late_101_handle:no_unexpected_egress",
+      "passed": true
+    },
+    {
+      "name": "managed_late_101_handle:runtime_disposal_acknowledged",
+      "passed": true
+    },
+    {
+      "name": "managed_late_101_handle:all_owned_gate_handles_and_pair_listeners_closed",
+      "passed": true
+    },
+    {
+      "name": "no_pending_host_watchdogs",
+      "passed": true
+    },
+    {
+      "name": "all_source_bytes_unchanged",
+      "passed": true
+    }
+  ],
+  "checkCount": 128,
+  "cases": [
+    {
+      "name": "negative",
+      "failure": null,
+      "elapsedMs": 201.10349000000008,
+      "routed": false,
+      "sourceExpectedWaitUntilCalls": 0,
+      "natural": {
+        "requests": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 0,
+          "unexpected": 0
+        },
+        "interceptedRequests": 2,
+        "unobservedOverflowResponseClosures": 0,
+        "gateOpened": false,
+        "ownerBodyComplete": true,
+        "naturalPrematureUnfinishedResponseClose": true,
+        "gateReadMarker": false,
+        "ambiguousErrors": 1,
+        "ignoredIncomingCloses": 2,
+        "forcedCleanupStarted": false,
+        "activeResponses": 0,
+        "responseHandles": 2,
+        "responseCloseAcknowledgements": 2,
+        "responseFinishAcknowledgements": 1,
+        "closedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 0
+        },
+        "finishedByRoute": {
+          "gate": 0,
+          "accepted": 1,
+          "complete": 0
+        },
+        "activeListeners": 10,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "gate:admitted",
+            "at": 724.888331
+          },
+          {
+            "sequence": 2,
+            "name": "accepted:admitted",
+            "at": 725.752734
+          },
+          {
+            "sequence": 3,
+            "name": "accepted:acknowledgement_sent",
+            "at": 725.756882
+          },
+          {
+            "sequence": 4,
+            "name": "accepted:response_finish",
+            "at": 728.701421
+          },
+          {
+            "sequence": 5,
+            "name": "accepted:response_close",
+            "at": 728.914095
+          },
+          {
+            "sequence": 6,
+            "name": "accepted:incoming_close_ignored",
+            "at": 729.099419
+          },
+          {
+            "sequence": 7,
+            "name": "gate:response_close",
+            "at": 742.524089
+          },
+          {
+            "sequence": 8,
+            "name": "gate:natural_premature_unfinished_close",
+            "at": 742.546972
+          },
+          {
+            "sequence": 9,
+            "name": "gate:incoming_error_ambiguous",
+            "at": 742.597385
+          },
+          {
+            "sequence": 10,
+            "name": "gate:incoming_close_ignored",
+            "at": 742.620849
+          },
+          {
+            "sequence": 11,
+            "name": "owner:finite_body_completed",
+            "at": 745.247308
+          }
+        ]
+      },
+      "cleanup": {
+        "requests": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 0,
+          "unexpected": 0
+        },
+        "interceptedRequests": 2,
+        "unobservedOverflowResponseClosures": 0,
+        "gateOpened": false,
+        "ownerBodyComplete": true,
+        "naturalPrematureUnfinishedResponseClose": true,
+        "gateReadMarker": false,
+        "ambiguousErrors": 1,
+        "ignoredIncomingCloses": 2,
+        "forcedCleanupStarted": true,
+        "activeResponses": 0,
+        "responseHandles": 2,
+        "responseCloseAcknowledgements": 2,
+        "responseFinishAcknowledgements": 1,
+        "closedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 0
+        },
+        "finishedByRoute": {
+          "gate": 0,
+          "accepted": 1,
+          "complete": 0
+        },
+        "activeListeners": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "gate:admitted",
+            "at": 724.888331
+          },
+          {
+            "sequence": 2,
+            "name": "accepted:admitted",
+            "at": 725.752734
+          },
+          {
+            "sequence": 3,
+            "name": "accepted:acknowledgement_sent",
+            "at": 725.756882
+          },
+          {
+            "sequence": 4,
+            "name": "accepted:response_finish",
+            "at": 728.701421
+          },
+          {
+            "sequence": 5,
+            "name": "accepted:response_close",
+            "at": 728.914095
+          },
+          {
+            "sequence": 6,
+            "name": "accepted:incoming_close_ignored",
+            "at": 729.099419
+          },
+          {
+            "sequence": 7,
+            "name": "gate:response_close",
+            "at": 742.524089
+          },
+          {
+            "sequence": 8,
+            "name": "gate:natural_premature_unfinished_close",
+            "at": 742.546972
+          },
+          {
+            "sequence": 9,
+            "name": "gate:incoming_error_ambiguous",
+            "at": 742.597385
+          },
+          {
+            "sequence": 10,
+            "name": "gate:incoming_close_ignored",
+            "at": 742.620849
+          },
+          {
+            "sequence": 11,
+            "name": "owner:finite_body_completed",
+            "at": 745.247308
+          },
+          {
+            "sequence": 12,
+            "name": "fixture:forced_cleanup_started",
+            "at": 745.608678
+          }
+        ]
+      },
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "positive",
+      "failure": null,
+      "elapsedMs": 101.18272999999999,
+      "routed": false,
+      "sourceExpectedWaitUntilCalls": 1,
+      "natural": {
+        "requests": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1,
+          "unexpected": 0
+        },
+        "interceptedRequests": 3,
+        "unobservedOverflowResponseClosures": 0,
+        "gateOpened": true,
+        "ownerBodyComplete": true,
+        "naturalPrematureUnfinishedResponseClose": false,
+        "gateReadMarker": true,
+        "ambiguousErrors": 0,
+        "ignoredIncomingCloses": 3,
+        "forcedCleanupStarted": false,
+        "activeResponses": 0,
+        "responseHandles": 3,
+        "responseCloseAcknowledgements": 3,
+        "responseFinishAcknowledgements": 3,
+        "closedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1
+        },
+        "finishedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1
+        },
+        "activeListeners": 17,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "gate:admitted",
+            "at": 844.356176
+          },
+          {
+            "sequence": 2,
+            "name": "accepted:admitted",
+            "at": 844.585762
+          },
+          {
+            "sequence": 3,
+            "name": "accepted:acknowledgement_sent",
+            "at": 844.587084
+          },
+          {
+            "sequence": 4,
+            "name": "accepted:response_finish",
+            "at": 844.797635
+          },
+          {
+            "sequence": 5,
+            "name": "accepted:response_close",
+            "at": 844.840815
+          },
+          {
+            "sequence": 6,
+            "name": "accepted:incoming_close_ignored",
+            "at": 844.889255
+          },
+          {
+            "sequence": 7,
+            "name": "owner:finite_body_completed",
+            "at": 848.890964
+          },
+          {
+            "sequence": 8,
+            "name": "gate:host_opened_after_owner_body",
+            "at": 848.980971
+          },
+          {
+            "sequence": 9,
+            "name": "gate:response_finish",
+            "at": 849.779902
+          },
+          {
+            "sequence": 10,
+            "name": "gate:response_close",
+            "at": 849.804418
+          },
+          {
+            "sequence": 11,
+            "name": "gate:incoming_close_ignored",
+            "at": 849.829204
+          },
+          {
+            "sequence": 12,
+            "name": "complete:admitted",
+            "at": 850.011532
+          },
+          {
+            "sequence": 13,
+            "name": "complete:gate_read_marker_validated",
+            "at": 850.278507
+          },
+          {
+            "sequence": 14,
+            "name": "complete:response_finish",
+            "at": 850.496311
+          },
+          {
+            "sequence": 15,
+            "name": "complete:response_close",
+            "at": 850.509164
+          },
+          {
+            "sequence": 16,
+            "name": "complete:incoming_close_ignored",
+            "at": 850.512631
+          }
+        ]
+      },
+      "cleanup": {
+        "requests": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1,
+          "unexpected": 0
+        },
+        "interceptedRequests": 3,
+        "unobservedOverflowResponseClosures": 0,
+        "gateOpened": true,
+        "ownerBodyComplete": true,
+        "naturalPrematureUnfinishedResponseClose": false,
+        "gateReadMarker": true,
+        "ambiguousErrors": 0,
+        "ignoredIncomingCloses": 3,
+        "forcedCleanupStarted": true,
+        "activeResponses": 0,
+        "responseHandles": 3,
+        "responseCloseAcknowledgements": 3,
+        "responseFinishAcknowledgements": 3,
+        "closedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1
+        },
+        "finishedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1
+        },
+        "activeListeners": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "gate:admitted",
+            "at": 844.356176
+          },
+          {
+            "sequence": 2,
+            "name": "accepted:admitted",
+            "at": 844.585762
+          },
+          {
+            "sequence": 3,
+            "name": "accepted:acknowledgement_sent",
+            "at": 844.587084
+          },
+          {
+            "sequence": 4,
+            "name": "accepted:response_finish",
+            "at": 844.797635
+          },
+          {
+            "sequence": 5,
+            "name": "accepted:response_close",
+            "at": 844.840815
+          },
+          {
+            "sequence": 6,
+            "name": "accepted:incoming_close_ignored",
+            "at": 844.889255
+          },
+          {
+            "sequence": 7,
+            "name": "owner:finite_body_completed",
+            "at": 848.890964
+          },
+          {
+            "sequence": 8,
+            "name": "gate:host_opened_after_owner_body",
+            "at": 848.980971
+          },
+          {
+            "sequence": 9,
+            "name": "gate:response_finish",
+            "at": 849.779902
+          },
+          {
+            "sequence": 10,
+            "name": "gate:response_close",
+            "at": 849.804418
+          },
+          {
+            "sequence": 11,
+            "name": "gate:incoming_close_ignored",
+            "at": 849.829204
+          },
+          {
+            "sequence": 12,
+            "name": "complete:admitted",
+            "at": 850.011532
+          },
+          {
+            "sequence": 13,
+            "name": "complete:gate_read_marker_validated",
+            "at": 850.278507
+          },
+          {
+            "sequence": 14,
+            "name": "complete:response_finish",
+            "at": 850.496311
+          },
+          {
+            "sequence": 15,
+            "name": "complete:response_close",
+            "at": 850.509164
+          },
+          {
+            "sequence": 16,
+            "name": "complete:incoming_close_ignored",
+            "at": 850.512631
+          },
+          {
+            "sequence": 17,
+            "name": "fixture:forced_cleanup_started",
+            "at": 850.586808
+          }
+        ]
+      },
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "routed_negative",
+      "failure": null,
+      "elapsedMs": 136.54427199999998,
+      "routed": true,
+      "sourceExpectedWaitUntilCalls": 0,
+      "natural": {
+        "requests": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 0,
+          "unexpected": 0
+        },
+        "interceptedRequests": 2,
+        "unobservedOverflowResponseClosures": 0,
+        "gateOpened": false,
+        "ownerBodyComplete": true,
+        "naturalPrematureUnfinishedResponseClose": true,
+        "gateReadMarker": false,
+        "ambiguousErrors": 1,
+        "ignoredIncomingCloses": 2,
+        "forcedCleanupStarted": false,
+        "activeResponses": 0,
+        "responseHandles": 2,
+        "responseCloseAcknowledgements": 2,
+        "responseFinishAcknowledgements": 1,
+        "closedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 0
+        },
+        "finishedByRoute": {
+          "gate": 0,
+          "accepted": 1,
+          "complete": 0
+        },
+        "activeListeners": 10,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "gate:admitted",
+            "at": 972.44565
+          },
+          {
+            "sequence": 2,
+            "name": "accepted:admitted",
+            "at": 972.753981
+          },
+          {
+            "sequence": 3,
+            "name": "accepted:acknowledgement_sent",
+            "at": 972.755374
+          },
+          {
+            "sequence": 4,
+            "name": "accepted:response_finish",
+            "at": 973.100283
+          },
+          {
+            "sequence": 5,
+            "name": "accepted:response_close",
+            "at": 973.133555
+          },
+          {
+            "sequence": 6,
+            "name": "accepted:incoming_close_ignored",
+            "at": 974.454073
+          },
+          {
+            "sequence": 7,
+            "name": "gate:response_close",
+            "at": 978.258948
+          },
+          {
+            "sequence": 8,
+            "name": "gate:natural_premature_unfinished_close",
+            "at": 978.261453
+          },
+          {
+            "sequence": 9,
+            "name": "gate:incoming_error_ambiguous",
+            "at": 978.27627
+          },
+          {
+            "sequence": 10,
+            "name": "gate:incoming_close_ignored",
+            "at": 978.278014
+          },
+          {
+            "sequence": 11,
+            "name": "owner:finite_body_completed",
+            "at": 981.275561
+          }
+        ]
+      },
+      "cleanup": {
+        "requests": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 0,
+          "unexpected": 0
+        },
+        "interceptedRequests": 2,
+        "unobservedOverflowResponseClosures": 0,
+        "gateOpened": false,
+        "ownerBodyComplete": true,
+        "naturalPrematureUnfinishedResponseClose": true,
+        "gateReadMarker": false,
+        "ambiguousErrors": 1,
+        "ignoredIncomingCloses": 2,
+        "forcedCleanupStarted": true,
+        "activeResponses": 0,
+        "responseHandles": 2,
+        "responseCloseAcknowledgements": 2,
+        "responseFinishAcknowledgements": 1,
+        "closedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 0
+        },
+        "finishedByRoute": {
+          "gate": 0,
+          "accepted": 1,
+          "complete": 0
+        },
+        "activeListeners": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "gate:admitted",
+            "at": 972.44565
+          },
+          {
+            "sequence": 2,
+            "name": "accepted:admitted",
+            "at": 972.753981
+          },
+          {
+            "sequence": 3,
+            "name": "accepted:acknowledgement_sent",
+            "at": 972.755374
+          },
+          {
+            "sequence": 4,
+            "name": "accepted:response_finish",
+            "at": 973.100283
+          },
+          {
+            "sequence": 5,
+            "name": "accepted:response_close",
+            "at": 973.133555
+          },
+          {
+            "sequence": 6,
+            "name": "accepted:incoming_close_ignored",
+            "at": 974.454073
+          },
+          {
+            "sequence": 7,
+            "name": "gate:response_close",
+            "at": 978.258948
+          },
+          {
+            "sequence": 8,
+            "name": "gate:natural_premature_unfinished_close",
+            "at": 978.261453
+          },
+          {
+            "sequence": 9,
+            "name": "gate:incoming_error_ambiguous",
+            "at": 978.27627
+          },
+          {
+            "sequence": 10,
+            "name": "gate:incoming_close_ignored",
+            "at": 978.278014
+          },
+          {
+            "sequence": 11,
+            "name": "owner:finite_body_completed",
+            "at": 981.275561
+          },
+          {
+            "sequence": 12,
+            "name": "fixture:forced_cleanup_started",
+            "at": 981.535213
+          }
+        ]
+      },
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "routed_positive",
+      "failure": null,
+      "elapsedMs": 134.893412,
+      "routed": true,
+      "sourceExpectedWaitUntilCalls": 1,
+      "natural": {
+        "requests": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1,
+          "unexpected": 0
+        },
+        "interceptedRequests": 3,
+        "unobservedOverflowResponseClosures": 0,
+        "gateOpened": true,
+        "ownerBodyComplete": true,
+        "naturalPrematureUnfinishedResponseClose": false,
+        "gateReadMarker": true,
+        "ambiguousErrors": 0,
+        "ignoredIncomingCloses": 3,
+        "forcedCleanupStarted": false,
+        "activeResponses": 0,
+        "responseHandles": 3,
+        "responseCloseAcknowledgements": 3,
+        "responseFinishAcknowledgements": 3,
+        "closedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1
+        },
+        "finishedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1
+        },
+        "activeListeners": 17,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "gate:admitted",
+            "at": 1118.652882
+          },
+          {
+            "sequence": 2,
+            "name": "accepted:admitted",
+            "at": 1118.80295
+          },
+          {
+            "sequence": 3,
+            "name": "accepted:acknowledgement_sent",
+            "at": 1118.804894
+          },
+          {
+            "sequence": 4,
+            "name": "accepted:response_finish",
+            "at": 1119.110591
+          },
+          {
+            "sequence": 5,
+            "name": "accepted:response_close",
+            "at": 1119.146176
+          },
+          {
+            "sequence": 6,
+            "name": "accepted:incoming_close_ignored",
+            "at": 1119.188956
+          },
+          {
+            "sequence": 7,
+            "name": "owner:finite_body_completed",
+            "at": 1122.03891
+          },
+          {
+            "sequence": 8,
+            "name": "gate:host_opened_after_owner_body",
+            "at": 1122.059248
+          },
+          {
+            "sequence": 9,
+            "name": "gate:response_finish",
+            "at": 1122.254439
+          },
+          {
+            "sequence": 10,
+            "name": "gate:response_close",
+            "at": 1122.269938
+          },
+          {
+            "sequence": 11,
+            "name": "gate:incoming_close_ignored",
+            "at": 1122.29234
+          },
+          {
+            "sequence": 12,
+            "name": "complete:admitted",
+            "at": 1123.072627
+          },
+          {
+            "sequence": 13,
+            "name": "complete:gate_read_marker_validated",
+            "at": 1123.191316
+          },
+          {
+            "sequence": 14,
+            "name": "complete:response_finish",
+            "at": 1123.40341
+          },
+          {
+            "sequence": 15,
+            "name": "complete:response_close",
+            "at": 1123.428536
+          },
+          {
+            "sequence": 16,
+            "name": "complete:incoming_close_ignored",
+            "at": 1123.434357
+          }
+        ]
+      },
+      "cleanup": {
+        "requests": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1,
+          "unexpected": 0
+        },
+        "interceptedRequests": 3,
+        "unobservedOverflowResponseClosures": 0,
+        "gateOpened": true,
+        "ownerBodyComplete": true,
+        "naturalPrematureUnfinishedResponseClose": false,
+        "gateReadMarker": true,
+        "ambiguousErrors": 0,
+        "ignoredIncomingCloses": 3,
+        "forcedCleanupStarted": true,
+        "activeResponses": 0,
+        "responseHandles": 3,
+        "responseCloseAcknowledgements": 3,
+        "responseFinishAcknowledgements": 3,
+        "closedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1
+        },
+        "finishedByRoute": {
+          "gate": 1,
+          "accepted": 1,
+          "complete": 1
+        },
+        "activeListeners": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "gate:admitted",
+            "at": 1118.652882
+          },
+          {
+            "sequence": 2,
+            "name": "accepted:admitted",
+            "at": 1118.80295
+          },
+          {
+            "sequence": 3,
+            "name": "accepted:acknowledgement_sent",
+            "at": 1118.804894
+          },
+          {
+            "sequence": 4,
+            "name": "accepted:response_finish",
+            "at": 1119.110591
+          },
+          {
+            "sequence": 5,
+            "name": "accepted:response_close",
+            "at": 1119.146176
+          },
+          {
+            "sequence": 6,
+            "name": "accepted:incoming_close_ignored",
+            "at": 1119.188956
+          },
+          {
+            "sequence": 7,
+            "name": "owner:finite_body_completed",
+            "at": 1122.03891
+          },
+          {
+            "sequence": 8,
+            "name": "gate:host_opened_after_owner_body",
+            "at": 1122.059248
+          },
+          {
+            "sequence": 9,
+            "name": "gate:response_finish",
+            "at": 1122.254439
+          },
+          {
+            "sequence": 10,
+            "name": "gate:response_close",
+            "at": 1122.269938
+          },
+          {
+            "sequence": 11,
+            "name": "gate:incoming_close_ignored",
+            "at": 1122.29234
+          },
+          {
+            "sequence": 12,
+            "name": "complete:admitted",
+            "at": 1123.072627
+          },
+          {
+            "sequence": 13,
+            "name": "complete:gate_read_marker_validated",
+            "at": 1123.191316
+          },
+          {
+            "sequence": 14,
+            "name": "complete:response_finish",
+            "at": 1123.40341
+          },
+          {
+            "sequence": 15,
+            "name": "complete:response_close",
+            "at": 1123.428536
+          },
+          {
+            "sequence": 16,
+            "name": "complete:incoming_close_ignored",
+            "at": 1123.434357
+          },
+          {
+            "sequence": 17,
+            "name": "fixture:forced_cleanup_started",
+            "at": 1123.511089
+          }
+        ]
+      },
+      "runtimeDisposalAcknowledged": true
+    }
+  ],
+  "caseCount": 13,
+  "managedCases": [
+    {
+      "name": "managed_pending_query_post_response_ack",
+      "expected": "held",
+      "failure": null,
+      "responses": [
+        {
+          "status": 503,
+          "body": "{\"schemaVersion\":1,\"outcome\":\"login_unavailable\"}",
+          "cookies": 0,
+          "metrics": {
+            "response": {
+              "cacheHit": false,
+              "cacheResolved": true,
+              "scope": {
+                "publicationAttempts": 1,
+                "publicationAccepted": 1,
+                "publicationFailures": 0,
+                "duplicatePublicationAttempts": 0,
+                "publishedPending": 1,
+                "publishedSettled": 0,
+                "ownerMismatches": 0,
+                "namespaceMismatches": 0,
+                "businessDenials": 0
+              },
+              "pools": {
+                "loginPool": {
+                  "connectAttempts": 1,
+                  "borrowAttempts": 1,
+                  "leasesAcquired": 1,
+                  "leaseReleaseAttempts": 1,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 1,
+                  "primaryConnects": 1,
+                  "primaryAttributions": 1,
+                  "querySubmissions": 1,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 1,
+                  "unverifiedReleases": 1,
+                  "socketAttempts": 1,
+                  "socketsAcquired": 1,
+                  "socketCloseAttempts": 1,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 4,
+                  "framesReceived": 3,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 1,
+                  "activeWaitListeners": 4
+                },
+                "preauthPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "selectionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "sessionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                }
+              },
+              "enteredAtMs": 1792178064193,
+              "initialDeadlineMs": 1792178089193,
+              "finalDeadlineMs": 1792178069193,
+              "attemptEnded": true
+            },
+            "leases": {
+              "borrows": 1,
+              "releaseAttempts": 1,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 1
+            },
+            "workos": {
+              "borrows": 0,
+              "releaseAttempts": 0,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 0
+            },
+            "fixtureClock": null
+          }
+        }
+      ],
+      "settlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 2,
+          "observedAt": 7435.301267
+        }
+      ],
+      "brokerEvents": [
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 1,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 1,
+          "releaseAcknowledgements": 1,
+          "activeLeases": 0,
+          "observedAt": 7434.975774
+        }
+      ],
+      "cleanupSettlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 2,
+          "observedAt": 7435.301267
+        }
+      ],
+      "cleanupBrokerEvents": [
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 1,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 1,
+          "releaseAcknowledgements": 1,
+          "activeLeases": 0,
+          "observedAt": 7434.975774
+        }
+      ],
+      "lateGateObservation": null,
+      "bodyCompletedAt": 7431.227785,
+      "natural": {
+        "callbacks": 2,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 1,
+        "acknowledgements": 1,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": false,
+        "responseHandles": 2,
+        "responseCloseAcknowledgements": 2,
+        "responseFinishAcknowledgements": 2,
+        "activeResponses": 0,
+        "activeListeners": 10,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "lease:admitted",
+            "id": 1,
+            "at": 7430.25426
+          },
+          {
+            "sequence": 2,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 7431.294118
+          },
+          {
+            "sequence": 3,
+            "name": "lease:opened_after_body",
+            "id": 1,
+            "at": 7431.599755
+          },
+          {
+            "sequence": 4,
+            "name": "lease:finished",
+            "id": 1,
+            "at": 7431.994637
+          },
+          {
+            "sequence": 5,
+            "name": "lease:closed",
+            "id": 1,
+            "at": 7432.085375
+          },
+          {
+            "sequence": 6,
+            "name": "complete:admitted",
+            "id": 1,
+            "at": 7433.057477
+          },
+          {
+            "sequence": 7,
+            "name": "complete:read_validated",
+            "id": 1,
+            "at": 7433.298945
+          },
+          {
+            "sequence": 8,
+            "name": "complete:finished",
+            "id": 1,
+            "at": 7433.46353
+          },
+          {
+            "sequence": 9,
+            "name": "complete:closed",
+            "id": 1,
+            "at": 7433.481063
+          }
+        ]
+      },
+      "cleanup": {
+        "callbacks": 2,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 1,
+        "acknowledgements": 1,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": true,
+        "responseHandles": 2,
+        "responseCloseAcknowledgements": 2,
+        "responseFinishAcknowledgements": 2,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "lease:admitted",
+            "id": 1,
+            "at": 7430.25426
+          },
+          {
+            "sequence": 2,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 7431.294118
+          },
+          {
+            "sequence": 3,
+            "name": "lease:opened_after_body",
+            "id": 1,
+            "at": 7431.599755
+          },
+          {
+            "sequence": 4,
+            "name": "lease:finished",
+            "id": 1,
+            "at": 7431.994637
+          },
+          {
+            "sequence": 5,
+            "name": "lease:closed",
+            "id": 1,
+            "at": 7432.085375
+          },
+          {
+            "sequence": 6,
+            "name": "complete:admitted",
+            "id": 1,
+            "at": 7433.057477
+          },
+          {
+            "sequence": 7,
+            "name": "complete:read_validated",
+            "id": 1,
+            "at": 7433.298945
+          },
+          {
+            "sequence": 8,
+            "name": "complete:finished",
+            "id": 1,
+            "at": 7433.46353
+          },
+          {
+            "sequence": 9,
+            "name": "complete:closed",
+            "id": 1,
+            "at": 7433.481063
+          },
+          {
+            "sequence": 10,
+            "name": "fixture:forced_cleanup",
+            "id": 0,
+            "at": 7435.871094
+          }
+        ]
+      },
+      "wire": {
+        "sessions": [
+          {
+            "role": "morrow_identity_login",
+            "kind": "p",
+            "metadata": true,
+            "authenticated": true,
+            "closed": true,
+            "terminated": false,
+            "scriptStep": 1,
+            "parserHeld": false
+          }
+        ],
+        "startups": 1,
+        "authenticated": 1,
+        "primaryMetadata": 1,
+        "observerMetadata": 0,
+        "statements": 1,
+        "parameterQueries": 0,
+        "terminates": 0,
+        "protocolRejections": 0,
+        "transportClosed": 1,
+        "sentFrames": 3,
+        "sentBytes": 593,
+        "receivedFrames": 3,
+        "queryResponses": 2,
+        "committedResponsesWithheld": 0,
+        "lateOutputDiscards": 1,
+        "activeTransports": 0,
+        "activePrimaryTuples": 0
+      },
+      "transport": {
+        "interceptedUpgrades": 1,
+        "pairs": 1,
+        "serverClosed": 1,
+        "clientClosed": 1,
+        "forcedFixtureCloses": 0,
+        "activeListeners": 0,
+        "activeUpgradeCallbacks": 0,
+        "createdAfterOwnerBody": 0
+      },
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack",
+      "expected": "held",
+      "failure": null,
+      "responses": [
+        {
+          "status": 503,
+          "body": "{\"schemaVersion\":1,\"outcome\":\"login_unavailable\"}",
+          "cookies": 0,
+          "metrics": {
+            "response": {
+              "cacheHit": false,
+              "cacheResolved": true,
+              "scope": {
+                "publicationAttempts": 1,
+                "publicationAccepted": 1,
+                "publicationFailures": 0,
+                "duplicatePublicationAttempts": 0,
+                "publishedPending": 1,
+                "publishedSettled": 0,
+                "ownerMismatches": 0,
+                "namespaceMismatches": 0,
+                "businessDenials": 0
+              },
+              "pools": {
+                "loginPool": {
+                  "connectAttempts": 1,
+                  "borrowAttempts": 1,
+                  "leasesAcquired": 1,
+                  "leaseReleaseAttempts": 1,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 1,
+                  "primaryConnects": 1,
+                  "primaryAttributions": 1,
+                  "querySubmissions": 1,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 1,
+                  "unverifiedReleases": 1,
+                  "socketAttempts": 1,
+                  "socketsAcquired": 1,
+                  "socketCloseAttempts": 1,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 4,
+                  "framesReceived": 3,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 1,
+                  "activeWaitListeners": 4
+                },
+                "preauthPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "selectionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "sessionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                }
+              },
+              "enteredAtMs": 1792178070098,
+              "initialDeadlineMs": 1792178095098,
+              "finalDeadlineMs": 1792178075098,
+              "attemptEnded": true
+            },
+            "leases": {
+              "borrows": 1,
+              "releaseAttempts": 1,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 1
+            },
+            "workos": {
+              "borrows": 0,
+              "releaseAttempts": 0,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 0
+            },
+            "fixtureClock": null
+          }
+        }
+      ],
+      "settlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 1,
+          "observedAt": 13332.018122
+        }
+      ],
+      "brokerEvents": [],
+      "cleanupSettlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 1,
+          "observedAt": 13332.018122
+        }
+      ],
+      "cleanupBrokerEvents": [],
+      "lateGateObservation": null,
+      "bodyCompletedAt": 13331.094851,
+      "natural": {
+        "callbacks": 1,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 1,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": false,
+        "responseHandles": 1,
+        "responseCloseAcknowledgements": 1,
+        "responseFinishAcknowledgements": 1,
+        "activeResponses": 0,
+        "activeListeners": 4,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "lease:admitted",
+            "id": 1,
+            "at": 13329.937865
+          },
+          {
+            "sequence": 2,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 13331.109828
+          },
+          {
+            "sequence": 3,
+            "name": "lease:opened_after_body",
+            "id": 1,
+            "at": 13331.141457
+          },
+          {
+            "sequence": 4,
+            "name": "lease:finished",
+            "id": 1,
+            "at": 13331.279573
+          },
+          {
+            "sequence": 5,
+            "name": "lease:closed",
+            "id": 1,
+            "at": 13331.298057
+          }
+        ]
+      },
+      "cleanup": {
+        "callbacks": 1,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 1,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": true,
+        "responseHandles": 1,
+        "responseCloseAcknowledgements": 1,
+        "responseFinishAcknowledgements": 1,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "lease:admitted",
+            "id": 1,
+            "at": 13329.937865
+          },
+          {
+            "sequence": 2,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 13331.109828
+          },
+          {
+            "sequence": 3,
+            "name": "lease:opened_after_body",
+            "id": 1,
+            "at": 13331.141457
+          },
+          {
+            "sequence": 4,
+            "name": "lease:finished",
+            "id": 1,
+            "at": 13331.279573
+          },
+          {
+            "sequence": 5,
+            "name": "lease:closed",
+            "id": 1,
+            "at": 13331.298057
+          },
+          {
+            "sequence": 6,
+            "name": "fixture:forced_cleanup",
+            "id": 0,
+            "at": 13332.127465
+          }
+        ]
+      },
+      "wire": {
+        "sessions": [
+          {
+            "role": "morrow_identity_login",
+            "kind": "p",
+            "metadata": true,
+            "authenticated": true,
+            "closed": true,
+            "terminated": false,
+            "scriptStep": 1,
+            "parserHeld": false
+          }
+        ],
+        "startups": 1,
+        "authenticated": 1,
+        "primaryMetadata": 1,
+        "observerMetadata": 0,
+        "statements": 1,
+        "parameterQueries": 0,
+        "terminates": 0,
+        "protocolRejections": 0,
+        "transportClosed": 1,
+        "sentFrames": 3,
+        "sentBytes": 593,
+        "receivedFrames": 3,
+        "queryResponses": 2,
+        "committedResponsesWithheld": 0,
+        "lateOutputDiscards": 1,
+        "activeTransports": 0,
+        "activePrimaryTuples": 0
+      },
+      "transport": {
+        "interceptedUpgrades": 1,
+        "pairs": 1,
+        "serverClosed": 1,
+        "clientClosed": 1,
+        "forcedFixtureCloses": 0,
+        "activeListeners": 0,
+        "activeUpgradeCallbacks": 0,
+        "createdAfterOwnerBody": 0
+      },
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack",
+      "expected": "held",
+      "failure": null,
+      "responses": [
+        {
+          "status": 503,
+          "body": "{\"schemaVersion\":1,\"outcome\":\"login_unavailable\"}",
+          "cookies": 0,
+          "metrics": {
+            "response": {
+              "cacheHit": false,
+              "cacheResolved": true,
+              "scope": {
+                "publicationAttempts": 1,
+                "publicationAccepted": 1,
+                "publicationFailures": 0,
+                "duplicatePublicationAttempts": 0,
+                "publishedPending": 1,
+                "publishedSettled": 0,
+                "ownerMismatches": 0,
+                "namespaceMismatches": 0,
+                "businessDenials": 0
+              },
+              "pools": {
+                "loginPool": {
+                  "connectAttempts": 1,
+                  "borrowAttempts": 1,
+                  "leasesAcquired": 1,
+                  "leaseReleaseAttempts": 1,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 1,
+                  "primaryConnects": 1,
+                  "primaryAttributions": 1,
+                  "querySubmissions": 1,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 1,
+                  "unverifiedReleases": 1,
+                  "socketAttempts": 1,
+                  "socketsAcquired": 1,
+                  "socketCloseAttempts": 1,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 4,
+                  "framesReceived": 3,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 1,
+                  "activeWaitListeners": 4
+                },
+                "preauthPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "selectionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "sessionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                }
+              },
+              "enteredAtMs": 1792178075995,
+              "initialDeadlineMs": 1792178100995,
+              "finalDeadlineMs": 1792178080995,
+              "attemptEnded": true
+            },
+            "leases": {
+              "borrows": 1,
+              "releaseAttempts": 1,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 1
+            },
+            "workos": {
+              "borrows": 0,
+              "releaseAttempts": 0,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 0
+            },
+            "fixtureClock": null
+          }
+        }
+      ],
+      "settlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 1,
+          "observedAt": 20223.510449
+        }
+      ],
+      "brokerEvents": [],
+      "cleanupSettlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 1,
+          "observedAt": 20223.510449
+        }
+      ],
+      "cleanupBrokerEvents": [],
+      "lateGateObservation": null,
+      "bodyCompletedAt": 19228.44147,
+      "natural": {
+        "callbacks": 1,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 1,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": false,
+        "responseHandles": 1,
+        "responseCloseAcknowledgements": 0,
+        "responseFinishAcknowledgements": 0,
+        "activeResponses": 1,
+        "activeListeners": 4,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "lease:admitted",
+            "id": 1,
+            "at": 19227.986116
+          },
+          {
+            "sequence": 2,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 19228.456197
+          }
+        ]
+      },
+      "cleanup": {
+        "callbacks": 1,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 1,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 1,
+        "forcedCleanupStarted": true,
+        "responseHandles": 1,
+        "responseCloseAcknowledgements": 1,
+        "responseFinishAcknowledgements": 0,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "lease:admitted",
+            "id": 1,
+            "at": 19227.986116
+          },
+          {
+            "sequence": 2,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 19228.456197
+          },
+          {
+            "sequence": 3,
+            "name": "fixture:forced_cleanup",
+            "id": 0,
+            "at": 20223.685504
+          },
+          {
+            "sequence": 4,
+            "name": "lease:closed",
+            "id": 1,
+            "at": 20224.472643
+          },
+          {
+            "sequence": 5,
+            "name": "incoming_error_ambiguous",
+            "id": 1,
+            "at": 20224.516404
+          }
+        ]
+      },
+      "wire": {
+        "sessions": [
+          {
+            "role": "morrow_identity_login",
+            "kind": "p",
+            "metadata": true,
+            "authenticated": true,
+            "closed": true,
+            "terminated": false,
+            "scriptStep": 1,
+            "parserHeld": false
+          }
+        ],
+        "startups": 1,
+        "authenticated": 1,
+        "primaryMetadata": 1,
+        "observerMetadata": 0,
+        "statements": 1,
+        "parameterQueries": 0,
+        "terminates": 0,
+        "protocolRejections": 0,
+        "transportClosed": 1,
+        "sentFrames": 3,
+        "sentBytes": 593,
+        "receivedFrames": 3,
+        "queryResponses": 2,
+        "committedResponsesWithheld": 0,
+        "lateOutputDiscards": 1,
+        "activeTransports": 0,
+        "activePrimaryTuples": 0
+      },
+      "transport": {
+        "interceptedUpgrades": 1,
+        "pairs": 1,
+        "serverClosed": 1,
+        "clientClosed": 1,
+        "forcedFixtureCloses": 0,
+        "activeListeners": 0,
+        "activeUpgradeCallbacks": 0,
+        "createdAfterOwnerBody": 0
+      },
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome",
+      "expected": "held",
+      "failure": null,
+      "responses": [
+        {
+          "status": 503,
+          "body": "{\"schemaVersion\":1,\"outcome\":\"login_unavailable\"}",
+          "cookies": 0,
+          "metrics": {
+            "response": {
+              "cacheHit": false,
+              "cacheResolved": true,
+              "scope": {
+                "publicationAttempts": 1,
+                "publicationAccepted": 1,
+                "publicationFailures": 0,
+                "duplicatePublicationAttempts": 0,
+                "publishedPending": 1,
+                "publishedSettled": 0,
+                "ownerMismatches": 0,
+                "namespaceMismatches": 0,
+                "businessDenials": 0
+              },
+              "pools": {
+                "loginPool": {
+                  "connectAttempts": 1,
+                  "borrowAttempts": 1,
+                  "leasesAcquired": 1,
+                  "leaseReleaseAttempts": 1,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 1,
+                  "primaryConnects": 1,
+                  "primaryAttributions": 1,
+                  "querySubmissions": 1,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 1,
+                  "unverifiedReleases": 1,
+                  "socketAttempts": 1,
+                  "socketsAcquired": 1,
+                  "socketCloseAttempts": 1,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 4,
+                  "framesReceived": 3,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 1,
+                  "activeWaitListeners": 4
+                },
+                "preauthPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "selectionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "sessionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                }
+              },
+              "enteredAtMs": 1792178082858,
+              "initialDeadlineMs": 1792178107858,
+              "finalDeadlineMs": 1792178087858,
+              "attemptEnded": true
+            },
+            "leases": {
+              "borrows": 1,
+              "releaseAttempts": 1,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 1
+            },
+            "workos": {
+              "borrows": 0,
+              "releaseAttempts": 0,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 0
+            },
+            "fixtureClock": null
+          }
+        }
+      ],
+      "settlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 1,
+          "observedAt": 27086.750179
+        }
+      ],
+      "brokerEvents": [],
+      "cleanupSettlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 1,
+          "observedAt": 27086.750179
+        }
+      ],
+      "cleanupBrokerEvents": [],
+      "lateGateObservation": "late_open_attempt_ack_unknown",
+      "bodyCompletedAt": 26090.903667,
+      "natural": {
+        "callbacks": 1,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 1,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": false,
+        "responseHandles": 1,
+        "responseCloseAcknowledgements": 0,
+        "responseFinishAcknowledgements": 0,
+        "activeResponses": 1,
+        "activeListeners": 4,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "lease:admitted",
+            "id": 1,
+            "at": 26086.677918
+          },
+          {
+            "sequence": 2,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 26090.920758
+          },
+          {
+            "sequence": 3,
+            "name": "lease:opened_after_body",
+            "id": 1,
+            "at": 27086.829506
+          }
+        ]
+      },
+      "cleanup": {
+        "callbacks": 1,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 1,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": true,
+        "responseHandles": 1,
+        "responseCloseAcknowledgements": 1,
+        "responseFinishAcknowledgements": 1,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "lease:admitted",
+            "id": 1,
+            "at": 26086.677918
+          },
+          {
+            "sequence": 2,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 26090.920758
+          },
+          {
+            "sequence": 3,
+            "name": "lease:opened_after_body",
+            "id": 1,
+            "at": 27086.829506
+          },
+          {
+            "sequence": 4,
+            "name": "fixture:forced_cleanup",
+            "id": 0,
+            "at": 27087.188311
+          },
+          {
+            "sequence": 5,
+            "name": "lease:finished",
+            "id": 1,
+            "at": 27087.645789
+          },
+          {
+            "sequence": 6,
+            "name": "lease:closed",
+            "id": 1,
+            "at": 27087.913656
+          }
+        ]
+      },
+      "wire": {
+        "sessions": [
+          {
+            "role": "morrow_identity_login",
+            "kind": "p",
+            "metadata": true,
+            "authenticated": true,
+            "closed": true,
+            "terminated": false,
+            "scriptStep": 1,
+            "parserHeld": false
+          }
+        ],
+        "startups": 1,
+        "authenticated": 1,
+        "primaryMetadata": 1,
+        "observerMetadata": 0,
+        "statements": 1,
+        "parameterQueries": 0,
+        "terminates": 0,
+        "protocolRejections": 0,
+        "transportClosed": 1,
+        "sentFrames": 3,
+        "sentBytes": 593,
+        "receivedFrames": 3,
+        "queryResponses": 2,
+        "committedResponsesWithheld": 0,
+        "lateOutputDiscards": 1,
+        "activeTransports": 0,
+        "activePrimaryTuples": 0
+      },
+      "transport": {
+        "interceptedUpgrades": 1,
+        "pairs": 1,
+        "serverClosed": 1,
+        "clientClosed": 1,
+        "forcedFixtureCloses": 0,
+        "activeListeners": 0,
+        "activeUpgradeCallbacks": 0,
+        "createdAfterOwnerBody": 0
+      },
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_concurrent_scopes",
+      "expected": "held",
+      "failure": null,
+      "responses": [
+        {
+          "status": 503,
+          "body": "{\"schemaVersion\":1,\"outcome\":\"login_unavailable\"}",
+          "cookies": 0,
+          "metrics": {
+            "response": {
+              "cacheHit": false,
+              "cacheResolved": true,
+              "scope": {
+                "publicationAttempts": 1,
+                "publicationAccepted": 1,
+                "publicationFailures": 0,
+                "duplicatePublicationAttempts": 0,
+                "publishedPending": 1,
+                "publishedSettled": 0,
+                "ownerMismatches": 0,
+                "namespaceMismatches": 0,
+                "businessDenials": 0
+              },
+              "pools": {
+                "loginPool": {
+                  "connectAttempts": 1,
+                  "borrowAttempts": 1,
+                  "leasesAcquired": 1,
+                  "leaseReleaseAttempts": 1,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 1,
+                  "primaryConnects": 1,
+                  "primaryAttributions": 1,
+                  "querySubmissions": 1,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 1,
+                  "unverifiedReleases": 1,
+                  "socketAttempts": 1,
+                  "socketsAcquired": 1,
+                  "socketCloseAttempts": 1,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 4,
+                  "framesReceived": 3,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 1,
+                  "activeWaitListeners": 4
+                },
+                "preauthPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "selectionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "sessionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                }
+              },
+              "enteredAtMs": 1792178089705,
+              "initialDeadlineMs": 1792178114705,
+              "finalDeadlineMs": 1792178094705,
+              "attemptEnded": true
+            },
+            "leases": {
+              "borrows": 2,
+              "releaseAttempts": 1,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 2
+            },
+            "workos": {
+              "borrows": 0,
+              "releaseAttempts": 0,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 0
+            },
+            "fixtureClock": null
+          }
+        },
+        {
+          "status": 503,
+          "body": "{\"schemaVersion\":1,\"outcome\":\"login_unavailable\"}",
+          "cookies": 0,
+          "metrics": {
+            "response": {
+              "cacheHit": true,
+              "cacheResolved": true,
+              "scope": {
+                "publicationAttempts": 1,
+                "publicationAccepted": 1,
+                "publicationFailures": 0,
+                "duplicatePublicationAttempts": 0,
+                "publishedPending": 1,
+                "publishedSettled": 0,
+                "ownerMismatches": 0,
+                "namespaceMismatches": 0,
+                "businessDenials": 0
+              },
+              "pools": {
+                "loginPool": {
+                  "connectAttempts": 1,
+                  "borrowAttempts": 1,
+                  "leasesAcquired": 1,
+                  "leaseReleaseAttempts": 1,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 1,
+                  "primaryConnects": 1,
+                  "primaryAttributions": 1,
+                  "querySubmissions": 1,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 1,
+                  "unverifiedReleases": 1,
+                  "socketAttempts": 1,
+                  "socketsAcquired": 1,
+                  "socketCloseAttempts": 1,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 4,
+                  "framesReceived": 3,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 1,
+                  "activeWaitListeners": 4
+                },
+                "preauthPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "selectionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "sessionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                }
+              },
+              "enteredAtMs": 1792178089715,
+              "initialDeadlineMs": 1792178114715,
+              "finalDeadlineMs": 1792178094715,
+              "attemptEnded": true
+            },
+            "leases": {
+              "borrows": 2,
+              "releaseAttempts": 2,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 2
+            },
+            "workos": {
+              "borrows": 0,
+              "releaseAttempts": 0,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 0
+            },
+            "fixtureClock": null
+          }
+        }
+      ],
+      "settlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 2,
+          "observedAt": 32945.794323
+        },
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 2,
+          "observedAt": 32947.623278
+        }
+      ],
+      "brokerEvents": [
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 1,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 2,
+          "releaseAcknowledgements": 1,
+          "activeLeases": 1,
+          "observedAt": 32945.668851
+        },
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 2,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 2,
+          "releaseAcknowledgements": 2,
+          "activeLeases": 0,
+          "observedAt": 32947.341736
+        }
+      ],
+      "cleanupSettlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 2,
+          "observedAt": 32945.794323
+        },
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 2,
+          "observedAt": 32947.623278
+        }
+      ],
+      "cleanupBrokerEvents": [
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 1,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 2,
+          "releaseAcknowledgements": 1,
+          "activeLeases": 1,
+          "observedAt": 32945.668851
+        },
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 2,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 2,
+          "releaseAcknowledgements": 2,
+          "activeLeases": 0,
+          "observedAt": 32947.341736
+        }
+      ],
+      "lateGateObservation": null,
+      "bodyCompletedAt": 32943.214431,
+      "natural": {
+        "callbacks": 4,
+        "unexpected": 0,
+        "ownerBodies": 2,
+        "admittedLeases": 2,
+        "acknowledgements": 2,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": false,
+        "responseHandles": 4,
+        "responseCloseAcknowledgements": 4,
+        "responseFinishAcknowledgements": 4,
+        "activeResponses": 0,
+        "activeListeners": 20,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "lease:admitted",
+            "id": 1,
+            "at": 32932.993516
+          },
+          {
+            "sequence": 2,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 32943.228246
+          },
+          {
+            "sequence": 3,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 32943.243625
+          },
+          {
+            "sequence": 4,
+            "name": "lease:admitted",
+            "id": 2,
+            "at": 32943.433386
+          },
+          {
+            "sequence": 5,
+            "name": "lease:opened_after_body",
+            "id": 1,
+            "at": 32943.466488
+          },
+          {
+            "sequence": 6,
+            "name": "lease:opened_after_body",
+            "id": 2,
+            "at": 32943.593824
+          },
+          {
+            "sequence": 7,
+            "name": "lease:finished",
+            "id": 1,
+            "at": 32943.71563
+          },
+          {
+            "sequence": 8,
+            "name": "lease:finished",
+            "id": 2,
+            "at": 32943.732291
+          },
+          {
+            "sequence": 9,
+            "name": "lease:closed",
+            "id": 1,
+            "at": 32943.749442
+          },
+          {
+            "sequence": 10,
+            "name": "lease:closed",
+            "id": 2,
+            "at": 32943.762116
+          },
+          {
+            "sequence": 11,
+            "name": "complete:admitted",
+            "id": 1,
+            "at": 32944.269456
+          },
+          {
+            "sequence": 12,
+            "name": "complete:read_validated",
+            "id": 1,
+            "at": 32944.445633
+          },
+          {
+            "sequence": 13,
+            "name": "complete:finished",
+            "id": 1,
+            "at": 32944.541982
+          },
+          {
+            "sequence": 14,
+            "name": "complete:closed",
+            "id": 1,
+            "at": 32944.550678
+          },
+          {
+            "sequence": 15,
+            "name": "complete:admitted",
+            "id": 2,
+            "at": 32944.888504
+          },
+          {
+            "sequence": 16,
+            "name": "complete:read_validated",
+            "id": 2,
+            "at": 32945.014508
+          },
+          {
+            "sequence": 17,
+            "name": "complete:finished",
+            "id": 2,
+            "at": 32945.108542
+          },
+          {
+            "sequence": 18,
+            "name": "complete:closed",
+            "id": 2,
+            "at": 32945.117889
+          }
+        ]
+      },
+      "cleanup": {
+        "callbacks": 4,
+        "unexpected": 0,
+        "ownerBodies": 2,
+        "admittedLeases": 2,
+        "acknowledgements": 2,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": true,
+        "responseHandles": 4,
+        "responseCloseAcknowledgements": 4,
+        "responseFinishAcknowledgements": 4,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "lease:admitted",
+            "id": 1,
+            "at": 32932.993516
+          },
+          {
+            "sequence": 2,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 32943.228246
+          },
+          {
+            "sequence": 3,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 32943.243625
+          },
+          {
+            "sequence": 4,
+            "name": "lease:admitted",
+            "id": 2,
+            "at": 32943.433386
+          },
+          {
+            "sequence": 5,
+            "name": "lease:opened_after_body",
+            "id": 1,
+            "at": 32943.466488
+          },
+          {
+            "sequence": 6,
+            "name": "lease:opened_after_body",
+            "id": 2,
+            "at": 32943.593824
+          },
+          {
+            "sequence": 7,
+            "name": "lease:finished",
+            "id": 1,
+            "at": 32943.71563
+          },
+          {
+            "sequence": 8,
+            "name": "lease:finished",
+            "id": 2,
+            "at": 32943.732291
+          },
+          {
+            "sequence": 9,
+            "name": "lease:closed",
+            "id": 1,
+            "at": 32943.749442
+          },
+          {
+            "sequence": 10,
+            "name": "lease:closed",
+            "id": 2,
+            "at": 32943.762116
+          },
+          {
+            "sequence": 11,
+            "name": "complete:admitted",
+            "id": 1,
+            "at": 32944.269456
+          },
+          {
+            "sequence": 12,
+            "name": "complete:read_validated",
+            "id": 1,
+            "at": 32944.445633
+          },
+          {
+            "sequence": 13,
+            "name": "complete:finished",
+            "id": 1,
+            "at": 32944.541982
+          },
+          {
+            "sequence": 14,
+            "name": "complete:closed",
+            "id": 1,
+            "at": 32944.550678
+          },
+          {
+            "sequence": 15,
+            "name": "complete:admitted",
+            "id": 2,
+            "at": 32944.888504
+          },
+          {
+            "sequence": 16,
+            "name": "complete:read_validated",
+            "id": 2,
+            "at": 32945.014508
+          },
+          {
+            "sequence": 17,
+            "name": "complete:finished",
+            "id": 2,
+            "at": 32945.108542
+          },
+          {
+            "sequence": 18,
+            "name": "complete:closed",
+            "id": 2,
+            "at": 32945.117889
+          },
+          {
+            "sequence": 19,
+            "name": "fixture:forced_cleanup",
+            "id": 0,
+            "at": 32947.763207
+          }
+        ]
+      },
+      "wire": {
+        "sessions": [
+          {
+            "role": "morrow_identity_login",
+            "kind": "p",
+            "metadata": true,
+            "authenticated": true,
+            "closed": true,
+            "terminated": false,
+            "scriptStep": 1,
+            "parserHeld": false
+          },
+          {
+            "role": "morrow_identity_login",
+            "kind": "p",
+            "metadata": true,
+            "authenticated": true,
+            "closed": true,
+            "terminated": false,
+            "scriptStep": 1,
+            "parserHeld": false
+          }
+        ],
+        "startups": 2,
+        "authenticated": 2,
+        "primaryMetadata": 2,
+        "observerMetadata": 0,
+        "statements": 2,
+        "parameterQueries": 0,
+        "terminates": 0,
+        "protocolRejections": 0,
+        "transportClosed": 2,
+        "sentFrames": 6,
+        "sentBytes": 1186,
+        "receivedFrames": 6,
+        "queryResponses": 4,
+        "committedResponsesWithheld": 0,
+        "lateOutputDiscards": 2,
+        "activeTransports": 0,
+        "activePrimaryTuples": 0
+      },
+      "transport": {
+        "interceptedUpgrades": 2,
+        "pairs": 2,
+        "serverClosed": 2,
+        "clientClosed": 2,
+        "forcedFixtureCloses": 0,
+        "activeListeners": 0,
+        "activeUpgradeCallbacks": 0,
+        "createdAfterOwnerBody": 0
+      },
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_non101_failed_connect",
+      "expected": "held",
+      "failure": null,
+      "responses": [
+        {
+          "status": 503,
+          "body": "{\"schemaVersion\":1,\"outcome\":\"login_unavailable\"}",
+          "cookies": 0,
+          "metrics": {
+            "response": {
+              "cacheHit": false,
+              "cacheResolved": true,
+              "scope": {
+                "publicationAttempts": 1,
+                "publicationAccepted": 1,
+                "publicationFailures": 0,
+                "duplicatePublicationAttempts": 0,
+                "publishedPending": 0,
+                "publishedSettled": 1,
+                "ownerMismatches": 0,
+                "namespaceMismatches": 0,
+                "businessDenials": 0
+              },
+              "pools": {
+                "loginPool": {
+                  "connectAttempts": 1,
+                  "borrowAttempts": 1,
+                  "leasesAcquired": 1,
+                  "leaseReleaseAttempts": 1,
+                  "leaseReleaseAcks": 1,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 1,
+                  "activeLeases": 0,
+                  "primaryConnects": 1,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 1,
+                  "unverifiedReleases": 1,
+                  "socketAttempts": 1,
+                  "socketsAcquired": 1,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 1,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "preauthPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "selectionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "sessionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                }
+              },
+              "enteredAtMs": 1792178095489,
+              "initialDeadlineMs": 1792178120489,
+              "finalDeadlineMs": 1792178100489,
+              "attemptEnded": true
+            },
+            "leases": {
+              "borrows": 1,
+              "releaseAttempts": 1,
+              "releaseAcknowledgements": 1,
+              "activeLeases": 0
+            },
+            "workos": {
+              "borrows": 0,
+              "releaseAttempts": 0,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 0
+            },
+            "fixtureClock": null
+          }
+        }
+      ],
+      "settlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 0,
+          "observedAt": 34723.031161
+        }
+      ],
+      "brokerEvents": [
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 1,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 1,
+          "releaseAcknowledgements": 1,
+          "activeLeases": 0,
+          "observedAt": 33726.870626
+        }
+      ],
+      "cleanupSettlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 0,
+          "observedAt": 34723.031161
+        }
+      ],
+      "cleanupBrokerEvents": [
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 1,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 1,
+          "releaseAcknowledgements": 1,
+          "activeLeases": 0,
+          "observedAt": 33726.870626
+        }
+      ],
+      "lateGateObservation": null,
+      "bodyCompletedAt": 34728.140423,
+      "natural": {
+        "callbacks": 0,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 0,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": false,
+        "responseHandles": 0,
+        "responseCloseAcknowledgements": 0,
+        "responseFinishAcknowledgements": 0,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 34728.156533
+          }
+        ]
+      },
+      "cleanup": {
+        "callbacks": 0,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 0,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": true,
+        "responseHandles": 0,
+        "responseCloseAcknowledgements": 0,
+        "responseFinishAcknowledgements": 0,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 34728.156533
+          },
+          {
+            "sequence": 2,
+            "name": "fixture:forced_cleanup",
+            "id": 0,
+            "at": 34728.217175
+          }
+        ]
+      },
+      "wire": {
+        "sessions": [],
+        "startups": 0,
+        "authenticated": 0,
+        "primaryMetadata": 0,
+        "observerMetadata": 0,
+        "statements": 0,
+        "parameterQueries": 0,
+        "terminates": 0,
+        "protocolRejections": 0,
+        "transportClosed": 0,
+        "sentFrames": 0,
+        "sentBytes": 0,
+        "receivedFrames": 0,
+        "queryResponses": 0,
+        "committedResponsesWithheld": 0,
+        "lateOutputDiscards": 0,
+        "activeTransports": 0,
+        "activePrimaryTuples": 0
+      },
+      "transport": {
+        "interceptedUpgrades": 1,
+        "pairs": 0,
+        "serverClosed": 0,
+        "clientClosed": 0,
+        "forcedFixtureCloses": 0,
+        "activeListeners": 0,
+        "activeUpgradeCallbacks": 0,
+        "createdAfterOwnerBody": 0
+      },
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect",
+      "expected": "held",
+      "failure": null,
+      "responses": [
+        {
+          "status": 503,
+          "body": "{\"schemaVersion\":1,\"outcome\":\"login_unavailable\"}",
+          "cookies": 0,
+          "metrics": {
+            "response": {
+              "cacheHit": false,
+              "cacheResolved": true,
+              "scope": {
+                "publicationAttempts": 1,
+                "publicationAccepted": 1,
+                "publicationFailures": 0,
+                "duplicatePublicationAttempts": 0,
+                "publishedPending": 0,
+                "publishedSettled": 1,
+                "ownerMismatches": 0,
+                "namespaceMismatches": 0,
+                "businessDenials": 0
+              },
+              "pools": {
+                "loginPool": {
+                  "connectAttempts": 1,
+                  "borrowAttempts": 1,
+                  "leasesAcquired": 1,
+                  "leaseReleaseAttempts": 1,
+                  "leaseReleaseAcks": 1,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 1,
+                  "activeLeases": 0,
+                  "primaryConnects": 1,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 1,
+                  "unverifiedReleases": 1,
+                  "socketAttempts": 1,
+                  "socketsAcquired": 1,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 1,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 2,
+                  "framesReceived": 1,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "preauthPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "selectionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "sessionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                }
+              },
+              "enteredAtMs": 1792178097316,
+              "initialDeadlineMs": 1792178122316,
+              "finalDeadlineMs": 1792178102316,
+              "attemptEnded": true
+            },
+            "leases": {
+              "borrows": 1,
+              "releaseAttempts": 1,
+              "releaseAcknowledgements": 1,
+              "activeLeases": 0
+            },
+            "workos": {
+              "borrows": 0,
+              "releaseAttempts": 0,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 0
+            },
+            "fixtureClock": null
+          }
+        }
+      ],
+      "settlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 0,
+          "observedAt": 36553.844579
+        }
+      ],
+      "brokerEvents": [
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 1,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 1,
+          "releaseAcknowledgements": 1,
+          "activeLeases": 0,
+          "observedAt": 35554.292666
+        }
+      ],
+      "cleanupSettlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 0,
+          "observedAt": 36553.844579
+        }
+      ],
+      "cleanupBrokerEvents": [
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 1,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 1,
+          "releaseAcknowledgements": 1,
+          "activeLeases": 0,
+          "observedAt": 35554.292666
+        }
+      ],
+      "lateGateObservation": null,
+      "bodyCompletedAt": 36560.456808,
+      "natural": {
+        "callbacks": 0,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 0,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": false,
+        "responseHandles": 0,
+        "responseCloseAcknowledgements": 0,
+        "responseFinishAcknowledgements": 0,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 36560.478569
+          }
+        ]
+      },
+      "cleanup": {
+        "callbacks": 0,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 0,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": true,
+        "responseHandles": 0,
+        "responseCloseAcknowledgements": 0,
+        "responseFinishAcknowledgements": 0,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 36560.478569
+          },
+          {
+            "sequence": 2,
+            "name": "fixture:forced_cleanup",
+            "id": 0,
+            "at": 36560.562144
+          }
+        ]
+      },
+      "wire": {
+        "sessions": [
+          {
+            "role": "morrow_identity_login",
+            "kind": "p",
+            "metadata": false,
+            "authenticated": false,
+            "closed": true,
+            "terminated": false,
+            "scriptStep": 0,
+            "parserHeld": true
+          }
+        ],
+        "startups": 1,
+        "authenticated": 0,
+        "primaryMetadata": 0,
+        "observerMetadata": 0,
+        "statements": 0,
+        "parameterQueries": 0,
+        "terminates": 0,
+        "protocolRejections": 1,
+        "transportClosed": 1,
+        "sentFrames": 1,
+        "sentBytes": 9,
+        "receivedFrames": 1,
+        "queryResponses": 0,
+        "committedResponsesWithheld": 0,
+        "lateOutputDiscards": 0,
+        "activeTransports": 0,
+        "activePrimaryTuples": 0
+      },
+      "transport": {
+        "interceptedUpgrades": 1,
+        "pairs": 1,
+        "serverClosed": 1,
+        "clientClosed": 1,
+        "forcedFixtureCloses": 0,
+        "activeListeners": 0,
+        "activeUpgradeCallbacks": 0,
+        "createdAfterOwnerBody": 0
+      },
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal",
+      "expected": "held",
+      "failure": null,
+      "responses": [
+        {
+          "status": 503,
+          "body": "{\"schemaVersion\":1,\"outcome\":\"login_unavailable\"}",
+          "cookies": 0,
+          "metrics": {
+            "response": {
+              "cacheHit": false,
+              "cacheResolved": true,
+              "scope": {
+                "publicationAttempts": 1,
+                "publicationAccepted": 1,
+                "publicationFailures": 0,
+                "duplicatePublicationAttempts": 0,
+                "publishedPending": 0,
+                "publishedSettled": 1,
+                "ownerMismatches": 0,
+                "namespaceMismatches": 0,
+                "businessDenials": 0
+              },
+              "pools": {
+                "loginPool": {
+                  "connectAttempts": 1,
+                  "borrowAttempts": 1,
+                  "leasesAcquired": 1,
+                  "leaseReleaseAttempts": 1,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 1,
+                  "primaryConnects": 1,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 1,
+                  "unverifiedReleases": 1,
+                  "socketAttempts": 1,
+                  "socketsAcquired": 1,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 1,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "preauthPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "selectionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "sessionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                }
+              },
+              "enteredAtMs": 1792178099225,
+              "initialDeadlineMs": 1792178124225,
+              "finalDeadlineMs": 1792178104225,
+              "attemptEnded": true
+            },
+            "leases": {
+              "borrows": 1,
+              "releaseAttempts": 1,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 1
+            },
+            "workos": {
+              "borrows": 0,
+              "releaseAttempts": 0,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 0
+            },
+            "fixtureClock": null
+          }
+        }
+      ],
+      "settlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 0,
+          "observedAt": 38459.458841
+        }
+      ],
+      "brokerEvents": [],
+      "cleanupSettlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 0,
+          "observedAt": 38459.458841
+        }
+      ],
+      "cleanupBrokerEvents": [],
+      "lateGateObservation": null,
+      "bodyCompletedAt": 38464.782986,
+      "natural": {
+        "callbacks": 0,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 0,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": false,
+        "responseHandles": 0,
+        "responseCloseAcknowledgements": 0,
+        "responseFinishAcknowledgements": 0,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 38464.802272
+          }
+        ]
+      },
+      "cleanup": {
+        "callbacks": 0,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 0,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": true,
+        "responseHandles": 0,
+        "responseCloseAcknowledgements": 0,
+        "responseFinishAcknowledgements": 0,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 38464.802272
+          },
+          {
+            "sequence": 2,
+            "name": "fixture:forced_cleanup",
+            "id": 0,
+            "at": 38464.858035
+          }
+        ]
+      },
+      "wire": {
+        "sessions": [],
+        "startups": 0,
+        "authenticated": 0,
+        "primaryMetadata": 0,
+        "observerMetadata": 0,
+        "statements": 0,
+        "parameterQueries": 0,
+        "terminates": 0,
+        "protocolRejections": 0,
+        "transportClosed": 0,
+        "sentFrames": 0,
+        "sentBytes": 0,
+        "receivedFrames": 0,
+        "queryResponses": 0,
+        "committedResponsesWithheld": 0,
+        "lateOutputDiscards": 0,
+        "activeTransports": 0,
+        "activePrimaryTuples": 0
+      },
+      "transport": {
+        "interceptedUpgrades": 1,
+        "pairs": 0,
+        "serverClosed": 0,
+        "clientClosed": 0,
+        "forcedFixtureCloses": 0,
+        "activeListeners": 0,
+        "activeUpgradeCallbacks": 0,
+        "createdAfterOwnerBody": 0
+      },
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_late_101_handle",
+      "expected": "held",
+      "failure": null,
+      "responses": [
+        {
+          "status": 503,
+          "body": "{\"schemaVersion\":1,\"outcome\":\"login_unavailable\"}",
+          "cookies": 0,
+          "metrics": {
+            "response": {
+              "cacheHit": false,
+              "cacheResolved": true,
+              "scope": {
+                "publicationAttempts": 1,
+                "publicationAccepted": 1,
+                "publicationFailures": 0,
+                "duplicatePublicationAttempts": 0,
+                "publishedPending": 1,
+                "publishedSettled": 0,
+                "ownerMismatches": 0,
+                "namespaceMismatches": 0,
+                "businessDenials": 1
+              },
+              "pools": {
+                "loginPool": {
+                  "connectAttempts": 1,
+                  "borrowAttempts": 1,
+                  "leasesAcquired": 1,
+                  "leaseReleaseAttempts": 1,
+                  "leaseReleaseAcks": 1,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 1,
+                  "activeLeases": 0,
+                  "primaryConnects": 1,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 1,
+                  "unverifiedReleases": 1,
+                  "socketAttempts": 1,
+                  "socketsAcquired": 1,
+                  "socketCloseAttempts": 1,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 1,
+                  "activeWaitListeners": 4
+                },
+                "preauthPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "selectionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                },
+                "sessionPool": {
+                  "connectAttempts": 0,
+                  "borrowAttempts": 0,
+                  "leasesAcquired": 0,
+                  "leaseReleaseAttempts": 0,
+                  "leaseReleaseAcks": 0,
+                  "leaseReleaseLateAcks": 0,
+                  "cleanupLeaseReleaseAcks": 0,
+                  "activeLeases": 0,
+                  "primaryConnects": 0,
+                  "primaryAttributions": 0,
+                  "querySubmissions": 0,
+                  "observerConnects": 0,
+                  "observerReads": 0,
+                  "primaryAbsenceVerified": 0,
+                  "normalReleases": 0,
+                  "heldClients": 0,
+                  "unverifiedReleases": 0,
+                  "socketAttempts": 0,
+                  "socketsAcquired": 0,
+                  "socketCloseAttempts": 0,
+                  "socketCloseAcks": 0,
+                  "lateSocketCloseAcks": 0,
+                  "cleanupSocketCloseAcks": 0,
+                  "framesSent": 0,
+                  "framesReceived": 0,
+                  "lateEvents": 0,
+                  "activeWaitTimers": 0,
+                  "activeWaitListeners": 0
+                }
+              },
+              "enteredAtMs": 1792178101069,
+              "initialDeadlineMs": 1792178126069,
+              "finalDeadlineMs": 1792178106069,
+              "attemptEnded": true
+            },
+            "leases": {
+              "borrows": 1,
+              "releaseAttempts": 1,
+              "releaseAcknowledgements": 1,
+              "activeLeases": 0
+            },
+            "workos": {
+              "borrows": 0,
+              "releaseAttempts": 0,
+              "releaseAcknowledgements": 0,
+              "activeLeases": 0
+            },
+            "fixtureClock": null
+          }
+        }
+      ],
+      "settlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 2,
+          "observedAt": 44299.6125
+        }
+      ],
+      "brokerEvents": [
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 1,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 1,
+          "releaseAcknowledgements": 1,
+          "activeLeases": 0,
+          "observedAt": 44298.023043
+        }
+      ],
+      "cleanupSettlement": [
+        {
+          "event": "morrow_managed_login_cleanup_settled",
+          "outcome": "rejected",
+          "publicationAttempts": 1,
+          "publicationAccepted": 1,
+          "publicationFailures": 0,
+          "duplicatePublicationAttempts": 0,
+          "publishedPending": 0,
+          "publishedSettled": 1,
+          "ownerMismatches": 0,
+          "namespaceMismatches": 0,
+          "businessDenials": 2,
+          "observedAt": 44299.6125
+        }
+      ],
+      "cleanupBrokerEvents": [
+        {
+          "event": "morrow_fixture_lease_ack",
+          "lease": 1,
+          "inOriginalCleanup": true,
+          "releaseAttempts": 1,
+          "releaseAcknowledgements": 1,
+          "activeLeases": 0,
+          "observedAt": 44298.023043
+        }
+      ],
+      "lateGateObservation": null,
+      "bodyCompletedAt": 44304.984759,
+      "natural": {
+        "callbacks": 0,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 0,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": false,
+        "responseHandles": 0,
+        "responseCloseAcknowledgements": 0,
+        "responseFinishAcknowledgements": 0,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 44304.997944
+          }
+        ]
+      },
+      "cleanup": {
+        "callbacks": 0,
+        "unexpected": 0,
+        "ownerBodies": 1,
+        "admittedLeases": 0,
+        "acknowledgements": 0,
+        "naturalPrematureCloses": 0,
+        "ambiguousErrors": 0,
+        "forcedCleanupStarted": true,
+        "responseHandles": 0,
+        "responseCloseAcknowledgements": 0,
+        "responseFinishAcknowledgements": 0,
+        "activeResponses": 0,
+        "activeListeners": 0,
+        "unobservedOverflowResponseClosures": 0,
+        "events": [
+          {
+            "sequence": 1,
+            "name": "owner:finite_body_completed",
+            "id": 0,
+            "at": 44304.997944
+          },
+          {
+            "sequence": 2,
+            "name": "fixture:forced_cleanup",
+            "id": 0,
+            "at": 44800.155676
+          }
+        ]
+      },
+      "wire": {
+        "sessions": [
+          {
+            "role": null,
+            "kind": null,
+            "metadata": false,
+            "authenticated": false,
+            "closed": true,
+            "terminated": false,
+            "scriptStep": 0,
+            "parserHeld": false
+          }
+        ],
+        "startups": 0,
+        "authenticated": 0,
+        "primaryMetadata": 0,
+        "observerMetadata": 0,
+        "statements": 0,
+        "parameterQueries": 0,
+        "terminates": 0,
+        "protocolRejections": 0,
+        "transportClosed": 1,
+        "sentFrames": 0,
+        "sentBytes": 0,
+        "receivedFrames": 0,
+        "queryResponses": 0,
+        "committedResponsesWithheld": 0,
+        "lateOutputDiscards": 0,
+        "activeTransports": 0,
+        "activePrimaryTuples": 0
+      },
+      "transport": {
+        "interceptedUpgrades": 1,
+        "pairs": 1,
+        "serverClosed": 1,
+        "clientClosed": 1,
+        "forcedFixtureCloses": 1,
+        "activeListeners": 0,
+        "activeUpgradeCallbacks": 0,
+        "createdAfterOwnerBody": 1
+      },
+      "runtimeDisposalAcknowledged": true
+    }
+  ],
+  "sdkVersion": "1.2.0",
+  "syntheticOnlyCoverage": [
+    "explicit_duplicate_release_callers",
+    "fake_ctx_registration_rejection",
+    "forged_copied_or_swapped_scope_owners"
+  ],
+  "nativeOutboundRequests": 29,
+  "unexpectedRequests": 0,
+  "actualInternetRequests": 0,
+  "actualProviderRequests": 0,
+  "pendingHostTimers": 0,
+  "watchdogs": {
+    "genericCaseTotalMs": 8000,
+    "managedCaseTotalMs": 12000,
+    "cleanupOnlyMs": 5000,
+    "renewsApplicationAuthority": false
+  },
+  "limitations": [
+    "Generic controls retain their exact production-import-free source. Managed rows use actual source handler, captured native SDK and independent PG-wire bytes, not a real SQL engine.",
+    "Actual ctx provenance is trusted native module wiring. Expected waitUntil call count and exact completion-Promise identity are source-bound, not a host promise-inspection API.",
+    "Raw premature ServerResponse close establishes observed subrequest cancellation; IncomingMessage close, physical TCP closure and runtime disposal are separate facts.",
+    "Worker gate-read marker follows response delivery and gate body read. Host response finish is not direct observation of final marker-ack consumption or Promise settlement.",
+    "Pool counters in response headers are snapshots before handoff. Later source settlement events contain scope counts only; post-settlement pool unverified behavior remains source-bound unless an actual pool snapshot captured it.",
+    "Managed registration is observed before finite handoff; the fixed source console reaction observes original P settlement without another request or retained telemetry task. Settlement alone does not prove credential acknowledgement or late resource absence.",
+    "The after-C row records a late-open attempt, actual read/ack only if observed, and native cancellation or unknown otherwise; it does not label an unobserved late acknowledgement as measured. Rejected, stalled and after-C credential acknowledgements remain conservative unknowns; forced fixture/runtime disposal cannot upgrade source cleanup. Cross-isolate SQL continuity, real browser, hosted and merchant qualification are separate."
+  ]
+}

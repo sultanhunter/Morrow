@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_https",
+  "result": "clear_for_narrow_measured_profile_publication_dependency_propagation",
+  "source_review_clear": true,
+  "blocking_findings": [],
+  "outside_helper_digests": {
+    "publish-ci-final91-measured-profile.py": "060c4fe56164b813ac45d88c9d547977b97c4270a4eb3fcaa11d63a0d24484c5",
+    "align-publication91-measured-profile.py": "f4d4a132c7e507ac445eb1f71a9dfa0503d691bc5bd27108aea366806a6885c6",
+    "test-publication91-measured-profile-guards.py": "5e7ab59e9f8f36cc2e79518875fb95d409420c47e9f1a01224dfd503521a2d26"
+  },
+  "prior_full_publication_review": {
+    "path": "work/morrow-p01/independent-final91-helper-review.json",
+    "sha256": "c3e7fcf3f2f94986c2686e1862ae299d100263903841071d3130832f5417df0f"
+  },
+  "measured_domain_review": {
+    "path": "work/morrow-p01/independent-domain91-measured-profile-review.json",
+    "sha256": "5798655d664e1ae687a5cfa2c33929eae7a2b10722c2d1e006edcb308871132f"
+  },
+  "author_receipt": {
+    "path": "work/morrow-p01/publication91-measured-profile-author-receipt.json",
+    "sha256": "dd9728768525dd77de1fca8b2f553efaa2c4c058f3c8c889173ae2968f384b62"
+  },
+  "independent_checks": {
+    "complete_diffs_read": true,
+    "exact_byte_inverse_to_three_reviewed_original_files": true,
+    "inverse_actual_exit_code": 0,
+    "inverse_chunk": "7b3af1",
+    "inert_guards": 16,
+    "inert_actual_exit_code": 0,
+    "inert_chunk": "e33ef1",
+    "publisher_help_actual_exit_code": 0,
+    "publisher_help_chunk": "3d6314",
+    "alignment_help_actual_exit_code": 0,
+    "alignment_help_chunk": "12c292"
+  },
+  "delta": "Publisher only switches the measured domain filename and exact hash. Alignment only switches the new publisher filename and exact hash. Tests change only the two helper filenames. Complete inverse restores original692c03be/752c4a6c/52d1dea2 bytes; no apply, transition, scope, cleanup, authority, raw-ZIP, finalCI or Desktop/CAS guard changes.",
+  "limits": [
+    "No operational helper main/apply, Source/Page/Git/Desktop/network/provider/native/SQL effect by reviewer.",
+    "This clears tooling propagation only; actual fresh A and B evidence/domain checks, evidence-only transition and guarded final publication remain separate.",
+    "Fresh-B domain review remains an explicit root prerequisite before mechanical alignment, as in the preserved reviewed helper."
+  ]
+}

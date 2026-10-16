@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 91,
+  "author": "/root/fixed_provider_workers",
+  "scope": "New outside helper variants only; dependency propagation to separately reviewed measured report-profile checker.",
+  "source_digests": {
+    "publish-ci-final91-measured-profile.py": "060c4fe56164b813ac45d88c9d547977b97c4270a4eb3fcaa11d63a0d24484c5",
+    "align-publication91-measured-profile.py": "f4d4a132c7e507ac445eb1f71a9dfa0503d691bc5bd27108aea366806a6885c6",
+    "test-publication91-measured-profile-guards.py": "5e7ab59e9f8f36cc2e79518875fb95d409420c47e9f1a01224dfd503521a2d26",
+    "publish-ci-final91.py": "692c03be6bd45d69fed9bf5c356a83495646d5d75a87e58808441f3ec7c74457",
+    "align-publication91.py": "752c4a6cd1bc6aaf1a9ac6567dd52fd5937b736a0e353828d6c22e974fce1236",
+    "test-publication91-guards.py": "52d1dea26ac00b67bb0f297da2abb6a796d83d1bcbe6571a3d7cd4c665cedfda",
+    "review-ci-domains91-measured-profile.py": "96e3e1dc8396daf0d0f7c1bdc5ea23af3efee31485b9493453299f319bb184d0"
+  },
+  "exact_delta": [
+    "Publisher changes only domain dependency filename and SHA from c02 to96e3.",
+    "Alignment changes only publisher dependency filename and SHA to060c.",
+    "RAM test fixture changes only the two helper filenames.",
+    "Reversing those literal replacements reproduces all three prior reviewed files byte-for-byte and AST-exact."
+  ],
+  "checks": [
+    {
+      "command": "python3 -E -B work/test-publication91-measured-profile-guards.py",
+      "tests": 16,
+      "actual_exit_code": 0,
+      "tool_chunk": "72ab9a"
+    },
+    {
+      "command": "python3 -E -B work/publish-ci-final91-measured-profile.py --help",
+      "actual_exit_code": 0,
+      "tool_chunk": "c3418d"
+    },
+    {
+      "command": "python3 -E -B work/align-publication91-measured-profile.py --help",
+      "actual_exit_code": 0,
+      "tool_chunk": "5daac4"
+    },
+    {
+      "kind": "Exact byte and AST inverse versus immutable reviewed originals",
+      "actual_exit_code": 0,
+      "tool_chunk": "0fe66f"
+    }
+  ],
+  "limitations": [
+    "Author self-check, not independent peer review or actual artifact/domain qualification.",
+    "No operational main/apply, Source, Git, network, runtime or provider effects. Only new outside files were authored.",
+    "Independent fresh-B domain review remains an external requirement before Desktop alignment; this dependency propagation does not change that boundary."
+  ]
+}
