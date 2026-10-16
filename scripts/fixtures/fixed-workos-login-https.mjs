@@ -86,7 +86,17 @@ export function createFixedWorkosHttpsProvider({
         // A deliberately rejected release is a tested unknown outcome. It is
         // not relabeled disposed from loss of JS references or test teardown.
         credentialDisposal:
-          oracle.metrics.activeLeases === 0 ? "acknowledged" : "intentionally_unverified",
+          oracle.metrics.borrows === 0 &&
+          oracle.metrics.releaseAttempts === 0 &&
+          oracle.metrics.releaseCompletions === 0 &&
+          oracle.metrics.activeLeases === 0
+            ? "not_acquired"
+            : oracle.metrics.borrows > 0 &&
+                oracle.metrics.releaseAttempts === oracle.metrics.borrows &&
+                oracle.metrics.releaseCompletions === oracle.metrics.borrows &&
+                oracle.metrics.activeLeases === 0
+              ? "acknowledged"
+              : "intentionally_unverified",
       });
     },
   });

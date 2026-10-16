@@ -1719,6 +1719,10 @@
     },
     {
       "path": "docs/evidence/P05.T01r/draft-validation.json",
+      "sha256": "b08d0c4ee251426550d7f0eeea3a35f07a680405d4137725e63ee741807d25dc"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/held-candidate-A/draft-validation.json",
       "sha256": "3baa5f465ee34dfc65b86e01ba10c7c28fc2b57ba2ed474e1f912868888e8898"
     },
     {
@@ -1740,6 +1744,14 @@
     {
       "path": "docs/evidence/P05.T01r/local-preparation.json",
       "sha256": "6428fff1ffaed1d16c541983fe790e7d05057e59b672b6eb2549a58a36a2f19e"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/provider-cleanup-projection-repair.json",
+      "sha256": "29301afc1d99ad33cda32358b714b5e82ddda9d54bf50c98942504e37b54bb0c"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/root-fixed-provider-repair-review86.json",
+      "sha256": "8ffa2a3e7d7f9099bbbe0dcdfbb8acbc01db3eec2d41077158ca3b57488fac83"
     },
     {
       "path": "docs/evidence/P05.T01r/root-fixed-provider-source-review86.json",

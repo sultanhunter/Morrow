@@ -228,6 +228,35 @@ try {
       "Content-Type": "application/json",
       "X-Morrow-Request": "1",
     });
+    // Unchanged84 deliberately cleans failed callbacks into this fixed redirect.
+    // This is stricter than accepting a status class or arbitrary failure page.
+    const callbackHeld = (response) => {
+      const observations = {
+        status: Number.isInteger(response.status) ? response.status : null,
+        cookieCount: response.headers.getSetCookie().length,
+        cleanLocation: response.headers.get("location") === "/auth/result",
+        emptyBody: response.text === "",
+        noStore: response.headers.get("cache-control") === "no-store",
+        nosniff: response.headers.get("x-content-type-options") === "nosniff",
+        noReferrer: response.headers.get("referrer-policy") === "no-referrer",
+        corsAbsent: !response.headers.has("access-control-allow-origin"),
+      };
+      const accepted =
+        observations.status === 303 &&
+        observations.cookieCount === 0 &&
+        observations.cleanLocation &&
+        observations.emptyBody &&
+        observations.noStore &&
+        observations.nosniff &&
+        observations.noReferrer &&
+        observations.corsAbsent;
+      if (!accepted)
+        console.error(
+          "FIXED_PROVIDER_HTTPS_CALLBACK_HOLD_DIAGNOSTIC " +
+            JSON.stringify({ stage, ...observations }),
+        );
+      return accepted;
+    };
     const poolList = () => [...harness.rolePools, ...harness.logoutRolePools, ...readPools];
     const familyCount = (c) =>
       Number(
@@ -489,8 +518,7 @@ try {
       const replay = await request(issued.path, { headers: issued.headers });
       check(
         "callback_replay_does_not_exchange_again",
-        replay.status === 503 &&
-          replay.headers.getSetCookie().length === 0 &&
+        callbackHeld(replay) &&
           c.provider.metrics.requests === beforeRequests &&
           c.provider.metrics.exchange === 1 &&
           familyCount(c) === 1,
@@ -617,8 +645,7 @@ try {
         const outcome = await finish(failed, prepared, false);
         check(
           "fault_" + fault + "_no_cookie_or_family",
-          outcome.response.status === 503 &&
-            outcome.response.headers.getSetCookie().length === 0 &&
+          callbackHeld(outcome.response) &&
             familyCount(failed) === 0 &&
             failed.provider.faultCount() === 1,
         );
@@ -630,8 +657,7 @@ try {
         const repeated = await request(outcome.path, { headers: outcome.headers });
         check(
           "fault_" + fault + "_no_callback_resend",
-          repeated.status === 503 &&
-            repeated.headers.getSetCookie().length === 0 &&
+          callbackHeld(repeated) &&
             failed.provider.metrics.requests === before &&
             failed.provider.metrics.exchange === 1,
         );
@@ -672,6 +698,20 @@ try {
           );
       }
       phase("cleanup_and_privacy");
+      const unacquired = cases.filter((entry) => entry.provider.metrics.borrows === 0);
+      check(
+        "unacquired_credential_has_no_release_acknowledgement",
+        unacquired.length === 3 &&
+          unacquired.every((entry) => {
+            const observation = entry.provider.cleanupObservation();
+            return (
+              observation.credentialDisposal === "not_acquired" &&
+              observation.releaseAttempts === 0 &&
+              observation.releaseCompletions === 0 &&
+              observation.activeLeases === 0
+            );
+          }),
+      );
       const closed = await Promise.allSettled([
         harness.close(),
         ...readPools.map((pool) => pool.close()),

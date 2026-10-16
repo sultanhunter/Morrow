@@ -1,3 +1,13 @@
+# Current continuation: classified fixture repair; fresh isolated CI pending
+
+Canonical86 remains current at497 blocks. First candidatea10f1452ebf85210df8dd757ef5ab0a1ae92e9bd completed CI38889019087 with40producer commands successful and the new HTTPS lab failed at callback replay. The collector correctly held with49fresh reports and missing new HTTPS evidence; its API,53payload artifact, exact source/restoration and logs are preserved outsideGit. No new HTTPS cleanup pass is inferred from the incomplete run.
+
+The failure is a proven fixture contract mismatch: unchanged84 failed callbacks return303 to/auth/result with emptybody/no cookie/securityheaders, while three new test predicates expected503. The two-file repair adopts that exact existing contract while retaining every no-retry/family/authority/disposal assertion. A separate report fix labels zero-borrow credentials not_acquired, reserving acknowledged for positive attributable releases; intentional unknown disposal stays unknown. One regression assertion is added. Root independent source review is clear; the author's unchanged84 CPU reproduction and six real-adapter/crypto cases pass.
+
+Existing local2,050tests/11scaffold and90Workers/995checks remain separately attributed before this fixture repair. All426original evidence files, the original pending manifest and prior reviews are preserved; core/application/SQL1–11/workflow bodies remain unchanged. A fresh repaired pending candidate must run full exact-head isolated CI and the real PostgreSQL/HTTPS chain, followed by artifact/source/cleanup/domain review, final evidence-only exact-head CI and guarded Desktop alignment. Desktop stays on published85. ParentP05.T01/P05.T03 remain In progress. No provider/key/sign-in, account/deployment or merchant action is included; no current user input is needed.
+
+# Historical86 first candidate checkpoint
+
 # Current continuation: fixed provider adapter prepared; isolated integration pending
 
 Canonical86 remains synchronized at497 blocks. The private fixed WorkOS port and independent HTTP/PKCE/RSA oracle are implemented. Actual local Workers passes90cases/995checks with zero outbound requests and acknowledged runtime disposal; intentional stalled/rejected release/cancellation remains unverified. Focused81 adapter and12 oracle units passed. The full pinned local pipeline passes2,050tests/zero failures and11scaffold guards after enabling local listener access. The initial sandbox denied90listener tests and the first scaffold attempt; those original holds/logs remain separate outside Git.

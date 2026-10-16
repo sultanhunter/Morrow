@@ -192,7 +192,7 @@
     "docs/packets/P05.T04a.md": "c93bfd97fecada7dffa4747cb5590e3bc946d3aefb65f8745e271331639992ac",
     "docs/plan/build-plan.md": "87f9c0a372a3f1877b56511c0077019e244e06ec49e546206f79f8ff036d974d",
     "docs/plan/source.json": "f79640b8e06767b9e610f68f60faf70d26b45643d5798abbfb2060837d7d4246",
-    "docs/progress/checkpoint.md": "f7def2e88de88e0c02a04611c3d5c158596ab4f3079c8de49df5521d8077c103",
+    "docs/progress/checkpoint.md": "a4f9bd5daa0fbd67c542af615a46dedb2796501741f79f71879860ad4d8dc186",
     "docs/progress/tasks.json": "5b358388fcfcf7e32182c76e04ddda7c5cba350051374490ac0a6c92f9392451",
     "docs/references/architecture.md": "d89f4610b745f5f5043fcc7a5af5d0e1df01fbeda2999409aedc1917b3ca9812",
     "docs/references/skills-and-agent-store.md": "244f6afc51d64b62e89a7071a4860bd05d6402ee65e4af93d66155864f79d436",
@@ -326,7 +326,7 @@
     "scripts/e2b-owned-image-qualification.mjs": "9d9b22a33c4a32ae4afa741cbba67df8fe98ac37939efc6ac32fac26d1d3b447",
     "scripts/e2b-template-qualification.mjs": "18e6a02f46b87884e546a3991203d72eb7ecf8bf31e2b987f3bedfa08e972cc9",
     "scripts/encrypted-lab-fixtures.mjs": "ea0d5261b70fb4ebae1cbaf44bee095e3e337d039338f3ac1410d47e4c6bdf15",
-    "scripts/fixed-workos-login-https-lab.mjs": "87c77aab633bf67b74bf6261af774515effab5e08e335ffcf62bfc0c4ac878c1",
+    "scripts/fixed-workos-login-https-lab.mjs": "0b74353ab6896c6e5f2fee0efacf7fbce8b20e520eb8efcc8fb357b28cd58485",
     "scripts/fixed-workos-login-workers-lab.mjs": "2c75ae261637fa16d444ba75ab2c14bfb320882b6892e35290652abfe5014780",
     "scripts/foundation.mjs": "1cd8f1c567eb9e82ef1e8e57ee8d37951a71d28ffc32e9362515b2c631cd6dcb",
     "scripts/generate-contracts.mjs": "47c95ee65293e77c818e81731b571d0e53bd2e35e69c68798490a9c9a9d1d02a",
@@ -418,7 +418,7 @@
     "scripts/workspace-store-linking-workers-lab.mjs": "1ea2ce31c6d8a778750f7e5350b4cb4d43406b85faeef78422e2d3a78c470adb",
     "scripts/fixtures/agent-authority-worker.ts": "e6a9682350aada88a7a99496019879638a097c4a460759398c69698d20e6e33e",
     "scripts/fixtures/authentication-exchange-admission-worker.ts": "908ea642dabd52d57f59b74f9d8a838c2da5cc3817b1674163ae05417a8b0873",
-    "scripts/fixtures/fixed-workos-login-https.mjs": "89b97bdf94531d35518fffa1850c90374510a6e3e24f12dfdbdb418388de684b",
+    "scripts/fixtures/fixed-workos-login-https.mjs": "f5ab76a22b787542930c25de053c25b1195d3f986b73b41646cb88d740b3c384",
     "scripts/fixtures/fixed-workos-login-worker.ts": "b144e5734219797cac8a3ccb40d11dde831a236ca5b92f68bf7bbd31c4c9a5ff",
     "scripts/fixtures/fixed-workos-provider.mjs": "f374a8e04578565f5ae3afe8873183344f7111356c4a6b6c9229ccc92fc01b26",
     "scripts/fixtures/login-https.mjs": "8973889c5b19ecc1d8f83aafeced7dd6940542d290b3ea784aed69e9a3432999",
@@ -547,7 +547,7 @@
     "tests/fixtures/e2b-source-60/scripts/e2b-owned-image-qualification.mjs": "b62644a679894be3ec371e181a3122d84c40c1a676a2ecf68c04321758e5684b",
     "tests/fixtures/e2b-source-60/scripts/e2b-template-qualification.mjs": "59f17590c04f170364a3fe0c1d438b0554c6ac09b4f60d93ebf9e8be315a67a3"
   },
-  "source_inventory_digest": "69d22f9a3a9737794f26493128a27317b7389166f657b8d7dbee9dbaf1486c99",
+  "source_inventory_digest": "a65edf3c4987ae8ab72b931069710b49ff3658775427b637835e80538d947c84",
   "independent_source_reviews": [
     {
       "path": "docs/evidence/P05.T01r/independent-fixed-port-workers86.json",
@@ -566,8 +566,8 @@
       "sha256": "59ca4ec16f312dbc5eef77000432ff536b2cba26dba561733c8bae0c3c025d12"
     },
     {
-      "path": "docs/evidence/P05.T01r/root-fixed-provider-source-review86.json",
-      "sha256": "f28841d355b468aacd1dc9f4bd9b6aff291d2391d021bc5797df2aa5ce7c85b4"
+      "path": "docs/evidence/P05.T01r/root-fixed-provider-repair-review86.json",
+      "sha256": "8ffa2a3e7d7f9099bbbe0dcdfbb8acbc01db3eec2d41077158ca3b57488fac83"
     }
   ],
   "current_local_engineering": {
@@ -580,12 +580,15 @@
     "workers_cases": 90,
     "workers_checks": 995,
     "provider_requests": 0,
-    "actual_PostgreSQL_HTTPS_pending": true
+    "actual_PostgreSQL_HTTPS_pending": true,
+    "full_pipeline_measurement_precedes_fixture_repair": true
   },
   "historical_evidence_files_byte_exact": 426,
   "limitations": [
     "Pending candidate only; exact-head isolated integration and independent evidence review still required.",
     "Prior actual82 allowance consumed, no native WorkOS/key/sign-in or account operation authorized.",
     "No browser-engine, hosted identity, Shopify or merchant qualification."
-  ]
+  ],
+  "fixture_repair_record": "docs/evidence/P05.T01r/provider-cleanup-projection-repair.json",
+  "prior_failed_candidate_preserved": "a10f1452ebf85210df8dd757ef5ab0a1ae92e9bd"
 }
