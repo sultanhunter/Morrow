@@ -25,7 +25,7 @@ const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const held = () => Error("MANAGED_LOGIN_POSTGRESQL_HELD");
 if (
   process.version !== "v24.13.0" ||
-  JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 93
+  JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 94
 )
   throw held();
 const args = process.argv.slice(2);
@@ -1176,7 +1176,7 @@ for (const [path, digest] of Object.entries(sourceDigests))
 const report = {
   schema_version: 1,
   task: "P05.T01u",
-  current_plan_sequence: 93,
+  current_plan_sequence: 94,
   status: failure || cleanupFailures.length ? "held" : "passed",
   scope:
     "independent_managed_Workers_capsule_keys_real_PostgreSQL17_fixed_four_role_native_transport",

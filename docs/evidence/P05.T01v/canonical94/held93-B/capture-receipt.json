@@ -1,0 +1,82 @@
+{
+  "scope": "read_only_capture_no_qualification",
+  "expected_head": "a6fc482617d53aa69902ffa045bf5cb4cc41b62c",
+  "run_id": 38972968535,
+  "run_attempt": 1,
+  "commands": [
+    {
+      "file": "run-rest.json",
+      "arguments": [
+        "api",
+        "repos/sultanhunter/Morrow/actions/runs/38972968535/attempts/1"
+      ],
+      "actual_exit_code": 0,
+      "bytes": 12817,
+      "sha256": "f974079c2d7cced96d9b5e2f9e28d7ea70a72006d2e3cd5af56df9e6b5875153"
+    },
+    {
+      "file": "jobs-rest.json",
+      "arguments": [
+        "api",
+        "repos/sultanhunter/Morrow/actions/runs/38972968535/attempts/1/jobs?per_page=100"
+      ],
+      "actual_exit_code": 0,
+      "bytes": 12321,
+      "sha256": "afc19e329dfbd41dcefa0cd75f7ed63cc722cf016842016b2a41e54e42f0fca0"
+    },
+    {
+      "file": "artifacts-rest.json",
+      "arguments": [
+        "api",
+        "repos/sultanhunter/Morrow/actions/runs/38972968535/artifacts?per_page=100"
+      ],
+      "actual_exit_code": 0,
+      "bytes": 748,
+      "sha256": "d803bfffc415f0eac35a95ae4cbf4be3e48c0d3dbce3413d1c068b7de08292cc"
+    },
+    {
+      "file": "artifact-rest.json",
+      "arguments": [
+        "api",
+        "repos/sultanhunter/Morrow/actions/artifacts/12077816923"
+      ],
+      "actual_exit_code": 0,
+      "bytes": 716,
+      "sha256": "2d328417492e79373c10a91a3b7b8770481dd9d8118d8d6e3311c5f383ed565b"
+    },
+    {
+      "file": "artifact.zip",
+      "arguments": [
+        "api",
+        "repos/sultanhunter/Morrow/actions/artifacts/12077816923/zip"
+      ],
+      "actual_exit_code": 0,
+      "bytes": 276925,
+      "sha256": "09cd8521a1515737d74bc6e27c5a5bc89f4273c742c826616fd8a27bac88447a"
+    },
+    {
+      "file": "run.log",
+      "arguments": [
+        "run",
+        "view",
+        "38972968535",
+        "--attempt",
+        "1",
+        "--repo",
+        "sultanhunter/Morrow",
+        "--log"
+      ],
+      "actual_exit_code": 0,
+      "bytes": 442185,
+      "sha256": "7604f551320d5b552798b355f3a17c22f9e4eee3ab8d4aeb16c064219f144029"
+    }
+  ],
+  "archive_extracted_or_executed": false,
+  "CI_numeric_exit_codes_inferred": false,
+  "provider_account_or_runtime_effects": false,
+  "status": "captured_not_qualified",
+  "run_conclusion": "failure",
+  "artifact_id": 12077816923,
+  "artifact_sha256": "09cd8521a1515737d74bc6e27c5a5bc89f4273c742c826616fd8a27bac88447a",
+  "artifact_bytes": 276925
+}

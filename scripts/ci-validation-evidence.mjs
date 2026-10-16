@@ -377,7 +377,7 @@ export function createCiValidationEvidence({
     runAttempt,
     expectedHead,
     nodeVersion: process.version,
-    canonicalSequence: 93,
+    canonicalSequence: 94,
   };
   const stateValue = () => {
     const file = readRegular(runRoot, "preparation.json");

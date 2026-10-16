@@ -88,7 +88,7 @@ if (manifest.migrations.length < 8) throw Error("STANDALONE_HTTP_EIGHT_MIGRATION
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
 if (
   process.version !== "v24.13.0" ||
-  plan.sequence < 93 ||
+  plan.sequence < 94 ||
   plan.sha256 !== hash(readFileSync(plan.path))
 )
   throw Error("STANDALONE_HTTP_SOURCE_REQUIRED");

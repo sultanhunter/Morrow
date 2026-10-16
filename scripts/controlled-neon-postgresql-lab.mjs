@@ -74,11 +74,11 @@ const neonVersion = JSON.parse(
 if (neonVersion !== "1.2.0") throw Error("CONTROLLED_PG_PINNED_SDK_REQUIRED");
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
 if (
-  plan.sequence !== 93 ||
+  plan.sequence !== 94 ||
   hash(readFileSync(plan.path)) !== plan.sha256 ||
   process.version !== "v24.13.0"
 )
-  throw Error("CONTROLLED_PG_CURRENT93_REQUIRED");
+  throw Error("CONTROLLED_PG_CURRENT94_REQUIRED");
 const checks = [];
 let stage = "source",
   appliedMigrations = 0,
@@ -701,7 +701,7 @@ for (const [path, digest] of Object.entries(sourceDigests))
 const report = {
   schema_version: 1,
   task: "P05.T01t",
-  current_plan_sequence: 93,
+  current_plan_sequence: 94,
   status: failure || cleanupFailure ? "held" : "passed",
   scope:
     "actual_captured_Workers_WebSocket_to_attested_owned_internal_IPv4_and_real_PostgreSQL17_four_roles_unchanged84_owners",

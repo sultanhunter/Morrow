@@ -1,3 +1,11 @@
+# Current continuation: preserve failed publication and repair late acknowledgment fixture
+
+Canonical94 is saved/read back at574blocks; all571 prior blocks remain exact. Final93 candidate a6fc482617d53aa69902ffa045bf5cb4cc41b62c failed CI38972968535/attempt1:2448tests/2447pass/1failure at the unchanged late-ACK assertion. Raw artifact12077816923 (276925bytes, SHA09cd8521a1515737d74bc6e27c5a5bc89f4273c742c826616fd8a27bac88447a), REST APIs/log and complete2078-file restored source remain outside; all995 old evidence and exact93 plan/source/packet are preserved. Desktop remains cleanqualified91; failedB is not qualified by earlier successfulA.
+
+Independent diagnosis confirms a fixture ordering assumption: fractional cleanupWait timeout may settle before absolute C. Actual outside characterization reproduced cleanupACK1/lateACK0, while six strict monotonic-fenced rows passed all9 original assertions. Production authority/cleanup/counters remain unchanged. Only this synthetic ACK timing and current94 authority/metadata are being repaired. New C full local/isolated CI, strict source/restoration/all57 domain review, then evidence-only D own exactCI and fresh independent review precede alignment. Parent P05.T01/P05.T03 remain In progress; no current human/provider input is required.
+
+# Earlier held93 checkpoint
+
 # Current continuation: native workspace API passes isolated integration; final publication pending
 
 Canonical93 remains current571blocks. Exact candidated7cf00837c4c85c740b9c3a129aa870649055f08 passed CI38969900266/attempt1/all57 final steps. Raw REST/digest verification binds artifact12076717862,544226bytes/SHAe67b1eee503223845a59e372a0ec5baff508b2f50f2cf938f3705003e372e33e,61payloads/57fresh reports and complete2005-file before/restored source. Repository2448tests/zero failures and11scaffold guards passed. All900historical records and both original V native outcomes stay immutable.

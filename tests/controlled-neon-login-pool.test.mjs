@@ -846,13 +846,32 @@ test("registration throw still disposes once and cannot restore a normal release
 test("bounded disposal settles without inventing an ack and a late ack stays late", async (t) => {
   const a = requestOwner(t),
     ack = deferred();
-  const pools = await a.pools((namespace) => invalidLease(namespace, () => ack.promise));
+  let releaseObservedAt;
+  const pools = await a.pools((namespace) =>
+    invalidLease(namespace, () => {
+      releaseObservedAt = performance.now();
+      return ack.promise;
+    }),
+  );
   await assert.rejects(pools.loginPool.connect(c(Date.now() + 5000)), held);
   let m = snapshotControlledNeonLoginPoolMetrics(pools).loginPool;
   assert.equal(m.leaseReleaseAttempts, 1);
   assert.equal(m.leaseReleaseAcks, 0);
   assert.equal(m.activeLeases, 1);
   assert.equal(a.snapshot().publishedSettled, 1);
+  // C was latched before this real release callback. Cross a monotonic
+  // upper bound on that same C; a fractional timer timeout alone is not proof.
+  assert.ok(Number.isFinite(releaseObservedAt));
+  const strictlyAfter = releaseObservedAt + 1000,
+    observationStopAt = performance.now() + 3000;
+  while (performance.now() <= strictlyAfter) {
+    assert.ok(performance.now() < observationStopAt, "bounded test-only observation");
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.max(1, Math.ceil(strictlyAfter - performance.now()))),
+    );
+  }
+  assert.ok(performance.now() <= observationStopAt, "test observation failsafe");
+  assert.ok(performance.now() > strictlyAfter, "actual original-C upper bound crossed");
   ack.resolve();
   await tick();
   m = snapshotControlledNeonLoginPoolMetrics(pools).loginPool;

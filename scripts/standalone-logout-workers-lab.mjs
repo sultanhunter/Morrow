@@ -165,7 +165,7 @@ const paths = [
   "package.json",
   ".github/workflows/ci.yml",
 ];
-assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 93);
+assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 94);
 const sourceDigests = Object.fromEntries(
   paths.sort().map((path) => [path, hash(readFileSync(path))]),
 );
@@ -216,7 +216,7 @@ try {
     assert.equal(hash(readFileSync(path)), digest, "Source changed: " + path);
   const report = {
     task: "P05.T01q",
-    current_plan_sequence: 93,
+    current_plan_sequence: 94,
     qualification_status: "passed",
     qualification:
       "actual_local_workerd_nodejs_compat_Fetch_WebCrypto_with_synthetic_fixed_SQL_oracle",

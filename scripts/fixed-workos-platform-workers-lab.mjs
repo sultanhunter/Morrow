@@ -6,8 +6,8 @@ import { createPlatformWorkosProviderOracle } from "./fixtures/fixed-workos-plat
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 if (process.version !== "v24.13.0") throw Error("PINNED_NODE_REQUIRED");
-if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 93)
-  throw Error("CURRENT93_REQUIRED");
+if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 94)
+  throw Error("CURRENT94_REQUIRED");
 const paths = [
   "packages/identity/src/fixed-workos-login-port.ts",
   "packages/identity/src/standalone-login.ts",
@@ -376,7 +376,7 @@ for (const [path, digest] of Object.entries(sourceDigests)) {
 }
 const report = {
   task: "P05.T01s",
-  current_plan_sequence: 93,
+  current_plan_sequence: 94,
   status: failure ? "held" : "passed",
   failure,
   qualification:

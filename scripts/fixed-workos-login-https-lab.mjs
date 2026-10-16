@@ -115,7 +115,7 @@ const paths = [
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
 if (
   process.version !== "v24.13.0" ||
-  plan.sequence !== 93 ||
+  plan.sequence !== 94 ||
   plan.path !== "docs/plan/build-plan.md" ||
   hash(readFileSync(plan.path)) !== plan.sha256
 )
@@ -855,7 +855,7 @@ for (const [path, digest] of Object.entries(sourceDigests))
 const report = {
   schemaVersion: 1,
   task: "P05.T01r",
-  canonicalSequence: 93,
+  canonicalSequence: 94,
   qualification:
     "private_fixed_workos_port_independent_synthetic_fetch_real_postgresql_merchant_https_jar_o_b_q",
   observedAt: new Date().toISOString(),

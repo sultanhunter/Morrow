@@ -124,7 +124,7 @@ const paths = [
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
 if (
   process.version !== "v24.13.0" ||
-  plan.sequence !== 93 ||
+  plan.sequence !== 94 ||
   hash(readFileSync(plan.path)) !== plan.sha256
 )
   throw Error("LOGIN_HTTPS_LAB_SOURCE_REQUIRED");
@@ -1271,7 +1271,7 @@ check(
 const report = {
   schemaVersion: 1,
   task: "P05.T01p",
-  canonicalSequence: 93,
+  canonicalSequence: 94,
   observedAt: new Date().toISOString(),
   qualification: "synthetic_native_rsa_pkce_to_real_sql_to_https_initial_cookie_jar_and_o_b",
   appliedMigrations: 10,

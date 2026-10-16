@@ -131,7 +131,7 @@ const paths = [
   "package-lock.json",
 ];
 const sourceDigests = Object.fromEntries(paths.map((path) => [path, hash(readFileSync(path))]));
-assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 93);
+assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 94);
 const bundled = await build({
   entryPoints: ["scripts/fixtures/standalone-workspace-worker.ts"],
   bundle: true,
@@ -179,7 +179,7 @@ try {
     assert.equal(hash(readFileSync(path)), digest, "Source changed during qualification: " + path);
   const report = {
     task: "P05.T01o",
-    canonicalSequence: 93,
+    canonicalSequence: 94,
     qualification:
       "actual_local_workerd_Fetch_WebCrypto_with_synthetic_SQL_and_independent_native_HMAC_oracle",
     compatibilityDate: "2026-07-30",

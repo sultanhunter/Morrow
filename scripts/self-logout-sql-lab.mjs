@@ -59,7 +59,7 @@ const sourcePaths = [
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
 if (
-  executionPlan.sequence !== 93 ||
+  executionPlan.sequence !== 94 ||
   executionPlan.path !== "docs/plan/build-plan.md" ||
   executionPlan.sha256 !== hash(readFileSync("docs/plan/build-plan.md")) ||
   manifest.migrations.length !== 11 ||
@@ -773,7 +773,7 @@ check("source_snapshot_unchanged", changedSourcePaths.length === 0);
 const report = {
   schemaVersion: 1,
   task: "P05.T01q",
-  canonicalSequence: 93,
+  canonicalSequence: 94,
   scope: "actual_local_postgresql_captured_cookie_commitment_family_retirement_only",
   sourceHashes,
   checkCount: checks.length,

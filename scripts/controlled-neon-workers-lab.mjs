@@ -11,8 +11,8 @@ import { Log, LogLevel, Miniflare, Response as MiniflareResponse, WebSocketPair 
 if (process.version !== "v24.13.0") throw Error("PINNED_NODE_REQUIRED");
 const sdkPackage = JSON.parse(readFileSync("node_modules/@neondatabase/serverless/package.json"));
 if (sdkPackage.version !== "1.2.0") throw Error("PINNED_NEON_SDK_REQUIRED");
-if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 93)
-  throw Error("CURRENT93_REQUIRED");
+if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 94)
+  throw Error("CURRENT94_REQUIRED");
 const hostname = "ep-controlled-fixture.c-14.us-east-1.aws.neon.tech";
 const syntheticPasswordMarker = ["MorrowSynthetic", "T88", "PG", "password", "only"].join("-");
 const hash = (data) => createHash("sha256").update(data).digest("hex");
@@ -755,7 +755,7 @@ for (const [path, expected] of Object.entries(sourceDigests)) {
 }
 const report = {
   task: "P05.T01t",
-  current_plan_sequence: 93,
+  current_plan_sequence: 94,
   phase: "native101_and_actual_sdk_independent_wire_local_engineering_only",
   status: failure ? "held" : "passed",
   failure,

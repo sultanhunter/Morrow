@@ -209,7 +209,7 @@ const paths = [
 ];
 // The SQL file is provenance only: this laboratory never installs or executes it.
 const sourceDigests = Object.fromEntries(paths.map((path) => [path, hash(readFileSync(path))]));
-assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 93);
+assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 94);
 const bundle = await build({
   entryPoints: ["scripts/fixtures/standalone-store-linking-worker.ts"],
   bundle: true,
@@ -257,7 +257,7 @@ try {
     assert.equal(hash(readFileSync(path)), digest, "Source changed during qualification: " + path);
   const report = {
     task: "P05.T03b",
-    canonicalSequence: 93,
+    canonicalSequence: 94,
     qualification:
       "actual_local_workerd_HTTP_guard_controlled_linking_composition_WebCrypto_and_synthetic_SQL",
     compatibilityDate: "2026-07-30",

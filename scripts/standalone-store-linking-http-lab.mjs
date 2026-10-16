@@ -62,7 +62,7 @@ const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 for (const m of manifest.migrations.slice(0, 9)) paths.push("migrations/" + m.file);
 const sourceDigests = Object.fromEntries(paths.map((p) => [p, hash(readFileSync(p))]));
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
-assert.equal(plan.sequence, 93);
+assert.equal(plan.sequence, 94);
 assert.equal(plan.sha256, hash(readFileSync("docs/plan/build-plan.md")));
 const queryTrace = [],
   allPools = [],
@@ -487,7 +487,7 @@ check(
 const report = {
   schemaVersion: 1,
   task: "P05.T03b",
-  canonicalSequence: 93,
+  canonicalSequence: 94,
   qualification: "actual_local_http_and_postgresql",
   checks,
   sourceDigests,

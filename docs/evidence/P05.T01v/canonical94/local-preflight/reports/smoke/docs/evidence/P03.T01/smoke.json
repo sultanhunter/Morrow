@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-10-16T22:25:23.698Z",
+  "scope": "Local production build HTTP status/headers and no-dispatch worker only, no authenticated tenant/provider qualification.",
+  "checks": [
+    {
+      "name": "API build resolves shared contracts",
+      "passed": true
+    },
+    {
+      "name": "Forged shop/host cannot grant private entry",
+      "passed": true
+    },
+    {
+      "name": "Unconfigured API cannot start login or issue a cookie",
+      "passed": true
+    },
+    {
+      "name": "Unconfigured API cannot retire a session or mutate cookies",
+      "passed": true
+    },
+    {
+      "name": "Unconfigured real connector entry fails closed",
+      "passed": true
+    },
+    {
+      "name": "Shop query cannot authenticate installation",
+      "passed": true
+    },
+    {
+      "name": "Production refuses development fixture even with flag",
+      "passed": true
+    },
+    {
+      "name": "Private connector response disables caching",
+      "passed": true
+    },
+    {
+      "name": "Unqualified connector is not embeddable",
+      "passed": true
+    },
+    {
+      "name": "Worker smoke has no dispatch mode",
+      "passed": true
+    },
+    {
+      "name": "Explicit synthetic connector entry starts without credentials",
+      "passed": true
+    }
+  ]
+}

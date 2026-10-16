@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "scope": "94 closed current-sequence metadata only; source review remains required",
+  "files": {
+    "scripts/controlled-neon-postgresql-lab.mjs": {
+      "before_sha256": "227ca55887bada524c0c6c76725c2baeead89f8d94a2ea770dc5fa7e294ba1fb",
+      "after_sha256": "45dd1b5128f68d47d66514fa94d18ab0e3e31e13c86177b693332cc9df360a94"
+    },
+    "scripts/controlled-neon-workers-lab.mjs": {
+      "before_sha256": "9bbf5641d3dbf9fd540e8137e654de98762309d8db1b15f92828aeb29dff29c3",
+      "after_sha256": "25d0f20ca38352d953f1faf345fe655baa5ce19c9221716b287768c17417ce91"
+    },
+    "scripts/fixed-workos-login-https-lab.mjs": {
+      "before_sha256": "99b8e49c38477b5c28713ab773bd1a21ab247d4f22b19d22fa00c69f31d7c461",
+      "after_sha256": "dee496805b833b25d30a1fdf941e3cb8ce38778c754dc13e3c827f3dcfeb1353"
+    },
+    "scripts/fixed-workos-login-workers-lab.mjs": {
+      "before_sha256": "ed51ea231197c0ebab16a7a00c68e9a8992d10e0eb0fc5f71b9f4b573e2d6193",
+      "after_sha256": "af0508d668bc0e98bbd7d036042245bc61aee256fee99f59d9085cb5b3df957b"
+    },
+    "scripts/fixed-workos-platform-workers-lab.mjs": {
+      "before_sha256": "bdd01eba1cab0ec3bf7ccb76082e6f37f418337bc852ab2da844682594eac45a",
+      "after_sha256": "4abafdf2002a821fdb0769f68c18dfa64754a20b234661e4bd39a12b128f3483"
+    },
+    "scripts/managed-login-lifetime-workers-lab.mjs": {
+      "before_sha256": "cc2c58160a6fbc209a0695d3c13565e46ff33813337fce8acee62343ad3140a3",
+      "after_sha256": "befc5be5d19bbcdfbf36536cf7c079106f6c316ad404e38bba68374c6c3d758e"
+    },
+    "scripts/managed-login-postgresql-lab.mjs": {
+      "before_sha256": "9f77ef92b4a8b930a1757e5489a5d39dcc2a4f0b275c622316472ecd00e41c32",
+      "after_sha256": "7b84e26ee0741a7f3c0f5a27dfd1d46e5cab631e9bba183eb2f8f58a542c447d"
+    },
+    "scripts/managed-workspace-api-postgresql-lab.mjs": {
+      "before_sha256": "a4ee42775a419dde5fa1b56832c92a5b5008399a1e1b4970dbfcfe368f2a95a9",
+      "after_sha256": "74c56ed9623082292571c6d34c90e809704c132ec348dcee8372e540ae15cdf5"
+    },
+    "scripts/managed-workspace-api-workers-lab.mjs": {
+      "before_sha256": "fc941ab1095506c21ee1e89e8289801ff9a014a605c267a99a2c79070106780d",
+      "after_sha256": "8ca185e757a199ab00c4c62117a16096d8f1a0eb35efd06951e3f3ad331ce756"
+    },
+    "scripts/self-logout-sql-lab.mjs": {
+      "before_sha256": "fa8e22cfeec92a1aacbcc156b32ccb21092d18b8b56f67d9aea87db5973612ea",
+      "after_sha256": "7209bf6fdc98209df36d473f93535d692af164e65fc8322b16e4f8128a83e505"
+    },
+    "scripts/standalone-login-https-lab.mjs": {
+      "before_sha256": "a7bc8ec88fde2af2e88890d4786c6014027a222036faad8f9846d5482ccd1436",
+      "after_sha256": "5c5bb49a5616fa3020bd8f56657d3f133087147671a6d128452ffe1f5a654833"
+    },
+    "scripts/standalone-login-workers-lab.mjs": {
+      "before_sha256": "b68894cb5be5a632427d2a0cfae4b3fb5eb3d5de07cb1064e1f4c7cff908c811",
+      "after_sha256": "bdc47dc9b0ceeb7a9eeafb2eaea7b1abd5e047727e0910bff7aa5a0e3240bd0d"
+    },
+    "scripts/standalone-logout-https-lab.mjs": {
+      "before_sha256": "94edb78db15638698652f3c4be122e985a1ea04e5259cb898daf929ea0f067ee",
+      "after_sha256": "f7324f25c6e6359fe302b64511fe3c7c55ed5f129d26c9a7e48b7a9b31a23af0"
+    },
+    "scripts/standalone-logout-workers-lab.mjs": {
+      "before_sha256": "d853f2f2d05367f95b6de57e5a7fe752e227b819eb75dd258b39aebbaf196efe",
+      "after_sha256": "7296bd92dd51eeb64190b26d38a18315c7e56d5f6f9fe31eeee04fdbe94e6622"
+    },
+    "scripts/standalone-store-linking-http-lab.mjs": {
+      "before_sha256": "0da6613d057e8a16cbf23721b8b0dd77c66ef6d25fe11cc3b663033931d8f2e9",
+      "after_sha256": "0db17d9bdf7806cea53d2c3ec0a6e1ec1a51ca336fe45f4fd7097a6be9d166b1"
+    },
+    "scripts/standalone-store-linking-workers-lab.mjs": {
+      "before_sha256": "93ceb7254e9196857cedcd55e2a5c196c86df385775d7973f7379867ddfc8ea6",
+      "after_sha256": "f71b09598dd77b6261601aca0aa2b8043ea981b122d70b958fa5e12161255dea"
+    },
+    "scripts/standalone-workspace-http-lab.mjs": {
+      "before_sha256": "6e62f181c8b551203f1ea9a68a6f52814aeda3c699c040e070027dd00da433c3",
+      "after_sha256": "0187f5d6fc73bcc65daf38e2847cc0fffc28cb81a6196b06aad36c82175b5c23"
+    },
+    "scripts/standalone-workspace-workers-lab.mjs": {
+      "before_sha256": "75c307f1f6b35588c46148fc068b700d592f1889c2e9c5ba22cc059d08f10c7a",
+      "after_sha256": "5bbe227575caa7feaf1c6e8d49342b6a3183364eb1ce284b6867ff08920404cd"
+    },
+    "scripts/workspace-store-linking-read-lab.mjs": {
+      "before_sha256": "99d14d12a48e4964a01f63f7302e1fc26f6dad34fb6b2222faa1b88210d6fba6",
+      "after_sha256": "5ab2655dfda9613d0ccdce908e08752064efd37c0f70beb4ef275110eb7ca225"
+    },
+    "docs/progress/tasks.json": {
+      "before_sha256": "1d47f3a7ce13e5a7959fd441d580611eaf4186676c67c2ce53983b3e3427dc02",
+      "after_sha256": "37149a59d58b37a91a22d3acf2b53e7d2a9d588e7360edadd6ab03783776d45b"
+    },
+    "docs/contracts/capabilities.json": {
+      "before_sha256": "40762468445379e1c65d1cbd10527ad1b3dff6e50b41d868a42cb2f04e5111b8",
+      "after_sha256": "cc74de639c6a1ccab84427f398b624a8b8856444ca0e5ce8317e78bdc612ba62"
+    },
+    "infra/environments/development.json": {
+      "before_sha256": "655e5d4e1f7d463ad862962ba21d8c4551a189c3effd7978559d4bbc4874d162",
+      "after_sha256": "c8ac259b3dd741d9804a65015489ce196e61876db39158e5025672e033acc109"
+    },
+    "infra/environments/staging.json": {
+      "before_sha256": "f76b9c69530b9fe527ba315e664608788991a2889ded77af4f83c5975fe9f9f5",
+      "after_sha256": "b9bc1829e035b15689311f24cf8f3cafe9fdf276e23de663dca775e2ef65485d"
+    },
+    "infra/environments/production.json": {
+      "before_sha256": "29b820a6bddec52b101f9c8b5e8cb23a3a74a84fb07571a1bf32d0d829c78617",
+      "after_sha256": "9f492244c7978345df5b2bbcaf796cbf05457aa1d983b63149c2ac41daf50d07"
+    }
+  },
+  "unchanged_maintained_files": [
+    "scripts/login-flow-custody-lab.mjs"
+  ],
+  "authority": {
+    "AGENTS.md": "b303c9e487e8e81ea6fa96877eaab1aa64db9578916225315e6016dcd2221c4b",
+    "docs/plan/build-plan.md": "8c7e73a515a449842cb40d03a409f6a823ef970af549174774a0c5a179841685",
+    "docs/plan/source.json": "0342a64d9e133279133d7004e2d7cc3ae6871428691cc49ed73c94c691637d88",
+    "docs/packets/P05.T01v.md": "1d79d8da947ced61b22a082c8ef346ad5611320cd845db45c8355616533c2f44",
+    "docs/progress/checkpoint.md": "61b4b97be175dffe0de549353b186121b27ef8c3b044cbc2bbc9770b75952204"
+  }
+}

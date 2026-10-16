@@ -1,0 +1,235 @@
+{
+  "scope": "Selected-stack local design inventory; not provider deployment, identity/network proof or authenticated approval",
+  "stack": "cloudflare-neon-runtime",
+  "runtime_provider": "e2b",
+  "mode": "synth",
+  "paid_resources_created": false,
+  "deployment_entrypoint": false,
+  "environments": [
+    {
+      "environment": "development",
+      "configuration_sha256": "cb0bc0dd88a5e94b9e969799ef4875e2d03433fb287a5c1447767eb394b12bcd",
+      "configuration": {
+        "schema_version": 1,
+        "plan_sequence": 94,
+        "stack": "cloudflare-neon-runtime",
+        "environment": "development",
+        "status": "design_candidate",
+        "global_processing": "permitted_under_approved_data_policy",
+        "cloudflare": {
+          "account_id": null,
+          "workers": {
+            "api": "morrow-development-api",
+            "connector": "morrow-development-connector",
+            "broker": "morrow-development-broker",
+            "orchestrator": "morrow-development-orchestrator"
+          },
+          "buckets": {
+            "artifacts": "morrow-development-artifacts",
+            "working": "morrow-development-working",
+            "recovery": "morrow-development-recovery"
+          },
+          "primary_storage_country": "US",
+          "private_processing": true,
+          "private_response_cache": false,
+          "broker_public_route": false,
+          "raw_provider_keys_in_api": false,
+          "artifact_revisions": "unique_keys_checksums_conditional_create"
+        },
+        "neon": {
+          "project_id": null,
+          "branch_id": null,
+          "region_id": null,
+          "primary_storage_country": "US",
+          "major_version": 17,
+          "minor_version": null,
+          "plan": "Launch",
+          "maximum_cu": null,
+          "pitr_days": 7,
+          "daily_recovery_days": 7,
+          "tenant_context": "SET_LOCAL_in_interactive_transaction",
+          "authority_cache": false
+        },
+        "workflow": {
+          "provider": "cloudflare_workflows",
+          "transport": "cloudflare_queues",
+          "business_state": "postgresql",
+          "payload": "opaque_references_and_safe_enums",
+          "closed_retention_days": 7,
+          "version_qualification": "not_run"
+        },
+        "quote": null,
+        "owner_cost_authorization": null,
+        "provider_qualification": null,
+        "deployed_revision": null,
+        "dispatch": "disabled",
+        "runtime": {
+          "provider": "e2b",
+          "project_id": null,
+          "region": null,
+          "sandbox_class": "linux_microvm",
+          "template_id": null,
+          "template_build_id": null,
+          "image_digest": null,
+          "direct_internet": false,
+          "direct_database": false,
+          "raw_provider_keys": false,
+          "public_preview": false,
+          "single_writer_generation": true,
+          "effective_network_tests": "not_run",
+          "dispatch": "disabled"
+        }
+      }
+    },
+    {
+      "environment": "staging",
+      "configuration_sha256": "c8e0908552d30adb3f74c56aa17cd00f92719e6bb951e4da208fb259c96a550c",
+      "configuration": {
+        "schema_version": 1,
+        "plan_sequence": 94,
+        "stack": "cloudflare-neon-runtime",
+        "environment": "staging",
+        "status": "design_candidate",
+        "global_processing": "permitted_under_approved_data_policy",
+        "cloudflare": {
+          "account_id": null,
+          "workers": {
+            "api": "morrow-staging-api",
+            "connector": "morrow-staging-connector",
+            "broker": "morrow-staging-broker",
+            "orchestrator": "morrow-staging-orchestrator"
+          },
+          "buckets": {
+            "artifacts": "morrow-staging-artifacts",
+            "working": "morrow-staging-working",
+            "recovery": "morrow-staging-recovery"
+          },
+          "primary_storage_country": "US",
+          "private_processing": true,
+          "private_response_cache": false,
+          "broker_public_route": false,
+          "raw_provider_keys_in_api": false,
+          "artifact_revisions": "unique_keys_checksums_conditional_create"
+        },
+        "neon": {
+          "project_id": null,
+          "branch_id": null,
+          "region_id": null,
+          "primary_storage_country": "US",
+          "major_version": 17,
+          "minor_version": null,
+          "plan": "Launch",
+          "maximum_cu": null,
+          "pitr_days": 7,
+          "daily_recovery_days": 7,
+          "tenant_context": "SET_LOCAL_in_interactive_transaction",
+          "authority_cache": false
+        },
+        "workflow": {
+          "provider": "cloudflare_workflows",
+          "transport": "cloudflare_queues",
+          "business_state": "postgresql",
+          "payload": "opaque_references_and_safe_enums",
+          "closed_retention_days": 7,
+          "version_qualification": "not_run"
+        },
+        "quote": null,
+        "owner_cost_authorization": null,
+        "provider_qualification": null,
+        "deployed_revision": null,
+        "dispatch": "disabled",
+        "runtime": {
+          "provider": "e2b",
+          "project_id": null,
+          "region": null,
+          "sandbox_class": "linux_microvm",
+          "template_id": null,
+          "template_build_id": null,
+          "image_digest": null,
+          "direct_internet": false,
+          "direct_database": false,
+          "raw_provider_keys": false,
+          "public_preview": false,
+          "single_writer_generation": true,
+          "effective_network_tests": "not_run",
+          "dispatch": "disabled"
+        }
+      }
+    },
+    {
+      "environment": "production",
+      "configuration_sha256": "a977276c7bb8c8d3fa4f8b5e878031ce0edb409a8e3b5a155af16b0ab052d14f",
+      "configuration": {
+        "schema_version": 1,
+        "plan_sequence": 94,
+        "stack": "cloudflare-neon-runtime",
+        "environment": "production",
+        "status": "design_candidate",
+        "global_processing": "permitted_under_approved_data_policy",
+        "cloudflare": {
+          "account_id": null,
+          "workers": {
+            "api": "morrow-production-api",
+            "connector": "morrow-production-connector",
+            "broker": "morrow-production-broker",
+            "orchestrator": "morrow-production-orchestrator"
+          },
+          "buckets": {
+            "artifacts": "morrow-production-artifacts",
+            "working": "morrow-production-working",
+            "recovery": "morrow-production-recovery"
+          },
+          "primary_storage_country": "US",
+          "private_processing": true,
+          "private_response_cache": false,
+          "broker_public_route": false,
+          "raw_provider_keys_in_api": false,
+          "artifact_revisions": "unique_keys_checksums_conditional_create"
+        },
+        "neon": {
+          "project_id": null,
+          "branch_id": null,
+          "region_id": null,
+          "primary_storage_country": "US",
+          "major_version": 17,
+          "minor_version": null,
+          "plan": "Scale",
+          "maximum_cu": null,
+          "pitr_days": 30,
+          "daily_recovery_days": 35,
+          "tenant_context": "SET_LOCAL_in_interactive_transaction",
+          "authority_cache": false
+        },
+        "workflow": {
+          "provider": "cloudflare_workflows",
+          "transport": "cloudflare_queues",
+          "business_state": "postgresql",
+          "payload": "opaque_references_and_safe_enums",
+          "closed_retention_days": 30,
+          "version_qualification": "not_run"
+        },
+        "quote": null,
+        "owner_cost_authorization": null,
+        "provider_qualification": null,
+        "deployed_revision": null,
+        "dispatch": "disabled",
+        "runtime": {
+          "provider": "e2b",
+          "project_id": null,
+          "region": null,
+          "sandbox_class": "linux_microvm",
+          "template_id": null,
+          "template_build_id": null,
+          "image_digest": null,
+          "direct_internet": false,
+          "direct_database": false,
+          "raw_provider_keys": false,
+          "public_preview": false,
+          "single_writer_generation": true,
+          "effective_network_tests": "not_run",
+          "dispatch": "disabled"
+        }
+      }
+    }
+  ]
+}

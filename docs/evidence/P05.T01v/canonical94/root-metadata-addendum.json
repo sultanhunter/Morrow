@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "scope": "two remaining fixed current94 metadata scalars; no execution change",
+  "rows": [
+    {
+      "path": "scripts/standalone-store-linking-http-lab.mjs",
+      "before_sha256": "0db17d9bdf7806cea53d2c3ec0a6e1ec1a51ca336fe45f4fd7097a6be9d166b1",
+      "after_sha256": "20bf9b6cd03cf79dad1ca3431abc50df2a1e6c369510eb83961dfb532a619b22",
+      "exact_old": "assert.equal(plan.sequence, 93);",
+      "exact_new": "assert.equal(plan.sequence, 94);"
+    },
+    {
+      "path": "scripts/ci-validation-evidence.mjs",
+      "before_sha256": "dbebd7507c2fe1a865fbef64cfca0c0b1a817fe96325666cd386ad4e11966a5a",
+      "after_sha256": "074ca5fab9bc5001ffc8add4e3ceaec1c01f2b2905c56ab0ec460016c6fc451a",
+      "exact_old": "canonicalSequence: 93,",
+      "exact_new": "canonicalSequence: 94,"
+    }
+  ]
+}

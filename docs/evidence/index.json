@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 93,
-  "plan_digest": "eed8edf1af40d3d9114f0797e795623a2984ddbb70a8ef5a0072fcb5fc5bd321",
+  "plan_sequence": 94,
+  "plan_digest": "8c7e73a515a449842cb40d03a409f6a823ef970af549174774a0c5a179841685",
   "tasks": [
     {
       "id": "P01.T01",
@@ -3612,6 +3612,222 @@
     {
       "path": "docs/evidence/P05.T01u/sql-validation.json",
       "sha256": "910efcb5e8cb4b6938b5072a4900be92c9bd2415cc1fd55aa14dbb31da50244f"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/canonical-readback.json",
+      "sha256": "8c408f8349dbe25bc51a0aa5c7e82971896319b9ae10e87d9dc2ef5ec22eff8a"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/draft-validation.json",
+      "sha256": "3b010445a3819399447d2901178d00785dcc0e094ab7946df82f10056d2bd028"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/artifact-rest.json",
+      "sha256": "2d328417492e79373c10a91a3b7b8770481dd9d8118d8d6e3311c5f383ed565b"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/artifacts-rest.json",
+      "sha256": "d803bfffc415f0eac35a95ae4cbf4be3e48c0d3dbce3413d1c068b7de08292cc"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/capture-receipt.json",
+      "sha256": "0a204acd309f33eef4c1be001374d3e18fa8086536685f084dfc260115fdb16d"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/jobs-rest.json",
+      "sha256": "afc19e329dfbd41dcefa0cd75f7ed63cc722cf016842016b2a41e54e42f0fca0"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/manifest.json",
+      "sha256": "217d9c23927ccf7e543ce4702044cd815065f674c1890f575ccefb8f0457c0da"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/reports/docs/evidence/P01.T01/verification.json",
+      "sha256": "e54e2e0d23e27b535c8e42941a789f494f098fe18e129f67f4851252d3e86dec"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/reports/docs/evidence/P01.T02/verification.json",
+      "sha256": "434640b9e2f94da623567de329c20c9fc1a66e0b57d94ff165228498f1ad62bf"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/reports/docs/evidence/P01.T03/verification.json",
+      "sha256": "47b167f7d6118cafc92a857649a05bf7f48db3d60680bb4d1f03a4b2331937cb"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/reports/docs/evidence/P01.T04/verification.json",
+      "sha256": "3e3d76dc7d2d707bf4614de39dabcbcb9dd86596ab99fc67e518a31ad4aaba1a"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/reports/docs/evidence/P02.T02/verification.json",
+      "sha256": "9839c651708724a878dbe0ff2dfd709daa20ba160518ea2d9890cb595b9fc25f"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/reports/docs/evidence/P03.T02/boundaries.json",
+      "sha256": "a4bf713000d76b4f2700ad2d250e6c1c87946420a5946edba5af68030e56e723"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/reports/docs/evidence/P03.T04/delivery.json",
+      "sha256": "0212791ee1005ceac1f2e400a14d1115af672abc87fd7afeb1f42cfa1f188fbf"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/reports/docs/evidence/P04.T01f/archive.json",
+      "sha256": "281fa9bb88b5f0daaf07169346514dbc4c3259e0cdc83e85c3f7dda92fba186c"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/reports/docs/evidence/P04.T01f/cleanup.json",
+      "sha256": "c47fb45ae38c8b83201291b18a26432d6f28dee749dcad94f7d233ca193b8133"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/source.after-restore.json",
+      "sha256": "922da65b2360dd9f108cbd2b92f4d3479b05b20706961dfd78fbaf5715814d12"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/source.after-tests.json",
+      "sha256": "d20831c65a34aa85fbe0b7600f269ee476ce6f89ffa209cc526128aa9b09cb5e"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/partial-payloads/source.before.json",
+      "sha256": "922da65b2360dd9f108cbd2b92f4d3479b05b20706961dfd78fbaf5715814d12"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/held93-B/run-rest.json",
+      "sha256": "f974079c2d7cced96d9b5e2f9e28d7ea70a72006d2e3cd5af56df9e6b5875153"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/independent-held93-B-diagnosis.json",
+      "sha256": "4c39f456eb3799bb9393783ba492afe0ac7f9e227c1861001be0732bf0d44804"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/independent-local-preflight-actual-review.json",
+      "sha256": "c43edb3b04abfd64b087ce9b5b98e5d8fccb89858be2e7cfe3aa3d0079c98bc2"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/independent-source-core-review.json",
+      "sha256": "f6ab4d67699e2b3a92b04f7e87ee2d7e39596fd93686bebf8c3ec00f5acbdd10"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/independent-test-https-review.json",
+      "sha256": "91fd6d1bfb68418455973f1130b59348a65b64781093400cbf34d11cb06b7a15"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/independent-timer-diagnosis.json",
+      "sha256": "13059639f86f238b03230a09362f30374ec3e8652af65c6ed940cd8326c9ba71"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/late-ack-actual-characterization.json",
+      "sha256": "6e609234e99a4f613ec3215971a57a71d5bb6ba6eb176e6370dde73413d1a965"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/ci-result.json",
+      "sha256": "1b6f9c706ca9868b8d1875f464627d4240e114a9297285ed00c4921b435a7f92"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/ci-started.json",
+      "sha256": "7030581cd574b5b98d26215e353526033a6bf94587a9609595cc93784ca0b9fe"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/receipt.json",
+      "sha256": "dae918a8ec38c7c8001adee3624cfa0056ed577a444ffa411bf042b76e7ecca7"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P01.T01/verification.json",
+      "sha256": "2cc98b0cc9683babe37cfc0877894297165a8d8269d9ffb028fcd3b7fb2bc35a"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P01.T02/verification.json",
+      "sha256": "96dd0f23fe2e3c4f5b891b1cfe44b4e33e8da66d37dfd4042494b4da62672c3a"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P01.T03/verification.json",
+      "sha256": "48c03316b2e2ffbc867bd814895017efd523153ba2bca2d5a0ce82d6566e8926"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P01.T04/verification.json",
+      "sha256": "3e509dbb00260476efdbeaa5d525a431840cc8a21268a939cfc97abdbd2e5348"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P02.T02/verification.json",
+      "sha256": "1342d4cad1d559d121456882df6df10ad1ca7f769e1c0c6eb07e29fe1de61062"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P03.T02/boundaries.json",
+      "sha256": "a4bf713000d76b4f2700ad2d250e6c1c87946420a5946edba5af68030e56e723"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P03.T03/example.json",
+      "sha256": "e001773426e5222702639fc851c1326628bd1bdcb8da02a1c331e605ae1e7453"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P03.T04/delivery.json",
+      "sha256": "aeab6898371d497722552748e8e1686caef1b2c23de592c4c75cc405b81559e1"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P04.T01a/permissions.json",
+      "sha256": "80ab34dcc3a9a90bd9ad3db82123c48711cce2e039dd948e2e9456bc48b9786c"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P04.T01a/readiness.json",
+      "sha256": "52ce806e30d1b0bbe0a4d544f230987ded8f4d534157d66532ad8a4ca58499f9"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P04.T01a/synth.json",
+      "sha256": "221ea7e596d3e97ef32a686a5b02567aa4a461dcbd6c7360555eb636cc497377"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P04.T01f/archive.json",
+      "sha256": "b7da82b0e32a547a96b127f694d203932953a2358f4d525d96c351308c3e1f71"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/P04.T01f/cleanup.json",
+      "sha256": "10cfd34157ba20601b814033a5da210b59062b052bc4975ad4ace5edde4afdea"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/ci/docs/evidence/index.json",
+      "sha256": "a2f9f77a482ce7c6f1decf3840d86539818c8b7090af33da622abe0f7ac9b6d7"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/reports/smoke/docs/evidence/P03.T01/smoke.json",
+      "sha256": "1c0ae0a26636f2124340b77c59783e7ce75b7b893432f53bc4a0fc319fa01c45"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/smoke-result.json",
+      "sha256": "1ed8583756bab38ff1baf75ab45b8cf1c4edbc5758b669fc6a508fca75286cb6"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/smoke-started.json",
+      "sha256": "9e879cfb79fcf0e14b71d805e0c3cb4e0374a2dca7268dc1b81350d6b7df57b0"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/source-after-restoration.json",
+      "sha256": "8eddc8152ea6c74c5b3a3b53d75f9b45b7303a12f7665d6ec57038143a2584e5"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/local-preflight/source-before.json",
+      "sha256": "c74b4b6d98ff428fbcb28cd6bbadefe979df913a6982fef6908eed445974d8fe"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/root-metadata-addendum.json",
+      "sha256": "eb5704ae2a585564024fe86f653859059f0391a116ff793f6b2fbd5a50885b45"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/root-metadata-phase1.json",
+      "sha256": "02aaac0eac1a873adcefdb106e0d627da8b86d5ee4079d4659c1d975b980e83d"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/tooling/independent-local-ci94-wrapper-workers-review.json",
+      "sha256": "61736c4cac81f92e3b66d3500c981cc8241973d9f529ce3fd78c428f41b5a437"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/tooling/independent-prepare-ci-candidate94-core-review.json",
+      "sha256": "5d7597e835da7845375711af1bad111b59c864e508366526b0db7c87d93bae3d"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/tooling/independent-profile94-https-review.json",
+      "sha256": "d74ca389bd12efa913e4bf7b6b42aa36eb380d89bcbfe21e511d6ac0cceda43b"
+    },
+    {
+      "path": "docs/evidence/P05.T01v/canonical94/tooling/independent-readers94-workers-review.json",
+      "sha256": "2cd7958e0e66c37b841fe2823e46aa930b24a6381ff9e2ddb846c6e4020115d8"
     },
     {
       "path": "docs/evidence/P05.T01v/ci-artifact-inspection.json",

@@ -1,0 +1,1101 @@
+{
+  "schemaVersion": 1,
+  "kind": "morrow_ci_pending_validation_evidence",
+  "repository": "sultanhunter/Morrow",
+  "runId": "38972968535",
+  "runAttempt": "1",
+  "expectedHead": "a6fc482617d53aa69902ffa045bf5cb4cc41b62c",
+  "nodeVersion": "v24.13.0",
+  "canonicalSequence": 93,
+  "testedHead": "a6fc482617d53aa69902ffa045bf5cb4cc41b62c",
+  "collectionStatus": "incomplete_pending",
+  "qualificationStatus": "pending",
+  "requiresFinalGitHubJobAndStepApi": true,
+  "sourceStable": true,
+  "designatedOutputsRestored": true,
+  "sourceInventoryDigest": "e9ab0f688136b87ea107493449842b75e0be770a244c67ab8704f2bda24df1ff",
+  "snapshotBeforeSha256": "922da65b2360dd9f108cbd2b92f4d3479b05b20706961dfd78fbaf5715814d12",
+  "snapshotAfterTestsSha256": "d20831c65a34aa85fbe0b7600f269ee476ce6f89ffa209cc526128aa9b09cb5e",
+  "snapshotAfterRestoreSha256": "922da65b2360dd9f108cbd2b92f4d3479b05b20706961dfd78fbaf5715814d12",
+  "commands": [
+    {
+      "stepId": "install_dependencies",
+      "command": "npm ci --ignore-scripts --no-audit --no-fund",
+      "outcome": "success",
+      "conclusion": "success",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "baseline_ci",
+      "command": "npm run ci",
+      "outcome": "failure",
+      "conclusion": "failure",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "baseline_smoke",
+      "command": "npm run smoke:scaffold",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_managed_login_lifetime",
+      "command": "npm run lab:managed-login-lifetime-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_workspace_api",
+      "command": "npm run lab:workspace-api-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_identity",
+      "command": "npm run lab:workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_agent",
+      "command": "npm run lab:agent-authority-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_linking",
+      "command": "npm run lab:workspace-store-linking-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_pkce",
+      "command": "npm run lab:authentication-exchange-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_token",
+      "command": "npm run lab:workos-session-token-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_status",
+      "command": "npm run lab:workos-session-status-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_evidence",
+      "command": "npm run lab:workos-authentication-evidence-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_selection",
+      "command": "npm run lab:workos-workspace-selection-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_admission",
+      "command": "npm run lab:browser-session-admission-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_workspace",
+      "command": "npm run lab:standalone-workspace-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_store",
+      "command": "npm run lab:standalone-store-linking-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_login",
+      "command": "npm run lab:standalone-login-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_logout",
+      "command": "npm run lab:standalone-logout-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_fixed_provider",
+      "command": "npm run lab:fixed-workos-login-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_platform_provider",
+      "command": "npm run lab:fixed-workos-platform-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "workers_controlled_neon",
+      "command": "npm run lab:controlled-neon-workers",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "frozen75",
+      "command": "npm run lab:workos-session-status-frozen75",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_engine",
+      "command": "pinned isolated PostgreSQL engine diagnostic",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "postgresql_controlled_neon",
+      "command": "npm run lab:controlled-neon-postgresql",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "postgresql_managed_login",
+      "command": "npm run lab:managed-login-postgresql",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "postgresql_workspace_api",
+      "command": "npm run lab:workspace-api-postgresql",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_operations",
+      "command": "npm run lab:operations",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_restore",
+      "command": "npm run lab:restore",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_identity",
+      "command": "npm run lab:identity",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_permissions",
+      "command": "npm run lab:permissions",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_challenge",
+      "command": "npm run lab:authentication",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_revocation",
+      "command": "npm run lab:workspace-revocation",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_linking",
+      "command": "npm run lab:workspace-store-linking",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_pkce",
+      "command": "npm run lab:authentication-exchange",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_selection",
+      "command": "npm run lab:provider-subject-resolution",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_admission",
+      "command": "npm run lab:browser-session-admission",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "frozen71",
+      "command": "npm run lab:workos-operator",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "frozen74",
+      "command": "npm run lab:workos-operator-frozen74",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "frozen80",
+      "command": "npm run lab:workos-authentication-operator",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "frozen82",
+      "command": "npm run lab:workos-authentication-operator-current",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "http_workspace",
+      "command": "npm run lab:standalone-workspace-http",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_link_read",
+      "command": "npm run lab:workspace-linking-read",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "http_linking",
+      "command": "npm run lab:standalone-store-linking-http",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_custody",
+      "command": "npm run lab:login-flow-custody",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "https_login",
+      "command": "npm run lab:standalone-login-https",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "sql_logout",
+      "command": "npm run lab:self-logout-sql",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "https_logout",
+      "command": "npm run lab:standalone-logout-https",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    },
+    {
+      "stepId": "https_fixed_provider",
+      "command": "npm run lab:fixed-workos-login-https",
+      "outcome": "skipped",
+      "conclusion": "skipped",
+      "actualExitCode": null
+    }
+  ],
+  "reports": [
+    {
+      "path": "docs/evidence/P01.T01/verification.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "fresh_partial_pending",
+      "sha256": "e54e2e0d23e27b535c8e42941a789f494f098fe18e129f67f4851252d3e86dec"
+    },
+    {
+      "path": "docs/evidence/P01.T02/verification.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "fresh_partial_pending",
+      "sha256": "434640b9e2f94da623567de329c20c9fc1a66e0b57d94ff165228498f1ad62bf"
+    },
+    {
+      "path": "docs/evidence/P01.T03/verification.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "fresh_partial_pending",
+      "sha256": "47b167f7d6118cafc92a857649a05bf7f48db3d60680bb4d1f03a4b2331937cb"
+    },
+    {
+      "path": "docs/evidence/P01.T04/verification.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "fresh_partial_pending",
+      "sha256": "3e3d76dc7d2d707bf4614de39dabcbcb9dd86596ab99fc67e518a31ad4aaba1a"
+    },
+    {
+      "path": "docs/evidence/P02.T02/verification.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "fresh_partial_pending",
+      "sha256": "9839c651708724a878dbe0ff2dfd709daa20ba160518ea2d9890cb595b9fc25f"
+    },
+    {
+      "path": "docs/evidence/P03.T02/boundaries.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "fresh_partial_pending",
+      "sha256": "a4bf713000d76b4f2700ad2d250e6c1c87946420a5946edba5af68030e56e723"
+    },
+    {
+      "path": "docs/evidence/P03.T04/delivery.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "fresh_partial_pending",
+      "sha256": "0212791ee1005ceac1f2e400a14d1115af672abc87fd7afeb1f42cfa1f188fbf"
+    },
+    {
+      "path": "docs/evidence/P04.T01a/synth.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P04.T01a/permissions.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P04.T01a/readiness.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P04.T01f/archive.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "fresh_partial_pending",
+      "sha256": "281fa9bb88b5f0daaf07169346514dbc4c3259e0cdc83e85c3f7dda92fba186c"
+    },
+    {
+      "path": "docs/evidence/P04.T01f/cleanup.json",
+      "producerStep": "baseline_ci",
+      "producer": {
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      },
+      "status": "fresh_partial_pending",
+      "sha256": "c47fb45ae38c8b83201291b18a26432d6f28dee749dcad94f7d233ca193b8133"
+    },
+    {
+      "path": "docs/evidence/P03.T01/smoke.json",
+      "producerStep": "baseline_smoke",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/managed-login-lifetime.json",
+      "producerStep": "workers_managed_login_lifetime",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/workspace-api-workers.json",
+      "producerStep": "workers_workspace_api",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P04.T01b/workers.json",
+      "producerStep": "workers_identity",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T04/workers-lab.json",
+      "producerStep": "workers_agent",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T03/workers-lab.json",
+      "producerStep": "workers_linking",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01d/workers-lab.json",
+      "producerStep": "workers_pkce",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01f/workers-lab.json",
+      "producerStep": "workers_token",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01m/legacy-reader-workers-lab.json",
+      "producerStep": "workers_status",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01m/legacy-composition-workers-lab.json",
+      "producerStep": "workers_evidence",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01m/legacy-selection-workers-lab.json",
+      "producerStep": "workers_selection",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01m/workers-lab.json",
+      "producerStep": "workers_admission",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/standalone-workspace-workers.json",
+      "producerStep": "workers_workspace",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/standalone-store-linking-workers.json",
+      "producerStep": "workers_store",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/login-workers-lab.json",
+      "producerStep": "workers_login",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/logout-workers-lab.json",
+      "producerStep": "workers_logout",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/fixed-provider-workers.json",
+      "producerStep": "workers_fixed_provider",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/platform-workers-lab.json",
+      "producerStep": "workers_platform_provider",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/controlled-neon-workers.json",
+      "producerStep": "workers_controlled_neon",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01h/frozen75-regression.json",
+      "producerStep": "frozen75",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/controlled-neon-postgresql.json",
+      "producerStep": "postgresql_controlled_neon",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/managed-login-postgresql.json",
+      "producerStep": "postgresql_managed_login",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/workspace-api-postgresql.json",
+      "producerStep": "postgresql_workspace_api",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P04.T03/operations-lab.json",
+      "producerStep": "sql_operations",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P04.T04/restore-lab.json",
+      "producerStep": "sql_restore",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01/identity-lab.json",
+      "producerStep": "sql_identity",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T02/database-lab.json",
+      "producerStep": "sql_permissions",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01k/authentication-challenge-lab.json",
+      "producerStep": "sql_challenge",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01/workspace-revocation-lab.json",
+      "producerStep": "sql_revocation",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T03/workspace-store-linking-lab.json",
+      "producerStep": "sql_linking",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01d/postgresql-lab.json",
+      "producerStep": "sql_pkce",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json",
+      "producerStep": "sql_selection",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01m/postgresql-lab.json",
+      "producerStep": "sql_admission",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01e/frozen-regression.json",
+      "producerStep": "frozen71",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01g/frozen74-regression.json",
+      "producerStep": "frozen74",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01o/frozen80-regression.json",
+      "producerStep": "frozen80",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01o/frozen82-regression.json",
+      "producerStep": "frozen82",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/standalone-workspace-http.json",
+      "producerStep": "http_workspace",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/workspace-linking-read.json",
+      "producerStep": "sql_link_read",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/standalone-store-linking-http.json",
+      "producerStep": "http_linking",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/login-flow-custody.json",
+      "producerStep": "sql_custody",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/login-https-postgresql-lab.json",
+      "producerStep": "https_login",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/self-logout-postgresql-lab.json",
+      "producerStep": "sql_logout",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/logout-https-postgresql-lab.json",
+      "producerStep": "https_logout",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    },
+    {
+      "path": "docs/evidence/P05.T01v/regressions/fixed-provider-https.json",
+      "producerStep": "https_fixed_provider",
+      "producer": {
+        "outcome": "skipped",
+        "conclusion": "skipped",
+        "actualExitCode": null
+      },
+      "status": "missing_pending",
+      "sha256": null
+    }
+  ],
+  "auxiliaryOutputs": [
+    {
+      "path": "docs/evidence/index.json",
+      "originalSha256": "a70b97174543526d7d7c8d7c650de0944eede874c9e9a5ddc6f8f4e3ab642cba",
+      "afterTestsSha256": "a70b97174543526d7d7c8d7c650de0944eede874c9e9a5ddc6f8f4e3ab642cba"
+    },
+    {
+      "path": "docs/evidence/P03.T03/example.json",
+      "originalSha256": "e001773426e5222702639fc851c1326628bd1bdcb8da02a1c331e605ae1e7453",
+      "afterTestsSha256": "e001773426e5222702639fc851c1326628bd1bdcb8da02a1c331e605ae1e7453"
+    }
+  ],
+  "issues": [
+    "producer_not_success:baseline_ci",
+    "report_missing:docs/evidence/P04.T01a/synth.json",
+    "report_missing:docs/evidence/P04.T01a/permissions.json",
+    "report_missing:docs/evidence/P04.T01a/readiness.json",
+    "producer_not_success:baseline_smoke",
+    "report_missing:docs/evidence/P03.T01/smoke.json",
+    "producer_not_success:workers_managed_login_lifetime",
+    "report_missing:docs/evidence/P05.T01v/regressions/managed-login-lifetime.json",
+    "producer_not_success:workers_workspace_api",
+    "report_missing:docs/evidence/P05.T01v/workspace-api-workers.json",
+    "producer_not_success:workers_identity",
+    "report_missing:docs/evidence/P04.T01b/workers.json",
+    "producer_not_success:workers_agent",
+    "report_missing:docs/evidence/P05.T04/workers-lab.json",
+    "producer_not_success:workers_linking",
+    "report_missing:docs/evidence/P05.T03/workers-lab.json",
+    "producer_not_success:workers_pkce",
+    "report_missing:docs/evidence/P05.T01d/workers-lab.json",
+    "producer_not_success:workers_token",
+    "report_missing:docs/evidence/P05.T01f/workers-lab.json",
+    "producer_not_success:workers_status",
+    "report_missing:docs/evidence/P05.T01m/legacy-reader-workers-lab.json",
+    "producer_not_success:workers_evidence",
+    "report_missing:docs/evidence/P05.T01m/legacy-composition-workers-lab.json",
+    "producer_not_success:workers_selection",
+    "report_missing:docs/evidence/P05.T01m/legacy-selection-workers-lab.json",
+    "producer_not_success:workers_admission",
+    "report_missing:docs/evidence/P05.T01m/workers-lab.json",
+    "producer_not_success:workers_workspace",
+    "report_missing:docs/evidence/P05.T01v/regressions/standalone-workspace-workers.json",
+    "producer_not_success:workers_store",
+    "report_missing:docs/evidence/P05.T01v/regressions/standalone-store-linking-workers.json",
+    "producer_not_success:workers_login",
+    "report_missing:docs/evidence/P05.T01v/regressions/login-workers-lab.json",
+    "producer_not_success:workers_logout",
+    "report_missing:docs/evidence/P05.T01v/regressions/logout-workers-lab.json",
+    "producer_not_success:workers_fixed_provider",
+    "report_missing:docs/evidence/P05.T01v/regressions/fixed-provider-workers.json",
+    "producer_not_success:workers_platform_provider",
+    "report_missing:docs/evidence/P05.T01v/regressions/platform-workers-lab.json",
+    "producer_not_success:workers_controlled_neon",
+    "report_missing:docs/evidence/P05.T01v/regressions/controlled-neon-workers.json",
+    "producer_not_success:frozen75",
+    "report_missing:docs/evidence/P05.T01h/frozen75-regression.json",
+    "producer_not_success:sql_engine",
+    "producer_not_success:postgresql_controlled_neon",
+    "report_missing:docs/evidence/P05.T01v/regressions/controlled-neon-postgresql.json",
+    "producer_not_success:postgresql_managed_login",
+    "report_missing:docs/evidence/P05.T01v/regressions/managed-login-postgresql.json",
+    "producer_not_success:postgresql_workspace_api",
+    "report_missing:docs/evidence/P05.T01v/workspace-api-postgresql.json",
+    "producer_not_success:sql_operations",
+    "report_missing:docs/evidence/P04.T03/operations-lab.json",
+    "producer_not_success:sql_restore",
+    "report_missing:docs/evidence/P04.T04/restore-lab.json",
+    "producer_not_success:sql_identity",
+    "report_missing:docs/evidence/P05.T01/identity-lab.json",
+    "producer_not_success:sql_permissions",
+    "report_missing:docs/evidence/P05.T02/database-lab.json",
+    "producer_not_success:sql_challenge",
+    "report_missing:docs/evidence/P05.T01k/authentication-challenge-lab.json",
+    "producer_not_success:sql_revocation",
+    "report_missing:docs/evidence/P05.T01/workspace-revocation-lab.json",
+    "producer_not_success:sql_linking",
+    "report_missing:docs/evidence/P05.T03/workspace-store-linking-lab.json",
+    "producer_not_success:sql_pkce",
+    "report_missing:docs/evidence/P05.T01d/postgresql-lab.json",
+    "producer_not_success:sql_selection",
+    "report_missing:docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json",
+    "producer_not_success:sql_admission",
+    "report_missing:docs/evidence/P05.T01m/postgresql-lab.json",
+    "producer_not_success:frozen71",
+    "report_missing:docs/evidence/P05.T01e/frozen-regression.json",
+    "producer_not_success:frozen74",
+    "report_missing:docs/evidence/P05.T01g/frozen74-regression.json",
+    "producer_not_success:frozen80",
+    "report_missing:docs/evidence/P05.T01o/frozen80-regression.json",
+    "producer_not_success:frozen82",
+    "report_missing:docs/evidence/P05.T01o/frozen82-regression.json",
+    "producer_not_success:http_workspace",
+    "report_missing:docs/evidence/P05.T01v/regressions/standalone-workspace-http.json",
+    "producer_not_success:sql_link_read",
+    "report_missing:docs/evidence/P05.T01v/regressions/workspace-linking-read.json",
+    "producer_not_success:http_linking",
+    "report_missing:docs/evidence/P05.T01v/regressions/standalone-store-linking-http.json",
+    "producer_not_success:sql_custody",
+    "report_missing:docs/evidence/P05.T01v/regressions/login-flow-custody.json",
+    "producer_not_success:https_login",
+    "report_missing:docs/evidence/P05.T01v/regressions/login-https-postgresql-lab.json",
+    "producer_not_success:sql_logout",
+    "report_missing:docs/evidence/P05.T01v/regressions/self-logout-postgresql-lab.json",
+    "producer_not_success:https_logout",
+    "report_missing:docs/evidence/P05.T01v/regressions/logout-https-postgresql-lab.json",
+    "producer_not_success:https_fixed_provider",
+    "report_missing:docs/evidence/P05.T01v/regressions/fixed-provider-https.json"
+  ],
+  "limitations": [
+    "No qualification or numeric process exit is inferred by this collector; verify the final GitHub run/job/step API.",
+    "Fresh report bytes do not replace their domain checks, current source bindings, physical cleanup or independent review.",
+    "Controlled CI filesystem only, not hostile concurrent filesystem isolation. No provider credentials or account actions."
+  ]
+}

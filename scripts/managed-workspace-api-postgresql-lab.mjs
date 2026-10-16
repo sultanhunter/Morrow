@@ -48,7 +48,7 @@ const require = (condition) => {
 };
 require(
   process.version === "v24.13.0" &&
-    JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence === 93,
+    JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence === 94,
 );
 const args = process.argv.slice(2);
 require(args.length <= 1 && (!args.length || /^--attempt=[a-z][a-z0-9-]{0,31}$/.test(args[0])));
@@ -980,7 +980,7 @@ for (const [path, digest] of Object.entries(sourceDigests))
 const report = {
   schema_version: 1,
   task: "P05.T01v",
-  current_plan_sequence: 93,
+  current_plan_sequence: 94,
   status: failure || cleanupFailures.length ? "held" : "passed",
   scope: "configured_local_same_application_Worker_seven_restricted_roles_real_PostgreSQL17",
   source_digests: sourceDigests,
