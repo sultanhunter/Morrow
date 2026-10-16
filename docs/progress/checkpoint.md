@@ -1,3 +1,11 @@
+# Current continuation: canonical94 local engineering qualified; evidence-only publication pending
+
+Canonical94 remains current574blocks. Candidate bd3be2ecc222d714d1cfae222ac6db321a0f5d54 passed exact CI38976564721/attempt1/all57 final steps. Artifact12079119909, 561828bytes/SHAaa9628158faae3e5bdf9905c7ea23904a194a58b01f401e53694d51ed97596dc contains61 fixed payloads/57fresh reports with complete2135-file before/restored source. Actual repository 2448tests/zero failures and11scaffold guards passed. The old pool synthetic ACK is fenced strictly after an upper bound on original C; production remains byte-exact to failed93 B. All1049 tested-C records, including995 held-B historical files and original V outcomes, remain immutable.
+
+Actual native workspace evidence: 388checks/41cases; real restricted PostgreSQL evidence: 190checks/6cases. Same-app login/cookie/bootstrap/controlled linking/logout, denial, replay, unknown outcomes and physical disposal retain their separately observed meanings. Physical cleanup and fresh reconciliation never promote unknown credential custody or original commit. Strict raw execution/source/restoration and all57-domain review are bound below; this new evidence/CPprepend/index is not final D qualification. Final D must pass its own exact-head complete CI, strict fresh artifact and independent all57-domain review before guarded alignment from qualified91. Parent P05.T01/P05.T03 remain In progress; no browser-engine, hosted WorkOS/Neon, Shopify, merchant, merge or deployment qualification.
+
+# Earlier pending-C checkpoint
+
 # Current continuation: preserve failed publication and repair late acknowledgment fixture
 
 Canonical94 is saved/read back at574blocks; all571 prior blocks remain exact. Final93 candidate a6fc482617d53aa69902ffa045bf5cb4cc41b62c failed CI38972968535/attempt1:2448tests/2447pass/1failure at the unchanged late-ACK assertion. Raw artifact12077816923 (276925bytes, SHA09cd8521a1515737d74bc6e27c5a5bc89f4273c742c826616fd8a27bac88447a), REST APIs/log and complete2078-file restored source remain outside; all995 old evidence and exact93 plan/source/packet are preserved. Desktop remains cleanqualified91; failedB is not qualified by earlier successfulA.

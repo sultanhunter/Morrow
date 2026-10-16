@@ -1,0 +1,1249 @@
+{
+  "task": "P01.T01",
+  "generated_at": "2026-10-16T22:35:48.208Z",
+  "plan_sequence": 94,
+  "plan_digest": "8c7e73a515a449842cb40d03a409f6a823ef970af549174774a0c5a179841685",
+  "capabilities": 103,
+  "domains": 14,
+  "packages": 18,
+  "tasks": 80,
+  "acceptance_cases": 73,
+  "walkthrough_cases": 70,
+  "scope": "Catalogue consistency and synthetic authority walkthroughs only; not production enforcement or provider qualification.",
+  "input_digests": {
+    "docs/contracts/capabilities.json": "cc74de639c6a1ccab84427f398b624a8b8856444ca0e5ce8317e78bdc612ba62",
+    "docs/decisions/dependencies.json": "5be3303a0144c9df055ad43f1fba7006297dfe52f9058b9b5cf3aa56ded41f44",
+    "docs/acceptance/P01.A01-fixtures.json": "c5cee8ff337b84e080c0775d0709ef46a8e63d646cfa7505487fce8a1b326786"
+  },
+  "errors": [],
+  "results": [
+    {
+      "id": "P01.A01.owner_content_publish_with_all_gates.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": true,
+        "reasons": []
+      },
+      "actual": {
+        "allowed": true,
+        "reasons": []
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.owner_content_publish_with_all_gates.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": true,
+        "reasons": []
+      },
+      "actual": {
+        "allowed": true,
+        "reasons": []
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.seo_can_draft.standalone_session_b",
+      "capability": "catalog.content.propose",
+      "host": "standalone",
+      "expected": {
+        "allowed": true,
+        "reasons": []
+      },
+      "actual": {
+        "allowed": true,
+        "reasons": []
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.seo_can_draft.standalone",
+      "capability": "catalog.content.propose",
+      "host": "standalone",
+      "expected": {
+        "allowed": true,
+        "reasons": []
+      },
+      "actual": {
+        "allowed": true,
+        "reasons": []
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.seo_title_does_not_grant_refunds.standalone_session_b",
+      "capability": "orders.refund.create",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.seo_title_does_not_grant_refunds.standalone",
+      "capability": "orders.refund.create",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.seo_title_does_not_grant_ad_spend.standalone_session_b",
+      "capability": "ads.campaign.activate",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.seo_title_does_not_grant_ad_spend.standalone",
+      "capability": "ads.campaign.activate",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.draft_grant_does_not_grant_publication.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.draft_grant_does_not_grant_publication.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.revoked_owner_denied.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "PRINCIPAL_REVOKED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "PRINCIPAL_REVOKED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.revoked_owner_denied.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "PRINCIPAL_REVOKED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "PRINCIPAL_REVOKED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.cross_tenant_denied.standalone_session_b",
+      "capability": "catalog.products.read",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "TENANT_OR_WORKSPACE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "TENANT_OR_WORKSPACE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.cross_tenant_denied.standalone",
+      "capability": "catalog.products.read",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "TENANT_OR_WORKSPACE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "TENANT_OR_WORKSPACE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.cross_workspace_denied.standalone_session_b",
+      "capability": "catalog.products.read",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "TENANT_OR_WORKSPACE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "TENANT_OR_WORKSPACE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.cross_workspace_denied.standalone",
+      "capability": "catalog.products.read",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "TENANT_OR_WORKSPACE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "TENANT_OR_WORKSPACE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.wrong_store_denied.standalone_session_b",
+      "capability": "catalog.products.read",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "STORE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "STORE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.wrong_store_denied.standalone",
+      "capability": "catalog.products.read",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "STORE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "STORE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.wrong_resource_denied.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "RESOURCE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "RESOURCE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.wrong_resource_denied.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "RESOURCE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "RESOURCE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.wrong_meta_account_denied.standalone_session_b",
+      "capability": "ads.performance.read",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ACCOUNT_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ACCOUNT_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.wrong_meta_account_denied.standalone",
+      "capability": "ads.performance.read",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ACCOUNT_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ACCOUNT_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.seo_price_field_denied.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "FIELD_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "FIELD_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.seo_price_field_denied.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "FIELD_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "FIELD_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.restricted_field_grant_denied.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "FIELD_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "FIELD_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.restricted_field_grant_denied.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "FIELD_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "FIELD_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.owner_cannot_bypass_provider_review.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "PROVIDER_NOT_QUALIFIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "PROVIDER_NOT_QUALIFIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.owner_cannot_bypass_provider_review.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "PROVIDER_NOT_QUALIFIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "PROVIDER_NOT_QUALIFIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.owner_cannot_bypass_provider_permission.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "PROVIDER_PERMISSION_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "PROVIDER_PERMISSION_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.owner_cannot_bypass_provider_permission.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "PROVIDER_PERMISSION_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "PROVIDER_PERMISSION_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.subscription_does_not_grant_authority.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.subscription_does_not_grant_authority.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "CAPABILITY_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.missing_entitlement_denied.standalone_session_b",
+      "capability": "creative.image.generate",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ENTITLEMENT_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ENTITLEMENT_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.missing_entitlement_denied.standalone",
+      "capability": "creative.image.generate",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ENTITLEMENT_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ENTITLEMENT_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.changed_proposal_requires_new_review.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.changed_proposal_requires_new_review.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.expired_review_denied.standalone_session_b",
+      "capability": "orders.refund.create",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.expired_review_denied.standalone",
+      "capability": "orders.refund.create",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.ineligible_reviewer_denied.standalone_session_b",
+      "capability": "orders.refund.create",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.ineligible_reviewer_denied.standalone",
+      "capability": "orders.refund.create",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "EXACT_APPROVAL_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.stale_product_precondition_denied.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "PRECONDITION_CONFLICT"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "PRECONDITION_CONFLICT"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.stale_product_precondition_denied.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "PRECONDITION_CONFLICT"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "PRECONDITION_CONFLICT"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.spend_without_reservation_denied.standalone_session_b",
+      "capability": "ads.campaign.activate",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.spend_without_reservation_denied.standalone",
+      "capability": "ads.campaign.activate",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.spend_above_ceiling_denied.standalone_session_b",
+      "capability": "ads.campaign.activate",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.spend_above_ceiling_denied.standalone",
+      "capability": "ads.campaign.activate",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.mixed_currency_budget_denied.standalone_session_b",
+      "capability": "ads.campaign.activate",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.mixed_currency_budget_denied.standalone",
+      "capability": "ads.campaign.activate",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "BUDGET_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.inventory_absolute_write_without_authority_denied.standalone_session_b",
+      "capability": "inventory.quantity.set",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "SOURCE_AUTHORITY_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "SOURCE_AUTHORITY_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.inventory_absolute_write_without_authority_denied.standalone",
+      "capability": "inventory.quantity.set",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "SOURCE_AUTHORITY_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "SOURCE_AUTHORITY_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.merchant_cannot_publish_firstparty_release.standalone_session_b",
+      "capability": "agents.release.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "OPERATOR_AUTHORITY_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "OPERATOR_AUTHORITY_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.merchant_cannot_publish_firstparty_release.standalone",
+      "capability": "agents.release.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "OPERATOR_AUTHORITY_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "OPERATOR_AUTHORITY_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.explicit_operator_can_publish_qualified_release.standalone_session_b",
+      "capability": "agents.release.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": true,
+        "reasons": []
+      },
+      "actual": {
+        "allowed": true,
+        "reasons": []
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.explicit_operator_can_publish_qualified_release.standalone",
+      "capability": "agents.release.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": true,
+        "reasons": []
+      },
+      "actual": {
+        "allowed": true,
+        "reasons": []
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.agent_cannot_be_human_reviewer.standalone_session_b",
+      "capability": "governance.approval.decide",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "HUMAN_REVIEWER_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "HUMAN_REVIEWER_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.agent_cannot_be_human_reviewer.standalone",
+      "capability": "governance.approval.decide",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "HUMAN_REVIEWER_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "HUMAN_REVIEWER_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.expired_agent_mandate_denied.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "MANDATE_EXPIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "MANDATE_EXPIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.expired_agent_mandate_denied.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "MANDATE_EXPIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "MANDATE_EXPIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.delegation_cannot_bypass_seo_authority.standalone_session_b",
+      "capability": "orders.refund.create",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.delegation_cannot_bypass_seo_authority.standalone",
+      "capability": "orders.refund.create",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.delegation_cannot_widen_store_scope.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.delegation_cannot_widen_store_scope.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.bounded_agent_can_publish_with_current_authority.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": true,
+        "reasons": []
+      },
+      "actual": {
+        "allowed": true,
+        "reasons": []
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.bounded_agent_can_publish_with_current_authority.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": true,
+        "reasons": []
+      },
+      "actual": {
+        "allowed": true,
+        "reasons": []
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.revoked_origin_cannot_keep_agent_authority.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.revoked_origin_cannot_keep_agent_authority.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_DENIED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.agent_requires_bound_origin.standalone_session_b",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.agent_requires_bound_origin.standalone",
+      "capability": "catalog.content.publish",
+      "host": "standalone",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_REQUIRED"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "ORIGIN_SCOPE_REQUIRED"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.denied.domain_surface.shopify_admin",
+      "capability": "catalog.content.publish",
+      "host": "shopify_admin",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "HOST_INVALID"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "HOST_INVALID"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "id": "P01.A01.denied.domain_surface.shopify_connector",
+      "capability": "catalog.content.publish",
+      "host": "shopify_connector",
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "HOST_INVALID"
+        ]
+      },
+      "actual": {
+        "allowed": false,
+        "reasons": [
+          "HOST_INVALID"
+        ]
+      },
+      "passed": true
+    }
+  ]
+}

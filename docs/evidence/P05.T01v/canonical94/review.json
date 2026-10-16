@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01v",
+  "current_plan_sequence": 94,
+  "tested_commit": "bd3be2ecc222d714d1cfae222ac6db321a0f5d54",
+  "result": "clear_for_provider_free_local_engineering",
+  "reviewer": "evidence_assembly_self_review",
+  "independent_actual_review": {
+    "path": "docs/evidence/P05.T01v/canonical94/independent-actual-C-review.json",
+    "sha256": "518724a25d8759746611c4c00bae28d7c50107bef594aa494afb2352e1289f8a"
+  },
+  "source_digests": {
+    "docs/evidence/P05.T01v/canonical94/execution.json": "6fe09bc45d6ddc85bea6c8672e4fd0beb4f06df11bca1044525161b15c370cda",
+    "docs/evidence/P05.T01v/canonical94/ci-run-rest.json": "1c19aaaf93637fa6e6a5a82e0839d2d3e28023e63e29f0cccef8029973786044",
+    "docs/evidence/P05.T01v/canonical94/ci-jobs-rest.json": "267373c870ae9ac895635a47301cc11d0c5bf6079aee67955c996337e3ae12ff",
+    "docs/evidence/P05.T01v/canonical94/ci-artifacts-rest.json": "e7dee425c2e8c45563cfe93d89999828e1b5a6ec8e4c4f1a021ab517dac91fcf",
+    "docs/evidence/P05.T01v/canonical94/ci-artifact-rest.json": "e219d77c2eba76839bbc478496e6736ced0835ba54881906ff6d5846d9bd7341",
+    "docs/evidence/P05.T01v/canonical94/ci-capture-receipt.json": "a614ed00f9026ab6fdf0e7d8ff025c2ebc74d49a9ef054e23104f44258d48b9f",
+    "docs/evidence/P05.T01v/canonical94/ci-artifact-inspection.json": "aa80697eb25dbe9b14429ff36123f842f0fc7da38797e961b15c3cbe1683620f",
+    "docs/evidence/P05.T01v/canonical94/independent-ci-domain-review.json": "6f652069d88f09e1d858943856910cfa5f09c745b5baf07d0f47080dc450d644",
+    "docs/evidence/P05.T01v/canonical94/independent-actual-C-review.json": "518724a25d8759746611c4c00bae28d7c50107bef594aa494afb2352e1289f8a"
+  },
+  "source_inventory_digest": "79ace28392797ffa90cda07604c0571223a15960944010760509ce34ca0523d6",
+  "limits": [
+    "Assembly is not an independent source/domain review; exact independently reviewed raw receipts remain separate."
+  ]
+}
