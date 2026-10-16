@@ -1,3 +1,23 @@
+# Current continuation: fixed provider adapter prepared; isolated integration pending
+
+Canonical86 remains synchronized at497 blocks. The private fixed WorkOS port and independent HTTP/PKCE/RSA oracle are implemented. Actual local Workers passes90cases/995checks with zero outbound requests and acknowledged runtime disposal; intentional stalled/rejected release/cancellation remains unverified. Focused81 adapter and12 oracle units passed. The full pinned local pipeline passes2,050tests/zero failures and11scaffold guards after enabling local listener access. The initial sandbox denied90listener tests and the first scaffold attempt; those original holds/logs remain separate outside Git.
+
+Independent adapter, oracle/Workers, HTTPS fixture and maintained metadata/CI reviews have no blocking findings. All11maintained runner assertion ASTs and seven owning PostgreSQL callback bodies remain unchanged. The current CI profile retains39producer commands and adds two, collecting50fresh reports. All426original evidence files are byte-exact; regenerated local reports are preserved separately, with the new Workers report under P05.T01r.
+
+Next copy a separately marked pending candidate only to the publisher and push existing draftPR1 for exact-head isolated PostgreSQL/HTTPS and prior regression execution. A pending candidate is not qualification or Desktop alignment. Downloaded artifact/API/source/cleanup validation, independent evidence review, final exact-head CI and guarded clean Desktop alignment remain required. Desktop stays on published85. ParentP05.T01/P05.T03 remain In progress; no native provider/key/sign-in, account, deployment or merchant activation is included. No current user input is required.
+
+# Historical86 implementation checkpoint
+
+# Current continuation: private fixed WorkOS provider dependency
+
+Canonical86 is saved/full-readback/synchronized at497 blocks, all489 prior blocks unchanged with eight exact additions. Active packet docs/packets/P05.T01r.md specifies only the private fixed exchange/JWKS/session-page adapter, controlled credential lease and independent synthetic qualification. No native provider/key/sign-in, account, deployment or merchant action is included. Existing identity/SQL1–11 and historical evidence remain unchanged.
+
+Published85 d1e3e3c36c908ed2c735ca4a26e6f868a5e4c9ef passed exact-head CI38884564116 all48steps and verified downloaded52-file artifact/source restoration. SOURCE, publisher and Desktop aligned1422 files clean at inventoryb68ea227e31e1775466d89e629368e16ecd5b351f072802425bf0c9a457fdf81. Before86 preserves all1422 public files (manifestd696d60d7372cac97edcc0a1b38dbf333982d88300ba497f34c75bfaefadfb0e); original85reports/Mac measurements and consumed82native receipts remain protected. Parent P05.T01/P05.T03 remain In progress.
+
+Implement the exact private port and synthetic oracle first, then qualify Node/zero-egress Workers and actual local PostgreSQL+HTTPS login→workspace/linking→logout. Maintain prior provider-free regressions with new86 report paths and unchanged protocol/assertions. Exact-head CI, fresh-output artifact verification, independent source/evidence review and guarded Desktop alignment remain required. No current user input is needed. A later actual native flow requires its own prepared action scope and manual login; do not reuse82's allowance.
+
+# Historical85 completed publication and prepublication history
+
 # Current continuation: self-logout engineering passed; final publication pending
 
 Canonical85 remains current at489 blocks; the fresh full Page read and no-op snapshot refresh match the saved authority. Pending candidate ac9f1c6f7414add3b094a1eb0f0f7d087077e1c0 completed exact-head isolated GitHub CI38837737312 attempt1 with all48 final API steps successful. The run log records1,957 repository tests passed, zero failed, and11 scaffold guards. The earlier1,943-test Mac baseline is retained separately.

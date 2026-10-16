@@ -63,15 +63,20 @@ export const ciValidationCommands = Object.freeze([
     "P05.T01m/workers-lab.json",
   ]),
   command("workers_workspace", "npm run lab:standalone-workspace-workers", [
-    "P05.T01q/regressions/standalone-workspace-workers.json",
+    "P05.T01r/regressions/standalone-workspace-workers.json",
   ]),
   command("workers_store", "npm run lab:standalone-store-linking-workers", [
-    "P05.T01q/regressions/standalone-store-linking-workers.json",
+    "P05.T01r/regressions/standalone-store-linking-workers.json",
   ]),
   command("workers_login", "npm run lab:standalone-login-workers", [
-    "P05.T01q/regressions/login-workers-lab.json",
+    "P05.T01r/regressions/login-workers-lab.json",
   ]),
-  command("workers_logout", "npm run lab:standalone-logout-workers", ["P05.T01q/workers-lab.json"]),
+  command("workers_logout", "npm run lab:standalone-logout-workers", [
+    "P05.T01r/regressions/logout-workers-lab.json",
+  ]),
+  command("workers_fixed_provider", "npm run lab:fixed-workos-login-workers", [
+    "P05.T01r/workers-lab.json",
+  ]),
   command("frozen75", "npm run lab:workos-session-status-frozen75", [
     "P05.T01h/frozen75-regression.json",
   ]),
@@ -107,23 +112,28 @@ export const ciValidationCommands = Object.freeze([
     "P05.T01o/frozen82-regression.json",
   ]),
   command("http_workspace", "npm run lab:standalone-workspace-http", [
-    "P05.T01q/regressions/standalone-workspace-http.json",
+    "P05.T01r/regressions/standalone-workspace-http.json",
   ]),
   command("sql_link_read", "npm run lab:workspace-linking-read", [
-    "P05.T01q/regressions/workspace-linking-read.json",
+    "P05.T01r/regressions/workspace-linking-read.json",
   ]),
   command("http_linking", "npm run lab:standalone-store-linking-http", [
-    "P05.T01q/regressions/standalone-store-linking-http.json",
+    "P05.T01r/regressions/standalone-store-linking-http.json",
   ]),
   command("sql_custody", "npm run lab:login-flow-custody", [
-    "P05.T01q/regressions/login-flow-custody.json",
+    "P05.T01r/regressions/login-flow-custody.json",
   ]),
   command("https_login", "npm run lab:standalone-login-https", [
-    "P05.T01q/regressions/login-https-postgresql-lab.json",
+    "P05.T01r/regressions/login-https-postgresql-lab.json",
   ]),
-  command("sql_logout", "npm run lab:self-logout-sql", ["P05.T01q/postgresql-lab.json"]),
+  command("sql_logout", "npm run lab:self-logout-sql", [
+    "P05.T01r/regressions/self-logout-postgresql-lab.json",
+  ]),
   command("https_logout", "npm run lab:standalone-logout-https", [
-    "P05.T01q/https-postgresql-lab.json",
+    "P05.T01r/regressions/logout-https-postgresql-lab.json",
+  ]),
+  command("https_fixed_provider", "npm run lab:fixed-workos-login-https", [
+    "P05.T01r/https-postgresql-lab.json",
   ]),
 ]);
 export const ciValidationReportPaths = Object.freeze(
@@ -346,7 +356,7 @@ export function createCiValidationEvidence({
     runAttempt,
     expectedHead,
     nodeVersion: process.version,
-    canonicalSequence: 85,
+    canonicalSequence: 86,
   };
   const stateValue = () => {
     const file = readRegular(runRoot, "preparation.json");
@@ -581,7 +591,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     });
     if (process.argv[2] === "prepare") {
       service.prepare();
-      console.log("CI_VALIDATION_EVIDENCE_PREPARED:48");
+      console.log("CI_VALIDATION_EVIDENCE_PREPARED:50");
     } else {
       require((process.env.CI_STEP_RESULTS ?? "{}").length <= 131072);
       const result = service.collect(JSON.parse(process.env.CI_STEP_RESULTS ?? "{}"));

@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 85,
-  "plan_digest": "62ad13ece3999eafa60d68688d34034471c3c0dd357d05de26e483b35ac2fadf",
+  "plan_sequence": 86,
+  "plan_digest": "87f9c0a372a3f1877b56511c0077019e244e06ec49e546206f79f8ff036d974d",
   "tasks": [
     {
       "id": "P01.T01",
@@ -1716,6 +1716,38 @@
     {
       "path": "docs/evidence/P05.T01q/workers-lab.json",
       "sha256": "abeadfb66660ce6746f38bdb5c9f1cb5b8c94e3553657d79eaa5476a313e94f8"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/draft-validation.json",
+      "sha256": "3baa5f465ee34dfc65b86e01ba10c7c28fc2b57ba2ed474e1f912868888e8898"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/independent-fixed-port-workers86.json",
+      "sha256": "412e301f555ac5a235c5442caee0ddba3640b69b0b2a1c4d3e9e0a988d24a81e"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/independent-fixed-provider-workers86.json",
+      "sha256": "3960b21c059e9d17dc9948e75865cb1baf807de6dc579ca2e0ca8ff36cc045f6"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/independent-fixed-provider86-custody.json",
+      "sha256": "24cd77aa890b66b9578c18b108bd326a50cd2d57ec892fda583859458cfda6fb"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/independent-maintained-runners86.json",
+      "sha256": "59ca4ec16f312dbc5eef77000432ff536b2cba26dba561733c8bae0c3c025d12"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/local-preparation.json",
+      "sha256": "6428fff1ffaed1d16c541983fe790e7d05057e59b672b6eb2549a58a36a2f19e"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/root-fixed-provider-source-review86.json",
+      "sha256": "f28841d355b468aacd1dc9f4bd9b6aff291d2391d021bc5797df2aa5ce7c85b4"
+    },
+    {
+      "path": "docs/evidence/P05.T01r/workers-lab.json",
+      "sha256": "a6368a0d28fb288615ffb858eb570a6d0dfb7f416b472fe154b68c406f2fd1df"
     },
     {
       "path": "docs/evidence/P05.T02/clean-build.json",

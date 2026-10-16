@@ -79,7 +79,7 @@ function fixture(t, absent = []) {
   return { base, sourceRoot, runnerTemp, options, service, head, originals, write, fresh };
 }
 
-test("fixed report inventory is exactly the preserved37 plus currentQ11, excluding actual/history/parents", () => {
+test("fixed report inventory is exactly the preserved37 plus currentR13, excluding actual/history/parents", () => {
   const provenance = JSON.parse(
     readFileSync(
       new URL("../docs/evidence/P05.T01p/current-regressions/provenance.json", import.meta.url),
@@ -88,9 +88,11 @@ test("fixed report inventory is exactly the preserved37 plus currentQ11, excludi
   const prior = provenance.measurements.map((m) => m.original_path);
   const current = [
     "workers-lab.json",
-    "postgresql-lab.json",
     "https-postgresql-lab.json",
     ...[
+      "logout-workers-lab.json",
+      "self-logout-postgresql-lab.json",
+      "logout-https-postgresql-lab.json",
       "standalone-workspace-workers.json",
       "standalone-store-linking-workers.json",
       "login-workers-lab.json",
@@ -100,10 +102,10 @@ test("fixed report inventory is exactly the preserved37 plus currentQ11, excludi
       "login-flow-custody.json",
       "login-https-postgresql-lab.json",
     ].map((p) => "regressions/" + p),
-  ].map((p) => "docs/evidence/P05.T01q/" + p);
+  ].map((p) => "docs/evidence/P05.T01r/" + p);
   assert.equal(prior.length, 37);
   assert.deepEqual([...ciValidationReportPaths].sort(), [...prior, ...current].sort());
-  assert.equal(new Set(ciValidationReportPaths).size, 48);
+  assert.equal(new Set(ciValidationReportPaths).size, 50);
   assert.ok(
     ciValidationReportPaths.every(
       (p) => !/(?:history|actual-|local-validation|qualification|provenance)/.test(p),
@@ -142,7 +144,7 @@ test("workflow gives each original command a unique serial step and binds exact 
 
 test("prepare removes every stale output before tests, leaves auxiliary inputs, then restores exact originals", (t) => {
   const f = fixture(t);
-  assert.deepEqual(f.service.prepare(), { status: "prepared", reportCount: 48 });
+  assert.deepEqual(f.service.prepare(), { status: "prepared", reportCount: 50 });
   const stateText = readFileSync(join(f.service.runRoot, "preparation.json"), "utf8");
   const state = JSON.parse(stateText);
   assert.equal(state.status, "prepared");
@@ -182,7 +184,7 @@ test("fresh full evidence captures exact JSON/snapshots and still awaits final e
   assert.equal(result.manifest.testedHead, f.head);
   assert.equal(result.manifest.sourceStable, true);
   assert.equal(result.manifest.designatedOutputsRestored, true);
-  assert.equal(result.manifest.reports.length, 48);
+  assert.equal(result.manifest.reports.length, 50);
   assert.ok(result.manifest.commands.every((c) => c.actualExitCode === null));
   assert.ok(result.manifest.reports.every((r) => r.status === "fresh_pending_external_validation"));
   for (const r of result.manifest.reports)

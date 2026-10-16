@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "task": "P05.T01r",
+  "reviewer": "fixed_provider_https",
+  "authorOfReviewedCore": false,
+  "reviewType": "independent_source_and_focused_cpu_execution",
+  "qualificationStatus": "pending_full_SQL_HTTPS_CI",
+  "findings": [],
+  "sourceDigests": {
+    "packages/identity/src/fixed-workos-login-port.ts": "f052b344c843bda5fcf6e84d3abd5f94ea8917a66d5932e3a3bc343e1f7b5d58",
+    "tests/fixed-workos-login-port.test.mjs": "4b3c56f3e8a5ebc7eaf91b087954c2d2736df6207a58785c101b6c38816a1079",
+    "packages/identity/src/standalone-login-protocol.ts": "0420c72e73f93a1f5f625a640f5cd1d9207931cf41e8a23ff96c6f26dc5cf01b",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "docs/packets/P05.T01r.md": "cc3ef16a1c019aa42650533bed96001693d1da4fe6a2675a84fe488f7a337544",
+    "docs/plan/build-plan.md": "87f9c0a372a3f1877b56511c0077019e244e06ec49e546206f79f8ff036d974d",
+    "docs/plan/source.json": "f79640b8e06767b9e610f68f60faf70d26b45643d5798abbfb2060837d7d4246"
+  },
+  "reviewed": [
+    "Operation custody is registered before the first post-await freshness check; late response/lease values are disposed through once-latched handles.",
+    "Each operation has fresh per-invocation WeakSets; normal release is latched before invocation and acknowledged before page success under original deadline and lease expiry.",
+    "Parent abort, revocation, clock regression, wall timeout and post-await checks permanently hold the invocation; the final wrapper never restores late success.",
+    "Separate cleanup-only controls are at most1000ms and have no authority to Fetch, retry release or forward data. Rejected/stalled cleanup is not treated as acknowledged.",
+    "Rejected/late Response bodies and active readers use independent once-only cancellation; fully consumed readers release their lock.",
+    "Strict duplicate-free parser rejects malformed UTF16 and private projected fields; native environment denials and synthetic fetch are separated."
+  ],
+  "focusedExecution": {
+    "actualExitCode": 0,
+    "owningToolChunk": "cb2f51",
+    "tests": 17,
+    "passed": 17,
+    "failed": 0,
+    "log": "/private/tmp/morrow86-independent-custody-review.log",
+    "logSha256": "090874fa2319ad9a46f6c91a82c183fb9d061c084820abaad1aa0cdda99d0817"
+  },
+  "limitations": [
+    "The reviewer authored the separate new HTTPS laboratory, not the reviewed core. This does not independently qualify that laboratory.",
+    "No Docker, PostgreSQL, provider network, WorkOS account/key or merchant action was used in this review.",
+    "Focused synthetic checks are not native DNS/TLS or hosted-secret qualification."
+  ]
+}

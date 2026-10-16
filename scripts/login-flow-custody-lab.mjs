@@ -47,6 +47,7 @@ const sourcePaths = [
   "docs/plan/source.json",
   "docs/plan/build-plan.md",
   "docs/packets/P05.T01p.md",
+  "docs/packets/P05.T01r.md",
   ...selectedMigrations.map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
@@ -901,9 +902,9 @@ const report = {
     "Historical receipt attribution never proves dispatch, delivery, or current authority.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01q/regressions", { recursive: true });
+mkdirSync("docs/evidence/P05.T01r/regressions", { recursive: true });
 writeFileSync(
-  "docs/evidence/P05.T01q/regressions/login-flow-custody.json",
+  "docs/evidence/P05.T01r/regressions/login-flow-custody.json",
   JSON.stringify(report, null, 2) + "\n",
 );
 console.log(

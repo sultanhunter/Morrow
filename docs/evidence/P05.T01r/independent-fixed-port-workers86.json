@@ -1,0 +1,35 @@
+{
+  "reviewer": "fixed_provider_workers",
+  "review_kind": "independent_source_only",
+  "current_plan_sequence": 86,
+  "findings": [],
+  "scope": [
+    "Exact fixed URL/method/header and credential isolation",
+    "Existing configuration grammar and strict duplicate-free UTF16/UTF8 parser reuse",
+    "Operation-local absolute deadline, monotonic clock, abort and once-only late-resource custody",
+    "Original-deadline lease acknowledgement and separate cleanup-only release; no retry or late output",
+    "Public keyset projection and conservative certificate metadata encoding checks",
+    "No public export, provider request, existing protocol/SQL body change or runtime activation"
+  ],
+  "source_digests": {
+    "packages/identity/src/fixed-workos-login-port.ts": "f052b344c843bda5fcf6e84d3abd5f94ea8917a66d5932e3a3bc343e1f7b5d58",
+    "packages/identity/src/standalone-login.ts": "12a5b7e9eeff006998d46f4119d87f86eb1d37b15ad271e16aae404bf370a6df",
+    "packages/identity/src/standalone-login-protocol.ts": "0420c72e73f93a1f5f625a640f5cd1d9207931cf41e8a23ff96c6f26dc5cf01b",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "docs/packets/P05.T01r.md": "cc3ef16a1c019aa42650533bed96001693d1da4fe6a2675a84fe488f7a337544",
+    "docs/plan/build-plan.md": "87f9c0a372a3f1877b56511c0077019e244e06ec49e546206f79f8ff036d974d",
+    "docs/plan/source.json": "f79640b8e06767b9e610f68f60faf70d26b45643d5798abbfb2060837d7d4246"
+  },
+  "observations": {
+    "independent_http_pkce_native_rsa_oracle_tests": 12,
+    "node_version": "v24.13.0",
+    "focused_oracle_command_exit_code": 0,
+    "fixture_typescript_exit_code": 0,
+    "workers_runtime_executed": false,
+    "native_provider_requests": 0
+  },
+  "limitations": [
+    "This is an independent source review plus focused synthetic Node oracle measurement, not Workers or PostgreSQL/HTTPS qualification.",
+    "No WorkOS DNS/TLS/account/credential ownership is qualified."
+  ]
+}

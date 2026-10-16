@@ -74,6 +74,9 @@ jobs:
       - name: Exercise current browser-family logout with synthetic providers in Workers
         id: workers_logout
         run: npm run lab:standalone-logout-workers
+      - name: Exercise fixed WorkOS wire adapter with synthetic providers in Workers
+        id: workers_fixed_provider
+        run: npm run lab:fixed-workos-login-workers
       - name: Exercise preserved75 session observation with synthetic providers only
         id: frozen75
         run: npm run lab:workos-session-status-frozen75
@@ -144,6 +147,9 @@ jobs:
       - name: Exercise local HTTPS logout and workspace/store-linking denial
         id: https_logout
         run: npm run lab:standalone-logout-https
+      - name: Exercise fixed WorkOS wire to local HTTPS login and logout
+        id: https_fixed_provider
+        run: npm run lab:fixed-workos-login-https
       - name: Collect pending validation evidence
         id: validation_evidence_collect
         if: always()

@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "currentPlanSequence": 86,
+  "reviewer": "/root/fixed_provider_core",
+  "reviewKind": "independent_read_only_maintained_runner_and_ci_metadata_review",
+  "reviewedAt": "2026-10-16T10:37:43.122Z",
+  "basis": "Independent full textual delta and separately parsed TypeScript AST comparison against preserved before86; root self-audit used for orientation only.",
+  "files": [
+    {
+      "path": "scripts/self-logout-sql-lab.mjs",
+      "beforeSha256": "2ca761450d66af6aca7895af3ce01817b39c3ca0aefffc5c50f0e9ec279936ec",
+      "sha256": "b6fedf690eb46778fba2e81fb477e40ded05f254c0da25418da5cdca585cceb7",
+      "explicitCheckCalls": 41,
+      "explicitCheckAstUnchanged": true,
+      "owningPostgresCallbacks": 1,
+      "owningPostgresCallbackAstUnchanged": true,
+      "metadataDeltaReviewed": "Only active plan sequence, added active packet hash input, current report path and report sequence metadata changed; original assertions, SQL execution, resource disposal and source stability checks retained."
+    },
+    {
+      "path": "scripts/standalone-logout-https-lab.mjs",
+      "beforeSha256": "906d30c295223e222389f006ab3aec87a5fdeca0eb00257823b63a8247de9cc5",
+      "sha256": "b5c1ea6327a9ba8bfff03ac1e57d8fafdf9ed12677aec8522edd76d0b977211a",
+      "explicitCheckCalls": 37,
+      "explicitCheckAstUnchanged": true,
+      "owningPostgresCallbacks": 1,
+      "owningPostgresCallbackAstUnchanged": true,
+      "metadataDeltaReviewed": "Only active plan sequence, added active packet hash input, current report path and report sequence metadata changed; original assertions, SQL execution, resource disposal and source stability checks retained."
+    },
+    {
+      "path": "scripts/standalone-logout-workers-lab.mjs",
+      "beforeSha256": "75576b36e07dd54e74ebfa7a54a0cd3c311cd457c8e7385e38e350b6ad66a1b7",
+      "sha256": "0eddc9066dc585c84d447c96e76b6feb7d898e0220b5d012dfe50e1175ce4297",
+      "explicitCheckCalls": 0,
+      "explicitCheckAstUnchanged": true,
+      "owningPostgresCallbacks": 0,
+      "owningPostgresCallbackAstUnchanged": true,
+      "metadataDeltaReviewed": "Only active plan sequence, added active packet hash input, current report path and report sequence metadata changed; original assertions, SQL execution, resource disposal and source stability checks retained."
+    },
+    {
+      "path": "scripts/standalone-login-workers-lab.mjs",
+      "beforeSha256": "eb646a9667cab4e58ff7a44566f6292b5d22de93c8ec18ba948bc9c0a28d3033",
+      "sha256": "e57a922c6f5ad67b6239e75c01fa45e90a85d7e71457bae837e09abb7f661f39",
+      "explicitCheckCalls": 0,
+      "explicitCheckAstUnchanged": true,
+      "owningPostgresCallbacks": 0,
+      "owningPostgresCallbackAstUnchanged": true,
+      "metadataDeltaReviewed": "Only active plan sequence, added active packet hash input, current report path and report sequence metadata changed; original assertions, SQL execution, resource disposal and source stability checks retained."
+    },
+    {
+      "path": "scripts/standalone-login-https-lab.mjs",
+      "beforeSha256": "e26e9c241229f0eb5eb8a0c91c4e994abdc9b7a7e5f271efa55caec4ea96ed7a",
+      "sha256": "a7e950a6460cadd8ff7c0da1af78cdfc5682ef035e74a152a0a9ca4e1e6f9379",
+      "explicitCheckCalls": 48,
+      "explicitCheckAstUnchanged": true,
+      "owningPostgresCallbacks": 1,
+      "owningPostgresCallbackAstUnchanged": true,
+      "metadataDeltaReviewed": "Only active plan sequence, added active packet hash input, current report path and report sequence metadata changed; original assertions, SQL execution, resource disposal and source stability checks retained."
+    },
+    {
+      "path": "scripts/login-flow-custody-lab.mjs",
+      "beforeSha256": "afd818e6b3045a7c3cb758578651bca06fec6c9458053a1b9f3ee51afaa08990",
+      "sha256": "916a39484a8ffad4615e5e26dfd59f466ba4d340fe9131b804d68a5938b1307b",
+      "explicitCheckCalls": 57,
+      "explicitCheckAstUnchanged": true,
+      "owningPostgresCallbacks": 1,
+      "owningPostgresCallbackAstUnchanged": true,
+      "metadataDeltaReviewed": "Only active plan sequence, added active packet hash input, current report path and report sequence metadata changed; original assertions, SQL execution, resource disposal and source stability checks retained."
+    },
+    {
+      "path": "scripts/standalone-workspace-http-lab.mjs",
+      "beforeSha256": "c8c4998028ea4d2aa513373e75befeeda3c9f79d3391e38c9eaeb641e1977e13",
+      "sha256": "c0deb33f2ebb30c31227fe633edb6e9d2c2e1faae9e061eba018f495d7bfb7e5",
+      "explicitCheckCalls": 26,
+      "explicitCheckAstUnchanged": true,
+      "owningPostgresCallbacks": 1,
+      "owningPostgresCallbackAstUnchanged": true,
+      "metadataDeltaReviewed": "Only active plan sequence, added active packet hash input, current report path and report sequence metadata changed; original assertions, SQL execution, resource disposal and source stability checks retained."
+    },
+    {
+      "path": "scripts/standalone-workspace-workers-lab.mjs",
+      "beforeSha256": "8a1c1c2e52525b3d074b5fa5362565860088bae03ad2aece39680c06aecb8db4",
+      "sha256": "256d6f32b4450bf5745059334b829494430cdf238f9f6f7042110f7ab70de7a9",
+      "explicitCheckCalls": 0,
+      "explicitCheckAstUnchanged": true,
+      "owningPostgresCallbacks": 0,
+      "owningPostgresCallbackAstUnchanged": true,
+      "metadataDeltaReviewed": "Only active plan sequence, added active packet hash input, current report path and report sequence metadata changed; original assertions, SQL execution, resource disposal and source stability checks retained."
+    },
+    {
+      "path": "scripts/standalone-store-linking-http-lab.mjs",
+      "beforeSha256": "2d643b9e24f5260ae416e7723036e6b68ffb0921d34d3d6e1c384d99bf412e57",
+      "sha256": "8f4d685dd5637bbf58eeda7842634fe3bf12f3e5e934ded771d1a801551db81f",
+      "explicitCheckCalls": 26,
+      "explicitCheckAstUnchanged": true,
+      "owningPostgresCallbacks": 1,
+      "owningPostgresCallbackAstUnchanged": true,
+      "metadataDeltaReviewed": "Only active plan sequence, added active packet hash input, current report path and report sequence metadata changed; original assertions, SQL execution, resource disposal and source stability checks retained."
+    },
+    {
+      "path": "scripts/standalone-store-linking-workers-lab.mjs",
+      "beforeSha256": "1b2827edad6abc1b8738fa305a06a83ce10801d49ae499b0ac333c2b5746a53e",
+      "sha256": "6edd9acf33d27ff33ec02aaccfb1df67a1f2de2cc69d02931a41dbe03bcb130b",
+      "explicitCheckCalls": 0,
+      "explicitCheckAstUnchanged": true,
+      "owningPostgresCallbacks": 0,
+      "owningPostgresCallbackAstUnchanged": true,
+      "metadataDeltaReviewed": "Only active plan sequence, added active packet hash input, current report path and report sequence metadata changed; original assertions, SQL execution, resource disposal and source stability checks retained."
+    },
+    {
+      "path": "scripts/workspace-store-linking-read-lab.mjs",
+      "beforeSha256": "13ea7fab4faa22cd3c49bf5027235b0d20f58a372e35abe0db836bafc510462c",
+      "sha256": "eb0b071042b217301941e6125f28ffd5c829a0acf3f6aad4eff76035538fc407",
+      "explicitCheckCalls": 50,
+      "explicitCheckAstUnchanged": true,
+      "owningPostgresCallbacks": 1,
+      "owningPostgresCallbackAstUnchanged": true,
+      "metadataDeltaReviewed": "Only active plan sequence, added active packet hash input, current report path and report sequence metadata changed; original assertions, SQL execution, resource disposal and source stability checks retained."
+    }
+  ],
+  "ci": {
+    "oldProducerCount": 39,
+    "currentProducerCount": 41,
+    "oldProducerCommandsAndOrderRetained": true,
+    "addedProducerIds": [
+      "workers_fixed_provider",
+      "https_fixed_provider"
+    ],
+    "workflowMatchesFixedProducerManifest": true,
+    "fixedUniqueReports": 50,
+    "completeExpectedArtifactPayloads": 54,
+    "completePayloadComposition": "50 fresh report JSON files plus manifest.json and source.before.json/source.after-tests.json/source.after-restore.json",
+    "unchangedGuards": [
+      "Exact PR-head checkout and persist-credentials:false",
+      "Pinned checkout/setup/upload actions; no scope expansion",
+      "Preparation removes fixed current outputs before any producer",
+      "Immutable source snapshots and exact output quarantine/restoration",
+      "Collection always pending; numeric process exit remains null and final GitHub API mandatory",
+      "Artifact allowlist/byte commitment and external download digest validation remain required"
+    ],
+    "findings": []
+  },
+  "source_digests": {
+    "scripts/self-logout-sql-lab.mjs": "b6fedf690eb46778fba2e81fb477e40ded05f254c0da25418da5cdca585cceb7",
+    "scripts/standalone-logout-https-lab.mjs": "b5c1ea6327a9ba8bfff03ac1e57d8fafdf9ed12677aec8522edd76d0b977211a",
+    "scripts/standalone-logout-workers-lab.mjs": "0eddc9066dc585c84d447c96e76b6feb7d898e0220b5d012dfe50e1175ce4297",
+    "scripts/standalone-login-workers-lab.mjs": "e57a922c6f5ad67b6239e75c01fa45e90a85d7e71457bae837e09abb7f661f39",
+    "scripts/standalone-login-https-lab.mjs": "a7e950a6460cadd8ff7c0da1af78cdfc5682ef035e74a152a0a9ca4e1e6f9379",
+    "scripts/login-flow-custody-lab.mjs": "916a39484a8ffad4615e5e26dfd59f466ba4d340fe9131b804d68a5938b1307b",
+    "scripts/standalone-workspace-http-lab.mjs": "c0deb33f2ebb30c31227fe633edb6e9d2c2e1faae9e061eba018f495d7bfb7e5",
+    "scripts/standalone-workspace-workers-lab.mjs": "256d6f32b4450bf5745059334b829494430cdf238f9f6f7042110f7ab70de7a9",
+    "scripts/standalone-store-linking-http-lab.mjs": "8f4d685dd5637bbf58eeda7842634fe3bf12f3e5e934ded771d1a801551db81f",
+    "scripts/standalone-store-linking-workers-lab.mjs": "6edd9acf33d27ff33ec02aaccfb1df67a1f2de2cc69d02931a41dbe03bcb130b",
+    "scripts/workspace-store-linking-read-lab.mjs": "eb0b071042b217301941e6125f28ffd5c829a0acf3f6aad4eff76035538fc407",
+    "scripts/ci-validation-evidence.mjs": "f138200dd8863cfd9167b77830d7a245e07b483e536f1aa9404b99dd3a6b0842",
+    "tests/ci-validation-evidence.test.mjs": "05fa8fe4c3237684d583559bf63f1b1fbeab6af9f891bf5bda85b00e58bb8981",
+    ".github/workflows/ci.yml": "d1d7b8808eadd48adaba2377733d3481401bd71af82c11b68b05250c3598e05f",
+    "docs/packets/P05.T01r.md": "cc3ef16a1c019aa42650533bed96001693d1da4fe6a2675a84fe488f7a337544",
+    "docs/plan/build-plan.md": "87f9c0a372a3f1877b56511c0077019e244e06ec49e546206f79f8ff036d974d",
+    "docs/plan/source.json": "f79640b8e06767b9e610f68f60faf70d26b45643d5798abbfb2060837d7d4246",
+    "AGENTS.md": "911635b8847259e72337d5536c0a866a5b553de1e862e9cc12c1c4c944453892"
+  },
+  "blocking_findings": [],
+  "limitations": [
+    "Source review only. No integration execution, actual hosted CI result, provider request, credential access or qualification inferred.",
+    "Report count54 is the complete expected artifact profile; a partial/failed run cannot be promoted on report presence alone."
+  ]
+}

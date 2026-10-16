@@ -61,6 +61,7 @@ const paths = [
   "migrations/manifest.json",
   "docs/plan/source.json",
   "docs/packets/P05.T01q.md",
+  "docs/packets/P05.T01r.md",
   "docs/plan/build-plan.md",
   "docs/packets/P05.T01o.md",
   ".nvmrc",
@@ -83,7 +84,7 @@ if (manifest.migrations.length < 8) throw Error("STANDALONE_HTTP_EIGHT_MIGRATION
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
 if (
   process.version !== "v24.13.0" ||
-  plan.sequence < 85 ||
+  plan.sequence < 86 ||
   plan.sha256 !== hash(readFileSync(plan.path))
 )
   throw Error("STANDALONE_HTTP_SOURCE_REQUIRED");
@@ -811,9 +812,9 @@ const report = {
     "Late acquisition returns a held response first; separately owned disposal is measured after client delivery.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01q/regressions", { recursive: true });
+mkdirSync("docs/evidence/P05.T01r/regressions", { recursive: true });
 writeFileSync(
-  "docs/evidence/P05.T01q/regressions/standalone-workspace-http.json",
+  "docs/evidence/P05.T01r/regressions/standalone-workspace-http.json",
   JSON.stringify(report, null, 2) + "\n",
 );
 console.log(
