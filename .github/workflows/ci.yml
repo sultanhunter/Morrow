@@ -90,6 +90,9 @@ jobs:
         id: sql_engine
         run: >-
           node --input-type=module --eval 'import {localPostgresLab} from "./scripts/local-postgres-lab.mjs"; await localPostgresLab("P04.engine-diagnostic", async ({image,version}) => console.log(JSON.stringify({image,version})));'
+      - name: Exercise controlled Neon profiles and login against isolated PostgreSQL
+        id: postgresql_controlled_neon
+        run: npm run lab:controlled-neon-postgresql
       - name: Exercise isolated PostgreSQL operations
         id: sql_operations
         run: npm run lab:operations
@@ -156,9 +159,6 @@ jobs:
       - name: Exercise fixed WorkOS wire to local HTTPS login and logout
         id: https_fixed_provider
         run: npm run lab:fixed-workos-login-https
-      - name: Exercise controlled Neon profiles and login against isolated PostgreSQL
-        id: postgresql_controlled_neon
-        run: npm run lab:controlled-neon-postgresql
       - name: Collect pending validation evidence
         id: validation_evidence_collect
         if: always()

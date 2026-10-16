@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 89,
+  "actual_subprocess_exit": 0,
+  "primary_log_sha256": "d66bcf8c28a14451be7f16c7ae298eba3e0acfbffa644066ba9433cc2a288ae9",
+  "generated_report_sha256": "4fca222d209a9ea4c8c85e8e0b9611cf4bcf11f1fc6028e22e3eba5018ad2968",
+  "historical_report_restored_byte_and_mode": true,
+  "whole_source_inventory_restored_exactly": true,
+  "provider_requests": 0,
+  "Git_writes": false,
+  "Desktop_writes": false
+}

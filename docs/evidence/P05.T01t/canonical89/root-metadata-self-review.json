@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01t",
+  "current_plan_sequence": 89,
+  "reviewer": "root_same_implementer_metadata_self_review",
+  "self_review_not_independent_approval": true,
+  "blocking_findings": [],
+  "reviewed_source_digests": {
+    "AGENTS.md": "f7a9e50ea643c3eb5355a342d21c4ca48b9ebad002497b4822182e6827e682d0",
+    "README.md": "903ad68bc7d0b737c30a6991971b3bc0ca528be695f1316a5ced855098122f08",
+    "docs/contracts/capabilities.json": "8840d14c21acec5c9312b18d17e8da393128d5da59947b894a56db056d63406b",
+    "docs/progress/tasks.json": "cd6615af31937cc11ad1a633b61025e8bd6f360cd32260d3d1c044d862ccead4",
+    "docs/plan/build-plan.md": "fe280f8aab9d7517b7959d1bf47f3edc889f29019714abcb7d9e381047fb6276",
+    "docs/plan/source.json": "9042999ce6659d8725ab5775958ff0308afa1022d033ae78cad5edb48dc4219f",
+    "docs/packets/P05.T01t.md": "9a237f11ad9316d176f645fd7f75da04708236234054c434a93e59cde6bf27dd",
+    "infra/environments/development.json": "2494c019400730a6b5c4dc3d71ed7870429b31eb7dd8b993fb87ebea7a697e4c",
+    "infra/environments/staging.json": "f022e36def41a8f0c600f2323cf7136b38ebccc4b336abe1b712762bf2bc55d9",
+    "infra/environments/production.json": "ce21b1a7f8bff58182b660d259b438309974b286276ae85db6d4945d75f1f4cc",
+    "docs/history/controlled-neon-88/docs/packets/P05.T01t.md": "8d4f348ec3ebeac4756944e9e0d2e720b25f4de596945b8e21c7d4f147c1ea7e",
+    "docs/history/controlled-neon-88/docs/plan/build-plan.md": "434489742e46422e8bf03d06251091a27ae7403e06f4d8551ce37f255c3067b1",
+    "docs/history/controlled-neon-88/docs/plan/source.json": "aecff6b3ff90d8452ec9a918f0b6d5560ff79f72403161de82c23c892c9e37bd"
+  },
+  "checks": [
+    "Current89fullPage has519blocks; all512priorIDs/hash/text exact and7newparagraphs equal intended insertion.",
+    "Current plan/source hashes and revised T authority bind corrected actual missing-publication observation; neither failed88run promoted to qualified.",
+    "Five metadata JSON files changed only plan_sequence88to89;80task IDs/statuses/order and73acceptanceIDs retained.",
+    "Original88packet/plan/source archives byte-identical to their original hashes; never executed.",
+    "README/AGENTS/checkpoint consistently select newownedendpoint89scope and keephosted/app/merchant/deployment denied."
+  ],
+  "actual_read_only_plan_check": {
+    "actual_exit_code": 0,
+    "completion_chunk": "379328",
+    "reports_written": false
+  },
+  "protected_during_authoring": {
+    "actual_exit_code": 0,
+    "completion_chunk": "616bb1",
+    "protected_paths": 1148,
+    "all631_evidence_exact": true,
+    "qualification": false
+  },
+  "limits": [
+    "Metadata self-review only. Separate implementation/independent source review and actual native/SQL/exact-head CI remain required.",
+    "Checkpoint and evidence index are progress/aggregation outputs; this review does not freeze a future checkpoint prepend."
+  ]
+}

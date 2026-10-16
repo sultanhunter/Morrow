@@ -1,11 +1,12 @@
 import { createConnection } from "node:net";
 import { Response, WebSocketPair } from "miniflare";
+import { resolveControlledNeonPostgresqlEndpoint } from "./controlled-neon-postgresql.mjs";
 
 const held = () => Error("CONTROLLED_NEON_TCP_BRIDGE_HELD");
 const require = (value) => {
   if (!value) throw held();
 };
-export function createControlledNeonTcpBridge({
+function createTcpBridge({
   endpoint,
   socket,
   onClientBytes = () => {},
@@ -14,12 +15,6 @@ export function createControlledNeonTcpBridge({
   maximumQueuedBytes = 262144,
   lifetimeMs = 30000,
 }) {
-  require(
-    endpoint?.host === "127.0.0.1" &&
-      Number.isInteger(endpoint.port) &&
-      endpoint.port > 0 &&
-      endpoint.port <= 65535,
-  );
   require(
     socket &&
       ["addEventListener", "removeEventListener", "send", "close"].every(
@@ -178,17 +173,38 @@ export function createControlledNeonTcpBridge({
     },
   });
 }
-export function createControlledNeonTcpService({
-  endpoint,
-  hostname,
-  onClientBytes,
-  onServerBytes,
-}) {
+function syntheticLoopbackEndpoint(endpoint) {
+  return endpoint?.host === "127.0.0.1" &&
+    Number.isInteger(endpoint.port) &&
+    endpoint.port > 0 &&
+    endpoint.port <= 65535
+    ? Object.freeze({ host: "127.0.0.1", port: endpoint.port })
+    : null;
+}
+export function createControlledNeonTcpBridge(options) {
+  const target = resolveControlledNeonPostgresqlEndpoint(options.endpoint);
+  require(target !== null);
+  return createTcpBridge({ ...options, endpoint: target });
+}
+// Explicit CPU fixture seam; it cannot issue an owned-container capability.
+export function createSyntheticLoopbackControlledNeonTcpBridge(options) {
+  const target = syntheticLoopbackEndpoint(options.endpoint);
+  require(target !== null);
+  return createTcpBridge({ ...options, endpoint: target });
+}
+export function createControlledNeonTcpService(options) {
+  return createTcpService(options, resolveControlledNeonPostgresqlEndpoint);
+}
+export function createSyntheticLoopbackControlledNeonTcpService(options) {
+  return createTcpService(options, syntheticLoopbackEndpoint);
+}
+function createTcpService({ endpoint, hostname, onClientBytes, onServerBytes }, resolveEndpoint) {
   require(/^ep-[a-z0-9-]+(?:\.c-[0-9]+)?\.[a-z0-9-]+\.aws\.neon\.tech$/.test(hostname));
   const bridges = [],
     observations = [];
   let interceptedRequests = 0,
-    deniedRequests = 0;
+    deniedRequests = 0,
+    pairAllocations = 0;
   return Object.freeze({
     bridges,
     observations,
@@ -196,6 +212,7 @@ export function createControlledNeonTcpService({
       Object.freeze({
         interceptedRequests,
         deniedRequests,
+        pairAllocations,
         actualInternetRequests: 0,
         actualProviderRequests: 0,
       }),
@@ -213,13 +230,15 @@ export function createControlledNeonTcpService({
         url.searchParams.get("address") === hostname + ":5432" &&
         request.headers.get("upgrade")?.toLowerCase() === "websocket" &&
         request.method === "GET";
-      if (!allowed || bridges.length >= 256) {
+      const target = resolveEndpoint(endpoint);
+      if (!allowed || !target || bridges.length >= 256) {
         deniedRequests++;
         return new Response("held", { status: 403 });
       }
       interceptedRequests++;
       const index = bridges.length;
       const pair = new WebSocketPair();
+      pairAllocations++;
       pair[1].accept();
       const observation = {
         index,
@@ -229,8 +248,8 @@ export function createControlledNeonTcpService({
         parseFailure: false,
       };
       observations.push(observation);
-      const bridge = createControlledNeonTcpBridge({
-        endpoint,
+      const bridge = createTcpBridge({
+        endpoint: target,
         socket: pair[1],
         onClientBytes: (bytes) => onClientBytes?.(bytes, observation),
         onServerBytes: (bytes) => onServerBytes?.(bytes, observation),

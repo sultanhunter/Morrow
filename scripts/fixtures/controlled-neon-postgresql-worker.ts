@@ -15,6 +15,7 @@ import { createStandaloneLoginBridge } from "../../packages/identity/src/standal
 
 type Setup = {
   bindingJson: string;
+  expectedHostSource: string;
   passwordByRole: Record<string, string>;
   cases: { configurationJson: string; workspaceId: string }[];
 };
@@ -184,6 +185,39 @@ export default {
           input.mode === "session_release_reject",
         );
         return Response.json({ initialized: true });
+      }
+      if (url.pathname.startsWith("/__fixture/source-address/")) {
+        const name = url.pathname.slice("/__fixture/source-address/".length) as PoolName;
+        expect(Object.hasOwn(controlledNeonLoginProfiles, name));
+        const client = rawClient(
+          setup,
+          name,
+          "morrow_t88_" + crypto.randomUUID().replaceAll("-", "") + "_p",
+        );
+        let serverSourceMatchedGateway = false;
+        try {
+          await client.connect();
+          const result = await client.query(
+            "SELECT pg_catalog.host(pg_catalog.inet_client_addr()) AS client_address, current_user::text AS role, session_user::text AS login",
+          );
+          expect(result.rows.length === 1);
+          const row = result.rows[0];
+          serverSourceMatchedGateway =
+            typeof setup.expectedHostSource === "string" &&
+            row.client_address === setup.expectedHostSource;
+          expect(
+            serverSourceMatchedGateway &&
+              row.role === controlledNeonLoginProfiles[name].role &&
+              row.login === controlledNeonLoginProfiles[name].role,
+          );
+        } finally {
+          await client.end();
+        }
+        return Response.json({
+          serverSourceMatchedGateway,
+          role: controlledNeonLoginProfiles[name].role,
+          clientEndAcknowledged: true,
+        });
       }
       if (url.pathname === "/__fixture/metrics") {
         expect(current);

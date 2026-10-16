@@ -255,7 +255,7 @@ const paths = [
   "package.json",
   ".github/workflows/ci.yml",
 ];
-assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 88);
+assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 89);
 const sourceDigests = Object.fromEntries(
   paths.sort().map((path) => [path, hash(readFileSync(path))]),
 );
@@ -315,7 +315,7 @@ try {
     assert.equal(hash(readFileSync(path)), digest, "Source changed: " + path);
   const report = {
     task: "P05.T01p",
-    current_plan_sequence: 88,
+    current_plan_sequence: 89,
     qualification:
       "actual_local_workerd_nodejs_compat_Fetch_WebCrypto_AESGCM_unchanged69_owning76_77_M_with_synthetic_SQL_and_independent_native_RSA",
     compatibilityDate: "2026-07-30",
@@ -336,8 +336,11 @@ try {
   const publicText = JSON.stringify(report, null, 2) + "\n";
   for (const secret of [fixture.token, fixture.claims.sub, fixture.claims.sid, "synthetic-code"])
     assert.ok(!publicText.includes(secret));
-  mkdirSync("docs/evidence/P05.T01t/regressions", { recursive: true });
-  writeFileSync("docs/evidence/P05.T01t/regressions/login-workers-lab.json", publicText);
+  mkdirSync("docs/evidence/P05.T01t/canonical89/regressions", { recursive: true });
+  writeFileSync(
+    "docs/evidence/P05.T01t/canonical89/regressions/login-workers-lab.json",
+    publicText,
+  );
   console.log(
     `PASS: ${cases.length} standalone login Workers cases; ${result.checks.length} checks; zero outbound requests.`,
   );

@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 89,
+  "task": "P05.T01t",
+  "actual_executions": {
+    "full_local_pipeline": {
+      "actual_exit_code": 0,
+      "tool_completion_chunk": "4eb1af",
+      "tests": 2141,
+      "failed": 0,
+      "receipt_sha256": "1172dc62219085adc94a2f9f5a8b16bcc9561990216ba53ec7286cd5790b9ad9"
+    },
+    "scaffold_initial": {
+      "actual_exit_code": 1,
+      "tool_completion_chunk": "96659e",
+      "reason": "Local scaffold did not become reachable under default restricted command; no child bind diagnostic was emitted, so exact OS cause is unobserved.",
+      "receipt_sha256": "d3c09321a086d809d798a3c09460f10e5dbf6425ecde031673d140aa9cfdbed8"
+    },
+    "scaffold_with_local_network_permission": {
+      "actual_exit_code": 0,
+      "tool_completion_chunk": "20b2f3",
+      "guards": 11,
+      "same_application_source": true,
+      "receipt_sha256": "366f5c335c8a14f0c4ca4a8734bd1dac79ed82f7984f491272335a8d86ba1748"
+    }
+  },
+  "old_evidence_records": 631,
+  "whole_source_inventory_restored_after_each_command": true,
+  "qualification": "local_engineering_only_no_realPG_native_or_overallCI_inference"
+}

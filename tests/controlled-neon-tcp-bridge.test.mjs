@@ -3,9 +3,15 @@ import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import { WebSocketPair } from "miniflare";
 import {
-  createControlledNeonTcpBridge,
-  createControlledNeonTcpService,
+  createSyntheticLoopbackControlledNeonTcpBridge as createControlledNeonTcpBridge,
+  createSyntheticLoopbackControlledNeonTcpService as createControlledNeonTcpService,
+  createControlledNeonTcpBridge as createOwnedBridge,
+  createControlledNeonTcpService as createOwnedService,
 } from "../scripts/fixtures/controlled-neon-tcp-bridge.mjs";
+import {
+  controlledNeonFixtureIpv4Matches,
+  resolveControlledNeonPostgresqlEndpoint,
+} from "../scripts/fixtures/controlled-neon-postgresql.mjs";
 async function fixture(use) {
   const peers = new Set();
   const server = createServer((socket) => {
@@ -134,4 +140,87 @@ test("invalid socket or throwing listener setup is rejected before TCP allocatio
     close() {},
   };
   assert.throws(() => createControlledNeonTcpBridge({ endpoint, socket }));
+});
+
+test("strict fixture IPv4 CIDR arithmetic rejects ambiguous or foreign endpoint views", () => {
+  const value = {
+    address: "172.20.0.2",
+    gateway: "172.20.0.1",
+    subnet: "172.20.0.0/16",
+    memberAddress: "172.20.0.2/16",
+    prefixLength: 16,
+  };
+  assert.equal(controlledNeonFixtureIpv4Matches(value), true);
+  for (const patch of [
+    { address: "172.20.0.2\n" },
+    { address: "172.20.0.2\r\n" },
+    { gateway: "172.20.0.1\n" },
+    { gateway: "172.20.0.1\r\n" },
+    { subnet: "172.20.0.0/16\n" },
+    { subnet: "172.20.0.0/16\r\n" },
+    { memberAddress: "172.20.0.2/16\n" },
+    { memberAddress: "172.20.0.2/16\r\n" },
+    { address: "172.020.0.2" },
+    { address: "172.21.0.2" },
+    { address: "172.20.0.0" },
+    { address: "172.20.255.255" },
+    { address: "172.20.0.1" },
+    { address: "127.0.0.1" },
+    { address: "0.0.0.0" },
+    { address: "224.0.0.1" },
+    { address: "172.20.0.256" },
+    { address: "172.20.2" },
+    { gateway: "172.21.0.1" },
+    { subnet: "172.20.0.1/16" },
+    { subnet: "172.20.0.0/016" },
+    { subnet: "0.0.0.0/0" },
+    { memberAddress: "172.20.0.3/16" },
+    { memberAddress: "172.20.0.2/24" },
+    { prefixLength: 24 },
+    { prefixLength: "16" },
+  ])
+    assert.equal(controlledNeonFixtureIpv4Matches({ ...value, ...patch }), false);
+});
+test("real bridge requires an unforgeable live issued endpoint before socket or pair setup", () => {
+  let setups = 0;
+  const socket = {
+    addEventListener() {
+      setups++;
+    },
+    removeEventListener() {},
+    send() {},
+    close() {},
+  };
+  for (const endpoint of [
+    null,
+    {},
+    Object.freeze({ host: "172.20.0.2", port: 5432 }),
+    Object.freeze({ host: "127.0.0.1", port: 1 }),
+    new Proxy(
+      {},
+      {
+        get() {
+          throw Error("must not read forged fields");
+        },
+      },
+    ),
+  ]) {
+    assert.equal(resolveControlledNeonPostgresqlEndpoint(endpoint), null);
+    assert.throws(() => createOwnedBridge({ endpoint, socket }));
+    const service = createOwnedService({
+      endpoint,
+      hostname: "ep-controlled-fixture.c-14.us-east-1.aws.neon.tech",
+    });
+    const response = service.outbound(
+      new Request(
+        "https://ep-controlled-fixture.c-14.us-east-1.aws.neon.tech/v2?address=ep-controlled-fixture.c-14.us-east-1.aws.neon.tech:5432",
+        { headers: { Upgrade: "websocket" } },
+      ),
+    );
+    assert.equal(response.status, 403);
+    assert.equal(service.bridges.length, 0);
+    assert.equal(service.observations.length, 0);
+    assert.equal(service.counts().pairAllocations, 0);
+  }
+  assert.equal(setups, 0);
 });

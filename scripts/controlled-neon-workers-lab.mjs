@@ -11,8 +11,8 @@ import { Log, LogLevel, Miniflare, Response as MiniflareResponse, WebSocketPair 
 if (process.version !== "v24.13.0") throw Error("PINNED_NODE_REQUIRED");
 const sdkPackage = JSON.parse(readFileSync("node_modules/@neondatabase/serverless/package.json"));
 if (sdkPackage.version !== "1.2.0") throw Error("PINNED_NEON_SDK_REQUIRED");
-if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 88)
-  throw Error("CURRENT88_REQUIRED");
+if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 89)
+  throw Error("CURRENT89_REQUIRED");
 const hostname = "ep-controlled-fixture.c-14.us-east-1.aws.neon.tech";
 const syntheticPasswordMarker = ["MorrowSynthetic", "T88", "PG", "password", "only"].join("-");
 const hash = (data) => createHash("sha256").update(data).digest("hex");
@@ -753,7 +753,7 @@ for (const [path, expected] of Object.entries(sourceDigests)) {
 }
 const report = {
   task: "P05.T01t",
-  current_plan_sequence: 88,
+  current_plan_sequence: 89,
   phase: "native101_and_actual_sdk_independent_wire_local_engineering_only",
   status: failure ? "held" : "passed",
   failure,
@@ -840,8 +840,8 @@ if (
   )
 )
   throw Error("CONTROLLED_NEON_REPORT_SECRET_FENCE");
-mkdirSync("docs/evidence/P05.T01t", { recursive: true });
-writeFileSync("docs/evidence/P05.T01t/workers-lab.json", serializedReport, {
+mkdirSync("docs/evidence/P05.T01t/canonical89", { recursive: true });
+writeFileSync("docs/evidence/P05.T01t/canonical89/workers-lab.json", serializedReport, {
   flag: "w",
 });
 if (failure) {

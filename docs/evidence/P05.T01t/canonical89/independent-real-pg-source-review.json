@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 89,
+  "task": "P05.T01t",
+  "reviewer": "/root/fixed_provider_core",
+  "result": "clear_for_provider_free_isolated_fixture_measurement_only",
+  "reviewed_source_digests": {
+    "scripts/fixtures/controlled-neon-postgresql.mjs": "409c058fecb19abd9a64d6d08baab8e674a2ef844c6fa72e62efbb3be6987c96",
+    "scripts/fixtures/controlled-neon-tcp-bridge.mjs": "07d4898ee63128ed9414901d3dafa3f7bc83e9f713f67eca3c49a5ab90985ac2",
+    "scripts/fixtures/controlled-neon-postgresql-worker.ts": "550b24685c50a129c2d7f5ada88585f9048cf277a60d94d52ba0c378d3eced6f",
+    "scripts/controlled-neon-postgresql-lab.mjs": "c3c98d0dec4539220e789372ae95f337ddba11311cf949051057018bd6935b1d",
+    "tests/controlled-neon-tcp-bridge.test.mjs": "24bf1754b1e82dc6ffefbf943de5dd884f61ad107a10b2aec4c731051551121e"
+  },
+  "blocking_findings": [],
+  "independent_source_proof": {
+    "all_existing_worker_bodies_AST_exact_after_one_new_source_probe_branch_and_Setup_member_removal": true,
+    "existing_owning_check_calls_exact": 28,
+    "existing_owner_fixture_endpoint_input_calls_exact": 9,
+    "capability_issuer_sites": 1,
+    "capability_issued_only_after_cross_attestation_and_same_host_observation": true,
+    "actual_root_and_author_repairs_included": [
+      "authenticationProbe_target_reference",
+      "strict_octet_and_prefix_canonical_roundtrip",
+      "host_inet_client_addr_fixture_query",
+      "callback_finally_once_only_Runtime_and_bridge_disposal_before_helper_teardown"
+    ],
+    "audit_script_sha256": "6404cbc34cbdc00bca18b8efe96d256ef2053a6cac5a52b707c45311fd0337b6"
+  },
+  "manually_reviewed_contracts": [
+    "One same-host Linux non-rootless Docker Unix context; pinned image/user/read-only/capability/resource/tmpfs constraints retained; no published ports, no alternate topology fallback.",
+    "Container/network IDs, names, packet/nonce labels, sole membership, endpoint ID/address/prefix/subnet and no IPv6/default route cross-checked before minting frozen module-private WeakMap identity capability.",
+    "Only canonical attested container IPv4/fixed5432 can be resolved by real bridge. Explicit synthetic loopback API cannot mint a real capability. Revoked/copied/forged handles deny before WebSocketPair/TCP/observations.",
+    "Bounded same-host TCP checks gateway source and target address before HBA enablement; exact four-role/database gateway32 SCRAM rule and reject-all retained; actual role-specific source query checks database-observed source/role/session login.",
+    "Raw relay framing/queue/backpressure/close behavior remains unchanged after endpoint authority guard replacement; no SQL/result rewriting or global/production socket override.",
+    "Four owners, SQL1-11, original D/C, observer predicates, unknown committed issuer/reconciliation and cookie transport unchanged. Administrator setup/final namespace only; earlier unknown never promoted.",
+    "Callback finally revokes capability and publishes/joins same Worker and bridge disposal attempts before container cleanup; no retry; per-resource cleanup failures retained separately from primary failure and absent handles do not receive acknowledgement.",
+    "Reports project closed booleans/counts, pre-revocation positive transport plus separate intentional-denial deltas, actual migration completion count, and source hashes; no raw endpoint/key/password/frame/parameter values."
+  ],
+  "execution_limits": [
+    "This script performs source/AST inspection only. Separate inert CPU source/disposal/address observations are attached in an execution receipt; no Docker, realSQL, native Miniflare/Worker or network fixture is started.",
+    "Real capability issuance, same-host address/HBA/SCRAM proof, real four-role SQL/full chain and resource absence remain unmeasured until isolated CI. Existing two88 holds remain nonqualifying.",
+    "Reviewer authored the private production controlled Neon pool modules; this independent verdict is limited to other-author five fixture files. Root core review remains separate.",
+    "Static internal bridge network allows host reachability; no host isolation/Internet-probe or hosted Neon/WorkOS/native application/Shopify qualification."
+  ]
+}

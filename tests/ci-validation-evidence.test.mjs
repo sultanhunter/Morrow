@@ -105,7 +105,7 @@ test("fixed report inventory is preserved37 plus fourteen T regressions and two 
       "login-flow-custody.json",
       "login-https-postgresql-lab.json",
     ].map((p) => "regressions/" + p),
-  ].map((p) => "docs/evidence/P05.T01t/" + p);
+  ].map((p) => "docs/evidence/P05.T01t/canonical89/" + p);
   assert.equal(prior.length, 37);
   assert.deepEqual([...ciValidationReportPaths].sort(), [...prior, ...current].sort());
   assert.equal(new Set(ciValidationReportPaths).size, 53);
@@ -116,12 +116,83 @@ test("fixed report inventory is preserved37 plus fourteen T regressions and two 
   );
 });
 
+test("new PostgreSQL producer follows the engine without changing the 42 older producer order", () => {
+  // Published87's exact producer ids, recorded independently of the current
+  // collector. The two new T producers may not reorder the older suites.
+  const olderProducerIds = [
+    "install_dependencies",
+    "baseline_ci",
+    "baseline_smoke",
+    "workers_identity",
+    "workers_agent",
+    "workers_linking",
+    "workers_pkce",
+    "workers_token",
+    "workers_status",
+    "workers_evidence",
+    "workers_selection",
+    "workers_admission",
+    "workers_workspace",
+    "workers_store",
+    "workers_login",
+    "workers_logout",
+    "workers_fixed_provider",
+    "workers_platform_provider",
+    "frozen75",
+    "sql_engine",
+    "sql_operations",
+    "sql_restore",
+    "sql_identity",
+    "sql_permissions",
+    "sql_challenge",
+    "sql_revocation",
+    "sql_linking",
+    "sql_pkce",
+    "sql_selection",
+    "sql_admission",
+    "frozen71",
+    "frozen74",
+    "frozen80",
+    "frozen82",
+    "http_workspace",
+    "sql_link_read",
+    "http_linking",
+    "sql_custody",
+    "https_login",
+    "sql_logout",
+    "https_logout",
+    "https_fixed_provider",
+  ];
+  const ids = ciValidationCommands.map((c) => c.id);
+  assert.equal(ids.length, 44);
+  assert.equal(new Set(ids).size, 44);
+  assert.deepEqual(
+    ids.filter((id) => !["workers_controlled_neon", "postgresql_controlled_neon"].includes(id)),
+    olderProducerIds,
+  );
+  const engine = ids.indexOf("sql_engine");
+  assert.deepEqual(ids.slice(engine, engine + 3), [
+    "sql_engine",
+    "postgresql_controlled_neon",
+    "sql_operations",
+  ]);
+  assert.ok(ids.indexOf("workers_controlled_neon") < engine);
+});
+
 test("workflow gives each original command a unique serial step and binds exact PR head/artifact action", () => {
   const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
   const npmCommands = [...workflow.matchAll(/^        run: (npm [^\n]+)$/gm)].map((m) => m[1]);
   assert.deepEqual(
     npmCommands,
     ciValidationCommands.filter((c) => c.id !== "sql_engine").map((c) => c.run),
+  );
+  const producerIds = new Set(ciValidationCommands.map((c) => c.id));
+  const workflowProducerIds = [...workflow.matchAll(/^        id: ([a-z][a-z0-9_]*)$/gm)]
+    .map((m) => m[1])
+    .filter((id) => producerIds.has(id));
+  assert.deepEqual(
+    workflowProducerIds,
+    ciValidationCommands.map((c) => c.id),
   );
   for (const c of ciValidationCommands)
     assert.equal(workflow.split("        id: " + c.id + "\n").length - 1, 1);

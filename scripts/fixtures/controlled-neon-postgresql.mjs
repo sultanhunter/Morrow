@@ -3,6 +3,61 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createConnection } from "node:net";
 
+// Issued only after this module has inspected the actual owned Docker endpoint.
+// Importing or resolving never starts Docker; no synthetic capability issuer exists.
+const ownedEndpoints = new WeakMap();
+export function resolveControlledNeonPostgresqlEndpoint(capability) {
+  return ownedEndpoints.get(capability) ?? null;
+}
+function ipv4(value) {
+  if (typeof value !== "string" || !/^(?:0|[1-9]\d{0,2})(?:\.(?:0|[1-9]\d{0,2})){3}$/.test(value))
+    return null;
+  const octets = value.split(".").map(Number);
+  if (octets.some((part) => part > 255) || octets.join(".") !== value) return null;
+  return octets.reduce((result, part) => result * 256 + part, 0);
+}
+// A pure arithmetic guard, never an ownership or capability issuer.
+export function controlledNeonFixtureIpv4Matches({
+  address,
+  gateway,
+  subnet,
+  memberAddress,
+  prefixLength,
+}) {
+  if (typeof subnet !== "string" || typeof memberAddress !== "string") return false;
+  const network = subnet.split("/"),
+    member = memberAddress.split("/");
+  if (network.length !== 2 || member.length !== 2 || !/^(?:[1-9]|[12]\d|30)$/.test(network[1]))
+    return false;
+  if (network[1] !== String(Number(network[1]))) return false;
+  const prefix = Number(network[1]),
+    host = ipv4(address),
+    gw = ipv4(gateway),
+    base = ipv4(network[0]);
+  if (
+    host === null ||
+    gw === null ||
+    base === null ||
+    prefixLength !== prefix ||
+    member[0] !== address ||
+    member[1] !== network[1]
+  )
+    return false;
+  const size = 2 ** (32 - prefix);
+  if (
+    base % size !== 0 ||
+    host <= base ||
+    host >= base + size - 1 ||
+    gw <= base ||
+    gw >= base + size - 1 ||
+    host === gw
+  )
+    return false;
+  // Preserve the prior fixture's bounded Docker IPv4 gateway range.
+  const privateStart = 172 * 2 ** 24 + 16 * 2 ** 16;
+  if (base < privateStart || base + size > privateStart + 16 * 2 ** 16) return false;
+  return host >= base && host < base + size && gw >= base && gw < base + size;
+}
 const roles = Object.freeze([
   "morrow_identity_login",
   "morrow_identity_preauth",
@@ -63,7 +118,7 @@ async function absent(kind, id) {
         (kind === "network" && result.stderr.includes("network " + id + " not found"))),
   );
 }
-async function authenticationProbe(endpoint, user) {
+async function authenticationProbe(target, user) {
   const fields = Buffer.from(
     "user\0" + user + "\0database\0morrow\0application_name\0morrow_t88_authprobe\0\0",
   );
@@ -72,7 +127,7 @@ async function authenticationProbe(endpoint, user) {
   startup.writeInt32BE(196608, 4);
   fields.copy(startup, 8);
   return new Promise((resolve, reject) => {
-    const socket = createConnection(endpoint);
+    const socket = createConnection(target);
     let buffer = Buffer.alloc(0),
       result,
       failed = false;
@@ -139,7 +194,6 @@ export async function controlledNeonPostgresqlLab(use) {
       config.major === 17 &&
       config.user === "999:999",
   );
-  await command(["image", "inspect", config.image]); // CI must obtain the exact image before allocation.
   const suffix = randomUUID().replaceAll("-", "");
   const networkName = "morrow-t88-net-" + suffix;
   const containerName = "morrow-t88-pg-" + suffix;
@@ -159,7 +213,8 @@ export async function controlledNeonPostgresqlLab(use) {
     outcome,
     primaryFailure = false,
     networkAttempted = false,
-    containerAttempted = false;
+    containerAttempted = false,
+    issuedEndpoint;
   const cleanupFailures = [];
   let setupStage = "network_absence";
   const setupObservation = {
@@ -170,13 +225,40 @@ export async function controlledNeonPostgresqlLab(use) {
     containerProfile: null,
     attachedNetworkOnlyOwned: null,
     kernelRoutes: null,
-    loopbackReachable: null,
+    sameHostConnection: null,
+    endpointAttestation: null,
+    localDockerProfile: null,
   };
   const setupPhase = (value) => {
     setupStage = value;
     console.error("CONTROLLED_PG_SETUP_PHASE:" + value);
   };
   try {
+    setupPhase("local_docker_profile");
+    const dockerHost = process.env.DOCKER_HOST;
+    require(dockerHost === undefined || dockerHost === "unix:///var/run/docker.sock");
+    const contextHost = (
+      await command(["context", "inspect", "--format", "{{.Endpoints.docker.Host}}"])
+    ).stdout.trim();
+    const daemonType = (await command(["info", "--format", "{{.OSType}}"])).stdout.trim();
+    const security = JSON.parse(
+      (await command(["info", "--format", "{{json .SecurityOptions}}"])).stdout,
+    );
+    setupObservation.localDockerProfile = Object.freeze({
+      localUnixContext: contextHost === "unix:///var/run/docker.sock",
+      linuxDaemon: daemonType === "linux",
+      rootless:
+        Array.isArray(security) &&
+        security.some((value) => typeof value === "string" && value.includes("rootless")),
+    });
+    require(
+      setupObservation.localDockerProfile.localUnixContext &&
+        setupObservation.localDockerProfile.linuxDaemon &&
+        Array.isArray(security) &&
+        !setupObservation.localDockerProfile.rootless,
+    );
+    setupPhase("pinned_image");
+    await command(["image", "inspect", config.image]);
     setupPhase("network_absence");
     await absent("network", networkName);
     networkAttempted = true;
@@ -241,8 +323,6 @@ export async function controlledNeonPostgresqlLab(use) {
         containerName,
         "--network",
         networkId,
-        "--publish",
-        "127.0.0.1::5432",
         "--read-only",
         "--user",
         "999:999",
@@ -378,7 +458,14 @@ export async function controlledNeonPostgresqlLab(use) {
     require(version.startsWith("17.11 "));
     setupPhase("container_inspection");
     const [container] = JSON.parse((await command(["inspect", containerId])).stdout);
-    const published = container.NetworkSettings?.Ports?.["5432/tcp"];
+    const noPublishedPorts =
+      Object.keys(container.HostConfig.PortBindings ?? {}).length === 0 &&
+      container.HostConfig.PublishAllPorts === false &&
+      container.NetworkSettings.Ports !== null &&
+      typeof container.NetworkSettings.Ports === "object" &&
+      Object.values(container.NetworkSettings.Ports).every(
+        (value) => value === null || (Array.isArray(value) && value.length === 0),
+      );
     setupObservation.containerProfile = Object.freeze({
       nameMatched: container.Name === "/" + containerName,
       imageMatched: container.Config.Image === config.image,
@@ -388,36 +475,50 @@ export async function controlledNeonPostgresqlLab(use) {
       readOnlyRootfs: container.HostConfig.ReadonlyRootfs === true,
       networkModeMatched: container.HostConfig.NetworkMode === networkId,
       noHostMounts: container.Mounts.length === 0,
-      publicationArray: Array.isArray(published),
-      singlePublication: Array.isArray(published) && published.length === 1,
-      loopbackPublication:
-        Array.isArray(published) && published.length === 1 && published[0].HostIp === "127.0.0.1",
-      validPortSpelling:
-        Array.isArray(published) &&
-        published.length === 1 &&
-        /^\d{1,5}$/.test(published[0].HostPort),
+      noPublishedPorts,
       singleNetwork: Object.keys(container.NetworkSettings.Networks).length === 1,
     });
-    require(
-      container.Name === "/" + containerName &&
-        container.Config.Image === config.image &&
-        container.Config.User === "999:999" &&
-        container.Config.Labels?.["morrow.packet"] === "P05.T01t" &&
-        container.Config.Labels?.["morrow.fixture"] === suffix &&
-        container.HostConfig.ReadonlyRootfs &&
-        container.HostConfig.NetworkMode === networkId &&
-        container.Mounts.length === 0 &&
-        Array.isArray(published) &&
-        published.length === 1 &&
-        published[0].HostIp === "127.0.0.1" &&
-        /^\d{1,5}$/.test(published[0].HostPort) &&
-        Object.keys(container.NetworkSettings.Networks).length === 1,
-    );
+    require(Object.values(setupObservation.containerProfile).every((value) => value === true));
     setupPhase("attached_network");
     const [attachedNetwork] = JSON.parse((await command(["network", "inspect", networkId])).stdout);
     setupObservation.attachedNetworkOnlyOwned =
       Object.keys(attachedNetwork.Containers ?? {}).join(",") === containerId;
     require(Object.keys(attachedNetwork.Containers ?? {}).join(",") === containerId);
+    const networkEntries = Object.entries(container.NetworkSettings.Networks);
+    const [attachedName, attached] = networkEntries[0];
+    const member = attachedNetwork.Containers[containerId];
+    const subnet = network.IPAM?.Config?.[0]?.Subnet;
+    const endpointId = attached.EndpointID;
+    const containerAddress = attached.IPAddress;
+    setupObservation.endpointAttestation = Object.freeze({
+      networkIdentityMatched:
+        attachedNetwork.Id === networkId &&
+        attachedNetwork.Name === networkName &&
+        attachedNetwork.Internal === true &&
+        attachedNetwork.EnableIPv6 === false &&
+        attachedNetwork.Labels?.["morrow.packet"] === "P05.T01t" &&
+        attachedNetwork.Labels?.["morrow.fixture"] === suffix,
+      singleSubnet:
+        network.IPAM?.Config?.length === 1 &&
+        attachedNetwork.IPAM?.Config?.length === 1 &&
+        attachedNetwork.IPAM.Config[0].Subnet === subnet &&
+        attachedNetwork.IPAM.Config[0].Gateway === gateway,
+      networkNameMatched: attachedName === networkName && attached.NetworkID === networkId,
+      endpointIdMatched:
+        typeof endpointId === "string" &&
+        /^[a-f0-9]{64}$/.test(endpointId) &&
+        member.EndpointID === endpointId,
+      memberNameMatched: member.Name === containerName,
+      ipv4Matched: controlledNeonFixtureIpv4Matches({
+        address: containerAddress,
+        gateway,
+        subnet,
+        memberAddress: member.IPv4Address,
+        prefixLength: attached.IPPrefixLen,
+      }),
+      noIpv6Endpoint: !attached.GlobalIPv6Address && !member.IPv6Address,
+    });
+    require(Object.values(setupObservation.endpointAttestation).every((value) => value === true));
     setupPhase("kernel_routes");
     const routeText = (await command(["exec", containerId, "cat", "/proc/net/route"])).stdout;
     const routeRows = routeText
@@ -437,23 +538,30 @@ export async function controlledNeonPostgresqlLab(use) {
           (row) => row.length >= 8 && /^[A-Fa-f0-9]{8}$/.test(row[1]) && row[1] !== "00000000",
         ),
     );
-    const port = Number(published[0].HostPort);
-    require(port > 0 && port <= 65535);
-    setupPhase("loopback_reachability");
-    const reachability = await new Promise((resolve) => {
-      const socket = createConnection({ host: "127.0.0.1", port });
-      let connected = false;
+    const target = Object.freeze({ host: containerAddress, port: 5432 });
+    setupPhase("same_host_reachability");
+    const sameHostConnection = await new Promise((resolve) => {
+      const socket = createConnection(target);
+      let connected = false,
+        sourceMatchedGateway = false,
+        destinationMatched = false;
       socket.once("connect", () => {
         connected = true;
+        sourceMatchedGateway = socket.localAddress === gateway;
+        destinationMatched = socket.remoteAddress === containerAddress;
         socket.end();
       });
       socket.once("error", () => socket.destroy());
       socket.setTimeout(1000, () => socket.destroy());
-      socket.once("close", () => resolve(connected));
+      socket.once("close", () =>
+        resolve(Object.freeze({ connected, sourceMatchedGateway, destinationMatched })),
+      );
     });
-    setupObservation.loopbackReachable = reachability;
-    require(reachability);
-    const endpoint = Object.freeze({ host: "127.0.0.1", port });
+    setupObservation.sameHostConnection = sameHostConnection;
+    require(Object.values(sameHostConnection).every((value) => value === true));
+    const endpoint = Object.freeze({});
+    ownedEndpoints.set(endpoint, target);
+    issuedEndpoint = endpoint;
     const api = Object.freeze({
       id: containerId,
       image: config.image,
@@ -461,11 +569,16 @@ export async function controlledNeonPostgresqlLab(use) {
       sql: setupSql,
       endpoint,
       passwordByRole,
+      expectedHostSource: gateway,
+      revokeEndpoint() {
+        ownedEndpoints.delete(endpoint);
+      },
       topology: Object.freeze({
         internalNetwork: true,
-        loopbackOnlyPublication: true,
-        ephemeralPort: true,
-        reachable: true,
+        noPublishedPorts: true,
+        ownedContainerEndpointAttested: true,
+        sameHostReachability: true,
+        sourceMatchedGateway: true,
         hostMounts: 0,
         tcpAdministratorAllowed: false,
         ipv4NoDefaultRouteMeasured: true,
@@ -510,9 +623,9 @@ export async function controlledNeonPostgresqlLab(use) {
         }
         require(loaded);
         setupPhase("role_authentication");
-        for (const role of roles) require((await authenticationProbe(endpoint, role)) === "scram");
-        require((await authenticationProbe(endpoint, "postgres")) === "rejected");
-        require((await authenticationProbe(endpoint, "morrow_identity_owner")) === "rejected");
+        for (const role of roles) require((await authenticationProbe(target, role)) === "scram");
+        require((await authenticationProbe(target, "postgres")) === "rejected");
+        require((await authenticationProbe(target, "morrow_identity_owner")) === "rejected");
         phase = "requests";
         setupPhase("requests_callback");
         return Object.freeze({
@@ -524,7 +637,7 @@ export async function controlledNeonPostgresqlLab(use) {
       },
       async observeFinalNamespace() {
         setupPhase("final_namespace");
-        require(phase === "requests");
+        require(phase === "requests" && resolveControlledNeonPostgresqlEndpoint(endpoint) === null);
         phase = "final";
         const where =
           "datname='morrow' AND usename IN (" +
@@ -562,6 +675,7 @@ export async function controlledNeonPostgresqlLab(use) {
   } catch {
     primaryFailure = true;
   } finally {
+    if (issuedEndpoint) ownedEndpoints.delete(issuedEndpoint);
     // A CLI timeout may follow a real allocation. Reconcile only this prelatched
     // unique attempt name and exact nonce/packet labels; never allocate again.
     if (containerAttempted) {

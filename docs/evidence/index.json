@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 88,
-  "plan_digest": "434489742e46422e8bf03d06251091a27ae7403e06f4d8551ce37f255c3067b1",
+  "plan_sequence": 89,
+  "plan_digest": "fe280f8aab9d7517b7959d1bf47f3edc889f29019714abcb7d9e381047fb6276",
   "tasks": [
     {
       "id": "P01.T01",
@@ -2332,6 +2332,78 @@
     {
       "path": "docs/evidence/P05.T01s/typecheck-registration.json",
       "sha256": "4fef52d4f8957f66c6ad7dc38d85d5bf22b7675cd3c17f5f8f3ef435ec31fa87"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/authority-and-preservation.json",
+      "sha256": "161c4fd61161be6e89ec917fa574c3d232889ba78af4f8820ea8bd50f603449d"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/draft-validation.json",
+      "sha256": "7408e12216c472e52b6432540d1b962747ad2eb141964e06e87a0e77f3d37dfb"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-diagnostic88/artifact-api.json",
+      "sha256": "0791cf1ed2ca62a3342dd158d95e54cec20f52be0dda47ec5cd887fd3cf1fabc"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-diagnostic88/execution.json",
+      "sha256": "ce433b971d0aebb28b4bc90d098ff6683af19c36f96cdbad6a5bf644605afdb2"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-diagnostic88/final-job-api.json",
+      "sha256": "20f6a46e8a783f00db91a0b0de318b8c002786bfe5c12e9cb3747c92cab24e0b"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-diagnostic88/final-run-api.json",
+      "sha256": "c0525d348697678b0641f2b89a16e534edae8cfb0e9be58bcd7ef5a56320e187"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-diagnostic88/independent-classification.json",
+      "sha256": "218e7ef26db46bb17675d3e2b833c35b95c66a362acb7da815029390bae5f90f"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-diagnostic88/postgresql-workers-lab.json",
+      "sha256": "bbca87168697e9976d9a7032670c63b91ce25ce3e1899116457a5afaec6976f8"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/independent-maintained-source-review.json",
+      "sha256": "c0910533a325a96aa68c404f198e717298a706f6be62686eb3f2ba45aba42650"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/independent-preserved-core-native-source-review.json",
+      "sha256": "f8a80d841729eece0fa19a59d161bc2ec2ae5a18c743d00419399a556b7e06c6"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/independent-real-pg-source-review.json",
+      "sha256": "4c5fdf5f6aeac65ff5c41c798ef816bd1a87a5f16d932fa964f043d95c5ed136"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/local-actual-execution.json",
+      "sha256": "6d77a286540c69e8ba9b626f76ff4e25c4aed7a713d0463f3d95ea1cf43ce9fb"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/local-pipeline-receipt.json",
+      "sha256": "1172dc62219085adc94a2f9f5a8b16bcc9561990216ba53ec7286cd5790b9ad9"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/native-local-receipt.json",
+      "sha256": "4e0499b899d9473a9ae7a32e6e0ebf046b555055e1e09d4687a39c7830849327"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/root-metadata-self-review.json",
+      "sha256": "393ab0acf913f85503d11ee9f0ab9166917d8207bc5b3397346345993f8d7bac"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/scaffold-initial-held-receipt.json",
+      "sha256": "d3c09321a086d809d798a3c09460f10e5dbf6425ecde031673d140aa9cfdbed8"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/scaffold-local-network-receipt.json",
+      "sha256": "366f5c335c8a14f0c4ca4a8734bd1dac79ed82f7984f491272335a8d86ba1748"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/workers-lab.json",
+      "sha256": "2c5e3952f19f6d2587b9400295c679d056ff22cb363440941c45643c52be512c"
     },
     {
       "path": "docs/evidence/P05.T01t/core-initial-author-receipt.json",

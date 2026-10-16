@@ -163,7 +163,7 @@ const paths = [
   "package.json",
   ".github/workflows/ci.yml",
 ];
-assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 88);
+assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 89);
 const sourceDigests = Object.fromEntries(
   paths.sort().map((path) => [path, hash(readFileSync(path))]),
 );
@@ -214,7 +214,7 @@ try {
     assert.equal(hash(readFileSync(path)), digest, "Source changed: " + path);
   const report = {
     task: "P05.T01q",
-    current_plan_sequence: 88,
+    current_plan_sequence: 89,
     qualification_status: "passed",
     qualification:
       "actual_local_workerd_nodejs_compat_Fetch_WebCrypto_with_synthetic_fixed_SQL_oracle",
@@ -236,8 +236,8 @@ try {
   const text = JSON.stringify(report, null, 2) + "\n";
   for (const value of [proof, "B".repeat(42) + "A", "private-marker", "SYNTHETIC_PRIVATE_FAULT"])
     assert.ok(!text.includes(value));
-  mkdirSync("docs/evidence/P05.T01t/regressions", { recursive: true });
-  writeFileSync("docs/evidence/P05.T01t/regressions/logout-workers-lab.json", text);
+  mkdirSync("docs/evidence/P05.T01t/canonical89/regressions", { recursive: true });
+  writeFileSync("docs/evidence/P05.T01t/canonical89/regressions/logout-workers-lab.json", text);
   console.log(
     `PASS: ${cases.length} standalone logout Workers cases; ${result.checks.length} checks; zero outbound requests.`,
   );

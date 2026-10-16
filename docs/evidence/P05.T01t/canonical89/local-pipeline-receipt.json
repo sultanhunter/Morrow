@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 89,
+  "scope": "full_local_pipeline_not_provider_or_merchant_qualification",
+  "actual_subprocess_exit": 0,
+  "source_before_sha256": "013d8c65c96dbfa3ddf89652cc154f30e7c96f12eff4b1250bb722d67b03cc49",
+  "primary_log_sha256": "df1c989635cfa5636b4a721aca8c8813395cb5b3ae432d8942a7cd5e533b063b",
+  "observed_outputs_after_command": {
+    "docs/evidence/P01.T01/verification.json": "b7320f2642050b7096b06dec2a95cf423c596fec6a03c8bb925648d64dc3232d",
+    "docs/evidence/P01.T02/verification.json": "c2e305b3df09c811a538be5c756e148ec034db19a24c23740bcc8f4c636a8d69",
+    "docs/evidence/P01.T03/verification.json": "95edf7fcf73bffdc9f3596f79d491d39a676d25373eed0f1e18df142e63381fd",
+    "docs/evidence/P01.T04/verification.json": "c4618c20f472706a8da2327a8e5905e3d8ed9c8a33aeb28d9a0975b4d84c249d",
+    "docs/evidence/P02.T02/verification.json": "5b3d79c3844dd92f3029ba29fa8b1db592d1fb5f6d826692bf5195983a5363ec",
+    "docs/evidence/P03.T02/boundaries.json": "8a3925f8251534639b034594e7193d9c6f84f6729444dabf087b266cc8788c2a",
+    "docs/evidence/P03.T04/delivery.json": "db030d3e23309f990399e71ea9b53a390d9ec5d8181e09c4c53d5a4ed72ace90",
+    "docs/evidence/P04.T01a/synth.json": "4ca6107a29ca2e63e8ee5c9af26ef33c850aea9bf348fe2c125153e2080e8a14",
+    "docs/evidence/P04.T01a/permissions.json": "8dc4714359d3c634472c0f6c7a6dfc4f4299ce9febafd013aff9f4dd773f321e",
+    "docs/evidence/P04.T01a/readiness.json": "c83c55725bedc3471a9a6f55e2ebd9b6e45b4b41ee23b0ad18e819a9aee0c30f",
+    "docs/evidence/P04.T01f/archive.json": "3dda7eb00a83f6ff3ddb5fbcfcd696be0b287eeebc9ad1c31fb9b499a410be2b",
+    "docs/evidence/P04.T01f/cleanup.json": "38d6427cedf056878b2f58b66067f61f5d22f5cd3bf14b51142e574e4d384ed3",
+    "docs/evidence/P03.T01/smoke.json": "e57ae6aa53fbfcdccdef90dd6f8b546d26081ca716770824515a0421114962fb",
+    "docs/evidence/P03.T03/example.json": "e001773426e5222702639fc851c1326628bd1bdcb8da02a1c331e605ae1e7453",
+    "docs/evidence/index.json": "1da66ed3992c5e347557a8afbb84cd3cc83fb2c5ae4f7beaff259f811f725551"
+  },
+  "unexpected_source_changes": [],
+  "source_inventory_restored_exactly": true,
+  "historical_reports_byte_and_mode_restored": 631,
+  "provider_requests": 0,
+  "Git_writes": false,
+  "Desktop_writes": false
+}

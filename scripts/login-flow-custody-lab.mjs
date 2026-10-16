@@ -904,9 +904,9 @@ const report = {
     "Historical receipt attribution never proves dispatch, delivery, or current authority.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01t/regressions", { recursive: true });
+mkdirSync("docs/evidence/P05.T01t/canonical89/regressions", { recursive: true });
 writeFileSync(
-  "docs/evidence/P05.T01t/regressions/login-flow-custody.json",
+  "docs/evidence/P05.T01t/canonical89/regressions/login-flow-custody.json",
   JSON.stringify(report, null, 2) + "\n",
 );
 console.log(

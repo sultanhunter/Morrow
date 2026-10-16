@@ -6,7 +6,7 @@ import { Log, LogLevel, Miniflare } from "miniflare";
 import { createFixedWorkosProviderOracle } from "./fixtures/fixed-workos-provider.mjs";
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 assert.equal(process.version, "v24.13.0");
-assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 88);
+assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 89);
 const oracle = createFixedWorkosProviderOracle();
 const verifier = Buffer.alloc(32, 13).toString("base64url");
 const challenge = createHash("sha256").update(verifier, "ascii").digest("base64url");
@@ -252,7 +252,7 @@ for (const [path, digest] of Object.entries(sourceDigests))
   assert.equal(hash(readFileSync(path)), digest, "source changed: " + path);
 const report = {
   task: "P05.T01r",
-  current_plan_sequence: 88,
+  current_plan_sequence: 89,
   qualification:
     "actual_local_pinned_workerd_fixed_WorkOS_wire_with_independent_HTTP_PKCE_native_RSA_and_unchanged84_owning76_77_M_synthetic_SQL",
   observedAt: new Date().toISOString(),
@@ -289,8 +289,8 @@ for (const secret of [
   "worker_management_marker_86_only",
 ])
   assert.ok(!text.includes(secret), "private fixture material is not reported");
-mkdirSync("docs/evidence/P05.T01t/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01t/regressions/fixed-provider-workers.json", text);
+mkdirSync("docs/evidence/P05.T01t/canonical89/regressions", { recursive: true });
+writeFileSync("docs/evidence/P05.T01t/canonical89/regressions/fixed-provider-workers.json", text);
 console.log(
   `PASS: ${cases.length} fixed WorkOS provider Workers cases; ${result.checks.length} checks; zero outbound requests; runtime disposed.`,
 );
