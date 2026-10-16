@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 89,
+  "scope": "actual_native_callback_request_envelope_and_unchanged_protocol_only_no_SQL_or_login_flow_qualification",
+  "source_digests": {
+    "packages/identity/src/standalone-login-protocol.ts": "0420c72e73f93a1f5f625a640f5cd1d9207931cf41e8a23ff96c6f26dc5cf01b",
+    "scripts/controlled-neon-postgresql-lab.mjs": "9780bf5cf9f16da771d8f9c5795c84ac23e9626bad59d204abec7d64f6ec1de4",
+    "node_modules/miniflare/package.json": "f0025bdc4b9b70199ea393572c23ca35ea58efa3d81b270f19f5e8c8d27771f4",
+    "node_modules/workerd/package.json": "5edae90469333c86e194a75358e80dbe5b1d3c259860794850e53ce8f240f762"
+  },
+  "runtime": {
+    "node": "v24.13.0",
+    "miniflare": "4.20260730.0",
+    "workerd": "1.20260730.1",
+    "compatibilityDate": "2026-07-30",
+    "compatibilityFlags": [
+      "nodejs_compat"
+    ]
+  },
+  "rows": [
+    {
+      "name": "source_callback_headers",
+      "responseStatus": 200,
+      "observation": {
+        "urlOriginMatched": true,
+        "hostMatched": true,
+        "site": "cross-site",
+        "mode": "cors",
+        "destination": "document",
+        "envelopeAccepted": true,
+        "callbackAccepted": false,
+        "codeMatched": false,
+        "stateMatched": false,
+        "cookieMatched": false,
+        "errorStatus": null
+      }
+    },
+    {
+      "name": "omitted_sec_fetch_headers",
+      "responseStatus": 200,
+      "observation": {
+        "urlOriginMatched": true,
+        "hostMatched": true,
+        "site": "absent",
+        "mode": "cors",
+        "destination": "absent",
+        "envelopeAccepted": true,
+        "callbackAccepted": false,
+        "codeMatched": false,
+        "stateMatched": false,
+        "cookieMatched": false,
+        "errorStatus": null
+      }
+    },
+    {
+      "name": "explicit_cors_negative",
+      "responseStatus": 200,
+      "observation": {
+        "urlOriginMatched": true,
+        "hostMatched": true,
+        "site": "cross-site",
+        "mode": "cors",
+        "destination": "document",
+        "envelopeAccepted": true,
+        "callbackAccepted": false,
+        "codeMatched": false,
+        "stateMatched": false,
+        "cookieMatched": false,
+        "errorStatus": null
+      }
+    },
+    {
+      "name": "wrong_host_negative",
+      "responseStatus": 200,
+      "observation": {
+        "urlOriginMatched": true,
+        "hostMatched": true,
+        "site": "cross-site",
+        "mode": "cors",
+        "destination": "document",
+        "envelopeAccepted": true,
+        "callbackAccepted": false,
+        "codeMatched": false,
+        "stateMatched": false,
+        "cookieMatched": false,
+        "errorStatus": null
+      }
+    }
+  ],
+  "runtimeDisposalAcknowledged": true,
+  "outboundRequests": 0,
+  "actualInternetRequests": 0,
+  "actualProviderRequests": 0,
+  "limitations": [
+    "Actual request header normalization only; no pool/SQL/PKCE/RSA/callback/cookie issuance or full owning-chain qualification.",
+    "No production guard changes or fabricated request headers inside Worker."
+  ]
+}

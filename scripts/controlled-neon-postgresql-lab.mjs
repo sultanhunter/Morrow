@@ -82,6 +82,7 @@ let stage = "source",
   appliedMigrations = 0,
   failure,
   measured,
+  firstBeginDiagnostic = null,
   cleanupFailure,
   workerDisposed = false,
   bridgesClosed = false,
@@ -297,6 +298,7 @@ try {
         ),
       );
       mf = new Miniflare({
+        upstream: origin,
         modules: true,
         script: bundled.outputFiles[0].text,
         compatibilityDate: "2026-07-30",
@@ -405,11 +407,26 @@ try {
             workspaceId: configurations[index].f.workspace,
           }),
         });
+        const diagnostic =
+          flowSerial === 0
+            ? (firstBeginDiagnostic = {
+                responseStatus: response.status,
+                cookieCount: response.headers.getSetCookie().length,
+                jarAccepted: null,
+                jarRejected: null,
+              })
+            : null;
+        const acceptCookie = () => {
+          const result = jar.ingest(origin + "/auth/login", response.headers);
+          if (diagnostic) {
+            diagnostic.jarAccepted = result.accepted;
+            diagnostic.jarRejected = result.rejected;
+          }
+          return result.accepted === 1;
+        };
         check(
           "actual_84_begin_cookie_" + ++flowSerial,
-          response.status === 200 &&
-            response.headers.getSetCookie().length === 1 &&
-            jar.ingest(origin + "/auth/login", response.headers).accepted === 1,
+          response.status === 200 && response.headers.getSetCookie().length === 1 && acceptCookie(),
         );
         const authorizationUrl = (await response.json()).authorizationUrl;
         const callback = activeOracle.arm(authorizationUrl);
@@ -421,6 +438,7 @@ try {
         const headers = {
           Cookie: prepared.jar.header(prepared.callback.callbackUrl),
           "Sec-Fetch-Mode": "navigate",
+          "MF-Sec-Fetch-Mode": "navigate",
           "Sec-Fetch-Dest": "document",
           "Sec-Fetch-Site": "cross-site",
         };
@@ -714,6 +732,7 @@ const report = {
     allBridgeEndpointsAcknowledged: bridgesClosed,
   },
   measured: measured ?? null,
+  firstBeginDiagnostic,
   limitations: [
     "Native WSS destination is fully locally intercepted; no remote DNS/TLS/Neon account/proxy qualification.",
     "Only this new fixture uses an attested owned internal IPv4 endpoint with no published ports; host access remains possible and old network-none laboratories are unchanged.",

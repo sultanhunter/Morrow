@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 89,
+  "scope": "actual_failed_candidate_preservation_not_qualification",
+  "tested_commit": "581feb00e9b922c409933d8a03ae8bf1b0bc850b",
+  "run_id": 38926285808,
+  "attempt": 1,
+  "artifact_id": 12056723434,
+  "artifact_sha256": "2c9b2e985fea5bd476eae26d1d87f73c6cb8d5ee7e0c7e4c21d00c328f7670cd",
+  "artifact_bytes": 333179,
+  "final_API_step_count": 53,
+  "partial_payloads": 35,
+  "partial_reports": 31,
+  "full_success_inspector": "correctly_rejected_COMPLETE_FIXED_PAYLOAD_REQUIRED",
+  "failed_check": "actual_84_begin_cookie_1",
+  "executed_source_checks": 48,
+  "executed_other_checks": 40,
+  "other_passed_checks": 39,
+  "appliedMigrations": 11,
+  "request_failure_stage": "full_unchanged_owning_chain",
+  "fixture_cleanup": {
+    "container": "absent",
+    "network": "absent",
+    "finalNamespace": "not_observed",
+    "forcedFinalCleanup": false
+  },
+  "fixture_cleanup_failures": [],
+  "request_cleanup_acknowledgements": {
+    "workerRuntimeDisposalAcknowledged": true,
+    "allBridgeEndpointsAcknowledged": true
+  },
+  "request_cleanup_failures": [],
+  "merchant_activation": false,
+  "real_begin_response_status_cookie_count_and_jar_acceptance_individually_observed": false,
+  "source_digests": {
+    "artifact-rest.json": "934e5214e9b2b3abfe8e97651fe163fb69cf5ac8aaad528a81e6328e4ec9c1ab",
+    "artifact.zip": "2c9b2e985fea5bd476eae26d1d87f73c6cb8d5ee7e0c7e4c21d00c328f7670cd",
+    "artifacts-rest.json": "098a102358e9d849903281059af515e28b05c62db8353a397db9f35b1f1d986e",
+    "capture-receipt.json": "d39d72db5d0705aa6e3cc28f074ac1d96124c140d501f73c350182ccc0467014",
+    "jobs-rest.json": "277b3ac80fadc990e1abd867472b3d3bf34aa56b9e30a069c836ca85a8567bff",
+    "partial-payload-map.json": "c8d5fe111eafbfe216b7234fec31972f8f0aa34421aded193f0df30cf05f2908",
+    "postgresql-workers-lab-held.json": "a000d888aa096b5001210631578cfe96fe32a9d480cb8eed2df6507262c2fd62",
+    "run-rest.json": "497a57cb49c78b79ae7aa734f71c8f78b69c1811c2a698e9975545233acb69a3",
+    "run.log": "c6a01deab9d668803435d5ed611f68f90a88b84f21ca81dec1e8e6183d6947e6"
+  },
+  "limits": [
+    "Partial bounded archive read is failure classification only; strict57/all53 success requirements remain unchanged.",
+    "All11migrations, topology and four-role controls passed before combined first-begin predicate failed; original response subvalues remain unobserved.",
+    "Separate local native diagnostics observe a Miniflare Host mismatch and corrected incoming envelope with upstream option; they do not establish the failed CI response status or qualify SQL/complete login flow.",
+    "Final backend namespace is not_observed despite runtime/bridge disposal acknowledgements and exact owned container/network absence."
+  ],
+  "independent_classification_sha256": "6da3f878ec9ac0728ceb83a6ee431c6d8bed3e200ecd5a6c704073a1ccc17180"
+}

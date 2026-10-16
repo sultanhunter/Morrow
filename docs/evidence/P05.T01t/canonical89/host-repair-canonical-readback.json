@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 89,
+  "scope": "fresh_canonical_authority_readback_no_plan_change",
+  "page_id": "page_b1ef27b80b788191b91e67cbb52f1037",
+  "observed_current_sequence": 89,
+  "complete_blocks": 519,
+  "full_content_equal_saved_canonical89": true,
+  "snapshot_regenerated": false,
+  "reason": "Unchanged current Page exact full content already bound by frozen snapshot; no captured_at-only rewrite.",
+  "source_digests": {
+    "docs/plan/build-plan.md": "fe280f8aab9d7517b7959d1bf47f3edc889f29019714abcb7d9e381047fb6276",
+    "docs/plan/source.json": "9042999ce6659d8725ab5775958ff0308afa1022d033ae78cad5edb48dc4219f",
+    "docs/packets/P05.T01t.md": "9a237f11ad9316d176f645fd7f75da04708236234054c434a93e59cde6bf27dd"
+  },
+  "merchant_activation": false
+}

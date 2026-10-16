@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01t",
+  "current_plan_sequence": 89,
+  "author": "fixed_provider_https",
+  "status": "source_frozen_focused_checks_passed_integrated_realPG_unqualified",
+  "authority": {
+    "packet_sha256": "9a237f11ad9316d176f645fd7f75da04708236234054c434a93e59cde6bf27dd",
+    "page_id": "page_b1ef27b80b788191b91e67cbb52f1037",
+    "fresh_page_sequence": 89,
+    "fresh_page_blocks": 519,
+    "source_write_scope": [
+      "scripts/controlled-neon-postgresql-lab.mjs"
+    ],
+    "parent_authorized": "upstream origin, closed first-begin primitive diagnostic, then measured static fixture-only Miniflare navigate carrier"
+  },
+  "failed_parent": {
+    "head": "581feb00e9b922c409933d8a03ae8bf1b0bc850b",
+    "run_id": 38926285808,
+    "artifact_id": 12056723434,
+    "artifact_sha256": "2c9b2e985fea5bd476eae26d1d87f73c6cb8d5ee7e0c7e4c21d00c328f7670cd",
+    "protected_evidence": 660,
+    "runner_sha256": "35687d1ac0c31354486b0713550acf2972f01ec3ae76c3254e4bc275d6ce75aa"
+  },
+  "final_source_digests": {
+    "scripts/fixtures/controlled-neon-postgresql.mjs": "409c058fecb19abd9a64d6d08baab8e674a2ef844c6fa72e62efbb3be6987c96",
+    "scripts/fixtures/controlled-neon-tcp-bridge.mjs": "07d4898ee63128ed9414901d3dafa3f7bc83e9f713f67eca3c49a5ab90985ac2",
+    "scripts/fixtures/controlled-neon-postgresql-worker.ts": "550b24685c50a129c2d7f5ada88585f9048cf277a60d94d52ba0c378d3eced6f",
+    "scripts/controlled-neon-postgresql-lab.mjs": "0afc64780430f7e0c7c87f68f4198b7a95c699b44577fe60f32d4a9c45aa86fe",
+    "tests/controlled-neon-tcp-bridge.test.mjs": "24bf1754b1e82dc6ffefbf943de5dd884f61ad107a10b2aec4c731051551121e"
+  },
+  "exact_delta": [
+    "Set source-owned Miniflare upstream: origin, keeping https://127.0.0.1 and production Host/origin guard exact.",
+    "Add firstBeginDiagnostic null/default plus responseStatus/cookieCount and null-or-observed jarAccepted/jarRejected primitive fields.",
+    "Wrap the one original jar.ingest path to capture its result once; status/cookie-count short-circuit and successful/failed predicate stay equivalent.",
+    "Retain firstBeginDiagnostic at report top level independently of measured:null; later begins never replace it.",
+    "Add exactly one static MF-Sec-Fetch-Mode:navigate beside existing finish navigation header; replay uses that same unchanged header object.",
+    "Prettier only joins the final equivalent three-part begin predicate line; no other old line changes."
+  ],
+  "preservation": {
+    "reverse_to_parent_runner_byte_exact": true,
+    "other_four_pg_source_files_exact": true,
+    "production_protocol_worker_sql_and_controls_unchanged": true,
+    "no_assertion_names_added_removed_or_relaxed": true,
+    "no_cookie_ingest_retry": true,
+    "no_new_sql_or_borrow_or_lease_or_provider_action": true,
+    "no_change_to_endpoint_or_cleanup_lifecycle": true
+  },
+  "executions": [
+    {
+      "kind": "source-extracted inert diagnostics and exact reversal",
+      "chunk": "5c8512",
+      "actual_exit": 0,
+      "cases": 8,
+      "report": "work/morrow-p01/real-pg89-upstream-carrier-repair-final-inert.json"
+    },
+    {
+      "kind": "final runner Node syntax",
+      "chunk": "44c73d",
+      "actual_exit": 0
+    },
+    {
+      "kind": "initial formatting held",
+      "chunk": "895f57",
+      "actual_exit": 1,
+      "disposition": "preserved; formatter changed only newly equivalent assertion presentation"
+    },
+    {
+      "kind": "final formatting",
+      "chunk": "451775",
+      "actual_exit": 0
+    },
+    {
+      "kind": "actual native callback without carrier",
+      "session": 12667,
+      "completion_chunk": "5ea22e",
+      "actual_exit": 0,
+      "report": "work/morrow-p01/callback-envelope89-upstream-local.json"
+    },
+    {
+      "kind": "actual native callback carrier characterization",
+      "session": 94768,
+      "completion_chunk": "60a612",
+      "actual_exit": 0,
+      "report": "work/morrow-p01/callback-envelope89-upstream-carrier-local.json"
+    },
+    {
+      "kind": "final source-rebound actual native callback carrier characterization",
+      "session": 1996,
+      "completion_chunk": "1d170c",
+      "actual_exit": 0,
+      "observed_rows": 7,
+      "report": "work/morrow-p01/callback-envelope89-upstream-carrier-final-local.json"
+    },
+    {
+      "kind": "final actual report closed observations independently checked by author",
+      "chunk": "80ab99",
+      "actual_exit": 0,
+      "observed_rows": 7
+    }
+  ],
+  "native_observations": {
+    "scope": "native test transport normalization and unchanged callback input parser only",
+    "upstream_host_and_origin_match": true,
+    "without_carrier_requested_navigate_observed_cors_and_callback_rejected": true,
+    "static_navigate_carrier_observed_navigate_and_callback_accepted": true,
+    "carrier_removed_before_user_worker": true,
+    "parsed_synthetic_code_state_cookie_match": true,
+    "cors_carrier_negative_rejected": true,
+    "wrong_destination_with_navigate_carrier_negative_rejected": true,
+    "wrong_host_input_normalized_to_configured_host_not_a_production_negative_test": true,
+    "runtime_disposal_acknowledged": true,
+    "outbound_requests": 0,
+    "actual_internet_requests": 0,
+    "actual_provider_requests": 0,
+    "runtime_source": {
+      "path": "node_modules/miniflare/dist/src/workers/core/entry.worker.js",
+      "sha256": "717cae00ff8f0480f4ce43c8e68c1fc2901834e2da1a0022ec81fe363eb75170",
+      "relevant_lines": "4504-4511: source-fixed upstream rewrites Host; SEC_FETCH_MODE carrier sets Sec-Fetch-Mode then is deleted"
+    }
+  },
+  "outside_evidence_digests": {
+    "work/morrow-p01/real-pg89-before-upstream-repair/manifest.json": "c2a6e095995b34bfc525c4480bcbbd0976e215c7deefb9d2687f58721cc66e4b",
+    "work/morrow-p01/real-pg89-upstream-repair.diff": "1604f86eeaeba6426fd935eff86179ac809bf2f4202781371065c41e6a9091e8",
+    "work/check-real-pg89-upstream-repair.mjs": "9090c461c0d41d533f2bf7a8c79c7499112c5accdc75c111b4adc9191761e63e",
+    "work/morrow-p01/real-pg89-upstream-carrier-repair-final-inert.json": "260ecb6a51ef22de28fb69e2ac43ec6a0e72ccff439d70b566b3e79aedadc9a8",
+    "work/check-real-pg89-callback-upstream.mjs": "39cf64d39f4c2a653a08d547fef8a42db1ad0f91dd13e58b5f16e26cbc4a8cf5",
+    "work/morrow-p01/callback-envelope89-upstream-local.json": "8dc16035fe5336ca89e616786b3391fdabedaea8011b2872c5ab2e8b0c1dc322",
+    "work/check-real-pg89-callback-carrier.mjs": "535d4a6c820fe84d2a905d1e94e1293e536c8782285afc3ca393f157d95239fb",
+    "work/morrow-p01/callback-envelope89-upstream-carrier-local.json": "e261358e2d42b5a5f79fa4bf980ae7ca2608cfab69642acc6b933d9ec934f2d1",
+    "work/check-real-pg89-callback-carrier-final.mjs": "ecd994e13199c6a836d3da8eb1db454e645b53a1e8322dbe3a70e21eaa2cd35d",
+    "work/morrow-p01/callback-envelope89-upstream-carrier-final-local.json": "5f91a185df52f3ee160485c438f243298780c6388ffa21cfe3795b0574a6a01a",
+    "/private/tmp/morrow89-upstream-carrier-repair-final-inert.log": "260ecb6a51ef22de28fb69e2ac43ec6a0e72ccff439d70b566b3e79aedadc9a8",
+    "/private/tmp/morrow89-callback-upstream-native.log": "8dc16035fe5336ca89e616786b3391fdabedaea8011b2872c5ab2e8b0c1dc322",
+    "/private/tmp/morrow89-callback-carrier-native.log": "e261358e2d42b5a5f79fa4bf980ae7ca2608cfab69642acc6b933d9ec934f2d1",
+    "/private/tmp/morrow89-callback-carrier-final-native.log": "5f91a185df52f3ee160485c438f243298780c6388ffa21cfe3795b0574a6a01a"
+  },
+  "limits": [
+    "Null jar counters mean original earlier status/cookie predicate prevented ingest, or ingest did not return; they are not accepted or rejected counts.",
+    "The first native report named wrong_host_negative was only a transport-normalization observation; upstream rewrites it. Later report and this receipt explicitly correct the limit without overwriting original observation.",
+    "No native browser engine, SQL/pool/PKCE/RSA/issuer/cookie issuance or integrated PostgreSQL/full84 qualification from these focused tests.",
+    "No Docker, hosted account, provider, key, Page, Git, publication, Desktop, merchant or deployment effects performed.",
+    "Actual isolated current-head full realPG/CI/artifact/domain review remains parent-owned and required."
+  ]
+}

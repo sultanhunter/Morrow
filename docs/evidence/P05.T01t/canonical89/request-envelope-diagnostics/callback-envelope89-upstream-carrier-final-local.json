@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 89,
+  "scope": "actual_native_callback_request_envelope_and_unchanged_protocol_only_no_SQL_or_login_flow_qualification",
+  "source_digests": {
+    "packages/identity/src/standalone-login-protocol.ts": "0420c72e73f93a1f5f625a640f5cd1d9207931cf41e8a23ff96c6f26dc5cf01b",
+    "scripts/controlled-neon-postgresql-lab.mjs": "0afc64780430f7e0c7c87f68f4198b7a95c699b44577fe60f32d4a9c45aa86fe",
+    "node_modules/miniflare/package.json": "f0025bdc4b9b70199ea393572c23ca35ea58efa3d81b270f19f5e8c8d27771f4",
+    "node_modules/workerd/package.json": "5edae90469333c86e194a75358e80dbe5b1d3c259860794850e53ce8f240f762",
+    "node_modules/miniflare/dist/src/workers/core/entry.worker.js": "717cae00ff8f0480f4ce43c8e68c1fc2901834e2da1a0022ec81fe363eb75170"
+  },
+  "runtime": {
+    "node": "v24.13.0",
+    "miniflare": "4.20260730.0",
+    "workerd": "1.20260730.1",
+    "compatibilityDate": "2026-07-30",
+    "compatibilityFlags": [
+      "nodejs_compat"
+    ]
+  },
+  "rows": [
+    {
+      "name": "source_callback_headers_with_native_carrier",
+      "responseStatus": 200,
+      "observation": {
+        "urlOriginMatched": true,
+        "hostMatched": true,
+        "site": "cross-site",
+        "mode": "navigate",
+        "destination": "document",
+        "bridgeHeaderAbsent": true,
+        "envelopeAccepted": true,
+        "callbackAccepted": true,
+        "codeMatched": true,
+        "stateMatched": true,
+        "cookieMatched": true,
+        "errorStatus": null
+      }
+    },
+    {
+      "name": "cors_carrier_negative",
+      "responseStatus": 200,
+      "observation": {
+        "urlOriginMatched": true,
+        "hostMatched": true,
+        "site": "cross-site",
+        "mode": "cors",
+        "destination": "document",
+        "bridgeHeaderAbsent": true,
+        "envelopeAccepted": true,
+        "callbackAccepted": false,
+        "codeMatched": false,
+        "stateMatched": false,
+        "cookieMatched": false,
+        "errorStatus": null
+      }
+    },
+    {
+      "name": "wrong_destination_with_navigate_carrier_negative",
+      "responseStatus": 200,
+      "observation": {
+        "urlOriginMatched": true,
+        "hostMatched": true,
+        "site": "cross-site",
+        "mode": "navigate",
+        "destination": "empty",
+        "bridgeHeaderAbsent": true,
+        "envelopeAccepted": true,
+        "callbackAccepted": false,
+        "codeMatched": false,
+        "stateMatched": false,
+        "cookieMatched": false,
+        "errorStatus": null
+      }
+    },
+    {
+      "name": "source_callback_headers",
+      "responseStatus": 200,
+      "observation": {
+        "urlOriginMatched": true,
+        "hostMatched": true,
+        "site": "cross-site",
+        "mode": "cors",
+        "destination": "document",
+        "bridgeHeaderAbsent": true,
+        "envelopeAccepted": true,
+        "callbackAccepted": false,
+        "codeMatched": false,
+        "stateMatched": false,
+        "cookieMatched": false,
+        "errorStatus": null
+      }
+    },
+    {
+      "name": "omitted_sec_fetch_headers",
+      "responseStatus": 200,
+      "observation": {
+        "urlOriginMatched": true,
+        "hostMatched": true,
+        "site": "absent",
+        "mode": "cors",
+        "destination": "absent",
+        "bridgeHeaderAbsent": true,
+        "envelopeAccepted": true,
+        "callbackAccepted": false,
+        "codeMatched": false,
+        "stateMatched": false,
+        "cookieMatched": false,
+        "errorStatus": null
+      }
+    },
+    {
+      "name": "explicit_cors_negative",
+      "responseStatus": 200,
+      "observation": {
+        "urlOriginMatched": true,
+        "hostMatched": true,
+        "site": "cross-site",
+        "mode": "cors",
+        "destination": "document",
+        "bridgeHeaderAbsent": true,
+        "envelopeAccepted": true,
+        "callbackAccepted": false,
+        "codeMatched": false,
+        "stateMatched": false,
+        "cookieMatched": false,
+        "errorStatus": null
+      }
+    },
+    {
+      "name": "wrong_host_transport_normalization_observation",
+      "responseStatus": 200,
+      "observation": {
+        "urlOriginMatched": true,
+        "hostMatched": true,
+        "site": "cross-site",
+        "mode": "cors",
+        "destination": "document",
+        "bridgeHeaderAbsent": true,
+        "envelopeAccepted": true,
+        "callbackAccepted": false,
+        "codeMatched": false,
+        "stateMatched": false,
+        "cookieMatched": false,
+        "errorStatus": null
+      }
+    }
+  ],
+  "runtimeDisposalAcknowledged": true,
+  "outboundRequests": 0,
+  "actualInternetRequests": 0,
+  "actualProviderRequests": 0,
+  "limitations": [
+    "Actual request header normalization only; no pool/SQL/PKCE/RSA/callback/cookie issuance or full owning-chain qualification.",
+    "Pinned Miniflare entry consumes its fixture-only MF-Sec-Fetch-Mode carrier before dispatch to unchanged protocol; this characterizes native test transport normalization, not a browser engine.",
+    "Upstream normalizes caller Host to configured host; the wrong-host input is not a production wrong-host rejection test.",
+    "No production guard changes or fabricated request headers inside Worker."
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 89,
+  "reviewer": "fixed_provider_core",
+  "kind": "independent_outside_host_repair89_helpers_review",
+  "reviewed_helper_digests": {
+    "prepare-ci-host-repair89.py": "45fb87584371f54ac97bb31758d74be40c9fdd3b1b71d0ee77f3fb7cdb5b84a1",
+    "test_prepare_ci_host_repair89.py": "e429aba26da59b36af2d66ff2bde6008479b25c0f17bbc61a384dee2bf22d00d",
+    "compose-ci-final89-host-repair.py": "66e6f6d256bb56c6d606d75d363a49bd863737da278d52b6cb64d971598a6b8b",
+    "test-compose-ci-final89-host-repair.py": "6683a3841e13e753d0350a76aec65cfbc99bdd6a0d5adfa0ac12316402aabbeb"
+  },
+  "prior_helpers_preserved": {
+    "prepare-ci-repair89.py": "80313df3bebb7efb30e0941ab1c5c1a3379cb6417be5b3c5df9a82d06ae4f3d7",
+    "compose-ci-final89-repair.py": "89dcb9184eb25bdaf7e720a3db599333864ea60386a25497a99e95dd6b1ff3ac",
+    "compose-ci-final89.py": "a0d7344823cd22b5e0dff729fa0d0fd84a25dbb92eb578b21923df9212a4c3c2",
+    "publish-ci-final89.py": "0f931165e81e31cb15a0c5a8420ddb59c4f6ccb5519599f0f50beee2c4a7076e"
+  },
+  "source_binding": {
+    "fixed_parent": "581feb00e9b922c409933d8a03ae8bf1b0bc850b",
+    "files": 1689,
+    "protected_evidence": 660,
+    "original_prior_failed_parent": "28f08f316679240507b8b9b55c1e5d81de8b4f83",
+    "prior_files": 1678,
+    "prior_evidence": 649,
+    "approved_replacement_anchors_unique": 5,
+    "approved_replacements_reconstruct_exact_current_runner": true,
+    "current_runner_sha256": "0afc64780430f7e0c7c87f68f4198b7a95c699b44577fe60f32d4a9c45aa86fe"
+  },
+  "reviewed_guards": [
+    "Hash-pinned prior80313 repair/candidate/safeIO chain, both immutable failed trees and exact modes/inventories/source maps. Older manifest hash checked before parsing its file rows.",
+    "Original89 draft and origin-repair draft/record preserved, all660 evidence/history/SQL immutable; one exact5-anchor fixture runner byte delta plus its full digest.",
+    "Only CP prepend/index and fresh canonical89 JSON allowed; new host-repair manifests pending/current source+clear reviews, exact original581/old-repair-manifestSHA.",
+    "No production/otherfixtures/CI/exports/SQL change, new arbitrary source, deletion, executable/scalar record, expired review or activation/provider authority.",
+    "Default complete read-only; fixed clean Publisher581 and qualified87/f396/28f ancestry; apply only guarded worktree copies, no Git-index/stage/commit or Desktop change; staged mode read-only exact verification.",
+    "Composer imports this new exact helper and requires its fixed-A/full transition before selecting fresh host-repair reviews. Neither older pending record can supply authority.",
+    "All7 prior composer function ASTs, including selector/main and exact artifact/domain/observed-count/acyclic final-engine logic, preserved. Only pinned helper import and historical660 limitation binding changes."
+  ],
+  "actual_independent_CPU_executions": [
+    {
+      "suite": "preparer",
+      "tests": 21,
+      "actual_exit_code": 0,
+      "start_chunk": "2b0a55",
+      "completion_chunk": "86b07d",
+      "session_id": 83058,
+      "log_sha256": "16edb2b2b4f03ba5b5dcfa98cb9e9552edbb95359734a0e632b42786ccf0d803"
+    },
+    {
+      "suite": "composer",
+      "tests": 10,
+      "actual_exit_code": 0,
+      "start_chunk": "4be036",
+      "completion_chunk": "11a72f",
+      "session_id": 36853,
+      "log_sha256": "9ec2f3fc3063e46379dd35d5860b5cf543831acc900424fa11f6dae691611c7e"
+    }
+  ],
+  "help_exits": [
+    0,
+    0
+  ],
+  "findings": [],
+  "blocking_findings": [],
+  "actual_main_apply_staging_artifact_Source_Git_Runtime_Docker_network_provider_or_Desktop_actions": false,
+  "authorship_limits": [
+    "Reviewer did not author new host-repair variants/tests. Reviewer originally authored the unchanged prior repair-composer and private Neon core; this review assesses other-authored new scope/pin transition and preservation, not a fresh independent approval of own unchanged engine/core.",
+    "Prior composer already has separate independent Workers/root review; unchanged function ASTs are bound here.",
+    "Immutable failed sources are inert test data. Synthetic guard fixtures are not actual PostgreSQL/callback/qualification evidence.",
+    "Root retains ownership of actual apply, CI/artifacts/domain review and publication; all53 qualification remains pending."
+  ]
+}

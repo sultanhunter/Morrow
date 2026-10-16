@@ -2394,6 +2394,50 @@
       "sha256": "bbca87168697e9976d9a7032670c63b91ce25ce3e1899116457a5afaec6976f8"
     },
     {
+      "path": "docs/evidence/P05.T01t/canonical89/held-origin-repair-A/artifact-api.json",
+      "sha256": "934e5214e9b2b3abfe8e97651fe163fb69cf5ac8aaad528a81e6328e4ec9c1ab"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-origin-repair-A/execution.json",
+      "sha256": "e29b8178dc071f7762835d0c7c96f4060bdb80fb92bf1d72a0eb6aa67499954a"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-origin-repair-A/final-job-api.json",
+      "sha256": "277b3ac80fadc990e1abd867472b3d3bf34aa56b9e30a069c836ca85a8567bff"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-origin-repair-A/final-run-api.json",
+      "sha256": "497a57cb49c78b79ae7aa734f71c8f78b69c1811c2a698e9975545233acb69a3"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-origin-repair-A/independent-classification.json",
+      "sha256": "6da3f878ec9ac0728ceb83a6ee431c6d8bed3e200ecd5a6c704073a1ccc17180"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-origin-repair-A/partial-payload-map.json",
+      "sha256": "c8d5fe111eafbfe216b7234fec31972f8f0aa34421aded193f0df30cf05f2908"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/held-origin-repair-A/postgresql-workers-lab.json",
+      "sha256": "a000d888aa096b5001210631578cfe96fe32a9d480cb8eed2df6507262c2fd62"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/host-repair-canonical-readback.json",
+      "sha256": "f4f20e35bdc7d55aae9a881e301902238a4ca06881ba1d8007610e66c4de8aa6"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/host-repair-draft-validation.json",
+      "sha256": "9d44189892e7eaaba7db8fa5e0a13ea5c35f0dc31c4bd25edb9f639decc7f44b"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/host-repair-helpers-author-receipt.json",
+      "sha256": "a41bf7ae105c0d55eab582efac85422d216244905dcd3b81fb8e2593744e359b"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/independent-host-repair-helpers-review.json",
+      "sha256": "4e01ea3007b7651cc78965a59a26261f07040de9e9b7fea5057d4be66180e14d"
+    },
+    {
       "path": "docs/evidence/P05.T01t/canonical89/independent-maintained-source-review.json",
       "sha256": "c0910533a325a96aa68c404f198e717298a706f6be62686eb3f2ba45aba42650"
     },
@@ -2404,6 +2448,10 @@
     {
       "path": "docs/evidence/P05.T01t/canonical89/independent-preserved-core-native-source-review.json",
       "sha256": "f8a80d841729eece0fa19a59d161bc2ec2ae5a18c743d00419399a556b7e06c6"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/independent-real-pg-host-repair-review.json",
+      "sha256": "08f9a3099173e8131c2d973a13e3f80d9669362d92f162147ef617a50c9607c7"
     },
     {
       "path": "docs/evidence/P05.T01t/canonical89/independent-real-pg-origin-repair-review.json",
@@ -2430,8 +2478,64 @@
       "sha256": "dcacd33da3bdf511de0d57ffd8386c26ebd56d5b22b57270a81aed2688e20a2e"
     },
     {
+      "path": "docs/evidence/P05.T01t/canonical89/real-pg-host-origin-repair.json",
+      "sha256": "b655360e34d11ac555fe03a163e9f72c2df152c99e744bc2d35fe8168d40241a"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/real-pg-host-repair-author-addendum.json",
+      "sha256": "0abf4a6c6e4caff5abc6302bab00524e051f7d948585b6886c1bd13eec6b4b8f"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/real-pg-host-repair-inert-checks.json",
+      "sha256": "260ecb6a51ef22de28fb69e2ac43ec6a0e72ccff439d70b566b3e79aedadc9a8"
+    },
+    {
       "path": "docs/evidence/P05.T01t/canonical89/repair-draft-validation.json",
       "sha256": "09199e4478a6aac2213c2bea15778c00996e12783ff252cad406aa27461b8b71"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/request-envelope-diagnostics/callback-envelope89-upstream-carrier-final-local.json",
+      "sha256": "5f91a185df52f3ee160485c438f243298780c6388ffa21cfe3795b0574a6a01a"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/request-envelope-diagnostics/callback-envelope89-upstream-carrier-local.json",
+      "sha256": "e261358e2d42b5a5f79fa4bf980ae7ca2608cfab69642acc6b933d9ec934f2d1"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/request-envelope-diagnostics/callback-envelope89-upstream-local.json",
+      "sha256": "8dc16035fe5336ca89e616786b3391fdabedaea8011b2872c5ab2e8b0c1dc322"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/request-envelope-diagnostics/execution.json",
+      "sha256": "9b9554dda756bdbca8f91f92baec30d8274a832374abc5e912a6555e7579c8e9"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/request-envelope-diagnostics/independent-native-review.json",
+      "sha256": "f8cdb8c086576a7e5d2ddcd9f609f07a67e01cbe9444c1e6328789d1b0680696"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/request-envelope-diagnostics/request-envelope89-explicit-host-local.json",
+      "sha256": "c2f4e156534d7697817032e03cf79280e15bdcfedf6a6836a9fe54059b9bc781"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/request-envelope-diagnostics/request-envelope89-local.json",
+      "sha256": "5b9511a6aa567647bf4a6482c743671c8e636ae566b49e852100f903e9ba6f30"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/request-envelope-diagnostics/request-envelope89-service-binding-local.json",
+      "sha256": "1eca1dd4ab2a472af7b4c83842be0c3433d7c7c146e1aa027294f833d15646b7"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/request-envelope-diagnostics/request-envelope89-upstream-local.json",
+      "sha256": "28423502a8502429585f293fc960343a81d7ec18cf9da0628741a44fe60d7708"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/root-host-repair-helper-review.json",
+      "sha256": "62201772fe4125cd6adb1afb23c394f7b617408dae6cad2eccdde161d8f57cff"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/root-host-repair-source-review.json",
+      "sha256": "7532f67e3e992c419a209f86eca5d554f6ae47663566df1b23ac6268ae05eabe"
     },
     {
       "path": "docs/evidence/P05.T01t/canonical89/root-metadata-self-review.json",
