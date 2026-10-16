@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "author": "fixed_provider_core",
+  "status": "author_repair_frozen_pending_independent_and_native_recheck",
+  "reviewed_source_digests": {
+    "packages/identity/src/controlled-neon-login-pool.ts": "c0aad7e65fcf30c913ff24c90cba9b40d303c988be1b80a3f1d6ce1aefd710ac",
+    "tests/controlled-neon-login-pool.test.mjs": "a61fbab1fa54f1adcdd0b51e7b851c6e60615f34f8e03f907e3f390bb7bcef37",
+    "packages/identity/src/managed-login-request-scope.ts": "a4699a12cfd8cc895b0369ffeaf54ede92a5584783c70c7dbf2d33aa74a690f3"
+  },
+  "preserved_original_pool_sha256": "2319f3cb1abbb294bb77cd4806626302eadddfa87b0414b5aba4a4a4e25ea028",
+  "exact_narrow_reversal_to_original_pool": true,
+  "original68_unit_prefix_preserved": true,
+  "change": "Only cleanupControl samples existing trusted clock before mapping remaining original monotonic C into credential absolute deadline. Clock failure aborts cleanup control. No parent/business assertion, renewal, API/SQL/profile/driver/observer change.",
+  "CPU_reproduction": {
+    "original_module": "2319f3cb1abbb294bb77cd4806626302eadddfa87b0414b5aba4a4a4e25ea028",
+    "original_negative": {
+      "completion_chunk": "f4aeb4",
+      "actual_exit_code": 1,
+      "tests": 3,
+      "pass": 0,
+      "fail": 3
+    },
+    "exact_preserved_original_recheck": {
+      "completion_chunk": "97edc8",
+      "actual_exit_code": 1,
+      "tests": 3,
+      "pass": 0,
+      "fail": 3,
+      "outside_clone": "work/morrow-p01/cleanup91-original-module-reproduction",
+      "source_pins_sha256": "b748b6bc7bcaf307ee616fc1d20629854c4fb985bbab88e6b064eb596ccb62eb"
+    },
+    "mechanism": "Actual bound scope/pool owns one attributable credential, then trusted clock ends parent before pool normal clock refresh. Old cleanup deadline behind current time after5s or30s, and old control un-aborted on regression. No socket, SQL, observer or real runtime executes.",
+    "fixed_assertions": [
+      "Parent-ended and business-D-expired still hold business outcome while one acquired lease receives current disposal control bounded by remaining original C<=1000 and cleanup ack counted separately; no normal release.",
+      "Clock regression aborts cleanup control and leaves active lease unknown, with no false ack. Original business deadline unchanged and one exact releasePromise published; active wait timers/listeners0."
+    ]
+  },
+  "actual_checks": {
+    "initial_full": {
+      "completion_chunk": "500984",
+      "session": 81744,
+      "actual_exit_code": 0,
+      "tests": 71,
+      "pass": 71,
+      "fail": 0
+    },
+    "final_full": {
+      "initial_chunk": "a49735",
+      "completion_chunk": "1cbdff",
+      "session": 95288,
+      "actual_exit_code": 0,
+      "tests": 71,
+      "pass": 71,
+      "fail": 0
+    },
+    "identity_types": {
+      "completion_chunk": "b30077",
+      "session": 4468,
+      "actual_exit_code": 0
+    },
+    "format": {
+      "initial_chunk": "94105d",
+      "initial_exit_code": 1,
+      "reason": "only newly appended unit wrapping",
+      "write_completion_chunk": "467061",
+      "final_completion_chunk": "1a02e8",
+      "final_exit_code": 0
+    }
+  },
+  "logs": {
+    "original-negative": {
+      "path": "work/morrow-p01/cleanup-clock91-original-negative.log",
+      "sha256": "953c281b7022dfca593b90ce24044bbca70042a4fa510c8a70a5b9011fd81685"
+    },
+    "preserved-original-negative": {
+      "path": "work/morrow-p01/cleanup-clock91-preserved-original-negative.log",
+      "sha256": "b355a6366f4f5f1cf4710c42f03709f350618960097a77e3839a88ece43d97fd"
+    },
+    "focused": {
+      "path": "work/morrow-p01/cleanup-clock91-focused.log",
+      "sha256": "007580d5528051e86a383898bbeced137a12afcd33de61a1d0ce9e296d401216"
+    },
+    "focused-final": {
+      "path": "work/morrow-p01/cleanup-clock91-focused-final.log",
+      "sha256": "c2a8cb480a7399f52b664e87c8880c0fe23fa1fca37bab58646b7238a4830e05"
+    },
+    "types": {
+      "path": "work/morrow-p01/cleanup-clock91-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "format-initial": {
+      "path": "work/morrow-p01/cleanup-clock91-format-initial.log",
+      "sha256": "4830bc17ab9e6e9a6c5ee8fc3056cf76faed432caeec233a0278193983a5bda8"
+    },
+    "format-repair": {
+      "path": "work/morrow-p01/cleanup-clock91-format-repair.log",
+      "sha256": "af703ff61402efbd0f8206c4000aa865ddb1f71e8a16e7aff7c56b359734a220"
+    },
+    "format-final": {
+      "path": "work/morrow-p01/cleanup-clock91-format-final.log",
+      "sha256": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20"
+    }
+  },
+  "limits": [
+    "CPU synthetic credential lease and original attempt only; fake valid/invalid clock timing does not prove native gate, ctx retention, SDK/SQL backend or provider cleanup.",
+    "Original native host-repair report remains held; raw P rejection is not credential release success. Fresh actual native test still required after independent source review.",
+    "No new D/C, timer, business stage, external service, realSQL, provider/key, Git or publication action."
+  ],
+  "runtime_network_realSQL_provider_actions": 0
+}

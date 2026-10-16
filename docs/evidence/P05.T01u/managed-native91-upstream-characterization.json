@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_core",
+  "scope": "actual_native_multiworker_upstream_placement_closed_envelope_characterization",
+  "source_and_runtime_digests": {
+    "packages/identity/src/standalone-login-protocol.ts": "0d75b3fd7efda9caf1938086b05fe433109de5a835e404655fb0b7d64b030078",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "node_modules/miniflare/package.json": "f0025bdc4b9b70199ea393572c23ca35ea58efa3d81b270f19f5e8c8d27771f4",
+    "node_modules/miniflare/dist/src/index.js": "25f0935c66e24b503a64561e77625b1dd163995ce2177485e3be48d05bde7d45",
+    "node_modules/miniflare/dist/src/index.d.ts": "87ac39f2f429c041f032c81396f97c7b5153a47e7e480e906192b1a5a921d135",
+    "node_modules/workerd/package.json": "5edae90469333c86e194a75358e80dbe5b1d3c259860794850e53ce8f240f762",
+    "node_modules/esbuild/package.json": "cb7d5b1fe478f8cbaae566a86031b6fdf5f7d444354f35d1cb3cba9adf6d2935"
+  },
+  "actual_bundle_inputs": [
+    "managed91-upstream-envelope-probe.ts",
+    "packages/identity/src/standalone-login-protocol.ts",
+    "packages/identity/src/workos-session-status-json.ts"
+  ],
+  "rows": [
+    {
+      "placement": "worker_local",
+      "observed": {
+        "urlOriginMatches": true,
+        "urlProtocolHttps": true,
+        "hostPresent": true,
+        "hostMatches": false,
+        "methodMatches": true,
+        "parserAccepted": false,
+        "failureStatus": 400
+      },
+      "outboundCalls": 0,
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "placement": "shared_top_level",
+      "observed": {
+        "urlOriginMatches": true,
+        "urlProtocolHttps": true,
+        "hostPresent": true,
+        "hostMatches": true,
+        "methodMatches": true,
+        "parserAccepted": true,
+        "failureStatus": 0
+      },
+      "outboundCalls": 0,
+      "runtimeDisposalAcknowledged": true
+    }
+  ],
+  "SQL_crypto_provider_outbound_actions": 0,
+  "limits": [
+    "Actual request Host and URL are evaluated only as source-fixed equality booleans; no raw hostname/port/header/body is recorded.",
+    "The initial managed held report did not capture Host/URL values. This separate characterization isolates shared upstream placement and does not retroactively claim raw initial request observations.",
+    "Unchanged loginRequestEnvelope is invoked; no guard, source, SQL/crypto/provider business stage or native managed lifetime proof is changed or qualified."
+  ]
+}

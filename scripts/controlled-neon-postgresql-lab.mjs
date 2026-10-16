@@ -47,6 +47,7 @@ const paths = [
   "docs/plan/build-plan.md",
   "docs/plan/source.json",
   "docs/packets/P05.T01t.md",
+  "docs/packets/P05.T01u.md",
   "package.json",
   "package-lock.json",
   "node_modules/@neondatabase/serverless/package.json",
@@ -72,11 +73,11 @@ const neonVersion = JSON.parse(
 if (neonVersion !== "1.2.0") throw Error("CONTROLLED_PG_PINNED_SDK_REQUIRED");
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
 if (
-  plan.sequence !== 89 ||
+  plan.sequence !== 91 ||
   hash(readFileSync(plan.path)) !== plan.sha256 ||
   process.version !== "v24.13.0"
 )
-  throw Error("CONTROLLED_PG_CURRENT89_REQUIRED");
+  throw Error("CONTROLLED_PG_CURRENT91_REQUIRED");
 const checks = [];
 let stage = "source",
   appliedMigrations = 0,
@@ -699,7 +700,7 @@ for (const [path, digest] of Object.entries(sourceDigests))
 const report = {
   schema_version: 1,
   task: "P05.T01t",
-  current_plan_sequence: 89,
+  current_plan_sequence: 91,
   status: failure || cleanupFailure ? "held" : "passed",
   scope:
     "actual_captured_Workers_WebSocket_to_attested_owned_internal_IPv4_and_real_PostgreSQL17_four_roles_unchanged84_owners",
@@ -747,8 +748,8 @@ if (
   )
 )
   throw Error("CONTROLLED_PG_PRIVATE_REPORT_HELD");
-mkdirSync("docs/evidence/P05.T01t/canonical89", { recursive: true });
-writeFileSync("docs/evidence/P05.T01t/canonical89/postgresql-workers-lab.json", serialized);
+mkdirSync("docs/evidence/P05.T01u/regressions", { recursive: true });
+writeFileSync("docs/evidence/P05.T01u/regressions/controlled-neon-postgresql.json", serialized);
 if (failure || cleanupFailure) throw Error("CONTROLLED_NEON_POSTGRESQL_LAB_HELD:" + stage);
 console.log(
   "PASS: " +

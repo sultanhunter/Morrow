@@ -79,7 +79,7 @@ function fixture(t, absent = []) {
   return { base, sourceRoot, runnerTemp, options, service, head, originals, write, fresh };
 }
 
-test("fixed report inventory is preserved37 plus fourteen T regressions and two new T reports", () => {
+test("fixed report inventory preserves37 fixed outputs and sixteen U regressions plus two U reports", () => {
   const provenance = JSON.parse(
     readFileSync(
       new URL("../docs/evidence/P05.T01p/current-regressions/provenance.json", import.meta.url),
@@ -87,8 +87,10 @@ test("fixed report inventory is preserved37 plus fourteen T regressions and two 
   );
   const prior = provenance.measurements.map((m) => m.original_path);
   const current = [
-    "workers-lab.json",
+    "lifetime-workers-lab.json",
     "postgresql-workers-lab.json",
+    "regressions/controlled-neon-workers.json",
+    "regressions/controlled-neon-postgresql.json",
     ...[
       "platform-workers-lab.json",
       "fixed-provider-workers.json",
@@ -105,10 +107,10 @@ test("fixed report inventory is preserved37 plus fourteen T regressions and two 
       "login-flow-custody.json",
       "login-https-postgresql-lab.json",
     ].map((p) => "regressions/" + p),
-  ].map((p) => "docs/evidence/P05.T01t/canonical89/" + p);
+  ].map((p) => "docs/evidence/P05.T01u/" + p);
   assert.equal(prior.length, 37);
   assert.deepEqual([...ciValidationReportPaths].sort(), [...prior, ...current].sort());
-  assert.equal(new Set(ciValidationReportPaths).size, 53);
+  assert.equal(new Set(ciValidationReportPaths).size, 55);
   assert.ok(
     ciValidationReportPaths.every(
       (p) => !/(?:history|actual-|local-validation|qualification|provenance)/.test(p),
@@ -164,19 +166,43 @@ test("new PostgreSQL producer follows the engine without changing the 42 older p
     "https_fixed_provider",
   ];
   const ids = ciValidationCommands.map((c) => c.id);
-  assert.equal(ids.length, 44);
-  assert.equal(new Set(ids).size, 44);
+  assert.equal(ids.length, 46);
+  assert.equal(new Set(ids).size, 46);
   assert.deepEqual(
-    ids.filter((id) => !["workers_controlled_neon", "postgresql_controlled_neon"].includes(id)),
+    ids.filter(
+      (id) =>
+        ![
+          "workers_controlled_neon",
+          "postgresql_controlled_neon",
+          "workers_managed_login_lifetime",
+          "postgresql_managed_login",
+        ].includes(id),
+    ),
     olderProducerIds,
   );
   const engine = ids.indexOf("sql_engine");
-  assert.deepEqual(ids.slice(engine, engine + 3), [
+  assert.deepEqual(ids.slice(engine, engine + 4), [
     "sql_engine",
     "postgresql_controlled_neon",
+    "postgresql_managed_login",
     "sql_operations",
   ]);
   assert.ok(ids.indexOf("workers_controlled_neon") < engine);
+  const prior44 = [...olderProducerIds];
+  prior44.splice(prior44.indexOf("frozen75"), 0, "workers_controlled_neon");
+  prior44.splice(prior44.indexOf("sql_operations"), 0, "postgresql_controlled_neon");
+  assert.deepEqual(
+    ids.filter(
+      (id) => !["workers_managed_login_lifetime", "postgresql_managed_login"].includes(id),
+    ),
+    prior44,
+  );
+  const smoke = ids.indexOf("baseline_smoke");
+  assert.deepEqual(ids.slice(smoke, smoke + 3), [
+    "baseline_smoke",
+    "workers_managed_login_lifetime",
+    "workers_identity",
+  ]);
 });
 
 test("workflow gives each original command a unique serial step and binds exact PR head/artifact action", () => {
@@ -218,7 +244,7 @@ test("workflow gives each original command a unique serial step and binds exact 
 
 test("prepare removes every stale output before tests, leaves auxiliary inputs, then restores exact originals", (t) => {
   const f = fixture(t);
-  assert.deepEqual(f.service.prepare(), { status: "prepared", reportCount: 53 });
+  assert.deepEqual(f.service.prepare(), { status: "prepared", reportCount: 55 });
   const stateText = readFileSync(join(f.service.runRoot, "preparation.json"), "utf8");
   const state = JSON.parse(stateText);
   assert.equal(state.status, "prepared");
@@ -258,7 +284,7 @@ test("fresh full evidence captures exact JSON/snapshots and still awaits final e
   assert.equal(result.manifest.testedHead, f.head);
   assert.equal(result.manifest.sourceStable, true);
   assert.equal(result.manifest.designatedOutputsRestored, true);
-  assert.equal(result.manifest.reports.length, 53);
+  assert.equal(result.manifest.reports.length, 55);
   assert.ok(result.manifest.commands.every((c) => c.actualExitCode === null));
   assert.ok(result.manifest.reports.every((r) => r.status === "fresh_pending_external_validation"));
   for (const r of result.manifest.reports)

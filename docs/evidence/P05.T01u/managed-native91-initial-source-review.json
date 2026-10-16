@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_core",
+  "result": "source_clear_for_first_bounded_managed_native_measurement",
+  "reviewed_source_digests": {
+    "scripts/fixtures/managed-login-request-worker.ts": "03a40a728c95a8858c2887fb9cac9544cdb1683f99258df24e00a6f5f975a20c",
+    "scripts/fixtures/managed-login-cleanup-gate.mjs": "7cfbf50014124b057dc4a63d2d00848e071c119b25a5e21bae82f8ec017d2520",
+    "scripts/managed-login-lifetime-workers-lab.mjs": "caba70d73468229821bbbb1b68e830f0aedfe08766c98f154a384afcf4fb4aa5",
+    "tests/managed-login-cleanup-gate.test.mjs": "708a26168b34a58dbb5e7cb37272097619f4f727e12844338978961016ebbba6",
+    "scripts/fixtures/managed-login-lifetime-worker.ts": "a9c1802628442f27c7774b1cda75abd85c10ed43d1554f818aa9beaad2e5e557"
+  },
+  "composition_source_digests": {
+    "packages/identity/src/managed-login-request.ts": "87d729f32b8c4deaca7d7f0cefc18ef0ec679ffba8e87fe46c8ca74297148c51",
+    "packages/identity/src/managed-login-request-scope.ts": "a4699a12cfd8cc895b0369ffeaf54ede92a5584783c70c7dbf2d33aa74a690f3",
+    "packages/identity/src/managed-login-capsule.ts": "24d46628c8717fe3a936f94b12dcf56c6a559d6895bbc4a388a41e87912d3153",
+    "packages/identity/src/standalone-login.ts": "61456a4e1c4a8f213e060e4b74cf936c41bafac3a634747d82388460ae6d9563",
+    "packages/identity/src/standalone-login-protocol.ts": "0d75b3fd7efda9caf1938086b05fe433109de5a835e404655fb0b7d64b030078",
+    "packages/identity/src/controlled-neon-login-pool.ts": "2319f3cb1abbb294bb77cd4806626302eadddfa87b0414b5aba4a4a4e25ea028",
+    "docs/packets/P05.T01u.md": "4e1ccdcb25ebf69a04bc42c20afa2c7d841bc5c8305e6adb26089c356e9545c3"
+  },
+  "blocking_findings": [],
+  "resolved_source_findings": [
+    "Pending managed rows now require actual handoff scope snapshot publishedPending1/publishedSettled0, separately from host console event arrival.",
+    "After-C case is late-open/cancellation/unknown unless actual late ack is observed; no unobserved acknowledgement promotion.",
+    "Late101 deliberately waits5500ms against original begin5s, then requires createdAt>fully consumed finite body and zero PG startup bytes.",
+    "Delayed upgrade callbacks have separate active counts and fixed503 cancellation resolution; final endpoint/listener/timer/callback closure measured independently.",
+    "Generic8s/managed12s/cleanup5s host watchdogs reported separately, none renew applicationD or cleanupC."
+  ],
+  "source_review": [
+    "Trusted actual platform request+ctx enters synchronous managed handler before per-request async fixture setup; source exactP registration remains in production scope/pool, no fixture waitUntil shim or extra post-response metrics request.",
+    "Independent raw Node gate callbacks return promptly; only owned response handles remain open. Routed generic negative/positive controls test same outbound relay; generic Worker exact original U01 source, old gate function exact prefix.",
+    "Actual captured nativeSDK/PG wire path admits source-fixed destination only; independently verifies exact first SQL query/role/protocol, no database authority claim. Per-response closed scope/pool snapshots, fixed source settlement logs, broker ack events and host raw close/body events are distinct.",
+    "Finite response bodies are fully consumed before gate opens; host waits do not retain request or supply another Worker request. Gated positive checks actual read markers and sourceP settlement after body, normal pool acknowledgements/cookies denied.",
+    "Concurrent scopes use distinct request-owned context, one held releaseP each, no shared request pending/crypto state. Rejected/stalled/late provider releases stay conservative; forced fixture/runtime disposal cannot promote normal cleanup.",
+    "No Internet/provider fallback route. Source pins and dependency versions checked; random key material is ephemeral and fenced from reports. Immutable fresh report flag and source rehash prevent stale output acceptance."
+  ],
+  "limits": [
+    "Source-only independent review: no managed native execution/cases achieved here. Actual13-case profile, timing, cancellation, sourceP settlement and cleanup must be measured; hold if required observables absent.",
+    "Exact P identity is source-bound and actual ctx provenance is trusted module wiring, not host introspection. Post-response pool unverified state is source-bound unless observed by a real pool snapshot; settlement logs expose scope counts only.",
+    "Explicit duplicate-release callers, registration rejection and forged/swapped scopes are synthetic unit coverage, correctly labeled, not fabricated native faults.",
+    "Reviewer authored scope/pool integration, excluded from independent production verdict; those modules have independent HTTPS review. This review independently covers other-author fixture/runner/gate.",
+    "Actual PG-wire is a synthetic protocol oracle, not a realSQL/cross-isolate/browser/provider/merchant qualification."
+  ],
+  "source_mutations": 0,
+  "runtime_test_network_SQL_actions": 0
+}

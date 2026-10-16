@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_https",
+  "status": "held_for_replay_predicate_completion_remaining_persisted_cutoff_case_not_qualified",
+  "review_independence": "Reviewer did not author new SQL runner/shared Worker. Original T helper/bridge authored by reviewer are excluded from new-code independence; their byte preservation is checked, with qualified89 reviews retained. Root managed core and separate Core native review are dependencies.",
+  "authority": {
+    "fresh_page_sequence": 91,
+    "full_page_blocks": 553,
+    "blocks_exact_previous_read": true,
+    "packet_sha256": "4e1ccdcb25ebf69a04bc42c20afa2c7d841bc5c8305e6adb26089c356e9545c3"
+  },
+  "reviewed_source_digests": {
+    "scripts/managed-login-postgresql-lab.mjs": "bab447ef0e8c3127e877bda16e8463b132724ef915dfffc76c78554d9d15e3af",
+    "scripts/fixtures/managed-login-request-worker.ts": "03a40a728c95a8858c2887fb9cac9544cdb1683f99258df24e00a6f5f975a20c"
+  },
+  "preserved_initial_manifest": {
+    "path": "work/morrow-p01/u-managed-fixture-initial91-source/manifest.json",
+    "sha256": "bd22ca0c34982718c6a5f4f004951102cab162be99bd0b157daaf28c8990fe9b"
+  },
+  "reviewed_intermediate_assertion_receipt": {
+    "path": "work/morrow-p01/u-managed-SQL-replay-final-checks91.json",
+    "sha256": "0c769e82c1fac8b7d10d130f4aa874160c27e8b773311fd7482d9cff4397fa52"
+  },
+  "unchanged_qualified_T_dependency_digests": {
+    "scripts/fixtures/controlled-neon-postgresql.mjs": "409c058fecb19abd9a64d6d08baab8e674a2ef844c6fa72e62efbb3be6987c96",
+    "scripts/fixtures/controlled-neon-tcp-bridge.mjs": "07d4898ee63128ed9414901d3dafa3f7bc83e9f713f67eca3c49a5ab90985ac2",
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+    "scripts/fixtures/self-logout-fixture.mjs": "b7e2154fcbcc1b29ac765f42266c353c3e59ae3e863fd46e0858ab9d6a966bb1",
+    "scripts/fixtures/standalone-login-fixture.mjs": "672a9b3234080a4fb5e4b02379c46f21aa374187db69d26e58be08adff99817e",
+    "scripts/standalone-session-fixtures.mjs": "377e6bc6c23a74ff49e1b5b27274f4cdf3ee922cdc7a1c98ea93bf2dac0af515",
+    "scripts/fixtures/fixed-workos-platform-provider.mjs": "821d874777f2bec89d62dfb32739d7f858ac2632595f753dc699c4c733a60b15",
+    "scripts/fixtures/fixed-workos-provider.mjs": "f374a8e04578565f5ae3afe8873183344f7111356c4a6b6c9229ccc92fc01b26",
+    "scripts/fixtures/login-https.mjs": "8973889c5b19ecc1d8f83aafeced7dd6940542d290b3ea784aed69e9a3432999",
+    "scripts/local-login-flow-sql.mjs": "93a8b1085e89b1516c39b061c05c70869e10a612b6418e3ff10c882abd755eab",
+    "scripts/local-browser-session-sql.mjs": "9c101d9fc3b796b662e924c29b2fb4a417a0ec5ec97ff58b3d68302354daa9fc",
+    "scripts/local-self-logout-sql.mjs": "7e62a077a43470d2d46936317ea089e62de2da4e8ef10fd7e39ac49bbcb85c0f"
+  },
+  "source_clear_aspects": [
+    "Single owned unchanged T engine topology/capability and original SQL1-11/role setup; at most2 explicitly tracked independent Miniflare instances; once-owned disposal promises and revoke\u2192Worker/bridge cleanup before helper admin teardown, failures remain held.",
+    "Shared Worker captures source-fixed synthetic credential maps and closes namespace/control checks; source module-startup fixed provider preparation is CPU-only, while each actual fetch delegates immediately to synchronous managed handler without an awaited per-request preinitializer. No admin/mutable secret seam in request path.",
+    "A begins under K1, separate cold B imports/decrypts through real persisted flow and native actual SDK. Replacement B ringK2/K1 preserves old record, starts newK2, races actual claims and checks no exchange on missing/wrong K1 proof.",
+    "Setup-only separate profile creates four malformed capsules through unchanged actual SQL/PKCE owners and independent real NodeAES. Tag/AAD/wrong claimed UUID/expired key are measured after setup seal by actual managed callbacks; no post-seal admin capsule mutation.",
+    "Native outbound service strictly routes only fixed fakeNeon host through original service validation/capability and exact WorkOS origin through synthetic cryptographic oracle; no Internet/provider calls are intended. Source report consists of closed metrics/counters/role summaries, with private material/code/token/ciphertext markers fenced from serialization.",
+    "Unknown session release is observed before fresh restricted Unix owner reconciliation and physical cleanup. Reconciliation uses containerid-backed restricted source adapters, not sealed setupSQL or TCP administrator; source labels transport honestly and never upgrades acknowledgement from later physical absence.",
+    "All endpoint allocations stop after capability revoke; explicit revoked-cap attempt cannot allocate pair/socket. Actual runtime/WS/TCP closure, private lease custody, namespace absence and final container/network absence remain separately asserted.",
+    "All twelve protected T/seed/transport/oracle/cookie adapter files byte exact against qualified89."
+  ],
+  "findings": [
+    {
+      "id": "SQL_replay_assertion_missing_claim_count",
+      "status": "open_in_bab447_intermediate",
+      "location": "scripts/managed-login-postgresql-lab.mjs check persisted_single_claim_no_reexchange",
+      "issue": "claimsBeforeReplay and newly added submissionsBeforeReplay are calculated but unused; predicate still asserts only no second provider exchange. Intermediate fixes preseed+2 submissions but does not close original replay assertion.",
+      "required_narrow_fix": "Conjoin newlyClaimedRows length unchanged and exact claim submission count baseline+1 to same check; preserve original no-exchange predicate.",
+      "classification": "Assertion strengthening required before treating this fixture as single-claim SQL acceptance; no production code change."
+    },
+    {
+      "id": "persisted_bind_cutoff_acceptance_missing",
+      "status": "open_acceptance_gap",
+      "location": "bounded_rotation/stale_isolate_cutoff_and_invalid_ring cases",
+      "issue": "Initial stale-before-SQL denial is present, but no actual newly_ready bind commit crosses encryptUntil while original5s attempt is still live and then withholds authorization/cookie. Capsule unit boundaries and correct source post-bind guard do not supply this persistedSQL evidence.",
+      "recommendation": "Source-fixed fixture-only trusted clock progression at exact bind-release boundary, preserved original attempt/lease controls and actual committed/reconciled effect. Retain no handoff check and separate boundary state.",
+      "classification": "Remaining U acceptance requirement, not a claim of production bug. Root notified; no unauthorized fixture expansion made."
+    }
+  ],
+  "actual_executions": {
+    "SQL": 0,
+    "Docker": 0,
+    "native_Miniflare": 0,
+    "provider": 0,
+    "network": 0
+  },
+  "limits": [
+    "Read-only source preflight; no new SQL/native runtime qualification. Native first matrix may proceed separately after Core source review.",
+    "Does not infer successful physical topology, role effects or cleanup from source checks or historical T results.",
+    "Current runner contains no actual measured U report; all intended counts remain configured observations pending execution.",
+    "Future all-U clearance requires actual native/realSQL counts, original timing, unknown custody, runtime cleanup, fullCI and exact artifact/source review."
+  ]
+}

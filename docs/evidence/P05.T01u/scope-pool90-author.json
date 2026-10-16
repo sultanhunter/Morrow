@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 90,
+  "author": "fixed_provider_core",
+  "status": "focused_source_units_and_types_passed_pending_independent_review_native_integration",
+  "source_digests": {
+    "packages/identity/src/managed-login-request-scope.ts": "e24bbcfa69a4bba542af12a2c7f75e970721218d78a4d9169728466998aaaf87",
+    "packages/identity/src/controlled-neon-login-pool.ts": "98a40d7d3f7f0c4cdfd3181b8ec0ae861b7b2304ec51d10486face7c7d357870",
+    "tests/controlled-neon-login-pool.test.mjs": "7f29aee7c8d6920362a4685a517a688ce05017badac64396580681de58befae1"
+  },
+  "tested_transitive_protocol_digest": "e2b689300f60bedd75c3b5750aadbefe311e5caed73cbdd0345498e49cfd980a",
+  "active_packet_digest": "93d73810fa416bbbf65f2bba245dd503d1eaab3ca3caa2e894397ae37c2a4835",
+  "scope_API": [
+    "createManagedLoginRequestOwner(ctx,attempt) => frozen {scope,ownerToken}",
+    "bindManagedLoginRequestNamespace(scope,token,digest):void",
+    "assertManagedLoginRequestOwner(scope,token,digest):fresh readonly LoginControl",
+    "publishManagedLoginCleanup(scope,token,P):void",
+    "snapshotManagedLoginRequestMetrics(scope,token):readonly closed counters"
+  ],
+  "bound_pool_API": "createWorkersRequestBoundNeonLoginPools(existing3deps,scope,token,digest):Promise<ControlledNeonLoginPools>",
+  "verified": {
+    "focused_units": {
+      "tests": 65,
+      "passed": 65,
+      "failed": 0,
+      "actual_exit_code": 0,
+      "initial_tool_chunk": "4cedae",
+      "session_id": 64103,
+      "completion_chunk": "001256",
+      "log_sha256": "f27f5d1b36f0d3f4b0830d1b2d70aa0cd0b132dc88f8997294456d9826d013f0"
+    },
+    "identity_workspace_typecheck": {
+      "actual_exit_code": 0,
+      "initial_tool_chunk": "e095f6",
+      "session_id": 23469,
+      "completion_chunk": "0fbdbd",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "owned_file_format": {
+      "actual_exit_code": 0,
+      "tool_chunk": "3a33e6",
+      "log_sha256": "92cf319b47f869db64d610bbd8f6c207f9bcb2345bd814467fb5e64f4140635a"
+    }
+  },
+  "preserved_initial_passing_64_units_and_source": "work/morrow-p01/u-scope-pool-initial64/receipt.json",
+  "pool_delta_sha256": "6c7efb9fb56859a7068787648316df41d945cc39f2b3f3fb95cb78952f85b4ab",
+  "semantic_changes": [
+    "WeakMap-owned request/token namespace binding, fresh parent business control, exact captured ctx.waitUntil Promise publication with once-only failed-registration latch and closed telemetry.",
+    "Only bound path joins parent/legitimate child signals and current parent cap into existing checks/controls; original source SQL/profiles/observer/tuple/lease/D/C code remains unchanged.",
+    "First release Promise is synchronously registered before its deferred body; ctx throw poisons normal branch without replacing Promise.",
+    "Failed connect now joins its already-owned bounded release before returning fixed primary failure on all constructors; legacy APIs retain signatures and unbound source policy."
+  ],
+  "authorship_limits": [
+    "Self-authored modules/units; independent source review and actual native/realPG integration remain separate.",
+    "New CPU fake contexts establish identity/registration classification only, not native retention. No native caller transport injection or synthetic request-bound production constructor added.",
+    "The focused suite exercises before-dial/broker/cleanup and actual existing socket guard code; native SDK/realSQL positive and accepted-query cases require other-author labs."
+  ],
+  "effects": {
+    "provider_account_credential_network_actions": false,
+    "Miniflare_Docker_runtime_actions": false,
+    "package_export_lock_SQL_or_owner_changes": false,
+    "full_CI_or_historical_evidence_regeneration": false
+  },
+  "blocking_findings": []
+}

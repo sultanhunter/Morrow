@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_core",
+  "result": "source_clear_for_fresh_host_repair_native_measurement",
+  "blocking_findings": [],
+  "reviewed_source_digests": {
+    "scripts/managed-login-lifetime-workers-lab.mjs": "821fb27223534917e60196cd239f354e6464348929bdfb2ba50a6f32d20680b1",
+    "scripts/fixtures/managed-login-request-worker.ts": "d7c67a67b92ad0860faf8ed6cb57ffba38cca3c392e2c8e960894fa8d08836c0",
+    "scripts/fixtures/managed-login-cleanup-gate.mjs": "7cfbf50014124b057dc4a63d2d00848e071c119b25a5e21bae82f8ec017d2520"
+  },
+  "prior_source_review_sha256": "9e0d6e49b625771bddd8b1db0e0b9bdf0f3a68a87fd95294e10e9de673bdf072",
+  "actual_hold_classification_sha256": "007c611c7be57273e913553f881cf43ff76740109560d9db96c4bbcd3fe7da0d",
+  "actual_closed_characterization_sha256": "9d201018fe9ea0b07ad0fe48feae3a07164a24bc3ee81cc49e652b1a0a202983",
+  "findings_resolved": [
+    "Exact native runner reversal proves only managed upstream moves from worker-local ignored property to shared top-level option; all scenarios/assertions/generic controls and production envelope guard unchanged. Actual closed characterization supports this source-fixed placement.",
+    "Shared Worker default native path retains Date.now()+offset and has no bindCutoff property. Optional dedicated one-begin SQL fixture adds only validated trusted clock progression at second login-role normal lease release and closed primitive snapshot; no stage await/gate or original deadline extension. The actual stored bind/release/cutoff case still needs realSQL measurement."
+  ],
+  "limits": [
+    "Source-only host repair verdict, no fresh managed native measurement or native/SQL acceptance claimed. Original held source/report remain immutable.",
+    "No production source/domain/SQL guard changed. Dedicated SQL runner and persisted effects are independently reviewed by HTTPS/root, not claimed here."
+  ],
+  "source_mutations": 0,
+  "runtime_actions": 0
+}

@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_https",
+  "result": "clear_for_saved_native91_actual_request_lifetime_engineering_evidence",
+  "source_review_clear": true,
+  "blocking_findings": [],
+  "review_independence": "Reviewer authored neither native producer nor shared Worker/pool/request scope/common handler. Reviewer authored capsule and prior T bridge; those source dependencies retain separate other-author semantic reviews and no new self-clearance is inferred.",
+  "report_path": "work/morrow-p01/native-managed91-event-wait-repair/lifetime-workers-lab.json",
+  "report_sha256": "c3841375dcfc9fa0b74ffbe3f8b837f7f250a251873fe250fc724f11ac3cfbad",
+  "reviewed_source_digests": {
+    "docs/packets/P05.T01u.md": "4e1ccdcb25ebf69a04bc42c20afa2c7d841bc5c8305e6adb26089c356e9545c3",
+    "docs/plan/build-plan.md": "b7a87e1f20a9b337ba6bc9ed1ef4d58746fcb5a97430e2f1ff39188305802ede",
+    "docs/plan/source.json": "b53f03408def89fe6f2c8cf46a779e07dfb9cdcf8cce71f6fc07d1d14c7bad68",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "package.json": "3f72d49320ccd224479e0d5eb639e3ff8a9946b4d1ce5c27f8be005a58fab4e6",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/identity/src/controlled-neon-login-pool.ts": "c0aad7e65fcf30c913ff24c90cba9b40d303c988be1b80a3f1d6ce1aefd710ac",
+    "packages/identity/src/controlled-neon-login-profiles.ts": "16645b5091135424192dc40cf548d3c5fee74b7a88527f23685dc550bdbcdeee",
+    "packages/identity/src/controlled-neon-transport.ts": "b87761b89fbbd72ae80088412e18dabd1ff1706e547583d9064d520dcfa3c43e",
+    "packages/identity/src/fixed-workos-login-port.ts": "415c00a69f74626ca2962357c7754c4f9d1a7837f034f7e74c82b5f59576e14f",
+    "packages/identity/src/login-flow-custody.ts": "5ab4256c9269886b83578669ec15ee263a51ed72b0eb04892fecc600aa56d503",
+    "packages/identity/src/login-preauth-control.ts": "372b5720cde644e9acf8458baa378fb1cf9bd879e6a4a2742dec30aada1c397f",
+    "packages/identity/src/managed-login-capsule.ts": "24d46628c8717fe3a936f94b12dcf56c6a559d6895bbc4a388a41e87912d3153",
+    "packages/identity/src/managed-login-request-scope.ts": "a4699a12cfd8cc895b0369ffeaf54ede92a5584783c70c7dbf2d33aa74a690f3",
+    "packages/identity/src/managed-login-request.ts": "87d729f32b8c4deaca7d7f0cefc18ef0ec679ffba8e87fe46c8ca74297148c51",
+    "packages/identity/src/standalone-login-protocol.ts": "0d75b3fd7efda9caf1938086b05fe433109de5a835e404655fb0b7d64b030078",
+    "packages/identity/src/standalone-login.ts": "61456a4e1c4a8f213e060e4b74cf936c41bafac3a634747d82388460ae6d9563",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-browser-session-admission.ts": "6b9f443c3bfd4c5d661615c9f4f311c4a4d3034f2259896b951aa3afa8f587ca",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+    "scripts/fixtures/fixed-workos-platform-provider.mjs": "821d874777f2bec89d62dfb32739d7f858ac2632595f753dc699c4c733a60b15",
+    "scripts/fixtures/fixed-workos-provider.mjs": "f374a8e04578565f5ae3afe8873183344f7111356c4a6b6c9229ccc92fc01b26",
+    "scripts/fixtures/managed-login-cleanup-gate.mjs": "7cfbf50014124b057dc4a63d2d00848e071c119b25a5e21bae82f8ec017d2520",
+    "scripts/fixtures/managed-login-lifetime-worker.ts": "a9c1802628442f27c7774b1cda75abd85c10ed43d1554f818aa9beaad2e5e557",
+    "scripts/fixtures/managed-login-request-worker.ts": "d7c67a67b92ad0860faf8ed6cb57ffba38cca3c392e2c8e960894fa8d08836c0",
+    "scripts/managed-login-lifetime-workers-lab.mjs": "f97b09356d6ee2a887d477cbb5f327ec5c8491fb8141467f2fd02c5d66552e10",
+    "tests/managed-login-cleanup-gate.test.mjs": "708a26168b34a58dbb5e7cb37272097619f4f727e12844338978961016ebbba6"
+  },
+  "reviewed_capture_digests": {
+    "morrow-p01/native-managed91-event-wait-repair/execution-receipt.json": "52d0a446ac2ebe682f403ccc16bb3d990637830436c5f0c99675d659c250506f",
+    "morrow-p01/native-managed91-event-wait-repair/source-before.json": "be47efedf8ec4993a624cb69e67c5c3acc3994b61c82bad7c3309ef77644005e",
+    "morrow-p01/native-managed91-event-wait-repair/primary.log": "b38a3ba5a01e9a513a25a4c2262a89bc006ba68505ddf63145f02a9bf574abc3",
+    "run-managed-native91-event-wait-repair.py": "ed91336df1f3ead051034f3905ad169565f6aec8ee920c8f7f6f1c3e076e42b6"
+  },
+  "actual_owner_execution": {
+    "exit_code": 0,
+    "completion_chunk": "7080e9",
+    "session_id": 39737,
+    "checks": 128,
+    "passed_checks": 128,
+    "generic_cases": 4,
+    "managed_cases": 9,
+    "total_cases": 13,
+    "local_intercepts": 29,
+    "actualInternetRequests": 0,
+    "actualProviderRequests": 0,
+    "runtimes_disposed": 13,
+    "pending_host_timers": 0
+  },
+  "independent_saved_observation_checks": {
+    "all30_source_pins_exact_preexecution_and_current": true,
+    "all5_pinned_runtime_dependencies_current": true,
+    "all1860_frozen_preexecution_file_bytes_and_inventory_verified": true,
+    "qualified89_scope_and754_historical_reports_preserved": true,
+    "root_wrapper_postexecution_preservation_receipt_bound": true,
+    "in_memory_negative_controls_rejected": 5
+  },
+  "generic_classification": [
+    {
+      "name": "negative",
+      "native_distinction": "unregistered_natural_unfinished_response_close",
+      "runtime_disposal_acknowledged": true
+    },
+    {
+      "name": "positive",
+      "native_distinction": "registered_read_after_body",
+      "runtime_disposal_acknowledged": true
+    },
+    {
+      "name": "routed_negative",
+      "native_distinction": "unregistered_natural_unfinished_response_close",
+      "runtime_disposal_acknowledged": true
+    },
+    {
+      "name": "routed_positive",
+      "native_distinction": "registered_read_after_body",
+      "runtime_disposal_acknowledged": true
+    }
+  ],
+  "managed_classification": [
+    {
+      "name": "managed_pending_query_post_response_ack",
+      "finite_held_responses": 1,
+      "pre_handoff_pending_scope_count": 1,
+      "pre_forced_cleanup_P_rejections": 1,
+      "broker_acknowledgements": 1,
+      "gate_read_markers": 1,
+      "credential_unknown_observed": false,
+      "late_gate_classification": null,
+      "native_pairs": 1,
+      "fixture_only_orphan_closes": 0,
+      "runtime_disposal_acknowledged": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack",
+      "finite_held_responses": 1,
+      "pre_handoff_pending_scope_count": 1,
+      "pre_forced_cleanup_P_rejections": 1,
+      "broker_acknowledgements": 0,
+      "gate_read_markers": 0,
+      "credential_unknown_observed": true,
+      "late_gate_classification": null,
+      "native_pairs": 1,
+      "fixture_only_orphan_closes": 0,
+      "runtime_disposal_acknowledged": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack",
+      "finite_held_responses": 1,
+      "pre_handoff_pending_scope_count": 1,
+      "pre_forced_cleanup_P_rejections": 1,
+      "broker_acknowledgements": 0,
+      "gate_read_markers": 0,
+      "credential_unknown_observed": true,
+      "late_gate_classification": null,
+      "native_pairs": 1,
+      "fixture_only_orphan_closes": 0,
+      "runtime_disposal_acknowledged": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome",
+      "finite_held_responses": 1,
+      "pre_handoff_pending_scope_count": 1,
+      "pre_forced_cleanup_P_rejections": 1,
+      "broker_acknowledgements": 0,
+      "gate_read_markers": 0,
+      "credential_unknown_observed": true,
+      "late_gate_classification": "late_open_attempt_ack_unknown",
+      "native_pairs": 1,
+      "fixture_only_orphan_closes": 0,
+      "runtime_disposal_acknowledged": true
+    },
+    {
+      "name": "managed_concurrent_scopes",
+      "finite_held_responses": 2,
+      "pre_handoff_pending_scope_count": 2,
+      "pre_forced_cleanup_P_rejections": 2,
+      "broker_acknowledgements": 2,
+      "gate_read_markers": 2,
+      "credential_unknown_observed": false,
+      "late_gate_classification": null,
+      "native_pairs": 2,
+      "fixture_only_orphan_closes": 0,
+      "runtime_disposal_acknowledged": true
+    },
+    {
+      "name": "managed_non101_failed_connect",
+      "finite_held_responses": 1,
+      "pre_handoff_pending_scope_count": 0,
+      "pre_forced_cleanup_P_rejections": 1,
+      "broker_acknowledgements": 1,
+      "gate_read_markers": 0,
+      "credential_unknown_observed": false,
+      "late_gate_classification": null,
+      "native_pairs": 0,
+      "fixture_only_orphan_closes": 0,
+      "runtime_disposal_acknowledged": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect",
+      "finite_held_responses": 1,
+      "pre_handoff_pending_scope_count": 0,
+      "pre_forced_cleanup_P_rejections": 1,
+      "broker_acknowledgements": 1,
+      "gate_read_markers": 0,
+      "credential_unknown_observed": false,
+      "late_gate_classification": null,
+      "native_pairs": 1,
+      "fixture_only_orphan_closes": 0,
+      "runtime_disposal_acknowledged": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal",
+      "finite_held_responses": 1,
+      "pre_handoff_pending_scope_count": 0,
+      "pre_forced_cleanup_P_rejections": 1,
+      "broker_acknowledgements": 0,
+      "gate_read_markers": 0,
+      "credential_unknown_observed": true,
+      "late_gate_classification": null,
+      "native_pairs": 0,
+      "fixture_only_orphan_closes": 0,
+      "runtime_disposal_acknowledged": true
+    },
+    {
+      "name": "managed_late_101_handle",
+      "finite_held_responses": 1,
+      "pre_handoff_pending_scope_count": 1,
+      "pre_forced_cleanup_P_rejections": 1,
+      "broker_acknowledgements": 1,
+      "gate_read_markers": 0,
+      "credential_unknown_observed": false,
+      "late_gate_classification": null,
+      "native_pairs": 1,
+      "fixture_only_orphan_closes": 1,
+      "runtime_disposal_acknowledged": true
+    }
+  ],
+  "scope_conclusions": [
+    "Both direct and routed generic negatives show a natural unopened unfinished ServerResponse close before forced cleanup; close races before finite body completion here and is classified only after the verified finite body. Ambiguous errors and IncomingMessage close are never substituted.",
+    "Registered generic direct and routed controls complete body\u2192gate open\u2192read marker and natural response closure before forced cleanup. The four generic fixtures remain production-import-free.",
+    "The two positive managed pending-query cases show six source/response scopes in total across the broader pending matrix; in the positive single/concurrent cases specifically three finite503/no-cookie responses carry pending1/settled0, then three read markers, three broker acknowledgements inside original cleanup controls, and three rejected source-P settlement events occur after the finite bodies and before forced disposal.",
+    "Every managed request remains intentionally held: exact one original25s attempt narrowed to5s, source registration once, no normal release, no post-hold observer/retry, and WorkOS counters0. Failed-connect cases may settle before body and do not establish post-response retention.",
+    "Rejected, stalled, after-C and rejected-credential disposal rows have no attributable broker acknowledgement. Stalled/after-C raw handles can remain open until fixture cleanup; source P rejection/runtime disposal does not turn these into acknowledged custody.",
+    "After-C opening occurs after the rejected source P and remains late_open_attempt_ack_unknown with no read marker or broker ack. No observed successful late read is manufactured.",
+    "Late101 pair is created after finite body with zero application startup bytes and requires one fixture-only orphan closure. Both physical pair endpoints close but this cannot prove source receipt or cleanup acknowledgement of that late handle.",
+    "Root wrapper actual exit0 and complete preexecution freeze bind the report, log,30 module pins and preservation; the terminal log cases4 refers to generic cases, while report caseCount13 explicitly includes9 managed rows. No full-U/SQL success is inferred from that short terminal summary."
+  ],
+  "limits": [
+    "Saved actual fully intercepted local Workers/SDK/PG-wire engineering evidence only; no new runtime, PostgreSQL, provider, network, Git or Source operation by this reviewer.",
+    "Host raw gate marker precedes receipt of its response; source broker-ack and exact-P console reaction provide separate following observations. P identity/actual ctx provenance remains source-bound platform wiring, not host Promise introspection.",
+    "Prehandoff pool metrics are snapshots, not postsettlement lease/timer/backend absence. A registered Promise settling at C does not promise retention of a later-arriving uncancellable handle.",
+    "ActualInternet/provider0 is scoped to source-owned fully intercepted application transports and zero WorkOS operations; positive29 local interceptions are not described as zero transport.",
+    "Cross-isolate persistedSQL, actual browser/hosted key provisioning, complete current CI/artifact and guarded publication remain separate. Prior failed native captures remain immutable."
+  ]
+}

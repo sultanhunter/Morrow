@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "canonical_sequence": 91,
+  "scope": "independent_exact_source_helper_and_encrypt_decrypt_wait_catch_with_actual_attempt_AES_CPU_only",
+  "source_digests": {
+    "packages/identity/src/standalone-login.ts": "61456a4e1c4a8f213e060e4b74cf936c41bafac3a634747d82388460ae6d9563",
+    "packages/identity/src/standalone-login-protocol.ts": "0d75b3fd7efda9caf1938086b05fe433109de5a835e404655fb0b7d64b030078"
+  },
+  "fragment_digests": {
+    "helper": "16548e885c9c341b0dbaf87c83a79d10057377d906b8bc177cb145618bd92732",
+    "encryptWaitCatch": "13f1e38b722ea8d8aa4d8e6c28514a3e4ff6b941d6ce0a4918a2bed3ebb9f5d4",
+    "decryptWaitCatch": "e4d528847ae80590367557bce917089d95f0141e12c00c44b8f4fbafcc4f50be"
+  },
+  "observations": [
+    {
+      "kind": "Encrypt",
+      "mode": "normal",
+      "parentAborted": false,
+      "waitHeld": false,
+      "consumerReceivedBuffer": true,
+      "callerUnwoundBeforeRelease": false,
+      "bufferLength": 65,
+      "postSettlementChecksBeforeAbort": 2,
+      "postSettlementChecksAfterAbort": 0,
+      "zeroBeforeTestCleanup": false
+    },
+    {
+      "kind": "Encrypt",
+      "mode": "abort_between_sink_and_postcheck",
+      "parentAborted": true,
+      "waitHeld": true,
+      "consumerReceivedBuffer": false,
+      "callerUnwoundBeforeRelease": false,
+      "bufferLength": 65,
+      "postSettlementChecksBeforeAbort": 1,
+      "postSettlementChecksAfterAbort": 1,
+      "zeroBeforeTestCleanup": true
+    },
+    {
+      "kind": "Encrypt",
+      "mode": "late_after_caller_unwind",
+      "parentAborted": true,
+      "waitHeld": true,
+      "consumerReceivedBuffer": false,
+      "callerUnwoundBeforeRelease": true,
+      "bufferLength": 65,
+      "postSettlementChecksBeforeAbort": 0,
+      "postSettlementChecksAfterAbort": 1,
+      "zeroBeforeTestCleanup": true
+    },
+    {
+      "kind": "Decrypt",
+      "mode": "normal",
+      "parentAborted": false,
+      "waitHeld": false,
+      "consumerReceivedBuffer": true,
+      "callerUnwoundBeforeRelease": false,
+      "bufferLength": 49,
+      "postSettlementChecksBeforeAbort": 2,
+      "postSettlementChecksAfterAbort": 0,
+      "zeroBeforeTestCleanup": false
+    },
+    {
+      "kind": "Decrypt",
+      "mode": "abort_between_sink_and_postcheck",
+      "parentAborted": true,
+      "waitHeld": true,
+      "consumerReceivedBuffer": false,
+      "callerUnwoundBeforeRelease": false,
+      "bufferLength": 49,
+      "postSettlementChecksBeforeAbort": 1,
+      "postSettlementChecksAfterAbort": 1,
+      "zeroBeforeTestCleanup": true
+    },
+    {
+      "kind": "Decrypt",
+      "mode": "late_after_caller_unwind",
+      "parentAborted": true,
+      "waitHeld": true,
+      "consumerReceivedBuffer": false,
+      "callerUnwoundBeforeRelease": true,
+      "bufferLength": 49,
+      "postSettlementChecksBeforeAbort": 0,
+      "postSettlementChecksAfterAbort": 1,
+      "zeroBeforeTestCleanup": true
+    }
+  ],
+  "actualNetworkRequests": 0,
+  "providerRequests": 0,
+  "SQLStatements": 0,
+  "limits": [
+    "Exact source helper and both wait/catch blocks extracted and TypeScript-erased; this is private lifecycle proof, not end-to-end managed handler or SQL.",
+    "Native real AES results used for every positive/negative; scheduling and a result-delivery gate only introduce abort/race/late observation, no successful crypto stubs.",
+    "Normal successful result remains unaltered before caller wipe. After held postcheck or caller unwind, source catch wipes same owned result; test cleanup follows observation."
+  ]
+}

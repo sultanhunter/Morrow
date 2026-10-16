@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_core",
+  "script_sha256": "789833a2cc12ae64eb9f596b14fccc7582eeacd1761a7782684cec3313ec1430",
+  "report_sha256": "9d201018fe9ea0b07ad0fe48feae3a07164a24bc3ee81cc49e652b1a0a202983",
+  "log_sha256": "0fbeb0d84d89cb1c9fdf54cc1bf2da94b416a3aafb19a3f94d43ad577cf9f9f0",
+  "actual_execution": {
+    "initial_chunk": "fedadc",
+    "session": 18483,
+    "completion_chunk": "465a21",
+    "exit_code": 0,
+    "serial_runtimes": 2,
+    "both_disposals_acknowledged": true
+  },
+  "preparation_hold": {
+    "chunk": "1927bd",
+    "exit_code": 1,
+    "reason": "outside module could not resolve esbuild, before runtime creation",
+    "preserved_script_sha256": "df2376f8e02131a1eb9dcb696c23c3e6ee75d22606ce8156db5697b39eeb610c",
+    "preserved_log_sha256": "f16c9a69074d2918d0baa56da5a138ca9636cd775dbba697097441e4135ae8d5"
+  },
+  "source_and_runtime_digests": {
+    "packages/identity/src/standalone-login-protocol.ts": "0d75b3fd7efda9caf1938086b05fe433109de5a835e404655fb0b7d64b030078",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "node_modules/miniflare/package.json": "f0025bdc4b9b70199ea393572c23ca35ea58efa3d81b270f19f5e8c8d27771f4",
+    "node_modules/miniflare/dist/src/index.js": "25f0935c66e24b503a64561e77625b1dd163995ce2177485e3be48d05bde7d45",
+    "node_modules/miniflare/dist/src/index.d.ts": "87ac39f2f429c041f032c81396f97c7b5153a47e7e480e906192b1a5a921d135",
+    "node_modules/workerd/package.json": "5edae90469333c86e194a75358e80dbe5b1d3c259860794850e53ce8f240f762",
+    "node_modules/esbuild/package.json": "cb7d5b1fe478f8cbaae566a86031b6fdf5f7d444354f35d1cb3cba9adf6d2935"
+  },
+  "SQL_crypto_provider_outbound_actions": 0,
+  "source_mutations": 0
+}

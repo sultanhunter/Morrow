@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_core",
+  "result": "first_managed_native_hold_preserved_not_qualified",
+  "overall_qualification": false,
+  "artifact_report_sha256": "cfc135a00b6da7003fcee12a00f66987dba29a3a7c18eff9714b226c09c67f55",
+  "frozen_report_path": "work/morrow-p01/native-managed91-initial/lifetime-workers-lab.json",
+  "execution_receipt_sha256": "487653bb0f217c877facb9e6246315bec624937b62f43b54a491145b5dc97843",
+  "actual_primary_exit_code": 1,
+  "parent_reported_owning_execution": {
+    "completion_chunk": "f5e6c1",
+    "session": 48403
+  },
+  "frozen_source": {
+    "manifest_sha256": "d273533d11a5d4b53dae8709d749910e84ba5a1d75216186c14dfed9cfaa7089",
+    "inventory_sha256": "ac8456bc80b97e293b9392d43a9e0809bd46d736b6a66a006cb74ed253312c98",
+    "files_verified_byte_and_Git_executable_mode": 1819,
+    "reported_prepost_unexpected_source_changes": [],
+    "historical_report_count_preserved": 754
+  },
+  "reviewed_source_digests": {
+    "docs/packets/P05.T01u.md": "4e1ccdcb25ebf69a04bc42c20afa2c7d841bc5c8305e6adb26089c356e9545c3",
+    "docs/plan/build-plan.md": "b7a87e1f20a9b337ba6bc9ed1ef4d58746fcb5a97430e2f1ff39188305802ede",
+    "docs/plan/source.json": "b53f03408def89fe6f2c8cf46a779e07dfb9cdcf8cce71f6fc07d1d14c7bad68",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "package.json": "24ebf0eea14edb19316a949164a3dfaf6f657af1c31c4f04ef90964683371da8",
+    "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+    "packages/identity/src/controlled-neon-login-pool.ts": "2319f3cb1abbb294bb77cd4806626302eadddfa87b0414b5aba4a4a4e25ea028",
+    "packages/identity/src/controlled-neon-login-profiles.ts": "16645b5091135424192dc40cf548d3c5fee74b7a88527f23685dc550bdbcdeee",
+    "packages/identity/src/controlled-neon-transport.ts": "b87761b89fbbd72ae80088412e18dabd1ff1706e547583d9064d520dcfa3c43e",
+    "packages/identity/src/fixed-workos-login-port.ts": "415c00a69f74626ca2962357c7754c4f9d1a7837f034f7e74c82b5f59576e14f",
+    "packages/identity/src/login-flow-custody.ts": "5ab4256c9269886b83578669ec15ee263a51ed72b0eb04892fecc600aa56d503",
+    "packages/identity/src/login-preauth-control.ts": "372b5720cde644e9acf8458baa378fb1cf9bd879e6a4a2742dec30aada1c397f",
+    "packages/identity/src/managed-login-capsule.ts": "24d46628c8717fe3a936f94b12dcf56c6a559d6895bbc4a388a41e87912d3153",
+    "packages/identity/src/managed-login-request-scope.ts": "a4699a12cfd8cc895b0369ffeaf54ede92a5584783c70c7dbf2d33aa74a690f3",
+    "packages/identity/src/managed-login-request.ts": "87d729f32b8c4deaca7d7f0cefc18ef0ec679ffba8e87fe46c8ca74297148c51",
+    "packages/identity/src/standalone-login-protocol.ts": "0d75b3fd7efda9caf1938086b05fe433109de5a835e404655fb0b7d64b030078",
+    "packages/identity/src/standalone-login.ts": "61456a4e1c4a8f213e060e4b74cf936c41bafac3a634747d82388460ae6d9563",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-browser-session-admission.ts": "6b9f443c3bfd4c5d661615c9f4f311c4a4d3034f2259896b951aa3afa8f587ca",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+    "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+    "scripts/fixtures/fixed-workos-platform-provider.mjs": "821d874777f2bec89d62dfb32739d7f858ac2632595f753dc699c4c733a60b15",
+    "scripts/fixtures/fixed-workos-provider.mjs": "f374a8e04578565f5ae3afe8873183344f7111356c4a6b6c9229ccc92fc01b26",
+    "scripts/fixtures/managed-login-cleanup-gate.mjs": "7cfbf50014124b057dc4a63d2d00848e071c119b25a5e21bae82f8ec017d2520",
+    "scripts/fixtures/managed-login-lifetime-worker.ts": "a9c1802628442f27c7774b1cda75abd85c10ed43d1554f818aa9beaad2e5e557",
+    "scripts/fixtures/managed-login-request-worker.ts": "03a40a728c95a8858c2887fb9cac9544cdb1683f99258df24e00a6f5f975a20c",
+    "scripts/managed-login-lifetime-workers-lab.mjs": "caba70d73468229821bbbb1b68e830f0aedfe08766c98f154a384afcf4fb4aa5",
+    "tests/managed-login-cleanup-gate.test.mjs": "708a26168b34a58dbb5e7cb37272097619f4f727e12844338978961016ebbba6"
+  },
+  "reviewed_runtimeDependencyDigests": {
+    "node_modules/miniflare/package.json": "f0025bdc4b9b70199ea393572c23ca35ea58efa3d81b270f19f5e8c8d27771f4",
+    "node_modules/miniflare/dist/src/index.js": "25f0935c66e24b503a64561e77625b1dd163995ce2177485e3be48d05bde7d45",
+    "node_modules/workerd/package.json": "5edae90469333c86e194a75358e80dbe5b1d3c259860794850e53ce8f240f762",
+    "node_modules/@neondatabase/serverless/package.json": "918affae421d21e41b19dcc0fa10fdfa5e5df196eb556265263926a8c2999e5a",
+    "node_modules/@neondatabase/serverless/index.mjs": "50f98b3540f02327ebe4d5423509fe15b820af87c512cee1b2b7322a8ef77699"
+  },
+  "actual_checks": {
+    "total": 88,
+    "passed": 53,
+    "failed": 35
+  },
+  "generic_controls": [
+    {
+      "name": "negative",
+      "failure": null,
+      "naturalPrematureUnfinishedResponseClose": true,
+      "gateReadMarker": false,
+      "runtimeDisposalAcknowledged": true,
+      "activeHandlesAfterCleanup": 0,
+      "activeListenersAfterCleanup": 0
+    },
+    {
+      "name": "positive",
+      "failure": null,
+      "naturalPrematureUnfinishedResponseClose": false,
+      "gateReadMarker": true,
+      "runtimeDisposalAcknowledged": true,
+      "activeHandlesAfterCleanup": 0,
+      "activeListenersAfterCleanup": 0
+    },
+    {
+      "name": "routed_negative",
+      "failure": null,
+      "naturalPrematureUnfinishedResponseClose": true,
+      "gateReadMarker": false,
+      "runtimeDisposalAcknowledged": true,
+      "activeHandlesAfterCleanup": 0,
+      "activeListenersAfterCleanup": 0
+    },
+    {
+      "name": "routed_positive",
+      "failure": null,
+      "naturalPrematureUnfinishedResponseClose": false,
+      "gateReadMarker": true,
+      "runtimeDisposalAcknowledged": true,
+      "activeHandlesAfterCleanup": 0,
+      "activeListenersAfterCleanup": 0
+    }
+  ],
+  "managed_holds": [
+    {
+      "name": "managed_pending_query_post_response_ack",
+      "responses": 1,
+      "statuses": [
+        400
+      ],
+      "cacheResolved": true,
+      "allPoolBrokerScopeCountersZero": true,
+      "nativeUpgrades": 0,
+      "credentialGateCallbacks": 0,
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_pending_query_rejected_ack",
+      "responses": 1,
+      "statuses": [
+        400
+      ],
+      "cacheResolved": true,
+      "allPoolBrokerScopeCountersZero": true,
+      "nativeUpgrades": 0,
+      "credentialGateCallbacks": 0,
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_pending_query_stalled_ack",
+      "responses": 1,
+      "statuses": [
+        400
+      ],
+      "cacheResolved": true,
+      "allPoolBrokerScopeCountersZero": true,
+      "nativeUpgrades": 0,
+      "credentialGateCallbacks": 0,
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_pending_query_after_C_open_outcome",
+      "responses": 1,
+      "statuses": [
+        400
+      ],
+      "cacheResolved": true,
+      "allPoolBrokerScopeCountersZero": true,
+      "nativeUpgrades": 0,
+      "credentialGateCallbacks": 0,
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_concurrent_scopes",
+      "responses": 2,
+      "statuses": [
+        400,
+        400
+      ],
+      "cacheResolved": true,
+      "allPoolBrokerScopeCountersZero": true,
+      "nativeUpgrades": 0,
+      "credentialGateCallbacks": 0,
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_non101_failed_connect",
+      "responses": 1,
+      "statuses": [
+        400
+      ],
+      "cacheResolved": true,
+      "allPoolBrokerScopeCountersZero": true,
+      "nativeUpgrades": 0,
+      "credentialGateCallbacks": 0,
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_wrong_password_failed_connect",
+      "responses": 1,
+      "statuses": [
+        400
+      ],
+      "cacheResolved": true,
+      "allPoolBrokerScopeCountersZero": true,
+      "nativeUpgrades": 0,
+      "credentialGateCallbacks": 0,
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_rejected_credential_disposal",
+      "responses": 1,
+      "statuses": [
+        400
+      ],
+      "cacheResolved": true,
+      "allPoolBrokerScopeCountersZero": true,
+      "nativeUpgrades": 0,
+      "credentialGateCallbacks": 0,
+      "runtimeDisposalAcknowledged": true
+    },
+    {
+      "name": "managed_late_101_handle",
+      "responses": 1,
+      "statuses": [
+        400
+      ],
+      "cacheResolved": true,
+      "allPoolBrokerScopeCountersZero": true,
+      "nativeUpgrades": 0,
+      "credentialGateCallbacks": 0,
+      "runtimeDisposalAcknowledged": true
+    }
+  ],
+  "actual_native_outbound_requests": 10,
+  "actual_Internet_requests": 0,
+  "actual_provider_requests": 0,
+  "pending_host_timers": 0,
+  "failure_classification": [
+    "All four actual generic direct/routed controls preserve negative natural unfinished response close versus positive post-response read marker; closed handles/listeners/runtime disposal independently observed.",
+    "All ten managed responses across nine cases are400 with no cookie after cache initialization, before any pool/broker/credential/native upgrade or release publication. The managed fault, credential cleanup, sourceP lifetime and late-handle scenarios were not exercised.",
+    "The original report does not expose request Host/URL mismatch subpredicates; no raw initial Host value or exact original failing envelope subpredicate is claimed.",
+    "A separate authorized two-runtime closed characterization invokes unchanged loginRequestEnvelope: worker-local upstream has matching URL origin/HTTPS but Host-matchfalse/parser400; shared top-level upstream has Host-matchtrue/parser accepted. Pinned primary types place upstream in shared options. This identifies the fixture option-placement mechanism without relaxing the production guard."
+  ],
+  "separate_characterization": {
+    "report_sha256": "9d201018fe9ea0b07ad0fe48feae3a07164a24bc3ee81cc49e652b1a0a202983",
+    "execution_receipt_sha256": "730fb02b797b86e7c773493cd2f2a081c08721a8d57d3e07026d72093996a84b",
+    "script_sha256": "789833a2cc12ae64eb9f596b14fccc7582eeacd1761a7782684cec3313ec1430",
+    "owning_exit_code": 0,
+    "source_mutations": 0,
+    "SQL_crypto_provider_outbound_actions": 0
+  },
+  "limits": [
+    "No overall nativeU/realSQL/fullCI/provider/merchant qualification follows from the first hold or generic controls.",
+    "First failed report/source/log/receipt remain unchanged. Subsequent fixture source changes must be separately reviewed and freshly measured.",
+    "Frozen1819 files independently verified; source after test is bound by actual root receipt. Current authoring was explicitly unfrozen for separate approved fixture changes; this review does not claim all current files still equal that frozen tree.",
+    "Reviewer authored scope/pool production code, excluded from independent production-source verdict; other-author native fixture/report and primitive request-envelope characterization reviewed here."
+  ],
+  "blocking_findings": [
+    {
+      "code": "MANAGED_NATIVE_STAGE_NOT_REACHED",
+      "detail": "First current native report is held; intended managed lifetime scenarios remain unqualified."
+    }
+  ]
+}

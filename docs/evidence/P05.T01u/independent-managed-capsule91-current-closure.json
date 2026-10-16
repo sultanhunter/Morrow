@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_core",
+  "source_review_clear": true,
+  "result": "clear_for_unchanged_private_capsule_source_and_prior_focused_CPU_evidence_review",
+  "blocking_findings": [],
+  "reviewed_source_digests": {
+    "packages/identity/src/managed-login-capsule.ts": "24d46628c8717fe3a936f94b12dcf56c6a559d6895bbc4a388a41e87912d3153",
+    "tests/managed-login-capsule.test.mjs": "7ac5c78bd213821431b72e33075dcc4c0f6ffe15c36fec21d7607a41cbc9c306"
+  },
+  "original_independent_review_sha256": "26c02de03d5f66374f1c9a906f11dd2cd9fa2cd0ada21d3853967405c6a3871b",
+  "original_review_path": "work/morrow-p01/independent-managed-capsule90-review.json",
+  "source_equivalence": "Both current capsule and focused unit bytes equal the independently reviewed final90 late-rejection-sink repair. No authority/peer source pins from the old record are reasserted current.",
+  "prior_actual_independent_execution": {
+    "tests": 46,
+    "pass": 46,
+    "fail": 0,
+    "completion_chunk": "e4e452",
+    "session": 2062,
+    "exit_code": 0,
+    "strict_types_completion_chunk": "e5ab86",
+    "strict_types_session": 2938,
+    "strict_types_exit_code": 0
+  },
+  "review_scope": [
+    "Strict duplicate-rejecting bounded JSON/UTF/canonical material/UUID/time/cutoffs, opaque handles, immutable captured version definitions, nonextractable realAES usage, temporal-neutral import with same original attempt pre/post checks, exact selected key/expiry and late-import rejection sink remain the same reviewed implementation.",
+    "No unnecessary rerun: unchanged source/test bytes retain prior independently executed46/46 real-native-crypto unit/type evidence, with original finding/negative proof preserved."
+  ],
+  "limits": [
+    "This narrow current91 receipt independently closes the two unchanged capsule paths only. Native request lifetime, shared common AAD/cache/delivery, actualSQL, CI/publication and production/merchant qualification remain separate.",
+    "Reviewer did not author these capsule files. No Source or old receipt edits, runtime, network, SQL, provider or account actions."
+  ],
+  "new_test_executions": 0,
+  "source_mutations": 0
+}

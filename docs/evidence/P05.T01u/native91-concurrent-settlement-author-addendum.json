@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 91,
+  "source_review_clear": true,
+  "purpose": "fixture-only exact expected-P settlement observation count repair",
+  "source_digests": {
+    "scripts/managed-login-lifetime-workers-lab.mjs": "f97b09356d6ee2a887d477cbb5f327ec5c8491fb8141467f2fd02c5d66552e10"
+  },
+  "previous_source_sha256": "bbe7bc6cf2e35a0a6247f87a77de9372796d9d404b79e07fdb44071e822f4d06",
+  "preserved_actual_cleanup_repair_report_sha256": "2e378293af90a00e1a527b2d049f5c2ecbf099023c2fd1370c8de0cc93b70670",
+  "actual_preserved_report_findings": {
+    "checks": 128,
+    "passed": 127,
+    "only_false_check": "managed_concurrent_scopes:exact_source_P_settled_once",
+    "first_scope_settlement_observed_at": 34341.726,
+    "second_broker_ack_observed_at": 34343.850166,
+    "forced_fixture_cleanup_at": 34344.042041,
+    "second_scope_settlement_observed_before_cleanup": false
+  },
+  "diagnosis": "signalSettlement flushed all waiting promises on the first event, although settled checks expected count only at registration. The exact original assertion correctly failed. The event wait must remain pending until expected count; no original check is removed or made weaker.",
+  "exact_delta": "one synchronous guard: if (settlement.length < expected) return;",
+  "whole_runner_bytes_after_reversing_exact_one_line_equal_previous": true,
+  "focused_checks": [
+    {
+      "name": "actual extracted waiter plus whole byte inverse",
+      "path": "work/test-u91-concurrent-settlement-waiter.mjs",
+      "sha256": "05e51ea5e3dfebf8dc27c7db3486e9c2dbe816d9168452c44022768e824fe64a",
+      "tests": 4,
+      "actual_exit_code": 0,
+      "completion_chunk": "17e6e6"
+    },
+    {
+      "name": "syntax",
+      "actual_exit_code": 0,
+      "completion_chunk": "1ee57d"
+    },
+    {
+      "name": "format",
+      "actual_exit_code": 0,
+      "completion_chunk": "fd5f96"
+    }
+  ],
+  "preserved": [
+    "all128 existing assertions",
+    "source P and publication semantics",
+    "generic cases",
+    "same original12s managed watchdog",
+    "all source D/C and authority boundaries",
+    "both already captured event rows in actual report",
+    "all three prior held native reports"
+  ],
+  "effects": {
+    "MF_runs": 0,
+    "SQL_runs": 0,
+    "production_changes": 0,
+    "other_Source_changes_by_author": 0
+  },
+  "status": "source_frozen_pending_independent_review_and_actual_native_run"
+}

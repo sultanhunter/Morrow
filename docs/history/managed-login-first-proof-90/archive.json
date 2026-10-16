@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "purpose": "Immutable first actual U01 generic lifetime proof sources; never an execution directory",
+  "canonical_sequence": 90,
+  "report_sha256": "c4aa23d39d4c5eddd2cc41cc7c939a548cb77e18d7751e8aec539311dcdc1f33",
+  "actual_native_exit_code": 0,
+  "native_completion_chunk": "f1636a",
+  "independent_review_sha256": "14b2512af9b904a2fd9e4212c5b78380993b4b52e2cf312c31466d72ddcc3d63",
+  "source_map_root": ".",
+  "files": [
+    {
+      "path": "docs/packets/P05.T01u.md",
+      "sha256": "93d73810fa416bbbf65f2bba245dd503d1eaab3ca3caa2e894397ae37c2a4835",
+      "mode": "100644"
+    },
+    {
+      "path": "docs/plan/build-plan.md",
+      "sha256": "20b94255f4d1b0a1335a26e3e979bdd02e3e00ea6bedb393b94c6852ecb75766",
+      "mode": "100644"
+    },
+    {
+      "path": "docs/plan/source.json",
+      "sha256": "fd03f2f9a6b20252935ce24002806be7cb3ba6b89506ecdd0525d6980132bb90",
+      "mode": "100644"
+    },
+    {
+      "path": "first-execution-receipt.json",
+      "sha256": "9cddbe15d9bdf5878d866607130675d7dbb036afdcfcdba6aa898160a916f839",
+      "mode": "100644"
+    },
+    {
+      "path": "first-execution.log",
+      "sha256": "5cdfa8e00c03398b7e44abf98359a79ba6e67cfa6714996c2ab41bef81e41d43",
+      "mode": "100644"
+    },
+    {
+      "path": "independent-review.json",
+      "sha256": "14b2512af9b904a2fd9e4212c5b78380993b4b52e2cf312c31466d72ddcc3d63",
+      "mode": "100644"
+    },
+    {
+      "path": "native-first-proof.json",
+      "sha256": "c4aa23d39d4c5eddd2cc41cc7c939a548cb77e18d7751e8aec539311dcdc1f33",
+      "mode": "100644"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/fixtures/managed-login-cleanup-gate.mjs",
+      "sha256": "001a099033ee75aad6d446f9914eed98e359f04ad5aa95b11a1bee83fb907566",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/fixtures/managed-login-lifetime-worker.ts",
+      "sha256": "a9c1802628442f27c7774b1cda75abd85c10ed43d1554f818aa9beaad2e5e557",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/managed-login-lifetime-workers-lab.mjs",
+      "sha256": "40acf87f1721ecd96ab3c014c83374762d6bb966506b2e995bf8d5e24b4acb3b",
+      "mode": "100644"
+    },
+    {
+      "path": "tests/managed-login-cleanup-gate.test.mjs",
+      "sha256": "faeb5d82e0f1c9381f16b52a20e3cd0384b58d4eaa1663a2d93f1534f712e916",
+      "mode": "100644"
+    }
+  ]
+}

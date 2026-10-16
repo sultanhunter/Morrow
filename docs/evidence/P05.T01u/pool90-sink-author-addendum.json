@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 90,
+  "author": "fixed_provider_core",
+  "kind": "narrow_independent_pool_pre_wait_sink_finding_repair",
+  "source_digests": {
+    "packages/identity/src/managed-login-request-scope.ts": "a4699a12cfd8cc895b0369ffeaf54ede92a5584783c70c7dbf2d33aa74a690f3",
+    "packages/identity/src/controlled-neon-login-pool.ts": "2319f3cb1abbb294bb77cd4806626302eadddfa87b0414b5aba4a4a4e25ea028",
+    "tests/controlled-neon-login-pool.test.mjs": "3b5d840304c10378a2936e9378ae60f16a9cc7e3ea94074022cbbf042b96fde6"
+  },
+  "previous_author_receipt_sha256": "04eacb04ad65ab07e7e679afc55487c45b6c91045931291b618cf63984d9fe7e",
+  "previous_telemetry_addendum_sha256": "0176ec9c03614dd4ab88c57bb4e209f81b398a7bac592188c6dafa484ce80d13",
+  "independent_reproduction_receipt_sha256": "08e94ba8095c45cf9dc5837399399aaf41f93ede07b6bdedfd3fb2ed37ec7f58",
+  "preserved_previous_freeze": "work/morrow-p01/u-pool-before-prewait-sink-repair",
+  "scope_source_unchanged": true,
+  "previous67_test_bytes_exact_prefix": true,
+  "exact_pool_reversal_matches_previous_source": true,
+  "delta": "Move the existing pending.catch rejection sink to private wait entry before its first parent/control check and stopped setup. No policy/deadline/cleanup/driver/SQL/profile/API or output change.",
+  "actual_results": {
+    "negative_regression_original98a40": {
+      "tool_chunk": "76b75a",
+      "actual_exit_code": 1,
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "failure": "unhandled MANAGED_LOGIN_REQUEST_SCOPE_HELD queued rejection",
+      "log_sha256": "a90edf9e7182f8455760042ea10196e044e4c6190a6edeb139e2f528ca4e719b"
+    },
+    "fixed_focused_suite": {
+      "launch_chunk": "3120ae",
+      "session_id": 58867,
+      "completion_chunk": "d2fe8a",
+      "actual_exit_code": 0,
+      "tests": 68,
+      "pass": 68,
+      "fail": 0,
+      "log_sha256": "835b13edeb116b998e1460bfb9c6490f474b02a414aa093af84a99ec296ccaa0"
+    },
+    "identity_typecheck": {
+      "launch_chunk": "b83628",
+      "session_id": 45916,
+      "completion_chunk": "000aa5",
+      "actual_exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "format": {
+      "tool_chunk": "0f00b8",
+      "actual_exit_code": 0,
+      "log_sha256": "5e6adae514ac05df904d903f033e9af811d5c1d6ed2c1b98d7ba73f8b3d7c0a2"
+    }
+  },
+  "proof_limits": [
+    "Regression uses actual bound scope/attempt/pool and a valid trusted clock that aborts parent at first queued borrow wait; no fake driver/global WebSocket/network/native or SQL execution.",
+    "Outer connect remains held, original release publishes once, broker/socket/observer stay0, timers/listeners end0. The source, not a test unhandledRejection listener, owns the queued Promise sink.",
+    "Self-authored repair requires independent reviewer closure; native SDK/post-response/realSQL still separate."
+  ],
+  "blocking_findings": []
+}

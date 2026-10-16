@@ -1,3 +1,23 @@
+import {
+  assertManagedLoginSealEligibility,
+  importManagedLoginKeyring,
+  parseManagedLoginKeyring,
+  selectManagedLoginOpenKey,
+  selectManagedLoginSealKey,
+  type ResolvedManagedLoginKeyring,
+} from "./managed-login-capsule.js";
+import {
+  bindManagedLoginRequestNamespace,
+  snapshotManagedLoginRequestMetrics,
+  type ManagedLoginRequestScope,
+  type ManagedLoginRequestOwnerToken,
+} from "./managed-login-request-scope.js";
+import {
+  createWorkersRequestBoundNeonLoginPools,
+  snapshotControlledNeonLoginPoolMetrics,
+  type ControlledNeonLoginPools,
+} from "./controlled-neon-login-pool.js";
+import { ownRecord, wellFormed } from "./controlled-neon-login-profiles.js";
 import { createLoginFlowCustody } from "./login-flow-custody.js";
 import { createWorkosAuthenticationEvidence } from "./workos-authentication-evidence.js";
 import { createWorkosWorkspaceSelection } from "./workos-workspace-selection.js";
@@ -19,6 +39,7 @@ import {
   loginTime,
   loginUuid,
   parseLoginConfiguration,
+  parseLoginConfigurationWithAttempt,
   type LoginAttempt,
   type LoginControl,
 } from "./standalone-login-protocol.js";
@@ -86,6 +107,216 @@ const decimal = (value: unknown): number => {
 };
 // Trusted source composition. No native provider adapter or normal application
 // entrypoint is enabled by constructing this factory.
+
+type Configuration = Awaited<ReturnType<typeof parseLoginConfiguration>>;
+type Capsule =
+  | Readonly<{ kind: "ephemeral"; key: CryptoKey; keyId: string }>
+  | Readonly<{ kind: "managed"; keyring: ResolvedManagedLoginKeyring }>;
+type CoreContext = Readonly<
+  Omit<StandaloneLoginDependencies, "configurationJson"> & {
+    config: Configuration;
+    capsule: Capsule;
+  }
+>;
+type LoginCore = ReturnType<typeof createLoginCore>;
+declare const constructionBrand: unique symbol;
+declare const setupBrand: unique symbol;
+export type ManagedLoginConstruction = Readonly<{ [constructionBrand]: true }>;
+export type StandaloneLoginSetup = Readonly<{ [setupBrand]: true }>;
+export interface ManagedLoginDependencies {
+  readonly configurationJson: string;
+  readonly capsuleKeyringJson: string;
+  readonly bindingJson: string;
+  readonly credentialBroker: unknown;
+  readonly providerPort: Readonly<FixedWorkosLoginPort>;
+  readonly now: () => number;
+}
+type Construction = {
+  configurationJson: string;
+  capsuleKeyringJson: string;
+  bindingJson: string;
+  credentialBroker: unknown;
+  provider: Readonly<FixedWorkosLoginPort>;
+  now: () => number;
+  cache?: Readonly<{ config: Configuration; keyring: ResolvedManagedLoginKeyring }>;
+};
+type Setup = {
+  kind: "ephemeral" | "managed";
+  enteredAt: number;
+  entryError?: unknown;
+  core?: LoginCore;
+  config?: Configuration;
+  construction?: Construction;
+  scope?: ManagedLoginRequestScope | undefined;
+  ownerToken?: ManagedLoginRequestOwnerToken | undefined;
+  pools?: ControlledNeonLoginPools;
+  cacheHit?: boolean;
+};
+const constructions = new WeakMap<object, Construction>();
+const setups = new WeakMap<object, Setup>();
+function issueSetup(value: Setup): StandaloneLoginSetup {
+  const handle = Object.freeze(Object.create(null)) as StandaloneLoginSetup;
+  setups.set(handle, value);
+  return handle;
+}
+// A constructor owns a complete captured definition and only resolved cache
+// entries. No request context/control/scope/client or pending IO is cached here.
+export function captureManagedLoginConstruction(
+  dependencies: ManagedLoginDependencies,
+): Readonly<{ construction: ManagedLoginConstruction; now: () => number }> {
+  try {
+    const d = ownRecord(dependencies, [
+      "configurationJson",
+      "capsuleKeyringJson",
+      "bindingJson",
+      "credentialBroker",
+      "providerPort",
+      "now",
+    ]);
+    for (const [name, limit] of [
+      ["configurationJson", 32768],
+      ["capsuleKeyringJson", 4096],
+      ["bindingJson", 8192],
+    ] as const) {
+      const text = d[name];
+      if (typeof text !== "string" || !wellFormed(text) || encoder.encode(text).length > limit)
+        throw loginFailure();
+    }
+    const broker = ownRecord(d.credentialBroker, ["borrow"]);
+    const port = ownRecord(d.providerPort, ["exchange", "readPublicKeyset", "readSessionPage"]);
+    if (
+      typeof d.now !== "function" ||
+      typeof broker.borrow !== "function" ||
+      Object.values(port).some((method) => typeof method !== "function")
+    )
+      throw loginFailure();
+    const trustedNow = d.now as () => number;
+    let last = -1,
+      bad = false;
+    const now = () => {
+      try {
+        const at = trustedNow();
+        if (bad || !loginTime(at) || at < last) throw loginFailure();
+        last = at;
+        return at;
+      } catch {
+        bad = true;
+        throw loginFailure();
+      }
+    };
+    const provider = Object.freeze({
+      exchange: (port.exchange as FixedWorkosLoginPort["exchange"]).bind(d.providerPort),
+      readPublicKeyset: (port.readPublicKeyset as FixedWorkosLoginPort["readPublicKeyset"]).bind(
+        d.providerPort,
+      ),
+      readSessionPage: (port.readSessionPage as FixedWorkosLoginPort["readSessionPage"]).bind(
+        d.providerPort,
+      ),
+    }) as Readonly<FixedWorkosLoginPort>;
+    const record: Construction = {
+      configurationJson: d.configurationJson as string,
+      capsuleKeyringJson: d.capsuleKeyringJson as string,
+      bindingJson: d.bindingJson as string,
+      credentialBroker: Object.freeze({ borrow: broker.borrow.bind(d.credentialBroker) }),
+      provider,
+      now,
+    };
+    const construction = Object.freeze(Object.create(null)) as ManagedLoginConstruction;
+    constructions.set(construction, record);
+    return Object.freeze({ construction, now });
+  } catch {
+    throw Error("STANDALONE_LOGIN_CONFIGURATION_INVALID");
+  }
+}
+export function createManagedStandaloneLoginSetup(
+  construction: ManagedLoginConstruction,
+  enteredAt: number,
+  scope?: ManagedLoginRequestScope,
+  ownerToken?: ManagedLoginRequestOwnerToken,
+  entryError?: unknown,
+): StandaloneLoginSetup {
+  const record = constructions.get(construction);
+  if (!record) throw loginFailure();
+  return issueSetup({
+    kind: "managed",
+    construction: record,
+    enteredAt,
+    scope,
+    ownerToken,
+    entryError,
+  });
+}
+async function managedCore(setup: Setup, attempt: LoginAttempt, seal: boolean): Promise<LoginCore> {
+  const d = setup.construction;
+  if (!d || !setup.scope || !setup.ownerToken) throw loginFailure();
+  attempt.check();
+  let resolved = d.cache;
+  setup.cacheHit = resolved !== undefined;
+  if (!resolved) {
+    const config = await parseLoginConfigurationWithAttempt(d.configurationJson, attempt);
+    attempt.check();
+    const definition = parseManagedLoginKeyring(d.capsuleKeyringJson, config.configurationDigest);
+    if (seal) assertManagedLoginSealEligibility(definition, attempt);
+    attempt.check();
+    const pending = importManagedLoginKeyring(definition, attempt);
+    void pending.catch(() => {});
+    const keyring = await attempt.wait(pending);
+    if (seal) assertManagedLoginSealEligibility(keyring, attempt);
+    attempt.check();
+    resolved = Object.freeze({ config, keyring });
+  } else if (seal) assertManagedLoginSealEligibility(resolved.keyring, attempt);
+  attempt.check();
+  bindManagedLoginRequestNamespace(
+    setup.scope,
+    setup.ownerToken,
+    resolved.config.configurationDigest,
+  );
+  attempt.check();
+  const pendingPools = createWorkersRequestBoundNeonLoginPools(
+    {
+      bindingJson: d.bindingJson,
+      credentialBroker: d.credentialBroker,
+      now: d.now,
+    },
+    setup.scope,
+    setup.ownerToken,
+    resolved.config.configurationDigest,
+  );
+  void pendingPools.catch(() => {});
+  const pools = await attempt.wait(pendingPools);
+  attempt.check();
+  if (seal) assertManagedLoginSealEligibility(resolved.keyring, attempt);
+  // All cached values are resolved and immutable, tied to this entire captured
+  // construction. A different handler/ring has a different private cache.
+  d.cache = resolved;
+  setup.pools = pools;
+  setup.config = resolved.config;
+  return createLoginCore({
+    ...pools,
+    providerPort: d.provider,
+    now: d.now,
+    config: resolved.config,
+    capsule: Object.freeze({ kind: "managed", keyring: resolved.keyring }),
+  });
+}
+export function snapshotManagedStandaloneLoginSetup(handle: StandaloneLoginSetup) {
+  const s = setups.get(handle);
+  if (!s || s.kind !== "managed") throw loginFailure();
+  return Object.freeze({
+    cacheHit: s.cacheHit === true,
+    cacheResolved: s.construction?.cache !== undefined,
+    scope:
+      s.scope && s.ownerToken ? snapshotManagedLoginRequestMetrics(s.scope, s.ownerToken) : null,
+    pools: s.pools ? snapshotControlledNeonLoginPoolMetrics(s.pools) : null,
+  });
+}
+export function standaloneLoginResponseFromPlan(output: Readonly<AuthDeliveryPlan>): Response {
+  const headers = new Headers(
+    output.headers.map(([name, value]) => [name, value] as [string, string]),
+  );
+  for (const value of output.cookies) headers.append("Set-Cookie", value);
+  return new Response(output.bodyText, { status: output.status, headers });
+}
 export async function createStandaloneLoginBridge(dependencies: StandaloneLoginDependencies) {
   let config: Awaited<ReturnType<typeof parseLoginConfiguration>>;
   let loginPool: LoginControlledSqlPool,
@@ -117,6 +348,78 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
     "decrypt",
   ]);
   const keyId = crypto.randomUUID();
+  const core = createLoginCore({
+    config,
+    loginPool,
+    preauthPool,
+    selectionPool,
+    sessionPool,
+    providerPort: provider,
+    now,
+    capsule: Object.freeze({ kind: "ephemeral", key, keyId }),
+  });
+  const dispatch = async (request: Request, sink: AuthDeliverySink): Promise<void> => {
+    let attempt: LoginAttempt | undefined, entryError: unknown;
+    try {
+      if (typeof sink === "function" && request instanceof Request)
+        attempt = createLoginAttempt(now, request.signal, 25000);
+    } catch (error) {
+      entryError = error;
+    }
+    const setup = issueSetup({
+      kind: "ephemeral",
+      core,
+      config,
+      enteredAt: attempt ? attempt.control().deadlineMs - 25000 : 0,
+      entryError,
+    });
+    try {
+      await dispatchStandaloneLoginWithAttempt(request, sink, attempt, setup);
+    } finally {
+      attempt?.end();
+    }
+  };
+  const fetch = async (request: Request): Promise<Response> => {
+    let response: Response | undefined;
+    await dispatch(request, (output) => {
+      response = standaloneLoginResponseFromPlan(output);
+    });
+    if (!response) throw loginFailure();
+    return response;
+  };
+  return Object.freeze({ fetch, dispatch });
+}
+function createLoginCore(context: CoreContext) {
+  const {
+    config,
+    loginPool,
+    preauthPool,
+    selectionPool,
+    sessionPool,
+    now,
+    providerPort: provider,
+    capsule,
+  } = context;
+  const managed = capsule.kind === "managed";
+  const hashFor = (text: string, attempt: LoginAttempt) => {
+    if (managed) attempt.check();
+    const pending = loginHash(text);
+    if (managed) void pending.catch(() => {});
+    return pending;
+  };
+  const retainLateBufferSink = (pending: Promise<ArrayBuffer>, attempt: LoginAttempt) => {
+    if (managed)
+      void pending.then(
+        (buffer) => {
+          try {
+            attempt.check();
+          } catch {
+            new Uint8Array(buffer).fill(0);
+          }
+        },
+        () => {},
+      );
+  };
   const custody = createLoginFlowCustody({ pool: loginPool, now });
   const aad = (fields: readonly string[]) =>
     encoder.encode(
@@ -124,13 +427,15 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
     );
   type Finalize = () => Readonly<AuthDeliveryPlan>;
   const start = async (request: Request, attempt: LoginAttempt): Promise<Finalize> => {
+    if (capsule.kind === "managed") assertManagedLoginSealEligibility(capsule.keyring, attempt);
     const workspaceId = await loginStartInput(request, attempt);
-    const ids = [
-      crypto.randomUUID(),
-      crypto.randomUUID(),
-      crypto.randomUUID(),
-      crypto.randomUUID(),
-    ];
+    const freshId = () => {
+      if (managed) attempt.check();
+      const id = crypto.randomUUID();
+      if (managed) attempt.check();
+      return id;
+    };
+    const ids = [freshId(), freshId(), freshId(), freshId()];
     if (new Set(ids).size !== 4) throw loginFailure();
     const [flowId, beginCommandId, admissionCommandId, issuerCommandId] = ids as [
       string,
@@ -138,6 +443,7 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
       string,
       string,
     ];
+    if (capsule.kind === "managed") assertManagedLoginSealEligibility(capsule.keyring, attempt);
     const intent = await attempt.wait(
       custody.createIntent(
         JSON.stringify({
@@ -161,6 +467,17 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
       throw loginFailure();
     const expiresAt = decimal(intent.expires_at_ms);
     attempt.cap(expiresAt);
+    const selectedKey =
+      capsule.kind === "managed"
+        ? selectManagedLoginSealKey(capsule.keyring, attempt, expiresAt)
+        : capsule;
+    const { key, keyId } = selectedKey;
+    const checkSeal = () => {
+      if (capsule.kind === "managed") {
+        const current = selectManagedLoginSealKey(capsule.keyring, attempt, expiresAt);
+        if (current.keyId !== keyId || current.key !== key) throw loginFailure();
+      }
+    };
     const material = await runControlledPreauth(
       preauthPool,
       config.authenticationBindingJson,
@@ -176,15 +493,21 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
       material.codeChallengeMethod !== "S256"
     )
       throw loginFailure();
+    if (managed) attempt.check();
     const opaqueBytes = crypto.getRandomValues(new Uint8Array(32));
-    const opaque = loginBase64(opaqueBytes);
-    opaqueBytes.fill(0);
+    let opaque: string;
+    try {
+      if (managed) attempt.check();
+      opaque = loginBase64(opaqueBytes);
+    } finally {
+      opaqueBytes.fill(0);
+    }
     const [stateDigest, cookieDigest, browserProofDigest, verifierDigest] = await attempt.wait(
       Promise.all([
-        loginHash(material.state),
-        loginHash(opaque),
-        loginHash(material.browserProof),
-        loginHash(material.verifier),
+        hashFor(material.state, attempt),
+        hashFor(opaque, attempt),
+        hashFor(material.browserProof, attempt),
+        hashFor(material.verifier, attempt),
       ]),
     );
     const aadBytes = aad([
@@ -201,52 +524,79 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
       verifierDigest,
       keyId,
     ]);
-    const aadDigest = await attempt.wait(loginHash(new TextDecoder().decode(aadBytes)));
+    const aadDigest = await attempt.wait(hashFor(new TextDecoder().decode(aadBytes), attempt));
+    if (managed) attempt.check();
     const nonce = crypto.getRandomValues(new Uint8Array(12));
-    const plaintext = encoder.encode(
-      JSON.stringify({
-        schemaVersion: 1,
-        browserProof: material.browserProof,
-        verifier: material.verifier,
-      }),
-    );
+    let plaintext: Uint8Array<ArrayBuffer> | undefined;
     let ciphertext: string;
+    let sealed = false;
     try {
-      ciphertext = loginBase64(
-        new Uint8Array(
-          await attempt.wait(
-            crypto.subtle.encrypt(
-              { name: "AES-GCM", iv: nonce, additionalData: aadBytes, tagLength: 128 },
-              key,
-              plaintext,
-            ),
-          ),
+      if (managed) attempt.check();
+      plaintext = encoder.encode(
+        JSON.stringify({
+          schemaVersion: 1,
+          browserProof: material.browserProof,
+          verifier: material.verifier,
+        }),
+      );
+      checkSeal();
+      if (managed) attempt.check();
+      const pending = crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: nonce, additionalData: aadBytes, tagLength: 128 },
+        key,
+        plaintext,
+      );
+      retainLateBufferSink(pending, attempt);
+      let result: ArrayBuffer;
+      try {
+        result = await attempt.wait(pending);
+      } catch (error) {
+        if (managed)
+          void pending.then(
+            (buffer) => new Uint8Array(buffer).fill(0),
+            () => {},
+          );
+        throw error;
+      }
+      const encrypted = new Uint8Array(result);
+      try {
+        checkSeal();
+        ciphertext = loginBase64(encrypted);
+        sealed = true;
+      } finally {
+        if (managed) encrypted.fill(0);
+      }
+    } finally {
+      plaintext?.fill(0);
+      if (!sealed) nonce.fill(0);
+    }
+    let ready: Awaited<ReturnType<typeof custody.bindBegin>>;
+    try {
+      checkSeal();
+      ready = await attempt.wait(
+        custody.bindBegin(
+          JSON.stringify({
+            schemaVersion: 1,
+            configurationDigest: config.configurationDigest,
+            flowId,
+            expectedRevision: intent.flow_revision,
+            challengeId: material.challengeId,
+            stateDigest,
+            cookieDigest,
+            browserProofDigest,
+            verifierDigest,
+            ciphertext,
+            encryptionNonce: loginBase64(nonce),
+            keyId,
+            aadDigest,
+          }),
+          attempt.control(),
         ),
       );
     } finally {
-      plaintext.fill(0);
+      nonce.fill(0);
     }
-    const ready = await attempt.wait(
-      custody.bindBegin(
-        JSON.stringify({
-          schemaVersion: 1,
-          configurationDigest: config.configurationDigest,
-          flowId,
-          expectedRevision: intent.flow_revision,
-          challengeId: material.challengeId,
-          stateDigest,
-          cookieDigest,
-          browserProofDigest,
-          verifierDigest,
-          ciphertext,
-          encryptionNonce: loginBase64(nonce),
-          keyId,
-          aadDigest,
-        }),
-        attempt.control(),
-      ),
-    );
-    nonce.fill(0);
+    checkSeal();
     if (
       ready.outcome !== "newly_ready" ||
       ready.flow_id !== flowId ||
@@ -266,6 +616,7 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
       authorization.searchParams.set(name, value);
     const body = JSON.stringify({ schemaVersion: 1, authorizationUrl: authorization.href });
     return () => {
+      checkSeal();
       const at = attempt.check(),
         age = Math.min(300, Math.floor((expiresAt - at) / 1000));
       if (age <= 0) throw loginFailure();
@@ -280,7 +631,11 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
   const callback = async (request: Request, url: URL, attempt: LoginAttempt): Promise<Finalize> => {
     const input = loginCallbackInput(request, url);
     const [cookieDigest, stateDigest, codeDigest] = await attempt.wait(
-      Promise.all([loginHash(input.cookie), loginHash(input.state), loginHash(input.code)]),
+      Promise.all([
+        hashFor(input.cookie, attempt),
+        hashFor(input.state, attempt),
+        hashFor(input.code, attempt),
+      ]),
     );
     const claimed = await attempt.wait(
       custody.claimCallback(
@@ -308,13 +663,32 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
       !claimed.aad_digest ||
       !claimed.browser_proof_digest ||
       !claimed.verifier_digest ||
-      claimed.key_id !== keyId ||
+      (capsule.kind === "ephemeral"
+        ? claimed.key_id !== capsule.keyId
+        : !loginUuid(claimed.key_id)) ||
       claimed.cookie_digest !== cookieDigest ||
       claimed.state_digest !== stateDigest ||
       claimed.code_digest !== codeDigest
     )
       throw loginFailure();
-    attempt.cap(decimal(claimed.expires_at_ms));
+    const expiresAt = decimal(claimed.expires_at_ms);
+    attempt.cap(expiresAt);
+    const selectedKey =
+      capsule.kind === "managed"
+        ? selectManagedLoginOpenKey(capsule.keyring, claimed.key_id!, attempt, expiresAt)
+        : capsule;
+    const { key, keyId } = selectedKey;
+    const checkOpen = () => {
+      if (capsule.kind === "managed") {
+        const current = selectManagedLoginOpenKey(
+          capsule.keyring,
+          claimed.key_id!,
+          attempt,
+          expiresAt,
+        );
+        if (current.keyId !== keyId || current.key !== key) throw loginFailure();
+      }
+    };
     const aadBytes = aad([
       claimed.flow_id,
       claimed.challenge_id,
@@ -329,29 +703,43 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
       claimed.verifier_digest,
       keyId,
     ]);
-    if ((await attempt.wait(loginHash(new TextDecoder().decode(aadBytes)))) !== claimed.aad_digest)
+    if (
+      (await attempt.wait(hashFor(new TextDecoder().decode(aadBytes), attempt))) !==
+      claimed.aad_digest
+    )
       throw loginFailure();
     const nonce = loginBytes(claimed.encryption_nonce, 12),
       ciphertext = loginBytes(claimed.ciphertext, 512);
     if (nonce.length !== 12 || ciphertext.length < 16) throw loginFailure();
-    const plaintext = new Uint8Array(
-      await attempt.wait(
-        crypto.subtle.decrypt(
-          { name: "AES-GCM", iv: nonce, additionalData: aadBytes, tagLength: 128 },
-          key,
-          ciphertext,
-        ),
-      ),
-    );
+    let plaintext: Uint8Array | undefined;
     let proof: Readonly<Record<string, unknown>>;
     try {
+      checkOpen();
+      if (managed) attempt.check();
+      const pending = crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: nonce, additionalData: aadBytes, tagLength: 128 },
+        key,
+        ciphertext,
+      );
+      retainLateBufferSink(pending, attempt);
+      try {
+        plaintext = new Uint8Array(await attempt.wait(pending));
+      } catch (error) {
+        if (managed)
+          void pending.then(
+            (buffer) => new Uint8Array(buffer).fill(0),
+            () => {},
+          );
+        throw error;
+      }
+      checkOpen();
       proof = loginJson(new TextDecoder("utf-8", { fatal: true }).decode(plaintext), 512, [
         "schemaVersion",
         "browserProof",
         "verifier",
       ]);
     } finally {
-      plaintext.fill(0);
+      plaintext?.fill(0);
       nonce.fill(0);
       ciphertext.fill(0);
     }
@@ -359,8 +747,8 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
       proof.schemaVersion !== 1 ||
       !loginSecret(proof.browserProof) ||
       !loginSecret(proof.verifier) ||
-      (await attempt.wait(loginHash(proof.browserProof))) !== claimed.browser_proof_digest ||
-      (await attempt.wait(loginHash(proof.verifier))) !== claimed.verifier_digest
+      (await attempt.wait(hashFor(proof.browserProof, attempt))) !== claimed.browser_proof_digest ||
+      (await attempt.wait(hashFor(proof.verifier, attempt))) !== claimed.verifier_digest
     )
       throw loginFailure();
     const reserved = await runControlledPreauth(
@@ -430,6 +818,7 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
     const stopped = new Promise<never>((_, reject) =>
       exchangeAbort.signal.addEventListener("abort", () => reject(loginFailure()), { once: true }),
     );
+    if (managed) void stopped.catch(() => {});
     try {
       attempt.check();
       if (parentSignal.aborted) throw loginFailure();
@@ -564,6 +953,7 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
       throw loginFailure();
     const credential = admitted.credential;
     return () => {
+      checkOpen();
       if (!readEvidence(verified.handle)) throw loginFailure();
       const at = attempt.check(),
         age = Math.min(900, Math.floor((credential.expiresAtMs - at) / 1000));
@@ -576,91 +966,89 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
       );
     };
   };
-  const dispatch = async (request: Request, sink: AuthDeliverySink): Promise<void> => {
-    let attempt: LoginAttempt | undefined,
-      delivered = false,
-      isCallback = false,
-      externalSignal: AbortSignal | undefined;
-    const deliver = (output: Readonly<AuthDeliveryPlan>) => {
-      if (delivered || externalSignal?.aborted) throw loginFailure();
-      delivered = true;
-      const result: unknown = sink(output);
-      if (result !== undefined) {
-        // Do not await an unsupported async sink or invoke it again. Suppress
-        // rejection only for a genuine native Promise without inspecting an
-        // arbitrary thenable's getters or granting it any protocol authority.
-        if (result instanceof Promise)
-          void Promise.prototype.then.call(
-            result,
-            () => undefined,
-            () => undefined,
-          );
-        throw Error("STANDALONE_LOGIN_TRANSPORT_UNKNOWN");
-      }
-    };
-    try {
-      if (typeof sink !== "function" || !(request instanceof Request)) throw loginFailure();
-      externalSignal = request.signal;
-      // Start the ceiling before even classifying/parsing the callback URL.
-      attempt = createLoginAttempt(now, externalSignal, 25000);
-      const enteredAt = attempt.control().deadlineMs - 25000;
-      isCallback = new URL(request.url).pathname === "/auth/workos/callback";
-      if (!isCallback) attempt.cap(enteredAt + 5000);
-      const url = loginRequestEnvelope(request, config.origin);
-      if (url.pathname === "/auth/result" && !url.search && request.method === "GET") {
-        deliver(resultPage());
-        return;
-      }
-      if (url.pathname !== "/auth/login" && !isCallback) {
-        deliver(unavailable(404));
-        return;
-      }
-      if ((isCallback && request.method !== "GET") || (!isCallback && request.method !== "POST")) {
-        deliver(unavailable(405));
-        return;
-      }
-      if (!isCallback && url.search) {
-        deliver(unavailable(400));
-        return;
-      }
-      if (
-        !isCallback &&
-        (request.headers.get("origin") !== config.origin ||
-          request.headers.get("content-type") !== "application/json" ||
-          request.headers.get("x-morrow-request") !== "1")
-      ) {
-        deliver(unavailable(403));
-        return;
-      }
-      const finalize = await (isCallback
-        ? callback(request, url, attempt)
-        : start(request, attempt));
-      // Freshness and cookie construction remain in this same stack as sink.
-      const output = finalize();
-      deliver(output);
-    } catch (error) {
-      if (delivered) throw Error("STANDALONE_LOGIN_TRANSPORT_UNKNOWN");
-      if (!externalSignal?.aborted)
-        deliver(
-          isCallback
-            ? failedCallback()
-            : unavailable(error instanceof LoginInputError ? error.status : 503),
+  return Object.freeze({ start, callback });
+}
+export async function dispatchStandaloneLoginWithAttempt(
+  request: Request,
+  sink: AuthDeliverySink,
+  attempt: LoginAttempt | undefined,
+  closedSetup: StandaloneLoginSetup,
+): Promise<void> {
+  let delivered = false,
+    isCallback = false,
+    externalSignal: AbortSignal | undefined;
+  const deliver = (output: Readonly<AuthDeliveryPlan>) => {
+    if (delivered || externalSignal?.aborted) throw loginFailure();
+    delivered = true;
+    const result: unknown = sink(output);
+    if (result !== undefined) {
+      // Do not await an unsupported async sink or invoke it again. Suppress
+      // rejection only for a genuine native Promise without inspecting an
+      // arbitrary thenable's getters or granting it any protocol authority.
+      if (result instanceof Promise)
+        void Promise.prototype.then.call(
+          result,
+          () => undefined,
+          () => undefined,
         );
-    } finally {
-      attempt?.end();
+      throw Error("STANDALONE_LOGIN_TRANSPORT_UNKNOWN");
     }
   };
-  const fetch = async (request: Request): Promise<Response> => {
-    let response: Response | undefined;
-    await dispatch(request, (output) => {
-      const headers = new Headers(
-        output.headers.map(([name, value]) => [name, value] as [string, string]),
+  try {
+    if (typeof sink !== "function" || !(request instanceof Request)) throw loginFailure();
+    externalSignal = request.signal;
+    const setup = setups.get(closedSetup);
+    if (!setup) throw loginFailure();
+    if (!attempt || setup.entryError !== undefined) throw setup.entryError ?? loginFailure();
+    // The wrapper supplied the one entry-owned attempt. Classification and
+    // managed initialization share this original ceiling and delivery frame.
+    const pathname = new URL(request.url).pathname;
+    isCallback = pathname === "/auth/workos/callback";
+    if (!isCallback) attempt.cap(setup.enteredAt + 5000);
+    const core =
+      setup.kind === "managed"
+        ? await managedCore(setup, attempt, pathname === "/auth/login" && request.method === "POST")
+        : setup.core;
+    const config = setup.config;
+    if (!core || !config) throw loginFailure();
+    const { start, callback } = core;
+    const url = loginRequestEnvelope(request, config.origin);
+    if (url.pathname === "/auth/result" && !url.search && request.method === "GET") {
+      deliver(resultPage());
+      return;
+    }
+    if (url.pathname !== "/auth/login" && !isCallback) {
+      deliver(unavailable(404));
+      return;
+    }
+    if ((isCallback && request.method !== "GET") || (!isCallback && request.method !== "POST")) {
+      deliver(unavailable(405));
+      return;
+    }
+    if (!isCallback && url.search) {
+      deliver(unavailable(400));
+      return;
+    }
+    if (
+      !isCallback &&
+      (request.headers.get("origin") !== config.origin ||
+        request.headers.get("content-type") !== "application/json" ||
+        request.headers.get("x-morrow-request") !== "1")
+    ) {
+      deliver(unavailable(403));
+      return;
+    }
+    const finalize = await (isCallback ? callback(request, url, attempt) : start(request, attempt));
+    // Freshness and cookie construction remain in this same stack as sink.
+    const output = finalize();
+    deliver(output);
+  } catch (error) {
+    if (delivered) throw Error("STANDALONE_LOGIN_TRANSPORT_UNKNOWN");
+    if (!externalSignal?.aborted)
+      deliver(
+        isCallback
+          ? failedCallback()
+          : unavailable(error instanceof LoginInputError ? error.status : 503),
       );
-      for (const value of output.cookies) headers.append("Set-Cookie", value);
-      response = new Response(output.bodyText, { status: output.status, headers });
-    });
-    if (!response) throw loginFailure();
-    return response;
-  };
-  return Object.freeze({ fetch, dispatch });
+  }
 }

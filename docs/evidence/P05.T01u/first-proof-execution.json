@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 90,
+  "author": "/root/fixed_provider_workers",
+  "phase": "U01_initial_actual_native_execution",
+  "status": "passed",
+  "report_path": "docs/evidence/P05.T01u/native-first-proof.json",
+  "report_sha256": "c4aa23d39d4c5eddd2cc41cc7c939a548cb77e18d7751e8aec539311dcdc1f33",
+  "outside_byte_copy": "work/morrow-p01/u01-first-execution-source/native-first-proof.json",
+  "outside_copy_sha256": "c4aa23d39d4c5eddd2cc41cc7c939a548cb77e18d7751e8aec539311dcdc1f33",
+  "pre_and_post_source_digests": {
+    "docs/packets/P05.T01u.md": "93d73810fa416bbbf65f2bba245dd503d1eaab3ca3caa2e894397ae37c2a4835",
+    "docs/plan/build-plan.md": "20b94255f4d1b0a1335a26e3e979bdd02e3e00ea6bedb393b94c6852ecb75766",
+    "docs/plan/source.json": "fd03f2f9a6b20252935ce24002806be7cb3ba6b89506ecdd0525d6980132bb90",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "scripts/fixtures/managed-login-cleanup-gate.mjs": "001a099033ee75aad6d446f9914eed98e359f04ad5aa95b11a1bee83fb907566",
+    "scripts/fixtures/managed-login-lifetime-worker.ts": "a9c1802628442f27c7774b1cda75abd85c10ed43d1554f818aa9beaad2e5e557",
+    "scripts/managed-login-lifetime-workers-lab.mjs": "40acf87f1721ecd96ab3c014c83374762d6bb966506b2e995bf8d5e24b4acb3b",
+    "tests/managed-login-cleanup-gate.test.mjs": "faeb5d82e0f1c9381f16b52a20e3cd0384b58d4eaa1663a2d93f1534f712e916"
+  },
+  "pre_execution_source_manifest_sha256": "c717f0479320728fecc86e97db6ce2020ed6b91910a695d73984d7ebf0ad7ecb",
+  "execution": {
+    "initial_tool_chunk": "aed701",
+    "session_id": 20042,
+    "completion_chunk": "f1636a",
+    "actual_exit_code": 0,
+    "stdout_stderr_log_path": "work/morrow-p01/u01-native-first-proof.log",
+    "stdout_stderr_log_sha256": "5cdfa8e00c03398b7e44abf98359a79ba6e67cfa6714996c2ab41bef81e41d43",
+    "command": "PATH=/opt/homebrew/opt/node@24/bin:$PATH node scripts/managed-login-lifetime-workers-lab.mjs",
+    "working_directory": "work/morrow-p01/repository",
+    "sandbox_escalation": "Authorized local loopback runtime only; no external/provider delegation."
+  },
+  "focused_checks": {
+    "gate_unit_tests": 21,
+    "gate_unit_actual_exit": 0,
+    "gate_unit_chunk": "61ef49",
+    "gate_unit_log_sha256": "52da01db00df8cfcf40feb3dcb7cfae1fd763cba001a66e4ad7f623e6e1ad550",
+    "standalone_strict_fixture_typecheck_actual_exit": 0,
+    "typecheck_chunk": "34014a",
+    "typecheck_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "measured": {
+    "cases": 2,
+    "checks": 14,
+    "native_outbound_requests": 5,
+    "negative_requests": 2,
+    "positive_requests": 3,
+    "unexpected_requests": 0,
+    "actual_Internet_requests": 0,
+    "actual_provider_requests": 0,
+    "pending_host_timers": 0,
+    "runtime_disposal_acknowledgements": 2,
+    "cleanup_active_responses": 0,
+    "cleanup_active_listeners": 0,
+    "all754_historical_evidence_bytes_and_Git_modes_exact": true
+  },
+  "natural_observations": {
+    "negative": "Admitted gate ServerResponse closes while unopened/unfinished before forced cleanup, just before host finite-body completion; ambiguous incoming error is not proof.",
+    "positive": "Finite body completes before gate opening, Worker gate-read marker, normal marker finish and natural close; all3 responses close before forced cleanup."
+  },
+  "post_execution_scope": {
+    "MF_lease_released": true,
+    "native_reruns": 0,
+    "production_or_CI_registration_changes": false,
+    "provider_account_or_credential_actions": false,
+    "awaiting_independent_review": true
+  },
+  "read_only_postcheck_correction": {
+    "initial_chunk": "336671",
+    "actual_exit_code": 1,
+    "reason": "The outside receipt check compared physical0600 permissions with Git100644 for preserved public evidence. Bytes were unchanged. Corrected only this inspection to compare Git executable/nonexecutable mode semantics; no Source/report/predicate change or native rerun."
+  },
+  "limitations": [
+    "Generic platform fixture only, with no production imports, SQL, crypto, SDK, provider or managed request handler.",
+    "Actual ctx provenance is trusted native module wiring. Expected waitUntil call count and exact completion-Promise identity are source-bound, not a host promise-inspection API.",
+    "Raw premature ServerResponse close establishes observed subrequest cancellation; IncomingMessage close, physical TCP closure and runtime disposal are separate facts.",
+    "Worker gate-read marker follows response delivery and gate body read. Host response finish is not direct observation of final marker-ack consumption or Promise settlement.",
+    "No application cleanup, original D/C, managed key continuity, browser, hosted or merchant qualification follows from this generic proof."
+  ]
+}

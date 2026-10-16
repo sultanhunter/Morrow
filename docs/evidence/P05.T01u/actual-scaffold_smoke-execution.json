@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 91,
+  "actual_subprocess_exit": 0,
+  "source_before_sha256": "f0f9ae0efec6cf9ed64a84ac094dc6b13af098f058b0cca40b5d4fa351ab72ea",
+  "source_inventory_digest": "cb22aaad79276927dcf6ab1bac86a948a24ccb33a11356e81c2cea2d3cf91dcc",
+  "primary_log_sha256": "d66bcf8c28a14451be7f16c7ae298eba3e0acfbffa644066ba9433cc2a288ae9",
+  "generated_report_sha256": "1b7912326ab9c551f5312e353dc18181f485f5d4485d693ef5ebd1db98974faa",
+  "whole_source_inventory_restored_exactly": true,
+  "historical_report_restored_byte_and_mode": true,
+  "provider_requests": 0,
+  "Git_writes": false,
+  "Desktop_writes": false
+}

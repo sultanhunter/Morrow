@@ -112,6 +112,7 @@ const paths = [
   "docs/packets/P05.T01r.md",
   "docs/packets/P05.T01s.md",
   "docs/packets/P05.T01t.md",
+  "docs/packets/P05.T01u.md",
   ".nvmrc",
   "package.json",
   "package-lock.json",
@@ -122,7 +123,7 @@ const paths = [
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
 if (
   process.version !== "v24.13.0" ||
-  plan.sequence !== 89 ||
+  plan.sequence !== 91 ||
   hash(readFileSync(plan.path)) !== plan.sha256
 )
   throw Error("LOGIN_HTTPS_LAB_SOURCE_REQUIRED");
@@ -1269,7 +1270,7 @@ check(
 const report = {
   schemaVersion: 1,
   task: "P05.T01p",
-  canonicalSequence: 89,
+  canonicalSequence: 91,
   observedAt: new Date().toISOString(),
   qualification: "synthetic_native_rsa_pkce_to_real_sql_to_https_initial_cookie_jar_and_o_b",
   appliedMigrations: 10,
@@ -1297,9 +1298,9 @@ const report = {
     "Source digests are selected reviewed inputs, not a complete third-party dependency closure.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01t/canonical89/regressions", { recursive: true });
+mkdirSync("docs/evidence/P05.T01u/regressions", { recursive: true });
 writeFileSync(
-  "docs/evidence/P05.T01t/canonical89/regressions/login-https-postgresql-lab.json",
+  "docs/evidence/P05.T01u/regressions/login-https-postgresql-lab.json",
   JSON.stringify(report, null, 2) + "\n",
 );
 console.log(

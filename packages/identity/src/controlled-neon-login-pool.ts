@@ -16,6 +16,12 @@ import {
   type NeonSocketConstructor,
   type NeonOwnedSocket,
 } from "./controlled-neon-transport.js";
+import {
+  assertManagedLoginRequestOwner,
+  publishManagedLoginCleanup,
+  type ManagedLoginRequestScope,
+  type ManagedLoginRequestOwnerToken,
+} from "./managed-login-request-scope.js";
 
 type Control = Readonly<{ deadlineMs: number; signal: AbortSignal }>;
 type Binding = Readonly<{
@@ -34,6 +40,11 @@ type Lease = Readonly<{
   release: (control: Control) => Promise<void>;
 }>;
 type Broker = { borrow(namespaceJson: string, control: Control): Promise<unknown> };
+type OwnedRequest = Readonly<{
+  scope: ManagedLoginRequestScope;
+  ownerToken: ManagedLoginRequestOwnerToken;
+  configurationDigest: string;
+}>;
 export type ControlledNeonLoginClient = Readonly<{
   query(
     text: string,
@@ -142,8 +153,18 @@ export function snapshotControlledNeonLoginPoolMetrics(pools: unknown) {
 async function create(
   dependencies: unknown,
   synthetic: boolean,
+  ownedRequest?: OwnedRequest,
 ): Promise<ControlledNeonLoginPools> {
   try {
+    const parentControl = () =>
+      ownedRequest
+        ? assertManagedLoginRequestOwner(
+            ownedRequest.scope,
+            ownedRequest.ownerToken,
+            ownedRequest.configurationDigest,
+          )
+        : undefined;
+    parentControl();
     const d = ownRecord(
       dependencies,
       synthetic
@@ -213,6 +234,13 @@ async function create(
       input: Control,
       m: Counters,
     ): Promise<ControlledNeonLoginClient> {
+      // No connection, publication or borrowed handle exists for a request
+      // already closed before this connect is admitted.
+      try {
+        parentControl();
+      } catch {
+        throw controlledNeonHeld();
+      }
       const bump = (key: string) => {
         m[key] = (m[key] ?? 0) + 1;
       };
@@ -248,6 +276,8 @@ async function create(
         purpose: "primary_and_one_same_role_observer",
       });
       const check = (deadline = D, signal?: AbortSignal) => {
+        const parent = parentControl();
+        if (parent) D = Math.min(D, parent.deadlineMs);
         const at = clock();
         if (
           held ||
@@ -255,7 +285,7 @@ async function create(
           original.signal.aborted ||
           signal?.aborted ||
           lease?.revocationSignal.aborted ||
-          at >= deadline ||
+          at >= Math.min(deadline, D) ||
           (lease && at >= lease.expiresAtMs)
         )
           throw controlledNeonHeld();
@@ -297,10 +327,14 @@ async function create(
         void pending.catch(() => {});
       }
       async function wait<T>(pending: Promise<T>, deadline = D, signal?: AbortSignal): Promise<T> {
+        // The operation already exists; the first authority check can itself
+        // lose the request before any race handlers are attached.
+        void pending.catch(() => {});
         let timer: ReturnType<typeof setTimeout> | undefined;
         const listeners: { signal: AbortSignal; listener: () => void }[] = [];
         try {
           const at = check(deadline, signal);
+          deadline = Math.min(deadline, D);
           const stopped = new Promise<never>((_, reject) => {
             const abort = () => {
               poison();
@@ -318,7 +352,6 @@ async function create(
             timer = setTimeout(abort, Math.max(0, deadline - at));
             bump("activeWaitTimers");
           });
-          void pending.catch(() => {});
           const answer = await Promise.race([pending, stopped]);
           check(deadline, signal);
           return answer;
@@ -354,10 +387,19 @@ async function create(
       }
       function cleanupControl(): Control {
         latch();
+        // Normal authority may have ended before its last timestamp refreshed.
+        // Map only the remaining original C using the existing trusted clock;
+        // this disposal read neither checks nor renews business authority.
+        let at = 0;
+        try {
+          at = clock();
+        } catch {
+          cleanupAbort!.abort();
+        }
         const remaining = Math.max(0, (C ?? runtimeNow()) - runtimeNow());
         if (remaining <= 0) cleanupAbort!.abort();
         return Object.freeze({
-          deadlineMs: Math.min(8640000000000000, Math.max(0, last) + Math.floor(remaining)),
+          deadlineMs: Math.min(8640000000000000, at + Math.floor(remaining)),
           signal: cleanupAbort!.signal,
         });
       }
@@ -538,11 +580,38 @@ async function create(
           }
         });
         void releasePromise.catch(() => {});
+        if (ownedRequest) {
+          try {
+            publishManagedLoginCleanup(ownedRequest.scope, ownedRequest.ownerToken, releasePromise);
+          } catch {
+            // The normal branch is deferred; registration failure poisons it
+            // synchronously without replacing or retrying the owned Promise.
+            if (!held) {
+              held = true;
+              bump("heldClients");
+            }
+          }
+        }
         return releasePromise;
       }
       let tuple: ReturnType<typeof controlledNeonTuple> | undefined;
       try {
         original = control(input);
+        const parent = parentControl();
+        if (parent) {
+          const joined = new AbortController();
+          const cancel = () => joined.abort();
+          for (const signal of new Set([original.signal, parent.signal])) {
+            signal.addEventListener("abort", cancel, { once: true });
+            lifetimeListeners.push({ signal, listener: cancel });
+            bump("activeWaitListeners");
+            if (signal.aborted) cancel();
+          }
+          original = Object.freeze({
+            deadlineMs: Math.min(original.deadlineMs, parent.deadlineMs),
+            signal: joined.signal,
+          });
+        }
         const entry = clock();
         D = Math.min(original.deadlineMs, entry + 25000);
         check();
@@ -642,6 +711,11 @@ async function create(
         });
       } catch {
         poison();
+        try {
+          await release();
+        } catch {
+          // Keep the primary held failure; disposal failure is secondary.
+        }
         throw controlledNeonHeld();
       }
     }
@@ -653,3 +727,14 @@ export const createWorkersControlledNeonLoginPools = (dependencies: unknown) =>
   create(dependencies, false);
 export const createSyntheticNodeControlledNeonLoginPools = (dependencies: unknown) =>
   create(dependencies, true);
+export const createWorkersRequestBoundNeonLoginPools = (
+  dependencies: unknown,
+  scope: ManagedLoginRequestScope,
+  expectedOwnerToken: ManagedLoginRequestOwnerToken,
+  configurationDigest: string,
+) =>
+  create(
+    dependencies,
+    false,
+    Object.freeze({ scope, ownerToken: expectedOwnerToken, configurationDigest }),
+  );

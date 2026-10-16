@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 91,
+  "scope": "full_local_pipeline_not_provider_or_merchant_qualification",
+  "actual_subprocess_exit": 1,
+  "source_before_sha256": "8e09e85921e216f2e0ebbc9971d144af0afde182b71964a39cb86cce3e726014",
+  "primary_log_sha256": "9a9858b8c862e11527ca5d59b2daf908dbe64b0af139dd97993feb7f18735974",
+  "observed_outputs_after_command": {
+    "docs/evidence/P01.T01/verification.json": "b1b46aea8b2aae9a812e1ed5a93bb463d6eaf2f9680d7dbf776b9184d248eb49",
+    "docs/evidence/P01.T02/verification.json": "9642746f4b1d8369c284083835146e69398a33903c4d5daba038d7e8aca4f3e2",
+    "docs/evidence/P01.T03/verification.json": "dcd4b50596f91399200d90ab0f4493cc74b16db40e49e14b29314b5ad3a92177",
+    "docs/evidence/P01.T04/verification.json": "d30d3a19044ea215b56fef0bd1affa942e6a179fb2c3ed932a7f316c1d2afb20",
+    "docs/evidence/P02.T02/verification.json": "dc193fbaf1e2de00a7e467ef59830eb022f49b3dc2c57edf6f0ea5a50b56627d",
+    "docs/evidence/P03.T02/boundaries.json": "f4d802acd3f7bbd7e86f7786ab3eef6c741a9588606ce226d97ae09f997d3629",
+    "docs/evidence/P03.T04/delivery.json": "23136fc9d179a605c3d627ba8f312fe392720c0f9c4df57957a0055ede483a87",
+    "docs/evidence/P04.T01a/synth.json": "cfe3e5688797df2ac43b751dfae2287beff1638fb4d3354a2e1734525d0e40e6",
+    "docs/evidence/P04.T01a/permissions.json": "470de2209c9482ae7ce2c73d2b09ae74b56cb87aa4a0393ffb64de7ebf389df8",
+    "docs/evidence/P04.T01a/readiness.json": "ce164d616c3276922474a0b96596bda51ba8deaf175eb42c6c6942919a31d064",
+    "docs/evidence/P04.T01f/archive.json": "013799f7241ed64445ed48526c81214b47a7cf83e37286ee7af66e63e4482918",
+    "docs/evidence/P04.T01f/cleanup.json": "d734c7945d33639b260b7c9340835c86e9801b5190c43ee9af927a1d097fb4d0",
+    "docs/evidence/P03.T01/smoke.json": "e57ae6aa53fbfcdccdef90dd6f8b546d26081ca716770824515a0421114962fb",
+    "docs/evidence/P03.T03/example.json": "e001773426e5222702639fc851c1326628bd1bdcb8da02a1c331e605ae1e7453",
+    "docs/evidence/index.json": "8a881de66459965cb620b2a3a30911a6587ae320b4f67656529151d5795f885f"
+  },
+  "unexpected_source_changes": [],
+  "source_inventory_restored_exactly": true,
+  "historical_reports_byte_and_mode_restored": 754,
+  "provider_requests": 0,
+  "Git_writes": false,
+  "Desktop_writes": false
+}

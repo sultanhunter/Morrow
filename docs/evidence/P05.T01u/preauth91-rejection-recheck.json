@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "sequence": 91,
+  "reviewer": "fixed_provider_core",
+  "scope": "current91_original_attempt_wait_sink_and_unchanged_preauth_CPU_recheck",
+  "source_digests": {
+    "standalone-login-protocol.ts": "0d75b3fd7efda9caf1938086b05fe433109de5a835e404655fb0b7d64b030078",
+    "workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "login-preauth-control.ts": "372b5720cde644e9acf8458baa378fb1cf9bd879e6a4a2742dec30aada1c397f",
+    "authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa"
+  },
+  "observed": {
+    "parentAborted": true,
+    "connected": 1,
+    "queried": 0,
+    "released": 1,
+    "outerHeld": true,
+    "clockAfterConnection": 6,
+    "unhandledRejections": 0,
+    "unhandledFixedCodes": []
+  },
+  "actual_SQL_native_MF_network_provider_actions": 0,
+  "limits": [
+    "Synthetic CPU pool only; no database/driver. Actual frozen attempt and unchanged preauth/admission code run, with real challenge crypto and valid clock.",
+    "Expected unhandled rejection is observed by an explicit reproduction-only process listener; it is not suppressed in production."
+  ]
+}

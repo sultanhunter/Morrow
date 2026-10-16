@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_https",
+  "source_review_clear": true,
+  "result": "source_clear_for_current_managed_fixture_and_unchanged_pool_preparation",
+  "reviewed_source_digests": {
+    "scripts/managed-login-lifetime-workers-lab.mjs": "f97b09356d6ee2a887d477cbb5f327ec5c8491fb8141467f2fd02c5d66552e10",
+    "scripts/fixtures/managed-login-request-worker.ts": "d7c67a67b92ad0860faf8ed6cb57ffba38cca3c392e2c8e960894fa8d08836c0",
+    "scripts/managed-login-postgresql-lab.mjs": "dcad4c25d7ecee090a06a7efe46f7a9ced81d5cb3f8cafdbcd6da4254402ea54",
+    "scripts/fixtures/managed-login-lifetime-worker.ts": "a9c1802628442f27c7774b1cda75abd85c10ed43d1554f818aa9beaad2e5e557",
+    "scripts/fixtures/managed-login-cleanup-gate.mjs": "7cfbf50014124b057dc4a63d2d00848e071c119b25a5e21bae82f8ec017d2520",
+    "tests/managed-login-cleanup-gate.test.mjs": "708a26168b34a58dbb5e7cb37272097619f4f727e12844338978961016ebbba6",
+    "packages/identity/src/controlled-neon-login-pool.ts": "c0aad7e65fcf30c913ff24c90cba9b40d303c988be1b80a3f1d6ce1aefd710ac",
+    "tests/controlled-neon-login-pool.test.mjs": "a61fbab1fa54f1adcdd0b51e7b851c6e60615f34f8e03f907e3f390bb7bcef37",
+    "packages/identity/src/managed-login-request-scope.ts": "a4699a12cfd8cc895b0369ffeaf54ede92a5584783c70c7dbf2d33aa74a690f3"
+  },
+  "blocking_findings": [],
+  "prior_source_reviews_preserved": {
+    "independent-managed-fixture91-repair-source-review.json": "a0d2931b1c21fde067f7d336c3ee829d2eff8ea1a4bd612c21583e2085e48e6e",
+    "independent-pool-native91-cleanup-console-review.json": "2fa64d1dc189a2e942367fdf331a7707b656c051933caa0b844a2a85ad54be7b"
+  },
+  "review_independence": "Reviewer did not author new shared/managed native or SQL fixtures, generic gate additions, request scope or Core pool. Prior qualified T helper/bridge are reviewer-owned preserved dependencies with earlier other-author review; no new semantic self-clearance is claimed.",
+  "current_native_delta": {
+    "previous_sha256": "bbe7bc6cf2e35a0a6247f87a77de9372796d9d404b79e07fdb44071e822f4d06",
+    "exact_one_line_inverse_preserves_complete_previous_runner": true,
+    "new_guard": "if (settlement.length < expected) return;",
+    "assessment": "The existing settled() checks expected count at registration. The old signalSettlement flushed queued waiters on first event; the new guard keeps a concurrent waiter pending until the same expected count. Existing exact expected assertion still rejects duplicate/extra/malformed events; no business/source promise, authority, registration, gate, response delay, watchdog or cleanup lifetime changes.",
+    "independent_tests": {
+      "path": "work/test-u91-concurrent-settlement-waiter.mjs",
+      "sha256": "05e51ea5e3dfebf8dc27c7db3486e9c2dbe816d9168452c44022768e824fe64a",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "actual_exit_code": 0,
+      "launch_chunk": "b87849",
+      "session_id": 55710,
+      "completion_chunk": "0aef9b",
+      "log_path": "/private/tmp/morrow91-independent-native-settlement-count.log",
+      "log_sha256": "a4595bd7917cd3c3f8434dee9bbdefc9a5705aae74c5ac689ddd69674c4f9bcb"
+    },
+    "author_addendum_path": "work/morrow-p01/native91-concurrent-settlement-source/author-addendum.json",
+    "author_addendum_sha256": "2e99f57ca32f1f69bf9d466d80114e5c456d8684c85c09c669e4995fdf676d61"
+  },
+  "retained_source_conclusions": [
+    "Shared Worker d7c and SQL dcad are byte-exact to the independently reviewed replay/committed-bind-cutoff final source. A\u2192B real persisted flow/rotation, single atomic claim/exact submission counts/no extra exchange, setup-only real-AES proof-loss negatives, original D/C and fresh restricted owner reconciliation/unknown release assertions remain unchanged.",
+    "Current pool c0aad,71-test file a61f and scope a469 remain exact to prior independent71/71/types and lifecycle review. Trusted cleanup-clock refresh maps only remaining original monotonic C; no renewed normal authority or observer follows hold. Both lifetime and custody retain separate observations.",
+    "Generic production-import-free U01 Worker remains byte-exact to qualified first-proof archive. Old U01 raw-Node gate implementation remains an exact byte prefix; original21 gate test bodies remain exact after only adding the new named managed-gate import. Read current bounded U05 lease gate and six appended synthetic observer cases completely; they do not grant native retention proof.",
+    "Managed lease gate returns promptly, requires fixed nonce/host/method/one use/bounded handles and markers, and tracks actual natural response close, finish, ambiguity, acknowledgements and forced cleanup separately. Marker/owner body cannot create production authority; malformed/duplicate/excess routes remain denials.",
+    "Supported structured logging/failfast repair remains the independently reviewed bbe source plus only the count guard. Host observation is synchronousvoid and adds no waitUntil, gate operation, timer, request or retained source work.",
+    "All12 original T helper/bridge/seed/oracle/cookie/SQL adapter dependencies remain byte-exact to the qualified89/reviewed source. No old endpoint policy, SQL, administrator seam, production callback, dependency or transport guard is changed."
+  ],
+  "source_guards": {
+    "all_reviewed_source_map_entries_current": true,
+    "generic_U01_module_exact_archived": true,
+    "U01_gate_exact_prefix": true,
+    "U01_original_test_bodies_exact": true,
+    "all12_T_dependencies_exact": true
+  },
+  "operational_actions": {
+    "Source_writes": 0,
+    "Git_writes": 0,
+    "MF_or_SQL_runs": 0,
+    "network_calls": 0
+  },
+  "limits": [
+    "This closes current source/CPU preparation review only. The root-owned current native run and any realSQL/fullCI/artifact outcomes require their own independent actual-evidence review; none is inferred here.",
+    "Previous actual native holds and intentional unknown cleanup remain preserved; completion markers or runtime/container absence never acknowledge a missing lease release.",
+    "No source assertion or watchdog weakened. No current user/provider/account/merchant/deployment authority is introduced."
+  ]
+}

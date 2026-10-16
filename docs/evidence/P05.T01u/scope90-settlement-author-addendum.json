@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 90,
+  "author": "fixed_provider_core",
+  "kind": "narrow_source_fixed_settlement_telemetry_addendum",
+  "previous_author_receipt_sha256": "04eacb04ad65ab07e7e679afc55487c45b6c91045931291b618cf63984d9fe7e",
+  "preserved_previous_sources": "work/morrow-p01/u-scope-before-settlement-telemetry",
+  "source_digests": {
+    "packages/identity/src/managed-login-request-scope.ts": "a4699a12cfd8cc895b0369ffeaf54ede92a5584783c70c7dbf2d33aa74a690f3",
+    "packages/identity/src/controlled-neon-login-pool.ts": "98a40d7d3f7f0c4cdfd3181b8ec0ae861b7b2304ec51d10486face7c7d357870",
+    "tests/controlled-neon-login-pool.test.mjs": "0d9b31706c06fe8cadef97f113f38127f255da8dcd763bab2c08a33ae14f686d"
+  },
+  "pool_source_unchanged": true,
+  "scope_delta_sha256": "b599fb3311e839faf914af0980f27dafbf0dc0541e05e63bd1dfa3d3556229d5",
+  "allowed_delta": "Existing exact registered release Promise settlement reaction now logs one source-fixed synchronous JSON event with outcome enum and the existing9closed counters; original Promise and registration identity unchanged. No new async work/context registration/network/timer/logger injection. Logging failure is contained.",
+  "actual_checks": {
+    "focused_real_Promise_units": {
+      "tests": 67,
+      "passed": 67,
+      "failed": 0,
+      "initial_chunk": "1beda2",
+      "session_id": 40966,
+      "completion_chunk": "fb9f9e",
+      "actual_exit_code": 0,
+      "log_sha256": "85247a484dd33e6c140c0facf0b9a4a3067b1746a4517e94ea9f989233e263f0"
+    },
+    "identity_types": {
+      "initial_chunk": "f33b8a",
+      "session_id": 43010,
+      "completion_chunk": "b39b12",
+      "actual_exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "format": {
+      "initial_chunk": "9ca54b",
+      "session_id": 8289,
+      "completion_chunk": "a1cd9d",
+      "actual_exit_code": 0,
+      "log_sha256": "3e547430ef9214c85e36333dc54167f234944a7a195c786ce597750f6a463174"
+    }
+  },
+  "new_unit_proof": [
+    "No log while real release Promise pending; one line after settlement despite duplicate publication.",
+    "Original Promise registered with fake CPU context remains strictly identical.",
+    "Fulfillment value and rejection reason cannot enter log; exact event/outcome+9integer keyset only.",
+    "Thrown console.debug does not alter original Promise fulfillment or registration counters."
+  ],
+  "authorship_and_limits": [
+    "Self-authored focused CPU tests, not independent review or native execution.",
+    "Native fixture Log capture must still establish ordered post-response gate/ack/settlement; this telemetry alone does not qualify application lifecycle/cleanup.",
+    "No additional runtime, provider, Source files, package, exports, SQL or historical report changes."
+  ],
+  "blocking_findings": []
+}

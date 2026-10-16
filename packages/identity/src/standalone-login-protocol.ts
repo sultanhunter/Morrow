@@ -64,6 +64,18 @@ export interface LoginConfiguration {
 export async function parseLoginConfiguration(
   value: unknown,
 ): Promise<Readonly<LoginConfiguration>> {
+  return parseLoginConfigurationCore(value);
+}
+export async function parseLoginConfigurationWithAttempt(
+  value: unknown,
+  originalAttempt: LoginAttempt,
+): Promise<Readonly<LoginConfiguration>> {
+  return parseLoginConfigurationCore(value, originalAttempt);
+}
+async function parseLoginConfigurationCore(
+  value: unknown,
+  attempt?: LoginAttempt,
+): Promise<Readonly<LoginConfiguration>> {
   try {
     const c = loginJson(value, 32768, [
       "schemaVersion",
@@ -129,7 +141,14 @@ export async function parseLoginConfiguration(
     )
       throw loginFailure();
     const binding = b as unknown as Readonly<AuthenticationExchangeBinding>;
-    const configurationDigest = await loginHash(
+    // Preserve the raw profile bytes and ordered outer transcript. Controlled
+    // setup checks before each actual digest, never only around the whole parser.
+    attempt?.check();
+    const profilePending = loginHash(c.verificationProfileJson as string);
+    if (attempt) void profilePending.catch(() => {});
+    const profileDigest = await (attempt ? attempt.wait(profilePending) : profilePending);
+    attempt?.check();
+    const configurationPending = loginHash(
       JSON.stringify([
         "morrow.login.configuration",
         "1",
@@ -145,9 +164,14 @@ export async function parseLoginConfiguration(
         binding.returnPath,
         c.profileId,
         String(c.profileRecordRevision),
-        await loginHash(c.verificationProfileJson as string),
+        profileDigest,
       ]),
     );
+    if (attempt) void configurationPending.catch(() => {});
+    const configurationDigest = await (attempt
+      ? attempt.wait(configurationPending)
+      : configurationPending);
+    attempt?.check();
     return Object.freeze({
       origin: c.origin,
       retentionTier: c.retentionTier as LoginConfiguration["retentionTier"],
@@ -219,6 +243,9 @@ export function createLoginAttempt(now: () => number, signal: AbortSignal, durat
       check();
     },
     async wait<T>(pending: Promise<T>): Promise<T> {
+      // Authority can end before the first check. Consume only late rejection
+      // of work already started; the original Promise and all checks remain.
+      void pending.catch(() => {});
       check();
       let stop: (() => void) | undefined;
       const interrupted = new Promise<never>((_, reject) => {

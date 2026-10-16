@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_https",
+  "source_review_clear": true,
+  "result": "clear_for_bounded_native_retry_source_and_CPU_scope_only",
+  "review_independence": "Reviewer did not author Core pool repair, appended3 units, Workers native capture/failfast repair or4 parser tests. Prior own capsule/T bridge remain excluded dependencies.",
+  "reviewed_source_digests": {
+    "scripts/managed-login-lifetime-workers-lab.mjs": "bbe7bc6cf2e35a0a6247f87a77de9372796d9d404b79e07fdb44071e822f4d06",
+    "packages/identity/src/controlled-neon-login-pool.ts": "c0aad7e65fcf30c913ff24c90cba9b40d303c988be1b80a3f1d6ce1aefd710ac",
+    "tests/controlled-neon-login-pool.test.mjs": "a61fbab1fa54f1adcdd0b51e7b851c6e60615f34f8e03f907e3f390bb7bcef37",
+    "packages/identity/src/managed-login-request-scope.ts": "a4699a12cfd8cc895b0369ffeaf54ede92a5584783c70c7dbf2d33aa74a690f3"
+  },
+  "reviewed_evidence_digests": {
+    "work/morrow-p01/native91-console-hook-source/author-addendum.json": "48b1a12a7f615400fc95f07d7e9e90909b9b87e1fb44d6b89efcf198c332baf1",
+    "work/morrow-p01/managed-pool91-cleanup-clock-author-addendum.json": "059e58b074a749dee223074af9ef33aa982d463550d0e2bb7548c56f45c474f5",
+    "work/morrow-p01/managed91-structured-console-characterization.json": "9040f8d68cd76133c85142f1cfc73a937a0a691207323090234563dd558cf72b",
+    "work/morrow-p01/check-managed91-structured-console.mjs": "562095d1ebc731981ae47e8c1e5cd2e6695406e491d903c5f540546eb671bd24",
+    "work/morrow-p01/independent-managed-scope-pool90-review.json": "9849c60a6468f0d6935bd94046fcb244c1843fb328a93706a51829d4e72904fb",
+    "work/morrow-p01/independent-managed-fixture91-repair-source-review.json": "a0d2931b1c21fde067f7d336c3ee829d2eff8ea1a4bd612c21583e2085e48e6e",
+    "work/test-u91-native-console-capture.mjs": "320f45c83a85cd480f0cef181c0129534950a55a0e2987c127d2d944e76f119b",
+    "/private/tmp/morrow91-independent-native-console-guards.log": "543715ab59ea5b1ee7f3c1a0caac0fc3b0ab0047725545370f1b5f5bbbfa22ed",
+    "/private/tmp/morrow91-independent-pool-cleanup-clock-focused.log": "169e60f6b3199b5d6abc41b919db7f6f42b748a2a7453ce3cfbb775f1a491a93",
+    "/private/tmp/morrow91-independent-pool-cleanup-clock-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "authority": {
+    "fresh_page_sequence": 91,
+    "full_page_blocks": 553,
+    "unchanged_page_readback": true,
+    "packet_sha256": "4e1ccdcb25ebf69a04bc42c20afa2c7d841bc5c8305e6adb26089c356e9545c3"
+  },
+  "pool_review": {
+    "previous_pool_sha256": "2319f3cb1abbb294bb77cd4806626302eadddfa87b0414b5aba4a4a4e25ea028",
+    "exact_narrow_reversal_verified": true,
+    "old68_unit_bytes_exact_prefix": true,
+    "clear_aspects": [
+      "cleanupControl alone samples the existing trusted monotonic-validated clock before translating remaining original monotonic C into absolute credential deadline.",
+      "No parent/business-authority assertion or original normal D/owner/lease/timer/SQL/observer/race change. Clock failure aborts existing cleanup controller; remaining C is measured after the clock read, never renewed.",
+      "Held direct connect and exact once-published release remain held/no normal release. Cleanup-only ack and late ack/unknown custody remain separately counted; invalid clock cannot create positive acknowledgement.",
+      "Existing namespace, four profiles/native socket facade, request scope publication and late sinks unchanged; no fresh borrow/driver/SQL observer after hold."
+    ],
+    "independent_actual": {
+      "focused": {
+        "launch_chunk": "e0aaff",
+        "session_id": 25221,
+        "completion_chunk": "15f605",
+        "actual_exit_code": 0,
+        "tests": 71,
+        "pass": 71,
+        "fail": 0
+      },
+      "strict_types": {
+        "launch_chunk": "e83642",
+        "session_id": 79978,
+        "completion_chunk": "42aade",
+        "actual_exit_code": 0,
+        "diagnostics": 0
+      },
+      "exact_source_inverse_and_prefix": {
+        "tool_chunk": "ac1993",
+        "actual_exit_code": 0
+      }
+    },
+    "author_original_negative_not_independent_rerun": "Two preserved exact-original runs show3 failures; this reviewer read those source-bound records and independently reran the current71 suite."
+  },
+  "native_capture_review": {
+    "previous_native_sha256": "821fb27223534917e60196cd239f354e6464348929bdfb2ba50a6f32d20680b1",
+    "clear_aspects": [
+      "Only supported top-level handleStructuredLogs synchronous void callback now forwards message to unchanged exact closed-event parser. Ordinary runtime Log remains separate.",
+      "No ctx/waitUntil/Promise registration, gate operation, timer, await, extra Worker request or source lifecycle work is introduced by capture. Callback parses fixed fields and records only closed counters/enums/timestamps.",
+      "Every previous response/body/cookie/source-registration check remains. New failfast triggers only on already-recorded failed response preconditions before an otherwise unreachable gate/source-settlement wait; it cannot create success.",
+      "Generic direct/routed controls, gate source, shared Worker/SQL source, production release Promise/D/C and unknown custody semantics unchanged by this delta."
+    ],
+    "supported_API_source_read": "Pinned Miniflare index.d.ts exposes top-level handleStructuredLogs({message,timestamp,level}):void; actual finite-response characterization separately observes one debug event before body/disposal with zero outbound and acknowledged disposal.",
+    "independent_actual": {
+      "parser_hook_failfast_units": {
+        "launch_chunk": "643661",
+        "session_id": 87666,
+        "completion_chunk": "2c82ff",
+        "actual_exit_code": 0,
+        "tests": 4,
+        "pass": 4,
+        "fail": 0
+      }
+    },
+    "actual_characterization_rerun_by_reviewer": false,
+    "actual_characterization_outcome_not_cleanup_proof": true
+  },
+  "blocking_findings": [],
+  "limits": [
+    "No fresh Miniflare/WebSocket/SQL/Docker/provider/network execution by reviewer and no Source writes.",
+    "Both preserved actual native holds remain held; logging observation is not credential acknowledgement or retention proof. Next bounded actual native run is still required.",
+    "CPU synthetic lease/clock and parser guards cannot establish actual SDK query, post-response gate, physical backend/socket closure, realSQL or merchant/provider qualification."
+  ]
+}

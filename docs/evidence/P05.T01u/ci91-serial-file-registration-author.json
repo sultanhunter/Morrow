@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 91,
+  "scope": "routine_U06_test_script_registration_only",
+  "source_before_sha256": "24ebf0eea14edb19316a949164a3dfaf6f657af1c31c4f04ef90964683371da8",
+  "source_after_sha256": "3f72d49320ccd224479e0d5eb639e3ff8a9946b4d1ce5c27f8be005a58fab4e6",
+  "exact_change": "Add --test-concurrency=1 to existing node --import tsx --test command; retain all test files, cases, assertions, original production D/C and test deadlines. No retry or skip.",
+  "evidence": {
+    "full_parallel_log_sha256": "8746813321f3c528770e1e4d6a97caa4c3652e584c4871c16242ac73d7a94646",
+    "full_parallel_tests": 2252,
+    "full_parallel_passed": 2250,
+    "full_parallel_failed": 2,
+    "isolated_log_sha256": "e8421891f2ad1f5b13aae6dd907560014385a0936ac01063db9159ade43b07f1",
+    "isolated_actual_exit_code": 0,
+    "isolated_tests": 124,
+    "isolated_passed": 124
+  },
+  "next": "Independent registration review and full fresh pipeline required; this record is not full CI qualification."
+}

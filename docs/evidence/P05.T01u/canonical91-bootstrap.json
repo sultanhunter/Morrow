@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "canonical_sequence": 91,
+  "canonical_blocks": 553,
+  "preserved_old_blocks": 549,
+  "new_blocks": 4,
+  "edit_receipt_sha256": "0ef7660d0092a5babfca3e5d804cb02de3d04005e1b10b84502dff34a46a34ae",
+  "authority_readback_sha256": "7ad4d1c259549538378a49e7dcfc9ae904c14ec7850e3e8a38129fd8d681a437",
+  "sync_actual_exit_code": 0,
+  "sync_tool_chunk": "92a224",
+  "metadata_reconciliation_actual_exit_code": 0,
+  "metadata_tool_chunk": "ab05fc",
+  "foundation_contract_units": {
+    "actual_exit_code": 0,
+    "execution_chunk": "9c44a1",
+    "session": 87817,
+    "tests": 305,
+    "passed": 305,
+    "failed": 0,
+    "log_sha256": "7b76762a2e8fcd9abf2222736bf181da2c7a2a846475555f97df640c1ac88346"
+  },
+  "scope": "plan_and_metadata_only_not_native_SQL_or_provider_qualification"
+}

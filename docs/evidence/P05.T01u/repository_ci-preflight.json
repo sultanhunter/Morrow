@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "preflight_kind": "repository_ci",
+  "current_plan_sequence": 91,
+  "source_inventory_digest": "cb22aaad79276927dcf6ab1bac86a948a24ccb33a11356e81c2cea2d3cf91dcc",
+  "actual_exit_code": 0,
+  "actual_execution_observed": true,
+  "qualification_status": "local_preflight_only",
+  "actual_receipt": {
+    "path": "docs/evidence/P05.T01u/actual-repository_ci-execution.json",
+    "sha256": "af288c507c0aac1a2927dfa6f1a86eacc89c2cb51b633ea189521e7fe1b4c365"
+  },
+  "primary_log_sha256": "a11a2afc6c98facab66dce87ebd171d9b5357fadb76ba2c1e6decb28b8efdff9",
+  "source_before_sha256": "925fb4097b9aea355e8666b48fbc28c03f0d9dcf280fb99f7f75ce42ae79f2ae",
+  "historical_reports_preserved": 754,
+  "source_inventory_restored_exactly": true,
+  "counts": {
+    "tests": 2252,
+    "passed": 2252,
+    "failed": 0
+  },
+  "limits": [
+    "Actual local engineering command only; fresh isolated CI/real PostgreSQL/hosted/merchant qualification remain separate."
+  ]
+}

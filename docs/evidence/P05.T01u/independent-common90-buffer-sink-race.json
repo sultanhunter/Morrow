@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "canonical_sequence": 90,
+  "scope": "independent_exact_source_buffer_sink_with_actual_attempt_and_AES_CPU_only",
+  "source_sha256": "4b0bda5f7d13c45571280bfc44813563ef961743df6c08b08ace5352394d65d4",
+  "helper_extracted_sha256": "16548e885c9c341b0dbaf87c83a79d10057377d906b8bc177cb145618bd92732",
+  "observations": [
+    {
+      "abortAfterSink": false,
+      "parentAborted": false,
+      "waitHeld": false,
+      "consumerReceivedBuffer": true,
+      "bufferLength": 49,
+      "zeroBeforeCallerCleanup": false
+    },
+    {
+      "abortAfterSink": true,
+      "parentAborted": true,
+      "waitHeld": true,
+      "consumerReceivedBuffer": false,
+      "bufferLength": 49,
+      "zeroBeforeCallerCleanup": false
+    }
+  ],
+  "actualNetworkRequests": 0,
+  "providerRequests": 0,
+  "SQLStatements": 0,
+  "limits": [
+    "Exact source helper was extracted and TypeScript-erased; this is a private lifecycle proof, not full managed handler or SQL integration.",
+    "Actual native AES generate/encrypt/decrypt; no crypto success stubs. Parent abort is deterministic microtask ordering after sink check and before wait postcheck.",
+    "All captured native result buffers and inputs are cleared by independent test cleanup after observation; no secret bytes written."
+  ]
+}

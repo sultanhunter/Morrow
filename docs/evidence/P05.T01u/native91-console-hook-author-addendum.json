@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 91,
+  "purpose": "fixture_only_supported_structured_console_capture_and_initial_failure_fast_exit",
+  "source_digests": {
+    "scripts/managed-login-lifetime-workers-lab.mjs": "bbe7bc6cf2e35a0a6247f87a77de9372796d9d404b79e07fdb44071e822f4d06"
+  },
+  "preserved_source_sha256": "821fb27223534917e60196cd239f354e6464348929bdfb2ba50a6f32d20680b1",
+  "preserved_actual_host_repair_report": {
+    "path": "docs/evidence/P05.T01u/lifetime-workers-lab-host-repair.json",
+    "sha256": "337060a007fbc2724f4a8dc93a2ff2b97f55d788c6254cec2991995b3558ec98"
+  },
+  "outside_evidence_digests": {
+    "check-managed91-structured-console.mjs": "562095d1ebc731981ae47e8c1e5cd2e6695406e491d903c5f540546eb671bd24",
+    "managed91-structured-console-characterization.json": "9040f8d68cd76133c85142f1cfc73a937a0a691207323090234563dd558cf72b",
+    "managed91-structured-console-characterization.log": "035d9fc52da65d99c366e805529d8c47796aae0e496d39e23c7fc24c86a6920d",
+    "managed91-structured-console-characterization-sandbox-held.log": "bade839f0c9ab882b56b6b48a80562462d73bdf12aa49808d28a117f38ad5e68",
+    "managed91-console-capture-diagnosis.json": "9d77bf0f004392a16a49dd94ee4f7a0aeabb3db1c1abaf3da073a0ed47898e6c"
+  },
+  "actual_characterization": {
+    "sandbox_first_exit": 1,
+    "sandbox_start_chunk": "941dc8",
+    "sandbox_session": 14151,
+    "sandbox_completion_chunk": "5d3817",
+    "sandbox_failure": "listen EPERM 127.0.0.1; log preserved; no report created",
+    "authorized_loopback_start_chunk": "20cb43",
+    "session_id": 26151,
+    "completion_chunk": "335819",
+    "actual_exit_code": 0,
+    "native_event_count_before_disposal": 1,
+    "native_event_level": "debug",
+    "event_observed_before_finite_body": true,
+    "outbound_requests": 0,
+    "runtime_disposal_acknowledged": true
+  },
+  "focused_checks": [
+    {
+      "name": "actual_source_parser_and_hook_and_initial_failfast",
+      "path": "work/test-u91-native-console-capture.mjs",
+      "sha256": "320f45c83a85cd480f0cef181c0129534950a55a0e2987c127d2d944e76f119b",
+      "tests": 4,
+      "actual_exit_code": 0,
+      "completion_chunk": "13c7b9"
+    },
+    {
+      "name": "node_syntax",
+      "actual_exit_code": 0,
+      "completion_chunk": "fc7b4a"
+    },
+    {
+      "name": "standalone_strict_fixture_types_ES2022_DOM_DOMIterable",
+      "actual_exit_code": 0,
+      "start_chunk": "19cc61",
+      "session_id": 25411,
+      "completion_chunk": "1e5f6a"
+    },
+    {
+      "name": "unchanged_gate_units",
+      "tests": 27,
+      "actual_exit_code": 0,
+      "completion_chunk": "cac9e3"
+    },
+    {
+      "name": "formatter",
+      "actual_exit_code": 0,
+      "completion_chunk": "f59be6"
+    }
+  ],
+  "bounded_changes": [
+    "same existing exact closed-event parser is called synchronously from supported top-level handleStructuredLogs message; ordinary Miniflare host Log retained",
+    "initial response-check failures throw before an unreachable source-settlement/gate wait; all checks retained"
+  ],
+  "preserved": [
+    "generic direct/routed control bodies and branches",
+    "source handler, exact P and source P.then telemetry",
+    "production D/C and release custody",
+    "Worker fixture, SQL runner, gate and all tests",
+    "both actual held report bytes"
+  ],
+  "limits": [
+    "Console hook proves observation only, not cleanup success. Credential gate zero remains independently unresolved.",
+    "The full managed native runner has not been rerun on this source.",
+    "No production/provider/account/Git/SQL effects."
+  ],
+  "source_paused": true
+}

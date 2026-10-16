@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "reviewer": "fixed_provider_core",
+  "report_sha256": "e2ef4d2ece3a58942e30dfc42b732a91a9bfa3cffbdbcf790fa230e2cb6e32e3",
+  "execution": {
+    "tool_chunk": "0af1f6",
+    "actual_exit_code": 0,
+    "log_sha256": "54e55ed667ba698a96b204b175782e20dea99293a05586cd0928b64552d8b172"
+  },
+  "frozen90_protocol_sha256": "e2b689300f60bedd75c3b5750aadbefe311e5caed73cbdd0345498e49cfd980a",
+  "repro_script_sha256": "5e7d5c4ed9fb423cfade810d9417e32a8f87260284ca8f997249dff3f2422fbc",
+  "preparation_hold": {
+    "actual_exit_code": 1,
+    "tool_chunk": "2fdb62",
+    "reason": "Outside clone lacked package type:module, so tsx exposed no named ESM export. Added only outside package.json type:module; normative source bytes unchanged.",
+    "log_sha256": "54415bcc9418c365cbb1bf4ff539a564af5a42c5319d76fd2cfc8b574e163ead"
+  },
+  "Source_Git_or_provider_mutation": false
+}

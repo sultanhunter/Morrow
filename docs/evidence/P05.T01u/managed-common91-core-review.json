@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_core",
+  "result": "clear_for_bounded_local_native_and_SQL_integration",
+  "blocking_findings": [],
+  "reviewed_source_digests": {
+    "packages/identity/src/standalone-login-protocol.ts": "0d75b3fd7efda9caf1938086b05fe433109de5a835e404655fb0b7d64b030078",
+    "packages/identity/src/standalone-login.ts": "61456a4e1c4a8f213e060e4b74cf936c41bafac3a634747d82388460ae6d9563",
+    "packages/identity/src/managed-login-request.ts": "87d729f32b8c4deaca7d7f0cefc18ef0ec679ffba8e87fe46c8ca74297148c51",
+    "tests/managed-login-request.test.mjs": "aeb74c205471fc9a7e982ca39149e71aa7d40ea56993617fe29da6b1d04dd81b",
+    "docs/packets/P05.T01u.md": "4e1ccdcb25ebf69a04bc42c20afa2c7d841bc5c8305e6adb26089c356e9545c3",
+    "docs/plan/build-plan.md": "b7a87e1f20a9b337ba6bc9ed1ef4d58746fcb5a97430e2f1ff39188305802ede",
+    "docs/plan/source.json": "b53f03408def89fe6f2c8cf46a779e07dfb9cdcf8cce71f6fc07d1d14c7bad68"
+  },
+  "author_receipt_sha256": "64f3f15d09e5fccc4b33ed6041444933eb44f5f4b0a366a2ba88bbd04bab8d12",
+  "source_review": [
+    "Synchronous managed entry owns one original attempt; classification, cold setup and dispatch share entry5s/callback25s, no second attempt. Legacy APIs keep original wrapper attempt ownership.",
+    "Closed captured construction/opaque handles and complete-definition resolved cache retain no ctx/attempt/client/scope or request pending work. Hardcoded individual managed hash/crypto prechecks and cutoff/namespace checks remain.",
+    "Shared parser preserves raw profile digest and exact ordered transcript. One original-Promise disposal sink precedes wait first check; no Promise replacement, operation callback, check/race/postcheck/signal/deadline/end change.",
+    "Exact selected key UUID/expiry, existing ordered AAD and single atomic SQL claim, no trial/fallback/retry. Managed held crypto results have owned disposal sinks covering result between settlement and postcheck or arriving late; success buffers clear in finally.",
+    "Shared synchronous delivery frame, statuses/headers/cookies and final freshness preserved. Temporary common generic wrappers/aggregate shims absent. Original14 tests unchanged apart from preauth import; three meaningful queued/native Promise regressions appended."
+  ],
+  "preservation": {
+    "wait_sink_exact_reversal_to_frozen90": true,
+    "other_protocol_helpers_exact_qualified89": true,
+    "original14_tests_preserved": true,
+    "protected_old_identity_SQL_lock_exports_evidence_paths": 796,
+    "all_old_evidence_files_exact_bytes_Git_executable_modes": 755,
+    "published_baseline_separately_records_evidence_records": 754
+  },
+  "actual_executions": {
+    "focused": {
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "initial_chunk": "8380f8",
+      "session": 39545,
+      "completion_chunk": "fd69e0",
+      "exit_code": 0
+    },
+    "identity_types": {
+      "initial_chunk": "4475f4",
+      "session": 76459,
+      "completion_chunk": "c0ab8a",
+      "exit_code": 0
+    },
+    "legacy": {
+      "tests": 107,
+      "pass": 107,
+      "fail": 0,
+      "initial_chunk": "143f58",
+      "session": 29749,
+      "completion_chunk": "86b921",
+      "exit_code": 0,
+      "loopback_permission": true
+    },
+    "restricted_legacy_hold": {
+      "completion_chunk": "9c60d1",
+      "exit_code": 1,
+      "pass": 70,
+      "fail": 37,
+      "reason": "all37 failures listen EPERM 127.0.0.1; same suites pass with fixed loopback permission"
+    },
+    "readonly_receipt_preparation_holds": [
+      {
+        "chunk": "4d3d60",
+        "exit_code": 1,
+        "reason": "754 baseline evidence_records incorrectly treated as count of755 raw evidence files"
+      },
+      {
+        "chunk": "1065ba",
+        "exit_code": 1,
+        "reason": "incorrect JSON-only count assumption; raw755 set includes723 JSON and32 supporting artifacts. All755 exact protected files now verified without relabeling baseline754."
+      }
+    ]
+  },
+  "logs": {
+    "focused": {
+      "path": "work/morrow-p01/independent-common91-focused.log",
+      "sha256": "6257cd1fa13771e948b4126328e428ef7a26ab15b9c343ce67db53c872906333"
+    },
+    "types": {
+      "path": "work/morrow-p01/independent-common91-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "legacy_initial_restricted": {
+      "path": "work/morrow-p01/independent-common91-legacy_initial_restricted.log",
+      "sha256": "63a20ce4dea1bd092ed3a5abfee5e21cb737675f021bd8dad6e1be295f7fce45"
+    },
+    "legacy_loopback": {
+      "path": "work/morrow-p01/independent-common91-legacy_loopback.log",
+      "sha256": "fc1d5bb5d6d4f6236bb8e726c35ce6409cc924aea236da910547ee7e00399a73"
+    }
+  },
+  "finding_closure": {
+    "frozen90_preauth_defect": "e2ef4d2ece3a58942e30dfc42b732a91a9bfa3cffbdbcf790fa230e2cb6e32e3",
+    "current91_recheck": "a7b670d2ad6dd1ec5beff06207a9976bcc674321a4b37f61101a674eb19d8135",
+    "observed": "connected1/query0/release1/outerheld in both; unhandled1 frozen90 ->0 current91"
+  },
+  "limits": [
+    "Reviewer authored scope/pool, excluded from independent source verdict; other-author HTTPS review9849c60a covers them. This review covers root common/protocol/handler/tests.",
+    "CPU controlled broker/context and actual native crypto delegation plus disposable loopback compatibility only. Native Worker lifetime, realSQL/cross-isolate, provider, fullCI and publication not qualified.",
+    "HTTPS owns actual AES race/late result repro executions; read their independent closure without attributing those executions to this reviewer."
+  ],
+  "source_mutations": 0,
+  "native_MF_Docker_SQL_provider_external_network_actions": 0
+}

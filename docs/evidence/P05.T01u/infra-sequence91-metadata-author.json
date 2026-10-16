@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 91,
+  "scope": "routine_current_metadata_exact_three_environment_fields",
+  "source_digests": {
+    "infra/environments/development.json": "34ff526244f60e3635f89e1d43232c8b297653c91a0c1665a6820b9ebfadf601",
+    "infra/environments/staging.json": "cd399d8f05f27ad09c055099744c0aebbdbac564f39686e2b1e4be9c6521293f",
+    "infra/environments/production.json": "d4167cfcfff74199ae43c4503fc096b3fa45735ee2c9029aebc7f8638c845a68"
+  },
+  "changes": {
+    "infra/environments/development.json": {
+      "before_sha256": "2494c019400730a6b5c4dc3d71ed7870429b31eb7dd8b993fb87ebea7a697e4c",
+      "after_sha256": "34ff526244f60e3635f89e1d43232c8b297653c91a0c1665a6820b9ebfadf601",
+      "exact_inverse": true
+    },
+    "infra/environments/staging.json": {
+      "before_sha256": "f022e36def41a8f0c600f2323cf7136b38ebccc4b336abe1b712762bf2bc55d9",
+      "after_sha256": "cd399d8f05f27ad09c055099744c0aebbdbac564f39686e2b1e4be9c6521293f",
+      "exact_inverse": true
+    },
+    "infra/environments/production.json": {
+      "before_sha256": "ce21b1a7f8bff58182b660d259b438309974b286276ae85db6d4945d75f1f4cc",
+      "after_sha256": "d4167cfcfff74199ae43c4503fc096b3fa45735ee2c9029aebc7f8638c845a68",
+      "exact_inverse": true
+    }
+  },
+  "profile": {
+    "path": "work/profile-source91-env-metadata.py",
+    "sha256": "d20f18cd33b42f425dece704a6755d4913531ba9e5832bdda9f4390d7be1f138"
+  },
+  "authority_assessment_sha256": "734d130f35d80f45fe10e9093bb36cd1f1fbdaff14f498c7ed4839125618717a",
+  "no_other_infrastructure_field_or_code_change": true,
+  "no_provisioning_or_activation": true,
+  "next": "Independent preservation-profile/metadata review and full current local CI."
+}

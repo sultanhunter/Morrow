@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 91,
+  "actual_exit_code": 0,
+  "source_files": 1860,
+  "source_before_sha256": "be47efedf8ec4993a624cb69e67c5c3acc3994b61c82bad7c3309ef77644005e",
+  "primary_log_sha256": "b38a3ba5a01e9a513a25a4c2262a89bc006ba68505ddf63145f02a9bf574abc3",
+  "new_report_sha256": "c3841375dcfc9fa0b74ffbe3f8b837f7f250a251873fe250fc724f11ac3cfbad",
+  "unexpected_source_changes": [],
+  "all_preexisting_files_preserved": true,
+  "historical_reports_preserved": 754,
+  "first_actual_managed_native": false,
+  "attempt_label": "event-wait-repair",
+  "preserved_initial_held_report_sha256": "cfc135a00b6da7003fcee12a00f66987dba29a3a7c18eff9714b226c09c67f55",
+  "provider_actions_by_wrapper": 0,
+  "Git_or_Desktop_mutations": false,
+  "limits": [
+    "Native fully intercepted SDK/wire fixture only; no realSQL or hosted activation.",
+    "Runtime runner and raw gate observations qualify their explicit stages only; settled cleanup does not promote unknown custody."
+  ]
+}

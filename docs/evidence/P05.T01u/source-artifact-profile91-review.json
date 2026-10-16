@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 91,
+  "reviewer": "fixed_provider_https",
+  "result": "clear_for_readonly_path_preservation_and_CI_transport_inspection_profile",
+  "review_independence": "Reviewer authored neither profile nor inspector nor its10 tests. Reviewer authored only separate11 in-memory profile guard cases and this receipt. Semantic source/domain/native reviews are separate.",
+  "reviewed_helper_digests": {
+    "work/profile-source91.py": "026a9e01a8bc46aeb8f19341ab260074f577e1face9639b139e6eac9c41f4ab9",
+    "work/inspect-ci-artifact91.py": "d416f03c114269ae638ae51166687dcc7ef580b4ac14fc909e733333d7cd9780",
+    "work/test-inspect-ci-artifact91.py": "bb56e5c2f4cd36eb5d1b9aa6813574c2df997e8228c73edc4d5af3ee5365b9eb"
+  },
+  "reviewed_evidence_digests": {
+    "work/profile-source91.py": "026a9e01a8bc46aeb8f19341ab260074f577e1face9639b139e6eac9c41f4ab9",
+    "work/inspect-ci-artifact91.py": "d416f03c114269ae638ae51166687dcc7ef580b4ac14fc909e733333d7cd9780",
+    "work/test-inspect-ci-artifact91.py": "bb56e5c2f4cd36eb5d1b9aa6813574c2df997e8228c73edc4d5af3ee5365b9eb",
+    "work/morrow-p01/artifact91-inspector-before-literal-preservation-label.py": "745ae253a9037b0f28f1845b65b0d4bab29699ae8e1b00aa37ea2148d7a20ef0",
+    "work/publish-source85.py": "144511876b1b2e00f3a8190b9b4cc93f4f39b59277fb93781c3dad24f274740c",
+    "work/morrow-p01/before90-qualified-manifest.json": "ec96ee33956b79de3e37173e62aef506019a17c6fa72ea572943c152616fb64b",
+    "work/morrow-p01/independent-source-profile91-guards.json": "34e721dd52c568cae5f2942d781522b3fe4e1ce9d4c6a572345c559c80eee379",
+    "work/review-profile-source91.py": "8cd33cc5e4d1fae573b8d04c8ba139ea2e748a3810a790cbcd0f511735f2089f",
+    "/private/tmp/morrow91-independent-artifact-inspector-inert.log": "7cb75b985cfd8b363b8ef33ec8ac36cdcebd694aa02024785b44600ef07275b7",
+    "/private/tmp/morrow91-independent-artifact-inspector-final-inert.log": "fdb4ccedc5e6027694653dae950d491e9954203bf0133a89031e4b24dd0178a3",
+    "/private/tmp/morrow91-independent-source-profile-guards.log": "34e721dd52c568cae5f2942d781522b3fe4e1ce9d4c6a572345c559c80eee379"
+  },
+  "authority": {
+    "fresh_page_sequence": 91,
+    "full_page_blocks": 553,
+    "exact_previous_readback": true,
+    "baseline_commit": "e6109a8548dd43de2445a08a2c1dae8d502ad3f1"
+  },
+  "review_coverage": [
+    "Read profile, inspector and10 tests in full, compared inspector against retained89 algorithm. Import is restricted to the pinned existing owned reader/profile and their main mutation branches are not invoked.",
+    "Profile binds exact1783-file89 Git baseline/inventory/manifest,754old records, immutable native first proof,17archive files, exact91plan/source/packet; all old file modes and non-maintained bytes preserved.31allowed old paths and12new required paths are scope allowances only.",
+    "Independent11 in-memory controls reject old evidence/owner/deletion/mode/unknown path/missing module/authority/firstproof/archive/new executable drift, while intentionally allowing semantic changes to an approved path without claiming those semantics are reviewed.",
+    "Inspector reads one bounded raw ZIP buffer, binds its API digest/run/attempt/head/repository and parses exactly that buffer; no extraction or archive code execution. Strict path/type/CRC/compression/expanded byte/file inventory guards retain59fixed payloads.",
+    "Exact55fresh reports/producers/report-hash rows,46source-pinned commands,55final-success API steps, same exact head/before/restored bytes and allowed after-test changes remain bound; previous44command relative order retained with only two U additions.",
+    "Local Git reads verify repository/branch/remote, explicit expected head and ancestry from qualified89. Those reads do not stage/commit/push or qualify source semantics.",
+    "Default is readonly. Optional inspection receipt is exclusive, no-follow,0600 and fsynced outsideGit; source/desktop/network/provider effects absent. API JSON remains trusted root-obtained evidence, not a cryptographic proof of API retrieval."
+  ],
+  "finding_closure": {
+    "id": "path_profile_semantic_preservation_label",
+    "status": "closed",
+    "original_sha256": "745ae253a9037b0f28f1845b65b0d4bab29699ae8e1b00aa37ea2148d7a20ef0",
+    "issue": "Original field claimed owner/SQL/export/dependency semantic preservation from an allowed-path profile which explicitly permits changes to package.json/shared source.",
+    "repair": "Exact one-key rename to allProtectedBaselineFilesAndEvidencePreserved; retained currentAllowedSourceSemanticsRequireIndependentReview=True.",
+    "independent_exact_delta_guard_passed": true
+  },
+  "independent_actual_executions": [
+    {
+      "kind": "initial_inspector10_inert_guards",
+      "tool_chunk": "d07bce",
+      "actual_exit_code": 0,
+      "tests": 10
+    },
+    {
+      "kind": "final_inspector10_inert_guards_after_label_repair",
+      "tool_chunk": "96c2d4",
+      "actual_exit_code": 0,
+      "tests": 10
+    },
+    {
+      "kind": "profile_current_readonly_and11_in_memory_controls",
+      "launch_chunk": "b96300",
+      "session_id": 44520,
+      "completion_chunk": "f67bf6",
+      "actual_exit_code": 0,
+      "cases": 11,
+      "summary": {
+        "baselineFiles": 1783,
+        "preservedEvidence": 754,
+        "allowedExistingPaths": 31,
+        "newModulePaths": 12,
+        "archiveFiles": 17
+      }
+    },
+    {
+      "kind": "exact_literal_label_delta_and_final_sourcepins",
+      "tool_chunk": "f0979f",
+      "actual_exit_code": 0
+    }
+  ],
+  "nonqualifying_preparation_note": "One read command first used work/ for the preserved inspector filename instead of work/morrow-p01 and exited1 (45c35e); corrected path exact delta guard succeeded. No helper execution, source effect or qualification claimed for that failed read.",
+  "blocking_findings": [],
+  "limits": [
+    "No actual CI artifact/API archive was inspected or accepted during these tests; all API/archive fixtures are inert in memory.",
+    "Current source read only establishes allowed paths and preservation; semantics, domain results, real physical cleanup, actual native/SQL counts and qualification need separate independent reviews.",
+    "No network/provider/native/Docker/SQL/Git mutation/Source/Desktop writes; outside review/guard receipts only.",
+    "Not a candidate staging, final publication, deployment or merchant activation approval."
+  ]
+}

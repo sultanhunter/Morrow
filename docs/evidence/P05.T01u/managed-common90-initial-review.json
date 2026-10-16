@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "task": "P05.T01u",
+  "current_plan_sequence": 90,
+  "reviewer": "fixed_provider_https",
+  "status": "held_pending_owner_narrow_buffer_disposal_repair_and_canonical91_final_source",
+  "review_independence": "Reviewer did not author root common handler/protocol/shared-core code or units. Own capsule module is excluded; its separate Core independent review is relied upon for API implementation. Scope/pool review was separate.",
+  "reviewed_original_source_digests": {
+    "packages/identity/src/standalone-login-protocol.ts": "e2b689300f60bedd75c3b5750aadbefe311e5caed73cbdd0345498e49cfd980a",
+    "packages/identity/src/standalone-login.ts": "4b0bda5f7d13c45571280bfc44813563ef961743df6c08b08ace5352394d65d4",
+    "packages/identity/src/managed-login-request.ts": "87d729f32b8c4deaca7d7f0cefc18ef0ec679ffba8e87fe46c8ca74297148c51",
+    "tests/managed-login-request.test.mjs": "7f63ce02063c6e564bf1b27ce6d538d3cd2631114dbba38ecbb1c373b78c0f2c"
+  },
+  "evidence_digests": {
+    "work/morrow-p01/managed-common90-author-receipt.json": "6c7bfe19fa65d3a6df667fc4945883e31ab6e08a962b04e661216ef577116801",
+    "work/morrow-p01/independent-common90-digest-batch-original.json": "489ff6371b700cd6e0654d5b268d537817617cadfbaf5ce6fb622e34b7d29982",
+    "work/morrow-p01/independent-common90-digest-batch-recheck.json": "d9036a5fcfb48751a8d766d008d73c6ef93d04d757750d2fc7cde7997378f193",
+    "work/morrow-p01/independent-common90-buffer-sink-race.json": "b5bb081933cb72e13514dfedd120bb8730e2670cd1680d6386c251eb81735aba",
+    "work/review-managed-common-batch90.mjs": "02fb76ee96d46b7486c9c6d5ac8f21b8bea6966810ac47bfd00bcf8a63a43c6c",
+    "work/review-managed-common-buffer90.mjs": "b75d95fe8650e9e46024dae710c477eb363349dd71412140b5498aa8d984fc52",
+    "/private/tmp/morrow90-independent-common-batch-original.log": "489ff6371b700cd6e0654d5b268d537817617cadfbaf5ce6fb622e34b7d29982",
+    "/private/tmp/morrow90-independent-common-batch-recheck.log": "d9036a5fcfb48751a8d766d008d73c6ef93d04d757750d2fc7cde7997378f193",
+    "/private/tmp/morrow90-independent-common-buffer.log": "b5bb081933cb72e13514dfedd120bb8730e2670cd1680d6386c251eb81735aba"
+  },
+  "authority": {
+    "fresh_page_sequence": 90,
+    "fresh_full_page_blocks": 549,
+    "active_packet_sha256": "93d73810fa416bbbf65f2bba245dd503d1eaab3ca3caa2e894397ae37c2a4835",
+    "qualified_baseline": "e6109a8548dd43de2445a08a2c1dae8d502ad3f1"
+  },
+  "clear_source_aspects": [
+    "Synchronous managed constructor captures exactly six trusted own-data construction fields and methods/receivers. Each fetch creates one25s attempt before asynchronous classification/setup; shared dispatch narrows noncallback to entry+5s and owns no new attempt. Both wrappers end exactly their supplied attempt in finally.",
+    "One shared start/callback/delivery path retains immutable AuthDeliveryPlan/header/cookie/body construction and synchronous sink check/order/error behavior. Managed path never enters legacy fetch/dispatch after initialization.",
+    "Parser validation and exact ordered digest transcript preserved; raw verificationProfileJson is hashed without reencoding. Controlled path checks before each actual digest and before return.",
+    "Per-handler entire captured snapshot owns only resolved immutable config/keyring cache. No pending IO/import, ctx/scope/attempt/client cache; concurrent misses are independent. Changed handlers cannot share same UUID/namespace cache entries.",
+    "Begin uses current key eligibility before/after import/encrypt, before bind, after bind and at final handoff. Exact SQL fixed flow expiry is retained and passed to selectors, not rewritten to key cutoff.",
+    "Callback performs existing atomic claim once, selects only claimed UUID and decrypts once; no trial alternatives/reclaim/provider retry. Exact AAD purpose/version/configuration namespace/ordered fields, nonce12/tag128/ciphertext bounds and proof digests are retained. Final open eligibility/owning evidence checked synchronously before cookie handoff.",
+    "Each managed random/digest/encrypt/decrypt invocation has immediate original authority checks; late cryptography cannot install late cache/domain/provider/cookie state. Successful plaintext/ciphertext temporary buffers have explicit finally wiping; physical zeroization of immutable strings/keys not claimed.",
+    "Original provider/69/76/77/M bodies and exchange/issuer latches remain source-preserved outside approved shared-core adaptation; native provider/browser/merchant entry activation remains out of scope."
+  ],
+  "findings": [
+    {
+      "id": "common_digest_batch_pending_sink",
+      "status": "proven_on_original_and_closed_on_intermediate_owner_repair_f368c3b5",
+      "issue": "Component digest sinks did not consume a rejected Promise.all created before attempt.wait initial authority check threw.",
+      "evidence": "Actual managed callback CPU-only, five real native digests, parent abort at prewait check; fixed late failure delivery produced one unhandled aggregate on original and zero after owner repair. Broker/provider/SQL zero.",
+      "original_execution": {
+        "launch_chunk": "b38657",
+        "session_id": 38735,
+        "completion_chunk": "cc3f50",
+        "actual_exit_code": 0
+      },
+      "intermediate_recheck_execution": {
+        "launch_chunk": "2972a3",
+        "session_id": 81689,
+        "completion_chunk": "83bd26",
+        "actual_exit_code": 0
+      },
+      "qualification_limit": "Root reported broader unchanged preauth internal gap and is amending canonical91 before central wait-entry sink. Final new source has not yet been reviewed."
+    },
+    {
+      "id": "common_buffer_sink_completion_abort_race",
+      "status": "proven_source_helper_gap_awaiting_owner_repair",
+      "issue": "Conditional sink can observe still-live authority just before original wait postcheck observes abort. Result is never assigned to outer plaintext local, so caller finally cannot wipe it and earlier sink does not wipe it.",
+      "evidence": "Exact frozen helper extracted/TypeScript-erased plus actual original attempt and real AES. Deterministic abort after sink before wait postcheck yields held/no-consumer and nonzero49-byte result. Ordinary control returns result and caller cleanup wipes.",
+      "execution": {
+        "launch_chunk": "55e307",
+        "session_id": 42787,
+        "completion_chunk": "f7d012",
+        "actual_exit_code": 0
+      },
+      "impact": "Best-effort temporary buffer disposal only; no authority/output revival.",
+      "minimal_proposed_repair": "On managed encrypt/decrypt wait rejection attach disposal-only then to same pending result, wipe its bytes whether already or later fulfilled, sink rejection, rethrow same primary failure; successful consumer still wipes in finally.",
+      "proof_limit": "This source-helper lifecycle proof is not a successful end-to-end managed handler/SQL flow."
+    }
+  ],
+  "limits": [
+    "No Source edits, runtime lease, native Miniflare/WebSocket, Docker, SQL or provider/network effects.",
+    "No final common-source clearance while owner source/authority is being repaired.",
+    "14 author units/types are author evidence, not an independent new successful crypto/cross-isolate SQL claim; independent comparison probes are explicitly recorded.",
+    "Canonical91 final old API/race/deadline/cleanup preservation and all current-source tests still require fresh review."
+  ]
+}

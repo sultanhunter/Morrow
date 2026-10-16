@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 89,
-  "plan_digest": "fe280f8aab9d7517b7959d1bf47f3edc889f29019714abcb7d9e381047fb6276",
+  "plan_sequence": 91,
+  "plan_digest": "b7a87e1f20a9b337ba6bc9ed1ef4d58746fcb5a97430e2f1ff39188305802ede",
   "tasks": [
     {
       "id": "P01.T01",
@@ -3028,6 +3028,278 @@
     {
       "path": "docs/evidence/P05.T01t/workers-lab.json",
       "sha256": "a01829fd242456d3306c57cf3a8159e1f0233cb9bde82b872434041e7d958d5b"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/actual-repository_ci-execution.json",
+      "sha256": "af288c507c0aac1a2927dfa6f1a86eacc89c2cb51b633ea189521e7fe1b4c365"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/actual-scaffold_smoke-execution.json",
+      "sha256": "1628b704b9cf34889f48e245e7ee68ae8dc07fceb5e89861e0d1a9ff5fc9d060"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/author-native91-event-wait-classification.json",
+      "sha256": "7bcc68043c1f882f055a7e1f008e317afd5150a4375799615406aba32c87f0d1"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/canonical91-bootstrap.json",
+      "sha256": "d45048f5b8321b856db45c5b64dbc1e319ebd78aa10979a8c00645b426ddb7e6"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/capsule90-author.json",
+      "sha256": "e4d4029dc0f5e7a9ff8a5f1b9e454f68330edb5d3122b9fcc75c5374b1d4647b"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/capsule90-independent-review.json",
+      "sha256": "26c02de03d5f66374f1c9a906f11dd2cd9fa2cd0ada21d3853967405c6a3871b"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/capsule90-late-sink-author-addendum.json",
+      "sha256": "2dd88ba0d3bf64a33c96e378634e8d6859f80b86ff0c5cf975b6f4034737e491"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/ci91-serial-file-registration-author.json",
+      "sha256": "233b91acce94e12631166230ce9cff24195a08d34324acf5c456fbf2a840a8c4"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/draft-validation.json",
+      "sha256": "35d7948a39e321bb9cd5d2f4e9addc80278d81e8e459b0752e6c6bdd78534fd0"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/first-proof-execution.json",
+      "sha256": "9cddbe15d9bdf5878d866607130675d7dbb036afdcfcdba6aa898160a916f839"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/first-proof-independent-review.json",
+      "sha256": "14b2512af9b904a2fd9e4212c5b78380993b4b52e2cf312c31466d72ddcc3d63"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/first-proof-root-preservation.json",
+      "sha256": "a9e8ef5864fe9c6767411a0167a7291c9a094497e55baedf37ca69519fe16e15"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-candidate91-helper-review-final.json",
+      "sha256": "9e4f8df676de2e4f3dc6b7c4de72468d3ad5abdfc6616199d5124535df591ae0"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-ci-metadata91-source-review.json",
+      "sha256": "06192c30962fc9cf3879ef05ec1a05a809fe517a7d5ac00d285df6b6c9651f89"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-common90-buffer-sink-race.json",
+      "sha256": "b5bb081933cb72e13514dfedd120bb8730e2670cd1680d6386c251eb81735aba"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-common91-buffer-sink-recheck.json",
+      "sha256": "2d8c28fbd2b8f88761fd9fb627882bf937e3bf3600a88624c09844af4f620843"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-common91-digest-batch-recheck.json",
+      "sha256": "90adba1c332216a58d5e18e2e05498b638cc147af18b24cfc6c47468b7a5b049"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-infra-env-helper91-current-review.json",
+      "sha256": "65b50d0a1f1c57f75e29b4c1991193cb185ab7d35773c7a63fdb41dd737058f6"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-infra-sequence91-authority-assessment.json",
+      "sha256": "734d130f35d80f45fe10e9093bb36cd1f1fbdaff14f498c7ed4839125618717a"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-managed-capsule91-current-closure.json",
+      "sha256": "11a08e61ce7e84e53c519716930758cd5c3c3b0908750eda14bd8ffcfb5be22f"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-managed-common91-review.json",
+      "sha256": "dc9762493e72dddd11198659ea92395cf155f7ccecd61ae232e1752f60ed4b09"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-managed-fixture91-current-source-review.json",
+      "sha256": "6f591ff30fdd4f05c95a9420593623255d18d4aed4e6ea330e373d7d857b7099"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-managed-native91-host-hold-classification.json",
+      "sha256": "e893a07ad95fd6e1c957e29c328bebe19e997e9b0c3722dbffbb5e7adb20384a"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-native91-event-wait-actual-review.json",
+      "sha256": "b7fe8bc7bb8714b608b06be445a0985b49a4e6bed38e4c25ec90c228f2bee219"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-native91-event-wait-root-review.json",
+      "sha256": "176a6721ba22e24a52c2bb39b4cf40871509fddde1d117e2de2a96ce975db941"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/independent-pool-native91-cleanup-console-review.json",
+      "sha256": "2fa64d1dc189a2e942367fdf331a7707b656c051933caa0b844a2a85ad54be7b"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/infra-sequence91-metadata-author.json",
+      "sha256": "308d0c91f813659aa180a86e3cae92acb998f30104a1340aeaeb61439d80f447"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/infra-sequence91-suffix-execution.json",
+      "sha256": "11b28a2e30e609bf87d8c2ab8498d7d9e46400bd20ab4dd7d2803276b8ab033a"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/lifetime-workers-lab-cleanup-repair.json",
+      "sha256": "2e378293af90a00e1a527b2d049f5c2ecbf099023c2fd1370c8de0cc93b70670"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/lifetime-workers-lab-event-wait-repair.json",
+      "sha256": "c3841375dcfc9fa0b74ffbe3f8b837f7f250a251873fe250fc724f11ac3cfbad"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/lifetime-workers-lab-host-repair.json",
+      "sha256": "337060a007fbc2724f4a8dc93a2ff2b97f55d788c6254cec2991995b3558ec98"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/lifetime-workers-lab.json",
+      "sha256": "cfc135a00b6da7003fcee12a00f66987dba29a3a7c18eff9714b226c09c67f55"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/local91-serial-held-execution.json",
+      "sha256": "475a4cee538429aeecbb5f193a8806de90cc2627121bb0a4264c7a2971cd1332"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-SQL91-initial-source-review.json",
+      "sha256": "df5ee527e5bca77d5bbcfcbb96cb2ede32572c271e4d382c23d8a2a6b81d931c"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-common90-initial-author.json",
+      "sha256": "6c7bfe19fa65d3a6df667fc4945883e31ab6e08a962b04e661216ef577116801"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-common90-initial-review.json",
+      "sha256": "a4d41cef2bfd4fecb7b015228b593f974f16c33e4ce321248a31f1db051aa5ec"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-common91-author.json",
+      "sha256": "64f3f15d09e5fccc4b33ed6041444933eb44f5f4b0a366a2ba88bbd04bab8d12"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-common91-core-review.json",
+      "sha256": "acaa28de9166d10fb02feebe6a505cf98f95651dd5b6b015a297dda1831a09fa"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-common91-independent-review.json",
+      "sha256": "dc9762493e72dddd11198659ea92395cf155f7ccecd61ae232e1752f60ed4b09"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-fixture91-repair-source-review.json",
+      "sha256": "a0d2931b1c21fde067f7d336c3ee829d2eff8ea1a4bd612c21583e2085e48e6e"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-native91-host-repair-execution.json",
+      "sha256": "d09d9e53b3c7798302f45b15dddc7f2791e0cfa0d91285cc5552efb56ca5c033"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-native91-host-repair-source-review.json",
+      "sha256": "bb72c811bb6344bf87a0287eea23cb12aa722ccf0a81a3b62e8a656d573ae361"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-native91-initial-classification.json",
+      "sha256": "007c611c7be57273e913553f881cf43ff76740109560d9db96c4bbcd3fe7da0d"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-native91-initial-execution.json",
+      "sha256": "487653bb0f217c877facb9e6246315bec624937b62f43b54a491145b5dc97843"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-native91-initial-source-review.json",
+      "sha256": "9e0d6e49b625771bddd8b1db0e0b9bdf0f3a68a87fd95294e10e9de673bdf072"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-native91-upstream-characterization.json",
+      "sha256": "9d201018fe9ea0b07ad0fe48feae3a07164a24bc3ee81cc49e652b1a0a202983"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed-pool91-cleanup-clock-author-addendum.json",
+      "sha256": "059e58b074a749dee223074af9ef33aa982d463550d0e2bb7548c56f45c474f5"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/managed91-upstream-envelope-execution.json",
+      "sha256": "730fb02b797b86e7c773493cd2f2a081c08721a8d57d3e07026d72093996a84b"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/native-console-capture91-diagnosis.json",
+      "sha256": "9d77bf0f004392a16a49dd94ee4f7a0aeabb3db1c1abaf3da073a0ed47898e6c"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/native-first-proof.json",
+      "sha256": "c4aa23d39d4c5eddd2cc41cc7c939a548cb77e18d7751e8aec539311dcdc1f33"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/native91-cleanup-repair-execution-receipt.json",
+      "sha256": "fc403360d47ba873d0d1b22ada569ae9ae1a2f7db859c39329f17ae46eee2014"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/native91-concurrent-settlement-author-addendum.json",
+      "sha256": "2e99f57ca32f1f69bf9d466d80114e5c456d8684c85c09c669e4995fdf676d61"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/native91-console-hook-author-addendum.json",
+      "sha256": "48b1a12a7f615400fc95f07d7e9e90909b9b87e1fb44d6b89efcf198c332baf1"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/native91-event-wait-repair-execution-receipt.json",
+      "sha256": "52d0a446ac2ebe682f403ccc16bb3d990637830436c5f0c99675d659c250506f"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/pool90-sink-author-addendum.json",
+      "sha256": "ed4629b2678210346e94493ed8fb6680b6005f3917078a58992d7a7a833af8b6"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/preauth90-original-execution.json",
+      "sha256": "e46f50bf8ba65f4133a7453b40eac1ab0996d76ec500114c51fe5363c7a07e2c"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/preauth90-original-rejection.json",
+      "sha256": "e2ef4d2ece3a58942e30dfc42b732a91a9bfa3cffbdbcf790fa230e2cb6e32e3"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/preauth91-recheck-execution.json",
+      "sha256": "e8c52632ad9fd0c438364ff49c7c65a48a9a7d328d9d294639742d5c699096fe"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/preauth91-rejection-recheck.json",
+      "sha256": "a7b670d2ad6dd1ec5beff06207a9976bcc674321a4b37f61101a674eb19d8135"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/prerequisite-T-final-domain-review.json",
+      "sha256": "e66113deae5a4ca7fed1a5230c44cec434d98ef4923afffcef73de047d1c9ccb"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/prerequisite-T-final-source-review.json",
+      "sha256": "232a014231df9e8174cb124443ac809dfa7dae2f8a6b3da86f8be5ed4209ec31"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/prerequisite-T-publication.json",
+      "sha256": "26f08a0778001ab14f357e14edbb2fcf455d81e576521c63f773b7c934351002"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/repository_ci-preflight.json",
+      "sha256": "73c4ce09178cf1f0b39a38b51cffed7e0d6b3609ed85100af3e8f53480dd2a5e"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/scaffold_smoke-preflight.json",
+      "sha256": "edbc44e671f69f16295657b670c9d9ae03cf53d4aa6cfb11af78117eb6991c65"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/scope-pool90-author.json",
+      "sha256": "04eacb04ad65ab07e7e679afc55487c45b6c91045931291b618cf63984d9fe7e"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/scope-pool90-independent-review.json",
+      "sha256": "9849c60a6468f0d6935bd94046fcb244c1843fb328a93706a51829d4e72904fb"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/scope90-settlement-author-addendum.json",
+      "sha256": "0176ec9c03614dd4ab88c57bb4e209f81b398a7bac592188c6dafa484ce80d13"
+    },
+    {
+      "path": "docs/evidence/P05.T01u/source-artifact-profile91-review.json",
+      "sha256": "1e4aee520da904487fd111497c343b947427822d0836eb99fefb4e6ef4f41bda"
     },
     {
       "path": "docs/evidence/P05.T02/clean-build.json",
