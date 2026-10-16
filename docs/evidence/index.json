@@ -2362,6 +2362,26 @@
       "sha256": "a2343e168801c80ba2ef739ae452178bee9b9381c15f735c0ad51cfa26e2d470"
     },
     {
+      "path": "docs/evidence/P05.T01t/held-candidate-A/artifact-api.json",
+      "sha256": "c1dfc7679f85fedfc61f067ff09b6d439407439e1580517159a160c296499ec3"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/held-candidate-A/execution.json",
+      "sha256": "1ccea0f5bb84eea542b2b73d814056d8db1e5c77348ae2c084ccc641a6f16948"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/held-candidate-A/final-job-api.json",
+      "sha256": "1d15ccefdc8d22118787e8b1cefa7ec8551eeb05cb638ff0bab2b4666c2aa905"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/held-candidate-A/final-run-api.json",
+      "sha256": "3af94d6cb5441c16371c43af48100d321d7516ba3cbb7d347973c289d21b7878"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/held-candidate-A/postgresql-workers-lab.json",
+      "sha256": "5020f03f4aae280e6dce99f75300f68e7f2b58c488dd8bb38a46c49d04418609"
+    },
+    {
       "path": "docs/evidence/P05.T01t/independent-core-source-marker-review.json",
       "sha256": "8b24094245901bbbbe87d9a011f37eff15c2f6bcf2aaf89d4f0eb5c16856662c"
     },
@@ -2372,6 +2392,14 @@
     {
       "path": "docs/evidence/P05.T01t/independent-core-source-review.json",
       "sha256": "c3dc519d166d96afff5389b8b1c541c3fc41e460e38237813cd2d8766a08e350"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/independent-final-review-selection-addendum.json",
+      "sha256": "9d7e75e1dc659ebb50e8ff758ab269a8b9433301fe76efe92ee21ca4e9852c15"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/independent-first-CI-classification.json",
+      "sha256": "1d4008e778754e754f463f93ef37c5417f0402f78f32a30cfd03d2596b67d825"
     },
     {
       "path": "docs/evidence/P05.T01t/independent-maintained-source-review.json",
@@ -2408,6 +2436,10 @@
     {
       "path": "docs/evidence/P05.T01t/independent-real-pg-root-review.json",
       "sha256": "24b32eab58e13a8faa53d3dd15c5accc6b8923e5737320cc86b49e4d76191150"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/independent-real-pg-setup-diagnostics-review.json",
+      "sha256": "41405f828018103e3fbe3bf8d67a40b212d3c57bd5ab1be9ca8619f53ec98662"
     },
     {
       "path": "docs/evidence/P05.T01t/independent-real-pg-source-review.json",
@@ -2464,6 +2496,30 @@
     {
       "path": "docs/evidence/P05.T01t/real-pg-initial-author-receipt.json",
       "sha256": "3d2d592abb004e504175d1905e85d46f5e3dd3a8562dc32c335997f474c8885c"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/real-pg-preflight-repair.json",
+      "sha256": "bef05c26b0be41f98158e3311dfe641e0ed7c04c96035364c099baba770b50e6"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/real-pg-setup-diagnostics-author-receipt.json",
+      "sha256": "0b536e4c05d7259e615bc9e087d078342c65bb3a5c4b435e07b4d6fb4a3b92b4"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/repair-draft-validation.json",
+      "sha256": "07e6eb37df119bf6876ccbd76725722edaaf5cf327438b3626361238dda43fc6"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/root-pg-diagnostics-focused-execution.json",
+      "sha256": "5774497310f96eaa448dc9d76e63eea33d48f9dc52ed08d04e7e8cf71c3d2adf"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/root-real-pg-setup-diagnostics-review.json",
+      "sha256": "cffdd3b24f54a2997b1dc867b57aac0408720938a9c079fa39a5c3283f6ed5a6"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/root-repair-helper-review.json",
+      "sha256": "aa8e40a733fee94db1f52b608d89f276f8f7c86edc1d4d4cfeb55526f0346e75"
     },
     {
       "path": "docs/evidence/P05.T01t/scaffold-execution.json",

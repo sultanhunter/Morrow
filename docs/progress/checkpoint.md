@@ -1,3 +1,13 @@
+# Current continuation: first isolated controlled Neon integration held before setup
+
+Canonical88 remains fresh and unchanged at512blocks. First candidate3c059a2ba80d3dd4ff25ef5f58d9131600da7d5c failed actual isolatedCI38911638758/attempt1 before the new PostgreSQL fixture entered its setup callback. All earlier producers passed; the new report has only48source-hash checks and no executed domain check. Final API records53steps with newPG and pending collector held; the raw425869-byte artifact b322e37d314b365861f067a09fa9ba11694729afb5da7760c05b307a133e50d5, actual logs/API and exact failed source are preserved. Owned container and internal network are independently absent. Worker/bridge were never initialized; false disposal acknowledgements are not cleanup leaks or promoted acknowledgements. The original unconditional appliedMigrations11 field was inaccurate for this early hold; no migrations ran.
+
+A narrow two-file repair adds closed setup milestones and per-guard booleans/counts, preserving every original topology/ownership/bounds predicate, and counts only successfully delegated exact migrations from zero. Focused inert seed/accounting cases pass; they do not establish real SQL or Docker behavior. Production adapter/owners/SQL1-11/old network-none helper and every617pendingA evidence record remain exact. Independent source review and a fresh isolated integration are required; no cause is selected from the original generic failure and no topology fallback is added.
+
+Next publish a separately marked repair candidate to existing draftPR1, then inspect actual topology/SCRAM/four-role/full84 request and cleanup observations. Only after all53actualAPIsteps and artifact/domain review pass may final evidence and exact-headCI qualify guarded Desktop alignment. Desktop remains qualified87; P05.T01/P05.T03 remain In progress. No current user input or hosted Neon/WorkOS/Shopify/account/deployment action is needed.
+
+# Historical88 initial candidate preparation checkpoint
+
 # Current continuation: controlled Neon prepared for isolated integration
 
 Canonical88 remains fresh at512blocks. The private four-role controlled Neon mechanism, captured Workers WebSocket transport, independent PG-wire oracle and separate realPG fixture are source-reviewed. Local fullCI passes2,138tests/zero failures and11scaffold guards; all580historical reports and the complete prior source inventory were restored byte/mode exact. The first local pipeline hold was the unchanged secret-pattern guard matching three known synthetic marker literals; exact same-byte fixture construction fixes it without weakening the guard or changing production modules. Original native holds and both source-bound successful runs remain preserved.

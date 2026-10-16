@@ -1,0 +1,308 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "reviewer": "fixed_provider_core",
+  "kind": "independent_first_failed_CI88_classification_not_qualification",
+  "tested_commit": "3c059a2ba80d3dd4ff25ef5f58d9131600da7d5c",
+  "run_id": 38911638758,
+  "attempt": 1,
+  "job_id": 117008666607,
+  "artifact_id": 12051970787,
+  "artifact_sha256": "b322e37d314b365861f067a09fa9ba11694729afb5da7760c05b307a133e50d5",
+  "input_sha256": {
+    "actual-failure-preservation.json": "1ccea0f5bb84eea542b2b73d814056d8db1e5c77348ae2c084ccc641a6f16948",
+    "artifact-rest.json": "c1dfc7679f85fedfc61f067ff09b6d439407439e1580517159a160c296499ec3",
+    "artifact.zip": "b322e37d314b365861f067a09fa9ba11694729afb5da7760c05b307a133e50d5",
+    "artifacts-rest.json": "1174524108bca011cd9380c9b77865a9da30b89ed54da5f0baf0339ae0ad876d",
+    "candidate-A-public-inventory.json": "8d57b50620e1469a116f1c7420c55832f7e66361434273751ba1ef45d8dec07a",
+    "jobs-rest.json": "1d15ccefdc8d22118787e8b1cefa7ec8551eeb05cb638ff0bab2b4666c2aa905",
+    "postgresql-held-report.json": "5020f03f4aae280e6dce99f75300f68e7f2b58c488dd8bb38a46c49d04418609",
+    "run-rest.json": "3af94d6cb5441c16371c43af48100d321d7516ba3cbb7d347973c289d21b7878",
+    "run-view.json": "bf58ca241931ec53b6cd3afd889bb55d7dddb210f1e270fd72568106d50d5ed9",
+    "run.log": "2cc9de3339a550f8d13eb5d53f95d87b895af4a2dfcc216be35d145e02eb15e8",
+    "watch.log": "7d61379be1079720d7f4472e29095c46131504d2c7d3e99a757b447b3020bfdb"
+  },
+  "strict_archive_structure": {
+    "fixed_payloads": 57,
+    "reports": 53,
+    "expanded_bytes": 3673395,
+    "zip_bytes": 425869,
+    "all_report_payload_hashes_match_manifest": true,
+    "API_artifact_digest_matches_exact_zip": true,
+    "candidate_source_files": 1643,
+    "candidate_source_inventory_digest": "bafd5551129c62c9027a9179738af94396d9c81c4d9e63fe10ca1659f052159d",
+    "source_snapshot_matches_exact_Git_commit": true,
+    "source_after_restore_identical_before_bytes": true,
+    "immutable_after_tests_files_unchanged": true
+  },
+  "API_failure": {
+    "run": "failure",
+    "job": "failure",
+    "steps_total": 53,
+    "failed_steps": [
+      {
+        "number": 48,
+        "name": "Exercise controlled Neon profiles and login against isolated PostgreSQL"
+      },
+      {
+        "number": 49,
+        "name": "Collect pending validation evidence"
+      }
+    ],
+    "skipped_steps": [
+      {
+        "number": 99,
+        "name": "Post Run actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38"
+      }
+    ],
+    "strict_success_inspector_rejection": "EXACT_SUCCESSFUL_RUN_REQUIRED"
+  },
+  "collector": {
+    "collectionStatus": "incomplete_pending",
+    "qualificationStatus": "pending",
+    "issues": [
+      "producer_not_success:postgresql_controlled_neon"
+    ],
+    "commands": 44,
+    "successful_commands": 43,
+    "failed_commands": [
+      {
+        "stepId": "postgresql_controlled_neon",
+        "command": "npm run lab:controlled-neon-postgresql",
+        "outcome": "failure",
+        "conclusion": "failure",
+        "actualExitCode": null
+      }
+    ],
+    "fresh_successful_reports": 52,
+    "fresh_partial_report": "docs/evidence/P05.T01t/postgresql-workers-lab.json",
+    "actual_numeric_process_exit_codes": null
+  },
+  "preserved_baseline": {
+    "manifestSha256": "8a40a46365dcb4536072d87d8a4f7d9e1d0345d5f31cb7e7f09fb1f7cc1a7fc1",
+    "commit": "dbb0f5bedd86574e77aab6b19318d1556bc41c9e",
+    "publicFiles": 1592,
+    "protectedHistoryAndEvidenceFiles": 1049,
+    "expectedHeadDescendsFromBaseline": true
+  },
+  "earlier_scope": {
+    "reports": 52,
+    "source_binding_occurrences_verified": 1013,
+    "reported_passed_assertions_verified": 11869,
+    "repository_tests": 2138,
+    "scaffold_guards": 11,
+    "native_report_sha256": "7cbe72550d5f89d85c508b91d6266eea1661caebbf59f3bc255593a15733f5a2",
+    "native_actual_domain": {
+      "cases": 81,
+      "checks": 960,
+      "native_websocket_intercepts": 101,
+      "local_coordination_calls": 7,
+      "owned_pair_endpoints": 79,
+      "intentional_unknown_credential_cases": [
+        "sdk_release_pending",
+        "sdk_release_reject"
+      ],
+      "observer_negative_cases": [
+        "sdk_observer_empty",
+        "sdk_observer_hidden_self",
+        "sdk_observer_millisecond_timestamp",
+        "sdk_observer_null_field",
+        "sdk_observer_primary_present",
+        "sdk_observer_wrong_app",
+        "sdk_observer_wrong_database",
+        "sdk_observer_wrong_pid",
+        "sdk_observer_wrong_role"
+      ],
+      "accepted_pending_query_negative_cases": [
+        "sdk_pending_concurrent_query",
+        "sdk_pending_parent_abort",
+        "sdk_pending_query_abort",
+        "sdk_pending_query_deadline",
+        "sdk_pending_release"
+      ],
+      "held_disposal_observation_cases": [
+        "sdk_wrong_app",
+        "sdk_extra_row",
+        "sdk_non101_200_same_host",
+        "sdk_non101_301_same_host",
+        "sdk_non101_301_foreign",
+        "sdk_non101_302_same_host",
+        "sdk_non101_302_foreign",
+        "sdk_non101_303_same_host",
+        "sdk_non101_303_foreign",
+        "sdk_non101_307_same_host",
+        "sdk_non101_307_foreign",
+        "sdk_non101_308_same_host",
+        "sdk_non101_308_foreign"
+      ],
+      "fixture_pair_disposals": 3,
+      "actual_internet_requests": 0,
+      "actual_provider_requests": 0,
+      "runtime_disposal_acknowledged": true,
+      "real_SQL_or_backend_absence_qualified": false,
+      "application_request_lifetime_wiring_qualified": false
+    },
+    "retained_S_native_domain": {
+      "cases": 91,
+      "checks": 1512,
+      "intercepted_platform_requests": 87,
+      "actual_internet_requests": 0,
+      "actual_provider_requests": 0,
+      "native_response_observations": [
+        {
+          "name": "unsupported_error",
+          "rejected": true,
+          "interceptedRequests": 0
+        },
+        {
+          "name": "manual200",
+          "rejected": false,
+          "expectedUrl": true,
+          "redirected": false,
+          "status": 200,
+          "jsonMedia": true,
+          "gzip": false,
+          "lengthPresent": false,
+          "decodedBytes": 473,
+          "jsonBody": true,
+          "interceptedRequests": 1
+        },
+        {
+          "name": "manual302",
+          "rejected": false,
+          "expectedUrl": true,
+          "redirected": false,
+          "status": 302,
+          "jsonMedia": true,
+          "gzip": false,
+          "lengthPresent": false,
+          "decodedBytes": 473,
+          "jsonBody": true,
+          "interceptedRequests": 1
+        },
+        {
+          "name": "actual_gzip",
+          "rejected": false,
+          "expectedUrl": true,
+          "redirected": false,
+          "status": 200,
+          "jsonMedia": true,
+          "gzip": true,
+          "lengthPresent": false,
+          "decodedBytes": 473,
+          "jsonBody": true,
+          "interceptedRequests": 1
+        }
+      ],
+      "intentional_unknown_release_cases": [
+        "page_release_pending",
+        "page_release_reject"
+      ],
+      "remote_stream_cancel_attempts": 0,
+      "local_reader_cancel_ack_directly_observed": false,
+      "runtime_disposal_acknowledged": true,
+      "synthetic_SQL_only": true
+    },
+    "qualification": "Scoped earlier observations only; not a complete53-report domain review."
+  },
+  "failed_PostgreSQL": {
+    "report_sha256": "5020f03f4aae280e6dce99f75300f68e7f2b58c488dd8bb38a46c49d04418609",
+    "source_digests": {
+      "scripts/controlled-neon-postgresql-lab.mjs": "2e519317f9795b92a8836eb173ecb68cb31a2d999c97ead6a3b795e929dfd3ca",
+      "scripts/fixtures/controlled-neon-postgresql.mjs": "7fe1e5dac6b4dac87b44cb9771f8d25102000048fd6b998c956c249b6014ab7d",
+      "scripts/fixtures/controlled-neon-tcp-bridge.mjs": "c658506e896b7206e2e4f256ef43006cdc8cf6374f3d37519e0a16c86f48cd30",
+      "scripts/fixtures/controlled-neon-postgresql-worker.ts": "cad6bd2b6c101bfde304f5de9344c91918eb8cc66d823753a1b45bbbdc16c469",
+      "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs": "b010c59ff534a1adda7e04e4dfc593559bba591bbef0194a47ead7d2323b43b5",
+      "tests/controlled-neon-tcp-bridge.test.mjs": "4e86cf4401ab51d4068e38d044cca58f2991ac2337417bec4373108e5a24800b",
+      "packages/identity/src/controlled-neon-login-pool.ts": "c0a6b091c2fb2f9dbc7c8be7b557b11687d201586ba381297aa28e413608a02a",
+      "packages/identity/src/controlled-neon-login-profiles.ts": "16645b5091135424192dc40cf548d3c5fee74b7a88527f23685dc550bdbcdeee",
+      "packages/identity/src/controlled-neon-transport.ts": "b87761b89fbbd72ae80088412e18dabd1ff1706e547583d9064d520dcfa3c43e",
+      "packages/identity/src/fixed-workos-login-port.ts": "415c00a69f74626ca2962357c7754c4f9d1a7837f034f7e74c82b5f59576e14f",
+      "packages/identity/src/standalone-login.ts": "12a5b7e9eeff006998d46f4119d87f86eb1d37b15ad271e16aae404bf370a6df",
+      "packages/identity/src/standalone-login-protocol.ts": "0420c72e73f93a1f5f625a640f5cd1d9207931cf41e8a23ff96c6f26dc5cf01b",
+      "packages/identity/src/login-flow-custody.ts": "5ab4256c9269886b83578669ec15ee263a51ed72b0eb04892fecc600aa56d503",
+      "packages/identity/src/login-preauth-control.ts": "372b5720cde644e9acf8458baa378fb1cf9bd879e6a4a2742dec30aada1c397f",
+      "packages/identity/src/authentication-exchange-admission.ts": "f7460d7f9825781de078b9dc07a0a3fc1c18435fdba37c5fed33ee1c3032bbfa",
+      "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+      "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+      "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+      "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+      "packages/identity/src/workos-browser-session-admission.ts": "6b9f443c3bfd4c5d661615c9f4f311c4a4d3034f2259896b951aa3afa8f587ca",
+      "scripts/fixtures/fixed-workos-platform-provider.mjs": "821d874777f2bec89d62dfb32739d7f858ac2632595f753dc699c4c733a60b15",
+      "scripts/fixtures/fixed-workos-provider.mjs": "f374a8e04578565f5ae3afe8873183344f7111356c4a6b6c9229ccc92fc01b26",
+      "scripts/fixtures/self-logout-fixture.mjs": "b7e2154fcbcc1b29ac765f42266c353c3e59ae3e863fd46e0858ab9d6a966bb1",
+      "scripts/fixtures/standalone-login-fixture.mjs": "672a9b3234080a4fb5e4b02379c46f21aa374187db69d26e58be08adff99817e",
+      "scripts/standalone-session-fixtures.mjs": "377e6bc6c23a74ff49e1b5b27274f4cdf3ee922cdc7a1c98ea93bf2dac0af515",
+      "infra/identity-role-prerequisites.sql": "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581",
+      "infra/identity-login-role-prerequisites.sql": "17c25b456d85d6b0a70fe312be885f4543339da9ebaf04122b585ccc2d4c541b",
+      "infra/identity-logout-role-prerequisites.sql": "1eb98c94b51d4d2b1c2580fc402234110536ae6a84c185116676766460a0193d",
+      "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+      "migrations/manifest.json": "8e8a905da33278f9f3996f001236ad9bf4b6090c88e55f01c1a112bc30e92eeb",
+      "docs/plan/build-plan.md": "434489742e46422e8bf03d06251091a27ae7403e06f4d8551ce37f255c3067b1",
+      "docs/plan/source.json": "aecff6b3ff90d8452ec9a918f0b6d5560ff79f72403161de82c23c892c9e37bd",
+      "docs/packets/P05.T01t.md": "8d4f348ec3ebeac4756944e9e0d2e720b25f4de596945b8e21c7d4f147c1ea7e",
+      "package.json": "3306ba949deebdc7e5e598535017b4c4aa8dd14e3ad3ecdf56ee0ac5e95c231e",
+      "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+      "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+      "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+      "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+      "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+      "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+      "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+      "migrations/0007.provider-subject-resolution.sql": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+      "migrations/0008.browser-session-admission.sql": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
+      "migrations/0009.workspace-linking-read-boundaries.sql": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2",
+      "migrations/0010.login-flow-custody.sql": "51c6d7ca9e31a897352c4a8b2e85824eb4a7b58506629246bce63c9d92070475",
+      "migrations/0011.self-browser-family-logout.sql": "089ff5487030df8f085045f37f523522540759752b7fde25abf91629396f28c4"
+    },
+    "runtimeDependencyDigests": {
+      "node_modules/@neondatabase/serverless/package.json": "918affae421d21e41b19dcc0fa10fdfa5e5df196eb556265263926a8c2999e5a",
+      "node_modules/@neondatabase/serverless/index.mjs": "50f98b3540f02327ebe4d5423509fe15b820af87c512cee1b2b7322a8ef77699"
+    },
+    "source_hash_checks": 48,
+    "behavior_or_SQL_checks_executed": 0,
+    "engine_callback_entered": false,
+    "failure": {
+      "stage": "source",
+      "code": "CONTROLLED_NEON_POSTGRESQL_LAB_HELD",
+      "observation": {
+        "primaryExecutionHeld": true,
+        "cleanup": {
+          "container": "absent",
+          "network": "absent",
+          "finalNamespace": "not_observed",
+          "forcedFinalCleanup": false
+        },
+        "cleanupFailures": []
+      }
+    },
+    "runtime_cleanup_flags": {
+      "workerRuntimeDisposalAcknowledged": false,
+      "allBridgeEndpointsAcknowledged": false
+    },
+    "measured": null,
+    "cause": "A pre-callback helper setup guard failed; exact substage is not established by the generic source-owned failure projection."
+  },
+  "material_evidence_findings": [
+    {
+      "kind": "incorrect_unconditional_applied_migrations_projection",
+      "report": "docs/evidence/P05.T01t/postgresql-workers-lab.json",
+      "claimed": 11,
+      "supported_actual_migrations": 0,
+      "basis": "The engine callback was never entered: all48 checks are input hash checks, measured is null, and no setup/migration phase appears. Source hardcodes11. Earlier producers cannot supply this missing T fact.",
+      "classification": "Preserve failed report unchanged; root assigned actual-count correction. No overall qualification."
+    }
+  ],
+  "overall_qualification": false,
+  "actual53_domain_review_executed": false,
+  "source_or_history_modified": false,
+  "reviewer_runtime_Docker_network_or_provider_calls": 0,
+  "limits": [
+    "Root obtained REST/API JSON; reviewer performed offline parsing/hash/Git-tree/source/domain reads only.",
+    "Own pool implementation was authored by reviewer. Independent other-authored fixtures/evidence are assessed here; separate root core source review remains required.",
+    "Container/network absence is an attributed cleanup observation. No generated backend namespace was observed; no Worker/bridge was created, so false runtime acknowledgement flags cannot imply a failed disposal of an allocated runtime.",
+    "The held intended scope string and48 source hash checks cannot establish new topology/SCRAM/SQL/observer/owning-chain success. Unconditional appliedMigrations11 is an evidence bug, not executed migrations.",
+    "Original failed artifact/API/log/report/source stay unchanged. Successful actual53 domain evidence and later exactB CI remain required.",
+    "An earlier read-only audit attempt stopped at an overly strict freshness-status assumption; fresh_partial_pending is the correct failed-producer freshness status and was verified from the preserved manifest. No failure or verdict was modified."
+  ]
+}

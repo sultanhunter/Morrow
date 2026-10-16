@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "task": "canonical88_final_helper_repair_review_selection_delta",
+  "reviewer": "/root/fixed_provider_workers",
+  "result": "clear_for_outside_helper_preparation_only",
+  "blocking_findings": [],
+  "reviewed_helper_digests": {
+    "work/compose-ci-final88.py": "22ba6b387d51757ca867830da13c95350e7407f0057d90a39545535747694662",
+    "work/publish-ci-final88.py": "a10cc8c5c08a474e601db1a7566a4d206b34949b518312778fd9e1849012e0dd",
+    "work/align-publication88.py": "85b9a79a9debd237b033ffc5a7e08ed32570f2d4c3bbb1aa52268b34ed170962",
+    "work/test-ci-final88.py": "1f3d3c6a312100b8e2345e45e97dbef8570c04b1c37eaa167b907a2c8fd96351"
+  },
+  "preserved_before_paths_and_digests": {
+    "work/morrow-p01/final88-helpers-before-repair-review-selection/compose-ci-final88.py": "ce57e1c23e09f067d3d1b6e14dd6697dba3dffb8b2a3573a9d5f8bf6e93b95eb",
+    "work/morrow-p01/final88-helpers-before-repair-review-selection/test-ci-final88.py": "04fa4c128c588049fb81ef88a5b8ca09c9cd3b15f6f32e553ecbc1ba0f30d055"
+  },
+  "reviewed_delta": [
+    "Composer adds one closed selection helper and uses its result in review.json; existing artifact/domain/source/qualification predicates remain unchanged.",
+    "Fresh repair record is preferred only if present in actual tested tree, binds fixed original pending A and exact immutable original draft hash, then reuses real candidate pending predicates.",
+    "Complete selected source map and at least three current hash-bound cleared source reviews are checked before any composition; no fallback to stale original reviews when a repair record is present but invalid.",
+    "In-memory replacement does not alter original tested/source draft; exact artifact-tested tree is selected, not post-test checkpoint edits.",
+    "Publisher/alignment hashes unchanged by root selection delta; they use explicit actual A identity and preserve every tested A byte except checkpoint/index."
+  ],
+  "independent_checks": {
+    "inert_final_helper_tests": 17,
+    "actual_exit_code": 0,
+    "tool_chunk": "b4849a",
+    "all_three_help_actual_exit_code": 0,
+    "help_tool_chunk": "fc4cf6",
+    "syntax_actual_exit_code": 0,
+    "syntax_tool_chunk": "80781e"
+  },
+  "authorship_limits": "This independently reviews the root-authored selection delta. The reviewer authored the earlier final helper algorithms and native synthetic producer; this is not independent domain review of their own producer.",
+  "actual_artifact_review": false,
+  "source_writes": false,
+  "publisher_writes": false,
+  "desktop_access": false,
+  "git_mutations": false,
+  "network_requests": 0,
+  "provider_requests": 0,
+  "runtime_executions": 0,
+  "helper_apply_executions": 0
+}

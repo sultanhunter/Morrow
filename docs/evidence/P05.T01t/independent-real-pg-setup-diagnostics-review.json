@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 88,
+  "reviewer": "/root/fixed_provider_core",
+  "review_scope": "narrow real PostgreSQL fixture diagnostics and actual migration accounting only",
+  "result": "clear_for_diagnostic_recheck_only",
+  "reviewed_source_digests": {
+    "scripts/fixtures/controlled-neon-postgresql.mjs": "a10036dc9b44bdf22548ca8ef6d318786e457332fb5540b156c0168bacf85fff",
+    "scripts/controlled-neon-postgresql-lab.mjs": "05b04277c49e78f1fa24c77bede17004b0558f7604df81782e912eff6643d0e9",
+    "scripts/fixtures/controlled-neon-tcp-bridge.mjs": "c658506e896b7206e2e4f256ef43006cdc8cf6374f3d37519e0a16c86f48cd30",
+    "scripts/fixtures/controlled-neon-postgresql-worker.ts": "cad6bd2b6c101bfde304f5de9344c91918eb8cc66d823753a1b45bbbdc16c469",
+    "tests/controlled-neon-tcp-bridge.test.mjs": "4e86cf4401ab51d4068e38d044cca58f2991ac2337417bec4373108e5a24800b"
+  },
+  "prior_source_digests": {
+    "scripts/fixtures/controlled-neon-postgresql.mjs": "7fe1e5dac6b4dac87b44cb9771f8d25102000048fd6b998c956c249b6014ab7d",
+    "scripts/controlled-neon-postgresql-lab.mjs": "2e519317f9795b92a8836eb173ecb68cb31a2d999c97ead6a3b795e929dfd3ca"
+  },
+  "independent_proof": {
+    "critical_call_argument_sets_exact": 66,
+    "full_helper_ast_unchanged_after_closed_diagnostic_removal": true,
+    "diagnostic_removals": {
+      "declarations": 3,
+      "calls": 19,
+      "assignments": 8,
+      "report_properties": 2
+    },
+    "runner_bytes_unchanged_after_exact_accounting_reversal": true,
+    "actual_unchanged_seed_helpers_used_with_inert_delegate": true,
+    "accounting_cases": [
+      "initial_zero",
+      "nonmigration_delegate_result_without_count",
+      "eleven_successful_exact_manifest_statements",
+      "duplicate_not_delegated",
+      "failed_fourth_leaves_three",
+      "out_of_order_not_delegated"
+    ],
+    "independent_script_sha256": "93f1c156dca87e4fdb7df76ea6f22e9c93208c417264f2b996195a1f28eb21db"
+  },
+  "diagnostics": {
+    "fixed_substage_strings_only": true,
+    "closed_boolean_and_count_projections": true,
+    "raw_command_output_or_password_emission_added": false,
+    "cleanup_still_independent_of_diagnostics": true
+  },
+  "blocking_findings": [],
+  "review_harness_history": {
+    "initial_run_exit_code": 1,
+    "initial_failure": "Inert review expected 20 diagnostic phase calls; actual source has 19. All full-AST and critical-call preservation comparisons before this cardinality assertion had passed.",
+    "initial_log": "/private/tmp/morrow88-independent-real-pg-diagnostic-review.log",
+    "initial_script": "work/morrow-p01/independent-real-pg88-diagnostic-audit-before-count-correction.mjs",
+    "correction": "Only expected inert phase-call cardinality changed from 20 to independently observed 19; no Source change."
+  },
+  "limitations": [
+    "Read-only source and inert CPU validation; no Docker, actual SQL, TCP listener, Miniflare, account, provider or network request.",
+    "The first actual candidate remains failed/nonqualifying. Its pre-callback setup cause remains unknown until an actual isolated diagnostic recheck.",
+    "The new count starts at zero and records only completed synchronous exact-manifest migration delegate calls, without upgrading earlier failed evidence.",
+    "Reviewer authored the separate controlled Neon production modules; this independent verdict covers only other-author fixture diagnostics/accounting."
+  ]
+}

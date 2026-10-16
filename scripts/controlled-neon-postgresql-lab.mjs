@@ -76,6 +76,7 @@ if (
   throw Error("CONTROLLED_PG_CURRENT88_REQUIRED");
 const checks = [];
 let stage = "source",
+  appliedMigrations = 0,
   failure,
   measured,
   cleanupFailure,
@@ -112,7 +113,21 @@ const privateMarkers = [];
 try {
   measured = await controlledNeonPostgresqlLab(async (engine) => {
     phase("setup_and_migrations");
-    const harness = createSelfLogoutFixtureHarness(engine),
+    const migrationStatements = new Map(
+      manifest.migrations.map((row) => [
+        "SET ROLE morrow_identity_owner;\n" + readFileSync("migrations/" + row.file, "utf8"),
+        row.sequence,
+      ]),
+    );
+    const setupSql = (text, database) => {
+      const sequence = migrationStatements.get(text);
+      if (sequence !== undefined && sequence !== appliedMigrations + 1)
+        throw Error("CONTROLLED_PG_MIGRATION_ACCOUNTING_HELD");
+      const result = engine.sql(text, database);
+      if (sequence !== undefined) appliedMigrations = sequence;
+      return result;
+    };
+    const harness = createSelfLogoutFixtureHarness({ id: engine.id, sql: setupSql }),
       origin = "https://morrow.controlled.test";
     const configurations = Array.from({ length: 2 }, () => harness.configured({ origin }));
     const oracles = configurations.map((c) =>
@@ -593,7 +608,7 @@ const report = {
     compatibilityDate: "2026-07-30",
     compatibilityFlags: ["nodejs_compat"],
   },
-  appliedMigrations: 11,
+  appliedMigrations,
   actualInternetRequests: 0,
   actualProviderRequests: 0,
   merchantActivation: false,

@@ -161,10 +161,27 @@ export async function controlledNeonPostgresqlLab(use) {
     networkAttempted = false,
     containerAttempted = false;
   const cleanupFailures = [];
+  let setupStage = "network_absence";
+  const setupObservation = {
+    networkProfile: null,
+    gatewayMatched: null,
+    readiness: null,
+    serverVersionMatched: null,
+    containerProfile: null,
+    attachedNetworkOnlyOwned: null,
+    kernelRoutes: null,
+    loopbackReachable: null,
+  };
+  const setupPhase = (value) => {
+    setupStage = value;
+    console.error("CONTROLLED_PG_SETUP_PHASE:" + value);
+  };
   try {
+    setupPhase("network_absence");
     await absent("network", networkName);
     networkAttempted = true;
     cleanup.network = "attempted_unknown";
+    setupPhase("network_create");
     networkId = (
       await command([
         "network",
@@ -181,7 +198,18 @@ export async function controlledNeonPostgresqlLab(use) {
     ).stdout.trim();
     require(/^[a-f0-9]{64}$/.test(networkId));
     cleanup.network = "owned";
+    setupPhase("network_inspection");
     const [network] = JSON.parse((await command(["network", "inspect", networkId])).stdout);
+    setupObservation.networkProfile = Object.freeze({
+      idMatched: network.Id === networkId,
+      nameMatched: network.Name === networkName,
+      internal: network.Internal === true,
+      bridge: network.Driver === "bridge",
+      packetLabelMatched: network.Labels?.["morrow.packet"] === "P05.T01t",
+      nonceLabelMatched: network.Labels?.["morrow.fixture"] === suffix,
+      ipv6Disabled: network.EnableIPv6 === false,
+      empty: Object.keys(network.Containers ?? {}).length === 0,
+    });
     require(
       network.Id === networkId &&
         network.Name === networkName &&
@@ -192,13 +220,18 @@ export async function controlledNeonPostgresqlLab(use) {
         network.EnableIPv6 === false &&
         Object.keys(network.Containers ?? {}).length === 0,
     );
+    setupPhase("network_gateway");
     const gateway = network.IPAM?.Config?.[0]?.Gateway;
+    setupObservation.gatewayMatched =
+      typeof gateway === "string" && /^172\.(1[6-9]|2[0-9]|3[01])\.\d{1,3}\.\d{1,3}$/.test(gateway);
     require(
       typeof gateway === "string" && /^172\.(1[6-9]|2[0-9]|3[01])\.\d{1,3}\.\d{1,3}$/.test(gateway),
     );
+    setupPhase("container_absence");
     await absent("container", containerName);
     containerAttempted = true;
     cleanup.container = "attempted_unknown";
+    setupPhase("container_create");
     containerId = (
       await command([
         "run",
@@ -307,6 +340,7 @@ export async function controlledNeonPostgresqlLab(use) {
       require(!result.error && result.status === 0);
       return result.stdout.trim();
     };
+    setupPhase("container_readiness");
     let ready = false;
     for (let i = 0; i < 40; i++) {
       const value = await command(
@@ -325,6 +359,12 @@ export async function controlledNeonPostgresqlLab(use) {
         true,
       );
       const main = await command(["exec", containerId, "cat", "/proc/1/comm"], undefined, true);
+      setupObservation.readiness = Object.freeze({
+        attempts: i + 1,
+        pgReadyExitCode: value.code,
+        pidReadExitCode: main.code,
+        pidMatched: main.stdout.trim() === "postgres",
+      });
       if (value.code === 0 && main.code === 0 && main.stdout.trim() === "postgres") {
         ready = true;
         break;
@@ -332,10 +372,32 @@ export async function controlledNeonPostgresqlLab(use) {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     require(ready);
+    setupPhase("server_version");
     const version = await sql("SELECT current_setting('server_version');");
+    setupObservation.serverVersionMatched = version.startsWith("17.11 ");
     require(version.startsWith("17.11 "));
+    setupPhase("container_inspection");
     const [container] = JSON.parse((await command(["inspect", containerId])).stdout);
     const published = container.NetworkSettings?.Ports?.["5432/tcp"];
+    setupObservation.containerProfile = Object.freeze({
+      nameMatched: container.Name === "/" + containerName,
+      imageMatched: container.Config.Image === config.image,
+      userMatched: container.Config.User === "999:999",
+      packetLabelMatched: container.Config.Labels?.["morrow.packet"] === "P05.T01t",
+      nonceLabelMatched: container.Config.Labels?.["morrow.fixture"] === suffix,
+      readOnlyRootfs: container.HostConfig.ReadonlyRootfs === true,
+      networkModeMatched: container.HostConfig.NetworkMode === networkId,
+      noHostMounts: container.Mounts.length === 0,
+      publicationArray: Array.isArray(published),
+      singlePublication: Array.isArray(published) && published.length === 1,
+      loopbackPublication:
+        Array.isArray(published) && published.length === 1 && published[0].HostIp === "127.0.0.1",
+      validPortSpelling:
+        Array.isArray(published) &&
+        published.length === 1 &&
+        /^\d{1,5}$/.test(published[0].HostPort),
+      singleNetwork: Object.keys(container.NetworkSettings.Networks).length === 1,
+    });
     require(
       container.Name === "/" + containerName &&
         container.Config.Image === config.image &&
@@ -351,14 +413,24 @@ export async function controlledNeonPostgresqlLab(use) {
         /^\d{1,5}$/.test(published[0].HostPort) &&
         Object.keys(container.NetworkSettings.Networks).length === 1,
     );
+    setupPhase("attached_network");
     const [attachedNetwork] = JSON.parse((await command(["network", "inspect", networkId])).stdout);
+    setupObservation.attachedNetworkOnlyOwned =
+      Object.keys(attachedNetwork.Containers ?? {}).join(",") === containerId;
     require(Object.keys(attachedNetwork.Containers ?? {}).join(",") === containerId);
+    setupPhase("kernel_routes");
     const routeText = (await command(["exec", containerId, "cat", "/proc/net/route"])).stdout;
     const routeRows = routeText
       .trim()
       .split("\n")
       .slice(1)
       .map((line) => line.trim().split(/\s+/));
+    setupObservation.kernelRoutes = Object.freeze({
+      rowCount: routeRows.length,
+      nonEmpty: routeRows.length > 0,
+      rowsParsed: routeRows.every((row) => row.length >= 8 && /^[A-Fa-f0-9]{8}$/.test(row[1])),
+      defaultRouteAbsent: routeRows.every((row) => row[1] !== "00000000"),
+    });
     require(
       routeRows.length > 0 &&
         routeRows.every(
@@ -367,6 +439,7 @@ export async function controlledNeonPostgresqlLab(use) {
     );
     const port = Number(published[0].HostPort);
     require(port > 0 && port <= 65535);
+    setupPhase("loopback_reachability");
     const reachability = await new Promise((resolve) => {
       const socket = createConnection({ host: "127.0.0.1", port });
       let connected = false;
@@ -378,6 +451,7 @@ export async function controlledNeonPostgresqlLab(use) {
       socket.setTimeout(1000, () => socket.destroy());
       socket.once("close", () => resolve(connected));
     });
+    setupObservation.loopbackReachable = reachability;
     require(reachability);
     const endpoint = Object.freeze({ host: "127.0.0.1", port });
     const api = Object.freeze({
@@ -399,6 +473,7 @@ export async function controlledNeonPostgresqlLab(use) {
         singleOwnedNetworkEndpoint: true,
       }),
       async sealSetup() {
+        setupPhase("role_scram_configuration");
         require(phase === "setup");
         for (const role of roles)
           await sql(
@@ -422,6 +497,7 @@ export async function controlledNeonPostgresqlLab(use) {
           ],
           hba,
         );
+        setupPhase("hba_reload");
         const loadedBefore = await sql("SELECT pg_conf_load_time()::text;");
         require((await sql("SELECT pg_reload_conf();")) === "t");
         let loaded = false;
@@ -433,10 +509,12 @@ export async function controlledNeonPostgresqlLab(use) {
           await new Promise((resolve) => setTimeout(resolve, 25));
         }
         require(loaded);
+        setupPhase("role_authentication");
         for (const role of roles) require((await authenticationProbe(endpoint, role)) === "scram");
         require((await authenticationProbe(endpoint, "postgres")) === "rejected");
         require((await authenticationProbe(endpoint, "morrow_identity_owner")) === "rejected");
         phase = "requests";
+        setupPhase("requests_callback");
         return Object.freeze({
           scramOfferedRoles: 4,
           tcpAdministratorRejected: true,
@@ -445,6 +523,7 @@ export async function controlledNeonPostgresqlLab(use) {
         });
       },
       async observeFinalNamespace() {
+        setupPhase("final_namespace");
         require(phase === "requests");
         phase = "final";
         const where =
@@ -475,9 +554,11 @@ export async function controlledNeonPostgresqlLab(use) {
         return finalObservation;
       },
     });
+    setupPhase("setup_callback");
     const result = await use(api);
     require(finalObservation !== undefined);
     outcome = { result, cleanup, image: config.image, version };
+    setupPhase("completed");
   } catch {
     primaryFailure = true;
   } finally {
@@ -542,6 +623,8 @@ export async function controlledNeonPostgresqlLab(use) {
     const error = held();
     error.observation = Object.freeze({
       primaryExecutionHeld: primaryFailure,
+      setupPhase: setupStage,
+      setupObservation: Object.freeze({ ...setupObservation }),
       cleanup: Object.freeze({ ...cleanup }),
       cleanupFailures: Object.freeze(cleanupFailures),
     });
