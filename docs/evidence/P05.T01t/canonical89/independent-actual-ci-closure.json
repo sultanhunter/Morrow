@@ -1,0 +1,394 @@
+{
+  "schema_version": 1,
+  "current_plan_sequence": 89,
+  "reviewer": "fixed_provider_core",
+  "kind": "independent_actual_host_repair89_manual_domain_and_execution_closure",
+  "tested_commit": "a1110de58be8e5d6ff0bcd2c224884519d6a791a",
+  "run_id": 38931367618,
+  "attempt": 1,
+  "job_id": 117075901174,
+  "artifact_id": 12059412571,
+  "artifact_sha256": "3b8a5c070cd93ba807a078f59abea452b60bd14d6cc088dd1a02080c3b7c4cc2",
+  "artifact_bytes": 442477,
+  "input_digests": {
+    "artifact-rest.json": "e16fac007287b1b771ebf3a17984091217b1fa20a9b0226798ab17e3d235762b",
+    "run-rest.json": "4ceae1f65a594a6ba484c8cba5a8146cbc111fdf5ed87b4f8da41e3bbda181e8",
+    "jobs-rest.json": "266273da35be9b83f8aee6900a0923c9f79a82426b4f26bf03a4c8dde807d933",
+    "artifact.zip": "3b8a5c070cd93ba807a078f59abea452b60bd14d6cc088dd1a02080c3b7c4cc2",
+    "run.log": "106e81cacfc1ede352a21b013e0eb274b2c8ced5c8a33e2a14af0da32459465e",
+    "capture-receipt.json": "676e3dae871fd7339c3bcc1747a1a0bd68b24ed94af484e047b71b9b28bcb9b3"
+  },
+  "domain_review_sha256": "6c55947b35dfd486682e45e5415dcf8c666c675c40b5bc67c2c304ac8d41bd0c",
+  "frozen_source_supplement_sha256": "b76081f7bb4959d6f41a87d7dd52f9473bc74bdc57cc2086627a8e5e0401fc24",
+  "actual_review_executions": [
+    {
+      "command": "python3 -E -B work/review-ci-domains89.py with fixed actual inputs",
+      "actual_exit_code": 0,
+      "owning_chunk": "187928",
+      "log_sha256": "1fe4ac038e6cf180e01ef0d1d716c534d061bd7f0bf78717eee348900dd9ddbf"
+    },
+    {
+      "command": "python3 -E -B work/audit-host-repair-ci89.py --artifact-id12059412571 --artifact-sha3b8a5c07...",
+      "actual_exit_code": 0,
+      "start_chunk": "19579d",
+      "completion_chunk": "3c1167",
+      "session_id": 10713,
+      "log_sha256": "1db4b04369b0a642279ef9345af47ff49fb6112cd279bf93bc0c7f29440e6df4"
+    },
+    {
+      "kind": "corrected direct raw report inspection",
+      "actual_exit_code": 0,
+      "owning_chunk": "ba54d5"
+    }
+  ],
+  "earlier_console_inspection_hold": {
+    "chunk": "e78b8e",
+    "actual_exit_code": 1,
+    "reason": "Read-only exploratory print assumed measured.engine; actual source-owned nesting is measured.result.engine. Corrected the inspection only; no report, predicate or helper changed."
+  },
+  "fresh_execution": {
+    "complete_reports": 53,
+    "fixed_payloads": 57,
+    "successful_final_API_steps": 53,
+    "producer_commands": 44,
+    "repository_tests": 2141,
+    "repository_passed": 2141,
+    "repository_failed": 0,
+    "scaffold_guards": 11,
+    "numeric_CI_producer_exit_codes_inferred": false
+  },
+  "source_review": {
+    "distinct_bound_source_paths": 380,
+    "source_binding_occurrences": 1059,
+    "new_PG_source_paths": 46,
+    "current_T_checks": {
+      "regressions/self-logout-postgresql-lab.json": 114,
+      "regressions/logout-https-postgresql-lab.json": 160,
+      "regressions/logout-workers-lab.json": 415,
+      "regressions/login-flow-custody.json": 106,
+      "regressions/login-https-postgresql-lab.json": 98,
+      "regressions/login-workers-lab.json": 627,
+      "regressions/standalone-workspace-http.json": 120,
+      "regressions/standalone-workspace-workers.json": 382,
+      "regressions/workspace-linking-read.json": 121,
+      "regressions/standalone-store-linking-http.json": 96,
+      "regressions/standalone-store-linking-workers.json": 590,
+      "regressions/fixed-provider-workers.json": 995,
+      "regressions/fixed-provider-https.json": 153,
+      "regressions/platform-workers-lab.json": 1512,
+      "workers-lab.json": 960,
+      "postgresql-workers-lab.json": 234
+    },
+    "all14_maintained_check_name_sets_preserved": true,
+    "candidate_source_files": 1715,
+    "candidate_evidence_records": 686,
+    "original_failed581_records": 660,
+    "original_failed28f_records": 649,
+    "failed88_records": 631,
+    "qualified87_reports": 580,
+    "actual_source_before_restored_byte_identical": true
+  },
+  "actual_PG_observations": {
+    "checks": 234,
+    "applied_migrations": 11,
+    "engine": {
+      "image": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+      "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+      "topology": {
+        "internalNetwork": true,
+        "noPublishedPorts": true,
+        "ownedContainerEndpointAttested": true,
+        "sameHostReachability": true,
+        "sourceMatchedGateway": true,
+        "hostMounts": 0,
+        "tcpAdministratorAllowed": false,
+        "ipv4NoDefaultRouteMeasured": true,
+        "networkIpv6Disabled": true,
+        "singleOwnedNetworkEndpoint": true
+      },
+      "auth": {
+        "scramOfferedRoles": 4,
+        "tcpAdministratorRejected": true,
+        "tcpOwnerRejected": true,
+        "probeConnectionsClosed": 6
+      }
+    },
+    "four_distinct_restricted_SCRAM_role_probes_and_self_visibility": true,
+    "first_begin_diagnostic": {
+      "responseStatus": 200,
+      "cookieCount": 1,
+      "jarAccepted": 1,
+      "jarRejected": 0
+    },
+    "normal_pool_metrics": {
+      "loginPool": {
+        "normalReleases": 7,
+        "primaryAttributions": 7,
+        "primaryAbsenceVerified": 7,
+        "observerConnects": 7,
+        "observerReads": 7,
+        "activeLeases": 0,
+        "activeWaitTimers": 0,
+        "activeWaitListeners": 0
+      },
+      "preauthPool": {
+        "normalReleases": 2,
+        "primaryAttributions": 2,
+        "primaryAbsenceVerified": 2,
+        "observerConnects": 2,
+        "observerReads": 2,
+        "activeLeases": 0,
+        "activeWaitTimers": 0,
+        "activeWaitListeners": 0
+      },
+      "selectionPool": {
+        "normalReleases": 1,
+        "primaryAttributions": 1,
+        "primaryAbsenceVerified": 1,
+        "observerConnects": 1,
+        "observerReads": 1,
+        "activeLeases": 0,
+        "activeWaitTimers": 0,
+        "activeWaitListeners": 0
+      },
+      "sessionPool": {
+        "normalReleases": 1,
+        "primaryAttributions": 1,
+        "primaryAbsenceVerified": 1,
+        "observerConnects": 1,
+        "observerReads": 1,
+        "activeLeases": 0,
+        "activeWaitTimers": 0,
+        "activeWaitListeners": 0
+      }
+    },
+    "normal_aggregate_leases": {
+      "borrows": 11,
+      "releaseAttempts": 11,
+      "releaseCompletions": 11,
+      "activeLeases": 0
+    },
+    "intentional_unknown_session_metrics": {
+      "normalReleases": 0,
+      "heldClients": 1,
+      "primaryAttributions": 1,
+      "primaryAbsenceVerified": 1,
+      "leaseReleaseAttempts": 1,
+      "leaseReleaseAcks": 0,
+      "activeLeases": 1
+    },
+    "unknown_aggregate_leases": {
+      "borrows": 10,
+      "releaseAttempts": 10,
+      "releaseCompletions": 9,
+      "activeLeases": 1
+    },
+    "unknown_is_not_repaired_by_backend_absence_or_final_teardown": true,
+    "reconciled": {
+      "outcome": "replayed",
+      "attributed": true,
+      "secretReturned": false
+    },
+    "readonly_flow_reconciled": {
+      "outcome": "observed",
+      "phase": "claimed",
+      "issuerOutcome": "admitted",
+      "hasFamily": true
+    },
+    "pre_revocation_transport_snapshot": {
+      "interceptedRequests": 111,
+      "deniedRequests": 0,
+      "pairAllocations": 111,
+      "actualInternetRequests": 0,
+      "actualProviderRequests": 0
+    },
+    "revoked_capability_control": {
+      "status": 403,
+      "deniedRequestsAdded": 1,
+      "interceptedRequestsAdded": 0,
+      "pairAllocationsAdded": 0,
+      "tcpBridgesAdded": 0,
+      "observationRowsAdded": 0
+    },
+    "all111_TCP_and_WebSocket_endpoints_closed_no_pending_bytes_or_timers": true,
+    "final_namespace": {
+      "presentBeforeFinalCleanup": 0,
+      "absentAfterFinalCleanup": true,
+      "forcedFinalCleanup": false
+    },
+    "owned_resource_cleanup": {
+      "container": "absent",
+      "network": "absent",
+      "finalNamespace": "absent",
+      "forcedFinalCleanup": false
+    },
+    "worker_and_bridge_cleanup": {
+      "workerRuntimeDisposalAcknowledged": true,
+      "allBridgeEndpointsAcknowledged": true
+    },
+    "cleanup_failures": [],
+    "provider_fixture_calls": [
+      {
+        "calls": 9,
+        "exchanges": 3,
+        "public_keysets": 3,
+        "session_pages": 3,
+        "actual_provider_and_internet_requests": 0
+      },
+      {
+        "calls": 3,
+        "exchanges": 1,
+        "public_keysets": 1,
+        "session_pages": 1,
+        "actual_provider_and_internet_requests": 0
+      }
+    ]
+  },
+  "actual_native_observations": {
+    "cases": 81,
+    "checks": 960,
+    "native_websocket_intercepts": 101,
+    "local_coordination_calls": 7,
+    "owned_pair_endpoints": 79,
+    "intentional_unknown_credential_cases": [
+      "sdk_release_pending",
+      "sdk_release_reject"
+    ],
+    "observer_negative_cases": [
+      "sdk_observer_empty",
+      "sdk_observer_hidden_self",
+      "sdk_observer_millisecond_timestamp",
+      "sdk_observer_null_field",
+      "sdk_observer_primary_present",
+      "sdk_observer_wrong_app",
+      "sdk_observer_wrong_database",
+      "sdk_observer_wrong_pid",
+      "sdk_observer_wrong_role"
+    ],
+    "accepted_pending_query_negative_cases": [
+      "sdk_pending_concurrent_query",
+      "sdk_pending_parent_abort",
+      "sdk_pending_query_abort",
+      "sdk_pending_query_deadline",
+      "sdk_pending_release"
+    ],
+    "held_disposal_observation_cases": [
+      "sdk_bad_timestamp",
+      "sdk_extra_row",
+      "sdk_non101_200_same_host",
+      "sdk_non101_301_same_host",
+      "sdk_non101_301_foreign",
+      "sdk_non101_302_same_host",
+      "sdk_non101_302_foreign",
+      "sdk_non101_303_same_host",
+      "sdk_non101_303_foreign",
+      "sdk_non101_307_same_host",
+      "sdk_non101_307_foreign",
+      "sdk_non101_308_same_host",
+      "sdk_non101_308_foreign"
+    ],
+    "fixture_pair_disposals": 3,
+    "actual_internet_requests": 0,
+    "actual_provider_requests": 0,
+    "runtime_disposal_acknowledged": true,
+    "real_SQL_or_backend_absence_qualified": false,
+    "application_request_lifetime_wiring_qualified": false
+  },
+  "retained_platform_observations": {
+    "cases": 91,
+    "checks": 1512,
+    "intercepted_platform_requests": 87,
+    "actual_internet_requests": 0,
+    "actual_provider_requests": 0,
+    "native_response_observations": [
+      {
+        "name": "unsupported_error",
+        "rejected": true,
+        "interceptedRequests": 0
+      },
+      {
+        "name": "manual200",
+        "rejected": false,
+        "expectedUrl": true,
+        "redirected": false,
+        "status": 200,
+        "jsonMedia": true,
+        "gzip": false,
+        "lengthPresent": false,
+        "decodedBytes": 473,
+        "jsonBody": true,
+        "interceptedRequests": 1
+      },
+      {
+        "name": "manual302",
+        "rejected": false,
+        "expectedUrl": true,
+        "redirected": false,
+        "status": 302,
+        "jsonMedia": true,
+        "gzip": false,
+        "lengthPresent": false,
+        "decodedBytes": 473,
+        "jsonBody": true,
+        "interceptedRequests": 1
+      },
+      {
+        "name": "actual_gzip",
+        "rejected": false,
+        "expectedUrl": true,
+        "redirected": false,
+        "status": 200,
+        "jsonMedia": true,
+        "gzip": true,
+        "lengthPresent": false,
+        "decodedBytes": 473,
+        "jsonBody": true,
+        "interceptedRequests": 1
+      }
+    ],
+    "intentional_unknown_release_cases": [
+      "page_release_pending",
+      "page_release_reject"
+    ],
+    "remote_stream_cancel_attempts": 0,
+    "local_reader_cancel_ack_directly_observed": false,
+    "runtime_disposal_acknowledged": true,
+    "synthetic_SQL_only": true
+  },
+  "retained_physical_cleanup": {
+    "normal_report_families": 10,
+    "physical_connections": 772,
+    "fresh_backend_absence_verified": 772,
+    "unverified_normal_host_closures": 0,
+    "fault_report_families_preserved": 5
+  },
+  "new_https": {
+    "merchant_requests": 41,
+    "case_count": 8,
+    "physical_connections": {
+      "observations": 56,
+      "connections": 106,
+      "backend_absence_verified": 106,
+      "unverified_host_closures": 0
+    },
+    "deliberately_unverified_credential_disposals": 1
+  },
+  "findings": [],
+  "blocking_findings": [],
+  "verdict": "clear_for_bounded_provider_free_local_engineering_evidence_composition",
+  "overall_publication_merchant_or_hosted_activation_qualified": false,
+  "Source_Git_runtime_Docker_network_provider_or_account_actions_by_reviewer": false,
+  "authorship_limits": [
+    "Reviewer authored private controlled-Neon pool modules/focused units and the earlier WorkOS port. This review independently examines other-authored fixtures and measured report data, not own-source approval; separate root core reviews remain required.",
+    "Workers/oracle and PostgreSQL/HTTPS producers were authored by other agents; reviewer independently source-reviewed the Workers/oracle plus fourteen maintained runner/CI deltas.",
+    "Other-agent/root reviews of the private adapter and HTTPS producer remain separately required and preserved."
+  ],
+  "limits": [
+    "Actual data inspected in addition to frozen checker success. Normal proof, intentional credential unknown, revoked-capability denial, final admin namespace absence and runtime disposal remain separate.",
+    "Native positive101/SDK oracle uses simulated PG semantics; real database authority comes only from the distinct111-endpoint PostgreSQL measurement.",
+    "First actual successful begin response200/one accepted cookie is now observed for this head only; previous failed raw response subvalues stay unobserved.",
+    "Native fixture incoming URL/Host/mode normalization is not browser-engine or deployed-ingress qualification.",
+    "Application managed cross-isolate keys and request waitUntil lifetime remain unqualified; normal D/cleanupC unchanged.",
+    "Exact final evidence-head CI and guarded publication/clean Desktop alignment remain required. No hosted Neon/WorkOS/Shopify/merchant/account/deployment qualification."
+  ]
+}

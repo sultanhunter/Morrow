@@ -1,0 +1,1018 @@
+{
+  "packet": "P05.T01k",
+  "planSequence": 89,
+  "selectedPolicySequence": 78,
+  "synthetic": true,
+  "qualificationScope": "Current selected human-session policy with explicit oauth fixture through unchanged token/composition/selection into isolated SQL; SQL-specific fault and constraint scenarios use labeled trusted synthetic readers. No provider or issuer qualification.",
+  "historicalReport": {
+    "path": "docs/evidence/P05.T01j/postgresql-lab.json",
+    "sha256": "5a06e6fc90e3368873c86ede58e2f11f12f6f0daeece0459ed06f5ffca21f826"
+  },
+  "providerRequests": 0,
+  "engine": "postgres@sha256:ae69c452f483507a6b99fb654cf93aad7fe156ffd2c56247707eef4e36d3c12b",
+  "version": "17.11 (Debian 17.11-1.pgdg13+2)",
+  "checks": [
+    {
+      "name": "resolution_preparation_nologin_safe",
+      "passed": true
+    },
+    {
+      "name": "migration7_transaction_rolls_back",
+      "passed": true
+    },
+    {
+      "name": "rollback_preserves_previous_schema",
+      "passed": true
+    },
+    {
+      "name": "migration_prerequisite_executor_login_denies",
+      "passed": true
+    },
+    {
+      "name": "migration_prerequisite_executor_replication_denies",
+      "passed": true
+    },
+    {
+      "name": "migration_prerequisite_owner_login_denies",
+      "passed": true
+    },
+    {
+      "name": "migration_prerequisite_service_assumes_owner_denies",
+      "passed": true
+    },
+    {
+      "name": "prerequisite_denials_leave_no_partial_schema",
+      "passed": true
+    },
+    {
+      "name": "current_eligible_selector_one_closed_row",
+      "passed": true
+    },
+    {
+      "name": "all_output_ids_and_text_revisions_exact",
+      "passed": true
+    },
+    {
+      "name": "identity_verification_profiles_owner_force_rls",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_resolution_cannot_enumerate_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_resolution_cannot_mutate_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_resolution_no_private_acl_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_enumerate_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_mutate_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_no_private_acl_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_enumerate_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_mutate_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_no_private_acl_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_enumerate_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_mutate_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_no_private_acl_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_cannot_enumerate_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_cannot_mutate_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_no_private_acl_identity_verification_profiles",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_mappings_owner_force_rls",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_resolution_cannot_enumerate_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_resolution_cannot_mutate_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_resolution_no_private_acl_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_enumerate_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_mutate_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_no_private_acl_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_enumerate_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_mutate_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_no_private_acl_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_enumerate_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_mutate_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_no_private_acl_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_cannot_enumerate_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_cannot_mutate_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_no_private_acl_provider_subject_mappings",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_profile_bindings_owner_force_rls",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_resolution_cannot_enumerate_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_resolution_cannot_mutate_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_resolution_no_private_acl_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_enumerate_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_mutate_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_no_private_acl_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_enumerate_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_mutate_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_no_private_acl_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_enumerate_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_mutate_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_no_private_acl_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_cannot_enumerate_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_cannot_mutate_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_no_private_acl_provider_subject_profile_bindings",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_no_resolver_execution",
+      "passed": true
+    },
+    {
+      "name": "morrow_api_cannot_assume_resolver",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_no_resolver_execution",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_lifecycle_cannot_assume_resolver",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_no_resolver_execution",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_linking_cannot_assume_resolver",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_no_resolver_execution",
+      "passed": true
+    },
+    {
+      "name": "morrow_identity_preauth_cannot_assume_resolver",
+      "passed": true
+    },
+    {
+      "name": "public_has_no_schema_or_execution",
+      "passed": true
+    },
+    {
+      "name": "set_role_does_not_change_session_user",
+      "passed": true
+    },
+    {
+      "name": "resolver_search_path_fixed_and_definer",
+      "passed": true
+    },
+    {
+      "name": "resolver_works_in_real_read_only_transaction",
+      "passed": true
+    },
+    {
+      "name": "read_only_transaction_refuses_owner_write",
+      "passed": true
+    },
+    {
+      "name": "exact_selector_field_0_mismatch_denies",
+      "passed": true
+    },
+    {
+      "name": "exact_selector_field_1_mismatch_denies",
+      "passed": true
+    },
+    {
+      "name": "exact_selector_field_2_mismatch_denies",
+      "passed": true
+    },
+    {
+      "name": "exact_selector_field_3_mismatch_denies",
+      "passed": true
+    },
+    {
+      "name": "exact_selector_field_4_mismatch_denies",
+      "passed": true
+    },
+    {
+      "name": "exact_selector_field_5_mismatch_denies",
+      "passed": true
+    },
+    {
+      "name": "exact_selector_field_6_mismatch_denies",
+      "passed": true
+    },
+    {
+      "name": "exact_selector_field_7_mismatch_denies",
+      "passed": true
+    },
+    {
+      "name": "exact_selector_field_8_mismatch_denies",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_e3b0c442_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_5feceb66_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_938db8c9_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_1bad6b8c_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_d0ff5974_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_bcac40fb_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_c681da39_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_0d81bbd7_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "malformed_revision_d5b592c0_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "null_selector_0_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "null_selector_1_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "null_selector_2_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "null_selector_3_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "null_selector_4_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "null_selector_5_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "null_selector_6_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "null_selector_7_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "null_selector_8_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "same_subject_other_environment_distinct_person",
+      "passed": true
+    },
+    {
+      "name": "provider_environment_selector_cannot_cross_mapping",
+      "passed": true
+    },
+    {
+      "name": "second_explicit_client_same_human",
+      "passed": true
+    },
+    {
+      "name": "unbound_sibling_client_denies",
+      "passed": true
+    },
+    {
+      "name": "second_eligible_organization_independent_selection",
+      "passed": true
+    },
+    {
+      "name": "foreign_existing_workspace_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "stable_subject_unique",
+      "passed": true
+    },
+    {
+      "name": "exact_profile_namespace_unique",
+      "passed": true
+    },
+    {
+      "name": "explicit_binding_pair_unique",
+      "passed": true
+    },
+    {
+      "name": "binding_mapping_environment_composite_fk",
+      "passed": true
+    },
+    {
+      "name": "binding_profile_environment_composite_fk",
+      "passed": true
+    },
+    {
+      "name": "mapping_must_reference_existing_principal",
+      "passed": true
+    },
+    {
+      "name": "profile_issuer_must_match_client",
+      "passed": true
+    },
+    {
+      "name": "identity_verification_profiles_cannot_delete",
+      "passed": true
+    },
+    {
+      "name": "identity_verification_profiles_same_revision_update_denies",
+      "passed": true
+    },
+    {
+      "name": "identity_verification_profiles_decreasing_revision_denies",
+      "passed": true
+    },
+    {
+      "name": "identity_verification_profiles_invalid_state_denies",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_mappings_cannot_delete",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_mappings_same_revision_update_denies",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_mappings_decreasing_revision_denies",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_mappings_invalid_state_denies",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_profile_bindings_cannot_delete",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_profile_bindings_same_revision_update_denies",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_profile_bindings_decreasing_revision_denies",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_profile_bindings_invalid_state_denies",
+      "passed": true
+    },
+    {
+      "name": "grouped_truncate_cannot_reset_identity",
+      "passed": true
+    },
+    {
+      "name": "binding_only_truncate_cannot_reset_revision",
+      "passed": true
+    },
+    {
+      "name": "all_three_statement_truncate_guards_installed",
+      "passed": true
+    },
+    {
+      "name": "grouped_truncate_keeps_rows",
+      "passed": true
+    },
+    {
+      "name": "immutable_identity_verification_profiles_id",
+      "passed": true
+    },
+    {
+      "name": "immutable_identity_verification_profiles_client_id",
+      "passed": true
+    },
+    {
+      "name": "immutable_identity_verification_profiles_environment_id",
+      "passed": true
+    },
+    {
+      "name": "immutable_provider_subject_mappings_subject_id",
+      "passed": true
+    },
+    {
+      "name": "immutable_provider_subject_mappings_principal_id",
+      "passed": true
+    },
+    {
+      "name": "immutable_provider_subject_profile_bindings_profile_id",
+      "passed": true
+    },
+    {
+      "name": "profile_ineligible_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "mapping_ineligible_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "binding_ineligible_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "principal_ineligible_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "nonhuman_ineligible_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "organization_ineligible_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "workspace_ineligible_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "membership_ineligible_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "workspace_membership_ineligible_zero_rows",
+      "passed": true
+    },
+    {
+      "name": "identity_verification_profiles_revoked_denies",
+      "passed": true
+    },
+    {
+      "name": "identity_verification_profiles_tombstone_cannot_reactivate",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_mappings_revoked_denies",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_mappings_tombstone_cannot_reactivate",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_profile_bindings_revoked_denies",
+      "passed": true
+    },
+    {
+      "name": "provider_subject_profile_bindings_tombstone_cannot_reactivate",
+      "passed": true
+    },
+    {
+      "name": "revision_jump_not_supported",
+      "passed": true
+    },
+    {
+      "name": "revision_domain_rejects_unsafe_integer",
+      "passed": true
+    },
+    {
+      "name": "profile_update_invalidates_original_token_profile",
+      "passed": true
+    },
+    {
+      "name": "updated_profile_revision_and_digest_exact",
+      "passed": true
+    },
+    {
+      "name": "unsafe_executor_superuser_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_executor_bypassrls_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_executor_createdb_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_executor_createrole_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_executor_replication_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_executor_inherit_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_owner_login_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_owner_superuser_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_owner_bypassrls_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_owner_createdb_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_owner_createrole_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_owner_replication_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "unsafe_owner_inherit_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "executor_inherits_role_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "role_can_assume_executor_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "api_can_assume_owner_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "owner_can_assume_preauth_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "transitive_service_owner_definer_denies",
+      "passed": true
+    },
+    {
+      "name": "separate_admin_owner_maintenance_grant_preserved",
+      "passed": true
+    },
+    {
+      "name": "maximum_safe_revisions_return_canonical_decimal_text",
+      "passed": true
+    },
+    {
+      "name": "pool_1_host_and_backend_cleanup",
+      "passed": true
+    },
+    {
+      "name": "pool_1_no_session_id_in_sql_output",
+      "passed": true
+    },
+    {
+      "name": "maximum_safe_revisions_decode_through_actual_driver",
+      "passed": true
+    },
+    {
+      "name": "pool_2_host_and_backend_cleanup",
+      "passed": true
+    },
+    {
+      "name": "pool_2_no_session_id_in_sql_output",
+      "passed": true
+    },
+    {
+      "name": "real_sql_application_private_synthetic_reader_positive",
+      "passed": true
+    },
+    {
+      "name": "pool_3_host_and_backend_cleanup",
+      "passed": true
+    },
+    {
+      "name": "pool_3_no_session_id_in_sql_output",
+      "passed": true
+    },
+    {
+      "name": "separate_read_committed_profile_drift_held",
+      "passed": true
+    },
+    {
+      "name": "pool_4_host_and_backend_cleanup",
+      "passed": true
+    },
+    {
+      "name": "pool_4_no_session_id_in_sql_output",
+      "passed": true
+    },
+    {
+      "name": "separate_read_committed_mapping_drift_held",
+      "passed": true
+    },
+    {
+      "name": "pool_5_host_and_backend_cleanup",
+      "passed": true
+    },
+    {
+      "name": "pool_5_no_session_id_in_sql_output",
+      "passed": true
+    },
+    {
+      "name": "separate_read_committed_binding_drift_held",
+      "passed": true
+    },
+    {
+      "name": "pool_6_host_and_backend_cleanup",
+      "passed": true
+    },
+    {
+      "name": "pool_6_no_session_id_in_sql_output",
+      "passed": true
+    },
+    {
+      "name": "separate_read_committed_policy_drift_held",
+      "passed": true
+    },
+    {
+      "name": "pool_7_host_and_backend_cleanup",
+      "passed": true
+    },
+    {
+      "name": "pool_7_no_session_id_in_sql_output",
+      "passed": true
+    },
+    {
+      "name": "separate_read_committed_membership_drift_held",
+      "passed": true
+    },
+    {
+      "name": "pool_8_host_and_backend_cleanup",
+      "passed": true
+    },
+    {
+      "name": "pool_8_no_session_id_in_sql_output",
+      "passed": true
+    },
+    {
+      "name": "separate_read_committed_workspace_membership_drift_held",
+      "passed": true
+    },
+    {
+      "name": "pool_9_host_and_backend_cleanup",
+      "passed": true
+    },
+    {
+      "name": "pool_9_no_session_id_in_sql_output",
+      "passed": true
+    },
+    {
+      "name": "actual_statement_timeout_no_selection",
+      "passed": true
+    },
+    {
+      "name": "pool_10_host_and_backend_cleanup",
+      "passed": true
+    },
+    {
+      "name": "pool_10_no_session_id_in_sql_output",
+      "passed": true
+    },
+    {
+      "name": "pending_lookup_cancellation_no_selection",
+      "passed": true
+    },
+    {
+      "name": "startup_deadline_rejection_waits_actual_backend_cleanup",
+      "passed": true
+    },
+    {
+      "name": "cancellation_before_guest_startup_checks_absence_after_exec_closure",
+      "passed": true
+    },
+    {
+      "name": "actual_host_sigkill_yields_only_held_and_unverified_cleanup",
+      "passed": true
+    },
+    {
+      "name": "fault_targeted_backend_absence_observed_but_container_fence_still_required",
+      "passed": true
+    },
+    {
+      "name": "independent_rsa_owning_evidence_created",
+      "passed": true
+    },
+    {
+      "name": "native_rsa_owning_t01i_to_actual_sql_selection",
+      "passed": true
+    },
+    {
+      "name": "genuine_composition_disposable_backend_closed",
+      "passed": true
+    },
+    {
+      "name": "no_attributable_session_backends_remain",
+      "passed": true
+    },
+    {
+      "name": "no_issuer_or_session_mutations",
+      "passed": true
+    }
+  ],
+  "checkCount": 211,
+  "adapterMetrics": [
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 1,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 1,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    },
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 1,
+      "unverifiedHostClosures": 0
+    }
+  ],
+  "faultInjectionMetrics": [
+    {
+      "connections": 1,
+      "released": 1,
+      "closed": 1,
+      "discarded": 1,
+      "cancelled": 0,
+      "backendCleanupVerified": 0,
+      "unverifiedHostClosures": 1,
+      "fault": "host_sigkill_after_startup"
+    }
+  ],
+  "cleanup": {
+    "containerRemoved": true,
+    "finalContainerFence": true,
+    "expectedUnverifiedFaults": 1
+  },
+  "sourceDigests": {
+    "migrations/0007.provider-subject-resolution.sql": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+    "infra/identity-role-prerequisites.sql": "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581",
+    "scripts/local-provider-subject-sql.mjs": "03ee4c0f79b225348a1fe88a7750775efcfb8ea05f0eb8865e96324ed790fa85",
+    "scripts/provider-subject-resolution-lab.mjs": "11d2d204effb5e12ec4e3c75e58a4339e20937c5e544331e6fc5a407eef146d4",
+    "packages/identity/src/workos-workspace-selection.ts": "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
+    "packages/identity/src/workos-authentication-evidence.ts": "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
+    "packages/identity/src/workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
+    "packages/identity/src/workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
+    "packages/identity/src/workos-session-status-json.ts": "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
+    "tests/fixtures/workos-authentication-evidence.mjs": "1faa18afb5f35fc4740a6f6ae1f08332102c0efb1a42ee42924778b63449af5b",
+    "scripts/local-postgres-lab.mjs": "63140c90bb85d4dc2379120347d6b99cf4519cffd810117a2b2929f6d8fc18c4",
+    "infra/local-engine.json": "99c5f2d3486ff83028604d71bbd05d3f403366abfff1b39ee1c7c27e1850de7b",
+    "migrations/manifest.json": "8e8a905da33278f9f3996f001236ad9bf4b6090c88e55f01c1a112bc30e92eeb",
+    "migrations/0001.identity-foundation.sql": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
+    "migrations/0002.identity-grants.sql": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
+    "migrations/0003.authentication-challenges.sql": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
+    "migrations/0004.workspace-access-revocation.sql": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
+    "migrations/0005.workspace-store-linking.sql": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "migrations/0006.authentication-exchange-admission.sql": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87"
+  }
+}

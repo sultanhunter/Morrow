@@ -1,0 +1,100 @@
+{
+  "task": "P05.T03a",
+  "canonical_sequence": 89,
+  "observed_at": "2026-10-16T16:24:37.604Z",
+  "scope": "Actual pinned local workerd with synthetic SQL replies and current permission facts; not PostgreSQL, Shopify/WorkOS authentication, review issuance, hosted deployment or linking qualification",
+  "runtime": "miniflare4.20260730.0",
+  "compatibility_date": "2026-07-30",
+  "provider_calls": 0,
+  "bundle_sha256": "b4eb60031a722f56377a03a71a52ab25beeccb592338ba4dfe4492faac7c44c4",
+  "input_digests": {
+    "packages/identity/src/workspace-store-linking.ts": "0b951ebb12d4e68f5421c9a19df9ba691166399fe247aa56c39ede0176574a53",
+    "packages/policy/src/index.ts": "d26c57c71889dd7c6369d90745ebc1a531dcfd555e4d2484b4d0d471924b0b59",
+    "scripts/fixtures/workspace-store-linking-worker.ts": "50786327be0ddeeff2094b2ddaebb2dee48fd5f74e6fe751df29da62fe360784",
+    "scripts/workspace-store-linking-workers-lab.mjs": "1ea2ce31c6d8a778750f7e5350b4cb4d43406b85faeef78422e2d3a78c470adb",
+    "packages/contracts/src/generated/runtime-validators.mjs": "b0e05ef8e3f6093097d7a1fdb8ea17acce441dbd7e2ee252dd88a1c47b5fd9a6",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7"
+  },
+  "checks": [
+    {
+      "name": "fixed_parameterized_link_result",
+      "passed": true
+    },
+    {
+      "name": "all_eleven_scalars_bound_once",
+      "passed": true
+    },
+    {
+      "name": "proxy_denied_without_traps",
+      "passed": true
+    },
+    {
+      "name": "accessor_denied_without_getters",
+      "passed": true
+    },
+    {
+      "name": "raw_object_denied",
+      "passed": true
+    },
+    {
+      "name": "malformed_json_denied",
+      "passed": true
+    },
+    {
+      "name": "oversized_json_denied",
+      "passed": true
+    },
+    {
+      "name": "unknown_authority_field_denied",
+      "passed": true
+    },
+    {
+      "name": "ordinary_api_role_denied",
+      "passed": true
+    },
+    {
+      "name": "role_membership_denied",
+      "passed": true
+    },
+    {
+      "name": "inheriting_role_denied",
+      "passed": true
+    },
+    {
+      "name": "ownership_reply_drift_denied",
+      "passed": true
+    },
+    {
+      "name": "policy_reply_drift_denied",
+      "passed": true
+    },
+    {
+      "name": "commit_loss_uncertain",
+      "passed": true
+    },
+    {
+      "name": "release_loss_uncertain",
+      "passed": true
+    },
+    {
+      "name": "connect_administer_requires_exact_approval",
+      "passed": true
+    },
+    {
+      "name": "field_expansion_denied",
+      "passed": true
+    },
+    {
+      "name": "handoff_or_review_reference_cannot_replace_grant",
+      "passed": true
+    },
+    {
+      "name": "dynamic_code_generation_denied",
+      "passed": true
+    },
+    {
+      "name": "zero_provider_requests",
+      "passed": true
+    }
+  ]
+}

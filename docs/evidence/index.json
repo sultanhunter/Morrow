@@ -2338,8 +2338,244 @@
       "sha256": "161c4fd61161be6e89ec917fa574c3d232889ba78af4f8820ea8bd50f603449d"
     },
     {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-artifact-inspection.json",
+      "sha256": "855c4711c3e7592283299aec0f92e13bed3e253c7086fbd9b50b3b5f4a0826d0"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/manifest.json",
+      "sha256": "2fb0ac3057fc60c1e94634f353eb82f4b86f2196bf2ebea12ffa2530ea088cdd"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P01.T01/verification.json",
+      "sha256": "bdb9f0c79cd9286e34b5494abebb54005a22f9a1cda8c838b0d8236ef517b3f1"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P01.T02/verification.json",
+      "sha256": "d52ab4114552a5754a70e64aa8adbdc41f308b30d150a1336de76aa0de459b9b"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P01.T03/verification.json",
+      "sha256": "44eef3fc873a943381b415c65c87017551931f656d6ec8a00553174ddc44465f"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P01.T04/verification.json",
+      "sha256": "952b518c56c53dd7900ddaa81e13e6e5c0b532bf6e80c53ab5a6df75698bbb82"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P02.T02/verification.json",
+      "sha256": "46e270e8016fca06e58a48e70c364997b054a6c1097e051e9974fdcfaee7c1bd"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P03.T01/smoke.json",
+      "sha256": "06d86195d3d68e5fdaa6a0f4ad7fc2a68cef77f0b0501707d23059d4f9ee936a"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P03.T02/boundaries.json",
+      "sha256": "8a3925f8251534639b034594e7193d9c6f84f6729444dabf087b266cc8788c2a"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P03.T04/delivery.json",
+      "sha256": "5544dfd03e99e0c2fa65b4347ab52f681c7cffd77f060d7b8e8c368209cdef07"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P04.T01a/permissions.json",
+      "sha256": "8dc4714359d3c634472c0f6c7a6dfc4f4299ce9febafd013aff9f4dd773f321e"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P04.T01a/readiness.json",
+      "sha256": "c83c55725bedc3471a9a6f55e2ebd9b6e45b4b41ee23b0ad18e819a9aee0c30f"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P04.T01a/synth.json",
+      "sha256": "4ca6107a29ca2e63e8ee5c9af26ef33c850aea9bf348fe2c125153e2080e8a14"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P04.T01b/workers.json",
+      "sha256": "368eda8f0238d08efc78813f0e0c2a0792cd5e5da04a86db92e64e836331c0c3"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P04.T01f/archive.json",
+      "sha256": "3dda7eb00a83f6ff3ddb5fbcfcd696be0b287eeebc9ad1c31fb9b499a410be2b"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P04.T01f/cleanup.json",
+      "sha256": "38d6427cedf056878b2f58b66067f61f5d22f5cd3bf14b51142e574e4d384ed3"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P04.T03/operations-lab.json",
+      "sha256": "4017fd73d9e96601c2c420116e9e350cc46d59695483e22d32884def79c77e74"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P04.T04/restore-lab.json",
+      "sha256": "342b935fc83ae8bda29201ac04a908059b40734685aec82a52a84d099d8569ff"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01/identity-lab.json",
+      "sha256": "01aee21c2577b9eb0ba783582ccbc4681268127f54e3cf6b8cf97bf721483397"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01/workspace-revocation-lab.json",
+      "sha256": "07d882acc56fc58e3b7192fe79b4361ef8d69277497c5c41b2c79c708f6d0ebf"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01d/postgresql-lab.json",
+      "sha256": "6dbaadad1a79a92702ab348ff9ecc95cdf6c910ffd155ca4132f3222da19c07f"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01d/workers-lab.json",
+      "sha256": "69ba1f0a85aee50d2c1b26b361157a6b39b1baf80277ff35bcc806ab2bbbef61"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01e/frozen-regression.json",
+      "sha256": "2a9fe997f833b050327f364fbb77912d9c4bb9fa9e60e4fe1daff5bfdd1dc341"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01f/workers-lab.json",
+      "sha256": "56cdf7bf1c6f489f060bf932a0cca063fb74ab1a3f3a1e3bb1ce2408afc11b79"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01g/frozen74-regression.json",
+      "sha256": "c10d97e2dfcae969faba91a5eb8bd5747c19bafdf5c1ce22d62fb1fb404a3c67"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01h/frozen75-regression.json",
+      "sha256": "4471d57eb71f25b4d290bb768d2d775666a2fe9eb66f6c59428ffa105ad3a6f8"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01k/authentication-challenge-lab.json",
+      "sha256": "3fd3d24443439c869ee53e788d36d38c0bbde2f391f03c8f5e770eba1f2ec287"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01m/legacy-composition-workers-lab.json",
+      "sha256": "b05d65bc7f64a77c00a2ac5366845d4b817e1e65128808cf6e5469480e3a97e7"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json",
+      "sha256": "54807078c0c7c192b1a9346db3c3e24830c013e5804c5c815ad718e413a6c597"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01m/legacy-reader-workers-lab.json",
+      "sha256": "cea59b8ad3c5508d5b3a0ef618cb81b5e0beb53f3206905df52b468785b1d9cb"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01m/legacy-selection-workers-lab.json",
+      "sha256": "ebaa25e890c481f3ff0a01413068d413cae8228db6d7765851b014a8bf2b25be"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01m/postgresql-lab.json",
+      "sha256": "ee15aae19741616dc28450d8ccbf680781371ef8339367a06f4afdbff6ad4759"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01m/workers-lab.json",
+      "sha256": "5774605962585fe956eb14fe45f7a9e86e7950a4fb3248dbae83950c496fb4c1"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01o/frozen80-regression.json",
+      "sha256": "f2ab6f71fcc5269c3a71557d6598a89f39295d608218a276ce21c14211cce1dc"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01o/frozen82-regression.json",
+      "sha256": "ec7f4f1e7bf6bc6d00f5113aa2b0330101088b5b0a62d6805ee595a6f0fe189c"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/postgresql-workers-lab.json",
+      "sha256": "40a03cbf677e8d758559853e20ca5b5b05dd1241fa921b2c692febf6feebb887"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/fixed-provider-https.json",
+      "sha256": "6918aa79470ebbab202993562f254e33a32e2491ceb005dff833144a57fe80dc"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/fixed-provider-workers.json",
+      "sha256": "c7d2d93f8d5820442a2968094c0ae3ae484e67cbef97bf3f39a7dfc430a2b237"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/login-flow-custody.json",
+      "sha256": "9ec6c1ac4cc1633d3477ce16d2be62bbb970a73a7f359bf1fcb2c4b6fd61cee7"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/login-https-postgresql-lab.json",
+      "sha256": "b701e1ad460c605966badd1982340e454a96b82acad3f716b1373c47edb729f4"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/login-workers-lab.json",
+      "sha256": "a734763ea7092b58d7f64a6f08b79dddf6d191be7a2d45e6ac34e0f7c35bef05"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/logout-https-postgresql-lab.json",
+      "sha256": "c9bef18a91f9498e7733a6f156dc65c37c6ad06fd4d5541b37fd5aed79b8ddf2"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/logout-workers-lab.json",
+      "sha256": "96c9db2c9bca84238a0eea0745eb98c2b32015ead91817339f577ad1ad4943c2"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/platform-workers-lab.json",
+      "sha256": "b63049dbcf54d642db353c81126914adfac0860a82c0e6bbe4ed7ac1abba45bb"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/self-logout-postgresql-lab.json",
+      "sha256": "86390d974ee63db15d7560b9f4c7116c9116faedad743f6f836b30fec2e7327b"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/standalone-store-linking-http.json",
+      "sha256": "f768352b3bed83f302cc70ed79c30ad09bf724de91c956e46c2fde1e709cfe62"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/standalone-store-linking-workers.json",
+      "sha256": "8150bf8cc44948be7467422b44d4ebfd28496f05ecd369730f77864e0c425070"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/standalone-workspace-http.json",
+      "sha256": "0b53ef68a8e44fffb417e8604ad76dc084abaed069247cf9f1cebeac0abf1cc9"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/standalone-workspace-workers.json",
+      "sha256": "306f4cd9b5040264e7d9915a79010ab2d70614b53e91085e5c695c5c6ee92b60"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/regressions/workspace-linking-read.json",
+      "sha256": "407e431e88d4699870075433ebabfbd921b7c0cc60d29a8ff58c6ed26978dec2"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T01t/canonical89/workers-lab.json",
+      "sha256": "5ed586452d39b8afd15a7c1f293710a65a787e522330c59e49de5e6eaa9ca980"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T02/database-lab.json",
+      "sha256": "1dee176cc621cc1ece6f1880341b560f927a32a1bf7a18032d82cab929d18ad4"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T03/workers-lab.json",
+      "sha256": "56aa7495b4c8a2b78ce4e539e9a174fa140c3b621062e815eebde76a6e0f47a5"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T03/workspace-store-linking-lab.json",
+      "sha256": "c9c63bd5639a613b03db93404c83049482198f9f2f5c8f08a4c305cb70b967eb"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/reports/docs/evidence/P05.T04/workers-lab.json",
+      "sha256": "049795335cd4cf8f1ccea964410340411a5ca24fc8223aedcdb278033f9b1b8d"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/source.after-restore.json",
+      "sha256": "f5656c42fc2832ec14539230ffb8d8a5bc55916869698c6459cb22c924d70822"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/source.after-tests.json",
+      "sha256": "03ea729890392f861330ea56127c5fc4c9e4d3e3af59c498abdc2dc3270e0626"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/ci-current-reports/source.before.json",
+      "sha256": "f5656c42fc2832ec14539230ffb8d8a5bc55916869698c6459cb22c924d70822"
+    },
+    {
       "path": "docs/evidence/P05.T01t/canonical89/draft-validation.json",
       "sha256": "7408e12216c472e52b6432540d1b962747ad2eb141964e06e87a0e77f3d37dfb"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/execution.json",
+      "sha256": "bde821cedf280d39963b34876ccf71a50ecb2cba0111f3bd72b01d7bd23cad20"
     },
     {
       "path": "docs/evidence/P05.T01t/canonical89/held-candidate-A/artifact-api.json",
@@ -2434,6 +2670,22 @@
       "sha256": "a41bf7ae105c0d55eab582efac85422d216244905dcd3b81fb8e2593744e359b"
     },
     {
+      "path": "docs/evidence/P05.T01t/canonical89/independent-actual-ci-closure.json",
+      "sha256": "396169fc3a533d44bce575653483386b8678e88dd6c65d428acbbc2f3a9a8377"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/independent-candidate-audit-helper-review.json",
+      "sha256": "ba5f39fc2c47e7b7850e33f148449df106145ae256e63496ee178e46a83bda86"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/independent-candidate-provenance-review.json",
+      "sha256": "b76081f7bb4959d6f41a87d7dd52f9473bc74bdc57cc2086627a8e5e0401fc24"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/independent-ci-domain-review.json",
+      "sha256": "6c55947b35dfd486682e45e5415dcf8c666c675c40b5bc67c2c304ac8d41bd0c"
+    },
+    {
       "path": "docs/evidence/P05.T01t/canonical89/independent-host-repair-helpers-review.json",
       "sha256": "4e01ea3007b7651cc78965a59a26261f07040de9e9b7fea5057d4be66180e14d"
     },
@@ -2468,6 +2720,10 @@
     {
       "path": "docs/evidence/P05.T01t/canonical89/local-pipeline-receipt.json",
       "sha256": "1172dc62219085adc94a2f9f5a8b16bcc9561990216ba53ec7286cd5790b9ad9"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/local-validation.json",
+      "sha256": "3d7a0f7567aef7a4cd9c5c2570c6a4926ae9aedcbcd58066ac7e3ff6295cf88f"
     },
     {
       "path": "docs/evidence/P05.T01t/canonical89/native-local-receipt.json",
@@ -2530,6 +2786,18 @@
       "sha256": "28423502a8502429585f293fc960343a81d7ec18cf9da0628741a44fe60d7708"
     },
     {
+      "path": "docs/evidence/P05.T01t/canonical89/review.json",
+      "sha256": "9dd6a0d59fffc57e2ef90f2cf135794f7920e98b6ece55fbe5a2bde4673f238b"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/root-actual-current-report-review.json",
+      "sha256": "3c119ffb62e93d4a0e76ebf748135f628a9ebc9382f65eba0c00915fc62150ac"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/root-final-composition-execution.json",
+      "sha256": "e5ff93e2238a9a97898c64fed3a12b4bb4c31397c79fd331ce9e78430d7b4c52"
+    },
+    {
       "path": "docs/evidence/P05.T01t/canonical89/root-host-repair-helper-review.json",
       "sha256": "62201772fe4125cd6adb1afb23c394f7b617408dae6cad2eccdde161d8f57cff"
     },
@@ -2548,6 +2816,10 @@
     {
       "path": "docs/evidence/P05.T01t/canonical89/scaffold-local-network-receipt.json",
       "sha256": "366f5c335c8a14f0c4ca4a8734bd1dac79ed82f7984f491272335a8d86ba1748"
+    },
+    {
+      "path": "docs/evidence/P05.T01t/canonical89/sql-validation.json",
+      "sha256": "9da1e01cbaa349abaf288c69202e996dc6f94eb2e4551a5dd86e149a48f1329d"
     },
     {
       "path": "docs/evidence/P05.T01t/canonical89/workers-lab.json",
