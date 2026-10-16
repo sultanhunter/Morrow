@@ -45,6 +45,19 @@ try {
     "Unconfigured API cannot start login or issue a cookie",
     login.status === 404 && login.headers.getSetCookie().length === 0,
   );
+  const logout = await fetch("http://127.0.0.1:4191/auth/logout", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Morrow-Request": "1",
+      Cookie: "__Host-morrow_session=" + "A".repeat(43),
+    },
+    body: JSON.stringify({ schemaVersion: 1 }),
+  });
+  check(
+    "Unconfigured API cannot retire a session or mutate cookies",
+    logout.status === 404 && logout.headers.getSetCookie().length === 0,
+  );
   start(
     "connector",
     ["node_modules/@react-router/serve/bin.js", "apps/shopify-connector/build/server/index.js"],

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "task": "P05.T01q",
+  "reviewer": "e2b_stack_reconciliation",
+  "result": "clear",
+  "reviewType": "independent_read_only_two_line_manifest_guard_maintenance",
+  "files": [
+    {
+      "path": "tests/browser-session-sql.test.mjs",
+      "beforeSha256": "3d83b72b45d256a127bf4a96b5121f089e7ad23961c1971e8b92ffc68ad732e8",
+      "sha256": "52c020710f9290b11b327a14326f29f0a8457f882dc616fb44d0ba990651ff16",
+      "onlyDelta": "Expected total manifest length10 to11; original immutable-prefix/checksum/core assertions byte-identical."
+    },
+    {
+      "path": "tests/workspace-linking-read-sql.test.mjs",
+      "beforeSha256": "372f7f08b0af41d39940c9ccf3f4a6ff858ca47a842617d3b3506be379a803d1",
+      "sha256": "155e2ddff0b51d074a6e193d8008bf81e0ea75d0863b1accf33657d5aabd2fb6",
+      "onlyDelta": "Expected total manifest length10 to11; original immutable-prefix/checksum/core assertions byte-identical."
+    }
+  ],
+  "materialFindings": [],
+  "limits": [
+    "No tests or Docker executed by this reviewer; focused/full-CI outcomes require owning execution records.",
+    "Structural exact-count maintenance does not itself qualify migration11 actual behavior."
+  ]
+}

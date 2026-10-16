@@ -13,6 +13,7 @@ export interface AuthDispatchHandler {
 export interface AuthHttpBinding {
   readonly origin: string;
   readonly auth: AuthDispatchHandler;
+  readonly logout?: AuthDispatchHandler;
 }
 const sensitive = new Set([
   "host",
@@ -30,7 +31,7 @@ const sensitive = new Set([
   "sec-fetch-dest",
 ]);
 const fixedBody = '{"schemaVersion":1,"outcome":"login_unavailable"}';
-function unavailable(response: ServerResponse, status: number) {
+function unavailable(response: ServerResponse, status: number, logoutUnknown = false) {
   response.shouldKeepAlive = false;
   response.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -38,9 +39,11 @@ function unavailable(response: ServerResponse, status: number) {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
   });
-  response.end(fixedBody);
+  response.end(
+    logoutUnknown ? '{"schemaVersion":1,"outcome":"logout_outcome_unknown"}' : fixedBody,
+  );
 }
-function ownedBody(request: IncomingMessage, response: ServerResponse) {
+function ownedBody(request: IncomingMessage, response: ServerResponse, maximum = 513) {
   // Cancelling Readable.toWeb(IncomingMessage) destroys the duplex socket,
   // which can erase a bounded400 before it is delivered. Own this tiny input
   // stream instead; an incomplete/rejected body closes only after response
@@ -58,12 +61,12 @@ function ownedBody(request: IncomingMessage, response: ServerResponse) {
     request.pause();
   };
   const data = (value: Buffer) => {
-    const remaining = 513 - total;
+    const remaining = maximum - total;
     const chunk = new Uint8Array(value.subarray(0, remaining));
     total += chunk.byteLength;
     controller.enqueue(chunk);
     request.pause();
-    if (total === 513) {
+    if (total === maximum) {
       response.shouldKeepAlive = false;
       detach();
       controller.close();
@@ -165,6 +168,26 @@ function snapshot(plan: AuthDeliveryPlan, path: string, method: string) {
       "default-src 'none'; base-uri 'none'; frame-ancestors 'none'"
   )
     throw Error("AUTH_HTTP_DELIVERY_INVALID");
+  if (path === "/auth/logout") {
+    const expected =
+      plan.status === 200
+        ? '{"schemaVersion":1,"outcome":"session_ended"}'
+        : '{"schemaVersion":1,"outcome":"logout_unavailable"}';
+    if (
+      plan.status === 303 ||
+      (plan.status === 200 && method !== "POST") ||
+      plan.cookies.length !== 0 ||
+      Object.keys(headers).sort().join(",") !==
+        "cache-control,content-type,referrer-policy,x-content-type-options" ||
+      headers["content-type"] !== "application/json; charset=utf-8" ||
+      (plan.bodyText !== expected &&
+        !(
+          plan.status === 503 &&
+          plan.bodyText === '{"schemaVersion":1,"outcome":"logout_outcome_unknown"}'
+        ))
+    )
+      throw Error("AUTH_HTTP_DELIVERY_INVALID");
+  }
   if (plan.status === 303) {
     if (
       path !== "/auth/workos/callback" ||
@@ -225,6 +248,8 @@ export function createAuthHttpListener(binding?: AuthHttpBinding) {
     let body: ReturnType<typeof ownedBody> | undefined;
     const disconnect = () => abort.abort();
     const rawTarget = request.url ?? "";
+    const logoutAtEntry = rawTarget === "/auth/logout" || rawTarget.startsWith("/auth/logout?");
+    let logoutDispatched = false;
     const callbackAtEntry =
       request.method === "GET" &&
       (rawTarget === "/auth/workos/callback" || rawTarget.startsWith("/auth/workos/callback?"));
@@ -243,7 +268,7 @@ export function createAuthHttpListener(binding?: AuthHttpBinding) {
               "Referrer-Policy": "no-referrer",
             });
             response.end();
-          } else unavailable(response, 503);
+          } else unavailable(response, 503, logoutAtEntry && logoutDispatched);
         } else if (!response.writableEnded) response.destroy();
       },
       callbackAtEntry ? 25000 : 5000,
@@ -300,7 +325,12 @@ export function createAuthHttpListener(binding?: AuthHttpBinding) {
           request.pause();
           return;
         }
-        if (!["/auth/login", "/auth/workos/callback", "/auth/result"].includes(url.pathname)) {
+        if (
+          !["/auth/login", "/auth/workos/callback", "/auth/result", "/auth/logout"].includes(
+            url.pathname,
+          ) ||
+          (url.pathname === "/auth/logout" && !configured.logout)
+        ) {
           unavailable(response, 404);
           request.pause();
           return;
@@ -321,12 +351,14 @@ export function createAuthHttpListener(binding?: AuthHttpBinding) {
           headers.append(request.rawHeaders[i]!, request.rawHeaders[i + 1]!);
         const init: RequestInit & { duplex?: "half" } = { method, headers, signal: abort.signal };
         if (method !== "GET" && method !== "HEAD") {
-          body = ownedBody(request, response);
+          body = ownedBody(request, response, url.pathname === "/auth/logout" ? 257 : 513);
           init.body = body.stream;
           init.duplex = "half";
         }
         const input = new Request(url, init);
-        await configured.auth.dispatch(input, (plan) => {
+        const handler = url.pathname === "/auth/logout" ? configured.logout! : configured.auth;
+        logoutDispatched = url.pathname === "/auth/logout";
+        await handler.dispatch(input, (plan) => {
           if (handed || abort.signal.aborted || response.destroyed || response.headersSent)
             throw Error("AUTH_HTTP_DELIVERY_HELD");
           handed = true;
@@ -336,11 +368,11 @@ export function createAuthHttpListener(binding?: AuthHttpBinding) {
           response.end(output.bodyText);
         });
         if (!handed && !abort.signal.aborted && !response.destroyed && !response.headersSent)
-          unavailable(response, 503);
+          unavailable(response, 503, logoutDispatched);
       } catch {
         body?.finish();
         if (!abort.signal.aborted && !response.destroyed && !response.headersSent)
-          unavailable(response, 503);
+          unavailable(response, 503, logoutDispatched);
         else if (!response.writableEnded) response.destroy();
       } finally {
         body?.finish();

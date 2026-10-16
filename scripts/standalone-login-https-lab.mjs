@@ -31,6 +31,13 @@ let diagnostic = () => {};
 const checks = [],
   check = (name, value) => {
     if (!value || !/^[a-z][a-z0-9_]{1,119}$/.test(name) || checks.some((x) => x.name === name)) {
+      // Check names are source-owned constants/fixed variants, never request or SQL fields.
+      console.error(
+        "LOGIN_HTTPS_FAILED_CHECK:" +
+          (typeof name === "string" && /^[a-z][a-z0-9_]{1,119}$/.test(name)
+            ? name
+            : "invalid_check_name"),
+      );
       diagnostic();
       throw Error("LOGIN_HTTPS_LAB_FAILED:" + name);
     }
@@ -112,13 +119,13 @@ const paths = [
 const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
 if (
   process.version !== "v24.13.0" ||
-  plan.sequence !== 84 ||
+  plan.sequence !== 85 ||
   hash(readFileSync(plan.path)) !== plan.sha256
 )
   throw Error("LOGIN_HTTPS_LAB_SOURCE_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-if (manifest.migrations.length !== 10) throw Error("LOGIN_HTTPS_LAB_TEN_MIGRATIONS_REQUIRED");
-for (const [i, entry] of manifest.migrations.entries()) {
+if (manifest.migrations.length < 10) throw Error("LOGIN_HTTPS_LAB_TEN_MIGRATIONS_REQUIRED");
+for (const [i, entry] of manifest.migrations.slice(0, 10).entries()) {
   if (entry.sequence !== i + 1 || hash(readFileSync("migrations/" + entry.file)) !== entry.sha256)
     throw Error("LOGIN_HTTPS_LAB_MIGRATION_HASH");
   paths.push("migrations/" + entry.file);
@@ -1128,8 +1135,32 @@ try {
         });
       });
       const results = await Promise.allSettled([h.close(), ...readPools.map((p) => p.close())]);
-      if (results.some((r) => r.status === "rejected"))
+      if (results.some((r) => r.status === "rejected")) {
+        const metrics = (pool) =>
+          Object.fromEntries(
+            [
+              "connections",
+              "released",
+              "closed",
+              "backendCleanupVerified",
+              "unverifiedHostClosures",
+            ].map((key) => [
+              key,
+              Number.isSafeInteger(pool.metrics[key]) && pool.metrics[key] >= 0
+                ? pool.metrics[key]
+                : null,
+            ]),
+          );
+        console.error(
+          "LOGIN_HTTPS_CLEANUP_DIAGNOSTIC " +
+            JSON.stringify({
+              phase,
+              rolePools: h.rolePools.map(metrics),
+              consumerPools: readPools.map(metrics),
+            }),
+        );
         throw Error("LOGIN_HTTPS_LAB_CLEANUP_UNVERIFIED");
+      }
     }
   });
   let plaintextDispatches = 0;
@@ -1235,7 +1266,7 @@ check(
 const report = {
   schemaVersion: 1,
   task: "P05.T01p",
-  canonicalSequence: 84,
+  canonicalSequence: 85,
   observedAt: new Date().toISOString(),
   qualification: "synthetic_native_rsa_pkce_to_real_sql_to_https_initial_cookie_jar_and_o_b",
   appliedMigrations: 10,
@@ -1263,9 +1294,9 @@ const report = {
     "Source digests are selected reviewed inputs, not a complete third-party dependency closure.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01p", { recursive: true });
+mkdirSync("docs/evidence/P05.T01q/regressions", { recursive: true });
 writeFileSync(
-  "docs/evidence/P05.T01p/https-postgresql-lab.json",
+  "docs/evidence/P05.T01q/regressions/login-https-postgresql-lab.json",
   JSON.stringify(report, null, 2) + "\n",
 );
 console.log(

@@ -9,7 +9,7 @@ test("linking read migration appends to the exact published eight-migration mani
   const previous = JSON.parse(
     read("docs/history/workos-authentication-operator-82/migrations/manifest.json"),
   );
-  assert.equal(current.migrations.length, 10);
+  assert.equal(current.migrations.length, 11);
   assert.deepEqual(current.migrations.slice(0, 8), previous.migrations);
   for (const m of current.migrations) assert.equal(hash(read("migrations/" + m.file)), m.sha256);
   assert.equal(current.migrations[8].sequence, 9);

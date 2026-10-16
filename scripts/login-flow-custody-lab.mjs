@@ -20,6 +20,9 @@ const hash = (v) => createHash("sha256").update(v).digest("hex"),
     console.log(JSON.stringify({ check: name, passed: true }));
   };
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
+const selectedMigrations = manifest.migrations.slice(0, 10);
+const executionPlan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
+const executionSequence = executionPlan.sequence;
 const sourcePaths = [
   "scripts/login-flow-custody-lab.mjs",
   "scripts/local-postgres-lab.mjs",
@@ -44,12 +47,19 @@ const sourcePaths = [
   "docs/plan/source.json",
   "docs/plan/build-plan.md",
   "docs/packets/P05.T01p.md",
-  ...manifest.migrations.map((m) => "migrations/" + m.file),
+  ...selectedMigrations.map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
 if (
-  JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence !== 84 ||
-  manifest.migrations.length !== 10
+  !Number.isSafeInteger(executionSequence) ||
+  executionSequence < 84 ||
+  executionPlan.path !== "docs/plan/build-plan.md" ||
+  executionPlan.sha256 !== hash(readFileSync("docs/plan/build-plan.md")) ||
+  selectedMigrations.length !== 10 ||
+  selectedMigrations.some(
+    (m, index) =>
+      m.sequence !== index + 1 || hash(readFileSync("migrations/" + m.file)) !== m.sha256,
+  )
 )
   throw Error("LOGIN_CUSTODY_PLAN_REQUIRED");
 let container,
@@ -872,7 +882,8 @@ check(
 const report = {
   schema_version: 1,
   packet: "P05.T01p",
-  canonical_sequence: 84,
+  canonical_sequence: executionSequence,
+  fixture_protocol_sequence: 84,
   scope: "synthetic_private_login_custody_actual_postgresql",
   provider_requests: 0,
   source_hashes: sourceHashes,
@@ -885,13 +896,14 @@ const report = {
   holder_cleanup: holderCleanup,
   limitations: [
     "Synthetic owner-seeded identities only; no native/provider or hosted activation.",
+    "Only preserved migrations1–10 are installed; migration11 self-logout is not installed or qualified by this regression.",
     "Controlled age fixtures qualify retention predicates, not elapsed production time.",
     "Historical receipt attribution never proves dispatch, delivery, or current authority.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01p", { recursive: true });
+mkdirSync("docs/evidence/P05.T01q/regressions", { recursive: true });
 writeFileSync(
-  "docs/evidence/P05.T01p/postgresql-custody-lab.json",
+  "docs/evidence/P05.T01q/regressions/login-flow-custody.json",
   JSON.stringify(report, null, 2) + "\n",
 );
 console.log(

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "task": "P05.T01q",
+  "canonicalSequence": 85,
+  "reviewKind": "independent_source_and_final_evidence_review",
+  "observedAt": "2026-10-16T00:58:06.827875+00:00",
+  "reviewer": "next_identity_packet",
+  "reviewed_source_digests": {
+    "scripts/standalone-logout-https-lab.mjs": "906d30c295223e222389f006ab3aec87a5fdeca0eb00257823b63a8247de9cc5",
+    "scripts/fixtures/login-provider.mjs": "fb3a717572ef3aff5ca0d5dc5a3cb8855364a025b149d7ea0dacccb485a0e05d",
+    "scripts/fixtures/login-https.mjs": "8973889c5b19ecc1d8f83aafeced7dd6940542d290b3ea784aed69e9a3432999",
+    "scripts/fixtures/self-logout-fixture.mjs": "b7e2154fcbcc1b29ac765f42266c353c3e59ae3e863fd46e0858ab9d6a966bb1",
+    "scripts/local-self-logout-sql.mjs": "7e62a077a43470d2d46936317ea089e62de2da4e8ef10fd7e39ac49bbcb85c0f",
+    "apps/api/src/auth-http.ts": "05bd4b04b51ca6d129a348b79b4789c9005320831087875bab557c2089021999",
+    "apps/api/src/workspace-router.ts": "d81784493ef38f4fbbb360282f1ad2e5a845e3f70e7034e8ceaf2090651b8944"
+  },
+  "blocking_findings": [],
+  "observations": [
+    "The in-process provider is independently signed with native RSA and independently validates public authorize inputs and PKCE; it is never a native WorkOS request.",
+    "Actual HTTPS issue() uses unchanged69\u2192owning76\u219277\u2192M and ties the cookie jar proof to the stored generation receipt before calling O/B or logout.",
+    "The same still-present cookie is checked against O bootstrap plus B preview/apply/status before and after one attributable family audit/revision; provider binding, generation records and identity/member/grant cardinalities remain separate invariants.",
+    "The delayed acknowledged-COMMIT gate preserves the original5s control while independent login creates a second family under the same provider; old completion/replay cannot clear cookies or retire that second family, and its explicit later logout is distinct.",
+    "Inactive membership/principal/mapping/profile/provider/generation paths deny protected access while permitting credential retirement; the expired case is expressly owner-seeded with valid past fixed15minute times.",
+    "Lost real COMMIT/release acknowledgement and transport disconnect assert one durable effect and no following SQL/retry/cookie operation.",
+    "Normal/fault role cleanup, backend namespace absence, exact owned container absence, listeners and private ephemeral TLS resources are checked separately; test jar does not establish browser-engine enforcement.",
+    "Selected-source hashes are captured before measurement and checked afterward; throwing check() prevents a failed behavior/source fence from producing a passed report.",
+    "The final fixture correction sends CSRF only for B apply, as unchanged B requires; each retired-cookie B call now witnesses exactly one private lookup/status read, fixed404linking_not_found, zero mutation SQL, unconsumed handoff and no link. This strengthens the product-semantic assertion instead of treating an ingress denial as proof.",
+    "Earlier two fixture-held measurements are preserved outsideGit and remain held; no runtime/core/deadline changes were used to make the final measurement pass."
+  ],
+  "evidence_status": "Final actual local HTTPS/PostgreSQL report source bindings,157closed checks and separate physical cleanup audited; no blocking finding.",
+  "limits": [
+    "This record excludes independently reviewing my authored standalone-logout controller/typed synthetic fixtures/tests/Workers.",
+    "No provider key/request, hosted identity/custody, deployment, merchant activation, browser-engine enforcement or actual client delivery is qualified."
+  ],
+  "finalEvidence": {
+    "path": "docs/evidence/P05.T01q/https-postgresql-lab.json",
+    "sha256": "32a5949b21b7b30202c4941eeda9ac33989d13c10329093d0a14ac6abf2eeaa1",
+    "sourceInventoryDigest": "61a6f700cb4f3f9b4fe2fa5737b2546f0742d21e2f9571c8b76a44c06ffd5776",
+    "selectedSources": 65,
+    "allSourceHashesCurrent": true,
+    "checks": 157,
+    "allChecksPassed": true,
+    "httpsRequests": 80,
+    "cases": 14,
+    "physicalClientAndBackendClosures": 177,
+    "providerRequests": 0,
+    "browserEngineQualified": false,
+    "cleanup": {
+      "httpsListener": "closed",
+      "tlsDirectory": "absent",
+      "ownedContainer": "absent"
+    }
+  },
+  "preservedHeldAttempts": {
+    "logout85-attempt1": {
+      "observation.json": "69693a79ba5b6ef8bfd85eee39e2f47b967437f22cdfb83bfb3548d5ced7383b",
+      "morrow85-logout-https-first.log": "f54050695351d4e6fa4d791f659fb3148eea7aa16e3133ddfc07e42718ef2a54",
+      "standalone-logout-https-lab.mjs": "5da49b5bda6ebf038c319e3366ba6a38ef8873e58b992e3876edc2f308025e59"
+    },
+    "logout85-attempt2": {
+      "observation.json": "21e9668bdf8955cc1735dc5a03d79809324d8ec54522fc0bc2baad02ef501834",
+      "standalone-logout-https-lab.mjs": "8f624b0b52792548c7bb2a65be4c722b9bf6bbbeabb50886ea00c8129d9f6e0e",
+      "morrow85-logout-https-final.log": "f54050695351d4e6fa4d791f659fb3148eea7aa16e3133ddfc07e42718ef2a54"
+    }
+  }
+}

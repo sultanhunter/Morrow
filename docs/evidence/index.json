@@ -1,7 +1,7 @@
 {
   "scope": "Snapshot of recorded evidence after verification; rerun after new reports. Self-review is separate from independent/merchant/provider qualification.",
-  "plan_sequence": 84,
-  "plan_digest": "25f268447a567a6c85dd600cb8ca5fefd403ed8063070ec2e302bfcc5cc5b33f",
+  "plan_sequence": 85,
+  "plan_digest": "62ad13ece3999eafa60d68688d34034471c3c0dd357d05de26e483b35ac2fadf",
   "tasks": [
     {
       "id": "P01.T01",
@@ -1420,6 +1420,66 @@
     {
       "path": "docs/evidence/P05.T01p/workers-lab.json",
       "sha256": "bf2d35c65448887500249404078f775d84d1d2b8620bb1c75f2a824c96c63db1"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/ci-evidence-author.json",
+      "sha256": "ba4c6e8590aedb5270197d91e321a5f08e5b9f5bdf9e165c8394118670f05b4c"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/draft-validation.json",
+      "sha256": "ad962bd66c216510284c86e36e2c8ec2b9c2e07e41667465f5346cc1f1c05fad"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/https-postgresql-lab.json",
+      "sha256": "32a5949b21b7b30202c4941eeda9ac33989d13c10329093d0a14ac6abf2eeaa1"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/independent-auth85.json",
+      "sha256": "c70792f6fbee3f58d5543e437259a6197a992d2413166f84a3f9d96ab492c5b5"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/independent-ci-source85.json",
+      "sha256": "4ae640d2612c90c1dc608ab8c834bc9ac37728b9b3a019d1cbc9ec8a9bb35170"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/independent-https85.json",
+      "sha256": "b7bc85321024a258d88fbb056f6683ca8a605ba3572bc9268f34a3e946c761f1"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/independent-maintenance85-source.json",
+      "sha256": "3af20758c5befd3257d410a20268f2f5a8f579049e658b8eee6684bdfc7f3699"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/independent-manifest-guards85.json",
+      "sha256": "557570397b2659ab265799b84a76c010fd856d9c4557445a24089a07130655e0"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/independent-q-controller85-final.json",
+      "sha256": "79c30fe823ca240a61ed782f13818fa0d83e0f1ba897960c5b50e979d2bb6760"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/independent-sql85.json",
+      "sha256": "03bfdb43cd0c272a213a4cf578d6656e517b25d90c45e2ff61ecc0deb2d7f354"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/regressions/login-workers-lab.json",
+      "sha256": "b2a2147bd8e83bbb974a8d8120a9bdefa8f70d9d3ea5e86cec633995d6e7a31c"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/regressions/standalone-store-linking-workers.json",
+      "sha256": "d302e1a052979b14d4097419b77cfe4bb17ae53317b6988801ac222d32f935f1"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/regressions/standalone-workspace-workers.json",
+      "sha256": "e4374bdd197121ed3e2527c6333e1635b0f50a7c58858175039353dedb31db71"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/root-pending-source-review.json",
+      "sha256": "7d61c4a38c5057366e20dc0ce02e7621472420963259186fcf49793eb097a898"
+    },
+    {
+      "path": "docs/evidence/P05.T01q/workers-lab.json",
+      "sha256": "abeadfb66660ce6746f38bdb5c9f1cb5b8c94e3553657d79eaa5476a313e94f8"
     },
     {
       "path": "docs/evidence/P05.T02/clean-build.json",

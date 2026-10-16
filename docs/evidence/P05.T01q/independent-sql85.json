@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "task": "P05.T01q",
+  "canonicalSequence": 85,
+  "reviewKind": "independent_source_review",
+  "observedAt": "2026-10-16T00:47:35.897252+00:00",
+  "reviewer": "next_identity_packet",
+  "reviewed_source_digests": {
+    "migrations/0011.self-browser-family-logout.sql": "089ff5487030df8f085045f37f523522540759752b7fde25abf91629396f28c4",
+    "infra/identity-logout-role-prerequisites.sql": "1eb98c94b51d4d2b1c2580fc402234110536ae6a84c185116676766460a0193d",
+    "packages/identity/src/self-logout-control.ts": "be16714a233b888a809c1bb2ba8a2f2a6bb94ac43dbfc0e5b0bbd4109e028a99"
+  },
+  "blocking_findings": [],
+  "observations": [
+    "Fixed eight-TEXT definer recomputes the exact request transcript and derives target only from new-generation digest and immutable configured namespace, explicitly checking profile and binding client/application facts.",
+    "Safe exact logout session_user/current_user checks and no-membership checks precede access and are repeated after waits/effect; no table or generic owner revoker grant is added.",
+    "Locking reuses original8 command/provider array_to_json advisory keys, then provider/family/generation rows; no later organization/profile/member lock is added.",
+    "Command-audit collision is checked before already-ended no-op; an ended family requires exactly one original revoked audit and performs no new write.",
+    "Fresh helper applied result is not trusted alone: command/digest/kind/target/revoked outcome/timestamp and unique original audit are checked; post-helper role/namespace/ambiguity failures roll back the effect within a subtransaction.",
+    "Inactive or expired callers are not trapped by workspace-domain authorization; legacy/new ambiguity and inconsistent new-family ownership deny.",
+    "Controlled service latches before fixed function invocation; uncertain query closes/disposes before propagation, no following SQL/retry; late acquisitions are discarded and success requires acknowledged commit plus awaited physical release."
+  ],
+  "evidence_status": "Actual PostgreSQL/HTTPS final measurements pending; no engine qualification inferred from source review.",
+  "limits": [
+    "Authored standalone-logout controller, fixture, focused tests and Workers runner are excluded from this independent review.",
+    "This source review does not establish provider, hosted deployment, merchant activation, browser-engine enforcement or actual client delivery."
+  ]
+}

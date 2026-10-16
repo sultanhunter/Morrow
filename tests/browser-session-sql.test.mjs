@@ -12,7 +12,7 @@ test("browser admission appends migration8 without rewriting the seven published
   const previous = JSON.parse(
     read("docs/history/workos-authentication-operator-80/migrations/manifest.json"),
   );
-  assert.equal(manifest.migrations.length, 10);
+  assert.equal(manifest.migrations.length, 11);
   assert.deepEqual(manifest.migrations.slice(0, 7), previous.migrations);
   for (const entry of manifest.migrations)
     assert.equal(hash("migrations/" + entry.file), entry.sha256);

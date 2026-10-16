@@ -62,6 +62,12 @@
       "file": "0010.login-flow-custody.sql",
       "sha256": "51c6d7ca9e31a897352c4a8b2e85824eb4a7b58506629246bce63c9d92070475",
       "reviewRef": "docs/evidence/P05.T01p/review.json"
+    },
+    {
+      "sequence": 11,
+      "file": "0011.self-browser-family-logout.sql",
+      "sha256": "089ff5487030df8f085045f37f523522540759752b7fde25abf91629396f28c4",
+      "reviewRef": "docs/evidence/P05.T01q/review.json"
     }
   ]
 }

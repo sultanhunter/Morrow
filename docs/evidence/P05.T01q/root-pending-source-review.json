@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "task": "P05.T01q",
+  "currentPlanSequence": 85,
+  "reviewer": "root",
+  "reviewKind": "self_review_of_pending_CI_candidate_metadata_and_other_author_CI_tooling",
+  "reviewed_source_digests": {
+    "scripts/ci-validation-evidence.mjs": "6217eea0abb32eea674b2aa1e1baadc986f6265b11d10435a1421bdd7948ebfa",
+    "tests/ci-validation-evidence.test.mjs": "fe13db91bdbeb5521803a56ee6b79c4404cc23bc9df76a78e2505dd6c5a5c5eb",
+    ".github/workflows/ci.yml": "a5cd525013db6a6ec520f0dbbadb4b943576d8db0333d66442e6cc59d2ac1967",
+    "package.json": "ac7cde48beb7935c32f46caf6baf1e1b5384e75fd1b3c160ee2309f4fd3cb101",
+    "docs/packets/P05.T01q.md": "2c96b4354fb153147894abf1a5596319ca5f3a67e315b19f2d5d382bba347f4e",
+    "docs/progress/checkpoint.md": "fe527719d35ef269b66095cea96b3906c0170f7474c3dfa3a744dbbc8461ffd4"
+  },
+  "blocking_findings": [],
+  "reviewedInvariants": [
+    "Exact PR head checkout; original38 npm commands plus fixed engine probe retain order and semantics.",
+    "Fixed48 report outputs quarantined before commands; auxiliary2 inputs retained separately.",
+    "Fresh bounded JSON outputs only; numeric exits not inferred; final GitHub API outcomes and downloaded artifact digest remain required.",
+    "Shorter JSON state writes truncate; quarantine bytes/directories sync before source unlink; full original tree reverified after output restoration.",
+    "Source snapshots bind tracked files to actual commit before tests, immutable files remain unchanged, collector reports pending even when complete.",
+    "Existing passed-only publication/alignment guards unchanged; candidate guard leaves Desktop84 and live/provider/default routes unchanged."
+  ],
+  "limits": [
+    "Source review is not command execution or final qualification.",
+    "Fourteen focused tests were observed by their owning author; exact candidate full CI and database outcomes remain pending.",
+    "Historical and Mac holds remain preserved."
+  ]
+}

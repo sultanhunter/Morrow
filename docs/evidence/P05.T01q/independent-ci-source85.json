@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "task": "P05.T01q",
+  "canonicalSequence": 85,
+  "reviewer": "next_identity_packet",
+  "reviewKind": "independent_source_review_only",
+  "observedAt": "2026-10-16T01:54:10.880304+00:00",
+  "reviewed_source_digests": {
+    "scripts/ci-validation-evidence.mjs": "6217eea0abb32eea674b2aa1e1baadc986f6265b11d10435a1421bdd7948ebfa",
+    "tests/ci-validation-evidence.test.mjs": "fe13db91bdbeb5521803a56ee6b79c4404cc23bc9df76a78e2505dd6c5a5c5eb",
+    ".github/workflows/ci.yml": "a5cd525013db6a6ec520f0dbbadb4b943576d8db0333d66442e6cc59d2ac1967"
+  },
+  "blocking_findings": [],
+  "observations": [
+    "Workflow explicitly checks out the PR head or push SHA and the helper checks actual Git HEAD before quarantine; command ids remain unique serial fixed producers. Original ten SQL commands are split into equivalent fail-fast serial steps.",
+    "Preparation precedes dependency install/all producers, removes exactly48 designated stale report outputs after saving verified originals, and retains/backups two auxiliary inputs. No arbitrary command execution exists inside the collector.",
+    "Source before/after snapshots bind tracked bytes and executable modes, deny staged/untracked unrelated changes, and permit only the fixed output set to differ. Unchanged source is checked before any report payload is copied.",
+    "Artifact copies only fixed JSON report paths and source hash snapshots; failed/skipped/cancelled/unknown producers remain partial/pending, missing/invalid reports cannot produce complete evidence, and untrusted step outputs/errors are discarded.",
+    "Numeric exit codes remain null and every result retains pending qualification with a mandatory external final GitHub run/job/step API gate; no collector success is a domain qualification verdict.",
+    "Original byte/mode restoration is identity/byte-guarded and the final exact full Git snapshot must equal the pre-test snapshot. Quarantine and newly created directories are synced before unlinking outputs.",
+    "Report symlinks and unsafe entries are refused without following their target. Run/attempt roots and collection are one-use; artifacts use a fixed run/attempt name, pinned upload action, no overwrite and short retention.",
+    "Focused tests cover missing/softened producers, stale reports, invalid UTF8/JSON, preparation failure, source drift, symlinks, one-use ownership and restoration. I inspected these tests; their14passing execution was reported by the author, not independently rerun by this reviewer."
+  ],
+  "qualification_status": "pending",
+  "limits": [
+    "This is an independent source review, not hosted candidate execution or actual PostgreSQL qualification.",
+    "Final artifact acceptance still requires exact candidate/run/attempt API metadata, artifact digest, all final steps/jobs success and separate report/domain/source/cleanup validation.",
+    "Controlled CI filesystem checkpoints are not hostile concurrent filesystem isolation; no native provider, key, merchant, deployment or browser-engine claim."
+  ]
+}
