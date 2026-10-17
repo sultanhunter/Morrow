@@ -244,8 +244,10 @@ test("every ci.yml job shares the hardened step sequence and foundation needs ev
 // every npm script it reaches through `npm run` chains in package.json.
 // `npm run x --workspaces` and `npm run x -w pkg` run workspace package scripts, not
 // root scripts, so they are not followed.
+// A container step (P04.T02a) runs its npm scripts through `sh -c '…'`; unwrap it.
 const rootScriptsRun = (command) =>
   command
+    .replace(/ -c '([^']*)'/g, (_, inner) => " && " + inner)
     .split("&&")
     .map((segment) => /^npm run "?([A-Za-z0-9:._-]+)"?(.*)$/.exec(segment.trim()))
     .filter((m) => m && !/(^|\s)(--workspaces?|-w)(\s|=|$)/.test(m[2]))
@@ -317,4 +319,24 @@ test("npm run verify runs the plan check, and CI reaches it", () => {
   assert.ok(rootScriptsRun(scripts.verify).includes("plan:check"), "verify must run plan:check");
   assert.ok(rootScriptsRun(scripts.ci).includes("verify"), "npm run ci must run verify");
   assert.ok(scriptsReachedByCi().has("plan:check"), "CI must run plan:check");
+});
+
+test("the edge dry-run and dev smoke run once, inside a network-none container with a read-only checkout", () => {
+  const steps = Object.values(ci.jobs).flatMap((job) => job.steps ?? []);
+  const container = steps.filter(
+    (step) => typeof step.run === "string" && step.run.includes("docker run"),
+  );
+  const edge = container.filter((step) => rootScriptsRun(step.run).includes("edge:dry-run"));
+  assert.equal(edge.length, 1);
+  const run = edge[0].run;
+  assert.deepEqual(rootScriptsRun(run), ["edge:dry-run", "smoke:edge-dev"]);
+  for (const flag of ["--network none", "--read-only", '--volume "$PWD:/repo:ro"', "--rm"])
+    assert.ok(run.includes(flag), flag);
+  assert.match(run, /require\("\.\/infra\/local-engine\.json"\)\.image/);
+  assert.match(run, /--volume "\$MORROW_ARTIFACTS_DIR:\/artifacts"/);
+  assert.ok(!/\bsecrets\.|CLOUDFLARE_|WORKOS_/.test(run));
+  assert.ok(
+    scripts.ci.includes("npm run edge:dry-run") && scripts.ci.includes("npm run typecheck:edge"),
+  );
+  assert.ok(scripts["ci:static"].includes("npm run edge:check"));
 });

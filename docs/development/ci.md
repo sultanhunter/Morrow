@@ -6,12 +6,12 @@
 
 | Job | What it runs | Local command | Timeout |
 | --- | --- | --- | --- |
-| `static` | Format check, typecheck, `verify` (plan check, task inventory, contract and validator drift, import boundaries, migration checksums, repository secret scan), build, scaffold denial guards, the lab example and the infrastructure synth/permissions/readiness checks | `npm run ci:static` | 15 min |
+| `static` | Format check, typecheck, `verify` (plan check, task inventory, contract and validator drift, import boundaries, migration checksums, repository secret scan), build, the Workers runtime typecheck and wrangler configuration/Env-type checks (`typecheck:edge`, `edge:check`), scaffold denial guards, the lab example and the infrastructure synth/permissions/readiness checks | `npm run ci:static` | 15 min |
 | `unit` (shards 1 and 2) | `tests/*.test.mjs`, split by file with `--test-shard`. Each shard runs its files one at a time. | `TEST_SHARD=1/2 npm run test:shard` | 15 min |
 | `workers-api` | `lab:workspace-api-workers`, the longest single lab | `npm run lab:workspace-api-workers` | 10 min |
-| `workers` | The other 17 Miniflare/workerd labs | `npm run lab:group:workers` | 10 min |
+| `workers` | The SPA build, then `edge:dry-run` and `smoke:edge-dev` inside a `--network none` container (read-only checkout, the runner's Node mounted into the digest-pinned engine image), then the other 18 Miniflare/workerd labs including `lab:edge-workers` | `npm run edge:dry-run && npm run smoke:edge-dev && npm run lab:group:workers` | 15 min |
 | `postgres` (`pg-core`, `pg-linking`, `pg-http`) | The network-none PostgreSQL, HTTP and HTTPS labs. `pg-core` also records the pinned engine build first. | `npm run lab:group:pg-core` (and `pg-linking`, `pg-http`) | 12 min |
-| `pgwire` | The three PG-wire labs: controlled Neon, managed login and workspace API | `npm run lab:group:pgwire` (Linux CI only) | 10 min |
+| `pgwire` | The four PG-wire labs: controlled Neon, managed login, workspace API and the deployable api/broker journey (`lab:edge-postgresql`) | `npm run lab:group:pgwire` (Linux CI only) | 12 min |
 | `foundation` | Aggregator: succeeds only when every job above succeeded | none | 5 min |
 
 The matrix jobs use `fail-fast: false`, so one failing shard or group does not hide the others' results.
@@ -49,7 +49,8 @@ Each job, and each matrix leg, uploads one artifact named `morrow-<job>[-<shard 
   - network-none PostgreSQL labs join one of the `pg-*` groups;
   - PG-wire labs join `lab:group:pgwire`.
 - The `pgwire` labs need Linux, `GITHUB_ACTIONS=true`, a rootful Docker daemon at `/var/run/docker.sock` and a bridge gateway in 172.16.0.0/12. That is why the job pins `ubuntu-24.04`. Elsewhere, including Docker Desktop on macOS, they refuse to run; they never pass by accident. Do not try to make them run on macOS.
-- `npm run ci` stays as the full serial local pipeline (static checks and all tests, without the scaffold smoke and the Docker/Workers labs). Running `npm run ci:static` and both test shards covers the same ground as CI's `static` and `unit` jobs.
+- `npm run ci` stays as the full serial local pipeline (static checks and all tests, without the scaffold smoke and the Docker/Workers labs). It also runs `typecheck:edge`, `edge:check` and `edge:dry-run` after `build`; CI runs the dry-run in the `workers` job's network-none container instead, and `tests/ci-workflow.test.mjs` follows the npm scripts that container step runs through `sh -c`.
+- Wrangler always runs through `scripts/edge.mjs`, with a scrubbed environment and a throwaway `HOME`, metrics, `cf.json` and the npm update check off, and never with an account or token. Running `npm run ci:static` and both test shards covers the same ground as CI's `static` and `unit` jobs.
 
 ## Running it locally
 
