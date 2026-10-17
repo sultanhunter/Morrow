@@ -10,7 +10,7 @@ P03.T04c repository overhaul on branch `claude/p03-t04c-overhaul` (base `f89ad75
 2. Done: remove plan-sequence, plan/AGENTS/packet digest and production-module byte-lock coupling. Native WorkOS operators 74/75/82 are retired by explicit unconditional denials, and E2B allocation/build/image/template work is denied by the committed gate `infra/labs/e2b-activation.json` (`active_profile_sequence: null`). Published migrations are pinned by `tests/migration-history.test.mjs`; labs accept later migrations after the original eleven.
 3. Done: retire AWS CDK, Daytona and the frozen 71/74/75/80/82 regressions (ADR-0007, which cites the terminal provider evidence); remove `aws-cdk-lib`, `constructs`, `@daytona/sdk` and the `brace-expansion` pin and regenerate the lockfile (removals only); delete `docs/plan/source.json`. `npm run ci` no longer runs `deps:repair`.
 4. This step: remove `docs/evidence` and `docs/history` from the tree. They stay readable at the tag; `docs/history/INDEX.md` explains how, lists the archived directories and repeats the terminal provider-state citations. Migration and provider-lab review references are tag-prefixed (`codex-archive-f89ad75:docs/evidence/...`).
-5. Then: parallel CI workflow with a `foundation` aggregator job.
+5. Done: parallel CI workflow (docs/development/ci.md). Jobs `static`, `unit` (2 shards), `workers-api`, `workers`, `postgres` (`pg-core`, `pg-linking`, `pg-http`) and `pgwire` run in parallel. The `foundation` aggregator keeps the required check name. Every job secret-scans its reports before upload and ends with a clean-tree gate. There is also an optional manual workflow, `frozen-regressions.yml`, that replays the retired frozen regressions at the archive tag.
 
 ## Last green commit
 
@@ -18,7 +18,7 @@ P03.T04c repository overhaul on branch `claude/p03-t04c-overhaul` (base `f89ad75
 
 ## Next action
 
-Implement overhaul step 5, then push the branch and confirm the full CI run, including the three Linux-only pg-wire labs.
+Commit step 4's removal of `docs/evidence` and `docs/history`; both are still tracked. Then push the branch and confirm the first parallel CI run. Check every job, both unit shards, the three postgres groups, the Linux-only `pgwire` job and the `foundation` aggregator. Download the artifacts and confirm there is one per job or shard.
 
 ## Blockers
 

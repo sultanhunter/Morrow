@@ -14,6 +14,8 @@ npm run ci
 npm run smoke:scaffold
 ```
 
+CI runs the same checks as parallel jobs, and the `foundation` job is the required check. To reproduce one job locally, run its group command: `npm run ci:static`, `TEST_SHARD=1/2 npm run test:shard` (and `2/2`), `npm run lab:workspace-api-workers`, `npm run lab:group:workers`, or `npm run lab:group:pg-core` (and `pg-linking`, `pg-http`; these need Docker). The PG-wire group (`lab:group:pgwire`) runs only on Linux CI. docs/development/ci.md describes the jobs.
+
 Local verification includes repository tests, scaffold denial checks, actual Workers execution, isolated PostgreSQL laboratories and local HTTPS transport tests. Reports are written to the git-ignored `.artifacts/` directory; CI runs and their uploaded artifacts are the evidence for each commit. Earlier committed reports and archives are at the tag `codex-archive-f89ad75`; docs/history/INDEX.md explains how to read them. Read docs/progress/STATUS.md for the last green commit and open gates. Synthetic fixtures, HTTP cookie jars and local tests do not establish actual browser-engine enforcement, hosted provider access or merchant activation. See docs/development/local-setup.md, repository-map.md and delivery.md for setup and limits.
 
 npm run dev:workspace serves a bare standalone shell; dev:connector explicitly enables a local synthetic entry. Real connector/auth entries fail closed, production refuses fixtures. Full design prototype is docs/design/prototype.html, sample data only; it is not accepted production feature UI. Lab examples never call providers or complete real work. Billing review models never emit charges. No merchant price, provider grant or paid provisioning is activated.
