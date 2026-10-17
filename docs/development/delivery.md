@@ -7,7 +7,7 @@ Migrations: immutable NNNN.slug.sql, sequence, SHA-256 and reviewed evidence ref
 
 Secret scan covers recognizable keys/private-key headers and credential literals, reports path/category only, never secret values. It is bounded assurance, not proof of no secrets or replacement for provider revocation. Suspected leaks block and require rotation/review via actual owner; fixture keys used for negative tests are constructed in memory. No credential is ever needed in CI. The production security/isolated-runtime gates remain P12/P18.
 
-Evidence index records packet status, source hashes, cases, scope and remaining gates. Reviews explicitly distinguish Codex self-review from independent review, real merchant usability and provider permissions. Qualification is not obtained by ignoring a check or relabelling test fixtures.
+CI runs and their uploaded artifacts are the evidence for each commit (ADR 0001 CI artifacts, ADR-0002); reports are not committed. The former evidence index and committed reports are at the tag `codex-archive-f89ad75` (docs/history/INDEX.md). Reviews explicitly distinguish Codex self-review from independent review, real merchant usability and provider permissions. Qualification is not obtained by ignoring a check or relabelling test fixtures.
 
 The private repository still has only a README on main. Current draft PR checks qualify every new source revision; the temporary bootstrap branch-push trigger was removed after PR CI qualified to avoid duplicate runs. No application code is merged. CI also executes isolated real PostgreSQL identity, rotation and restore labs, with no account credentials.
 
