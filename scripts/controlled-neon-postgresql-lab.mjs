@@ -52,9 +52,9 @@ const paths = [
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 // Every published migration must be present in order and checksum-verified. The
-// self-logout fixture applies exactly the first eleven, so the count stays exact until
-// this lab also applies later migrations; a twelfth migration must fail here.
-if (manifest.migrations.length !== 11) throw Error("CONTROLLED_PG_ORIGINAL_MIGRATIONS_REQUIRED");
+// login fixture applies exactly the twelve in the manifest, so the count stays exact until
+// this lab also applies later migrations; a thirteenth migration must fail here.
+if (manifest.migrations.length !== 12) throw Error("CONTROLLED_PG_CURRENT_MIGRATIONS_REQUIRED");
 for (const [i, row] of manifest.migrations.entries()) {
   if (row.sequence !== i + 1 || hash(readFileSync("migrations/" + row.file)) !== row.sha256)
     throw Error("CONTROLLED_PG_MIGRATION_DRIFT");
@@ -213,7 +213,7 @@ try {
                 if (
                   !roles.includes(startup.parameters.user) ||
                   startup.parameters.database !== "morrow" ||
-                  !/^morrow_t88_[a-f0-9]{32}_[po]$/.test(startup.parameters.application_name)
+                  !/^morrow_id_[a-f0-9]{32}_[po]$/.test(startup.parameters.application_name)
                 )
                   throw Error("CONTROLLED_PG_STARTUP_HELD");
               },

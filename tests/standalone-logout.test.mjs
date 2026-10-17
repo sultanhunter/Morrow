@@ -321,6 +321,10 @@ test("trusted configuration is primitive closed JSON and no public authority sea
     JSON.stringify({ ...logoutFixtureConfiguration, profileId: "../bad" }),
     JSON.stringify({ ...logoutFixtureConfiguration, origin: "http://workspace.example.test" }),
     JSON.stringify({ ...logoutFixtureConfiguration, extra: true }),
+    // Only the neutral protocol name is accepted (P05.T01x Part A).
+    JSON.stringify({ ...logoutFixtureConfiguration, protocol: "morrow-self-logout-v2" }),
+    JSON.stringify({ ...logoutFixtureConfiguration, protocol: "MORROW-SELF-LOGOUT-V1" }),
+    JSON.stringify({ ...logoutFixtureConfiguration, protocol: "" }),
   ]) {
     const fixture = createStandaloneLogoutFixture();
     await assert.rejects(

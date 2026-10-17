@@ -77,7 +77,7 @@ function backendRows(chunks) {
 }
 const names = ["identityPool", "linkingPool", "logoutPool"];
 const app = (number, kind = "p") =>
-  "morrow_t88_" + number.toString(16).padStart(32, "0") + "_" + kind;
+  "morrow_id_" + number.toString(16).padStart(32, "0") + "_" + kind;
 function setup(options = {}) {
   const name = options.name ?? "identityPool",
     profile = managedWorkspaceWireSql[name];

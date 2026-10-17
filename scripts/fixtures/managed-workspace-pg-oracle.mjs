@@ -522,7 +522,7 @@ export function createManagedWorkspacePgOracle({
         assert.equal(start.client_encoding, "UTF8");
         assert.equal(start.statement_timeout, chosen.profile.statementTimeout);
         assert.equal(start.idle_in_transaction_session_timeout, chosen.profile.idleTimeout);
-        assert.match(start.application_name, /^morrow_t88_[a-f0-9]{32}_[po]$/);
+        assert.match(start.application_name, /^morrow_id_[a-f0-9]{32}_[po]$/);
         require(!sessions.some((other) => other !== state && other.app === start.application_name));
         state.kind = start.application_name.endsWith("_p") ? "p" : "o";
         state.role = start.user;

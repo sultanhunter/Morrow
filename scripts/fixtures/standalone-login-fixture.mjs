@@ -6,15 +6,59 @@ import {
 } from "../standalone-session-fixtures.mjs";
 import { localLoginFlowSqlPool } from "../local-login-flow-sql.mjs";
 const hash = (v) => createHash("sha256").update(v).digest("hex");
-// Only fresh isolated laboratory databases. No real account/user material.
-export function createStandaloneLoginFixtureHarness(context) {
+// The exact current manifest: 0001-0009 through the session harness, then this chain.
+// A new migration must be added here, so every login and logout lab applies it.
+const loginMigrationChain = Object.freeze([
+  [10, "0010.login-flow-custody.sql"],
+  [11, "0011.self-browser-family-logout.sql"],
+  [12, "0012.login-protocol-v1.sql"],
+]);
+export const currentMigrationCount = 12;
+export const loginControllerProtocol = "morrow-login-v1";
+function qualifiedMigration(sequence) {
+  const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
+  const m = manifest.migrations[sequence - 1];
+  const expected = loginMigrationChain.find(([n]) => n === sequence);
+  if (
+    manifest.migrations.length !== currentMigrationCount ||
+    !expected ||
+    m.sequence !== sequence ||
+    m.file !== expected[1]
+  )
+    throw Error("LOGIN_FIXTURE_MIGRATION_UNQUALIFIED");
+  const source = readFileSync("migrations/" + m.file, "utf8");
+  if (hash(source) !== m.sha256) throw Error("LOGIN_FIXTURE_MIGRATION_UNQUALIFIED");
+  return source;
+}
+// The retired controller protocol exactly as the applied 0010 bytes define it. Upgrade
+// laboratories seed legacy rows with it; no current code or migration names it.
+export function appliedLegacyLoginControllerProtocol() {
+  const found =
+    /controller_protocol text NOT NULL CHECK\(controller_protocol='([a-z0-9-]{1,64})'\)/.exec(
+      qualifiedMigration(10),
+    );
+  if (!found || found[1] === loginControllerProtocol)
+    throw Error("LOGIN_FIXTURE_MIGRATION_UNQUALIFIED");
+  return found[1];
+}
+// Only fresh isolated laboratory databases. No real account/user material. By default
+// every migration in the manifest is applied. `deferProtocolV1` stops after 0011, so an
+// upgrade laboratory can seed legacy rows before it calls `applyProtocolV1()`.
+export function createStandaloneLoginFixtureHarness(context, options = {}) {
+  const sources = loginMigrationChain.map(([sequence]) => qualifiedMigration(sequence));
+  const legacyProtocol = appliedLegacyLoginControllerProtocol();
   const h = createStandaloneFixtureHarness(context, 9);
   context.sql(readFileSync("infra/identity-login-role-prerequisites.sql", "utf8"), "morrow");
-  const m = JSON.parse(readFileSync("migrations/manifest.json", "utf8")).migrations[9];
-  const source = readFileSync("migrations/" + m.file, "utf8");
-  if (m.sequence !== 10 || hash(source) !== m.sha256)
-    throw Error("LOGIN_FIXTURE_MIGRATION_UNQUALIFIED");
-  h.admin(source);
+  h.admin(sources[0]);
+  context.sql(readFileSync("infra/identity-logout-role-prerequisites.sql", "utf8"), "morrow");
+  h.admin(sources[1]);
+  let protocol = legacyProtocol;
+  function applyProtocolV1() {
+    if (protocol === loginControllerProtocol) throw Error("LOGIN_FIXTURE_PROTOCOL_V1_APPLIED");
+    h.admin(sources[2]);
+    protocol = loginControllerProtocol;
+  }
+  if (options.deferProtocolV1 !== true) applyProtocolV1();
   context.sql(
     "ALTER ROLE morrow_identity_login LOGIN;ALTER ROLE morrow_identity_login_maintenance LOGIN;ALTER ROLE morrow_identity_preauth LOGIN;ALTER ROLE morrow_identity_resolution LOGIN;",
     "morrow",
@@ -33,10 +77,11 @@ export function createStandaloneLoginFixtureHarness(context) {
       returnPath: "/",
     });
     const verificationProfileJson = f.profileJson,
-      retentionTier = options.retentionTier ?? "development";
+      retentionTier = options.retentionTier ?? "development",
+      controllerProtocol = options.controllerProtocol ?? protocol;
     const configurationJson = JSON.stringify({
       schemaVersion: 1,
-      controllerProtocol: "morrow-local-login-84",
+      controllerProtocol,
       origin,
       retentionTier,
       authenticationBindingJson,
@@ -48,7 +93,7 @@ export function createStandaloneLoginFixtureHarness(context) {
       JSON.stringify([
         "morrow.login.configuration",
         "1",
-        "morrow-local-login-84",
+        controllerProtocol,
         origin,
         retentionTier,
         bindingId,
@@ -64,11 +109,12 @@ export function createStandaloneLoginFixtureHarness(context) {
       ]),
     );
     h.admin(
-      `INSERT INTO morrow_identity.authentication_bindings VALUES(${lit(bindingId)},${lit(f.environment)},${lit(f.client)},${lit(origin + "/auth/workos/callback")},'/',true);INSERT INTO morrow_identity.authentication_exchange_bindings VALUES(${lit(bindingId)},'workos',${lit(f.application)},1,true);INSERT INTO morrow_identity.login_controller_configurations VALUES(${lit(configurationDigest)},'morrow-local-login-84',${lit(origin)},${lit(retentionTier)},${lit(bindingId)},1,${lit(f.environment)},${lit(f.application)},${lit(f.client)},${lit(origin + "/auth/workos/callback")},'/',${lit(f.profile)},1,${lit(f.issuer)},1,${lit(hash(f.profileJson))});`,
+      `INSERT INTO morrow_identity.authentication_bindings VALUES(${lit(bindingId)},${lit(f.environment)},${lit(f.client)},${lit(origin + "/auth/workos/callback")},'/',true);INSERT INTO morrow_identity.authentication_exchange_bindings VALUES(${lit(bindingId)},'workos',${lit(f.application)},1,true);INSERT INTO morrow_identity.login_controller_configurations VALUES(${lit(configurationDigest)},${lit(controllerProtocol)},${lit(origin)},${lit(retentionTier)},${lit(bindingId)},1,${lit(f.environment)},${lit(f.application)},${lit(f.client)},${lit(origin + "/auth/workos/callback")},'/',${lit(f.profile)},1,${lit(f.issuer)},1,${lit(hash(f.profileJson))});`,
     );
     return {
       f,
       origin,
+      controllerProtocol,
       bindingId,
       configurationJson,
       configurationDigest,
@@ -84,6 +130,8 @@ export function createStandaloneLoginFixtureHarness(context) {
   }
   return Object.freeze({
     ...h,
+    applyProtocolV1,
+    legacyProtocol,
     configured,
     pool,
     rolePools,

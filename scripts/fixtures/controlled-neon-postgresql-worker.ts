@@ -192,7 +192,7 @@ export default {
         const client = rawClient(
           setup,
           name,
-          "morrow_t88_" + crypto.randomUUID().replaceAll("-", "") + "_p",
+          "morrow_id_" + crypto.randomUUID().replaceAll("-", "") + "_p",
         );
         let serverSourceMatchedGateway = false;
         try {
@@ -321,7 +321,7 @@ export default {
         const client = rawClient(
           setup,
           name,
-          "morrow_t88_" + crypto.randomUUID().replaceAll("-", "") + "_p",
+          "morrow_id_" + crypto.randomUUID().replaceAll("-", "") + "_p",
         );
         const denied = { table: false, maintenance: false, ownerRole: false };
         try {
@@ -352,7 +352,7 @@ export default {
         expect(Object.hasOwn(controlledNeonLoginProfiles, name));
         const binding = JSON.parse(setup.bindingJson),
           role = controlledNeonLoginProfiles[name].role;
-        const prefix = "morrow_t88_" + crypto.randomUUID().replaceAll("-", "");
+        const prefix = "morrow_id_" + crypto.randomUUID().replaceAll("-", "");
         const primaryName = prefix + "_p",
           observerName = prefix + "_o";
         const primary = rawClient(setup, name, primaryName),

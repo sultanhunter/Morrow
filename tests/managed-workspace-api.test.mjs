@@ -30,7 +30,7 @@ const binding = {
 };
 const logout = {
   schemaVersion: 1,
-  protocol: "morrow-local-self-logout-85",
+  protocol: "morrow-self-logout-v1",
   origin,
   providerId: "workos",
   environmentId: auth.environmentId,

@@ -21,7 +21,8 @@ const hash = (v) => createHash("sha256").update(v).digest("hex"),
     console.log(JSON.stringify({ check: name, passed: true }));
   };
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-const selectedMigrations = manifest.migrations.slice(0, 10);
+// The login fixture applies exactly the twelve in the manifest; a thirteenth must fail here.
+const selectedMigrations = manifest.migrations;
 const sourcePaths = [
   "scripts/login-flow-custody-lab.mjs",
   "scripts/local-postgres-lab.mjs",
@@ -41,13 +42,14 @@ const sourcePaths = [
   "tests/fixtures/workos-authentication-evidence.mjs",
   "infra/identity-role-prerequisites.sql",
   "infra/identity-login-role-prerequisites.sql",
+  "infra/identity-logout-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
   ...selectedMigrations.map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
 if (
-  selectedMigrations.length !== 10 ||
+  selectedMigrations.length !== 12 ||
   selectedMigrations.some(
     (m, index) =>
       m.sequence !== index + 1 || hash(readFileSync("migrations/" + m.file)) !== m.sha256,
@@ -314,8 +316,9 @@ const observed = await localPostgresLab("P05.T01p-custody", async (context) => {
   };
   try {
     check(
-      "ten_exact_immutable_migrations",
-      manifest.migrations.every((m) => hash(readFileSync("migrations/" + m.file)) === m.sha256),
+      "twelve_exact_immutable_migrations",
+      manifest.migrations.length === 12 &&
+        manifest.migrations.every((m) => hash(readFileSync("migrations/" + m.file)) === m.sha256),
     );
     check(
       "six_force_rls_owner_tables",
@@ -874,7 +877,7 @@ check(
 const report = {
   schema_version: 1,
   packet: "P05.T01p",
-  fixture_protocol_sequence: 84,
+  fixture_controller_protocol: "morrow-login-v1",
   scope: "synthetic_private_login_custody_actual_postgresql",
   provider_requests: 0,
   source_hashes: sourceHashes,
@@ -887,7 +890,7 @@ const report = {
   holder_cleanup: holderCleanup,
   limitations: [
     "Synthetic owner-seeded identities only; no native/provider or hosted activation.",
-    "Only preserved migrations1–10 are installed; migration11 self-logout is not installed or qualified by this regression.",
+    "All twelve manifest migrations are installed; migration11 self-logout is installed but not qualified by this regression.",
     "Controlled age fixtures qualify retention predicates, not elapsed production time.",
     "Historical receipt attribution never proves dispatch, delivery, or current authority.",
   ],

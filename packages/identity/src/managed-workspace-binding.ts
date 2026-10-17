@@ -106,7 +106,7 @@ export function captureManagedWorkspaceBinding(
     const sharedOrigin = origin(login.origin);
     if (
       login.schemaVersion !== 1 ||
-      login.controllerProtocol !== "morrow-local-login-84" ||
+      login.controllerProtocol !== "morrow-login-v1" ||
       !["development", "staging", "production"].includes(login.retentionTier as string) ||
       !loginId(login.profileId) ||
       !loginRevision(login.profileRecordRevision)
@@ -169,7 +169,7 @@ export function captureManagedWorkspaceBinding(
       workspace.mode !== "https" ||
       workspace.origin !== sharedOrigin ||
       logout.schemaVersion !== 1 ||
-      logout.protocol !== "morrow-local-self-logout-85" ||
+      logout.protocol !== "morrow-self-logout-v1" ||
       logout.origin !== sharedOrigin ||
       logout.providerId !== "workos" ||
       logout.environmentId !== authentication.environmentId ||
