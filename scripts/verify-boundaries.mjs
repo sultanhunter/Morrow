@@ -53,6 +53,7 @@ const negatives = [
   ["server_env", "const x=process.env.SHOPIFY_API_SECRET;", "UI_SERVER_ENVIRONMENT"],
   ["dynamic_secret", "const x=import(variable);", "DYNAMIC_IMPORT_UNREVIEWED"],
   ["runtime", "import {x} from '@morrow/runtime';", "TRUST_BOUNDARY_IMPORT"],
+  ["broker", "import {x} from '@morrow/broker';", "TRUST_BOUNDARY_IMPORT"],
 ].map(([name, code, expected]) => ({
   name,
   passed: inspectImports("apps/workspace-web/src/test.tsx", code).includes(expected),
@@ -154,6 +155,24 @@ for (const [name, path, code, expected] of [
     "packages/runtime-adapters/src/daytona/client.ts",
     "import {createProvider} from '../e2b/client';",
     "RUNTIME_ADAPTER_PROVIDER_MISMATCH",
+  ],
+  [
+    "broker_source_from_api",
+    "apps/api/src/deployed-worker.ts",
+    "import {brokerNeonLease} from '../../broker/src/neon-lease';",
+    "BROKER_SOURCE_IMPORT",
+  ],
+  [
+    "broker_package_from_api",
+    "apps/api/src/deployed-worker.ts",
+    "import {ApiBroker} from '@morrow/broker';",
+    "BROKER_SOURCE_IMPORT",
+  ],
+  [
+    "api_source_from_broker",
+    "apps/broker/src/index.ts",
+    "import {composeApiDependencies} from '../../api/src/deployed-worker';",
+    "BROKER_APP_IMPORT",
   ],
   [
     "runtime_adapter_absolute_import",

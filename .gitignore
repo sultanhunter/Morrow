@@ -13,3 +13,7 @@ build/
 *.tsbuildinfo
 
 .artifacts/
+
+# Wrangler (P04.T02a): local state and developer secret files never enter the repo.
+.wrangler/
+.dev.vars*

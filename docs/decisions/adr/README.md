@@ -11,7 +11,7 @@ Material decisions (ADR-0002) are recorded here before dependent implementation.
 | [0005](ADR-0005-kill-switches-executor-review-policy.md) | Kill switches, executor classes and review policy | Accepted 2026-10-17 |
 | [0006](ADR-0006-pre-install-billing-state.md) | Billing state before any Shopify store is installed | Accepted 2026-10-17 |
 | [0007](ADR-0007-broker-credential-custody-v0.md) | Broker credential custody v0 for development and staging | Accepted 2026-10-17 for development and staging only; production custody pending |
-| [0008](ADR-0008-shopify-connector-runtime.md) | Shopify connector runtime: Cloudflare Workers with the `@shopify/shopify-api` web adapter | Proposed, pending owner approval |
+| [0008](ADR-0008-shopify-connector-runtime.md) | Shopify connector runtime: Cloudflare Workers with the `@shopify/shopify-api` web adapter | Accepted 2026-10-18 |
 | [0009](ADR-0009-self-serve-signup.md) | Self-serve enrollment and first-owner signup | Accepted 2026-10-17 |
 | [0010](ADR-0010-tenant-data-pattern-and-work-api-v1.md) | Tenant data pattern for P06+ and work API v1 | Accepted 2026-10-17 |
 | [0011](ADR-0011-review-policy-and-contract-v1-1.md) | Contract v1.1: review policy and exact proposals | Accepted 2026-10-17 |

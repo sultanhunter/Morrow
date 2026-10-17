@@ -4,10 +4,18 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active packets
 
-`main` is the trunk (ADR-0014). The integration branch `codex/morrow-foundation` and the P03.T04c/d overhaul (PR #2) are merged into it. Three packets are in progress, each on its own branch from the overhaul head; their PRs will target `main`:
-- **P04.T02a** deployable composition root (`claude/p04-t02a-composition-root`; ADR-0007, `docs/packets/P04.T02a.md`).
-- **P05.T01x Part A** forward migration 0012 that removes plan-number identifiers (`claude/p05-t01x-a-protocol-names`; `docs/packets/P05.T01x.md`). Committed locally, rebased on `main`: migration 0012, the `morrow-login-v1`, `morrow-self-logout-v1` and `morrow_id_` renames, and `lab:login-protocol-v1`. Awaiting its PR into `main`, hosted CI (including the Linux-only `pgwire` labs, which AC03 and AC04 still wait on) and Tier 2 review (`docs/acceptance/P05.md`).
-- **P01.T02a.** PR-A (executor classes and human-only kill switches; ADR-0005) is merged into `main` as `d8ab463` (PR #6). PR-B (review policy, Proposal@2, Approval@2 and the pure review library; ADR-0011, AC11-AC26) is committed locally on `claude/p01-t02a-b-review-policy`, with the confirmed Tier 2 AI review findings addressed; it awaits its PR, `/security-review`, the full `npm run ci` and `smoke:scaffold`, and hosted CI (`docs/acceptance/P01.md`). v1.1 stays `candidate_owner_signoff` until the Tier 3 P01 contract sign-off.
+`main` is the trunk (ADR-0014). These are merged into it:
+- PR #1: the foundation.
+- PR #2: the P03.T04c/d overhaul.
+- PR #3: ADR-0014.
+- PR #4: P05.T01x Part A. Migration 0012 retires plan-number identifiers: `morrow-login-v1`, `morrow-self-logout-v1`, `morrow_id_`.
+- PR #5: P04.T02a, the deployable composition root. It adds the api, broker, orchestrator and connector-placeholder Workers, `scripts/edge.mjs`, and the `lab:edge-workers` and `lab:edge-postgresql` labs (ADR-0007).
+- PR #6: P01.T02a PR-A, executor classes and human-only kill switches (ADR-0005, §2 confirmed 2026-10-18).
+
+In progress:
+- **ADR-0008 acceptance** (PR #7): the Shopify connector is a Cloudflare Worker on `@shopify/shopify-api`, and secret-dependent calls stay in the broker.
+- **P01.T02a PR-B** (`claude/p01-t02a-b-review-policy`): review policy, Proposal@2, Approval@2 (ADR-0011). Implemented and reviewed: AC11-AC26, the pure review library `@morrow/policy/review` and contract v1.1 replacements; full local pipeline passed; awaiting PR CI and merge.
+- **Packet designs:** P01.T04a, P01.T02c, P06.T01b, P03.T04e (shared PostgreSQL harness), P14.T01a (provisional UI), P05.T01y and P05.T01z.
 
 Delivered in P03.T04c/d:
 - Outputs go to `.artifacts/` and CI artifacts (ADR-0012).
@@ -15,15 +23,15 @@ Delivered in P03.T04c/d:
 - AWS CDK, Daytona and the frozen regressions are retired (ADR-0013).
 - `docs/evidence` and `docs/history` are removed from the tree (recover them from the archive tag via `docs/history/INDEX.md`).
 - CI runs as parallel jobs (`docs/development/ci.md`).
-- `CLAUDE.md`, the `AGENTS.md` pointer, ADR-0001 to ADR-0013, plan R1 with `npm run plan:check`, and the next packets. ADR-0014 (merge authority, `main` as trunk) lands in PR #3.
+- `CLAUDE.md`, the `AGENTS.md` pointer, ADR-0001 to ADR-0013, plan R1 with `npm run plan:check`, and the next packets. ADR-0014 (merge authority, `main` as trunk) landed in PR #3.
 
 ## Last green commit
 
-`b9fb432` (merge of PR #2 into `codex/morrow-foundation`). PR #1's hosted run 39043798037 succeeded on it across all jobs: `static`, two unit shards, `workers-api`, `workers`, `pg-core`, `pg-linking`, `pg-http`, `pgwire` and `foundation`. `main` is at `f9ab367`, which has the same tree, and its push run 39044164847 also succeeded. PR #2's own runs 39039205040 and 39043168173 on `claude/p03-t04c-overhaul` also succeeded. Each run took about 4.5 minutes, against 21.5 minutes for the old serial job.
+`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. Runs take about 4.5 minutes, against 21.5 minutes for the old serial job.
 
 ## Next actions
 
-1. Finish, review and merge the three active packets (Tier 2 AI review, then green `foundation`).
+1. Merge P01.T02a PR-B once reviewed and green.
 2. P05.T01x Part B, signup and workspace list (ADR-0009). It needs P01.T02a PR-B (ADR-0011) first.
 3. P06.T01a, work commands on the tenant data pattern (ADR-0010). P01.T02b and T02c contracts.
 4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
@@ -41,8 +49,6 @@ None for local work. Hosted staging (M1) waits on the owner actions below.
 
 - **Sign-offs:**
   - Plan R1 (Tier 3).
-  - P01 contract sign-off (Tier 3), which freezes contract v1.1, after P05.T01z settles how a disconnect's KillSwitchRecord names its target (packet Q11). The ADR-0005 §2 executor classes were confirmed on 2026-10-18 (Q10).
-  - Approve or reject ADR-0008, the Shopify connector runtime (Proposed).
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check (not an approving review) before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
 - **M1 prerequisites (P04.T01i):**

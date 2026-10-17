@@ -1,0 +1,31 @@
+// morrow-<env>-connector: a fail-closed 503 placeholder until P09.T01 builds
+// the ADR-0008 runtime. It binds only MORROW_ENVIRONMENT; no Shopify secret,
+// route or provider call exists.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "morrow-development-connector",
+  "main": "worker/placeholder.ts",
+  "compatibility_date": "2026-07-30",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_do_not_populate_process_env"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "logpush": false,
+  "upload_source_maps": false,
+  "keep_vars": false,
+  "send_metrics": false,
+  "observability": { "enabled": false },
+  "vars": { "MORROW_ENVIRONMENT": "development" },
+  "secrets": { "required": [] },
+  "env": {
+    "staging": {
+      "name": "morrow-staging-connector",
+      "vars": { "MORROW_ENVIRONMENT": "staging" },
+      "secrets": { "required": [] },
+    },
+    "production": {
+      "name": "morrow-production-connector",
+      "vars": { "MORROW_ENVIRONMENT": "production" },
+      "secrets": { "required": [] },
+    },
+  },
+}

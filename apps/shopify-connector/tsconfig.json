@@ -4,5 +4,6 @@
     "rootDirs": [".", "./.react-router/types"],
     "types": ["@react-router/node", "vite/client"]
   },
-  "include": ["app/**/*.ts", "app/**/*.tsx", "*.ts", ".react-router/types/**/*"]
+  "include": ["app/**/*.ts", "app/**/*.tsx", "*.ts", ".react-router/types/**/*"],
+  "exclude": ["worker/placeholder.ts"]
 }

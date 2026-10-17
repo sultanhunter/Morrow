@@ -1,0 +1,67 @@
+// morrow-<env>-orchestrator (P04.T02a D8): one Workflow class and one Queue
+// consumer with a dead-letter queue, dispatch hard-disabled. No producer,
+// service binding, secret or route.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "morrow-development-orchestrator",
+  "main": "src/orchestrator.ts",
+  "compatibility_date": "2026-07-30",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_do_not_populate_process_env"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "logpush": false,
+  "upload_source_maps": false,
+  "keep_vars": false,
+  "send_metrics": false,
+  "observability": { "enabled": false },
+  "workflows": [
+    { "name": "morrow-development-work", "binding": "WORK", "class_name": "MorrowWorkWorkflow" },
+  ],
+  "queues": {
+    "consumers": [
+      {
+        "queue": "morrow-development-dispatch",
+        "max_batch_size": 1,
+        "max_retries": 3,
+        "dead_letter_queue": "morrow-development-dispatch-dlq",
+      },
+    ],
+  },
+  "secrets": { "required": [] },
+  "env": {
+    "staging": {
+      "name": "morrow-staging-orchestrator",
+      "workflows": [
+        { "name": "morrow-staging-work", "binding": "WORK", "class_name": "MorrowWorkWorkflow" },
+      ],
+      "queues": {
+        "consumers": [
+          {
+            "queue": "morrow-staging-dispatch",
+            "max_batch_size": 1,
+            "max_retries": 3,
+            "dead_letter_queue": "morrow-staging-dispatch-dlq",
+          },
+        ],
+      },
+      "secrets": { "required": [] },
+    },
+    "production": {
+      "name": "morrow-production-orchestrator",
+      "workflows": [
+        { "name": "morrow-production-work", "binding": "WORK", "class_name": "MorrowWorkWorkflow" },
+      ],
+      "queues": {
+        "consumers": [
+          {
+            "queue": "morrow-production-dispatch",
+            "max_batch_size": 1,
+            "max_retries": 3,
+            "dead_letter_queue": "morrow-production-dispatch-dlq",
+          },
+        ],
+      },
+      "secrets": { "required": [] },
+    },
+  },
+}

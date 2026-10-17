@@ -4,3 +4,5 @@ dist
 .react-router
 packages/contracts/src/generated
 .artifacts
+.wrangler
+worker-configuration.d.ts

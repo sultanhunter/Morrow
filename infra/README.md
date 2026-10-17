@@ -20,6 +20,8 @@ Private R2 artifacts use unique revision keys, checksum/manifests and conditiona
 
 The selected E2B merchant runtime requires a qualified hardware-isolated Linux microVM profile behind the provider port. Working files are tenant/agent-owned with one writer generation and isolated scratch for overlapping runs. No database, platform/model/Shopify keys or unrestricted direct internet enters a sandbox. Enforce broker/proxy leases and test actual effective network behavior, including redirects, rebinding, private/metadata addresses, alternative protocols and quota-tier exceptions. Keep execution disabled until P12 qualifies this profile. Native E2B timeout bounds running time only; paused resources have no automatic TTL. Preserve the original wall deadline and verified cleanup controller; paused-resource billing and entitlement are not assumed. Native memory/snapshots are not cross-provider migration formats. Merchant artifacts and durable agent memory belong in governed Neon/R2 records, not only working disks.
 
+Deployable composition root (P04.T02a, ADR-0007): the four Workers are configured by `apps/{api,broker,workers,shopify-connector}/wrangler.jsonc` and checked with `npm run edge:check`, `npm run typecheck:edge` and `npm run edge:dry-run`, none of which needs an account, credential or network; `npm run dev:edge` serves the unbound api and broker on `https://127.0.0.1:8787`. Secret placement and the login keyring are in `rotation-runbook.md` ("Workers secrets and login keyring").
+
 ## Regions and recovery
 
 US is the default primary-storage preference; approved global processing is permitted. Do not impose an end-to-end US-only promise or enterprise localization add-on by default. Actual storage/provider identifiers remain a preflight input.

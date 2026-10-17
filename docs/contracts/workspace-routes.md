@@ -12,7 +12,7 @@ Deep links require server authentication/current membership/resource authority b
 
 Store selection is a navigation filter. Task and proposal targets come from authoritative records and stay visibly pinned. Opening the same record in another authorized browser/session preserves target, persisted revision and current grants. Unsaved local text does not magically transfer; save/checkpoint must complete before a cross-session promise. Browser back/forward and reload preserve logical path and guard unsaved input.
 
-Static destinations such as agents/new precede dynamic agent IDs. Opaque IDs may not use reserved route slugs. Decode once, validate IDs and re-encode; encoded slashes, traversal, foreign origins, unexpected parameters and token-bearing URLs deny. navigation-examples.mjs demonstrates mapping only; later app adapters implement router/auth/session behavior.
+The api Worker serves the SPA through Static Assets and reserves `/auth`, `/workspace`, `/api` and `/healthz` (and everything below them) for itself (`apps/api/src/reserved-paths.ts`); no route pattern may fall under a reserved prefix, which `npm run edge:check` enforces. Static destinations such as agents/new precede dynamic agent IDs. Opaque IDs may not use reserved route slugs. Decode once, validate IDs and re-encode; encoded slashes, traversal, foreign origins, unexpected parameters and token-bearing URLs deny. navigation-examples.mjs demonstrates mapping only; later app adapters implement router/auth/session behavior.
 
 ## Connector boundary
 
