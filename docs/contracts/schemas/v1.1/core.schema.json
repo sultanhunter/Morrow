@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:morrow:contracts:core:v1.1",
+  "title": "Morrow core contract version 1.1",
+  "$comment": "Additions and declared replacements over urn:morrow:contracts:core:v1, which stays byte-identical. A definition resolves here first, then in v1 (docs/contracts/contract-versions.md). Replacements of v1 names are listed in changes.json.",
+  "$defs": {
+    "HumanActorRef": {
+      "description": "A current human member acting in one workspace. Structurally an ActorRef with kind human, a workspace and a membership, and no installation or mandate.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "human"
+        },
+        "principalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "membershipId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "type": "null"
+        },
+        "mandateId": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "kind",
+        "principalId",
+        "organizationId",
+        "workspaceId",
+        "membershipId",
+        "installationId",
+        "mandateId"
+      ],
+      "additionalProperties": false
+    },
+    "KillSwitchControl": {
+      "description": "The control fields every kill switch carries (ADR-0005): a recorded reason and the agent proposal it executes, if any. A source proposal confers no authority; it is rechecked against the same tenant, capability and targets.",
+      "type": "object",
+      "properties": {
+        "reason": {
+          "description": "Why the stop is needed. At least one non-whitespace character.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "\\S"
+        },
+        "sourceProposalRef": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "reason",
+        "sourceProposalRef"
+      ],
+      "additionalProperties": false
+    },
+    "CampaignRef": {
+      "description": "One advertising campaign on one connection. The trusted tenant, store and connection are rechecked against the resolved record.",
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "connectionId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "const": "campaign"
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "connectionId",
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "CampaignRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/CampaignRef"
+      },
+      "minItems": 1,
+      "maxItems": 100,
+      "uniqueItems": true
+    },
+    "KillSwitchRecord": {
+      "description": "Append-only record of one executed kill switch, committed together with its effect. The owner notification is derived from it.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "description": "Always 1: a record is never revised.",
+          "const": 1
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "capabilityId": {
+          "description": "One of the five ADR-0005 kill switches.",
+          "type": "string",
+          "enum": [
+            "ads.campaign.pause",
+            "agents.installation.disable",
+            "governance.membership.revoke",
+            "governance.connection.disconnect",
+            "agents.release.revoke"
+          ]
+        },
+        "actor": {
+          "$ref": "#/$defs/HumanActorRef"
+        },
+        "control": {
+          "$ref": "#/$defs/KillSwitchControl"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/ResourceRef"
+          },
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true
+        },
+        "commandId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "requestDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "priorStateObserved": {
+          "type": "string",
+          "enum": [
+            "active",
+            "already_stopped"
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "revision",
+        "createdAt",
+        "capabilityId",
+        "actor",
+        "control",
+        "targets",
+        "commandId",
+        "requestDigest",
+        "priorStateObserved"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

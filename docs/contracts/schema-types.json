@@ -45,6 +45,10 @@
       "schema": "urn:morrow:contracts:core:v1#/$defs/BudgetRef",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
     },
+    "CampaignRefs": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/CampaignRefs",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
     "CaseRef": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/CaseRef",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
@@ -116,6 +120,10 @@
     "InventoryList": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/InventoryList",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
+    },
+    "KillSwitchControl": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/KillSwitchControl",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
     },
     "KnowledgeList": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/KnowledgeList",

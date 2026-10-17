@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { writeArtifact } from "./artifacts.mjs";
+import { contractVersion } from "./contract-sources.mjs";
 const children = [],
   checks = [],
   logs = [];
@@ -33,8 +34,8 @@ try {
   start("api", ["apps/api/dist/index.mjs"], { MORROW_API_PORT: "4191" });
   const health = await poll("http://127.0.0.1:4191/health");
   check(
-    "API build resolves shared contracts",
-    (await health.json()).contracts === "morrow.contracts.v1",
+    `API build reports contract version ${contractVersion}`,
+    (await health.json()).contracts === contractVersion,
   );
   const privateEntry = await fetch(
     "http://127.0.0.1:4191/workspace?shop=forged.myshopify.com&host=standalone",
@@ -79,13 +80,14 @@ try {
   await new Promise((resolve, reject) =>
     worker.on("exit", (code) => (code === 0 ? resolve() : reject(Error("Worker failed")))),
   );
+  const workerLog = logs
+    .filter((x) => x.label === "worker")
+    .map((x) => x.text)
+    .join("");
+  check("Worker smoke has no dispatch mode", workerLog.includes('"mode":"scaffold"'));
   check(
-    "Worker smoke has no dispatch mode",
-    logs
-      .filter((x) => x.label === "worker")
-      .map((x) => x.text)
-      .join("")
-      .includes('"mode":"scaffold"'),
+    `Worker build reports contract version ${contractVersion}`,
+    workerLog.includes(`"contracts":${JSON.stringify(contractVersion)}`),
   );
   start(
     "connector-dev",

@@ -1,7 +1,14 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { inspectImports, inspectCompatibility, isBoundarySource } from "./boundary-checks.mjs";
+import {
+  inspectImports,
+  inspectCompatibility,
+  inspectBaselineCoverage,
+  inspectDeclaredReplacements,
+  isBoundarySource,
+} from "./boundary-checks.mjs";
+import { changesPath, readSchemaSources, schemasByKind } from "./contract-sources.mjs";
 import { writeArtifact } from "./artifacts.mjs";
 const files = [];
 function walk(dir) {
@@ -14,6 +21,14 @@ function walk(dir) {
 }
 walk("apps");
 walk("packages");
+const schemaFiles = [];
+(function schemaWalk(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = dir + "/" + entry.name;
+    if (entry.isDirectory()) schemaWalk(p);
+    else if (p.endsWith(".schema.json")) schemaFiles.push(p);
+  }
+})("docs/contracts/schemas");
 const errors = files.flatMap((p) =>
   inspectImports(p, readFileSync(p, "utf8")).map((e) => p + ":" + e),
 );
@@ -22,6 +37,10 @@ const schemas = Object.fromEntries(
   Object.keys(baseline.schemas).map((p) => [p, readFileSync(p, "utf8")]),
 );
 errors.push(...inspectCompatibility(baseline, schemas));
+errors.push(...inspectBaselineCoverage(baseline, schemaFiles));
+const changes = JSON.parse(readFileSync(changesPath, "utf8"));
+const layered = schemasByKind(readSchemaSources());
+errors.push(...inspectDeclaredReplacements(changes, layered));
 const negatives = [
   ["host_sdk", "import {x} from '@shopify/shopify-app-react-router/server';", "UI_SERVER_IMPORT"],
   ["relative_api", "import {x} from '../../api/src/index';", "UI_RELATIVE_ESCAPE"],
@@ -154,15 +173,43 @@ negatives.push({
   name: "incompatible_schema_type",
   passed: inspectCompatibility(baseline, changed).length > 0,
 });
+negatives.push({
+  name: "unbaselined_schema",
+  passed: inspectBaselineCoverage(baseline, [
+    ...schemaFiles,
+    "docs/contracts/schemas/v1.1/extra.schema.json",
+  ]).includes("UNBASELINED_SCHEMA:docs/contracts/schemas/v1.1/extra.schema.json"),
+});
+negatives.push({
+  name: "undeclared_body_override",
+  passed: inspectDeclaredReplacements(
+    { ...changes, changes: changes.changes.filter((c) => c.name !== "ads.campaign.pause.input") },
+    layered,
+  ).includes("UNDECLARED_REPLACEMENT:ads.campaign.pause.input"),
+});
+const reused = structuredClone(layered);
+reused["core-v1.1"].$defs.Proposal = reused.core.$defs.Proposal;
+negatives.push({
+  name: "undeclared_definition_reuse",
+  passed: inspectDeclaredReplacements(changes, reused).includes("UNDECLARED_REPLACEMENT:Proposal"),
+});
+negatives.push({
+  name: "phantom_replacement_declaration",
+  passed: inspectDeclaredReplacements(
+    { ...changes, changes: [...changes.changes, { ...changes.changes[0], name: "Invented" }] },
+    layered,
+  ).includes("UNDECLARED_REPLACEMENT:Invented"),
+});
 if (negatives.some((x) => !x.passed)) errors.push("Negative guard failed");
 writeArtifact("verify/boundaries.json", {
   scope:
     "Source import/dependency and unreleased contract-freeze checks; not a security sandbox, production tenant authority or live runtime/provider qualification.",
   files: files.length,
+  schema_files: schemaFiles.length,
   negative_checks: negatives,
   errors,
 });
 if (errors.length) throw Error(errors.join("\n"));
 console.log(
-  `PASS: ${files.length} source modules, ${negatives.length} deliberate boundary/schema failures detected.`,
+  `PASS: ${files.length} source modules, ${schemaFiles.length} baselined schema files, ${negatives.length} deliberate boundary/schema failures detected.`,
 );

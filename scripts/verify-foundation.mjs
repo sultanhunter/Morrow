@@ -3,12 +3,14 @@ import { resolve } from 'node:path';
 import { root, read, sha, validateCatalogue, validateTasks, inspectAuthority, planInventory } from './foundation.mjs';
 import { renderDocuments } from './render-catalogue.mjs';
 import { writeArtifact } from './artifacts.mjs';
+import { readEffectiveBodies } from './contract-sources.mjs';
 
 const catalogue = read('docs/contracts/capabilities.json');
 const deps = read('docs/decisions/dependencies.json');
 const tasks = read('docs/progress/tasks.json');
 const types = read('docs/contracts/schema-types.json');
-const errors = [...validateCatalogue(catalogue,deps,tasks,types), ...validateTasks(tasks)];
+const bodies = readEffectiveBodies(catalogue.capabilities.map(c=>c.id));
+const errors = [...validateCatalogue(catalogue,deps,tasks,types,bodies), ...validateTasks(tasks)];
 const readText = path => readFileSync(resolve(root,path),'utf8');
 const plan = readText('docs/plan/build-plan.md');
 // Defined parent tasks and acceptance cases, in plan order, must equal tasks.json in order.

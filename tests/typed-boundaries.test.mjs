@@ -42,6 +42,47 @@ test("provider output is not accepted on static types alone", async () => {
   const client = createCapabilityClient(async () => ({ goalId: "goal", revision: "1" }));
   await assert.rejects(client.invoke("workspace.goal.create", input), /Invalid capability output/);
 });
+test("the client sends the effective v1.1 kill-switch body and refuses the replaced v1 body", async () => {
+  const ref = {
+    organizationId: "org_a",
+    workspaceId: "workspace_a",
+    storeId: "store_a",
+    kind: "proposal",
+    id: "proposal_a",
+    revision: 1,
+    digest: "a".repeat(64),
+  };
+  const sent = [];
+  const client = createCapabilityClient(async (id, body) => {
+    sent.push([id, body]);
+    return {
+      operationId: "operation_a",
+      readback: { ...ref, kind: "evidence", id: "evidence_a" },
+    };
+  });
+  const pause = {
+    campaigns: [
+      {
+        organizationId: "org_a",
+        workspaceId: "workspace_a",
+        storeId: "store_a",
+        connectionId: "connection_a",
+        kind: "campaign",
+        id: "campaign_a",
+      },
+    ],
+    control: { reason: "Overspend", sourceProposalRef: ref },
+  };
+  assert.equal((await client.invoke("ads.campaign.pause", pause)).operationId, "operation_a");
+  await assert.rejects(
+    client.invoke("ads.campaign.pause", {
+      proposalRef: ref,
+      approvalRef: { ...ref, kind: "approval" },
+    }),
+    /Invalid capability input/,
+  );
+  assert.deepEqual(sent, [["ads.campaign.pause", pause]]);
+});
 test("closed input validation does not coerce", () =>
   assert.equal(
     validateCapabilityInput("workspace.goal.create", { ...input, objective: 42 }),

@@ -1,5 +1,6 @@
-/** P03 shell metadata only; generated domain boundaries follow in P03.T02. */
-export const contractVersion = "morrow.contracts.v1" as const;
+/** Contract types and the one contract version, both generated from scripts/contract-sources.mjs. */
+import { contractVersion } from "./generated/domain";
+export { contractVersion };
 export type ScaffoldHealth = {
   service: "api" | "workers";
   contracts: typeof contractVersion;

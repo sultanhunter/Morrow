@@ -1,0 +1,899 @@
+[
+  {
+    "id": "P01.T02a.control.valid",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchControl",
+    "valid": true,
+    "value": {
+      "reason": "Overspend on a misconfigured campaign",
+      "sourceProposalRef": null
+    }
+  },
+  {
+    "id": "P01.T02a.control.source_proposal",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchControl",
+    "valid": true,
+    "value": {
+      "reason": "Overspend on a misconfigured campaign",
+      "sourceProposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.control.empty_reason",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchControl",
+    "valid": false,
+    "value": {
+      "reason": "",
+      "sourceProposalRef": null
+    }
+  },
+  {
+    "id": "P01.T02a.control.blank_reason",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchControl",
+    "valid": false,
+    "value": {
+      "reason": "   ",
+      "sourceProposalRef": null
+    }
+  },
+  {
+    "id": "P01.T02a.control.long_reason",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchControl",
+    "valid": false,
+    "value": {
+      "reason": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "sourceProposalRef": null
+    }
+  },
+  {
+    "id": "P01.T02a.control.missing_source",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchControl",
+    "valid": false,
+    "value": {
+      "reason": "Overspend on a misconfigured campaign"
+    }
+  },
+  {
+    "id": "P01.T02a.control.approval_as_source",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchControl",
+    "valid": false,
+    "value": {
+      "reason": "Overspend on a misconfigured campaign",
+      "sourceProposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "approval",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.control.extra_field",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchControl",
+    "valid": false,
+    "value": {
+      "reason": "Overspend on a misconfigured campaign",
+      "sourceProposalRef": null,
+      "approved": true
+    }
+  },
+  {
+    "id": "P01.T02a.human.valid",
+    "kind": "schema",
+    "selector": "core-v1.1:HumanActorRef",
+    "valid": true,
+    "value": {
+      "kind": "human",
+      "principalId": "human_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "membershipId": "membership_a",
+      "installationId": null,
+      "mandateId": null
+    }
+  },
+  {
+    "id": "P01.T02a.human.agent",
+    "kind": "schema",
+    "selector": "core-v1.1:HumanActorRef",
+    "valid": false,
+    "value": {
+      "kind": "agent",
+      "principalId": "human_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "membershipId": "membership_a",
+      "installationId": null,
+      "mandateId": null
+    }
+  },
+  {
+    "id": "P01.T02a.human.installation",
+    "kind": "schema",
+    "selector": "core-v1.1:HumanActorRef",
+    "valid": false,
+    "value": {
+      "kind": "human",
+      "principalId": "human_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "membershipId": "membership_a",
+      "installationId": "installation_a",
+      "mandateId": null
+    }
+  },
+  {
+    "id": "P01.T02a.human.mandate",
+    "kind": "schema",
+    "selector": "core-v1.1:HumanActorRef",
+    "valid": false,
+    "value": {
+      "kind": "human",
+      "principalId": "human_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "membershipId": "membership_a",
+      "installationId": null,
+      "mandateId": "mandate_a"
+    }
+  },
+  {
+    "id": "P01.T02a.human.no_membership",
+    "kind": "schema",
+    "selector": "core-v1.1:HumanActorRef",
+    "valid": false,
+    "value": {
+      "kind": "human",
+      "principalId": "human_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "membershipId": null,
+      "installationId": null,
+      "mandateId": null
+    }
+  },
+  {
+    "id": "P01.T02a.human.no_workspace",
+    "kind": "schema",
+    "selector": "core-v1.1:HumanActorRef",
+    "valid": false,
+    "value": {
+      "kind": "human",
+      "principalId": "human_a",
+      "organizationId": "org_a",
+      "workspaceId": null,
+      "membershipId": "membership_a",
+      "installationId": null,
+      "mandateId": null
+    }
+  },
+  {
+    "id": "P01.T02a.human.is_actor_ref",
+    "kind": "schema",
+    "selector": "core:ActorRef",
+    "valid": true,
+    "value": {
+      "kind": "human",
+      "principalId": "human_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "membershipId": "membership_a",
+      "installationId": null,
+      "mandateId": null
+    }
+  },
+  {
+    "id": "P01.T02a.campaign.valid",
+    "kind": "schema",
+    "selector": "core-v1.1:CampaignRef",
+    "valid": true,
+    "value": {
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "connectionId": "connection_a",
+      "kind": "campaign",
+      "id": "campaign_a"
+    }
+  },
+  {
+    "id": "P01.T02a.campaign.storeless",
+    "kind": "schema",
+    "selector": "core-v1.1:CampaignRef",
+    "valid": true,
+    "value": {
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": null,
+      "connectionId": "connection_a",
+      "kind": "campaign",
+      "id": "campaign_a"
+    }
+  },
+  {
+    "id": "P01.T02a.campaign.product_kind",
+    "kind": "schema",
+    "selector": "core-v1.1:CampaignRef",
+    "valid": false,
+    "value": {
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "connectionId": "connection_a",
+      "kind": "product",
+      "id": "campaign_a"
+    }
+  },
+  {
+    "id": "P01.T02a.campaign.no_connection",
+    "kind": "schema",
+    "selector": "core-v1.1:CampaignRef",
+    "valid": false,
+    "value": {
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "connectionId": null,
+      "kind": "campaign",
+      "id": "campaign_a"
+    }
+  },
+  {
+    "id": "P01.T02a.campaigns.one",
+    "kind": "schema",
+    "selector": "core-v1.1:CampaignRefs",
+    "valid": true,
+    "value": [
+      {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "connectionId": "connection_a",
+        "kind": "campaign",
+        "id": "campaign_a"
+      }
+    ]
+  },
+  {
+    "id": "P01.T02a.campaigns.empty",
+    "kind": "schema",
+    "selector": "core-v1.1:CampaignRefs",
+    "valid": false,
+    "value": []
+  },
+  {
+    "id": "P01.T02a.campaigns.duplicate",
+    "kind": "schema",
+    "selector": "core-v1.1:CampaignRefs",
+    "valid": false,
+    "value": [
+      {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "connectionId": "connection_a",
+        "kind": "campaign",
+        "id": "campaign_a"
+      },
+      {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "connectionId": "connection_a",
+        "kind": "campaign",
+        "id": "campaign_a"
+      }
+    ]
+  },
+  {
+    "id": "P01.T02a.record.valid",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": true,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "ads.campaign.pause",
+      "actor": {
+        "kind": "human",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      },
+      "targets": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "campaign",
+          "id": "campaign_a"
+        }
+      ],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "active"
+    }
+  },
+  {
+    "id": "P01.T02a.record.already_stopped",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": true,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "ads.campaign.pause",
+      "actor": {
+        "kind": "human",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      },
+      "targets": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "campaign",
+          "id": "campaign_a"
+        }
+      ],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "already_stopped"
+    }
+  },
+  {
+    "id": "P01.T02a.record.revised",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 2,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "ads.campaign.pause",
+      "actor": {
+        "kind": "human",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      },
+      "targets": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "campaign",
+          "id": "campaign_a"
+        }
+      ],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "active"
+    }
+  },
+  {
+    "id": "P01.T02a.record.not_kill_switch",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "ads.campaign.activate",
+      "actor": {
+        "kind": "human",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      },
+      "targets": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "campaign",
+          "id": "campaign_a"
+        }
+      ],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "active"
+    }
+  },
+  {
+    "id": "P01.T02a.record.agent_actor",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "ads.campaign.pause",
+      "actor": {
+        "kind": "agent",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      },
+      "targets": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "campaign",
+          "id": "campaign_a"
+        }
+      ],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "active"
+    }
+  },
+  {
+    "id": "P01.T02a.record.no_reason",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "ads.campaign.pause",
+      "actor": {
+        "kind": "human",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": " ",
+        "sourceProposalRef": null
+      },
+      "targets": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "campaign",
+          "id": "campaign_a"
+        }
+      ],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "active"
+    }
+  },
+  {
+    "id": "P01.T02a.record.no_targets",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "ads.campaign.pause",
+      "actor": {
+        "kind": "human",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      },
+      "targets": [],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "active"
+    }
+  },
+  {
+    "id": "P01.T02a.record.unknown_prior_state",
+    "kind": "schema",
+    "selector": "core-v1.1:KillSwitchRecord",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "stop_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-17T12:00:00Z",
+      "capabilityId": "ads.campaign.pause",
+      "actor": {
+        "kind": "human",
+        "principalId": "human_a",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      },
+      "targets": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "campaign",
+          "id": "campaign_a"
+        }
+      ],
+      "commandId": "command_a",
+      "requestDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "priorStateObserved": "unknown"
+    }
+  },
+  {
+    "id": "P01.T02a.pause.valid",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:ads.campaign.pause.input",
+    "valid": true,
+    "value": {
+      "campaigns": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "campaign",
+          "id": "campaign_a"
+        }
+      ],
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.pause.v1_shape",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:ads.campaign.pause.input",
+    "valid": false,
+    "value": {
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "approvalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "approval",
+        "id": "approval_a",
+        "revision": 1,
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.pause.credential",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:ads.campaign.pause.input",
+    "valid": false,
+    "value": {
+      "campaigns": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "campaign",
+          "id": "campaign_a"
+        }
+      ],
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      },
+      "apiKey": "fixture-not-secret"
+    }
+  },
+  {
+    "id": "P01.T02a.pause.v1_history",
+    "kind": "schema",
+    "selector": "capabilities:ads.campaign.pause.input",
+    "valid": true,
+    "value": {
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "approvalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "approval",
+        "id": "approval_a",
+        "revision": 1,
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.pause.v1_rejects_v1_1",
+    "kind": "schema",
+    "selector": "capabilities:ads.campaign.pause.input",
+    "valid": false,
+    "value": {
+      "campaigns": [
+        {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "connectionId": "connection_a",
+          "kind": "campaign",
+          "id": "campaign_a"
+        }
+      ],
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.disable.valid",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:agents.installation.disable.input",
+    "valid": true,
+    "value": {
+      "installationId": "installation_a",
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.disable.expected_revision",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:agents.installation.disable.input",
+    "valid": false,
+    "value": {
+      "installationId": "installation_a",
+      "expectedRevision": 1,
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.revoke.valid",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.membership.revoke.input",
+    "valid": true,
+    "value": {
+      "membershipId": "membership_b",
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.revoke.expected_revision",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.membership.revoke.input",
+    "valid": false,
+    "value": {
+      "membershipId": "membership_b",
+      "expectedRevision": 1,
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.revoke.no_control",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.membership.revoke.input",
+    "valid": false,
+    "value": {
+      "membershipId": "membership_b"
+    }
+  },
+  {
+    "id": "P01.T02a.disconnect.valid",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.connection.disconnect.input",
+    "valid": true,
+    "value": {
+      "connectionId": "connection_a",
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.disconnect.v1_shape",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.connection.disconnect.input",
+    "valid": false,
+    "value": {
+      "connectionId": "connection_a",
+      "expectedRevision": 1
+    }
+  },
+  {
+    "id": "P01.T02a.release.valid",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:agents.release.revoke.input",
+    "valid": true,
+    "value": {
+      "releaseRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "release",
+        "id": "release_a",
+        "revision": 3,
+        "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.release.v1_reason",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:agents.release.revoke.input",
+    "valid": false,
+    "value": {
+      "releaseRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "release",
+        "id": "release_a",
+        "revision": 3,
+        "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "reason": "Unsafe release"
+    }
+  },
+  {
+    "id": "P01.T02a.release.reason_and_control",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:agents.release.revoke.input",
+    "valid": false,
+    "value": {
+      "releaseRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "release",
+        "id": "release_a",
+        "revision": 3,
+        "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "reason": "Unsafe release",
+      "control": {
+        "reason": "Overspend on a misconfigured campaign",
+        "sourceProposalRef": null
+      }
+    }
+  }
+]

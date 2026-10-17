@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:morrow:contracts:capabilities:v1.1",
+  "title": "Morrow capability bodies version 1.1",
+  "$comment": "Capability bodies that replace or add to urn:morrow:contracts:capabilities:v1, which stays byte-identical. A body resolves here first, then in v1. Every replacement is declared in changes.json and is not compatible with the v1 body in either direction.",
+  "$defs": {
+    "ads.campaign.pause.input": {
+      "type": "object",
+      "properties": {
+        "campaigns": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/CampaignRefs"
+        },
+        "control": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/KillSwitchControl"
+        }
+      },
+      "required": [
+        "campaigns",
+        "control"
+      ],
+      "additionalProperties": false
+    },
+    "agents.installation.disable.input": {
+      "type": "object",
+      "properties": {
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "control": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/KillSwitchControl"
+        }
+      },
+      "required": [
+        "installationId",
+        "control"
+      ],
+      "additionalProperties": false
+    },
+    "governance.membership.revoke.input": {
+      "type": "object",
+      "properties": {
+        "membershipId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "control": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/KillSwitchControl"
+        }
+      },
+      "required": [
+        "membershipId",
+        "control"
+      ],
+      "additionalProperties": false
+    },
+    "governance.connection.disconnect.input": {
+      "type": "object",
+      "properties": {
+        "connectionId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "control": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/KillSwitchControl"
+        }
+      },
+      "required": [
+        "connectionId",
+        "control"
+      ],
+      "additionalProperties": false
+    },
+    "agents.release.revoke.input": {
+      "type": "object",
+      "properties": {
+        "releaseRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ReleaseRef"
+        },
+        "control": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/KillSwitchControl"
+        }
+      },
+      "required": [
+        "releaseRef",
+        "control"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

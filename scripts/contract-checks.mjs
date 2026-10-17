@@ -2,6 +2,7 @@ import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import canonicalize from 'canonicalize';
 import {read,sha} from './foundation.mjs';
+import {readSchemaSources} from './contract-sources.mjs';
 
 if (Number(process.versions.node.split('.')[0])!==24) throw new Error('Contract checks require the pinned Node 24 runtime');
 export const core=read('docs/contracts/schemas/v1/core.schema.json');
@@ -11,6 +12,19 @@ addFormats(ajv);
 ajv.addSchema(core);ajv.addSchema(bodies);
 export const validators=Object.fromEntries(Object.keys(core.$defs).map(name=>[name,ajv.compile({$ref:core.$id+'#/$defs/'+name})]));
 export const bodyValidators=Object.fromEntries(Object.keys(bodies.$defs).map(name=>[name,ajv.compile({$ref:bodies.$id+'#/$defs/'+name})]));
+// Reference (non-generated) validators for any exact selector `<kind>:<name>` of
+// the contract set in scripts/contract-sources.mjs. Sources are registered and
+// compiled on first use, after importers such as billing-checks.mjs have added
+// the schemas they own to this shared instance.
+export const sources=readSchemaSources();
+const compiled=new Map();
+export function selectorValidator(selector) {
+  for (const s of sources) if (!ajv.getSchema(s.schema.$id)) ajv.addSchema(s.schema);
+  const separator=selector.indexOf(':'),source=sources.find(s=>s.kind===selector.slice(0,separator)),name=selector.slice(separator+1);
+  if (!source || !Object.hasOwn(source.schema.$defs,name)) throw new Error('Unknown contract selector '+selector);
+  if (!compiled.has(selector)) compiled.set(selector,ajv.compile({$ref:source.schema.$id+'#/$defs/'+name}));
+  return compiled.get(selector);
+}
 export const digest=value=>sha(canonicalize(value));
 export function proposalDigest(proposal) { const {proposalDigest,...content}=proposal;return digest(content); }
 
@@ -54,7 +68,7 @@ export function inspectHandoff(v) {
   return !v.consumed && Date.parse(v.expiresAt)>Date.parse(v.now) && v.boundPrincipalId===v.requestingPrincipalId && v.boundWorkspaceId===v.requestedWorkspaceId && v.boundInstallationId===v.requestedInstallationId && v.expectedOwnershipRevision===v.currentOwnershipRevision && !v.ownershipConflict && v.currentGrant;
 }
 export function checkFixture(f) {
-  if (f.kind==='schema') return validators[f.definition](f.value)===f.valid;
+  if (f.kind==='schema') return (f.selector ? selectorValidator(f.selector) : validators[f.definition])(f.value)===f.valid;
   if (f.kind==='binding') return JSON.stringify(inspectBinding(f.context).sort())===JSON.stringify([...f.expectedErrors].sort());
   if (f.kind==='transition') return inspectTransition(f)===f.allowed;
   if (f.kind==='handoff') return inspectHandoff(f.value)===f.allowed;

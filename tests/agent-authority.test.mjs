@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   createAgentAuthorityService,
   canonicalPayloadDigest,
@@ -1027,4 +1028,59 @@ test("automation facts also reload after owner revocation and primitive inputs r
   );
   assert.equal(traps, 0);
   assert.equal(h.calls.length, 2);
+});
+
+// P01.T02a PR-A (AC07): agents get no verb on a human_only capability except
+// propose, and only where a proposal path exists (ADR-0005).
+const catalogue = JSON.parse(readFileSync("docs/contracts/capabilities.json", "utf8"));
+const humanOnly = catalogue.capabilities.filter((c) => c.executor === "human_only");
+// Conditions that already denied agents before v1.1 still apply.
+const deniedBefore = (c) =>
+  c.id === "governance.connection.connect" ||
+  c.eligible_principal.startsWith("operator_") ||
+  c.eligible_principal.startsWith("eligible_human_");
+async function reasonFor(f, mode) {
+  return (await harness(f, mode).decide()).decision.reason;
+}
+test("AC07: agents with otherwise-sufficient grants cannot view or execute any human_only capability", async () => {
+  assert.ok(humanOnly.some((c) => c.id === "ads.campaign.pause"));
+  assert.ok(humanOnly.some((c) => c.id === "workspace.task.takeover"));
+  for (const c of humanOnly)
+    for (const mode of ["delegation", "automation"])
+      for (const verb of ["view", "execute"]) {
+        const make = mode === "delegation" ? delegationFixture : automationFixture;
+        const f = retarget(make(), c.id, verb, "task", ["status"]);
+        assert.equal(await reasonFor(f, mode), "capability_denied", `${mode} ${verb} ${c.id}`);
+        await denied(f, mode);
+      }
+});
+test("AC07: agents may propose a human_only capability exactly when it is a kill switch or reviewed", async () => {
+  const proposable = [];
+  for (const c of humanOnly) {
+    const expected = (c.kill_switch || c.review_required) && !deniedBefore(c);
+    for (const mode of ["delegation", "automation"]) {
+      const make = mode === "delegation" ? delegationFixture : automationFixture;
+      const f = retarget(make(), c.id, "propose", "task", ["status"]);
+      if (expected) {
+        const result = await allowed(f, mode);
+        assert.ok(!result.obligations.includes("exact_approval"));
+      } else assert.equal(await reasonFor(f, mode), "capability_denied", `${mode} ${c.id}`);
+    }
+    if (expected) proposable.push(c.id);
+  }
+  assert.ok(proposable.includes("ads.campaign.pause"));
+  assert.ok(proposable.includes("governance.membership.revoke"));
+  assert.ok(!proposable.includes("workspace.task.takeover"));
+  assert.ok(!proposable.includes("agents.release.revoke"));
+});
+test("AC07: the pause an agent proposes is a stop only a human can execute", async () => {
+  const pause = (verb) =>
+    retarget(delegationFixture(), "ads.campaign.pause", verb, "campaign", ["delivery_status"]);
+  await allowed(pause("propose"));
+  assert.equal(await reasonFor(pause("execute")), "capability_denied");
+  // Agent-direct capabilities keep their existing behaviour.
+  await allowed(retarget(delegationFixture(), "orders.refund.create", "execute"));
+  await allowed(
+    retarget(delegationFixture(), "catalog.products.read", "view", "product", ["title"]),
+  );
 });

@@ -3,13 +3,27 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
-import { validators } from "../packages/contracts/src/generated/runtime-validators.mjs";
+import {
+  validators,
+  currentDefinitionSelectors,
+  capabilityBodySelectors,
+} from "../packages/contracts/src/generated/runtime-validators.mjs";
 import {
   validateDefinition,
   validateCapabilityInput,
+  validateCurrentDefinition,
 } from "../packages/contracts/src/validation.ts";
+import {
+  readSchemaSources,
+  schemasByKind,
+  currentDefinitionSelectors as expectedCurrent,
+  capabilityBodySelectors as expectedBodies,
+} from "../scripts/contract-sources.mjs";
 
-test("all 334 generated validators agree with the original compiler on bounded valid/invalid corpus", () => {
+const sources = readSchemaSources();
+const definitionCount = sources.reduce((n, s) => n + Object.keys(s.schema.$defs).length, 0);
+
+test("every generated validator agrees with the original compiler on bounded valid/invalid corpus", () => {
   const ajv = new Ajv2020({
     strict: true,
     allErrors: true,
@@ -19,12 +33,7 @@ test("all 334 generated validators agree with the original compiler on bounded v
     removeAdditional: false,
   });
   addFormats(ajv);
-  const schemas = Object.fromEntries(
-    ["core", "capabilities", "billing"].map((name) => [
-      name,
-      JSON.parse(readFileSync(`docs/contracts/schemas/v1/${name}.schema.json`, "utf8")),
-    ]),
-  );
+  const schemas = schemasByKind(sources);
   for (const schema of Object.values(schemas)) ajv.addSchema(schema);
   const corpus = [
     undefined,
@@ -58,7 +67,8 @@ test("all 334 generated validators agree with the original compiler on bounded v
     }
   };
   add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.A02.json", "utf8")));
-  assert.equal(Object.keys(validators).length, 334);
+  add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.T02a.json", "utf8")));
+  assert.equal(Object.keys(validators).length, definitionCount);
   let accepted = 0,
     rejected = 0;
   for (const [kind, schema] of Object.entries(schemas))
@@ -91,4 +101,43 @@ test("closed validator selectors cannot invoke inherited names or coerce input",
   const copy = structuredClone(input);
   assert.equal(validateCapabilityInput("workspace.goal.create", input), false);
   assert.deepEqual(input, copy);
+});
+test("effective selectors resolve to the newest layer and are frozen", () => {
+  const byKind = schemasByKind(sources);
+  const catalogue = JSON.parse(readFileSync("docs/contracts/capabilities.json", "utf8"));
+  assert.deepEqual({ ...currentDefinitionSelectors }, expectedCurrent(byKind));
+  assert.deepEqual(
+    { ...capabilityBodySelectors },
+    expectedBodies(
+      byKind,
+      catalogue.capabilities.map((c) => c.id),
+    ),
+  );
+  for (const selectors of [validators, currentDefinitionSelectors, capabilityBodySelectors])
+    assert.ok(Object.isFrozen(selectors));
+  for (const selector of [
+    ...Object.values(currentDefinitionSelectors),
+    ...Object.values(capabilityBodySelectors),
+  ])
+    assert.ok(Object.hasOwn(validators, selector), selector);
+  assert.equal(currentDefinitionSelectors.ActorRef, "core:ActorRef");
+  assert.equal(currentDefinitionSelectors.KillSwitchControl, "core-v1.1:KillSwitchControl");
+  assert.equal(
+    capabilityBodySelectors["ads.campaign.pause.input"],
+    "capabilities-v1.1:ads.campaign.pause.input",
+  );
+  assert.equal(
+    capabilityBodySelectors["ads.campaign.pause.output"],
+    "capabilities:ads.campaign.pause.output",
+  );
+  const control = { reason: "Overspend", sourceProposalRef: null };
+  assert.equal(validateCurrentDefinition("KillSwitchControl", control), true);
+  assert.equal(validateDefinition("core-v1.1", "KillSwitchControl", control), true);
+  assert.equal(validateDefinition("core", "KillSwitchControl", control), false);
+  for (const name of ["constructor", "__proto__", "ads.campaign.pause.input"])
+    assert.equal(validateCurrentDefinition(name, control), false);
+  // Only the declared definition layers are selectable; bodies go through the
+  // effective capability validators.
+  for (const schema of ["capabilities", "capabilities-v1.1", "core-v1.1:KillSwitchControl#"])
+    assert.equal(validateDefinition(schema, "ads.campaign.pause.input", {}), false);
 });

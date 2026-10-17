@@ -11,3 +11,7 @@ Unsent work can release. Dispatched/uncertain work retains credit/cash commitmen
 Production transactions must lock payers in stable order, compare current revisions, update all shares/root ceilings atomically and persist reservation plus command/outbox. Serializable contention/retries, operation uniqueness, crash recovery and provider readback need P06/P11/P12/P18 evidence. P01's sequential model is not real concurrency proof.
 
 Credit exhaustion pauses paid work while preserving ordinary granted reads, reviews, export/privacy handling. Operational quotas remain service safeguards rather than a separate merchant infrastructure bill. Budget reductions do not erase commitments; period resets preserve outstanding reservations and identities. Terms qualification must resolve grant order/expiry, rollover, renewal, refunds, proration, overages, rounding and lowest effective credit price. Real rates and charging remain blocked.
+
+## Contract v1.1: kill switches (P01.T02a PR-A)
+
+Kill switches (ADR-0005) are `external_write` or `control` capabilities, never `spend` or `billable_job` (catalogue rule R7), so the policy evaluators never attach `budget_reservation` to them, and a stop reserves no credits. In PR-A the existing entitlement and provider checks still apply to a stop, as before. PR-B (ADR-0011 Q8) exempts kill switches from entitlement and credit balance checks while keeping provider limits (`provider_denied`).
