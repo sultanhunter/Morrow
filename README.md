@@ -37,4 +37,4 @@ The labs run real workerd and PostgreSQL 17 in the groups CI uses: `npm run lab:
 
 ## CI
 
-`.github/workflows/ci.yml` runs parallel jobs behind the required `foundation` check. Each job secret-scans its reports and uploads them as an artifact; the green run and its artifacts are the evidence for a commit (ADR-0012). [docs/development/ci.md](docs/development/ci.md) describes the jobs and how to run each one locally.
+`.github/workflows/ci.yml` runs parallel jobs behind the `foundation` aggregator, the check to require once branch protection exists. Each job secret-scans its reports and uploads them as an artifact; the green run and its artifacts are the evidence for a commit (ADR-0012). [docs/development/ci.md](docs/development/ci.md) describes the jobs and how to run each one locally.

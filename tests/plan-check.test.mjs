@@ -9,6 +9,7 @@ import {
   adrNumbers,
   definedLetteredIds,
   inspectPlan,
+  inspectWording,
   letteredIds,
 } from "../scripts/plan-check.mjs";
 
@@ -16,6 +17,7 @@ const repository = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const checker = join(repository, "scripts/plan-check.mjs");
 const planPath = join(repository, "docs/plan/build-plan.md");
 const adrDirectory = join(repository, "docs/decisions/adr");
+const rulesPath = join(repository, "CLAUDE.md");
 const plan = readFileSync(planPath, "utf8");
 const adrs = adrNumbers(adrDirectory);
 
@@ -128,11 +130,22 @@ for (const [name, mutate, expected] of [
     assert.match(errors.join("\n"), expected);
   });
 
-test("a lettered ID is defined by a bold list entry, including ranges", () => {
+test("a lettered ID is defined only by the bold text that opens a list entry", () => {
   const extra = "\n- **P07.T05q-T05s Example children.** Uses P07.T05r.\n";
   assert.deepEqual(inspectPlan(plan + extra, adrs), []);
-  const prose = "\nProse **P07.T05q** is not a definition.\n";
-  assert.match(inspectPlan(plan + prose, adrs).join("\n"), /^LETTERED_UNDEFINED: P07\.T05q$/m);
+  for (const mention of [
+    "\nProse **P07.T05q** is not a definition.\n",
+    "\n- See **P07.T05q** later.\n",
+    "\n6. **P06.T01a** first, then **P07.T05q** second.\n",
+  ])
+    assert.match(inspectPlan(plan + mention, adrs).join("\n"), /^LETTERED_UNDEFINED: P07\.T05q$/m);
+  const defined = definedLetteredIds("6. **P05.T01x Signup**; **P06.T01a** work");
+  assert.ok(defined.has("P05.T01x"));
+  assert.ok(!defined.has("P06.T01a"));
+  assert.ok(definedLetteredIds("12. **P01.T02b, then P08.T01a + P08.T02a:** text").has("P08.T02a"));
+});
+
+test("a lettered range expands over its letters or task numbers and keeps its end ID", () => {
   assert.deepEqual([...letteredIds("P11.T01a–T03a and P17.T02a-c")].sort(), [
     "P11.T01a",
     "P11.T02a",
@@ -141,5 +154,27 @@ test("a lettered ID is defined by a bold list entry, including ranges", () => {
     "P17.T02b",
     "P17.T02c",
   ]);
-  assert.ok(definedLetteredIds("6. **P05.T01x Signup**; **P06.T01a** work").has("P06.T01a"));
+  assert.deepEqual([...letteredIds("P11.T01a–T03q")].sort(), [
+    "P11.T01a",
+    "P11.T02a",
+    "P11.T03a",
+    "P11.T03q",
+  ]);
+  assert.match(
+    inspectPlan(`${plan}\nNext: P11.T01a–T03q.\n`, adrs).join("\n"),
+    /^LETTERED_UNDEFINED: P11\.T03q$/m,
+  );
 });
+
+test("CLAUDE.md is held to the plan's wording rules and is only read", () =>
+  withTemporaryDirectory((directory) => {
+    const rules = readFileSync(rulesPath, "utf8");
+    assert.deepEqual(inspectWording(rules, "CLAUDE.md "), []);
+    const copy = join(directory, "CLAUDE.md");
+    writeFileSync(copy, `${rules}\nAs of seq${95}, see run ${String(38979693185)}.\n`);
+    const result = runChecker([planPath, adrDirectory, copy]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /^REVISION_TOKEN: CLAUDE\.md line \d+$/m);
+    assert.match(result.stderr, /^CI_RUN_ID: CLAUDE\.md line \d+$/m);
+    assert.equal(readFileSync(rulesPath, "utf8"), rules);
+  }));

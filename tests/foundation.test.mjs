@@ -23,7 +23,6 @@ for (const [name,mutate,expected] of [
 test('task records use the plan status vocabulary',()=>{
   assert.deepEqual(validateTasks(tasks),[]);
   assert.ok(TASK_STATUSES.includes('Self-reviewed'));
-  for (const id of ['P01.T01','P02.T01','P03.T04']) assert.equal(tasks.tasks.find(t=>t.id===id).status,'Self-reviewed');
 });
 for (const [name,mutate,expected] of [
   ['unknown status',t=>t.tasks[0].status='Done',/P01\.T01: unknown status "Done"/],

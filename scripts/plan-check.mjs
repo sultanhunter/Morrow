@@ -1,7 +1,9 @@
 // Structure and governance lint for the plan of record, docs/plan/build-plan.md (ADR-0001).
 // verify:foundation checks the defined parent task and acceptance IDs against
-// docs/progress/tasks.json; this script checks the plan's own structure and wording.
-// Usage: node scripts/plan-check.mjs [plan-file] [adr-directory]
+// docs/progress/tasks.json; this script checks the plan's own structure and wording, and
+// applies the wording rules (no revision tokens, digests, run IDs or Page references) to
+// CLAUDE.md as well, which it only reads.
+// Usage: node scripts/plan-check.mjs [plan-file] [adr-directory] [working-rules-file]
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -15,8 +17,8 @@ export const MAX_LINE_LENGTH = 2000;
 const LETTERED_ID = /P\d{2}\.T\d{2}[a-z]+(?![a-z\d])/g;
 // Ranges: P04.T01a-T01d (letters), P11.T01a–T03a (task numbers), P17.T02a-f (letters).
 const LETTERED_RANGE = /(P\d{2})\.T(\d{2})([a-z])[-–](?:T(\d{2})([a-z])|([a-z]))(?![a-z\d])/g;
-const LIST_ITEM = /^\s*(?:[-*+]|\d+\.)\s/;
-const BOLD = /\*\*(.+?)\*\*/g;
+// The bold span that opens a list item: "- **P05.T01x ...**" or "6. **P06.T01a ...**".
+const LEADING_BOLD = /^\s*(?:[-*+]|\d+\.)\s+\*\*(.+?)\*\*/;
 const ADR_FILE = /^ADR-(\d{4})-.+\.md$/;
 const lineRules = [
   ["REVISION_TOKEN", /canonical\s*\d|\bseq\d+\b/i],
@@ -28,31 +30,44 @@ const lineRules = [
 const letter = (code) => String.fromCharCode(code);
 const pad = (n) => String(n).padStart(2, "0");
 
+// A range within one task expands over its letters. A range across task numbers expands
+// with the start letter. Either way the end ID is included, so P11.T01a–T03q checks P11.T03q.
 export function letteredIds(text) {
   const ids = new Set(text.match(LETTERED_ID) ?? []);
   for (const [, pkg, n1, l1, n2, l2, l3] of text.matchAll(LETTERED_RANGE)) {
-    if (l3) {
-      for (let c = l1.charCodeAt(0); c <= l3.charCodeAt(0); c += 1)
-        ids.add(`${pkg}.T${n1}${letter(c)}`);
-    } else if (n1 === n2) {
-      for (let c = l1.charCodeAt(0); c <= l2.charCodeAt(0); c += 1)
+    const last = n2 ?? n1;
+    const lastLetter = l2 ?? l3;
+    ids.add(`${pkg}.T${last}${lastLetter}`);
+    if (last === n1) {
+      for (let c = l1.charCodeAt(0); c <= lastLetter.charCodeAt(0); c += 1)
         ids.add(`${pkg}.T${n1}${letter(c)}`);
     } else {
-      for (let n = Number(n1); n <= Number(n2); n += 1) ids.add(`${pkg}.T${pad(n)}${l1}`);
+      for (let n = Number(n1); n <= Number(last); n += 1) ids.add(`${pkg}.T${pad(n)}${l1}`);
     }
   }
   return ids;
 }
 
-// A lettered ID is defined when it appears in bold in a list item, such as a
-// "- **P05.T01x ...**" child entry or a "6. **P06.T01a** ..." Next work step.
+// A lettered ID is defined only by the bold span that opens a list item: a package's
+// "- **P05.T01x ...**" child entry or a "6. **P06.T01a ...**" Next work step. Bold text
+// later in an item, or in prose, is a mention.
 export function definedLetteredIds(text) {
   const ids = new Set();
   for (const line of text.split("\n")) {
-    if (!LIST_ITEM.test(line)) continue;
-    for (const [, span] of line.matchAll(BOLD)) for (const id of letteredIds(span)) ids.add(id);
+    const span = LEADING_BOLD.exec(line)?.[1];
+    if (span) for (const id of letteredIds(span)) ids.add(id);
   }
   return ids;
+}
+
+// The wording rules that apply to the plan and, read only, to CLAUDE.md.
+export function inspectWording(text, label = "") {
+  const errors = [];
+  text.split("\n").forEach((line, index) => {
+    for (const [code, pattern] of lineRules)
+      if (pattern.test(line)) errors.push(`${code}: ${label}line ${index + 1}`);
+  });
+  return errors;
 }
 
 export function adrNumbers(directory) {
@@ -104,9 +119,8 @@ export function inspectPlan(text, adrs) {
   lines.forEach((line, index) => {
     if (line.length > MAX_LINE_LENGTH)
       errors.push(`LINE_TOO_LONG: line ${index + 1} has ${line.length} characters`);
-    for (const [code, pattern] of lineRules)
-      if (pattern.test(line)) errors.push(`${code}: line ${index + 1}`);
   });
+  errors.push(...inspectWording(text));
 
   for (const number of [...new Set([...text.matchAll(/\bADR-(\d{4})\b/g)].map((m) => m[1]))])
     if (!adrs.has(number)) errors.push(`ADR_MISSING: ADR-${number}`);
@@ -116,15 +130,19 @@ export function inspectPlan(text, adrs) {
 function main() {
   const planPath = resolve(process.argv[2] ?? resolve(root, "docs/plan/build-plan.md"));
   const adrDirectory = resolve(process.argv[3] ?? resolve(root, "docs/decisions/adr"));
+  const rulesPath = resolve(process.argv[4] ?? resolve(root, "CLAUDE.md"));
   const text = readFileSync(planPath, "utf8");
-  const errors = inspectPlan(text, adrNumbers(adrDirectory));
+  const errors = [
+    ...inspectPlan(text, adrNumbers(adrDirectory)),
+    ...inspectWording(readFileSync(rulesPath, "utf8"), "CLAUDE.md "),
+  ];
   if (errors.length) {
     console.error(errors.join("\n"));
     process.exitCode = 1;
   } else {
     const inventory = planInventory(text);
     console.log(
-      `PASS: plan check, ${PACKAGES} packages, ${inventory.tasks.length} parent tasks, ${inventory.cases.length} acceptance cases, ${definedLetteredIds(text).size} lettered IDs, every cited ADR present.`,
+      `PASS: plan check, ${PACKAGES} packages, ${inventory.tasks.length} parent tasks, ${inventory.cases.length} acceptance cases, ${definedLetteredIds(text).size} lettered IDs, every cited ADR present, CLAUDE.md wording clean.`,
     );
   }
 }

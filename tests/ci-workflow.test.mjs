@@ -312,3 +312,9 @@ test("CI runs every lab script exactly once and covers the local npm run ci pipe
     assert.ok(reached.has(name === "test" ? "test:shard" : name), `CI must run ${name}`);
   assert.ok(reached.has("smoke:scaffold"));
 });
+
+test("npm run verify runs the plan check, and CI reaches it", () => {
+  assert.ok(rootScriptsRun(scripts.verify).includes("plan:check"), "verify must run plan:check");
+  assert.ok(rootScriptsRun(scripts.ci).includes("verify"), "npm run ci must run verify");
+  assert.ok(scriptsReachedByCi().has("plan:check"), "CI must run plan:check");
+});
