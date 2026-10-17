@@ -20,7 +20,7 @@ const profile = {
 };
 const configuration = {
   schemaVersion: 1,
-  controllerProtocol: "morrow-local-login-84",
+  controllerProtocol: "morrow-login-v1",
   origin: "https://workspace.example.test",
   retentionTier: "staging",
   authenticationBindingJson: JSON.stringify({

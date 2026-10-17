@@ -411,7 +411,7 @@ privateMarkers.push(cookieSecret, handoffToken);
 const workspaceConfigurationJson = JSON.stringify({ schemaVersion: 1, mode: "https", origin });
 const logoutConfigurationJson = JSON.stringify({
   schemaVersion: 1,
-  protocol: "morrow-local-self-logout-85",
+  protocol: "morrow-self-logout-v1",
   origin,
   providerId: "workos",
   environmentId: binding.environmentId,

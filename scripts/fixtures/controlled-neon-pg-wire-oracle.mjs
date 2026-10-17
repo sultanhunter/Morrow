@@ -614,7 +614,7 @@ export function createControlledNeonPgOracle({
         assert.equal(parameters.client_encoding, "UTF8");
         assert.equal(parameters.statement_timeout, profile.profile.statementTimeout);
         assert.equal(parameters.idle_in_transaction_session_timeout, profile.profile.idleTimeout);
-        assert.match(parameters.application_name, /^morrow_t88_[a-f0-9]{32}_[po]$/);
+        assert.match(parameters.application_name, /^morrow_id_[a-f0-9]{32}_[po]$/);
         state.kind = parameters.application_name.endsWith("_p") ? "p" : "o";
         state.role = parameters.user;
         state.app = parameters.application_name;

@@ -105,6 +105,7 @@ const paths = [
   "tests/fixtures/workos-authentication-evidence.mjs",
   "infra/identity-role-prerequisites.sql",
   "infra/identity-login-role-prerequisites.sql",
+  "infra/identity-logout-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
   ".nvmrc",
@@ -116,8 +117,9 @@ const paths = [
 ];
 if (process.version !== "v24.13.0") throw Error("LOGIN_HTTPS_LAB_SOURCE_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-if (manifest.migrations.length < 10) throw Error("LOGIN_HTTPS_LAB_TEN_MIGRATIONS_REQUIRED");
-for (const [i, entry] of manifest.migrations.slice(0, 10).entries()) {
+// The login fixture applies 0001-0012; later manifest entries are not applied here.
+if (manifest.migrations.length < 12) throw Error("LOGIN_HTTPS_LAB_TWELVE_MIGRATIONS_REQUIRED");
+for (const [i, entry] of manifest.migrations.slice(0, 12).entries()) {
   if (entry.sequence !== i + 1 || hash(readFileSync("migrations/" + entry.file)) !== entry.sha256)
     throw Error("LOGIN_HTTPS_LAB_MIGRATION_HASH");
   paths.push("migrations/" + entry.file);
@@ -1260,7 +1262,7 @@ const report = {
   task: "P05.T01p",
   observedAt: new Date().toISOString(),
   qualification: "synthetic_native_rsa_pkce_to_real_sql_to_https_initial_cookie_jar_and_o_b",
-  appliedMigrations: 10,
+  appliedMigrations: 12,
   providerRequests: 0,
   browserEngineQualified: false,
   sourceDigests,

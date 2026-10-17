@@ -51,11 +51,10 @@ const paths = [
   "node_modules/@neondatabase/serverless/index.mjs",
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-// Every published migration must be present in order and checksum-verified. The
-// self-logout fixture applies exactly the first eleven, so the count stays exact until
-// this lab also applies later migrations; a twelfth migration must fail here.
-if (manifest.migrations.length !== 11) throw Error("CONTROLLED_PG_ORIGINAL_MIGRATIONS_REQUIRED");
-for (const [i, row] of manifest.migrations.entries()) {
+// The login fixture applies 0001-0012; those entries must be present in order and
+// checksum-verified. Later manifest entries are not applied by this lab.
+if (manifest.migrations.length < 12) throw Error("CONTROLLED_PG_CURRENT_MIGRATIONS_REQUIRED");
+for (const [i, row] of manifest.migrations.slice(0, 12).entries()) {
   if (row.sequence !== i + 1 || hash(readFileSync("migrations/" + row.file)) !== row.sha256)
     throw Error("CONTROLLED_PG_MIGRATION_DRIFT");
   paths.push("migrations/" + row.file);
@@ -213,7 +212,7 @@ try {
                 if (
                   !roles.includes(startup.parameters.user) ||
                   startup.parameters.database !== "morrow" ||
-                  !/^morrow_t88_[a-f0-9]{32}_[po]$/.test(startup.parameters.application_name)
+                  !/^morrow_id_[a-f0-9]{32}_[po]$/.test(startup.parameters.application_name)
                 )
                   throw Error("CONTROLLED_PG_STARTUP_HELD");
               },
