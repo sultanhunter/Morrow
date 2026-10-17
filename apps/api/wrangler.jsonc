@@ -1,0 +1,57 @@
+// morrow-<env>-api: the only public Worker (ADR-0007 item 1). Static Assets
+// serve apps/workspace-web/dist on the same origin as the reserved Worker paths,
+// which the __Host- cookies require. No account, route or identifier is
+// committed here (P04.T01i adds the domain and the reviewed staging values).
+// Its only secret is its own login keyring, placed with --secrets-file; with
+// `secrets.required: []` types and dev never infer or load api secrets.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "morrow-development-api",
+  "main": "src/deployed-worker.ts",
+  "compatibility_date": "2026-07-30",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_do_not_populate_process_env"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "logpush": false,
+  "upload_source_maps": false,
+  "keep_vars": false,
+  "send_metrics": false,
+  "observability": { "enabled": false },
+  "assets": {
+    "directory": "../workspace-web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/auth",
+      "/auth/*",
+      "/workspace",
+      "/workspace/*",
+      "/api",
+      "/api/*",
+      "/healthz",
+    ],
+  },
+  "vars": { "MORROW_ENVIRONMENT": "development" },
+  "services": [
+    { "binding": "BROKER", "service": "morrow-development-broker", "entrypoint": "ApiBroker" },
+  ],
+  "secrets": { "required": [] },
+  "dev": { "ip": "127.0.0.1", "port": 8787, "local_protocol": "https" },
+  "env": {
+    "staging": {
+      "name": "morrow-staging-api",
+      "vars": { "MORROW_ENVIRONMENT": "staging" },
+      "services": [
+        { "binding": "BROKER", "service": "morrow-staging-broker", "entrypoint": "ApiBroker" },
+      ],
+      "secrets": { "required": [] },
+    },
+    "production": {
+      "name": "morrow-production-api",
+      "vars": { "MORROW_ENVIRONMENT": "production" },
+      "services": [
+        { "binding": "BROKER", "service": "morrow-production-broker", "entrypoint": "ApiBroker" },
+      ],
+      "secrets": { "required": [] },
+    },
+  },
+}

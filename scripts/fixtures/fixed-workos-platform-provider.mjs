@@ -43,6 +43,8 @@ export function createPlatformWorkosProviderOracle(options = {}) {
     sessions.set(issued.claims.sid, { claims: issued.claims, at: crypto.now() });
   };
   const fault = options.fault ?? {};
+  // The broker's synthetic sk_test_ marker (P04.T02a) or the original fixture marker.
+  const managementMarker = options.managementMarker ?? "platform_management_marker_87_only";
   const handleRequest = async (request) => {
     metrics.interceptedRequests++;
     try {
@@ -102,7 +104,7 @@ export function createPlatformWorkosProviderOracle(options = {}) {
         );
         assert.ok(match, "only fixed session path");
         assert.equal(request.method, "GET");
-        assert.equal(headers.get("authorization"), "Bearer platform_management_marker_87_only");
+        assert.equal(headers.get("authorization"), "Bearer " + managementMarker);
         assert.equal(headers.has("content-type"), false);
         assert.equal(await request.text(), "");
         assert.deepEqual(
@@ -239,7 +241,7 @@ export function createPlatformWorkosProviderOracle(options = {}) {
     calls,
     platformHeaderNames,
     secrets,
-    marker: "platform_management_marker_87_only",
+    marker: managementMarker,
     callback: binding.redirectUri,
   };
 }

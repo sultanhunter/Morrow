@@ -74,6 +74,9 @@ export function inspectImports(file, code) {
   const productionSource = /^(apps|packages)\//.test(path);
   const provider = adapterProvider(path);
   const composition = path === compositionPath;
+  // The broker is trusted Worker source (ADR-0007): only it may import its own
+  // modules, and it imports no other app.
+  const broker = /^apps\/broker\//.test(path);
   const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, scriptKind(file));
   const inspect = (specifier) => {
     let localTarget = null;
@@ -131,13 +134,19 @@ export function inspectImports(file, code) {
       errors.push("UI_SERVER_IMPORT");
     if (
       (ui || neutral) &&
-      /^@morrow\/(api|workers|shopify-connector|policy|identity|infrastructure|connectors|runtime|runtime-adapters|secrets)(\/|$)/.test(
+      /^@morrow\/(api|broker|workers|shopify-connector|policy|identity|infrastructure|connectors|runtime|runtime-adapters|secrets)(\/|$)/.test(
         specifier,
       )
     )
       errors.push("TRUST_BOUNDARY_IMPORT");
+    if (productionSource && !broker && /^@morrow\/broker(?:\/|$)/.test(specifier))
+      errors.push("BROKER_SOURCE_IMPORT");
     if (localTarget !== null) {
       const target = localTarget;
+      if (productionSource && !broker && /^apps\/broker\//.test(target))
+        errors.push("BROKER_SOURCE_IMPORT");
+      if (broker && /^apps\//.test(target) && !/^apps\/broker\//.test(target))
+        errors.push("BROKER_APP_IMPORT");
       if (productionSource && adapterPath(target) && !composition) {
         if (!provider) errors.push("RUNTIME_ADAPTER_IMPORT_DENIED");
         else if (adapterProvider(target) !== provider)
