@@ -89,7 +89,7 @@ async function parseLoginConfigurationCore(
     ]);
     if (
       c.schemaVersion !== 1 ||
-      c.controllerProtocol !== "morrow-local-login-84" ||
+      c.controllerProtocol !== "morrow-login-v1" ||
       typeof c.origin !== "string" ||
       encoder.encode(c.origin).length > 512 ||
       !["development", "staging", "production"].includes(c.retentionTier as string) ||

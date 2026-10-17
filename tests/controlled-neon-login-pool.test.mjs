@@ -113,15 +113,15 @@ test("closed inputs refuse accessors without calling them", async () => {
 test("synthetic Node remapping is a separately closed loopback path", async () => {
   const pools = await createSyntheticNodeControlledNeonLoginPools({
     ...dependencies(),
-    loopbackWsUrl: "ws://127.0.0.1:12345/morrow-neon-t88",
+    loopbackWsUrl: "ws://127.0.0.1:12345/morrow-neon-loopback",
   });
   assert.ok(Object.isFrozen(pools));
   for (const url of [
-    "wss://foreign.invalid/morrow-neon-t88",
-    "ws://localhost:1234/morrow-neon-t88",
+    "wss://foreign.invalid/morrow-neon-loopback",
+    "ws://localhost:1234/morrow-neon-loopback",
     "ws://127.0.0.1:1234/other",
-    "ws://127.0.0.1:1234/morrow-neon-t88?x=1",
-    "ws://127.0.0.1:99999/morrow-neon-t88",
+    "ws://127.0.0.1:1234/morrow-neon-loopback?x=1",
+    "ws://127.0.0.1:99999/morrow-neon-loopback",
   ])
     await assert.rejects(
       createSyntheticNodeControlledNeonLoginPools({ ...dependencies(), loopbackWsUrl: url }),
@@ -304,7 +304,7 @@ test("parameters deny wrong arity, sparse/extra/accessor/mutable nonstrings and 
 const expected = {
   role: "morrow_identity_login",
   database: "morrow",
-  applicationName: "morrow_t88_0123456789abcdef0123456789abcdef_p",
+  applicationName: "morrow_id_0123456789abcdef0123456789abcdef_p",
 };
 const row = () => ({
   backend_pid: "1234",

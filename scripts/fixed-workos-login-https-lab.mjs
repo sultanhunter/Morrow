@@ -108,11 +108,10 @@ const paths = [
 ];
 if (process.version !== "v24.13.0") throw Error("FIXED_PROVIDER_HTTPS_SOURCE_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-// Every published migration must be present in order and checksum-verified. The
-// self-logout fixture applies exactly the first eleven, so the count stays exact until
-// this lab also applies later migrations; a twelfth migration must fail here.
-if (manifest.migrations.length !== 11) throw Error("FIXED_PROVIDER_HTTPS_MIGRATIONS_REQUIRED");
-for (const [index, entry] of manifest.migrations.entries()) {
+// The login fixture applies 0001-0012; those entries must be present in order and
+// checksum-verified. Later manifest entries are not applied by this lab.
+if (manifest.migrations.length < 12) throw Error("FIXED_PROVIDER_HTTPS_MIGRATIONS_REQUIRED");
+for (const [index, entry] of manifest.migrations.slice(0, 12).entries()) {
   if (
     entry.sequence !== index + 1 ||
     hash(readFileSync("migrations/" + entry.file)) !== entry.sha256
@@ -850,7 +849,7 @@ const report = {
   observedAt: new Date().toISOString(),
   sourceDigests,
   sourceDigest: hash(JSON.stringify(Object.entries(sourceDigests).sort())),
-  appliedMigrations: 11,
+  appliedMigrations: 12,
   checks,
   checkCount: checks.length,
   providerRequests: 0,

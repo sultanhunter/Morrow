@@ -129,7 +129,7 @@ async function absent(kind, id) {
 }
 export async function authenticationProbe(target, user) {
   const fields = Buffer.from(
-    "user\0" + user + "\0database\0morrow\0application_name\0morrow_t88_authprobe\0\0",
+    "user\0" + user + "\0database\0morrow\0application_name\0morrow_id_authprobe\0\0",
   );
   const startup = Buffer.alloc(fields.length + 8);
   startup.writeInt32BE(startup.length);
@@ -212,8 +212,8 @@ async function ownedPostgresqlLab(use, profile) {
       config.user === "999:999",
   );
   const suffix = randomUUID().replaceAll("-", "");
-  const networkName = "morrow-t88-net-" + suffix;
-  const containerName = "morrow-t88-pg-" + suffix;
+  const networkName = "morrow-loopback-net-" + suffix;
+  const containerName = "morrow-loopback-pg-" + suffix;
   const passwordByRole = Object.fromEntries(
     roles.map((role) => [role, randomBytes(32).toString("hex")]),
   );
@@ -667,7 +667,7 @@ async function ownedPostgresqlLab(use, profile) {
         const where =
           "datname='morrow' AND usename IN (" +
           roles.map(literal).join(",") +
-          ") AND left(application_name,11)='morrow_t88_'";
+          ") AND left(application_name,10)='morrow_id_'";
         const before = Number(
           await sql("SELECT count(*) FROM pg_stat_activity WHERE " + where + ";", "morrow"),
         );

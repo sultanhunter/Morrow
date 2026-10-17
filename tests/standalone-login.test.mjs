@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createStandaloneLoginBridge } from "../packages/identity/src/standalone-login.ts";
 import { createStandaloneLoginFixture } from "../scripts/fixtures/standalone-login-fixture.ts";
+import { appliedLegacyLoginControllerProtocol } from "../scripts/fixtures/standalone-login-fixture.mjs";
 import { buildWorkosAuthenticationEvidenceFixture } from "./fixtures/workos-authentication-evidence.mjs";
 const native = buildWorkosAuthenticationEvidenceFixture();
 const origin = "https://workspace.example.test";
@@ -470,6 +471,27 @@ test("factory refuses shared pool identity and insecure cookie origin", async ()
     createStandaloneLoginBridge({ ...f, configurationJson: JSON.stringify(c) }),
     /CONFIGURATION_INVALID/,
   );
+});
+test("configuration accepts only the morrow-login-v1 controller protocol", async () => {
+  const f = fixture(),
+    c = JSON.parse(f.configurationJson);
+  assert.equal(c.controllerProtocol, "morrow-login-v1");
+  // The retired value comes from the applied 0010 bytes; no current source names it.
+  for (const controllerProtocol of [
+    appliedLegacyLoginControllerProtocol(),
+    "morrow-login-v2",
+    "MORROW-LOGIN-V1",
+    "morrow-login-v1 ",
+    "",
+  ])
+    await assert.rejects(
+      createStandaloneLoginBridge({
+        ...f,
+        configurationJson: JSON.stringify({ ...c, controllerProtocol }),
+      }),
+      /CONFIGURATION_INVALID/,
+    );
+  assert.equal(f.external.length, 0);
 });
 for (const change of [
   JSON.stringify({ schemaVersion: 1, accessToken: "private-marker", authenticated: true }),

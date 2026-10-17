@@ -223,7 +223,7 @@ async function create(
     if (synthetic) {
       if (
         typeof d.loopbackWsUrl !== "string" ||
-        !/^ws:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}\/morrow-neon-t88$/.test(d.loopbackWsUrl) ||
+        !/^ws:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}\/morrow-neon-loopback$/.test(d.loopbackWsUrl) ||
         new URL(d.loopbackWsUrl).port === "" ||
         Number(new URL(d.loopbackWsUrl).port) > 65535
       )
@@ -470,8 +470,8 @@ async function create(
       function makeDriver(kind: "p" | "o"): Driver {
         check();
         ambient();
-        const applicationName = `morrow_t88_${crypto.randomUUID().replaceAll("-", "")}_${kind}`;
-        if (!/^morrow_t88_[a-f0-9]{32}_[po]$/.test(applicationName)) throw controlledNeonHeld();
+        const applicationName = `morrow_id_${crypto.randomUUID().replaceAll("-", "")}_${kind}`;
+        if (!/^morrow_id_[a-f0-9]{32}_[po]$/.test(applicationName)) throw controlledNeonHeld();
         const driver = {} as Driver;
         driver.applicationName = applicationName;
         const Guard = createControlledNeonSocketClass({

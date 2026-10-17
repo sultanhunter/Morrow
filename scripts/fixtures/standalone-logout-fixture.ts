@@ -6,7 +6,7 @@ import type { StandaloneWorkspaceSqlPool } from "../../packages/identity/src/sta
 export const logoutFixtureOrigin = "https://workspace.example.test";
 export const logoutFixtureConfiguration = Object.freeze({
   schemaVersion: 1,
-  protocol: "morrow-local-self-logout-85",
+  protocol: "morrow-self-logout-v1",
   origin: logoutFixtureOrigin,
   providerId: "workos",
   environmentId: "environment_" + "A".repeat(26),
