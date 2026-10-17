@@ -1,7 +1,9 @@
 import type {
   CapabilityInput,
   CapabilityOutput,
+  Current_Approval,
   Current_KillSwitchControl,
+  Current_Proposal,
   CurrentDefinitionName,
 } from "./generated/domain";
 const goodInput: CapabilityInput<"workspace.goal.create"> = {
@@ -65,5 +67,50 @@ void badOutput;
 void pause;
 void v1Pause;
 void revoke;
+// Proposal@2 (ADR-0011 Q6): credit ceilings are integer strings summed with BigInt.
+const credits: Current_Proposal["maximumCredits"] = "20";
+// @ts-expect-error a credit ceiling is never a number
+const numericCredits: Current_Proposal["maximumCredits"] = 20;
+// @ts-expect-error Proposal@2 replaces the v1 shape; schemaVersion 1 is not current
+const v1Proposal: Current_Proposal["schemaVersion"] = 1;
+// Approval@2 reviewers are human members only.
+const agentReviewer: Current_Approval["reviewer"] = {
+  // @ts-expect-error an agent cannot be an Approval@2 reviewer
+  kind: "agent",
+  principalId: "agent",
+  organizationId: "org",
+  workspaceId: "workspace",
+  membershipId: "membership",
+  installationId: null,
+  mandateId: null,
+};
+const decide: CapabilityInput<"governance.approval.decide"> = {
+  proposalRef,
+  decision: {
+    decision: "approve",
+    selectedTargetIndexes: [0, 1],
+    expectedDecisionDigest: "b".repeat(64),
+    soloOwnerConfirmation: null,
+    comment: null,
+  },
+  expectedRevision: 1,
+};
+const v1Decide: CapabilityInput<"governance.approval.decide"> = {
+  proposalRef,
+  // @ts-expect-error the v1 DecisionRef decision is replaced by a ReviewDecisionInput
+  decision: { ...proposalRef, kind: "decision" },
+  expectedRevision: 1,
+};
+const preview: CapabilityInput<"governance.approval.preview"> = {
+  proposalRef,
+  selectedTargetIndexes: null,
+};
 void currentName;
 void bodyName;
+void credits;
+void numericCredits;
+void v1Proposal;
+void agentReviewer;
+void decide;
+void v1Decide;
+void preview;

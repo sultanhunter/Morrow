@@ -36,6 +36,27 @@
       "replaces": "capabilities:agents.release.revoke.input",
       "reason": "Kill switch: control.reason replaces the v1 free-text reason and adds an optional source proposal.",
       "adr": "ADR-0005"
+    },
+    {
+      "kind": "definition",
+      "name": "Proposal",
+      "replaces": "core:Proposal",
+      "reason": "Proposal@2: schemaVersion 2; per-target and total credit and cash ceilings inside the digest; server-derived irreversible, requestedBy, beneficiaries and contextTaint; partial approval and derivation. A v1 proposal is not a valid Proposal@2.",
+      "adr": "ADR-0011"
+    },
+    {
+      "kind": "definition",
+      "name": "Approval",
+      "replaces": "core:Approval",
+      "reason": "Approval@2: schemaVersion 2; a human reviewer only; the bound review policy, quorum, recorded decisions and effectiveAt. A v1 approval is not a valid Approval@2.",
+      "adr": "ADR-0011"
+    },
+    {
+      "kind": "capability_body",
+      "name": "governance.approval.decide.input",
+      "replaces": "capabilities:governance.approval.decide.input",
+      "reason": "The decision becomes a ReviewDecisionInput bound to the exact proposal digest, with an optional target selection, solo-owner confirmation and cancel before effect, in place of the v1 DecisionRef.",
+      "adr": "ADR-0011"
     }
   ]
 }

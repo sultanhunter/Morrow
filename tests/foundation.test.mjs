@@ -82,7 +82,7 @@ test('AC06: reversals keep review; activation is agent_after_approval and the re
 });
 for (const [name,mutate,expected] of [
   ['R1 unknown executor',c=>find(c,'catalog.products.read').executor='agent',/R1 invalid executor/],
-  ['R1 non-boolean kill switch',c=>find(c,'catalog.products.read').kill_switch='no',/R1 kill_switch and review_required must be booleans/],
+  ['R1 non-boolean kill switch',c=>find(c,'catalog.products.read').kill_switch='no',/R1 kill_switch, irreversible and review_required must be booleans/],
   ['R2 read written by agents',c=>find(c,'catalog.products.read').executor='agent_direct_write',/R2 read/],
   ['R3 write as a read',c=>find(c,'workspace.task.create').executor='agent_direct_read',/R3 write/],
   ['R4 external write without approval executor',c=>find(c,'catalog.content.publish').executor='agent_direct_write',/R4 consequential/],
@@ -120,4 +120,43 @@ test('kill-switch walkthroughs require a recorded reason and a human executor',(
     agent.principal.kind='agent';
     assert.deepEqual(inspectAuthority(c,agent).reasons,['HUMAN_EXECUTOR_REQUIRED']);
   }
+});
+
+// P01.T02a PR-B: irreversible capabilities (ADR-0011 Q4), the two review capabilities (Q5) and stops without entitlement (Q8).
+const irreversible=['lifecycle.campaign.send','support.reply.send','orders.refund.create','orders.cancel','orders.fulfillment.create','governance.privacy.erase','agents.installation.uninstall'];
+test('AC06 R10: the irreversible set is the ADR-0011 Q4 list and never a read',()=>{
+  for (const c of catalogue.capabilities) assert.equal(typeof c.irreversible,'boolean',c.id);
+  assert.deepEqual(new Set(catalogue.capabilities.filter(c=>c.irreversible).map(c=>c.id)),new Set(irreversible));
+});
+for (const [name,mutate,expected] of [
+  ['R10 irreversible read',c=>find(c,'catalog.products.read').irreversible=true,/R10 an irreversible capability cannot be a read/],
+  ['R1 non-boolean irreversible',c=>find(c,'orders.cancel').irreversible='yes',/R1 kill_switch, irreversible and review_required must be booleans/],
+  ['R1 missing irreversible',c=>delete find(c,'orders.cancel').irreversible,/R1 kill_switch, irreversible and review_required must be booleans/],
+  ['R11 decide body described with the v1 DecisionRef',c=>find(c,'governance.approval.decide').input.fields.decision.type='DecisionRef',/R11 input\.decision type differs/],
+]) test(`AC06 rejects ${name}`,()=>{const c=structuredClone(catalogue);mutate(c);assert.match(validate(c).join('\n'),expected);});
+test('the review capabilities follow ADR-0011 Q5',()=>{
+  const revise=find(catalogue,'governance.review_policy.revise'),preview=find(catalogue,'governance.approval.preview'),decide=find(catalogue,'governance.approval.decide');
+  assert.deepEqual([revise.effect,revise.executor,revise.review_required,revise.kill_switch,revise.irreversible,revise.eligible_principal],['control','human_only',true,false,false,'human_or_bounded_installation_with_explicit_capability_grant']);
+  assert.deepEqual([preview.effect,preview.executor,preview.review_required,preview.kill_switch,preview.irreversible,preview.eligible_principal],['read','human_only',false,false,false,'eligible_human_reviewer_with_explicit_decision_grant']);
+  assert.deepEqual(Object.fromEntries(Object.entries(revise.input.fields).map(([k,v])=>[k,v.type])),{proposalRef:'ProposalRef',approvalRef:'ApprovalRef'});
+  assert.deepEqual(Object.fromEntries(Object.entries(revise.output.fields).map(([k,v])=>[k,v.type])),{policyRef:'PolicyRef'});
+  assert.deepEqual(Object.fromEntries(Object.entries(preview.input.fields).map(([k,v])=>[k,v.type])),{proposalRef:'ProposalRef',selectedTargetIndexes:'TargetSelection'});
+  assert.deepEqual(Object.fromEntries(Object.entries(preview.output.fields).map(([k,v])=>[k,v.type])),{proposal:'Proposal'});
+  assert.deepEqual(Object.fromEntries(Object.entries(decide.input.fields).map(([k,v])=>[k,v.type])),{proposalRef:'ProposalRef',decision:'ReviewDecisionInput',expectedRevision:'Revision'});
+  assert.deepEqual([revise.implementation_tasks,revise.acceptance_cases],[['P11.T01'],['P01.A01','P11.A01']]);
+  assert.deepEqual([preview.implementation_tasks,preview.acceptance_cases],[['P11.T01','P14.T03'],['P01.A01','P11.A01','P14.A03']]);
+  for (const c of [revise,preview]) {
+    assert.deepEqual([c.domain,c.provider_dependency,c.hosts,c.retention_class,c.journey,c.activation],['Governance','D01',['standalone'],'R02','J13','blocked_until_contract_and_provider_qualified']);
+    for (const key of ['resource_scope','source_authority','failure_behavior','layout']) assert.equal(c[key],decide[key],key);
+  }
+});
+test('kill-switch walkthroughs are not blocked by entitlement (ADR-0011 Q8)',()=>{
+  const fixture=read('docs/acceptance/P01.A01-fixtures.json').find(f=>f.id==='P01.A01.human_pauses_campaigns_without_approval.standalone');
+  const request=structuredClone(fixture.request);
+  request.conditions.entitled=false;
+  assert.deepEqual(inspectAuthority(find(catalogue,'ads.campaign.pause'),request),{allowed:true,reasons:[]});
+  request.conditions.providerPermission=false;
+  assert.deepEqual(inspectAuthority(find(catalogue,'ads.campaign.pause'),request).reasons,['PROVIDER_PERMISSION_DENIED']);
+  const billed=read('docs/acceptance/P01.A01-fixtures.json').find(f=>f.id==='P01.A01.missing_entitlement_denied.standalone');
+  assert.deepEqual(inspectAuthority(find(catalogue,billed.capability),billed.request).reasons,['ENTITLEMENT_DENIED']);
 });

@@ -40,8 +40,8 @@ export function validateTasks(tasks) {
   return errors;
 }
 
-// Executor classes (ADR-0005 §2; P01.T02a §3). Rules R1-R9 and R11 replace the
-// v1 "consequential action without review gate" rule; R10 (irreversible) is PR-B.
+// Executor classes (ADR-0005 §2; P01.T02a §3). Rules R1-R11 replace the v1
+// "consequential action without review gate" rule; R10 (irreversible) is ADR-0011 Q4.
 export const EXECUTORS = Object.freeze(['human_only', 'agent_after_approval', 'agent_direct_write', 'agent_direct_read']);
 const consequential = ['external_write', 'spend', 'communication'];
 
@@ -72,7 +72,7 @@ export function validateCatalogue(catalogue, dependencies, tasks, types, bodies)
     if (JSON.stringify([...c.hosts].sort()) !== JSON.stringify(['standalone'])) fail('standalone surface required');
     if (!c.layout?.trim()) fail('width adaptation missing');
     if (!EXECUTORS.includes(c.executor)) fail('R1 invalid executor');
-    if (typeof c.kill_switch !== 'boolean' || typeof c.review_required !== 'boolean') fail('R1 kill_switch and review_required must be booleans');
+    if (typeof c.kill_switch !== 'boolean' || typeof c.review_required !== 'boolean' || typeof c.irreversible !== 'boolean') fail('R1 kill_switch, irreversible and review_required must be booleans');
     if (c.effect === 'read' && !['agent_direct_read','human_only'].includes(c.executor)) fail('R2 read must be agent_direct_read or human_only');
     if (['internal_write','billable_job'].includes(c.effect) && c.executor === 'agent_direct_read') fail('R3 write must not be agent_direct_read');
     if (consequential.includes(c.effect) && !['agent_after_approval','human_only'].includes(c.executor)) fail('R4 consequential action must be agent_after_approval or human_only');
@@ -81,6 +81,7 @@ export function validateCatalogue(catalogue, dependencies, tasks, types, bodies)
     if (c.kill_switch === true && (c.executor !== 'human_only' || c.review_required !== false || !['external_write','control'].includes(c.effect))) fail('R7 kill switch must be human_only, unreviewed and external_write or control');
     if (consequential.includes(c.effect) && c.review_required !== true && c.kill_switch !== true) fail('R8 consequential action without review gate must be a kill switch');
     if (c.eligible_principal?.startsWith('eligible_human_') && c.executor !== 'human_only') fail('R9 eligible human capability must be human_only');
+    if (c.irreversible === true && c.effect === 'read') fail('R10 an irreversible capability cannot be a read');
     if (c.activation !== 'blocked_until_contract_and_provider_qualified') fail('premature activation');
     if (!c.implementation_tasks?.length || c.implementation_tasks.some(id => !taskIds.has(id))) fail('unknown implementation task');
     if (!c.acceptance_cases?.includes('P01.A01') || c.acceptance_cases.some(id => !cases.has(id))) fail('unknown acceptance case');
@@ -131,7 +132,8 @@ export function inspectAuthority(c, request) {
   if (p.kind === 'agent' && !q.mandateCurrent) failures.push('MANDATE_EXPIRED');
   if (!q.providerQualified) failures.push('PROVIDER_NOT_QUALIFIED');
   if (!q.providerPermission) failures.push('PROVIDER_PERMISSION_DENIED');
-  if (!q.entitled) failures.push('ENTITLEMENT_DENIED');
+  // Kill switches are never blocked by entitlement or credit balance (ADR-0011 Q8); provider limits still apply.
+  if (!q.entitled && !c.kill_switch) failures.push('ENTITLEMENT_DENIED');
   if (!q.sourceAuthorized) failures.push('SOURCE_AUTHORITY_DENIED');
   if (!q.preconditionCurrent) failures.push('PRECONDITION_CONFLICT');
   // Kill switches never need an exact approval (ADR-0005).

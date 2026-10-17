@@ -1,13 +1,13 @@
 # Morrow status
 
-Updated 2026-10-17. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
+Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
 
 ## Active packets
 
 `main` is the trunk (ADR-0014). The integration branch `codex/morrow-foundation` and the P03.T04c/d overhaul (PR #2) are merged into it. Three packets are in progress, each on its own branch from the overhaul head; their PRs will target `main`:
 - **P04.T02a** deployable composition root (`claude/p04-t02a-composition-root`; ADR-0007, `docs/packets/P04.T02a.md`).
 - **P05.T01x Part A** forward migration 0012 that removes plan-number identifiers (`claude/p05-t01x-a-protocol-names`; `docs/packets/P05.T01x.md`). Committed locally, rebased on `main`: migration 0012, the `morrow-login-v1`, `morrow-self-logout-v1` and `morrow_id_` renames, and `lab:login-protocol-v1`. Awaiting its PR into `main`, hosted CI (including the Linux-only `pgwire` labs, which AC03 and AC04 still wait on) and Tier 2 review (`docs/acceptance/P05.md`).
-- **P01.T02a PR-A** executor classes and human-only kill switches (`claude/p01-t02a-a-executors`; ADR-0005, `docs/packets/P01.T02a.md`).
+- **P01.T02a.** PR-A (executor classes and human-only kill switches; ADR-0005) is merged into `main` as `d8ab463` (PR #6). PR-B (review policy, Proposal@2, Approval@2 and the pure review library; ADR-0011, AC11-AC26) is committed locally on `claude/p01-t02a-b-review-policy`; it awaits its PR, Tier 2 AI review plus `/security-review`, the full `npm run ci` and `smoke:scaffold`, and hosted CI (`docs/acceptance/P01.md`). v1.1 stays `candidate_owner_signoff` until the Tier 3 P01 contract sign-off.
 
 Delivered in P03.T04c/d:
 - Outputs go to `.artifacts/` and CI artifacts (ADR-0012).
@@ -41,7 +41,7 @@ None for local work. Hosted staging (M1) waits on the owner actions below.
 
 - **Sign-offs:**
   - Plan R1 (Tier 3).
-  - The ADR-0005 §2 executor-class assignments. The quoted approval covers §1 (kill switches) and §3 (self-approval) only.
+  - P01 contract sign-off (Tier 3), which freezes contract v1.1, after P05.T01z settles how a disconnect's KillSwitchRecord names its target (packet Q11). The ADR-0005 §2 executor classes were confirmed on 2026-10-18 (Q10).
   - Approve or reject ADR-0008, the Shopify connector runtime (Proposed).
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check (not an approving review) before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.

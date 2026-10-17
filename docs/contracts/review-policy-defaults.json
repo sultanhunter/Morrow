@@ -1,0 +1,62 @@
+{
+  "contract_version": "morrow.contracts.v1.1",
+  "decision": "ADR-0011 Q3 (defaults) and Q9 (risk class)",
+  "policy": "riskClassByEffect is the fixed effect-to-risk table: a proposal's risk equals the entry for its capability's catalogue effect, with no per-capability override unless an ADR adds one. rules is validated as core-v1.1 ReviewPolicyRules; P11.T01 seeds each workspace's ReviewPolicy revision 1 from it.",
+  "riskClassByEffect": {
+    "read": "internal",
+    "internal_write": "internal",
+    "billable_job": "internal",
+    "external_write": "external",
+    "spend": "financial",
+    "communication": "communication",
+    "control": "access_change"
+  },
+  "rules": {
+    "internal": {
+      "requiredApprovals": 1,
+      "selfApproval": "allowed",
+      "pendingExpirySeconds": 604800,
+      "approvedValiditySeconds": 86400,
+      "eligibleReviewerPrincipalIds": null
+    },
+    "external": {
+      "requiredApprovals": 1,
+      "selfApproval": "allowed",
+      "pendingExpirySeconds": 259200,
+      "approvedValiditySeconds": 86400,
+      "eligibleReviewerPrincipalIds": null
+    },
+    "communication": {
+      "requiredApprovals": 1,
+      "selfApproval": "solo_owner_typed_confirmation",
+      "pendingExpirySeconds": 86400,
+      "approvedValiditySeconds": 3600,
+      "eligibleReviewerPrincipalIds": null
+    },
+    "financial": {
+      "requiredApprovals": 1,
+      "selfApproval": "solo_owner_typed_confirmation",
+      "pendingExpirySeconds": 86400,
+      "approvedValiditySeconds": 3600,
+      "eligibleReviewerPrincipalIds": null
+    },
+    "access_change": {
+      "requiredApprovals": 1,
+      "selfApproval": "solo_owner_typed_confirmation",
+      "pendingExpirySeconds": 86400,
+      "approvedValiditySeconds": 3600,
+      "eligibleReviewerPrincipalIds": null
+    },
+    "irreversible": {
+      "requiredApprovals": 1,
+      "selfApproval": "solo_owner_typed_confirmation",
+      "pendingExpirySeconds": 86400,
+      "approvedValiditySeconds": 3600,
+      "eligibleReviewerPrincipalIds": null
+    },
+    "soloOwner": {
+      "coolDownSeconds": 300,
+      "quietPeriodSeconds": 86400
+    }
+  }
+}

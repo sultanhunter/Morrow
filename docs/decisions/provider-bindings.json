@@ -2605,6 +2605,61 @@
       "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
     },
     {
+      "capability": "governance.approval.preview",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.approval.preview"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P11.T01",
+        "P14.T03"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "governance.review_policy.revise",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.review_policy.revise"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P11.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
       "capability": "governance.usage.read",
       "provider": "morrow",
       "mode": "internal",

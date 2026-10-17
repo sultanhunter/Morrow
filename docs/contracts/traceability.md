@@ -90,6 +90,8 @@ Contract coverage only. Real provider evidence, executable authorization and mer
 | governance.connection.connect | J13 | P05.T01, P17.T01 | P01.A01, P05.A01 | D01 |
 | governance.connection.disconnect | J13 | P05.T01, P17.T01 | P01.A01, P05.A01 | D01 |
 | governance.approval.decide | J13 | P05.T01, P17.T01 | P01.A01, P05.A01 | D01 |
+| governance.approval.preview | J13 | P11.T01, P14.T03 | P01.A01, P11.A01, P14.A03 | D01 |
+| governance.review_policy.revise | J13 | P11.T01 | P01.A01, P11.A01 | D01 |
 | governance.usage.read | J13 | P05.T01, P17.T01 | P01.A01, P05.A01 | D01 |
 | governance.budget.revise | J13 | P05.T01, P17.T01 | P01.A01, P05.A01 | D01 |
 | governance.audit.export | J13 | P05.T01, P17.T01 | P01.A01, P05.A01 | D01 |

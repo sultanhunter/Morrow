@@ -654,7 +654,7 @@ Send or schedule an approved channel campaign. Owner: Morrow platform owner. Eff
 
 Input: proposalRef: ProposalRef; approvalRef: ApprovalRef; consentEvidence: EvidenceList. Output: operationId: Id; deliveryReceipt: EvidenceRef.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant lifecycle.campaign.send. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: channel, recipients, content, schedule. Executor: agent_after_approval. Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant lifecycle.campaign.send. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: channel, recipients, content, schedule. Executor: agent_after_approval; irreversible (ADR-0011 Q4: the irreversible review rule is merged in). Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
 
 Retention: R03. Verification: Consent suppression recipient scope and provider acceptance are verified. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
@@ -704,7 +704,7 @@ Send an exact approved customer reply. Owner: Morrow platform owner. Effect: com
 
 Input: proposalRef: ProposalRef; approvalRef: ApprovalRef. Output: operationId: Id; deliveryReceipt: EvidenceRef.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant support.reply.send. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: recipient, channel, reply body. Executor: agent_after_approval. Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant support.reply.send. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: recipient, channel, reply body. Executor: agent_after_approval; irreversible (ADR-0011 Q4: the irreversible review rule is merged in). Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
 
 Retention: R03. Verification: Provider message identity verifies the exact approved recipient and body. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
@@ -766,7 +766,7 @@ Cancel an exact eligible order. Owner: Morrow platform owner. Effect: external_w
 
 Input: proposalRef: ProposalRef; approvalRef: ApprovalRef. Output: operationId: Id; readback: EvidenceRef.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant orders.cancel. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: cancellation fields and declared consequences. Executor: agent_after_approval. Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant orders.cancel. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: cancellation fields and declared consequences. Executor: agent_after_approval; irreversible (ADR-0011 Q4: the irreversible review rule is merged in). Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
 
 Retention: R03. Verification: Financial and restock consequences are separately bound in the proposal. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
@@ -778,7 +778,7 @@ Create an approved eligible fulfillment. Owner: Morrow platform owner. Effect: e
 
 Input: proposalRef: ProposalRef; approvalRef: ApprovalRef. Output: operationId: Id; readback: EvidenceRef.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant orders.fulfillment.create. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: fulfillment order, line quantities, tracking. Executor: agent_after_approval. Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant orders.fulfillment.create. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: fulfillment order, line quantities, tracking. Executor: agent_after_approval; irreversible (ADR-0011 Q4: the irreversible review rule is merged in). Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
 
 Retention: R03. Verification: Assigned fulfillment service and remaining quantities are validated. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
@@ -814,7 +814,7 @@ Issue a specifically approved bounded refund. Owner: Morrow platform owner. Effe
 
 Input: proposalRef: ProposalRef; approvalRef: ApprovalRef; budget: BudgetRef. Output: operationId: Id; transactionEvidence: EvidenceRef.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant orders.refund.create. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: refund amount, currency, lines, shipping, restock consequences. Executor: agent_after_approval. Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant orders.refund.create. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: refund amount, currency, lines, shipping, restock consequences. Executor: agent_after_approval; irreversible (ADR-0011 Q4: the irreversible review rule is merged in). Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
 
 Retention: R04. Verification: Refund record and transaction status both reconcile without duplicate payment. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
@@ -1060,13 +1060,37 @@ Trace: J13; P05.T01, P17.T01; P01.A01, P05.A01. Complete domain workflow in stan
 
 Approve or reject an immutable proposal. Owner: Morrow platform owner. Effect: control. Provider: morrow (D01, Design recorded).
 
-Input: proposalRef: ProposalRef; decision: DecisionRef; expectedRevision: Revision. Output: approvalId: Id; proposalDigest: string.
+Input: proposalRef: ProposalRef; decision: ReviewDecisionInput; expectedRevision: Revision. Output: approvalId: Id; proposalDigest: string.
 
 Authority: eligible_human_reviewer_with_explicit_decision_grant; explicit grant governance.approval.decide. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: exact resources, fields, parameters, cost, expiry. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
 
 Retention: R02. Verification: Eligible reviewer binds the decision to one exact proposal digest. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
 Trace: J13; P05.T01, P17.T01; P01.A01, P05.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### governance.approval.preview
+
+Preview the exact proposal a decision binds. Owner: Morrow platform owner. Effect: read. Provider: morrow (D01, Design recorded).
+
+Input: proposalRef: ProposalRef; selectedTargetIndexes: TargetSelection. Output: proposal: Proposal.
+
+Authority: eligible_human_reviewer_with_explicit_decision_grant; explicit grant governance.approval.preview. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: exact resources, fields, parameters, cost, expiry. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: Derived digest equals the one the decision binds. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J13; P11.T01, P14.T03; P01.A01, P11.A01, P14.A03. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### governance.review_policy.revise
+
+Approve and apply a workspace review policy revision. Owner: Morrow platform owner. Effect: control. Provider: morrow (D01, Design recorded).
+
+Input: proposalRef: ProposalRef; approvalRef: ApprovalRef. Output: policyRef: PolicyRef.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant governance.review_policy.revise. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: review rules, quorum, expiry, self-approval. Executor: human_only. Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
+
+Retention: R02. Verification: A new revision invalidates approvals bound to the old one. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J13; P11.T01; P01.A01, P11.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
 
 ### governance.usage.read
 
@@ -1122,7 +1146,7 @@ Execute a verified bounded deletion request. Owner: Morrow platform owner. Effec
 
 Input: subjectRef: SubjectRef; verifiedRequest: ProofRef; approvalRef: ApprovalRef. Output: deletionReceipt: EvidenceRef; retainedBasis: EvidenceList.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant governance.privacy.erase. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: subject records and permitted derived content. Executor: human_only. Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant governance.privacy.erase. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: subject records and permitted derived content. Executor: human_only; irreversible (ADR-0011 Q4: the irreversible review rule is merged in). Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
 
 Retention: R02. Verification: Deletion replay covers projections artifacts and restored data with explicit retention exceptions. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
@@ -1220,7 +1244,7 @@ Remove an installation and revoke its authority. Owner: Morrow platform owner. E
 
 Input: installationId: Id; expectedRevision: Revision. Output: receipt: EvidenceRef; retentionPlan: EvidenceRef.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant agents.installation.uninstall. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: installation authority, routines. Executor: human_only. Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant agents.installation.uninstall. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: installation authority, routines. Executor: human_only; irreversible (ADR-0011 Q4: the irreversible review rule is merged in). Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
 
 Retention: R02. Verification: Uninstall does not reverse published changes or silently delete retained work. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
