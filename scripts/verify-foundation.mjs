@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { root, read, sha, validateCatalogue, inspectAuthority } from './foundation.mjs';
+import { root, read, sha, validateCatalogue, validateTasks, inspectAuthority, planInventory } from './foundation.mjs';
 import { renderDocuments } from './render-catalogue.mjs';
 import { writeArtifact } from './artifacts.mjs';
 
@@ -8,12 +8,12 @@ const catalogue = read('docs/contracts/capabilities.json');
 const deps = read('docs/decisions/dependencies.json');
 const tasks = read('docs/progress/tasks.json');
 const types = read('docs/contracts/schema-types.json');
-const errors = validateCatalogue(catalogue,deps,tasks,types);
+const errors = [...validateCatalogue(catalogue,deps,tasks,types), ...validateTasks(tasks)];
 const readText = path => readFileSync(resolve(root,path),'utf8');
 const plan = readText('docs/plan/build-plan.md');
-const ids = pattern => [...new Set(plan.match(pattern) ?? [])];
-const expectedTasks = ids(/P\d{2}\.T\d{2}(?![a-z\d])/g);
-const expectedCases = ids(/P\d{2}\.A\d{2}(?![a-z\d])/g);
+// Defined parent tasks and acceptance cases, in plan order, must equal tasks.json in order.
+// npm run plan:check owns the rest of the plan's structure (each ID defined once, mentions defined).
+const { tasks: expectedTasks, cases: expectedCases } = planInventory(plan);
 if (JSON.stringify(tasks.tasks.map(t=>t.id)) !== JSON.stringify(expectedTasks)) errors.push('task inventory drift');
 if (JSON.stringify(tasks.acceptance_ids) !== JSON.stringify(expectedCases)) errors.push('acceptance inventory drift');
 if (new Set(tasks.tasks.map(t=>t.id.slice(0,3))).size !== 18) errors.push('package count drift');

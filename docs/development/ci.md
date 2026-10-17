@@ -6,7 +6,7 @@
 
 | Job | What it runs | Local command | Timeout |
 | --- | --- | --- | --- |
-| `static` | Format check, typecheck, `verify` (contract and validator drift, import boundaries, migration checksums, repository secret scan), build, scaffold denial guards, the lab example and the infrastructure synth/permissions/readiness checks | `npm run ci:static` | 15 min |
+| `static` | Format check, typecheck, `verify` (plan check, task inventory, contract and validator drift, import boundaries, migration checksums, repository secret scan), build, scaffold denial guards, the lab example and the infrastructure synth/permissions/readiness checks | `npm run ci:static` | 15 min |
 | `unit` (shards 1 and 2) | `tests/*.test.mjs`, split by file with `--test-shard`. Each shard runs its files one at a time. | `TEST_SHARD=1/2 npm run test:shard` | 15 min |
 | `workers-api` | `lab:workspace-api-workers`, the longest single lab | `npm run lab:workspace-api-workers` | 10 min |
 | `workers` | The other 17 Miniflare/workerd labs | `npm run lab:group:workers` | 10 min |

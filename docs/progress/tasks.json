@@ -2,23 +2,23 @@
   "tasks": [
     {
       "id": "P01.T01",
-      "status": "Verified"
+      "status": "Self-reviewed"
     },
     {
       "id": "P01.T02",
-      "status": "Verified"
+      "status": "Self-reviewed"
     },
     {
       "id": "P01.T03",
-      "status": "Verified"
+      "status": "Self-reviewed"
     },
     {
       "id": "P01.T04",
-      "status": "Verified"
+      "status": "Self-reviewed"
     },
     {
       "id": "P02.T01",
-      "status": "Verified"
+      "status": "Self-reviewed"
     },
     {
       "id": "P02.T02",
@@ -34,19 +34,19 @@
     },
     {
       "id": "P03.T01",
-      "status": "Verified"
+      "status": "Self-reviewed"
     },
     {
       "id": "P03.T02",
-      "status": "Verified"
+      "status": "Self-reviewed"
     },
     {
       "id": "P03.T03",
-      "status": "Verified"
+      "status": "Self-reviewed"
     },
     {
       "id": "P03.T04",
-      "status": "Verified"
+      "status": "Self-reviewed"
     },
     {
       "id": "P04.T01",
@@ -69,11 +69,11 @@
       "status": "In progress"
     },
     {
-      "id": "P05.T03",
+      "id": "P05.T02",
       "status": "In progress"
     },
     {
-      "id": "P05.T02",
+      "id": "P05.T03",
       "status": "In progress"
     },
     {
