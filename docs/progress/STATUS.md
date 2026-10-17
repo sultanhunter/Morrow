@@ -5,7 +5,7 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 ## Active packets
 
 `main` is the trunk (ADR-0014). The integration branch `codex/morrow-foundation` and the P03.T04c/d overhaul (PR #2) are merged into it. P05.T01x Part A (PR #4: migration 0012, the `morrow-login-v1`, `morrow-self-logout-v1` and `morrow_id_` renames, `lab:login-protocol-v1`) and P01.T02a PR-A (PR #6: executor classes and human-only kill switches; ADR-0005) are merged into `main`. In progress:
-- **P04.T02a** deployable composition root (`claude/p04-t02a-composition-root`, PR #5; ADR-0007, `docs/packets/P04.T02a.md`). `main` merged on 2026-10-18; its tests and labs now use the 0012 identifiers and apply migrations 0001–0012 (packet "Implementation notes: migration 0012"). Awaiting a green hosted run (including `pgwire`) and Tier 2 review.
+- **P04.T02a** deployable composition root (`claude/p04-t02a-composition-root`, PR #5; ADR-0007, `docs/packets/P04.T02a.md`). `main` merged on 2026-10-18; its tests and labs now use the 0012 identifiers and apply migrations 0001–0012 (packet "Implementation notes: migration 0012"). Hosted run 39069081910 passed all 10 jobs on `5a3c66b` (`pgwire`: `lab:edge-postgresql` 7 cases, 50 checks). Tier 2 review findings are applied; the new head needs its own green run before merge.
 
 Delivered in P03.T04c/d:
 - Outputs go to `.artifacts/` and CI artifacts (ADR-0012).

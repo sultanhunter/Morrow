@@ -251,6 +251,10 @@ test("AC14: a retired or unknown login protocol disables sessions only", async (
     const capabilities = await brokerCapabilities(env);
     assert.equal(capabilities.sessions, null);
     assert.notEqual(capabilities.database, null);
+    const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
+    assert.ok(
+      JSON.parse(await brokerNeonLease(env, neonLeaseNamespace(parsed, "morrow_api"))).password,
+    );
   }
 });
 
