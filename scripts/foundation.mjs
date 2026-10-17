@@ -40,8 +40,16 @@ export function validateTasks(tasks) {
   return errors;
 }
 
-export function validateCatalogue(catalogue, dependencies, tasks, types) {
+// Executor classes (ADR-0005 §2; P01.T02a §3). Rules R1-R9 and R11 replace the
+// v1 "consequential action without review gate" rule; R10 (irreversible) is PR-B.
+export const EXECUTORS = Object.freeze(['human_only', 'agent_after_approval', 'agent_direct_write', 'agent_direct_read']);
+const consequential = ['external_write', 'spend', 'communication'];
+
+// `bodies` maps "<id>.input"/"<id>.output" to the effective body schema
+// (contract-sources.mjs effectiveBodies); `types` is schema-types.json.
+export function validateCatalogue(catalogue, dependencies, tasks, types, bodies) {
   const errors = [];
+  if (catalogue.schema_version !== 2) errors.push('catalogue schema_version must be 2');
   const ids = new Set();
   const domains = new Set();
   const deps = new Set(dependencies.map(d => d.id));
@@ -63,7 +71,16 @@ export function validateCatalogue(catalogue, dependencies, tasks, types) {
     if (!c.field_scope?.length || c.field_scope.includes('*')) fail('missing or unrestricted fields');
     if (JSON.stringify([...c.hosts].sort()) !== JSON.stringify(['standalone'])) fail('standalone surface required');
     if (!c.layout?.trim()) fail('width adaptation missing');
-    if (['external_write','spend','communication'].includes(c.effect) && c.review_required !== true) fail('consequential action without review gate');
+    if (!EXECUTORS.includes(c.executor)) fail('R1 invalid executor');
+    if (typeof c.kill_switch !== 'boolean' || typeof c.review_required !== 'boolean') fail('R1 kill_switch and review_required must be booleans');
+    if (c.effect === 'read' && !['agent_direct_read','human_only'].includes(c.executor)) fail('R2 read must be agent_direct_read or human_only');
+    if (['internal_write','billable_job'].includes(c.effect) && c.executor === 'agent_direct_read') fail('R3 write must not be agent_direct_read');
+    if (consequential.includes(c.effect) && !['agent_after_approval','human_only'].includes(c.executor)) fail('R4 consequential action must be agent_after_approval or human_only');
+    if (c.effect === 'control' && c.executor !== 'human_only') fail('R5 control must be human_only');
+    if (c.executor === 'agent_after_approval' && c.review_required !== true) fail('R6 agent_after_approval without review gate');
+    if (c.kill_switch === true && (c.executor !== 'human_only' || c.review_required !== false || !['external_write','control'].includes(c.effect))) fail('R7 kill switch must be human_only, unreviewed and external_write or control');
+    if (consequential.includes(c.effect) && c.review_required !== true && c.kill_switch !== true) fail('R8 consequential action without review gate must be a kill switch');
+    if (c.eligible_principal?.startsWith('eligible_human_') && c.executor !== 'human_only') fail('R9 eligible human capability must be human_only');
     if (c.activation !== 'blocked_until_contract_and_provider_qualified') fail('premature activation');
     if (!c.implementation_tasks?.length || c.implementation_tasks.some(id => !taskIds.has(id))) fail('unknown implementation task');
     if (!c.acceptance_cases?.includes('P01.A01') || c.acceptance_cases.some(id => !cases.has(id))) fail('unknown acceptance case');
@@ -72,6 +89,11 @@ export function validateCatalogue(catalogue, dependencies, tasks, types) {
       for (const [field, descriptor] of Object.entries(c[shape]?.fields ?? {})) {
         if (!types.types[descriptor.type] || descriptor.required !== true || descriptor.nullable !== false) fail(`invalid ${shape}.${field}`);
       }
+      // R11: the catalogue describes the effective (current) body exactly.
+      const body = bodies[`${c.id}.${shape}`];
+      const fields = Object.keys(c[shape]?.fields ?? {}).sort();
+      if (!body || JSON.stringify(Object.keys(body.properties ?? {}).sort()) !== JSON.stringify(fields) || JSON.stringify([...(body.required ?? [])].sort()) !== JSON.stringify(fields)) fail(`R11 ${shape} fields differ from the effective body`);
+      else for (const [field, descriptor] of Object.entries(c[shape].fields)) if (types.types[descriptor.type]?.schema !== body.properties[field].$ref) fail(`R11 ${shape}.${field} type differs from the effective body`);
     }
   }
   for (const domain of catalogue.domain_names) if (!domains.has(domain)) errors.push(`missing launch domain: ${domain}`);
@@ -84,6 +106,8 @@ export function validateCatalogue(catalogue, dependencies, tasks, types) {
 }
 
 // Synthetic contract walkthrough only. It is not a production policy engine.
+// A walkthrough models execution of the capability; agents may only propose
+// human_only capabilities, which the agent kernel tests cover.
 // Each context is a fixture representing facts the backend must later resolve.
 export function inspectAuthority(c, request) {
   const failures = [];
@@ -97,6 +121,8 @@ export function inspectAuthority(c, request) {
   if (!p.accounts.includes(target.account)) failures.push('ACCOUNT_DENIED');
   if (target.fields.some(f => !c.field_scope.includes(f) || !p.fields.includes(f))) failures.push('FIELD_DENIED');
   if (c.eligible_principal.startsWith('eligible_human') && p.kind !== 'human') failures.push('HUMAN_REVIEWER_REQUIRED');
+  if (c.executor === 'human_only' && p.kind !== 'human') failures.push('HUMAN_EXECUTOR_REQUIRED');
+  if (c.kill_switch && !(typeof q.killSwitchReason === 'string' && /\S/.test(q.killSwitchReason))) failures.push('KILL_SWITCH_REASON_REQUIRED');
   if (c.eligible_principal.startsWith('operator_') && !p.operator) failures.push('OPERATOR_AUTHORITY_REQUIRED');
   if (origin) {
     if (origin.revoked || origin.tenant !== target.tenant || origin.workspace !== target.workspace || !origin.grants.includes(c.id) || !origin.stores.includes(target.store) || !origin.resources.includes(target.resource) || !origin.accounts.includes(target.account) || target.fields.some(f => !origin.fields.includes(f))) failures.push('ORIGIN_SCOPE_DENIED');
@@ -108,7 +134,8 @@ export function inspectAuthority(c, request) {
   if (!q.entitled) failures.push('ENTITLEMENT_DENIED');
   if (!q.sourceAuthorized) failures.push('SOURCE_AUTHORITY_DENIED');
   if (!q.preconditionCurrent) failures.push('PRECONDITION_CONFLICT');
-  if (c.review_required && (q.approvedDigest !== q.proposalDigest || !q.approvalCurrent || !q.reviewerEligible)) failures.push('EXACT_APPROVAL_REQUIRED');
+  // Kill switches never need an exact approval (ADR-0005).
+  if (c.review_required && !c.kill_switch && (q.approvedDigest !== q.proposalDigest || !q.approvalCurrent || !q.reviewerEligible)) failures.push('EXACT_APPROVAL_REQUIRED');
   if (['spend','billable_job'].includes(c.effect) && (!q.budgetReserved || BigInt(q.costMinor) > BigInt(q.ceilingMinor) || q.costCurrency !== q.ceilingCurrency)) failures.push('BUDGET_DENIED');
   return {allowed: failures.length === 0, reasons: failures};
 }

@@ -4,6 +4,8 @@ import {read} from '../scripts/foundation.mjs';
 import {digest,proposalDigest,validators,bodyValidators,checkFixture} from '../scripts/contract-checks.mjs';
 
 for (const f of read('docs/contracts/fixtures/P01.A02.json')) test(f.id,()=>assert.equal(checkFixture(f),true));
+// Contract v1.1 (P01.T02a): exact-selector schema cases for the kill-switch types and bodies.
+for (const f of read('docs/contracts/fixtures/P01.T02a.json')) test(f.id,()=>assert.equal(checkFixture(f),true));
 test('canonical digest ignores JSON property order',()=>assert.equal(digest({a:1,b:2}),digest({b:2,a:1})));
 test('canonical digest preserves array ordering',()=>assert.notEqual(digest(['product-a','product-b']),digest(['product-b','product-a'])));
 test('approved parameters and costs change proposal digest',()=>{

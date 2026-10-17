@@ -1,85 +1,132 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, realpathSync } from "node:fs";
+import { resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import standaloneCode from "ajv/dist/standalone/index.js";
 import { build } from "esbuild";
+import {
+  contractVersion,
+  readSchemaSources,
+  repositoryRoot,
+  schemasByKind,
+  currentDefinitionSelectors,
+  capabilityBodySelectors,
+} from "./contract-sources.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
-const sourcePaths = ["core", "capabilities", "billing"].map(
-  (name) => `docs/contracts/schemas/v1/${name}.schema.json`,
-);
-const inputs = sourcePaths.map((path) => readFileSync(path, "utf8"));
-const schemas = inputs.map((text) => JSON.parse(text));
-const ajv = new Ajv2020({
-  strict: true,
-  allErrors: true,
-  validateFormats: true,
-  coerceTypes: false,
-  useDefaults: false,
-  removeAdditional: false,
-  code: { source: true, esm: true },
-});
-addFormats(ajv);
-for (const schema of schemas) ajv.addSchema(schema);
-const exports = {},
-  selectors = {};
-for (let index = 0; index < schemas.length; index++) {
-  const schema = schemas[index];
-  const kind = ["core", "capabilities", "billing"][index];
-  for (const definition of Object.keys(schema.$defs).sort()) {
-    const name = `v${Object.keys(exports).length}`;
-    const ref = `${schema.$id}#/$defs/${definition}`;
-    ajv.getSchema(ref);
-    exports[name] = ref;
-    selectors[`${kind}:${definition}`] = name;
-  }
-}
-const code =
-  standaloneCode(ajv, exports) +
-  "\nexport const validators = Object.freeze({\n" +
-  Object.entries(selectors)
-    .map(([selector, name]) => `${JSON.stringify(selector)}:${name}`)
-    .join(",\n") +
+export const validatorsPath = "packages/contracts/src/generated/runtime-validators.mjs";
+export const validatorsManifestPath = "packages/contracts/src/generated/runtime-validators.json";
+export const validatorsTypesPath = "packages/contracts/src/generated/runtime-validators.d.mts";
+const frozen = (name, entries) =>
+  `\nexport const ${name} = Object.freeze({\n` +
+  entries.map(([key, value]) => `${JSON.stringify(key)}:${value}`).join(",\n") +
   "\n});\n";
-const bundled = await build({
-  stdin: { contents: code, sourcefile: "morrow-runtime-validators.js", resolveDir: process.cwd() },
-  bundle: true,
-  platform: "browser",
-  format: "esm",
-  target: "es2022",
-  write: false,
-  minify: true,
-  legalComments: "none",
-});
-const generated =
-  "// Generated from canonical schemas by scripts/generate-runtime-validators.mjs; do not edit.\n" +
-  bundled.outputFiles[0].text;
-const path = "packages/contracts/src/generated/runtime-validators.mjs";
-const manifestPath = "packages/contracts/src/generated/runtime-validators.json";
-const manifest =
-  JSON.stringify(
-    {
-      schema_version: 1,
-      definitions: Object.keys(selectors).length,
-      inputs: Object.fromEntries(sourcePaths.map((path, i) => [path, hash(inputs[i])])),
-      compiler: { ajv: "8.20.0", formats: "3.0.1", esbuild: "0.25.12" },
-      output: { path, sha256: hash(generated) },
-      scope: "Ahead-of-time validators only; no runtime schema compilation or hosted qualification",
+
+// Pure: compiles every source with one Ajv instance ahead of time and returns
+// the generated files. No schema is compiled at runtime.
+export async function generateRuntimeValidators(root = repositoryRoot) {
+  const sources = readSchemaSources(root);
+  const byKind = schemasByKind(sources);
+  const catalogue = JSON.parse(
+    readFileSync(resolve(root, "docs/contracts/capabilities.json"), "utf8"),
+  );
+  const ajv = new Ajv2020({
+    strict: true,
+    allErrors: true,
+    validateFormats: true,
+    coerceTypes: false,
+    useDefaults: false,
+    removeAdditional: false,
+    code: { source: true, esm: true },
+  });
+  addFormats(ajv);
+  for (const source of sources) ajv.addSchema(source.schema);
+  const exports = {},
+    selectors = {};
+  for (const source of sources)
+    for (const definition of Object.keys(source.schema.$defs).sort()) {
+      const name = `v${Object.keys(exports).length}`;
+      const ref = `${source.schema.$id}#/$defs/${definition}`;
+      ajv.getSchema(ref);
+      exports[name] = ref;
+      selectors[`${source.kind}:${definition}`] = name;
+    }
+  const current = currentDefinitionSelectors(byKind);
+  const bodies = capabilityBodySelectors(
+    byKind,
+    catalogue.capabilities.map((c) => c.id),
+  );
+  const code =
+    standaloneCode(ajv, exports) +
+    frozen("validators", Object.entries(selectors)) +
+    frozen(
+      "currentDefinitionSelectors",
+      Object.entries(current).map(([name, selector]) => [name, JSON.stringify(selector)]),
+    ) +
+    frozen(
+      "capabilityBodySelectors",
+      Object.entries(bodies).map(([name, selector]) => [name, JSON.stringify(selector)]),
+    );
+  const bundled = await build({
+    stdin: { contents: code, sourcefile: "morrow-runtime-validators.js", resolveDir: root },
+    bundle: true,
+    platform: "browser",
+    format: "esm",
+    target: "es2022",
+    write: false,
+    minify: true,
+    legalComments: "none",
+  });
+  const generated =
+    "// Generated from canonical schemas by scripts/generate-runtime-validators.mjs; do not edit.\n" +
+    bundled.outputFiles[0].text;
+  const types =
+    "// Generated by scripts/generate-runtime-validators.mjs; do not edit.\n" +
+    "// Types for the reproducible, ahead-of-time generated ESM artifact.\n" +
+    "/** Every exact selector, `<kind>:<name>`, including replaced v1 shapes kept for history. */\n" +
+    "export const validators: Readonly<Record<string, (value: unknown) => boolean>>;\n" +
+    "/** Effective definition name -> exact selector (newest core layer that defines it). */\n" +
+    "export const currentDefinitionSelectors: Readonly<Record<string, string>>;\n" +
+    "/** Effective `<capability id>.<input|output>` -> exact body selector. */\n" +
+    "export const capabilityBodySelectors: Readonly<Record<string, string>>;\n";
+  const countByKind = Object.fromEntries(
+    sources.map((s) => [s.kind, Object.keys(s.schema.$defs).length]),
+  );
+  const manifest = {
+    schema_version: 2,
+    contract_version: contractVersion,
+    definitions: Object.keys(selectors).length,
+    definitions_by_source: countByKind,
+    current_definitions: Object.keys(current).length,
+    capability_bodies: Object.keys(bodies).length,
+    inputs: Object.fromEntries(sources.map((s) => [s.path, hash(s.text)])),
+    compiler: { ajv: "8.20.0", formats: "3.0.1", esbuild: "0.25.12" },
+    output: { path: validatorsPath, sha256: hash(generated) },
+    scope: "Ahead-of-time validators only; no runtime schema compilation or hosted qualification",
+  };
+  return {
+    files: {
+      [validatorsPath]: generated,
+      [validatorsManifestPath]: JSON.stringify(manifest, null, 2) + "\n",
+      [validatorsTypesPath]: types,
     },
-    null,
-    2,
-  ) + "\n";
-if (process.argv.includes("--check")) {
-  if (readFileSync(path, "utf8") !== generated || readFileSync(manifestPath, "utf8") !== manifest)
-    throw Error("RUNTIME_VALIDATOR_DRIFT");
-  console.log(
-    `PASS: ${Object.keys(selectors).length} unchanged-schema validators reproduce exactly.`,
-  );
-} else {
-  writeFileSync(path, generated);
-  writeFileSync(manifestPath, manifest);
-  console.log(
-    `Generated ${Object.keys(selectors).length} validators; ${Buffer.byteLength(generated)} bytes.`,
-  );
+    manifest,
+    bytes: Buffer.byteLength(generated),
+  };
+}
+
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const { files, manifest, bytes } = await generateRuntimeValidators();
+  if (process.argv.includes("--check")) {
+    for (const [path, text] of Object.entries(files))
+      if (readFileSync(resolve(repositoryRoot, path), "utf8") !== text)
+        throw Error("RUNTIME_VALIDATOR_DRIFT");
+    console.log(`PASS: ${manifest.definitions} unchanged-schema validators reproduce exactly.`);
+  } else {
+    for (const [path, text] of Object.entries(files))
+      writeFileSync(resolve(repositoryRoot, path), text);
+    console.log(`Generated ${manifest.definitions} validators; ${bytes} bytes.`);
+  }
 }

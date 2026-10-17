@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { definitionLayers, bodyLayers } from "./contract-sources.mjs";
 const root = resolve(".");
 // Source organization checks for reviewed literal specifiers and recognized loaders.
 // This is not hermetic: aliases, custom module resolution and transitive code need
@@ -194,4 +195,51 @@ export function inspectCompatibility(baseline, schemas) {
         !schemas[path] || createHash("sha256").update(schemas[path]).digest("hex") !== digest,
     )
     .map(([path]) => "UNREVIEWED_SCHEMA_DELTA:" + path);
+}
+// Every schema file under docs/contracts/schemas must be hashed in the
+// baseline; otherwise a new file escapes inspectCompatibility.
+export function inspectBaselineCoverage(baseline, schemaPaths) {
+  return schemaPaths
+    .filter(
+      (path) =>
+        /^docs\/contracts\/schemas\/.+\.schema\.json$/.test(path) &&
+        !Object.hasOwn(baseline.schemas, path),
+    )
+    .map((path) => "UNBASELINED_SCHEMA:" + path);
+}
+// A newest-layer definition that reuses an older name, or a newest-layer
+// capability body that overrides an older body, is a replacement: it must be
+// declared in changes.json, and every declaration must name a real replacement.
+// `schemas` maps source kinds (contract-sources.mjs) to parsed schemas.
+export function inspectDeclaredReplacements(changes, schemas) {
+  const layers = { definition: definitionLayers, capability_body: bodyLayers };
+  const replaced = (kind, name) =>
+    layers[kind].slice(1).find((older) => Object.hasOwn(schemas[older].$defs, name));
+  const errors = [],
+    declared = new Set();
+  const entries = Array.isArray(changes?.changes) ? changes.changes : [];
+  if (!Array.isArray(changes?.changes)) errors.push("UNDECLARED_REPLACEMENT:changes.json");
+  for (const entry of entries) {
+    const name = typeof entry?.name === "string" ? entry.name : JSON.stringify(entry?.name);
+    const valid =
+      entry !== null &&
+      typeof entry === "object" &&
+      Object.keys(entry).sort().join() === "adr,kind,name,reason,replaces" &&
+      Object.hasOwn(layers, entry.kind) &&
+      typeof entry.name === "string" &&
+      Object.hasOwn(schemas[layers[entry.kind][0]].$defs, entry.name) &&
+      replaced(entry.kind, entry.name) !== undefined &&
+      entry.replaces === `${replaced(entry.kind, entry.name)}:${entry.name}` &&
+      typeof entry.reason === "string" &&
+      entry.reason.trim() !== "" &&
+      /^ADR-\d{4}$/.test(entry.adr) &&
+      !declared.has(entry.kind + ":" + entry.name);
+    if (valid) declared.add(entry.kind + ":" + entry.name);
+    else errors.push("UNDECLARED_REPLACEMENT:" + name);
+  }
+  for (const [kind, [newest]] of Object.entries(layers))
+    for (const name of Object.keys(schemas[newest].$defs))
+      if (replaced(kind, name) && !declared.has(kind + ":" + name))
+        errors.push("UNDECLARED_REPLACEMENT:" + name);
+  return [...new Set(errors)];
 }

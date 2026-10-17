@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./agent-authority": "./src/agent-authority.ts"
+    "./agent-authority": "./src/agent-authority.ts",
+    "./kill-switch": "./src/kill-switch.ts",
+    "./review-facts": "./src/review-facts.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

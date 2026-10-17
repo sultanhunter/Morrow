@@ -10,6 +10,7 @@ import type {
 } from "@morrow/contracts";
 import { validateDefinition } from "@morrow/contracts/validation";
 import catalogue from "../../../docs/contracts/capabilities.json";
+import { plainJson, closed, freezeJson } from "./json-boundary";
 export type PermissionVerb = Core_Grant["verbs"][number];
 export interface PermissionRequest {
   readonly capabilityId: CapabilityId;
@@ -38,9 +39,14 @@ export interface HumanAuthority {
 export interface AuthorityReader {
   readCurrent(request: PermissionRequest): Promise<HumanAuthority>;
 }
+// kill_switch_record: the executor must record the reason in an append-only
+// KillSwitchRecord committed with the effect, and notify the owner from it
+// (ADR-0005; P05.T01z and P11.T05 implement it). A dispatcher that does not
+// implement an obligation denies dispatch.
 export type ExecutionObligation =
   | "recheck_at_dispatch"
   | "exact_approval"
+  | "kill_switch_record"
   | "budget_reservation"
   | "provider_effect_verification";
 export interface PermissionResult {
@@ -56,49 +62,6 @@ export class PolicyBoundaryError extends Error {
 const verbs = ["view", "propose", "approve", "execute", "delegate", "administer"];
 const capabilities = new Map(catalogue.capabilities.map((c) => [c.id, c]));
 const valid = (type: string, value: unknown) => validateDefinition("core", type, value);
-// JSON-only bounded values: reject getters/toJSON/prototype tricks before schema
-// validators or cloning can read fields. These are not user-supplied adapters.
-function plainJson(
-  value: unknown,
-  depth = 0,
-  seen = new Set<object>(),
-  budget = { nodes: 0 },
-): boolean {
-  if (++budget.nodes > 200000 || depth > 16) return false;
-  if (value === null || typeof value === "boolean" || typeof value === "string") return true;
-  if (typeof value === "number") return Number.isFinite(value);
-  if (typeof value !== "object" || seen.has(value)) return false;
-  if (!Array.isArray(value) && ![Object.prototype, null].includes(Object.getPrototypeOf(value)))
-    return false;
-  if (Reflect.ownKeys(value).some((key) => typeof key !== "string")) return false;
-  if (
-    Array.isArray(value) &&
-    (Object.getPrototypeOf(value) !== Array.prototype ||
-      Object.keys(value).length !== value.length ||
-      Object.keys(value).some((key, i) => key !== String(i)))
-  )
-    return false;
-  seen.add(value);
-  for (const [key, desc] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
-    if (Array.isArray(value) && key === "length") continue;
-    if (
-      !desc.enumerable ||
-      !("value" in desc) ||
-      !plainJson(desc.value as unknown, depth + 1, seen, budget)
-    )
-      return false;
-  }
-  seen.delete(value);
-  return true;
-}
-function closed(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    Object.keys(value).sort().join(",") === [...keys].sort().join(",")
-  );
-}
 const sameResource = (a: Core_ResourceRef, b: Core_ResourceRef) =>
   a.organizationId === b.organizationId &&
   a.workspaceId === b.workspaceId &&
@@ -114,13 +77,6 @@ const sameActor = (a: Core_ActorRef, b: Core_ActorRef) =>
   a.membershipId === b.membershipId &&
   a.installationId === b.installationId &&
   a.mandateId === b.mandateId;
-function freezeJson(value: unknown): unknown {
-  if (value !== null && typeof value === "object") {
-    for (const item of Object.values(value)) freezeJson(item);
-    Object.freeze(value);
-  }
-  return value;
-}
 function parseRequest(value: unknown): PermissionRequest {
   if (
     !plainJson(value) ||
@@ -256,7 +212,11 @@ function evaluate(request: PermissionRequest, a: HumanAuthority, at: string): Pe
   const obligations: ExecutionObligation[] = [];
   if (reason === "allowed") {
     obligations.push("recheck_at_dispatch");
-    if (
+    // Kill switches are unreviewed (ADR-0005): no exact approval. validateCatalogue R7
+    // keeps their effect to external_write or control, so they never reserve budget.
+    if (capability?.kill_switch && request.verb === "execute")
+      obligations.push("kill_switch_record");
+    else if (
       capability?.review_required &&
       (request.verb === "execute" ||
         (request.capabilityId === "governance.connection.connect" && request.verb === "administer"))

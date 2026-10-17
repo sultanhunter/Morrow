@@ -1,0 +1,41 @@
+{
+  "contract_version": "morrow.contracts.v1.1",
+  "policy": "Every v1.1 definition that reuses a v1 name, and every v1.1 capability body that overrides a v1 body, is listed here. Each one is a replacement, not compatible with the v1 shape in either direction; writers emit only the current shape. Checked by inspectDeclaredReplacements in scripts/boundary-checks.mjs.",
+  "changes": [
+    {
+      "kind": "capability_body",
+      "name": "ads.campaign.pause.input",
+      "replaces": "capabilities:ads.campaign.pause.input",
+      "reason": "Kill switch: executes without a second approver, so the v1 proposalRef/approvalRef input is replaced by named campaigns plus a recorded reason and optional source proposal.",
+      "adr": "ADR-0005"
+    },
+    {
+      "kind": "capability_body",
+      "name": "agents.installation.disable.input",
+      "replaces": "capabilities:agents.installation.disable.input",
+      "reason": "Kill switch: a stop is an idempotent target state, so expectedRevision is dropped and a recorded reason plus optional source proposal is required.",
+      "adr": "ADR-0005"
+    },
+    {
+      "kind": "capability_body",
+      "name": "governance.membership.revoke.input",
+      "replaces": "capabilities:governance.membership.revoke.input",
+      "reason": "Kill switch: a stop is an idempotent target state, so expectedRevision is dropped and a recorded reason plus optional source proposal is required.",
+      "adr": "ADR-0005"
+    },
+    {
+      "kind": "capability_body",
+      "name": "governance.connection.disconnect.input",
+      "replaces": "capabilities:governance.connection.disconnect.input",
+      "reason": "Kill switch: a stop is an idempotent target state, so expectedRevision is dropped and a recorded reason plus optional source proposal is required.",
+      "adr": "ADR-0005"
+    },
+    {
+      "kind": "capability_body",
+      "name": "agents.release.revoke.input",
+      "replaces": "capabilities:agents.release.revoke.input",
+      "reason": "Kill switch: control.reason replaces the v1 free-text reason and adds an optional source proposal.",
+      "adr": "ADR-0005"
+    }
+  ]
+}
