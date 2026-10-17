@@ -2,7 +2,7 @@ import { createServer, request as httpsRequest } from "node:https";
 import { createServer as createHttpServer, request as httpRequest } from "node:http";
 import { connect as connectSocket } from "node:net";
 import { spawn } from "node:child_process";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createWorkspaceApiHttpListener } from "../apps/api/src/workspace-router.ts";
 import { createStandaloneLoginBridge } from "../packages/identity/src/standalone-login.ts";
@@ -25,6 +25,7 @@ import { seedStandaloneLinkingFixture } from "./fixtures/standalone-linking-fixt
 import { standaloneSqlLiteral as lit } from "./standalone-session-fixtures.mjs";
 import { localStandaloneSqlPool } from "./local-standalone-sql.mjs";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 let diagnostic = () => {};
@@ -106,14 +107,6 @@ const paths = [
   "infra/identity-login-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/plan/source.json",
-  "docs/plan/build-plan.md",
-  "docs/packets/P05.T01p.md",
-  "docs/packets/P05.T01r.md",
-  "docs/packets/P05.T01s.md",
-  "docs/packets/P05.T01t.md",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
   ".nvmrc",
   "package.json",
   "package-lock.json",
@@ -121,13 +114,7 @@ const paths = [
   "packages/contracts/package.json",
   "tsconfig.base.json",
 ];
-const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
-if (
-  process.version !== "v24.13.0" ||
-  plan.sequence !== 94 ||
-  hash(readFileSync(plan.path)) !== plan.sha256
-)
-  throw Error("LOGIN_HTTPS_LAB_SOURCE_REQUIRED");
+if (process.version !== "v24.13.0") throw Error("LOGIN_HTTPS_LAB_SOURCE_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 if (manifest.migrations.length < 10) throw Error("LOGIN_HTTPS_LAB_TEN_MIGRATIONS_REQUIRED");
 for (const [i, entry] of manifest.migrations.slice(0, 10).entries()) {
@@ -1271,7 +1258,6 @@ check(
 const report = {
   schemaVersion: 1,
   task: "P05.T01p",
-  canonicalSequence: 94,
   observedAt: new Date().toISOString(),
   qualification: "synthetic_native_rsa_pkce_to_real_sql_to_https_initial_cookie_jar_and_o_b",
   appliedMigrations: 10,
@@ -1299,11 +1285,7 @@ const report = {
     "Source digests are selected reviewed inputs, not a complete third-party dependency closure.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01v/regressions/login-https-postgresql-lab.json",
-  JSON.stringify(report, null, 2) + "\n",
-);
+writeArtifact("labs/standalone-login-https.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   "PASS: " +
     checks.length +

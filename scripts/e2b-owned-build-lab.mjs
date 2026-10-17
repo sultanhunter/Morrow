@@ -9,7 +9,7 @@ import {
   validateE2BOwnedBuildAuthorization,
   validateE2BOwnedBuildRecord,
 } from "../packages/runtime-adapters/src/e2b/owned-build.ts";
-import { loadE2BReadOnlyAccess } from "./e2b-development-input.mjs";
+import { e2bActivationProfile, loadE2BReadOnlyAccess } from "./e2b-development-input.mjs";
 import {
   loadOwnedBuildAuthorization,
   openOwnedBuildJournal,
@@ -255,20 +255,15 @@ export async function mainE2BOwnedBuild(argv = process.argv.slice(2)) {
     console.log("E2B_OWNED_BUILD_USAGE_DENIED");
     return 2;
   }
-  let currentPlan;
-  if (mode === "reconcile") {
-    try {
-      currentPlan = json("docs/plan/source.json").sources.plan.sequence;
-    } catch {
-      currentPlan = null;
-    }
-  } else currentPlan = json("docs/plan/source.json").sources.plan.sequence;
+  // The committed activation gate is tolerant: a missing or malformed gate is null,
+  // which denies new builds and leaves read-only reconciliation available.
+  const currentPlan = e2bActivationProfile();
   if ((mode !== "reconcile" && currentPlan !== 67) || envDenied())
     throw Error("E2B_OWNED_BUILD_CONTROLLER_DENIED");
-  mkdirSync("docs/evidence/P04.T01h", { recursive: true });
+  mkdirSync(".artifacts/e2b", { recursive: true });
   const writeReport = (name, base, value) =>
     writeFileSync(
-      `docs/evidence/P04.T01h/${name}.json`,
+      `.artifacts/e2b/${name}.json`,
       JSON.stringify({ ...base, ...value }, null, 2) + "\n",
     );
   let journal = null,
@@ -320,8 +315,8 @@ export async function mainE2BOwnedBuild(argv = process.argv.slice(2)) {
       source = ownedBuildSourceBinding(".");
       const profile = json("infra/labs/e2b-owned-build.json"),
         account = json("infra/labs/e2b-development-account.json");
-      const manifest = existsSync("docs/evidence/P04.T01h/owned-image-qualification.json")
-        ? json("docs/evidence/P04.T01h/owned-image-qualification.json")
+      const manifest = existsSync(".artifacts/e2b/owned-image-qualification.json")
+        ? json(".artifacts/e2b/owned-image-qualification.json")
         : null;
       const blockers = inspectOwnedBuildPrerequisites(profile, account, manifest, source);
       base = { ...base, source_sha256: source.sourceSha256, source_digests: source.digests };

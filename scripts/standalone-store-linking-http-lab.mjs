@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer, request as httpRequest } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
 import { localStandaloneSqlPool } from "./local-standalone-sql.mjs";
 import {
@@ -15,6 +15,7 @@ import { createStandaloneStoreLinking } from "../packages/identity/src/standalon
 import { identitySql } from "../packages/identity/src/index.ts";
 import { workspaceStoreLinkingControlSql } from "../packages/identity/src/workspace-store-linking-control.ts";
 import { workspaceStoreLinkingSql } from "../packages/identity/src/workspace-store-linking.ts";
+import { writeArtifact } from "./artifacts.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const checks = [];
@@ -47,23 +48,12 @@ const paths = [
   "infra/identity-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/plan/source.json",
-  "docs/packets/P05.T01q.md",
-  "docs/packets/P05.T01r.md",
-  "docs/packets/P05.T01s.md",
-  "docs/packets/P05.T01t.md",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
-  "docs/plan/build-plan.md",
   ".nvmrc",
   "package-lock.json",
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 for (const m of manifest.migrations.slice(0, 9)) paths.push("migrations/" + m.file);
 const sourceDigests = Object.fromEntries(paths.map((p) => [p, hash(readFileSync(p))]));
-const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
-assert.equal(plan.sequence, 94);
-assert.equal(plan.sha256, hash(readFileSync("docs/plan/build-plan.md")));
 const queryTrace = [],
   allPools = [],
   responseTexts = [];
@@ -487,7 +477,6 @@ check(
 const report = {
   schemaVersion: 1,
   task: "P05.T03b",
-  canonicalSequence: 94,
   qualification: "actual_local_http_and_postgresql",
   checks,
   sourceDigests,
@@ -508,8 +497,7 @@ assert.equal(
   privateSecrets.some((s) => text.includes(s)),
   false,
 );
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01v/regressions/standalone-store-linking-http.json", text);
+writeArtifact("labs/standalone-store-linking-http.json", text);
 console.log(
   "PASS: " +
     checks.length +

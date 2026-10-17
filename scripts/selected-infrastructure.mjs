@@ -1,22 +1,18 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import {
   selectedEnvironments,
   compileSelectedConfiguration,
   selectedPermissionProfiles,
   selectedStack,
 } from "../packages/infrastructure/src/selected-stack.ts";
+import { writeArtifact } from "./artifacts.mjs";
 
 const mode = process.argv[2] ?? "synth";
 if (!["synth", "readiness", "permissions"].includes(mode)) throw Error("UNKNOWN_LOCAL_MODE");
-const planSequence = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
-  .sequence;
 const configurations = selectedEnvironments.map((name) => {
   const config = JSON.parse(readFileSync(`infra/environments/${name}.json`, "utf8"));
-  if (config.plan_sequence !== planSequence) throw Error("STALE_OR_UNRECORDED_CONFIGURATION");
   return compileSelectedConfiguration(config);
 });
-const destination = "docs/evidence/P04.T01a";
-mkdirSync(destination, { recursive: true });
 const payload = {
   scope:
     "Selected-stack local design inventory; not provider deployment, identity/network proof or authenticated approval",
@@ -47,7 +43,7 @@ const payload = {
       : {}),
   })),
 };
-writeFileSync(`${destination}/${mode}.json`, JSON.stringify(payload, null, 2) + "\n");
+writeArtifact(`infra/${mode}.json`, payload);
 console.log(
   `PASS: selected Cloudflare/Neon/E2B ${mode}; three isolated design inventories; no provider calls or activation.`,
 );

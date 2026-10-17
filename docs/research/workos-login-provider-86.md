@@ -60,7 +60,7 @@ Even a later successful native local trial will not qualify durable hosted encry
 
 - scripts/workos-authentication-operator-native.mjs SHA256 e9cf7d9038b7bf890dcd114b21dfe56e27eb7dac8267fba2c428db380c19a778
 - scripts/workos-session-status-transport.mjs SHA256 f4edc4732e72127ae5819a5a9b8cf40171c7e1a5074d77136fc27e7099a8048e
-- docs/evidence/P05.T01n/actual-staging-trial.json SHA256 7b3b95df108fb4ecf62dbb7c7643737c5e967c364f31992a6afa67e53b3271eb
+- codex-archive-f89ad75:docs/evidence/P05.T01n/actual-staging-trial.json SHA256 7b3b95df108fb4ecf62dbb7c7643737c5e967c364f31992a6afa67e53b3271eb
 - packages/identity/src/standalone-login.ts SHA256 12a5b7e9eeff006998d46f4119d87f86eb1d37b15ad271e16aae404bf370a6df
 - packages/identity/src/workos-session-token.ts SHA256 198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966
 - packages/identity/src/workos-session-status.ts SHA256 babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e

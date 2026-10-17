@@ -29,11 +29,7 @@ import {
   ownedBuildPriceSourceValid,
 } from "../scripts/e2b-owned-build-lab.mjs";
 
-import {
-  frozenE2B60Fixture,
-  currentE2BFixture,
-  currentE2BPlanSequence,
-} from "./fixtures/frozen-e2b-60.mjs";
+import { frozenE2B60Fixture, currentE2BFixture } from "./fixtures/frozen-e2b-60.mjs";
 
 const profile = JSON.parse(readFileSync("infra/labs/e2b-owned-build.json", "utf8"));
 const operationId = "00000000-0000-4000-8000-000000000015",
@@ -363,22 +359,21 @@ test("current67 builder retains unqualified write permission before private inpu
     { encoding: "utf8", cwd: current.root },
   );
   assert.equal(child.status, 2, child.stderr);
-  const report = JSON.parse(current.read("docs/evidence/P04.T01h/owned-build-blocked.json"));
+  const report = JSON.parse(current.read(".artifacts/e2b/owned-build-blocked.json"));
   assert.equal(report.plan_sequence, 67);
   assert.equal(report.provider_calls, false);
   assert.equal(report.private_input_read, false);
   assert.ok(report.blockers.includes("E2B_OWNED_BUILD_WRITE_RECEIPT_UNQUALIFIED"));
 });
 
-test("unrelated current plan denies frozen67 builder before private receipt or report access", (t) => {
+test("committed activation gate denies frozen67 builder before private receipt or report access", (t) => {
   const current = currentE2BFixture();
   t.after(current.dispose);
   current.useCurrentPlan();
   assert.equal(
-    JSON.parse(current.read("docs/plan/source.json")).sources.plan.sequence,
-    currentE2BPlanSequence(),
+    JSON.parse(current.read("infra/labs/e2b-activation.json")).active_profile_sequence,
+    null,
   );
-  assert.notEqual(currentE2BPlanSequence(), 67);
   const before = current.read("infra/labs/e2b-owned-build.json");
   const child = spawnSync(
     process.execPath,
@@ -393,10 +388,7 @@ test("unrelated current plan denies frozen67 builder before private receipt or r
   );
   assert.equal(child.status, 2, child.stderr);
   assert.match(child.stdout + child.stderr, /E2B_OWNED_BUILD_CONTROLLER_DENIED/);
-  assert.equal(
-    existsSync(join(current.root, "docs/evidence/P04.T01h/owned-build-blocked.json")),
-    false,
-  );
+  assert.equal(existsSync(join(current.root, ".artifacts/e2b/owned-build-blocked.json")), false);
   assert.deepEqual(current.read("infra/labs/e2b-owned-build.json"), before);
 });
 

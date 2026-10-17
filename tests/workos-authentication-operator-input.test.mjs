@@ -12,6 +12,8 @@ import {
   claimWorkosAuthenticationOperatorRun as claim,
   inspectWorkosAuthenticationOperatorRun as inspect,
   parseWorkosAuthenticationOperatorProfile as profile,
+  loadWorkosAuthenticationOperatorScope as loadScope,
+  prepareWorkosAuthenticationOperatorActivation as prepareNative,
 } from "../scripts/workos-authentication-operator-input.mjs";
 import {
   authenticationOperatorHash as hash,
@@ -305,4 +307,35 @@ test("baseline freshness is checked at durable claim, including source work and 
       },
     },
   );
+});
+test("retired native82 scope and preparation are denied before private effects", () => {
+  assert.throws(() => loadScope(), /WORKOS_AUTHENTICATION_OPERATOR_HELD/);
+  const root = path.join(os.tmpdir(), "morrow-auth82-retired-" + Date.now());
+  assert.deepEqual(prepareNative(root, path.join(root, "missing-binding.json")), {
+    outcome: "held",
+    reason: "preparation_denied",
+    credentialReads: 0,
+    providerRequests: 0,
+  });
+  assert.equal(fs.existsSync(root), false);
+  let traps = 0;
+  const hostile = new Proxy(
+    {},
+    {
+      get() {
+        traps++;
+        throw Error();
+      },
+      ownKeys() {
+        traps++;
+        throw Error();
+      },
+      getPrototypeOf() {
+        traps++;
+        throw Error();
+      },
+    },
+  );
+  assert.equal(claim(hostile), null);
+  assert.equal(traps, 0);
 });

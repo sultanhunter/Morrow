@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomUUID, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
@@ -12,6 +12,7 @@ import {
 import { authenticationExchangeAdmissionSql as preauthSql } from "../packages/identity/src/authentication-exchange-admission.ts";
 import { runControlledPreauth } from "../packages/identity/src/login-preauth-control.ts";
 import { createLoginAttempt } from "../packages/identity/src/standalone-login-protocol.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const hash = (v) => createHash("sha256").update(v).digest("hex"),
   checks = [],
   check = (name, value) => {
@@ -21,8 +22,6 @@ const hash = (v) => createHash("sha256").update(v).digest("hex"),
   };
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 const selectedMigrations = manifest.migrations.slice(0, 10);
-const executionPlan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
-const executionSequence = executionPlan.sequence;
 const sourcePaths = [
   "scripts/login-flow-custody-lab.mjs",
   "scripts/local-postgres-lab.mjs",
@@ -44,22 +43,10 @@ const sourcePaths = [
   "infra/identity-login-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/plan/source.json",
-  "docs/plan/build-plan.md",
-  "docs/packets/P05.T01p.md",
-  "docs/packets/P05.T01r.md",
-  "docs/packets/P05.T01s.md",
-  "docs/packets/P05.T01t.md",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
   ...selectedMigrations.map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
 if (
-  !Number.isSafeInteger(executionSequence) ||
-  executionSequence < 84 ||
-  executionPlan.path !== "docs/plan/build-plan.md" ||
-  executionPlan.sha256 !== hash(readFileSync("docs/plan/build-plan.md")) ||
   selectedMigrations.length !== 10 ||
   selectedMigrations.some(
     (m, index) =>
@@ -887,7 +874,6 @@ check(
 const report = {
   schema_version: 1,
   packet: "P05.T01p",
-  canonical_sequence: executionSequence,
   fixture_protocol_sequence: 84,
   scope: "synthetic_private_login_custody_actual_postgresql",
   provider_requests: 0,
@@ -906,11 +892,7 @@ const report = {
     "Historical receipt attribution never proves dispatch, delivery, or current authority.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01v/regressions/login-flow-custody.json",
-  JSON.stringify(report, null, 2) + "\n",
-);
+writeArtifact("labs/login-flow-custody.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   JSON.stringify({
     packet: report.packet,

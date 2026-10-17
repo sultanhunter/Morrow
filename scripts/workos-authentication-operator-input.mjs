@@ -83,10 +83,6 @@ export const workosAuthenticationOperatorSourcePaths = Object.freeze([
   "scripts/workos-authentication-operator-lab.mjs",
   "scripts/workos-authentication-operator.mjs",
   profilePath,
-  "docs/plan/build-plan.md",
-  "docs/plan/source.json",
-  "docs/packets/P05.T01l.md",
-  "AGENTS.md",
   "packages/identity/src/workos-session-token.ts",
   "packages/identity/src/workos-session-status-json.ts",
   "packages/identity/src/workos-session-status.ts",
@@ -112,69 +108,12 @@ export const workosAuthenticationOperatorSourcePaths = Object.freeze([
   "package-lock.json",
   "tsconfig.base.json",
 ]);
-function sourceBytes(relative) {
-  if (
-    typeof relative !== "string" ||
-    relative.startsWith("/") ||
-    relative.split("/").some((p) => !p || p === "." || p === "..")
-  )
-    throw heldError();
-  let cursor = repository;
-  for (const component of relative.split("/").slice(0, -1)) {
-    cursor = path.join(cursor, component);
-    const st = fs.lstatSync(cursor);
-    if (st.isSymbolicLink() || !st.isDirectory()) throw heldError();
-  }
-  const file = path.join(repository, relative),
-    before = fs.lstatSync(file);
-  if (
-    !before.isFile() ||
-    before.isSymbolicLink() ||
-    before.uid !== process.getuid() ||
-    before.nlink !== 1 ||
-    (before.mode & 0o022) !== 0 ||
-    before.size > 16777216
-  )
-    throw heldError();
-  const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
-  try {
-    const stat = fs.fstatSync(fd);
-    if (identity(stat) !== identity(before)) throw heldError();
-    const raw = fs.readFileSync(fd);
-    if (
-      identity(fs.fstatSync(fd)) !== identity(stat) ||
-      identity(fs.lstatSync(file)) !== identity(stat)
-    )
-      throw heldError();
-    return raw;
-  } finally {
-    fs.closeSync(fd);
-  }
-}
+// The native82 operator is retired: its one approved allowance was consumed and the
+// staging session was revoked. Native scope loading is denied unconditionally instead
+// of relying on a plan-sequence mismatch (ADR-0002). Re-enabling it needs a new
+// owner-approved ADR. The synthetic test seam below keeps its frozen protocol checks.
 export function loadWorkosAuthenticationOperatorScope() {
-  try {
-    const source = JSON.parse(sourceBytes("docs/plan/source.json").toString("utf8"));
-    if (
-      source.sources.plan.sequence !== 82 ||
-      source.sources.plan.path !== "docs/plan/build-plan.md" ||
-      hash(sourceBytes(source.sources.plan.path)) !== source.sources.plan.sha256
-    )
-      throw heldError();
-    const profileJson = sourceBytes(profilePath).toString("utf8"),
-      profile = parseWorkosAuthenticationOperatorProfile(profileJson);
-    const sources = workosAuthenticationOperatorSourcePaths.map((p) => [p, hash(sourceBytes(p))]);
-    return JSON.stringify({
-      schemaVersion: 1,
-      planSequence: 82,
-      planDigest: source.sources.plan.sha256,
-      sourceDigest: hash(JSON.stringify(sources)),
-      profileDigest: hash(profileJson),
-      protectedBindingDigest: profile.protectedBindingDigest,
-      profileJson,
-    });
-  } catch {
-    throw heldError();
-  }
+  throw heldError();
 }
 export function isWorkosAuthenticationOperatorSourceDirectory() {
   try {

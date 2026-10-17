@@ -1,8 +1,9 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
 import { localIdentityPool } from "./local-identity-sql.mjs";
 import { createWorkspacePermissionBoundary } from "../packages/policy/src/index.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const checks = [];
 const check = (name, condition) => {
   if (!condition) throw Error("PERMISSION_DATABASE_CHECK_FAILED:" + name);
@@ -329,14 +330,11 @@ const observed = await localPostgresLab("P05.T02b", async ({ id, sql, image, ver
   }
   return { image, version };
 });
-mkdirSync("docs/evidence/P05.T02", { recursive: true });
-const source = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
-writeFileSync(
-  "docs/evidence/P05.T02/database-lab.json",
+writeArtifact(
+  "labs/permissions.json",
   JSON.stringify(
     {
       task: "P05.T02b",
-      canonical_sequence: source.sources.plan.sequence,
       observed_at: new Date().toISOString(),
       scope:
         "Actual application identity read transaction and shared permission kernel against owned isolated PostgreSQL17.11 grant/workspace records. Scripts-only psql adapter and synthetic session issuer/provider/entitlement facts; no production driver/WorkOS/HTTP/dispatch qualification.",

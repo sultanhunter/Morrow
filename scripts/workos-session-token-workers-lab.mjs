@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
+import { writeArtifact } from "./artifacts.mjs";
 
 // Independent native RSA signer/oracle; only synthetic tokens reach local workerd.
 const now = Date.UTC(2026, 9, 15, 12, 0, 0);
@@ -239,14 +240,11 @@ try {
     "package-lock.json",
   ];
   const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
-  mkdirSync("docs/evidence/P05.T01f", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P05.T01f/workers-lab.json",
+  writeArtifact(
+    "labs/workos-session-token-workers.json",
     JSON.stringify(
       {
         task: "P05.T01f",
-        canonical_sequence: JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
-          .sequence,
         observed_at: new Date().toISOString(),
         scope:
           "Actual pinned local workerd; independent native synthetic RSA signer; no real provider token, keyset, network, session, membership or grant",

@@ -11,6 +11,7 @@ import {
   runSyntheticLab,
 } from "../packages/infrastructure/src/synthetic-runtime-lab.ts";
 import {
+  e2bActivationProfile,
   e2bLabSourceBinding,
   e2bLabSha,
   inspectE2BLabAccount,
@@ -26,14 +27,12 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
     return 2;
   }
   const readFile = testing.readFile ?? readFileSync;
-  let draft, plan, source, accountBytes, account;
+  // The committed activation gate is read tolerantly in both modes: a missing or
+  // malformed gate denies allocation and never strands an original cleanup.
+  const activeProfile = e2bActivationProfile(readFile);
+  let draft, source, accountBytes, account;
   if (cleanup) {
     // Current allocation manifests must not strand the original resource.
-    try {
-      plan = JSON.parse(readFile("docs/plan/source.json", "utf8"));
-    } catch {
-      plan = null;
-    }
     try {
       source = (testing.sourceBinding ?? e2bLabSourceBinding)(".");
     } catch {
@@ -41,16 +40,15 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
     }
   } else {
     draft = JSON.parse(readFile("infra/labs/e2b-development.json", "utf8"));
-    plan = JSON.parse(readFile("docs/plan/source.json", "utf8"));
     source = (testing.sourceBinding ?? e2bLabSourceBinding)(".");
     accountBytes = readFile("infra/labs/e2b-development-account.json");
     account = JSON.parse(accountBytes);
   }
-  const destination = testing.evidenceDirectory ?? "docs/evidence/P04.T01h";
+  const destination = testing.evidenceDirectory ?? ".artifacts/e2b";
   mkdirSync(destination, { recursive: true });
   const base = {
     task: "P04.T01h",
-    plan_sequence: plan?.sources?.plan?.sequence ?? null,
+    plan_sequence: activeProfile,
     scope: "Synthetic operator microVM lab only",
     sdk: "e2b2.56.0",
     source_sha256: source?.sourceSha256 ?? null,
@@ -68,7 +66,11 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
     } catch {
       blockers.push("E2B_LAB_PROFILE_UNBOUND");
     }
-    if (draft.providerId !== "e2b" || draft.planSequence !== plan.sources.plan.sequence)
+    if (
+      draft.providerId !== "e2b" ||
+      activeProfile === null ||
+      draft.planSequence !== activeProfile
+    )
       blockers.push("E2B_LAB_SELECTED_PLAN_DENIED");
     blockers.push(...inspectE2BLabAccount(account, draft));
     if (compiled && account.profile_sha256 !== compiled.profileSha256)
@@ -91,7 +93,7 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
     console.log("Prepared E2B synthetic laboratory; no credentials or provider calls.");
     return 0;
   }
-  // New allocations require the current plan/account/quote. Cleanup retains original bindings.
+  // New allocations require the activation gate/account/quote. Cleanup retains original bindings.
   if (allocate && blockers.length) {
     report("live.json", {
       status: "blocked",
@@ -129,7 +131,7 @@ export async function mainE2BLab(argv = process.argv.slice(2), testing = {}) {
       if (input.operationId !== argv[1]) throw Error("E2B_LAB_ORIGINAL_OPERATION_DENIED");
       Object.assign(base, {
         plan_sequence: compiled.profile.planSequence,
-        controller_plan_sequence: plan?.sources?.plan?.sequence ?? null,
+        controller_plan_sequence: activeProfile,
         controller_source_sha256: source?.sourceSha256 ?? null,
         source_sha256: envelope.record.operation.sourceSha256,
         source_digests: envelope.sourceDigests,

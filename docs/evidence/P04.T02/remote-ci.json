@@ -1,7 +1,0 @@
-{
-  "source_commit": "befbaf6fd8fde32cab86c79eb21409c07886af51",
-  "run_id": 37497806878,
-  "url": "https://github.com/sultanhunter/Morrow/actions/runs/37497806878",
-  "conclusion": "success",
-  "scope": "Locked install/repair, full589-test pipeline, nine scaffold guards and regional CloudFormation validation; no actual AWS or merchant qualification"
-}

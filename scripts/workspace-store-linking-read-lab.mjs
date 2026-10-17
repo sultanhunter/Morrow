@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
@@ -13,6 +13,7 @@ import {
   workspaceStoreLinkingControlSql,
 } from "../packages/identity/src/workspace-store-linking-control.ts";
 import { workspaceStoreLinkingSql } from "../packages/identity/src/workspace-store-linking.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const hash = (v) => createHash("sha256").update(v).digest("hex");
 let failedCheck = null;
 const checks = [],
@@ -45,21 +46,11 @@ const sourcePaths = [
   "infra/identity-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/plan/source.json",
-  "docs/packets/P05.T01q.md",
-  "docs/packets/P05.T01r.md",
-  "docs/packets/P05.T01s.md",
-  "docs/packets/P05.T01t.md",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
-  "docs/plan/build-plan.md",
   ...JSON.parse(readFileSync("migrations/manifest.json", "utf8"))
     .migrations.slice(0, 9)
     .map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
-const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
-if (plan.sources.plan.sequence !== 94) throw Error("LINKING_READ_PLAN_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 if (manifest.migrations.length < 9) throw Error("LINKING_READ_MIGRATIONS_REQUIRED");
 const migrations = manifest.migrations.slice(0, 9).map((m) => {
@@ -844,7 +835,6 @@ check(
 );
 const report = {
   packet: "P05.T03b",
-  canonicalSequence: 94,
   scope:
     "controlled owner-seeded synthetic store-linking read boundaries with fresh independently signed owning76 evidence and actual M-family admission",
   providerCalls: 0,
@@ -865,11 +855,7 @@ const report = {
 };
 if (new Set(checks.map((x) => x.name)).size !== checks.length)
   throw Error("LINKING_READ_DUPLICATE_CHECK");
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01v/regressions/workspace-linking-read.json",
-  JSON.stringify(report, null, 2) + "\n",
-);
+writeArtifact("labs/workspace-linking-read.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   JSON.stringify({
     packet: report.packet,

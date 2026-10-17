@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
+  e2bActivationProfile,
   inspectE2BLabAccount,
   loadE2BLabInput,
   loadE2BReadOnlyAccess,
@@ -27,9 +28,10 @@ import {
 } from "../packages/infrastructure/src/synthetic-runtime-lab.ts";
 import { mainE2BLab } from "../scripts/e2b-development-lab.mjs";
 import {
+  e2bRepositoryRoot,
   frozenE2B60Fixture,
   currentE2BFixture,
-  currentE2BPlanSequence,
+  unrelatedE2BPlanSequence,
 } from "./fixtures/frozen-e2b-60.mjs";
 
 const projectId = "a1234567-1234-4234-8234-123456789abc";
@@ -156,7 +158,7 @@ test("unqualified run denies before credentials, journal or provider calls", (t)
 test("readonly discovery preparation cannot read credentials or overwrite live qualification", (t) => {
   const frozen = frozenE2B60Fixture();
   t.after(frozen.dispose);
-  const destination = "docs/evidence/P04.T01h/template-qualification.json";
+  const destination = ".artifacts/e2b/template-qualification.json";
   const previous = existsSync(destination) ? readFileSync(destination, "utf8") : null;
   const out = spawnSync(
     process.execPath,
@@ -188,7 +190,7 @@ test("current plan denies a frozen60 allocation before private input", (t) => {
   assert.equal(out.status, 2, out.stderr);
   assert.match(out.stdout, /PREREQUISITES_UNQUALIFIED/);
   const report = JSON.parse(frozen.read("docs/evidence/P04.T01h/live.json"));
-  assert.equal(report.plan_sequence, currentE2BPlanSequence());
+  assert.equal(report.plan_sequence, unrelatedE2BPlanSequence);
   assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"));
   assert.equal(report.private_input_read, false);
   assert.equal(report.provider_calls, false);
@@ -526,22 +528,21 @@ test("current67 runtime still needs fresh allocation authority before private in
     { encoding: "utf8", cwd: current.root },
   );
   assert.equal(out.status, 2, out.stderr);
-  const report = JSON.parse(current.read("docs/evidence/P04.T01h/live.json"));
+  const report = JSON.parse(current.read(".artifacts/e2b/live.json"));
   assert.equal(report.plan_sequence, 67);
   assert.equal(report.provider_calls, false);
   assert.equal(report.private_input_read, false);
   assert.ok(report.blockers.includes("E2B_LAB_ACCESS_UNQUALIFIED"));
 });
 
-test("unrelated current plan denies frozen67 runtime allocation before private input", (t) => {
+test("committed activation gate denies frozen67 runtime allocation before private input", (t) => {
   const current = currentE2BFixture();
   t.after(current.dispose);
   current.useCurrentPlan();
   assert.equal(
-    JSON.parse(current.read("docs/plan/source.json")).sources.plan.sequence,
-    currentE2BPlanSequence(),
+    JSON.parse(current.read("infra/labs/e2b-activation.json")).active_profile_sequence,
+    null,
   );
-  assert.notEqual(currentE2BPlanSequence(), 67);
   const before = current.read("infra/labs/e2b-development.json");
   const out = spawnSync(
     process.execPath,
@@ -555,12 +556,90 @@ test("unrelated current plan denies frozen67 runtime allocation before private i
     { encoding: "utf8", cwd: current.root },
   );
   assert.equal(out.status, 2, out.stderr);
-  const report = JSON.parse(current.read("docs/evidence/P04.T01h/live.json"));
-  assert.equal(report.plan_sequence, currentE2BPlanSequence());
+  const report = JSON.parse(current.read(".artifacts/e2b/live.json"));
+  assert.equal(report.plan_sequence, null);
   assert.equal(report.provider_calls, false);
   assert.equal(report.private_input_read, false);
   assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"));
   assert.deepEqual(current.read("infra/labs/e2b-development.json"), before);
+});
+
+test("activation gate yields a profile only for the exact valid shape and fails closed otherwise", () => {
+  const gatePath = "infra/labs/e2b-activation.json";
+  const valid = {
+    schema_version: 1,
+    active_profile_sequence: 67,
+    decision: "docs/decisions/adr/ADR-0013-retire-aws-cdk-daytona-frozen-regressions.md",
+  };
+  const reader = (content) => (path, encoding) => {
+    assert.equal(path, gatePath);
+    assert.equal(encoding, "utf8");
+    if (content instanceof Error) throw content;
+    return typeof content === "string" ? content : JSON.stringify(content);
+  };
+  assert.equal(e2bActivationProfile(reader(valid)), 67);
+  // The committed repository gate names no active profile.
+  assert.equal(
+    e2bActivationProfile((path, encoding) =>
+      readFileSync(resolve(e2bRepositoryRoot, path), encoding),
+    ),
+    null,
+  );
+  const without = (key) => Object.fromEntries(Object.entries(valid).filter(([k]) => k !== key));
+  for (const [label, content] of [
+    ["missing file", Object.assign(Error("ENOENT: no such file"), { code: "ENOENT" })],
+    ["unreadable file", Object.assign(Error("EACCES: permission denied"), { code: "EACCES" })],
+    ["invalid JSON", "{"],
+    ["empty file", ""],
+    ["JSON null", "null"],
+    ["JSON number", "67"],
+    ["array", [valid]],
+    ["schema_version 2", { ...valid, schema_version: 2 }],
+    ["schema_version string", { ...valid, schema_version: "1" }],
+    ["extra key", { ...valid, enabled: true }],
+    ["missing decision", without("decision")],
+    ["missing sequence", without("active_profile_sequence")],
+    ["non-string decision", { ...valid, decision: 7 }],
+    ["string sequence", { ...valid, active_profile_sequence: "67" }],
+    ["float sequence", { ...valid, active_profile_sequence: 67.5 }],
+    ["negative sequence", { ...valid, active_profile_sequence: -67 }],
+    ["zero sequence", { ...valid, active_profile_sequence: 0 }],
+    ["unsafe integer sequence", { ...valid, active_profile_sequence: 2 ** 53 }],
+    ["boolean sequence", { ...valid, active_profile_sequence: true }],
+    ["array sequence", { ...valid, active_profile_sequence: [67] }],
+    ["null sequence", { ...valid, active_profile_sequence: null }],
+  ])
+    assert.equal(e2bActivationProfile(reader(content)), null, label);
+});
+
+test("missing or malformed activation gate denies allocation before private input", (t) => {
+  for (const [label, gate] of [
+    ["missing", null],
+    ["malformed", '{"schema_version":1,"active_profile_sequence":"67","decision":"x"}\n'],
+  ]) {
+    const current = currentE2BFixture();
+    t.after(current.dispose);
+    const gatePath = join(current.root, "infra/labs/e2b-activation.json");
+    if (gate === null) rmSync(gatePath);
+    else writeFileSync(gatePath, gate);
+    const out = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        current.loader,
+        current.script("scripts/e2b-development-lab.mjs"),
+        "--run",
+        "/never/read-private-input",
+      ],
+      { encoding: "utf8", cwd: current.root },
+    );
+    assert.equal(out.status, 2, `${label}: ${out.stderr}`);
+    const report = JSON.parse(current.read(".artifacts/e2b/live.json"));
+    assert.equal(report.plan_sequence, null, label);
+    assert.equal(report.provider_calls, false, label);
+    assert.equal(report.private_input_read, false, label);
+    assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"), label);
+  }
 });
 
 test("runtime CLI refuses disabled TLS before an original cleanup key is loaded", async (t) => {

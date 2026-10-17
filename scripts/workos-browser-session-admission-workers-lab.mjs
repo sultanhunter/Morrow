@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
+import { writeArtifact } from "./artifacts.mjs";
 const now = 1800000000000,
   hash = (value) => createHash("sha256").update(value).digest("hex");
 const pair = generateKeyPairSync("rsa", { modulusLength: 2048, publicExponent: 65537 });
@@ -203,13 +204,11 @@ try {
   assert.equal(outbound, 0);
   assert.equal(result.metrics.length, cases.length);
   for (const [p, d] of Object.entries(sourceDigests)) assert.equal(hash(readFileSync(p)), d);
-  mkdirSync("docs/evidence/P05.T01m", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P05.T01m/workers-lab.json",
+  writeArtifact(
+    "labs/browser-session-admission-workers.json",
     JSON.stringify(
       {
         task: "P05.T01m",
-        canonicalSequence: 81,
         qualification: "actual_local_workerd_with_independent_native_RSA_and_synthetic_SQL",
         observedAt: new Date().toISOString(),
         cases: cases.length,

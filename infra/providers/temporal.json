@@ -1,7 +1,0 @@
-{
-  "schema_version": 1,
-  "status": "superseded",
-  "superseded_by": "cloudflare_workflows",
-  "plan_sequence": 45,
-  "activation": "disabled"
-}

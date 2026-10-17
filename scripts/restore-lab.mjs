@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
 import { encryptedLabFixtures } from "./encrypted-lab-fixtures.mjs";
 import { encodeOperationalEvent } from "../packages/infrastructure/src/operations.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const archive = encryptedLabFixtures();
 const restoredObjects = encryptedLabFixtures();
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -257,8 +257,7 @@ try {
 }
 report.elapsed_ms = Math.round(performance.now() - started);
 report.cleanup = "owned ephemeral container and process-local encrypted fixtures removed";
-mkdirSync("docs/evidence/P04.T04", { recursive: true });
-writeFileSync("docs/evidence/P04.T04/restore-lab.json", JSON.stringify(report, null, 2) + "\n");
+writeArtifact("labs/restore.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   "PASS: actual local database restore, exact object integrity, later erasure/revocation replay and closed quarantine; real integration pending.",
 );

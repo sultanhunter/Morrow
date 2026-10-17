@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomUUID, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
@@ -9,6 +9,7 @@ import {
   createSelfLogoutControl,
   selfLogoutSql as sql,
 } from "../packages/identity/src/self-logout-control.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const hash = (s) => createHash("sha256").update(s).digest("hex");
 const checks = [],
   check = (name, passed) => {
@@ -25,7 +26,6 @@ const checks = [],
     console.log(JSON.stringify({ check: name, passed: true }));
   };
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-const executionPlan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
 const sourcePaths = [
   "scripts/self-logout-sql-lab.mjs",
   "scripts/local-self-logout-sql.mjs",
@@ -47,21 +47,13 @@ const sourcePaths = [
   "infra/identity-logout-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/packets/P05.T01q.md",
-  "docs/packets/P05.T01r.md",
-  "docs/packets/P05.T01s.md",
-  "docs/packets/P05.T01t.md",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
-  "docs/plan/source.json",
-  "docs/plan/build-plan.md",
   ...manifest.migrations.map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
+// Every published migration must be present in order and checksum-verified. The
+// self-logout fixture applies exactly the first eleven, so the count stays exact until
+// this lab also applies later migrations; a twelfth migration must fail here.
 if (
-  executionPlan.sequence !== 94 ||
-  executionPlan.path !== "docs/plan/build-plan.md" ||
-  executionPlan.sha256 !== hash(readFileSync("docs/plan/build-plan.md")) ||
   manifest.migrations.length !== 11 ||
   manifest.migrations.some(
     (m, i) => m.sequence !== i + 1 || hash(readFileSync("migrations/" + m.file)) !== m.sha256,
@@ -773,7 +765,6 @@ check("source_snapshot_unchanged", changedSourcePaths.length === 0);
 const report = {
   schemaVersion: 1,
   task: "P05.T01q",
-  canonicalSequence: 94,
   scope: "actual_local_postgresql_captured_cookie_commitment_family_retirement_only",
   sourceHashes,
   checkCount: checks.length,
@@ -791,11 +782,7 @@ const report = {
     "Already-ended acknowledgement correlates original immutable family state, not a new command receipt or browser delivery.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01v/regressions/self-logout-postgresql-lab.json",
-  JSON.stringify(report, null, 2) + "\n",
-);
+writeArtifact("labs/self-logout-sql.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   JSON.stringify({
     packet: "P05.T01q",

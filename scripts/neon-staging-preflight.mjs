@@ -1,10 +1,11 @@
 import { resolve } from "node:path";
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { build } from "esbuild";
 import { Miniflare, Log, LogLevel } from "miniflare";
 import { loadNeonPreflightInput, publicNeonPreflightBinding } from "./neon-preflight-input.mjs";
 import { neonPreflightEgressScript } from "./neon-preflight-egress.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 // No implicit credential lookup, provider calls or CI invocation.
 if (process.argv[2] !== "--run" || process.argv.length !== 4) {
@@ -24,27 +25,19 @@ const files = [
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const writeReport = (status, result = {}) => {
   if (!binding) return;
-  mkdirSync("docs/evidence/P04.T01c", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P04.T01c/neon-preflight.json",
-    JSON.stringify(
-      {
-        task: "P04.T01c",
-        observed_at: new Date().toISOString(),
-        status,
-        binding,
-        ...result,
-        scope:
-          "Actual Neon operator WSS/PostgreSQL transactions in local workerd; not morrow_api/RLS, WorkOS, live Cloudflare deployment, failover or recovery qualification",
-        runtime: "miniflare4.20260730.0",
-        migrations_applied: false,
-        cloud_resources_created: false,
-        source_digests: Object.fromEntries(files.map((file) => [file, sha(readFileSync(file))])),
-      },
-      null,
-      2,
-    ) + "\n",
-  );
+  writeArtifact("neon/preflight.json", {
+    task: "P04.T01c",
+    observed_at: new Date().toISOString(),
+    status,
+    binding,
+    ...result,
+    scope:
+      "Actual Neon operator WSS/PostgreSQL transactions in local workerd; not morrow_api/RLS, WorkOS, live Cloudflare deployment, failover or recovery qualification",
+    runtime: "miniflare4.20260730.0",
+    migrations_applied: false,
+    cloud_resources_created: false,
+    source_digests: Object.fromEntries(files.map((file) => [file, sha(readFileSync(file))])),
+  });
 };
 try {
   const input = loadNeonPreflightInput(process.argv[3], resolve("../../morrow-private-staging"));

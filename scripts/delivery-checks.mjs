@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { writeArtifact } from "./artifacts.mjs";
 export function inspectSecrets(text) {
   const patterns = [
     ["private_key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
@@ -60,15 +61,7 @@ export function lockedBundleAncestor(path, packages) {
 }
 function verify() {
   const paths = [];
-  const skip = new Set([
-    "node_modules",
-    ".git",
-    "build",
-    "dist",
-    ".react-router",
-    "cdk.out",
-    "work",
-  ]);
+  const skip = new Set(["node_modules", ".git", "build", "dist", ".react-router", ".artifacts"]);
   function walk(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const p = (dir === "." ? "" : dir + "/") + entry.name;
@@ -131,25 +124,17 @@ function verify() {
       ).includes("MIGRATION_CHECKSUM"),
     },
   ];
-  mkdirSync("docs/evidence/P03.T04", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P03.T04/delivery.json",
-    JSON.stringify(
-      {
-        generated_at: new Date().toISOString(),
-        scope:
-          "Known-pattern secret guard, dependency locking (bundles bound to integrity-checked parent tarballs), migration metadata/checksum/envelope only; not complete secret assurance or PostgreSQL execution. Hosted CI evidenced separately; release protection pending.",
-        scanned_files: paths.length,
-        dependency_records: Object.keys(lock.packages).length,
-        migrations: manifest.migrations.length,
-        negative_checks: negatives,
-        secret_findings: errors,
-        migration_errors: migrationErrors,
-      },
-      null,
-      2,
-    ) + "\n",
-  );
+  writeArtifact("verify/delivery.json", {
+    generated_at: new Date().toISOString(),
+    scope:
+      "Known-pattern secret guard, dependency locking (bundles bound to integrity-checked parent tarballs), migration metadata/checksum/envelope only; not complete secret assurance or PostgreSQL execution. Hosted CI evidenced separately; release protection pending.",
+    scanned_files: paths.length,
+    dependency_records: Object.keys(lock.packages).length,
+    migrations: manifest.migrations.length,
+    negative_checks: negatives,
+    secret_findings: errors,
+    migration_errors: migrationErrors,
+  });
   if (errors.length || migrationErrors.length || negatives.some((x) => !x.passed))
     throw Error("Delivery checks failed; inspect redacted evidence");
   console.log(

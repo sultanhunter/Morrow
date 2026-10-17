@@ -1,7 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { e2bLabSourceBinding, loadE2BReadOnlyAccess } from "./e2b-development-input.mjs";
+import {
+  e2bActivationProfile,
+  e2bLabSourceBinding,
+  loadE2BReadOnlyAccess,
+} from "./e2b-development-input.mjs";
 import { discoverE2BDevelopmentOwnedTemplates } from "../packages/runtime-adapters/src/e2b/development-transport.ts";
 
 export async function mainE2BTemplateQualification(argv = process.argv.slice(2)) {
@@ -9,14 +13,14 @@ export async function mainE2BTemplateQualification(argv = process.argv.slice(2))
     console.log("E2B_READONLY_USAGE_DENIED");
     return 2;
   }
-  const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
+  const activeProfile = e2bActivationProfile();
   const account = JSON.parse(readFileSync("infra/labs/e2b-development-account.json", "utf8"));
   const source = e2bLabSourceBinding(".");
-  const destination = `docs/evidence/P04.T01h/${argv.length ? "template-qualification" : "template-preparation"}.json`;
+  const destination = `.artifacts/e2b/${argv.length ? "template-qualification" : "template-preparation"}.json`;
   mkdirSync(resolve(destination, ".."), { recursive: true });
   const base = {
     task: "P04.T01h",
-    plan_sequence: plan.sources.plan.sequence,
+    plan_sequence: activeProfile,
     source_sha256: source.sourceSha256,
     source_digests: source.digests,
     read_only: true,
@@ -31,7 +35,7 @@ export async function mainE2BTemplateQualification(argv = process.argv.slice(2))
     return 0;
   }
   if (
-    plan.sources.plan.sequence !== 67 ||
+    activeProfile !== 67 ||
     account.plan_sequence !== 67 ||
     account.project_id !== "22220c06-b76d-47b2-98d7-a1069d611e8f" ||
     account.operator_access_authorized !== true ||

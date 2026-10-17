@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import canonicalize from "canonicalize";
@@ -17,6 +17,7 @@ import {
   validateDefinition,
   validateCapabilityInput,
 } from "../packages/contracts/src/validation.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const checks = [];
 const check = (name, ok) => {
   if (!ok) throw Error("STORE_LINKING_LAB_FAILED:" + name);
@@ -1007,9 +1008,8 @@ const sources = [
   "scripts/local-store-linking-sql.mjs",
   "scripts/workspace-store-linking-lab.mjs",
 ];
-mkdirSync("docs/evidence/P05.T03", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T03/workspace-store-linking-lab.json",
+writeArtifact(
+  "labs/workspace-store-linking.json",
   JSON.stringify(
     {
       task: "P05.T03a",

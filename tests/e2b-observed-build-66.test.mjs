@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
 import {
   compileSyntheticLabProfile,
   prepareSyntheticLabOperation,
@@ -16,9 +15,7 @@ import {
 import { discoverE2BDevelopmentOwnedTemplates } from "../packages/runtime-adapters/src/e2b/development-transport.ts";
 import { createE2BNativeDevelopmentTransport } from "../packages/runtime-adapters/src/e2b/development-native.ts";
 
-const history = JSON.parse(
-  readFileSync("docs/evidence/P04.T01h/history/build-65/owned-build-qualification.json", "utf8"),
-);
+const history = JSON.parse(readFileSync("tests/fixtures/e2b-observed-build-65.json", "utf8"));
 const record = history.result.record,
   observed = history.result.observation;
 const clock = observed.finishedAtMs + 1000;
@@ -89,19 +86,10 @@ function wire(changes = {}) {
   return { calls, fetch, now: () => clock };
 }
 
-test("operator65 archived source closure retains the exact actual operation source", () => {
-  const root = "docs/history/e2b-operator-65",
-    manifest = JSON.parse(readFileSync(`${root}/manifest.json`, "utf8"));
+test("observed build65 record binds the exact actual operation source", () => {
   const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
-  assert.equal(manifest.ownedBuildSourceSha256, source);
   assert.equal(history.source_sha256, source);
-  for (const [path, expected] of Object.entries(manifest.files))
-    assert.equal(sha(readFileSync(resolve(root, path))), expected, path);
-  const digests = Object.fromEntries(
-    manifest.ownedBuildSources.map((path) => [path, sha(readFileSync(resolve(root, path)))]),
-  );
-  assert.deepEqual(digests, history.source_digests);
-  assert.equal(sha(JSON.stringify(digests)), source);
+  assert.equal(sha(JSON.stringify(history.source_digests)), source);
 });
 
 test("only the exact observed12422 tuple qualifies the bounded66 runtime profile", () => {

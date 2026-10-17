@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { build } from "esbuild";
 import { Miniflare, Log, LogLevel } from "miniflare";
 import { validators } from "../packages/contracts/src/generated/runtime-validators.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 const bundle = await build({
   entryPoints: ["scripts/fixtures/neon-worker.ts"],
@@ -94,14 +95,11 @@ try {
     "package-lock.json",
   ];
   const sha = (text) => createHash("sha256").update(text).digest("hex");
-  mkdirSync("docs/evidence/P04.T01b", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P04.T01b/workers.json",
+  writeArtifact(
+    "labs/workers-identity.json",
     JSON.stringify(
       {
         task: "P04.T01b",
-        plan_sequence: JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
-          .sequence,
         scope:
           "Pinned local workerd runtime with synthetic driver/identity; not hosted Neon, TLS, pool reuse, provider identity or deployment qualification",
         runtime: "miniflare4.20260730.0",

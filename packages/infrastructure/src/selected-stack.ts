@@ -5,14 +5,11 @@ export const selectedStack = "cloudflare-neon-runtime";
 export const selectedEnvironments = ["development", "staging", "production"] as const;
 export type SelectedEnvironment = (typeof selectedEnvironments)[number];
 
-export function selectedConfiguration(environment: SelectedEnvironment, planSequence: number) {
+export function selectedConfiguration(environment: SelectedEnvironment) {
   if (!selectedEnvironments.includes(environment)) throw Error("UNKNOWN_ENVIRONMENT");
-  if (!Number.isSafeInteger(planSequence) || planSequence < 64)
-    throw Error("UNRECORDED_STACK_DECISION");
   const prefix = `morrow-${environment}`;
   return {
     schema_version: 1,
-    plan_sequence: planSequence,
     stack: selectedStack,
     environment,
     status: "design_candidate",
@@ -106,12 +103,7 @@ export function inspectSelectedConfiguration(value: unknown): string[] {
   const input = value as Partial<SelectedConfiguration>;
   if (!selectedEnvironments.includes(input.environment as SelectedEnvironment))
     return ["UNKNOWN_ENVIRONMENT"];
-  if (!Number.isSafeInteger(input.plan_sequence) || (input.plan_sequence ?? 0) < 64)
-    return ["UNRECORDED_STACK_DECISION"];
-  const expected = selectedConfiguration(
-    input.environment as SelectedEnvironment,
-    input.plan_sequence!,
-  );
+  const expected = selectedConfiguration(input.environment as SelectedEnvironment);
   try {
     return canonical(value) === canonical(expected) ? [] : ["UNREVIEWED_CONFIGURATION_DELTA"];
   } catch {

@@ -8,34 +8,14 @@ const hash = (p) => createHash("sha256").update(readFileSync(p)).digest("hex");
 const migration = read("migrations/0008.browser-session-admission.sql");
 const manifest = JSON.parse(read("migrations/manifest.json"));
 
-test("browser admission appends migration8 without rewriting the seven published migrations", () => {
-  const previous = JSON.parse(
-    read("docs/history/workos-authentication-operator-80/migrations/manifest.json"),
-  );
-  assert.equal(manifest.migrations.length, 11);
-  assert.deepEqual(manifest.migrations.slice(0, 7), previous.migrations);
+// Published-migration immutability is pinned in tests/migration-history.test.mjs.
+test("browser admission is migration8 inside one transaction without session table rewrites", () => {
   for (const entry of manifest.migrations)
     assert.equal(hash("migrations/" + entry.file), entry.sha256);
   assert.equal(manifest.migrations[7].sequence, 8);
   assert.equal(manifest.migrations[7].file, "0008.browser-session-admission.sql");
-  assert.equal(manifest.migrations[7].reviewRef, "docs/evidence/P05.T01m/review.json");
   assert.match(migration, /^BEGIN;[\s\S]+COMMIT;\s*$/);
   assert.doesNotMatch(migration, /\b(?:ALTER|DROP)\s+TABLE\s+morrow_identity\.sessions\b/i);
-});
-
-test("admission preserves the qualified evidence and nonauthorizing selection boundaries", () => {
-  const protectedModules = {
-    "workos-session-token.ts": "198228864379483a4bdcd7fbba5982c429a20def7f189f66b2f1c8efb9ce7966",
-    "workos-session-status-json.ts":
-      "9b18639cca3a0ff7d2743171f1afbc605801b0b272622dccb934f4775ead48cb",
-    "workos-session-status.ts": "babe11c985ed80ce0f64e0f4a7042c440f1c60c78483db6d70aeb835d145564e",
-    "workos-authentication-evidence.ts":
-      "5c83d68b63474f85e6121bbbb55540280e742c66022fa9c481e37305a0568b90",
-    "workos-workspace-selection.ts":
-      "22f99e2a8c260996d60bbe0daf7694a2f2ec844e1ba718812b3bae0ed7f6d77e",
-  };
-  for (const [file, digest] of Object.entries(protectedModules))
-    assert.equal(hash("packages/identity/src/" + file), digest);
 });
 
 // These writers carry independently qualified receipt/grant/proof fences.

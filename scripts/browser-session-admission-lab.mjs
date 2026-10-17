@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import canonicalize from "canonicalize";
@@ -25,6 +25,7 @@ import {
   validateDefinition,
   validateCapabilityInput,
 } from "../packages/contracts/src/validation.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const checks = [];
 const check = (name, ok) => {
   if (!ok) throw Error("BROWSER_SESSION_LAB_FAILED:" + name);
@@ -55,8 +56,6 @@ const sourcePaths = [
   "infra/identity-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/plan/source.json",
-  "docs/plan/build-plan.md",
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 const migrations = manifest.migrations.slice(0, 8).map((m) => {
@@ -67,13 +66,6 @@ const migrations = manifest.migrations.slice(0, 8).map((m) => {
 });
 if (migrations.length !== 8 || migrations[7].m.sequence !== 8)
   throw Error("BROWSER_SESSION_MIGRATION_REQUIRED");
-const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
-if (
-  !Number.isSafeInteger(plan.sequence) ||
-  plan.sequence < 81 ||
-  plan.sha256 !== hash(readFileSync("docs/plan/build-plan.md"))
-)
-  throw Error("BROWSER_SESSION_PLAN_REQUIRED");
 const sources = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
 const secrets = [],
   pools = [],
@@ -880,7 +872,6 @@ for (const [p, d] of Object.entries(sources))
 const report = {
   schemaVersion: 1,
   packet: "P05.T01m",
-  executionSequence: plan.sequence,
   observedAt: new Date().toISOString(),
   scope:
     "Synthetic owning evidence and private local session persistence; no provider, browser, public issuer or live qualification.",
@@ -898,8 +889,7 @@ const report = {
     "No cookie, refresh transport, production adapter or end-user revocation issuer.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01m", { recursive: true });
-writeFileSync("docs/evidence/P05.T01m/postgresql-lab.json", JSON.stringify(report, null, 2) + "\n");
+writeArtifact("labs/browser-session-admission.json", JSON.stringify(report, null, 2) + "\n");
 console.log("PASS browser session admission PostgreSQL lab " + checks.length + " checks");
 async function exerciseWriters(ctx) {
   const {

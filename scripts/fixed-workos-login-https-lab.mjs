@@ -1,5 +1,5 @@
 import { createServer, request as httpsRequest } from "node:https";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createWorkspaceApiHttpListener } from "../apps/api/src/workspace-router.ts";
 import { createStandaloneLoginBridge } from "../packages/identity/src/standalone-login.ts";
@@ -25,6 +25,7 @@ import { seedStandaloneLinkingFixture } from "./fixtures/standalone-linking-fixt
 import { standaloneSqlLiteral as lit } from "./standalone-session-fixtures.mjs";
 import { localStandaloneSqlPool } from "./local-standalone-sql.mjs";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const checks = [];
@@ -98,13 +99,6 @@ const paths = [
   "infra/identity-logout-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/plan/source.json",
-  "docs/plan/build-plan.md",
-  "docs/packets/P05.T01r.md",
-  "docs/packets/P05.T01s.md",
-  "docs/packets/P05.T01t.md",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
   ".nvmrc",
   "package.json",
   "package-lock.json",
@@ -112,15 +106,11 @@ const paths = [
   "packages/contracts/package.json",
   "tsconfig.base.json",
 ];
-const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
-if (
-  process.version !== "v24.13.0" ||
-  plan.sequence !== 94 ||
-  plan.path !== "docs/plan/build-plan.md" ||
-  hash(readFileSync(plan.path)) !== plan.sha256
-)
-  throw Error("FIXED_PROVIDER_HTTPS_SOURCE_REQUIRED");
+if (process.version !== "v24.13.0") throw Error("FIXED_PROVIDER_HTTPS_SOURCE_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
+// Every published migration must be present in order and checksum-verified. The
+// self-logout fixture applies exactly the first eleven, so the count stays exact until
+// this lab also applies later migrations; a twelfth migration must fail here.
 if (manifest.migrations.length !== 11) throw Error("FIXED_PROVIDER_HTTPS_MIGRATIONS_REQUIRED");
 for (const [index, entry] of manifest.migrations.entries()) {
   if (
@@ -855,7 +845,6 @@ for (const [path, digest] of Object.entries(sourceDigests))
 const report = {
   schemaVersion: 1,
   task: "P05.T01r",
-  canonicalSequence: 94,
   qualification:
     "private_fixed_workos_port_independent_synthetic_fetch_real_postgresql_merchant_https_jar_o_b_q",
   observedAt: new Date().toISOString(),
@@ -895,8 +884,7 @@ const privateValues = [
 ];
 if (privateValues.some((value) => text.includes(value)))
   throw Error("FIXED_PROVIDER_HTTPS_REPORT_PRIVACY");
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01v/regressions/fixed-provider-https.json", text);
+writeArtifact("labs/fixed-workos-login-https.json", text);
 console.log(
   "PASS: " +
     checks.length +

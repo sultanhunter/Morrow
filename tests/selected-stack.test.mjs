@@ -1,14 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
 import {
   selectedConfiguration,
   compileSelectedConfiguration,
   inspectSelectedConfiguration,
 } from "../packages/infrastructure/src/selected-stack.ts";
 import { estimateStackComponents } from "../scripts/stack-cost.mjs";
-import { estimateStackComponents as estimateLegacyDaytonaComponents } from "../docs/decisions/archive/daytona-selection-54/scripts/stack-cost.mjs";
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 const model = read("docs/decisions/cost-model.json");
 
@@ -37,7 +35,7 @@ test("selected environment inventories are distinct and remain non-activating", 
   }
 });
 test("configuration digest is independent of JSON key ordering", () => {
-  const config = selectedConfiguration("staging", 64);
+  const config = selectedConfiguration("staging");
   const reordered = Object.fromEntries(Object.entries(config).reverse());
   assert.equal(
     compileSelectedConfiguration(config).configuration_sha256,
@@ -70,11 +68,11 @@ test("selected runtime registry, policy and neutral capability routes agree", ()
 });
 test("non-finite and cyclic configuration values cannot masquerade as null selectors", () => {
   for (const invalid of [NaN, Infinity, undefined]) {
-    const config = selectedConfiguration("staging", 64);
+    const config = selectedConfiguration("staging");
     config.cloudflare.account_id = invalid;
     assert.deepEqual(inspectSelectedConfiguration(config), ["INVALID_CONFIGURATION_VALUE"]);
   }
-  const config = selectedConfiguration("staging", 64);
+  const config = selectedConfiguration("staging");
   config.quote = config;
   assert.deepEqual(inspectSelectedConfiguration(config), ["INVALID_CONFIGURATION_VALUE"]);
 });
@@ -101,15 +99,18 @@ for (const [name, change] of [
   ["unexpected credential field", (c) => (c.runtime.token = "synthetic")],
 ])
   test(`local selected inventory rejects ${name}`, () => {
-    const config = selectedConfiguration("staging", 64);
+    const config = selectedConfiguration("staging");
     change(config);
     assert.deepEqual(inspectSelectedConfiguration(config), ["UNREVIEWED_CONFIGURATION_DELTA"]);
     assert.throws(() => compileSelectedConfiguration(config), /UNREVIEWED_CONFIGURATION_DELTA/);
   });
-test("earlier hosting decisions and unknown environments cannot compile", () => {
-  for (const revision of [44, 45, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63])
-    assert.throws(() => selectedConfiguration("staging", revision), /UNRECORDED_STACK_DECISION/);
-  assert.throws(() => selectedConfiguration("invented", 64), /UNKNOWN_ENVIRONMENT/);
+test("unknown environments and extra revision fields cannot compile", () => {
+  assert.throws(() => selectedConfiguration("invented"), /UNKNOWN_ENVIRONMENT/);
+  assert.deepEqual(inspectSelectedConfiguration({ environment: "invented" }), [
+    "UNKNOWN_ENVIRONMENT",
+  ]);
+  const stale = { ...selectedConfiguration("staging"), plan_sequence: 63 };
+  assert.deepEqual(inspectSelectedConfiguration(stale), ["UNREVIEWED_CONFIGURATION_DELTA"]);
 });
 test("E2B active arithmetic excludes unbound subscription and runtime meters", () => {
   const result = estimateStackComponents(model, model.example_usage);
@@ -198,28 +199,7 @@ test("active pricing refuses legacy meters, provider substitution and invented p
   forged.rates.e2b_vcpu_second.amount = "0";
   assert.throws(() => estimateStackComponents(forged, model.example_usage), /Unqualified E2B/);
 });
-test("exact previous Daytona inventory and cost arithmetic are retained as explicit history", () => {
-  const manifest = read("docs/decisions/archive/daytona-selection-54/manifest.json");
-  for (const entry of Object.values(manifest.entries))
-    assert.equal(
-      createHash("sha256").update(readFileSync(entry.archive)).digest("hex"),
-      entry.sha256,
-    );
-  const previous = read("infra/archive/daytona-selection-54/environments/staging.json");
-  assert.equal(previous.stack, "cloudflare-neon-daytona");
-  assert.equal(previous.daytona.sandbox_class, "linux_vm");
-  const legacy = read(model.legacy_cost_model);
-  assert.equal(
-    estimateLegacyDaytonaComponents(legacy, legacy.example_usage).subtotal,
-    "859.230000000",
-  );
-  assert.throws(
-    () => estimateStackComponents(legacy, legacy.example_usage),
-    /explicit exclusions|Unsupported stack/,
-  );
-  const retained = read("infra/providers/daytona.json");
-  assert.equal(retained.new_allocation, "disabled");
-  assert.match(retained.original_operation_cleanup, /original_provider_account_profile_journal/);
+test("selected E2B provider record stays unqualified and disabled", () => {
   const selected = read("infra/providers/e2b.json");
   assert.equal(selected.status, "selected_not_qualified");
   assert.equal(selected.activation, "disabled");

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare, Response as MiniflareResponse, WebSocketPair } from "miniflare";
 import {
@@ -13,6 +13,7 @@ import {
   createManagedLoginCleanupGate,
   createManagedLoginReleaseGate,
 } from "./fixtures/managed-login-cleanup-gate.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 if (process.version !== "v24.13.0") throw Error("U01_PINNED_NODE_REQUIRED");
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -20,16 +21,11 @@ const packageVersion = (name) =>
   JSON.parse(readFileSync(`node_modules/${name}/package.json`)).version;
 if (packageVersion("miniflare") !== "4.20260730.0" || packageVersion("workerd") !== "1.20260730.1")
   throw Error("U01_PINNED_RUNTIME_REQUIRED");
-if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 94)
-  throw Error("V_CURRENT94_REQUIRED");
 const attempt = process.argv.slice(2);
 if (attempt.length > 1 || (attempt.length && !/^--attempt=[a-z][a-z0-9-]{0,31}$/.test(attempt[0])))
   throw Error("U01_CLOSED_ATTEMPT_NAME_REQUIRED");
-const reportPath =
-  "docs/evidence/P05.T01v/workspace-api-workers" +
-  (attempt.length ? "-" + attempt[0].slice(10) : "") +
-  ".json";
-if (existsSync(reportPath)) throw Error("U01_IMMUTABLE_REPORT_EXISTS");
+const reportName =
+  "labs/workspace-api-workers" + (attempt.length ? "-" + attempt[0].slice(10) : "") + ".json";
 const paths = [
   "scripts/fixtures/managed-login-lifetime-worker.ts",
   "scripts/fixtures/managed-login-cleanup-gate.mjs",
@@ -39,9 +35,6 @@ const paths = [
   "scripts/fixtures/managed-workspace-pg-oracle.mjs",
   "tests/managed-workspace-pg-oracle.test.mjs",
   "tests/managed-login-cleanup-gate.test.mjs",
-  "docs/packets/P05.T01v.md",
-  "docs/plan/build-plan.md",
-  "docs/plan/source.json",
   "package-lock.json",
   "package.json",
   "scripts/fixtures/managed-login-request-worker.ts",
@@ -1026,7 +1019,6 @@ const status =
 const report = {
   schema_version: 1,
   task: "P05.T01v",
-  current_plan_sequence: 94,
   phase: "V03_same_application_three_role_native_request_lifetime",
   status,
   source_digests: sourceDigests,
@@ -1078,11 +1070,10 @@ const report = {
     "The after-C row records a late-open attempt, actual read/ack only if observed, and native cancellation or unknown otherwise; it does not label an unobserved late acknowledgement as measured. Rejected, stalled and after-C credential acknowledgements remain conservative unknowns; forced fixture/runtime disposal cannot upgrade source cleanup. Cross-isolate SQL continuity, real browser, hosted and merchant qualification are separate.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01v", { recursive: true });
 const reportText = JSON.stringify(report, null, 2) + "\n";
 if (privateMarkers.some((marker) => marker && reportText.includes(marker)))
   throw Error("U_MANAGED_SECRET_FENCE");
-writeFileSync(reportPath, reportText, { flag: "wx" });
+const reportPath = writeArtifact(reportName, reportText);
 process.stdout.write(
   JSON.stringify({ report: reportPath, status, cases: cases.length, checks: checks.length }) + "\n",
 );

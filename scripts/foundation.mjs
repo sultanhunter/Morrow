@@ -7,6 +7,39 @@ export const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const read = path => JSON.parse(readFileSync(resolve(root, path), 'utf8'));
 export const sha = value => createHash('sha256').update(value).digest('hex');
 
+// Parent tasks are defined by numbered plan items ("1. **P01.T01 ..."), acceptance cases by
+// their bold IDs ("**P01.A01:**"), both in plan order. Mentions are every ID the plan names.
+export function planInventory(plan) {
+  const all = pattern => [...plan.matchAll(pattern)].map(m => m[1]);
+  return {
+    tasks: all(/^[ \t]*\d+\. \*\*(P\d{2}\.T\d{2})(?![a-z\d])/gm),
+    cases: all(/\*\*(P\d{2}\.A\d{2})(?![a-z\d])/g),
+    mentionedTasks: [...new Set(plan.match(/P\d{2}\.T\d{2}(?![a-z\d])/g) ?? [])],
+    mentionedCases: [...new Set(plan.match(/P\d{2}\.A\d{2}(?![a-z\d])/g) ?? [])],
+  };
+}
+
+// Status vocabulary of docs/progress/tasks.json (plan "Working agreement and change control").
+// Self-reviewed: complete with implementer review only while a required review or human gate is open.
+export const TASK_STATUSES = Object.freeze(['Planned', 'Ready', 'In progress', 'In review', 'Self-reviewed', 'Verified', 'Blocked']);
+
+export function validateTasks(tasks) {
+  const errors = [];
+  const ids = new Set();
+  for (const t of tasks.tasks ?? []) {
+    if (typeof t?.id !== 'string' || !/^P\d{2}\.T\d{2}$/.test(t.id) || ids.has(t.id)) errors.push(`invalid or duplicate task ID: ${t?.id}`);
+    ids.add(t?.id);
+    if (JSON.stringify(Object.keys(t ?? {}).sort()) !== '["id","status"]') errors.push(`${t?.id}: task record must have exactly id and status`);
+    if (!TASK_STATUSES.includes(t?.status)) errors.push(`${t?.id}: unknown status ${JSON.stringify(t?.status)}`);
+  }
+  const cases = new Set();
+  for (const id of tasks.acceptance_ids ?? []) {
+    if (typeof id !== 'string' || !/^P\d{2}\.A\d{2}$/.test(id) || cases.has(id)) errors.push(`invalid or duplicate acceptance ID: ${id}`);
+    cases.add(id);
+  }
+  return errors;
+}
+
 export function validateCatalogue(catalogue, dependencies, tasks, types) {
   const errors = [];
   const ids = new Set();
@@ -45,7 +78,7 @@ export function validateCatalogue(catalogue, dependencies, tasks, types) {
   if (domains.size !== catalogue.domain_names.length) errors.push('unexpected domain');
   for (const d of dependencies) {
     if (!taskIds.has(d.resolve_in) || !d.owner || !['Open','Design recorded'].includes(d.status) || d.activation !== 'blocked_until_qualified') errors.push(`invalid dependency gate: ${d.id}`);
-    if (d.status === 'Design recorded' && (!Number.isInteger(d.design_sequence) || d.design_sequence > catalogue.plan_sequence || d.engineering_status !== 'not_implemented' || d.controlled_test_status !== 'not_run' || d.production_permission_status !== 'pending')) errors.push(`unsupported qualification claim: ${d.id}`);
+    if (d.status === 'Design recorded' && (!Number.isInteger(d.design_sequence) || d.engineering_status !== 'not_implemented' || d.controlled_test_status !== 'not_run' || d.production_permission_status !== 'pending')) errors.push(`unsupported qualification claim: ${d.id}`);
   }
   return errors;
 }

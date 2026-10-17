@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
 import { tsImport } from "tsx/esm/api";
@@ -16,6 +16,7 @@ import {
 import { createPlatformWorkosProviderOracle } from "./fixtures/fixed-workos-platform-provider.mjs";
 import { createBoundedLoginCookieJar } from "./fixtures/login-https.mjs";
 import { localStandaloneSqlPool } from "./local-standalone-sql.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 const { createSelfLogoutFixtureHarness } = await tsImport(
   "./fixtures/self-logout-fixture.mjs",
@@ -46,17 +47,11 @@ const held = () => Error("MANAGED_WORKSPACE_POSTGRESQL_HELD");
 const require = (condition) => {
   if (!condition) throw held();
 };
-require(
-  process.version === "v24.13.0" &&
-    JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence === 94,
-);
+require(process.version === "v24.13.0");
 const args = process.argv.slice(2);
 require(args.length <= 1 && (!args.length || /^--attempt=[a-z][a-z0-9-]{0,31}$/.test(args[0])));
-const reportPath =
-  "docs/evidence/P05.T01v/workspace-api-postgresql" +
-  (args.length ? "-" + args[0].slice(10) : "") +
-  ".json";
-require(!existsSync(reportPath));
+const reportName =
+  "labs/workspace-api-postgresql" + (args.length ? "-" + args[0].slice(10) : "") + ".json";
 const paths = [
   "scripts/managed-workspace-api-postgresql-lab.mjs",
   "scripts/fixtures/managed-workspace-api-worker.ts",
@@ -80,9 +75,6 @@ const paths = [
   "infra/identity-login-role-prerequisites.sql",
   "infra/identity-logout-role-prerequisites.sql",
   "migrations/manifest.json",
-  "docs/packets/P05.T01v.md",
-  "docs/plan/build-plan.md",
-  "docs/plan/source.json",
   "package.json",
   "package-lock.json",
   ...[
@@ -117,6 +109,9 @@ const paths = [
   ].map((name) => "packages/identity/src/" + name + ".ts"),
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json"));
+// Every published migration must be present in order and checksum-verified. The
+// self-logout fixture applies exactly the first eleven, so the count stays exact until
+// this lab also applies later migrations; a twelfth migration must fail here.
 require(manifest.migrations.length === 11);
 for (const [i, row] of manifest.migrations.entries()) {
   require(row.sequence === i + 1 && hash(readFileSync("migrations/" + row.file)) === row.sha256);
@@ -980,7 +975,6 @@ for (const [path, digest] of Object.entries(sourceDigests))
 const report = {
   schema_version: 1,
   task: "P05.T01v",
-  current_plan_sequence: 94,
   status: failure || cleanupFailures.length ? "held" : "passed",
   scope: "configured_local_same_application_Worker_seven_restricted_roles_real_PostgreSQL17",
   source_digests: sourceDigests,
@@ -1020,8 +1014,7 @@ const secretFenceClear = !privateMarkers.some((marker) => marker && text.include
 privateMarkers.fill("");
 privateMarkers.length = 0;
 require(secretFenceClear);
-mkdirSync("docs/evidence/P05.T01v", { recursive: true });
-writeFileSync(reportPath, text, { flag: "wx" });
+const reportPath = writeArtifact(reportName, text);
 process.stdout.write(
   JSON.stringify({
     report: reportPath,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Miniflare, Log, LogLevel } from "miniflare";
 import {
@@ -11,6 +11,7 @@ import {
   actor,
   digest,
 } from "../tests/fixtures/agent-authority.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 // Real local workerd, synthetic data and denied outbound network only.
 // This is not a production reader, authenticator or deployment command.
@@ -122,14 +123,11 @@ try {
   assert.equal(outbound, 0);
   result.checks.push({ name: "zero_provider_requests", passed: outbound === 0 });
   const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
-  mkdirSync("docs/evidence/P05.T04", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P05.T04/workers-lab.json",
+  writeArtifact(
+    "labs/agent-authority-workers.json",
     JSON.stringify(
       {
         task: "P05.T04a",
-        canonical_sequence: JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
-          .sequence,
         observed_at: new Date().toISOString(),
         scope:
           "Actual pinned local workerd with synthetic agent authority readers; no hosted deployment, SQL ownership, provider authentication or dispatch qualification",

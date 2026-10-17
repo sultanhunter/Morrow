@@ -117,8 +117,12 @@ function sourceBytes(root, name) {
   }
 }
 // Optional root is a trusted local test seam; the CLI never accepts a source root.
+// The native74 operator is retired: its one approved allowance was consumed and the
+// staging session was revoked. The repository root is denied unconditionally instead
+// of relying on a plan-sequence mismatch (ADR-0002); only synthetic fixture roots load.
 export function loadPublicWorkosOperatorScope(root = repositoryRoot) {
   try {
+    if (realpathSync(root) === realpathSync(repositoryRoot)) throw unavailable();
     if (typeof root !== "string" || !isAbsolute(root) || realpathSync(root) !== root)
       throw unavailable();
     const manifest = JSON.parse(sourceBytes(root, "docs/plan/source.json").toString("utf8"));

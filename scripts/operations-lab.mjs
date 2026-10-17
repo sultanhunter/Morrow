@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
 import { randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
 import { encryptedLabFixtures } from "./encrypted-lab-fixtures.mjs";
 import { encodeOperationalEvent } from "../packages/infrastructure/src/operations.ts";
-import { inspectProvisioningReadiness } from "../packages/infrastructure/src/readiness.ts";
+import { compileSelectedConfiguration } from "../packages/infrastructure/src/selected-stack.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const start = performance.now();
 const correlationId = randomUUID();
 const events = [];
@@ -148,32 +149,18 @@ try {
     if (beforeDeath !== "1" || durableRows !== "1" || login(currentCredentialRevision).status !== 0)
       throw Error("ROTATION_WORKER_DURABILITY_FAILED");
     emit("WORKER_CONNECTION_RECOVERED");
-    const pending = inspectProvisioningReadiness(
-      {
-        environment: "development",
-        region: "us-east-1",
-        accountId: null,
-        sourceCommit: null,
-        templateDigest: null,
-        engineVersion: null,
-        maximumAcu: null,
-        ingressCertificateArn: null,
-        s3RegionalPrefixListId: null,
-        deploymentIssuerRolePath: null,
-        recoveryIssuerRolePath: null,
-        cloudflarePrivateProcessing: false,
-        checks: {},
-        quote: null,
-        ownerAuthorization: null,
-      },
-      {
-        environment: "development",
-        sourceCommit: "a".repeat(40),
-        templateDigest: "b".repeat(64),
-        now: new Date().toISOString(),
-      },
-    );
-    if (!pending.includes("BOUND_OWNER_COST_AUTHORIZATION_REQUIRED"))
+    // Activation stays held: the reviewed selected development configuration has no
+    // owner cost authorization and both dispatch switches disabled.
+    const held = compileSelectedConfiguration(
+      JSON.parse(
+        readFileSync(new URL("../infra/environments/development.json", import.meta.url), "utf8"),
+      ),
+    ).configuration;
+    if (
+      held.owner_cost_authorization !== null ||
+      held.dispatch !== "disabled" ||
+      held.runtime.dispatch !== "disabled"
+    )
       throw Error("INVALID_ACTIVATION_NOT_HELD");
     emit("ACTIVATION_HELD");
     const serverLogs = containerCommand(["logs", id]);
@@ -215,8 +202,7 @@ try {
 }
 report.elapsed_ms = Math.round(performance.now() - start);
 report.cleanup = "owned ephemeral container removed";
-mkdirSync("docs/evidence/P04.T03", { recursive: true });
-writeFileSync("docs/evidence/P04.T03/operations-lab.json", JSON.stringify(report, null, 2) + "\n");
+writeArtifact("labs/operations.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   "PASS: actual local SCRAM rotation, abrupt client death, durable committed rows and redacted signals; cloud qualification pending.",
 );
