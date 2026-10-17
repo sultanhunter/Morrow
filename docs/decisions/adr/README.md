@@ -17,6 +17,7 @@ Material decisions (ADR-0002) are recorded here before dependent implementation.
 | [0011](ADR-0011-review-policy-and-contract-v1-1.md) | Contract v1.1: review policy and exact proposals | Accepted 2026-10-17 |
 | [0012](ADR-0012-ci-artifacts-are-evidence.md) | CI runs and their uploaded artifacts are the evidence | Accepted 2026-10-17 |
 | [0013](ADR-0013-retire-aws-cdk-daytona-frozen-regressions.md) | Retire the AWS CDK foundation, the Daytona laboratory and the frozen WorkOS operator regressions | Accepted 2026-10-17 |
+| [0014](ADR-0014-merge-authority-and-trunk.md) | Merge authority and main as the trunk | Accepted 2026-10-17 |
 
 ADR-0012 and ADR-0013 record how the P03.T04c overhaul implemented ADR-0002; earlier drafts of them used the numbers 0001, 0007 and 0008.
 
