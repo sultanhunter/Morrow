@@ -1,0 +1,7 @@
+{
+  "name": "@morrow/broker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "//": "No build or typecheck script: `npm run typecheck:edge` checks it against the pinned Workers runtime types and only wrangler bundles it (`npm run edge:dry-run`)."
+}

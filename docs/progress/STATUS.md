@@ -1,13 +1,11 @@
 # Morrow status
 
-Updated 2026-10-17. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
+Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
 
 ## Active packets
 
-`main` is the trunk (ADR-0014). The integration branch `codex/morrow-foundation` and the P03.T04c/d overhaul (PR #2) are merged into it. Three packets are in progress, each on its own branch from the overhaul head; their PRs will target `main`:
-- **P04.T02a** deployable composition root (`claude/p04-t02a-composition-root`; ADR-0007, `docs/packets/P04.T02a.md`).
-- **P05.T01x Part A** forward migration 0012 that removes plan-number identifiers (`claude/p05-t01x-a-protocol-names`; `docs/packets/P05.T01x.md`). Committed locally, rebased on `main`: migration 0012, the `morrow-login-v1`, `morrow-self-logout-v1` and `morrow_id_` renames, and `lab:login-protocol-v1`. Awaiting its PR into `main`, hosted CI (including the Linux-only `pgwire` labs, which AC03 and AC04 still wait on) and Tier 2 review (`docs/acceptance/P05.md`).
-- **P01.T02a PR-A** executor classes and human-only kill switches (`claude/p01-t02a-a-executors`; ADR-0005, `docs/packets/P01.T02a.md`).
+`main` is the trunk (ADR-0014). The integration branch `codex/morrow-foundation` and the P03.T04c/d overhaul (PR #2) are merged into it. P05.T01x Part A (PR #4: migration 0012, the `morrow-login-v1`, `morrow-self-logout-v1` and `morrow_id_` renames, `lab:login-protocol-v1`) and P01.T02a PR-A (PR #6: executor classes and human-only kill switches; ADR-0005) are merged into `main`. In progress:
+- **P04.T02a** deployable composition root (`claude/p04-t02a-composition-root`, PR #5; ADR-0007, `docs/packets/P04.T02a.md`). `main` merged on 2026-10-18; its tests and labs now use the 0012 identifiers and apply migrations 0001–0012 (packet "Implementation notes: migration 0012"). Hosted run 39069081910 passed all 10 jobs on `5a3c66b` (`pgwire`: `lab:edge-postgresql` 7 cases, 50 checks). Tier 2 review findings are applied; the new head needs its own green run before merge.
 
 Delivered in P03.T04c/d:
 - Outputs go to `.artifacts/` and CI artifacts (ADR-0012).
@@ -15,7 +13,7 @@ Delivered in P03.T04c/d:
 - AWS CDK, Daytona and the frozen regressions are retired (ADR-0013).
 - `docs/evidence` and `docs/history` are removed from the tree (recover them from the archive tag via `docs/history/INDEX.md`).
 - CI runs as parallel jobs (`docs/development/ci.md`).
-- `CLAUDE.md`, the `AGENTS.md` pointer, ADR-0001 to ADR-0013, plan R1 with `npm run plan:check`, and the next packets. ADR-0014 (merge authority, `main` as trunk) lands in PR #3.
+- `CLAUDE.md`, the `AGENTS.md` pointer, ADR-0001 to ADR-0013, plan R1 with `npm run plan:check`, and the next packets. ADR-0014 (merge authority, `main` as trunk) landed in PR #3.
 
 ## Last green commit
 
@@ -23,7 +21,7 @@ Delivered in P03.T04c/d:
 
 ## Next actions
 
-1. Finish, review and merge the three active packets (Tier 2 AI review, then green `foundation`).
+1. Finish, review and merge P04.T02a (Tier 2 AI review, then green `foundation`).
 2. P05.T01x Part B, signup and workspace list (ADR-0009). It needs P01.T02a PR-B (ADR-0011) first.
 3. P06.T01a, work commands on the tenant data pattern (ADR-0010). P01.T02b and T02c contracts.
 4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.

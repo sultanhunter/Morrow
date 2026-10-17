@@ -1,0 +1,12 @@
+# Static Assets response headers for the api Worker's same-origin SPA
+# (P04.T02a D6). Worker responses on reserved paths set their own headers.
+# HSTS and form-action wait for P04.T01i (domain policy, AuthKit redirects).
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Cross-Origin-Opener-Policy: same-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

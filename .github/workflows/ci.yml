@@ -133,7 +133,7 @@ jobs:
 
   workers:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -148,6 +148,27 @@ jobs:
         run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build the workspace SPA that the api Worker serves through Static Assets
+        run: npm run build -w @morrow/workspace-web
+      - name: Pull the pinned image that hosts the network-none edge checks
+        run: docker pull "$(node -p 'require("./infra/local-engine.json").image')"
+      # P04.T02a AC02/AC23: wrangler dry-runs all 12 Worker x environment bundles and
+      # starts the unbound local dev pair with no network at all. The checkout is
+      # mounted read-only (wrangler's .wrangler/ scratch directories are tmpfs) and the
+      # runner's pinned Node 24.13.0 is mounted into the digest-pinned image.
+      - name: Dry-run every Worker and smoke-test local dev inside a network-none container
+        run: >-
+          mkdir -p "$MORROW_ARTIFACTS_DIR" apps/api/.wrangler apps/broker/.wrangler apps/workers/.wrangler apps/shopify-connector/.wrangler &&
+          docker run --rm --network none --read-only --user "$(id -u):$(id -g)"
+          --tmpfs /tmp:rw,exec,size=1024m
+          --tmpfs /repo/apps/api/.wrangler:rw,exec,uid=$(id -u) --tmpfs /repo/apps/broker/.wrangler:rw,exec,uid=$(id -u)
+          --tmpfs /repo/apps/workers/.wrangler:rw,exec,uid=$(id -u) --tmpfs /repo/apps/shopify-connector/.wrangler:rw,exec,uid=$(id -u)
+          --volume "$PWD:/repo:ro" --volume "$(dirname "$(dirname "$(command -v node)")"):/opt/node:ro"
+          --volume "$MORROW_ARTIFACTS_DIR:/artifacts" --workdir /repo
+          --env PATH=/opt/node/bin:/usr/bin:/bin --env HOME=/tmp --env CI=true --env MORROW_ARTIFACTS_DIR=/artifacts
+          --env npm_config_update_notifier=false --env npm_config_cache=/tmp/npm-cache
+          --entrypoint /bin/sh "$(node -p 'require("./infra/local-engine.json").image')"
+          -c 'npm run edge:dry-run && npm run smoke:edge-dev'
       - name: Exercise the other Workers laboratories in the local Workers runtime, one at a time
         run: npm run lab:group:workers
       - name: Secret-scan generated reports before upload
@@ -219,7 +240,7 @@ jobs:
 
   pgwire:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -236,7 +257,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Pull the pinned PostgreSQL image
         run: docker pull "$(node -p 'require("./infra/local-engine.json").image')"
-      - name: Exercise controlled Neon, managed login and workspace API over PG wire against isolated PostgreSQL
+      - name: Exercise controlled Neon, managed login, workspace API and the deployable api/broker over PG wire against isolated PostgreSQL
         run: npm run lab:group:pgwire
       - name: Secret-scan generated reports before upload
         id: artifact_scan

@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { writeArtifact } from "./artifacts.mjs";
@@ -8,6 +9,8 @@ export function inspectSecrets(text) {
     ["openai_key", /\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}/],
     ["github_token", /\bgh[pousr]_[A-Za-z0-9]{36,}/],
     ["aws_access_key", /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/],
+    ["workos_key", /\bsk_(?:test|live)_[A-Za-z0-9]{16,}/],
+    ["neon_password", /\bnpg_[A-Za-z0-9]{12,}/],
     [
       "credential_literal",
       /\b(?:apiSecretKey|client_secret|access_token|password)\b["']?\s*[:=]\s*["'][^"'\s]{16,}["']/i,
@@ -59,25 +62,46 @@ export function lockedBundleAncestor(path, packages) {
   }
   return false;
 }
-function verify() {
+// Text files the repository secret scan reads, as root-relative paths. Wrangler's
+// local state (.wrangler/) is skipped; its configs (.jsonc) and developer secret
+// files (.env*, .dev.vars*) are scanned.
+export function scannedPaths(root = ".") {
   const paths = [];
-  const skip = new Set(["node_modules", ".git", "build", "dist", ".react-router", ".artifacts"]);
+  const skip = new Set([
+    "node_modules",
+    ".git",
+    "build",
+    "dist",
+    ".react-router",
+    ".artifacts",
+    ".wrangler",
+  ]);
   function walk(dir) {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    for (const entry of readdirSync(join(root, dir), { withFileTypes: true })) {
       const p = (dir === "." ? "" : dir + "/") + entry.name;
       if (entry.isDirectory()) {
         if (!skip.has(entry.name)) walk(p);
       } else if (
-        /\.(?:ts|tsx|mjs|json|md|yml|yaml|toml|html|sql)$/.test(p) ||
-        /\.env(?:\.|$)/.test(entry.name)
+        /\.(?:ts|tsx|mjs|json|jsonc|md|yml|yaml|toml|html|sql)$/.test(p) ||
+        /\.env(?:\.|$)/.test(entry.name) ||
+        /^\.dev\.vars(?:\.|$)/.test(entry.name)
       )
         paths.push(p);
     }
   }
   walk(".");
-  const errors = paths.flatMap((p) =>
-    inspectSecrets(readFileSync(p, "utf8")).map((kind) => ({ path: p, kind })),
-  ); // Never output matches or values.
+  return paths;
+}
+// Findings carry the path and pattern kind only, never the match or its value.
+export function scanSecrets(root = ".") {
+  const paths = scannedPaths(root);
+  const findings = paths.flatMap((p) =>
+    inspectSecrets(readFileSync(join(root, p), "utf8")).map((kind) => ({ path: p, kind })),
+  );
+  return { paths, findings };
+}
+function verify() {
+  const { paths, findings: errors } = scanSecrets("."); // Never output matches or values.
   const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
   const sql = Object.fromEntries(
     readdirSync("migrations")
@@ -100,6 +124,14 @@ function verify() {
     {
       name: "leaked_fixture_key",
       passed: inspectSecrets("sk-proj-" + "A".repeat(50)).includes("openai_key"),
+    },
+    {
+      name: "workos_key_marker",
+      passed: inspectSecrets("sk_" + "test_" + "A".repeat(24)).includes("workos_key"),
+    },
+    {
+      name: "neon_password_marker",
+      passed: inspectSecrets("npg_" + "A".repeat(16)).includes("neon_password"),
     },
     {
       name: "private_key_header",
