@@ -3,13 +3,18 @@ import { randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
 import { apiEnvironmentValueBindings, mapApiEnvironment } from "../apps/api/src/environment.ts";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
+import { appliedLegacyLoginControllerProtocol } from "../scripts/fixtures/standalone-login-fixture.mjs";
 
 // P04.T02a AC07, AC09 and the mapper side of AC08. Markers are built at runtime.
 const provider = createPlatformWorkosProviderOracle({ origin: "https://workspace.example.test" });
 const base = JSON.parse(provider.configurationJson);
 const auth = JSON.parse(base.authenticationBindingJson);
 function values(environment = "development", change = {}) {
-  const login = JSON.stringify({ ...base, retentionTier: change.retentionTier ?? environment });
+  const login = JSON.stringify({
+    ...base,
+    controllerProtocol: change.controllerProtocol ?? base.controllerProtocol,
+    retentionTier: change.retentionTier ?? environment,
+  });
   return {
     LOGIN_CONFIGURATION_JSON: login,
     WORKSPACE_CONFIGURATION_JSON: JSON.stringify({
@@ -19,7 +24,7 @@ function values(environment = "development", change = {}) {
     }),
     LOGOUT_CONFIGURATION_JSON: JSON.stringify({
       schemaVersion: 1,
-      protocol: "morrow-local-self-logout-85",
+      protocol: change.logoutProtocol ?? "morrow-self-logout-v1",
       origin: base.origin,
       providerId: "workos",
       environmentId: auth.environmentId,
@@ -178,6 +183,25 @@ test("AC09: cross-binding mismatches and production always fail step 7", () => {
     }),
     "API_ENV_CROSS_BINDING_MISMATCH",
   );
+});
+
+// Migration 0012 (P05.T01x Part A): captureManagedWorkspaceBinding admits only the
+// current login and logout protocols, so a retired or unknown one keeps the api unbound.
+test("AC09: a retired or unknown login or logout protocol fails step 7", () => {
+  assert.equal(base.controllerProtocol, "morrow-login-v1");
+  assert.equal(code(env()), "OK");
+  for (const controllerProtocol of [appliedLegacyLoginControllerProtocol(), "morrow-login-v2", ""])
+    assert.equal(
+      code(env("development", { controllerProtocol })),
+      "API_ENV_CROSS_BINDING_MISMATCH",
+      controllerProtocol,
+    );
+  for (const logoutProtocol of ["morrow-self-logout-v2", "morrow-login-v1", ""])
+    assert.equal(
+      code(env("staging", { logoutProtocol })),
+      "API_ENV_CROSS_BINDING_MISMATCH",
+      logoutProtocol,
+    );
 });
 
 test("records, environments, keyrings and the broker binding have their own codes", () => {

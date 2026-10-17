@@ -1,6 +1,6 @@
 // P04.T02a PostgreSQL 17 lab: the configured journey through the real wrangler
 // dry-run bundles of the api and broker, over the WSS->TCP bridge into an
-// isolated PostgreSQL 17 engine (migrations 0001-0011, restricted roles, test-only
+// isolated PostgreSQL 17 engine (migrations 0001-0012, restricted roles, test-only
 // LOGIN with random passwords held only by the broker). Synthetic WorkOS; no
 // account, credential or network. Linux CI only (the `pgwire` job), like the
 // other PG-wire labs; `edge-postgresql-local.mjs` runs the same journeys on a
@@ -105,10 +105,16 @@ export async function edgePostgresqlJourneys(engine, createService) {
     import.meta.url,
   );
   const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-  // Exactly the eleven published migrations; a twelfth must update this lab.
-  require(manifest.migrations.length === 11, "MIGRATION_COUNT");
+  // The login fixture applies 0001-0012 (0012 is the morrow-login-v1 protocol); those
+  // entries must be present in order and checksum-verified. Later manifest entries are
+  // not applied by this lab.
+  require(manifest.migrations.length >= 12, "MIGRATION_COUNT");
+  const appliedManifest = manifest.migrations.slice(0, 12);
+  for (const [i, row] of appliedManifest.entries())
+    require(row.sequence === i + 1 &&
+      hash(readFileSync("migrations/" + row.file)) === row.sha256, "MIGRATION_DRIFT");
   const migrationSql = new Map(
-    manifest.migrations.map((row) => [
+    appliedManifest.map((row) => [
       "SET ROLE morrow_identity_owner;\n" + readFileSync("migrations/" + row.file, "utf8"),
       row.sequence,
     ]),
@@ -183,7 +189,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
 
   stage = "seal";
   const sealed = await engine.sealSetup();
-  check("all_eleven_unchanged_migrations", appliedMigrations === 11);
+  check("all_twelve_unchanged_migrations", appliedMigrations === 12);
   check("seven_scram_roles", sealed.scramOfferedRoles === 7);
 
   // Passive PG-wire observation of every bridged connection: the startup role.

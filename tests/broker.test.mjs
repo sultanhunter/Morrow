@@ -17,6 +17,7 @@ import { brokerCapabilities, brokerHealth } from "../apps/broker/src/capabilitie
 import { brokerNeonLease } from "../apps/broker/src/neon-lease.ts";
 import { brokerWorkosSessionPage } from "../apps/broker/src/workos-session.ts";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
+import { appliedLegacyLoginControllerProtocol } from "../scripts/fixtures/standalone-login-fixture.mjs";
 
 // P04.T02a AC10 (prototype), AC11, AC13 (broker side), AC14 and AC29 over the
 // broker handlers. Every marker is built at runtime; none is written to disk.
@@ -39,6 +40,7 @@ function brokerEnv(environment = "development", change = {}) {
     MORROW_ENVIRONMENT: environment,
     LOGIN_CONFIGURATION_JSON: JSON.stringify({
       ...login,
+      controllerProtocol: change.controllerProtocol ?? login.controllerProtocol,
       retentionTier: change.retentionTier ?? environment,
     }),
     MORROW_DATABASE_BINDING_JSON: JSON.stringify(binding(change.bindingEnvironment ?? environment)),
@@ -225,6 +227,31 @@ test("AC14: a key from the wrong tier disables sessions only", async () => {
     await brokerHealth(brokerEnv("staging", { retentionTier: "development" }).env),
     false,
   );
+});
+
+// Migration 0012: the broker parses the login configuration with the same
+// parseLoginConfiguration, so a retired or unknown protocol disables sessions only.
+test("AC14: a retired or unknown login protocol disables sessions only", async () => {
+  assert.equal(login.controllerProtocol, "morrow-login-v1");
+  for (const controllerProtocol of [appliedLegacyLoginControllerProtocol(), "morrow-login-v2"]) {
+    const { env } = brokerEnv("staging", { controllerProtocol });
+    logs.length = 0;
+    const sent = requests.length;
+    await failure(
+      brokerWorkosSessionPage(
+        env,
+        workosSessionNamespace(env.LOGIN_CONFIGURATION_JSON),
+        selector(),
+        1000,
+      ),
+    );
+    assert.deepEqual(codes("workosSessionPage"), ["CAPABILITY_UNAVAILABLE"]);
+    assert.equal(requests.length, sent);
+    assert.equal(await brokerHealth(env), false);
+    const capabilities = await brokerCapabilities(env);
+    assert.equal(capabilities.sessions, null);
+    assert.notEqual(capabilities.database, null);
+  }
 });
 
 test("AC29: 20 concurrent first calls share one initialisation; a failure stays held", async () => {

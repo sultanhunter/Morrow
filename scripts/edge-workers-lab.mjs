@@ -160,7 +160,7 @@ function apiBindings(change = {}) {
     WORKSPACE_CONFIGURATION_JSON: JSON.stringify({ schemaVersion: 1, mode: "https", origin }),
     LOGOUT_CONFIGURATION_JSON: JSON.stringify({
       schemaVersion: 1,
-      protocol: "morrow-local-self-logout-85",
+      protocol: "morrow-self-logout-v1",
       origin,
       providerId: "workos",
       environmentId: auth.environmentId,

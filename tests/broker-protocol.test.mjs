@@ -139,7 +139,7 @@ test("the broker binding parser agrees with captureManagedWorkspaceBinding over 
         }),
         logoutConfigurationJson: JSON.stringify({
           schemaVersion: 1,
-          protocol: "morrow-local-self-logout-85",
+          protocol: "morrow-self-logout-v1",
           origin: login.origin,
           providerId: "workos",
           environmentId: auth.environmentId,

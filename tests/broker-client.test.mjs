@@ -108,7 +108,7 @@ test("AC12: a bad grant holds the pool before any socket", async () => {
     bindingJson: JSON.stringify(controlledNeonWireBinding),
     credentialBroker: createBrokerNeonCredentialBroker(broker, Date.now),
     now: Date.now,
-    loopbackWsUrl: "ws://127.0.0.1:9/morrow-neon-t88",
+    loopbackWsUrl: "ws://127.0.0.1:9/morrow-neon-loopback",
   });
   await assert.rejects(pools.loginPool.connect(control()));
   const m = snapshotControlledNeonLoginPoolMetrics(pools).loginPool;
@@ -118,7 +118,7 @@ test("AC12: a bad grant holds the pool before any socket", async () => {
 
 test("AC12: over a PG-wire oracle the pool releases normally once and never unverified", async (t) => {
   const oracle = createControlledNeonPgOracle({ password, poolNames: ["loginPool"] });
-  const server = new WebSocketServer({ host: "127.0.0.1", port: 0, path: "/morrow-neon-t88" });
+  const server = new WebSocketServer({ host: "127.0.0.1", port: 0, path: "/morrow-neon-loopback" });
   await once(server, "listening");
   t.after(() => new Promise((done) => server.close(done)));
   server.on("connection", (socket) => {
@@ -140,7 +140,7 @@ test("AC12: over a PG-wire oracle the pool releases normally once and never unve
     bindingJson: JSON.stringify(controlledNeonWireBinding),
     credentialBroker: createBrokerNeonCredentialBroker(broker, Date.now),
     now: Date.now,
-    loopbackWsUrl: `ws://127.0.0.1:${server.address().port}/morrow-neon-t88`,
+    loopbackWsUrl: `ws://127.0.0.1:${server.address().port}/morrow-neon-loopback`,
   });
   const client = await pools.loginPool.connect(control(Date.now() + 10000));
   await client.release(false);
