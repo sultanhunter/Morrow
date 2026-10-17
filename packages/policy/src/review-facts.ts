@@ -16,11 +16,20 @@ export interface WorkspaceOwnershipFacts {
   readonly lastMembershipChangeAt: string | null;
 }
 
-/** What each kill switch stops. */
+/**
+ * What each kill switch stops. The kinds are v1 `ResourceRef` kinds, so a
+ * KillSwitchRecord can name its targets without a mapping: `ads.campaign.pause`
+ * → `campaign`, `agents.installation.disable` → `installation`,
+ * `governance.membership.revoke` → `member`, `agents.release.revoke` →
+ * `release`. The exception is `connection`: v1 `ResourceRef` has no kind for a
+ * store connection, so how a `governance.connection.disconnect` record names its
+ * target is open. P05.T01z settles it with a deliberate v1.1 edit before the
+ * Tier 3 sign-off freezes v1.1.
+ */
 export type KillSwitchTargetKind =
   | "campaign"
   | "installation"
-  | "membership"
+  | "member"
   | "connection"
   | "release";
 
@@ -48,8 +57,11 @@ export interface KillSwitchTargetRecord {
 
 /**
  * The store and connection coverage of one of the actor's current execute
- * grants for the kill switch. A target must fit within a single grant; grants
- * are never unioned.
+ * grants for the kill switch. Every target, of every kind, must fit within a
+ * single grant; grants are never unioned. A storeless target needs a grant with
+ * no stores (the human evaluator's rule); a target with a store needs that
+ * store; a target on a connection, and a connection being disconnected, needs
+ * that connection. An empty list of grants therefore stops nothing.
  */
 export interface KillSwitchGrantCoverage {
   readonly storeIds: readonly string[];

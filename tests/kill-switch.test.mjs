@@ -64,13 +64,20 @@ function facts() {
         connectionId: "connection_b",
       }),
       record("installation", "installation_a"),
-      record("membership", "membership_owner"),
-      record("membership", "membership_b"),
-      record("membership", "membership_c"),
+      record("installation", "installation_store_a", { storeId: "store_a" }),
+      record("installation", "installation_ungranted", { storeId: "store_b" }),
+      record("member", "membership_owner"),
+      record("member", "membership_b"),
+      record("member", "membership_c"),
       record("connection", "connection_a", { storeId: "store_a", connectionId: "connection_a" }),
+      record("connection", "connection_b", { storeId: "store_b", connectionId: "connection_b" }),
       record("release", "release_a", { revision: 3, digest: "b".repeat(64) }),
     ],
-    grants: [{ storeIds: ["store_a"], connectionIds: ["connection_a"] }],
+    // A store-and-connection grant and a storeless (workspace-level) grant.
+    grants: [
+      { storeIds: ["store_a"], connectionIds: ["connection_a"] },
+      { storeIds: [], connectionIds: [] },
+    ],
     sourceProposal: null,
     ownership: {
       ownerPrincipalId: "human_owner",
@@ -168,7 +175,7 @@ test("AC09: a source proposal must be same-tenant, same-capability and cover the
   const source = {
     ref: proposalRef,
     capabilityId: "governance.membership.revoke",
-    targets: [{ kind: "membership", id: "membership_b" }],
+    targets: [{ kind: "member", id: "membership_b" }],
   };
   assert.equal(withSource(revoke("membership_b", proposalRef), source).allowed, true);
   const foreign = { ...proposalRef, workspaceId: "workspace_b" };
@@ -270,7 +277,7 @@ test("AC09: the owner membership is protected; a non-owner revocation is a membe
   assert.deepEqual(checkKillSwitchTarget(revoke("membership_c"), facts()), {
     allowed: true,
     capabilityId: "governance.membership.revoke",
-    targets: [{ kind: "membership", id: "membership_c" }],
+    targets: [{ kind: "member", id: "membership_c" }],
     membershipChange: true,
   });
 });
@@ -309,6 +316,47 @@ test("AC09: installation, connection and release targets resolve in the trusted 
   );
 });
 
+test("AC09: installation, connection, membership and release targets must each fit one grant", () => {
+  const check = (capabilityId, input, grants) => {
+    const f = facts();
+    if (grants) f.grants = grants;
+    return checkKillSwitchTarget({ capabilityId, input: { ...input, control } }, f);
+  };
+  const disable = (installationId, grants) =>
+    check("agents.installation.disable", { installationId }, grants);
+  const disconnect = (connectionId, grants) =>
+    check("governance.connection.disconnect", { connectionId }, grants);
+  // Granted targets are allowed.
+  assert.equal(disable("installation_store_a").allowed, true);
+  assert.equal(disconnect("connection_a").allowed, true);
+  const results = [
+    // A connection in a store outside every grant.
+    disconnect("connection_b"),
+    // A disconnect, a revoke and a release revoke with no grants at all.
+    disconnect("connection_a", []),
+    checkKillSwitchTarget(revoke("membership_c"), { ...facts(), grants: [] }),
+    check("agents.release.revoke", { releaseRef }, []),
+    // A connection must fit a single grant: store and connection are never unioned.
+    disconnect("connection_a", [
+      { storeIds: ["store_a"], connectionIds: ["connection_z"] },
+      { storeIds: ["store_z"], connectionIds: ["connection_a"] },
+    ]),
+    // An installation in an ungranted store.
+    disable("installation_ungranted"),
+    disable("installation_store_a", [{ storeIds: ["store_b"], connectionIds: [] }]),
+    // A storeless installation needs a storeless grant.
+    disable("installation_a", [{ storeIds: ["store_a"], connectionIds: ["connection_a"] }]),
+    // A membership revoke under only a store-scoped grant.
+    checkKillSwitchTarget(revoke("membership_c"), {
+      ...facts(),
+      grants: [{ storeIds: ["store_a"], connectionIds: ["connection_a"] }],
+    }),
+  ];
+  for (const result of results) assert.deepEqual(result, notFound);
+  for (const result of results) assert.deepEqual(result, results[0]);
+  assert.doesNotMatch(JSON.stringify(results), /installation_|connection_|membership_|store_/);
+});
+
 test("malformed requests and facts fail closed at the boundary", () => {
   const invalid = (request, f = facts(), code = "KILL_SWITCH_INPUT_INVALID") =>
     assert.throws(
@@ -342,7 +390,7 @@ test("malformed requests and facts fail closed at the boundary", () => {
     mutate(f);
     invalid(revoke("membership_b"), f, "KILL_SWITCH_FACTS_INVALID");
   };
-  bad((f) => f.records.push(record("membership", "membership_b", { workspaceId: "workspace_b" })));
+  bad((f) => f.records.push(record("member", "membership_b", { workspaceId: "workspace_b" })));
   bad((f) => (f.records[0].revision = 1));
   bad((f) => (f.extra = true));
   bad((f) => (f.ownership.activeHumanMembershipCount = -1));
@@ -354,7 +402,7 @@ test("malformed requests and facts fail closed at the boundary", () => {
       (f.sourceProposal = {
         ref: proposalRef,
         capabilityId: "governance.membership.revoke",
-        targets: [{ kind: "membership", id: "membership_b" }],
+        targets: [{ kind: "member", id: "membership_b" }],
       }),
   );
 });

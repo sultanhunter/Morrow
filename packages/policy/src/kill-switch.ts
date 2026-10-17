@@ -1,9 +1,9 @@
 // Target rules for the five ADR-0005 kill switches (P01.T02a §5). Pure: no I/O,
 // clock or randomness. It runs after the human policy evaluator allowed
 // `execute` and before any effect. It decides only whether the named targets
-// exist in the trusted tenant, fit the actor's grant and may be stopped; the
-// KillSwitchRecord, owner notification and the effect itself belong to
-// P05.T01z and P11.T05.
+// exist in the trusted tenant, each fit one of the actor's grants and may be
+// stopped; the KillSwitchRecord, owner notification and the effect itself
+// belong to P05.T01z and P11.T05.
 import type { CapabilityInput, Core_ProposalRef } from "@morrow/contracts";
 import { validateCapabilityInput, validateDefinition } from "@morrow/contracts/validation";
 import catalogue from "../../../docs/contracts/capabilities.json";
@@ -19,7 +19,7 @@ export type * from "./review-facts";
 const targetKinds = {
   "ads.campaign.pause": "campaign",
   "agents.installation.disable": "installation",
-  "governance.membership.revoke": "membership",
+  "governance.membership.revoke": "member",
   "governance.connection.disconnect": "connection",
   "agents.release.revoke": "release",
 } as const satisfies Record<string, KillSwitchTargetKind>;
@@ -203,23 +203,16 @@ export function checkKillSwitchTarget(
     case "ads.campaign.pause":
       claims = r.input.campaigns.map((c) => ({
         key: { kind: "campaign", id: c.id },
-        // The named store and connection must be the record's, and fit one grant.
+        // The named store and connection must be the record's.
         matches: (record) =>
-          inTenant(c) &&
-          record.storeId === c.storeId &&
-          record.connectionId === c.connectionId &&
-          f.grants.some(
-            (g) =>
-              (c.storeId === null ? g.storeIds.length === 0 : g.storeIds.includes(c.storeId)) &&
-              g.connectionIds.includes(c.connectionId),
-          ),
+          inTenant(c) && record.storeId === c.storeId && record.connectionId === c.connectionId,
       }));
       break;
     case "agents.installation.disable":
       claims = [{ key: { kind: "installation", id: r.input.installationId }, matches: any }];
       break;
     case "governance.membership.revoke":
-      claims = [{ key: { kind: "membership", id: r.input.membershipId }, matches: any }];
+      claims = [{ key: { kind: "member", id: r.input.membershipId }, matches: any }];
       break;
     case "governance.connection.disconnect":
       claims = [{ key: { kind: "connection", id: r.input.connectionId }, matches: any }];
@@ -239,9 +232,25 @@ export function checkKillSwitchTarget(
       break;
     }
   }
+  // Every target, of every kind, must fit within one of the actor's current
+  // execute grants for this kill switch; grants are never unioned. The store
+  // follows the evaluator's rule (a storeless target needs a storeless grant),
+  // and a target on a connection, or a connection itself, needs that connection.
+  const fitsOneGrant = (storeId: string | null, connectionId: string | null) =>
+    f.grants.some(
+      (g) =>
+        (storeId === null ? g.storeIds.length === 0 : g.storeIds.includes(storeId)) &&
+        (connectionId === null || g.connectionIds.includes(connectionId)),
+    );
   for (const claim of claims) {
     const found = f.records.find((x) => x.kind === claim.key.kind && x.id === claim.key.id);
-    if (!found || !inTenant(found) || !claim.matches(found)) return notFound;
+    if (
+      !found ||
+      !inTenant(found) ||
+      !claim.matches(found) ||
+      !fitsOneGrant(found.storeId, found.kind === "connection" ? found.id : found.connectionId)
+    )
+      return notFound;
   }
   const keys = claims.map((claim) => claim.key);
   const source = r.input.control.sourceProposalRef;

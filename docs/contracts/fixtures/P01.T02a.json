@@ -784,7 +784,7 @@
     "value": {
       "membershipId": "membership_b",
       "control": {
-        "reason": "Overspend on a misconfigured campaign",
+        "reason": "Former contractor still has access",
         "sourceProposalRef": null
       }
     }
@@ -798,7 +798,7 @@
       "membershipId": "membership_b",
       "expectedRevision": 1,
       "control": {
-        "reason": "Overspend on a misconfigured campaign",
+        "reason": "Former contractor still has access",
         "sourceProposalRef": null
       }
     }

@@ -5169,7 +5169,7 @@
         "ceilingMinor": "0",
         "costCurrency": "USD",
         "ceilingCurrency": "USD",
-        "killSwitchReason": "Overspend on a misconfigured campaign"
+        "killSwitchReason": "Former contractor still has access"
       }
     },
     "expected": {
@@ -5233,7 +5233,7 @@
         "ceilingMinor": "0",
         "costCurrency": "USD",
         "ceilingCurrency": "USD",
-        "killSwitchReason": "Overspend on a misconfigured campaign"
+        "killSwitchReason": "Former contractor still has access"
       }
     },
     "expected": {
@@ -5319,7 +5319,7 @@
         "ceilingMinor": "0",
         "costCurrency": "USD",
         "ceilingCurrency": "USD",
-        "killSwitchReason": "Overspend on a misconfigured campaign"
+        "killSwitchReason": "Former contractor still has access"
       }
     },
     "expected": {
@@ -5407,7 +5407,7 @@
         "ceilingMinor": "0",
         "costCurrency": "USD",
         "ceilingCurrency": "USD",
-        "killSwitchReason": "Overspend on a misconfigured campaign"
+        "killSwitchReason": "Former contractor still has access"
       }
     },
     "expected": {
