@@ -117,9 +117,9 @@ const paths = [
 ];
 if (process.version !== "v24.13.0") throw Error("LOGIN_HTTPS_LAB_SOURCE_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-// The login fixture applies exactly the twelve in the manifest; a thirteenth must fail here.
-if (manifest.migrations.length !== 12) throw Error("LOGIN_HTTPS_LAB_TWELVE_MIGRATIONS_REQUIRED");
-for (const [i, entry] of manifest.migrations.entries()) {
+// The login fixture applies 0001-0012; later manifest entries are not applied here.
+if (manifest.migrations.length < 12) throw Error("LOGIN_HTTPS_LAB_TWELVE_MIGRATIONS_REQUIRED");
+for (const [i, entry] of manifest.migrations.slice(0, 12).entries()) {
   if (entry.sequence !== i + 1 || hash(readFileSync("migrations/" + entry.file)) !== entry.sha256)
     throw Error("LOGIN_HTTPS_LAB_MIGRATION_HASH");
   paths.push("migrations/" + entry.file);

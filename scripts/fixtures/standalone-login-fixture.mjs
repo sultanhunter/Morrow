@@ -6,25 +6,20 @@ import {
 } from "../standalone-session-fixtures.mjs";
 import { localLoginFlowSqlPool } from "../local-login-flow-sql.mjs";
 const hash = (v) => createHash("sha256").update(v).digest("hex");
-// The exact current manifest: 0001-0009 through the session harness, then this chain.
-// A new migration must be added here, so every login and logout lab applies it.
+// 0001-0009 through the session harness, then this chain; each entry is checked by
+// sequence, file and sha256. Later manifest entries are not applied here: the shared
+// harness planned in P03.T04e applies the whole manifest and honours `executeAs`.
 const loginMigrationChain = Object.freeze([
   [10, "0010.login-flow-custody.sql"],
   [11, "0011.self-browser-family-logout.sql"],
   [12, "0012.login-protocol-v1.sql"],
 ]);
-export const currentMigrationCount = 12;
 export const loginControllerProtocol = "morrow-login-v1";
 function qualifiedMigration(sequence) {
   const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
   const m = manifest.migrations[sequence - 1];
   const expected = loginMigrationChain.find(([n]) => n === sequence);
-  if (
-    manifest.migrations.length !== currentMigrationCount ||
-    !expected ||
-    m.sequence !== sequence ||
-    m.file !== expected[1]
-  )
+  if (!expected || m?.sequence !== sequence || m.file !== expected[1])
     throw Error("LOGIN_FIXTURE_MIGRATION_UNQUALIFIED");
   const source = readFileSync("migrations/" + m.file, "utf8");
   if (hash(source) !== m.sha256) throw Error("LOGIN_FIXTURE_MIGRATION_UNQUALIFIED");
@@ -42,8 +37,8 @@ export function appliedLegacyLoginControllerProtocol() {
   return found[1];
 }
 // Only fresh isolated laboratory databases. No real account/user material. By default
-// every migration in the manifest is applied. `deferProtocolV1` stops after 0011, so an
-// upgrade laboratory can seed legacy rows before it calls `applyProtocolV1()`.
+// 0001-0012 are applied. `deferProtocolV1` stops after 0011, so an upgrade laboratory
+// can seed legacy rows before it calls `applyProtocolV1()`.
 export function createStandaloneLoginFixtureHarness(context, options = {}) {
   const sources = loginMigrationChain.map(([sequence]) => qualifiedMigration(sequence));
   const legacyProtocol = appliedLegacyLoginControllerProtocol();

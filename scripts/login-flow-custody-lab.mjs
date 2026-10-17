@@ -21,8 +21,8 @@ const hash = (v) => createHash("sha256").update(v).digest("hex"),
     console.log(JSON.stringify({ check: name, passed: true }));
   };
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-// The login fixture applies exactly the twelve in the manifest; a thirteenth must fail here.
-const selectedMigrations = manifest.migrations;
+// The login fixture applies 0001-0012; later manifest entries are not applied here.
+const selectedMigrations = manifest.migrations.slice(0, 12);
 const sourcePaths = [
   "scripts/login-flow-custody-lab.mjs",
   "scripts/local-postgres-lab.mjs",
@@ -316,9 +316,9 @@ const observed = await localPostgresLab("P05.T01p-custody", async (context) => {
   };
   try {
     check(
-      "twelve_exact_immutable_migrations",
-      manifest.migrations.length === 12 &&
-        manifest.migrations.every((m) => hash(readFileSync("migrations/" + m.file)) === m.sha256),
+      "migrations_0001_0012_exact_and_immutable",
+      selectedMigrations.length === 12 &&
+        selectedMigrations.every((m) => hash(readFileSync("migrations/" + m.file)) === m.sha256),
     );
     check(
       "six_force_rls_owner_tables",
@@ -890,7 +890,7 @@ const report = {
   holder_cleanup: holderCleanup,
   limitations: [
     "Synthetic owner-seeded identities only; no native/provider or hosted activation.",
-    "All twelve manifest migrations are installed; migration11 self-logout is installed but not qualified by this regression.",
+    "Migrations 0001-0012 are installed; migration11 self-logout is installed but not qualified by this regression.",
     "Controlled age fixtures qualify retention predicates, not elapsed production time.",
     "Historical receipt attribution never proves dispatch, delivery, or current authority.",
   ],

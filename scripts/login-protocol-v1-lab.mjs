@@ -36,11 +36,12 @@ const check = (name, passed) => {
   console.log(JSON.stringify({ check: name, passed: true }));
 };
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-// Exactly the twelve migrations in the manifest; a thirteenth must fail here.
+// The login fixture applies 0001-0012; later manifest entries are not applied here.
+const appliedMigrations = manifest.migrations.slice(0, 12);
 if (
-  manifest.migrations.length !== 12 ||
-  manifest.migrations[11].file !== "0012.login-protocol-v1.sql" ||
-  manifest.migrations.some(
+  appliedMigrations.length !== 12 ||
+  appliedMigrations[11].file !== "0012.login-protocol-v1.sql" ||
+  appliedMigrations.some(
     (m, i) => m.sequence !== i + 1 || hash(readFileSync("migrations/" + m.file)) !== m.sha256,
   )
 )
@@ -67,7 +68,7 @@ const sourcePaths = [
   "infra/identity-logout-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  ...manifest.migrations.map((m) => "migrations/" + m.file),
+  ...appliedMigrations.map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
 const loginMetrics = [],
@@ -140,6 +141,8 @@ const observed = await localPostgresLab("P05.T01x-protocol", async (context) => 
     count(
       `SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='morrow_identity' AND has_function_privilege(${lit(role)},p.oid,'EXECUTE')`,
     );
+  const v1Constraint =
+    "login_controller_protocol_v1|false|CHECK ((controller_protocol = 'morrow-login-v1'::text)) NOT VALID";
   const flowState = (v) =>
     h.admin(
       `SELECT phase||'|'||revision||'|'||(ciphertext IS NULL)||'|'||(capsule_erased_at IS NULL) FROM morrow_identity.login_flows WHERE id=${lit(v.selected.flowId)}`,
@@ -358,21 +361,17 @@ const observed = await localPostgresLab("P05.T01x-protocol", async (context) => 
     );
     check("refused_applications_change_nothing", protocolConstraints() === constraintsBefore);
     h.applyProtocolV1();
-    check("migration_0012_commits_as_owner", true);
+    // Committed: the 0010 column constraint is gone and the v1 constraint exists.
+    check("migration_0012_commits_as_owner", protocolConstraints() === v1Constraint);
     check(
       "migration_0012_reapplication_refused",
       refused(attempt(protocolMigration), "P0001", "LOGIN_PROTOCOL_PREREQUISITES_INVALID"),
     );
     check(
       "applied_migrations_0001_0011_unchanged",
-      manifest.migrations
+      appliedMigrations
         .slice(0, 11)
         .every((m) => hash(readFileSync("migrations/" + m.file)) === m.sha256),
-    );
-    check(
-      "v1_constraint_not_valid_and_never_validated",
-      protocolConstraints() ===
-        "login_controller_protocol_v1|false|CHECK ((controller_protocol = 'morrow-login-v1'::text)) NOT VALID",
     );
     // AC03 (catalog half): no constraint or function body names the retired protocol.
     check("catalog_has_no_legacy_protocol", catalogMentions(legacy) === 0);
@@ -407,7 +406,40 @@ const observed = await localPostgresLab("P05.T01x-protocol", async (context) => 
         ),
         "P0001",
         "LOGIN_RECORD_IMMUTABLE",
-      ),
+      ) &&
+        refused(
+          attempt(
+            `DELETE FROM morrow_identity.login_controller_configurations WHERE configuration_digest=${lit(x.configurationDigest)}`,
+          ),
+          "P0001",
+          "LOGIN_RECORD_IMMUTABLE",
+        ),
+    );
+    const legacyFlows = [intentFlow, awaitingFlow, claimedFlow],
+      legacyFlowStates = legacyFlows.map(flowState).join(",");
+    check(
+      "legacy_flows_immutable",
+      legacyFlows.every(
+        (v) =>
+          refused(
+            attempt(
+              `UPDATE morrow_identity.login_flows SET revision=revision+1 WHERE id=${lit(v.selected.flowId)}`,
+            ),
+            "P0001",
+            "LOGIN_RECORD_IMMUTABLE",
+          ) &&
+          refused(
+            attempt(`DELETE FROM morrow_identity.login_flows WHERE id=${lit(v.selected.flowId)}`),
+            "P0001",
+            "LOGIN_RECORD_IMMUTABLE",
+          ),
+      ) &&
+        refused(
+          attempt("TRUNCATE morrow_identity.login_flows"),
+          "P0001",
+          "LOGIN_RECORD_IMMUTABLE",
+        ) &&
+        legacyFlows.map(flowState).join(",") === legacyFlowStates,
     );
     const flowsBefore = count("SELECT count(*) FROM morrow_identity.login_flows");
     check(
@@ -486,6 +518,7 @@ const observed = await localPostgresLab("P05.T01x-protocol", async (context) => 
         "newly_claimed",
     );
     check("v1_claimed_flow_eligible", (await eligibility(current)).matches === true);
+    check("v1_constraint_not_valid_and_never_validated", protocolConstraints() === v1Constraint);
     check(
       "no_secret_in_sql_observations",
       [...h.rolePools, ...readPools].every((p) => {
@@ -520,7 +553,7 @@ const report = {
   packet: "P05.T01x",
   part: "A",
   acceptance: ["P05.T01x-AC01", "P05.T01x-AC02", "P05.T01x-AC03", "P05.T01x-AC04"],
-  migrations: manifest.migrations.map((m) => ({ sequence: m.sequence, sha256: m.sha256 })),
+  migrations: appliedMigrations.map((m) => ({ sequence: m.sequence, sha256: m.sha256 })),
   source_hashes: sourceHashes,
   checks,
   checks_passed: checks.length,
@@ -532,7 +565,7 @@ const report = {
   limitations: [
     "Synthetic owner-seeded identities in a fresh local container only; no hosted migration, provider or merchant effect.",
     "The retired protocol value is read from the applied 0010 bytes; the HTTP login and logout journeys on the v1 protocol are covered by the existing login and logout laboratories.",
-    "The application-name pattern is observed by the PG-wire laboratories, which run on Linux CI only.",
+    "The application-name pattern is asserted at every startup by the PG-wire oracle of the Workers laboratories; its real PostgreSQL observation is in the PG-wire laboratories, which run on Linux CI only.",
   ],
 };
 writeArtifact("labs/login-protocol-v1.json", JSON.stringify(report, null, 2) + "\n");

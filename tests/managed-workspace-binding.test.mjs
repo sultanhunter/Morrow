@@ -15,6 +15,7 @@ import {
   parseStandaloneLogoutConfigurationWithAttempt,
 } from "../packages/identity/src/standalone-logout.ts";
 import { createStandaloneLoginFixture } from "../scripts/fixtures/standalone-login-fixture.ts";
+import { appliedLegacyLoginControllerProtocol } from "../scripts/fixtures/standalone-login-fixture.mjs";
 import { buildWorkosAuthenticationEvidenceFixture } from "./fixtures/workos-authentication-evidence.mjs";
 import {
   createStandaloneLogoutFixture,
@@ -179,6 +180,18 @@ test("semantic workspace JSON formatting is stable and no keyring or pending cac
   }
 });
 const mismatches = {
+  legacyLoginProtocol: inputs({
+    loginConfigurationJson: JSON.stringify({
+      ...login,
+      controllerProtocol: appliedLegacyLoginControllerProtocol(),
+    }),
+  }),
+  unknownLoginProtocol: inputs({
+    loginConfigurationJson: JSON.stringify({ ...login, controllerProtocol: "morrow-login-v2" }),
+  }),
+  logoutProtocol: inputs({
+    logoutConfigurationJson: JSON.stringify({ ...logout, protocol: "morrow-self-logout-v2" }),
+  }),
   workspaceOrigin: inputs({
     workspaceConfigurationJson: JSON.stringify({
       schemaVersion: 1,

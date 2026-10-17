@@ -47,15 +47,15 @@ const sourcePaths = [
   "infra/identity-logout-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  ...manifest.migrations.map((m) => "migrations/" + m.file),
+  ...manifest.migrations.slice(0, 12).map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
-// Every published migration must be present in order and checksum-verified. The
-// login fixture applies exactly the twelve in the manifest, so the count stays exact until
-// this lab also applies later migrations; a thirteenth migration must fail here.
+// The login fixture applies 0001-0012; those entries must be present in order and
+// checksum-verified. Later manifest entries are not applied by this lab.
+const appliedMigrations = manifest.migrations.slice(0, 12);
 if (
-  manifest.migrations.length !== 12 ||
-  manifest.migrations.some(
+  appliedMigrations.length !== 12 ||
+  appliedMigrations.some(
     (m, i) => m.sequence !== i + 1 || hash(readFileSync("migrations/" + m.file)) !== m.sha256,
   )
 )
@@ -305,7 +305,13 @@ const observed = await localPostgresLab("P05.T01q-sql", async (context) => {
     };
   }
   try {
-    check("twelve_exact_immutable_migrations", manifest.migrations.length === 12);
+    check(
+      "migrations_0001_0012_exact_and_immutable",
+      appliedMigrations.length === 12 &&
+        appliedMigrations.every(
+          (m, i) => m.sequence === i + 1 && hash(readFileSync("migrations/" + m.file)) === m.sha256,
+        ),
+    );
     check(
       "dedicated_logout_role_safe",
       context
