@@ -13,8 +13,11 @@ const scripts = JSON.parse(
 const headRef = "${{ github.event.pull_request.head.sha || github.sha }}";
 const pinnedAction = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
 // Never run by CI: lab:engine is the standalone engine probe (pg-core records the engine
-// build inline), and lab:e2b-* are offline-by-default provider operator commands.
-const labsOutsideCi = (name) => name === "lab:engine" || name.startsWith("lab:e2b-");
+// build inline), lab:e2b-* are offline-by-default provider operator commands, and
+// lab:edge-postgresql-local is the developer-machine runner of the lab:edge-postgresql
+// journeys (supporting evidence; the pgwire job runs lab:edge-postgresql itself).
+const labsOutsideCi = (name) =>
+  name === "lab:engine" || name === "lab:edge-postgresql-local" || name.startsWith("lab:e2b-");
 
 // Parses the YAML subset these workflows use: block maps and sequences, plain, quoted and
 // flow-sequence scalars, `|`/`>-` block scalars and comments.

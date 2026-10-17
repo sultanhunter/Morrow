@@ -3,8 +3,9 @@
 // isolated PostgreSQL 17 engine (migrations 0001-0011, restricted roles, test-only
 // LOGIN with random passwords held only by the broker). Synthetic WorkOS; no
 // account, credential or network. Linux CI only (the `pgwire` job), like the
-// other PG-wire labs. Covers AC13, AC17, AC18 (second half), AC19, AC20, AC26
-// (login 200 half) and AC27.
+// other PG-wire labs; `edge-postgresql-local.mjs` runs the same journeys on a
+// developer machine as supporting evidence only. Covers AC13, AC17, AC18 (second
+// half), AC19, AC20, AC26 (login 200 half) and AC27.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -37,7 +38,7 @@ const held = (code = "HELD") => Error("EDGE_POSTGRESQL_LAB_" + code);
 const require = (condition, code) => {
   if (!condition) throw held(code);
 };
-const roles = Object.freeze([
+export const edgePostgresqlRoles = Object.freeze([
   "morrow_identity_login",
   "morrow_identity_preauth",
   "morrow_identity_resolution",
@@ -46,6 +47,7 @@ const roles = Object.freeze([
   "morrow_identity_linking",
   "morrow_identity_logout",
 ]);
+const roles = edgePostgresqlRoles;
 const literal = (value) => {
   require(typeof value === "string" && value.length <= 16384, "LITERAL");
   return "'" + value.replaceAll("'", "''") + "'";
@@ -82,7 +84,16 @@ function fixtureAdministratorSql(engineId, sql) {
 export async function edgePostgresqlJourneys(engine, createService) {
   const checks = [];
   const cases = [];
+  // privateMarkers: never in the report, logs or results. credentialMarkers (a
+  // subset: key, passwords, keyring material, codes, tokens) also never in any
+  // response body, Set-Cookie or Location header.
   const privateMarkers = [];
+  const credentialMarkers = ["platform_dropped_refresh_marker"];
+  const secret = (...values) => {
+    credentialMarkers.push(...values);
+    privateMarkers.push(...values);
+  };
+  const responses = [];
   const instances = new Set();
   let stage = "fixture";
   const check = (name, passed) => {
@@ -130,7 +141,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
   const ring = (fromMs, untilMs) => {
     const keyId = randomUUID();
     const material = randomBytes(32).toString("base64url");
-    privateMarkers.push(material);
+    secret(material);
     return JSON.stringify({
       schemaVersion: 1,
       purpose: "morrow.login.capsule/1",
@@ -148,7 +159,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
     });
   };
   const passwords = { ...engine.passwordByRole };
-  privateMarkers.push(keyMarker, ...Object.values(passwords));
+  secret(keyMarker, ...Object.values(passwords));
   const databaseBinding = { ...controlledNeonWireBinding, environment: "development" };
   const apiBindings = (change = {}) => ({
     MORROW_ENVIRONMENT: "development",
@@ -176,25 +187,38 @@ export async function edgePostgresqlJourneys(engine, createService) {
   check("seven_scram_roles", sealed.scramOfferedRoles === 7);
 
   // Passive PG-wire observation of every bridged connection: the startup role.
-  const parsers = new Map();
-  const service = createService({
-    endpoint: engine.endpoint,
-    hostname: controlledNeonWireBinding.hostname,
-    onClientBytes(bytes, observation) {
-      let parser = parsers.get(observation.index);
-      if (!parser) {
-        parser = createPgFrontendParser({
-          onStartup({ parameters }) {
-            observation.startup = { user: parameters.user, database: parameters.database };
-          },
-          onMessage() {},
-        });
-        parsers.set(observation.index, parser);
-      }
-      parser.push(bytes);
-    },
-    onServerBytes() {},
-  });
+  // One bridge service admits at most 256 bridges over its life, and the
+  // wrong-secret matrix alone opens more, so a fresh service takes over between
+  // scenarios and matrix rounds (never inside one journey). Old services stay open
+  // until cleanup, so connections that instances still hold are never cut.
+  const services = [];
+  let service;
+  const startService = () => {
+    const parsers = new Map();
+    service = createService({
+      endpoint: engine.endpoint,
+      hostname: controlledNeonWireBinding.hostname,
+      onClientBytes(bytes, observation) {
+        let parser = parsers.get(observation.index);
+        if (!parser) {
+          parser = createPgFrontendParser({
+            onStartup({ parameters }) {
+              observation.startup = { user: parameters.user, database: parameters.database };
+            },
+            onMessage() {},
+          });
+          parsers.set(observation.index, parser);
+        }
+        parser.push(bytes);
+      },
+      onServerBytes() {},
+    });
+    services.push(service);
+  };
+  startService();
+  const freshBridgeCapacity = () => {
+    if (service.observations.length > 96) startService();
+  };
   const bridgedRoles = (from = 0) =>
     new Set(
       service.observations
@@ -295,7 +319,13 @@ export async function edgePostgresqlJourneys(engine, createService) {
         ...init,
         headers,
       });
-      return { status: response.status, headers: response.headers, body: await response.text() };
+      const body = await response.text();
+      responses.push({
+        body,
+        setCookie: response.headers.getSetCookie(),
+        location: response.headers.get("location"),
+      });
+      return { status: response.status, headers: response.headers, body };
     };
     return {
       fetch,
@@ -329,12 +359,22 @@ export async function edgePostgresqlJourneys(engine, createService) {
     response.headers.get("cache-control") === "no-store" &&
     response.headers.get("x-content-type-options") === "nosniff" &&
     response.headers.get("referrer-policy") === "no-referrer";
-  const startLogin = (owner, workspaceId = f.workspace) =>
-    owner.fetch("/auth/login", {
+  // 0010 admits at most 10 new login flows per 10 seconds per environment and
+  // profile (`rate_limited`); every start, from any instance, stays below that.
+  const loginStarts = [];
+  async function startLogin(owner, workspaceId = f.workspace) {
+    for (;;) {
+      const recent = loginStarts.filter((at) => at > Date.now() - 10500);
+      if (recent.length < 8) break;
+      await new Promise((resolve) => setTimeout(resolve, recent[0] + 10600 - Date.now()));
+    }
+    loginStarts.push(Date.now());
+    return owner.fetch("/auth/login", {
       method: "POST",
       headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
       body: JSON.stringify({ schemaVersion: 1, workspaceId }),
     });
+  }
   const callback = (owner, url, cookie) =>
     owner.fetch(url.pathname + url.search, {
       headers: {
@@ -352,10 +392,11 @@ export async function edgePostgresqlJourneys(engine, createService) {
   async function signIn(owner, label) {
     const jar = createBoundedLoginCookieJar();
     const started = await startLogin(owner);
+    const loginCode = label + "_LOGIN_" + started.status;
     require(started.status === 200 &&
-      jar.ingest(origin + "/auth/login", started.headers).accepted === 1, label + "_LOGIN");
+      jar.ingest(origin + "/auth/login", started.headers).accepted === 1, loginCode);
     const armed = oracle.arm(json(started.body).authorizationUrl);
-    privateMarkers.push(armed.code, armed.token);
+    secret(armed.code, armed.token);
     const callbackUrl = new URL(armed.callbackUrl);
     const finished = await callback(owner, callbackUrl, jar.header(armed.callbackUrl));
     require(finished.status === 303 &&
@@ -368,6 +409,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
     const before = checks.length;
     let failure = null;
     stage = name;
+    freshBridgeCapacity();
     try {
       await run();
     } catch (error) {
@@ -382,181 +424,264 @@ export async function edgePostgresqlJourneys(engine, createService) {
     });
   }
 
+  const linkStatus = (owner, cookie) =>
+    owner.fetch("/workspace/" + f.workspace + "/store-links/status", {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: origin,
+        "Content-Type": "application/json",
+        "X-Morrow-Request": "1",
+        "Idempotency-Key": randomUUID(),
+      },
+      body: JSON.stringify({
+        handoffToken: randomBytes(32).toString("base64url").slice(0, 42) + "A",
+      }),
+    });
+  const logout = (owner, cookie) =>
+    owner.fetch("/auth/logout", {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: origin,
+        "Content-Type": "application/json",
+        "X-Morrow-Request": "1",
+      },
+      body: JSON.stringify({ schemaVersion: 1 }),
+    });
+
+  // AC17 steps 1-5, with AC13 (WorkOS calls) and AC19 (borrowed roles) measured
+  // over the same journey, on one fresh instance.
+  async function journey(owner, label) {
+    const name = (suffix) => label + ":" + suffix;
+    const firstBridge = service.observations.length;
+    const apiFrom = outbound.api.length;
+    const brokerFrom = outbound.broker.length;
+    const jar = createBoundedLoginCookieJar();
+    const started = await startLogin(owner);
+    const authorizationUrl = json(started.body)?.authorizationUrl ?? "";
+    const authorization = new URL(authorizationUrl || "https://invalid.example/");
+    check(
+      name("1_authorization_url"),
+      started.status === 200 &&
+        Object.keys(json(started.body)).join() === "schemaVersion,authorizationUrl" &&
+        authorization.origin + authorization.pathname ===
+          "https://api.workos.com/user_management/authorize" &&
+        [...authorization.searchParams.keys()].join() ===
+          "client_id,redirect_uri,response_type,provider,state,code_challenge,code_challenge_method" &&
+        authorization.searchParams.get("client_id") === f.client &&
+        authorization.searchParams.get("redirect_uri") === origin + "/auth/workos/callback" &&
+        authorization.searchParams.get("response_type") === "code" &&
+        authorization.searchParams.get("provider") === "authkit" &&
+        authorization.searchParams.get("code_challenge_method") === "S256",
+    );
+    const loginCookies = started.headers.getSetCookie();
+    const loginAge =
+      /^__Host-morrow_login=[A-Za-z0-9_-]{43}; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=(\d+)$/.exec(
+        loginCookies[0] ?? "",
+      );
+    check(
+      name("1_one_login_cookie"),
+      loginCookies.length === 1 &&
+        !!loginAge &&
+        Number(loginAge[1]) >= 1 &&
+        Number(loginAge[1]) <= 300,
+    );
+    check(name("1_json_headers"), jsonHeaders(started));
+    require(jar.ingest(origin + "/auth/login", started.headers).accepted === 1, "JAR_LOGIN");
+    const armed = oracle.arm(authorizationUrl);
+    secret(armed.code, armed.token);
+    privateMarkers.push(authorizationUrl);
+    const callbackUrl = new URL(armed.callbackUrl);
+    const finished = await callback(owner, callbackUrl, jar.header(armed.callbackUrl));
+    const sessionCookies = finished.headers.getSetCookie();
+    const sessionAge =
+      /^__Host-morrow_session=[A-Za-z0-9_-]{43}; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=(\d+)$/.exec(
+        sessionCookies[0] ?? "",
+      );
+    check(
+      name("2_callback_session_cookie"),
+      finished.status === 303 &&
+        finished.headers.get("location") === "/" &&
+        sessionCookies.length === 1 &&
+        !!sessionAge &&
+        Number(sessionAge[1]) >= 1 &&
+        Number(sessionAge[1]) <= 900 &&
+        !/domain=/i.test(sessionCookies[0]),
+    );
+    require(jar.ingest(armed.callbackUrl, finished.headers).accepted === 1, "JAR_SESSION");
+    const cookie = jar.header(origin + "/");
+    privateMarkers.push(cookie);
+    const boot = await bootstrap(owner, cookie);
+    const body = json(boot.body);
+    check(
+      name("3_bootstrap"),
+      boot.status === 200 &&
+        Object.keys(body ?? {})
+          .sort()
+          .join() === "policyRevision,schemaVersion,workspace" &&
+        Object.keys(body.workspace ?? {})
+          .sort()
+          .join() === "displayName,id" &&
+        body.workspace.id === f.workspace &&
+        !boot.headers.has("set-cookie") &&
+        jsonHeaders(boot),
+    );
+    // The status route is POST with Idempotency-Key and a handoffToken body.
+    const status = await linkStatus(owner, cookie);
+    check(
+      name("4_unknown_link_status"),
+      status.status === 404 &&
+        status.body === '{"code":"linking_not_found"}' &&
+        jsonHeaders(status),
+    );
+    const ended = await logout(owner, cookie);
+    check(
+      name("5_logout"),
+      ended.status === 200 &&
+        ended.body === '{"schemaVersion":1,"outcome":"session_ended"}' &&
+        !ended.headers.has("set-cookie") &&
+        jsonHeaders(ended),
+    );
+    check(name("5_bootstrap_after_logout_401"), (await bootstrap(owner, cookie)).status === 401);
+    check(
+      name("AC13_api_workos_calls_keyless"),
+      JSON.stringify(outbound.api.slice(apiFrom)) ===
+        JSON.stringify([
+          { method: "POST", path: "/user_management/authenticate", authorization: false },
+          { method: "GET", path: "/sso/jwks/" + f.client, authorization: false },
+        ]),
+    );
+    const brokerCalls = outbound.broker.slice(brokerFrom);
+    check(
+      name("AC13_broker_only_keyed_sessions_get"),
+      brokerCalls.length === 1 &&
+        brokerCalls[0].method === "GET" &&
+        brokerCalls[0].path === "/user_management/users/" + f.subject + "/sessions" &&
+        brokerCalls[0].authorization === true,
+    );
+    const used = bridgedRoles(firstBridge);
+    check(
+      name("AC19_borrowed_roles_equal_allowlist"),
+      used.size === roles.length && roles.every((role) => used.has(role)),
+    );
+    check(
+      name("AC19_no_unexpected_outbound"),
+      outbound.unexpected === 0 && oracle.metrics.oracleFailures === 0,
+    );
+  }
+
   let session = null;
   await scenario("AC17_AC13_AC19_configured_journey", async () => {
     const owner = await instance();
     try {
-      const firstBridge = service.observations.length;
-      const jar = createBoundedLoginCookieJar();
-      const started = await startLogin(owner);
-      const authorizationUrl = json(started.body)?.authorizationUrl ?? "";
-      const authorization = new URL(authorizationUrl || "https://invalid.example/");
-      check(
-        "AC17:1_authorization_url",
-        started.status === 200 &&
-          Object.keys(json(started.body)).join() === "schemaVersion,authorizationUrl" &&
-          authorization.origin + authorization.pathname ===
-            "https://api.workos.com/user_management/authorize" &&
-          [...authorization.searchParams.keys()].join() ===
-            "client_id,redirect_uri,response_type,provider,state,code_challenge,code_challenge_method" &&
-          authorization.searchParams.get("client_id") === f.client &&
-          authorization.searchParams.get("redirect_uri") === origin + "/auth/workos/callback" &&
-          authorization.searchParams.get("response_type") === "code" &&
-          authorization.searchParams.get("provider") === "authkit" &&
-          authorization.searchParams.get("code_challenge_method") === "S256",
-      );
-      const loginCookies = started.headers.getSetCookie();
-      const loginAge =
-        /^__Host-morrow_login=[A-Za-z0-9_-]{43}; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=(\d+)$/.exec(
-          loginCookies[0] ?? "",
-        );
-      check(
-        "AC17:1_one_login_cookie",
-        loginCookies.length === 1 &&
-          !!loginAge &&
-          Number(loginAge[1]) >= 1 &&
-          Number(loginAge[1]) <= 300,
-      );
-      check("AC17:1_json_headers", jsonHeaders(started));
-      require(jar.ingest(origin + "/auth/login", started.headers).accepted === 1, "JAR_LOGIN");
-      const armed = oracle.arm(authorizationUrl);
-      privateMarkers.push(armed.code, armed.token, authorizationUrl);
-      const callbackUrl = new URL(armed.callbackUrl);
-      const finished = await callback(owner, callbackUrl, jar.header(armed.callbackUrl));
-      const sessionCookies = finished.headers.getSetCookie();
-      const sessionAge =
-        /^__Host-morrow_session=[A-Za-z0-9_-]{43}; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=(\d+)$/.exec(
-          sessionCookies[0] ?? "",
-        );
-      check(
-        "AC17:2_callback_session_cookie",
-        finished.status === 303 &&
-          finished.headers.get("location") === "/" &&
-          sessionCookies.length === 1 &&
-          !!sessionAge &&
-          Number(sessionAge[1]) >= 1 &&
-          Number(sessionAge[1]) <= 900 &&
-          !/domain=/i.test(sessionCookies[0]),
-      );
-      require(jar.ingest(armed.callbackUrl, finished.headers).accepted === 1, "JAR_SESSION");
-      const cookie = jar.header(origin + "/");
-      privateMarkers.push(cookie);
-      const boot = await bootstrap(owner, cookie);
-      const body = json(boot.body);
-      check(
-        "AC17:3_bootstrap",
-        boot.status === 200 &&
-          Object.keys(body ?? {})
-            .sort()
-            .join() === "policyRevision,schemaVersion,workspace" &&
-          Object.keys(body.workspace ?? {})
-            .sort()
-            .join() === "displayName,id" &&
-          body.workspace.id === f.workspace &&
-          !boot.headers.has("set-cookie") &&
-          jsonHeaders(boot),
-      );
-      const status = await owner.fetch("/workspace/" + f.workspace + "/store-links/status", {
-        method: "POST",
-        headers: {
-          Cookie: cookie,
-          Origin: origin,
-          "Content-Type": "application/json",
-          "X-Morrow-Request": "1",
-          "Idempotency-Key": randomUUID(),
-        },
-        body: JSON.stringify({
-          handoffToken: randomBytes(32).toString("base64url").slice(0, 42) + "A",
-        }),
-      });
-      check(
-        "AC17:4_unknown_link_status",
-        status.status === 404 &&
-          status.body === '{"code":"linking_not_found"}' &&
-          jsonHeaders(status),
-      );
-      const logout = await owner.fetch("/auth/logout", {
-        method: "POST",
-        headers: {
-          Cookie: cookie,
-          Origin: origin,
-          "Content-Type": "application/json",
-          "X-Morrow-Request": "1",
-        },
-        body: JSON.stringify({ schemaVersion: 1 }),
-      });
-      check(
-        "AC17:5_logout",
-        logout.status === 200 &&
-          logout.body === '{"schemaVersion":1,"outcome":"session_ended"}' &&
-          !logout.headers.has("set-cookie") &&
-          jsonHeaders(logout),
-      );
-      check("AC17:5_bootstrap_after_logout_401", (await bootstrap(owner, cookie)).status === 401);
-      check(
-        "AC13:api_workos_calls_keyless",
-        JSON.stringify(outbound.api) ===
-          JSON.stringify([
-            { method: "POST", path: "/user_management/authenticate", authorization: false },
-            { method: "GET", path: "/sso/jwks/" + f.client, authorization: false },
-          ]),
-      );
-      check(
-        "AC13:broker_only_keyed_sessions_get",
-        outbound.broker.length === 1 &&
-          outbound.broker[0].method === "GET" &&
-          outbound.broker[0].path === "/user_management/users/" + f.subject + "/sessions" &&
-          outbound.broker[0].authorization === true,
-      );
-      const used = bridgedRoles(firstBridge);
-      check(
-        "AC19:borrowed_roles_equal_allowlist",
-        used.size === roles.length && roles.every((role) => used.has(role)),
-      );
-      check(
-        "AC19:no_unexpected_outbound",
-        outbound.unexpected === 0 && oracle.metrics.oracleFailures === 0,
-      );
+      await journey(owner, "AC17");
     } finally {
       await owner.dispose();
     }
   });
 
+  // AC19: one wrong role secret at a time fails only that role's routes, each with
+  // its existing failure response. Every flow starts on a correctly configured
+  // instance that shares the api bindings (and so the capsule keyring); each route
+  // then runs on the instance whose broker holds the one wrong password.
+  const routeOutcome = {
+    login: (r) =>
+      r.status === 200
+        ? "ok"
+        : r.status === 503 && r.body === '{"schemaVersion":1,"outcome":"login_unavailable"}'
+          ? "unavailable"
+          : null,
+    callback: (r) =>
+      r.status === 303 && r.headers.get("location") === "/" && r.headers.getSetCookie().length === 1
+        ? "ok"
+        : r.status === 303 &&
+            r.headers.get("location") === "/auth/result" &&
+            r.headers.getSetCookie().length === 0
+          ? "result_page"
+          : null,
+    bootstrap: (r) =>
+      r.status === 200
+        ? "ok"
+        : r.status === 503 && r.body === '{"code":"unavailable"}'
+          ? "unavailable"
+          : null,
+    linkStatus: (r) =>
+      r.status === 404 && r.body === '{"code":"linking_not_found"}'
+        ? "ok"
+        : r.status === 503 && r.body === '{"code":"unavailable"}'
+          ? "unavailable"
+          : null,
+    logout: (r) =>
+      r.status === 200 && r.body === '{"schemaVersion":1,"outcome":"session_ended"}'
+        ? "ok"
+        : r.status === 503 && r.body === '{"schemaVersion":1,"outcome":"logout_unavailable"}'
+          ? "unavailable"
+          : null,
+  };
+  const classify = (route, response) =>
+    routeOutcome[route](response) ??
+    "unexpected_" +
+      response.status +
+      (response.status >= 400 ? "_" + response.body.slice(0, 80) : "");
+  const healthy = { login: "ok", callback: "ok", bootstrap: "ok", linkStatus: "ok", logout: "ok" };
+  const expectedWrongSecret = Object.freeze({
+    morrow_identity_login: { ...healthy, login: "unavailable", callback: "result_page" },
+    morrow_identity_preauth: { ...healthy, login: "unavailable", callback: "result_page" },
+    morrow_identity_resolution: { ...healthy, callback: "result_page" },
+    morrow_identity_sessions: { ...healthy, callback: "result_page" },
+    morrow_api: { ...healthy, bootstrap: "unavailable" },
+    morrow_identity_linking: { ...healthy, linkStatus: "unavailable" },
+    morrow_identity_logout: { ...healthy, logout: "unavailable" },
+  });
+  const wrongSecretMatrix = {};
   await scenario("AC19_one_wrong_role_secret_fails_only_its_routes", async () => {
-    const wrongApi = await instance(
-      apiBindings(),
-      brokerBindings({ MORROW_DB_PASSWORD_MORROW_API: "Wrong-" + randomBytes(16).toString("hex") }),
-    );
+    const sharedApi = apiBindings();
+    const good = await instance(sharedApi);
     try {
-      session = await signIn(wrongApi, "WRONG_API");
-      check("AC19:login_unaffected_by_morrow_api_secret", typeof session === "string");
-      const boot = await bootstrap(wrongApi, session);
-      check(
-        "AC19:bootstrap_existing_503",
-        boot.status === 503 && boot.body === '{"code":"unavailable"}',
-      );
+      session = await signIn(good, "GOOD");
+      for (const role of roles) {
+        freshBridgeCapacity();
+        const wrongPassword = "Wrong-" + randomBytes(16).toString("hex");
+        secret(wrongPassword);
+        const logoutSession = await signIn(good, "LOGOUT");
+        const wrong = await instance(
+          sharedApi,
+          brokerBindings({ ["MORROW_DB_PASSWORD_" + role.toUpperCase()]: wrongPassword }),
+        );
+        try {
+          const started = await startLogin(wrong);
+          const login = classify("login", started);
+          // The callback uses the wrong instance's own flow, or one from the good
+          // instance when this role's secret breaks login start.
+          const jar = createBoundedLoginCookieJar();
+          const begun = login === "ok" ? started : await startLogin(good);
+          require(begun.status === 200 &&
+            jar.ingest(origin + "/auth/login", begun.headers).accepted === 1, "MATRIX_LOGIN");
+          const armed = oracle.arm(json(begun.body).authorizationUrl);
+          secret(armed.code, armed.token);
+          const outcome = {
+            login,
+            callback: classify(
+              "callback",
+              await callback(wrong, new URL(armed.callbackUrl), jar.header(armed.callbackUrl)),
+            ),
+            bootstrap: classify("bootstrap", await bootstrap(wrong, session)),
+            linkStatus: classify("linkStatus", await linkStatus(wrong, session)),
+            logout: classify("logout", await logout(wrong, logoutSession)),
+          };
+          wrongSecretMatrix[role] = outcome;
+          check(
+            "AC19:wrong_" + role + "_fails_only_its_routes",
+            JSON.stringify(outcome) === JSON.stringify(expectedWrongSecret[role]),
+          );
+        } finally {
+          await wrong.dispose();
+        }
+      }
+      check("AC19:session_survives_the_matrix", (await bootstrap(good, session)).status === 200);
     } finally {
-      await wrongApi.dispose();
-    }
-    const wrongLogin = await instance(
-      apiBindings(),
-      brokerBindings({
-        MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGIN: "Wrong-" + randomBytes(16).toString("hex"),
-      }),
-    );
-    try {
-      const started = await startLogin(wrongLogin);
-      check(
-        "AC19:login_existing_503",
-        started.status === 503 &&
-          started.body === '{"schemaVersion":1,"outcome":"login_unavailable"}',
-      );
-      check(
-        "AC19:bootstrap_unaffected_by_login_secret",
-        (await bootstrap(wrongLogin, session)).status === 200,
-      );
-    } finally {
-      await wrongLogin.dispose();
+      await good.dispose();
     }
   });
 
@@ -574,7 +699,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
       require(started.status === 200 &&
         jar.ingest(origin + "/auth/login", started.headers).accepted === 1, "DRIFT_LOGIN");
       const armed = oracle.arm(json(started.body).authorizationUrl);
-      privateMarkers.push(armed.code, armed.token);
+      secret(armed.code, armed.token);
       const finished = await callback(
         owner,
         new URL(armed.callbackUrl),
@@ -613,7 +738,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
       require(started.status === 200 &&
         jar.ingest(origin + "/auth/login", started.headers).accepted === 1, "UNKNOWN_LOGIN");
       const armed = oracle.arm(json(started.body).authorizationUrl);
-      privateMarkers.push(armed.code, armed.token);
+      secret(armed.code, armed.token);
       fault.kind = "exchange";
       fault.delayMs = 11000;
       const url = new URL(armed.callbackUrl);
@@ -667,7 +792,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
       require(session, "NO_SESSION");
       check("AC20:bootstrap_before_rotation", (await bootstrap(owner, session)).status === 200);
       const rotated = randomBytes(32).toString("hex");
-      privateMarkers.push(rotated);
+      secret(rotated);
       fixtureAdministratorSql(
         engine.id,
         "ALTER ROLE morrow_api PASSWORD " + literal(rotated) + ";",
@@ -696,10 +821,10 @@ export async function edgePostgresqlJourneys(engine, createService) {
           "]) AS r(name) WHERE has_database_privilege(r.name, 'morrow', 'TEMP');",
       ) === "0",
     );
+    // The whole AC17 journey (login, callback, bootstrap, link status, logout).
     const owner = await instance();
     try {
-      const cookie = await signIn(owner, "AFTER_REVOKE");
-      check("AC19:bootstrap_after_revoke_temp", (await bootstrap(owner, cookie)).status === 200);
+      await journey(owner, "AC19_after_revoke_temp");
     } finally {
       await owner.dispose();
     }
@@ -707,17 +832,27 @@ export async function edgePostgresqlJourneys(engine, createService) {
 
   stage = "cleanup";
   await Promise.allSettled([...instances].map((mf) => mf.dispose()));
-  await service.close?.();
+  for (const owned of services) await owned.close?.();
   engine.revokeEndpoint();
   const final = await engine.observeFinalNamespace();
-  const evidence = JSON.stringify({ checks, cases, logs, outbound });
+  const evidence = JSON.stringify({ checks, cases, logs, outbound, wrongSecretMatrix });
   check(
     "AC13:no_marker_in_logs_or_results",
     privateMarkers.every((marker) => !marker || !evidence.includes(marker)),
   );
+  // Every response the Workers returned: bodies, Set-Cookie and Location headers.
+  const returned = JSON.stringify(responses);
+  check(
+    "AC13:no_credential_marker_in_any_response",
+    responses.length > 0 &&
+      credentialMarkers.every((marker) => !marker || !returned.includes(marker)),
+  );
+  responses.length = 0;
   return {
     checks,
     cases,
+    wrongSecretMatrix,
+    responsesScanned: JSON.parse(returned).length,
     appliedMigrations,
     final,
     stage,
@@ -760,6 +895,8 @@ async function main() {
     appliedMigrations: result?.appliedMigrations ?? null,
     cases: result?.cases ?? [],
     checks: result?.checks ?? [],
+    wrongSecretMatrix: result?.wrongSecretMatrix ?? null,
+    responsesScanned: result?.responsesScanned ?? null,
     outbound: result?.outbound ?? null,
     finalNamespace: result?.final ?? null,
     failure,

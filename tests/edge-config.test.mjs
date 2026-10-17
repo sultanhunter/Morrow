@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   cpSync,
   mkdirSync,
@@ -15,9 +16,12 @@ import {
   bundleExclusions,
   edgeChildEnvironment,
   edgeEnvironments,
+  devBindingTables,
   edgeRefusals,
   edgeWorkers,
+  runWrangler,
   verifyEdgeConfig,
+  wranglerInvocation,
 } from "../scripts/edge.mjs";
 import { scanSecrets } from "../scripts/delivery-checks.mjs";
 import { reservedWorkerPaths } from "../apps/api/src/reserved-paths.ts";
@@ -247,6 +251,88 @@ test("wrangler children get a scrubbed environment and refuse local secrets or C
     ],
   );
   assert.deepEqual(edgeRefusals(resolve("."), {}), []);
+});
+
+test("a .env or .dev.vars at the repository root, or in a run's working directory, is refused", () => {
+  const root = join(scratch, "root-dotenv");
+  mkdirSync(join(root, "apps/api"), { recursive: true });
+  writeFileSync(join(root, ".env"), "CLOUDFLARE_API_TOKEN=planted\n");
+  writeFileSync(join(root, ".dev.vars.staging"), "");
+  assert.deepEqual(edgeRefusals(root, {}), [
+    "EDGE_LOCAL_SECRET_FILE:.dev.vars.staging",
+    "EDGE_LOCAL_SECRET_FILE:.env",
+  ]);
+  assert.throws(() => runWrangler(["--version"], { cwd: root }), {
+    message: "EDGE_REFUSED: EDGE_LOCAL_SECRET_FILE:.dev.vars.staging, EDGE_LOCAL_SECRET_FILE:.env",
+  });
+});
+
+test("every wrangler child gets an empty --env-file, so a planted root .env never reaches it", () => {
+  const home = join(scratch, "invocation-home");
+  mkdirSync(home);
+  const invocation = wranglerInvocation(["deploy", "--dry-run"], home);
+  const flag = "--env-file=" + join(home, "empty.env");
+  assert.equal(invocation.args.at(-1), flag);
+  assert.equal(readFileSync(join(home, "empty.env"), "utf8"), "");
+  assert.ok(
+    !wranglerInvocation(["types"], home, { envFile: false }).args.some((arg) =>
+      arg.startsWith("--env-file"),
+    ),
+  );
+  // A scratch project (outside the checkout) whose root .env sets WRANGLER_LOG=debug.
+  // The refusal is bypassed on purpose: this is the second layer on its own.
+  const project = join(scratch, "dotenv-project");
+  mkdirSync(project);
+  writeFileSync(join(project, ".env"), "WRANGLER_LOG=debug\n");
+  writeFileSync(join(project, "worker.js"), "export default { fetch: () => new Response('') };\n");
+  writeFileSync(
+    join(project, "wrangler.jsonc"),
+    JSON.stringify({ name: "dotenv-probe", main: "worker.js", compatibility_date: "2026-07-30" }),
+  );
+  const dryRun = (envFile) => {
+    const childHome = mkdtempSync(join(scratch, "probe-home-"));
+    const run = wranglerInvocation(
+      ["deploy", "--dry-run", "--outdir=" + join(childHome, "out")],
+      childHome,
+      { envFile },
+    );
+    const result = spawnSync(process.execPath, run.args, {
+      cwd: project,
+      env: run.env,
+      encoding: "utf8",
+      timeout: 60000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout + result.stderr;
+  };
+  // WRANGLER_LOG=debug shows as "Metrics dispatcher: ..." lines.
+  assert.match(
+    dryRun(false),
+    /Metrics dispatcher/,
+    "negative control: without --env-file the root .env applies",
+  );
+  const isolated = dryRun(true);
+  assert.doesNotMatch(isolated, /Metrics dispatcher/);
+  assert.match(isolated, /--dry-run: exiting now\./);
+});
+
+test("dev binding tables are parsed per Worker", () => {
+  const output = [
+    "morrow-development-api has access to the following bindings:",
+    "Binding                     Resource                  Mode",
+    "env.BROKER (morrow-development-broker#ApiBroker)   Worker   local [not connected]",
+    'env.MORROW_ENVIRONMENT ("development")   Environment Variable   local',
+    "",
+    "morrow-development-broker has access to the following bindings:",
+    "Binding                     Resource                  Mode",
+    'env.MORROW_ENVIRONMENT ("development")   Environment Variable   local',
+    'env.WORKOS_API_KEY ("(hidden)")   Environment Variable   local',
+    "",
+  ].join("\n");
+  assert.deepEqual(devBindingTables(output), {
+    "morrow-development-api": ["BROKER", "MORROW_ENVIRONMENT"],
+    "morrow-development-broker": ["MORROW_ENVIRONMENT", "WORKOS_API_KEY"],
+  });
 });
 
 test("AC05 (rules): bundle exclusions name the forbidden inputs", () => {

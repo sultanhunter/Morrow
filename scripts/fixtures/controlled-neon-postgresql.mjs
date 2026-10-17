@@ -127,7 +127,7 @@ async function absent(kind, id) {
         (kind === "network" && result.stderr.includes("network " + id + " not found"))),
   );
 }
-async function authenticationProbe(target, user) {
+export async function authenticationProbe(target, user) {
   const fields = Buffer.from(
     "user\0" + user + "\0database\0morrow\0application_name\0morrow_t88_authprobe\0\0",
   );

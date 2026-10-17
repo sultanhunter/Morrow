@@ -16,6 +16,7 @@ import test from "node:test";
 import { parseManagedLoginKeyring } from "../packages/identity/src/managed-login-capsule.ts";
 import { parseLoginConfiguration } from "../packages/identity/src/standalone-login-protocol.ts";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
+import { checkKeyringDestination } from "../scripts/login-keyring.mjs";
 
 // P04.T02a AC25: synthetic configuration only, scratch directories outside the checkout.
 const script = resolve("scripts/login-keyring.mjs");
@@ -101,4 +102,27 @@ test("AC25: refuses the checkout, the artifacts directory, existing paths and sy
     assert.equal(result.stderr.trim(), code);
   }
   assert.equal(readFileSync(existing, "utf8"), "{}");
+});
+
+test("AC25: a directory named ..something inside the checkout or artifacts is still inside", () => {
+  const root = join(scratch, "fake-repo");
+  const fakeArtifacts = join(scratch, "fake-artifacts");
+  for (const dir of [join(root, "..keys"), join(fakeArtifacts, "..out"), root + "-sibling"])
+    mkdirSync(dir, { recursive: true });
+  const guarded = { root, artifacts: fakeArtifacts };
+  for (const out of [
+    join(root, "inside.json"),
+    join(root, "..keys", "keyring.json"),
+    join(fakeArtifacts, "..out", "keyring.json"),
+  ])
+    assert.throws(() => checkKeyringDestination(out, guarded), {
+      message: "LOGIN_KEYRING_OUT_INSIDE_CHECKOUT",
+    });
+  // A sibling whose name merely starts with the root's name is outside.
+  const sibling = join(root + "-sibling", "keyring.json");
+  assert.equal(checkKeyringDestination(sibling, guarded), sibling);
+  assert.equal(
+    checkKeyringDestination(join(scratch, "outside.json"), guarded),
+    join(scratch, "outside.json"),
+  );
 });

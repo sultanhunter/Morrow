@@ -5,11 +5,17 @@
 //   verify-config     resolved wrangler configuration of all 4 Workers x 3 environments
 //   dry-run           `wrangler deploy --dry-run` bundles, metafiles and sizes.json
 //   dev               unbound local api + broker on https://127.0.0.1:8787
-//   smoke-dev         start dev over http, poll /healthz, fetch /, SIGTERM, port closed
+//   smoke-dev         dev over http, then https: /healthz, /, SIGTERM, port closed
 //   measure           report-only local api cold start (median of 5)
-// Every wrangler child gets a scrubbed environment and a throwaway HOME, so it can
-// never see a Cloudflare login on this machine; metrics, cf.json and the npm
-// update check are off. Outputs go through scripts/artifacts.mjs under edge/.
+// Every wrangler child gets a scrubbed environment, a throwaway HOME (so the
+// Cloudflare login and config under the real HOME are out of reach) and
+// `--env-file=<empty file>` (so no .env or .dev.vars in its working directory or
+// next to a config is loaded; Env type generation, whose header records its flags,
+// runs instead in a clean staged copy outside the checkout). Runs refuse
+// Cloudflare credentials in the parent environment and any .env*/.dev.vars* at
+// the repository root, under apps/ or in the child's working directory. Metrics,
+// cf.json and the npm update check are off. Outputs go through
+// scripts/artifacts.mjs under edge/.
 import { spawn, spawnSync } from "node:child_process";
 import {
   cpSync,
@@ -22,8 +28,10 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { createConnection, createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { networkInterfaces, tmpdir } from "node:os";
 import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -88,17 +96,26 @@ export function edgeChildEnvironment(home, source = process.env) {
   });
 }
 
+const localSecretName = (name) => /^\.dev\.vars/.test(name) || /^\.env/.test(name);
+// The .env*/.dev.vars* entries directly in one directory (wrangler's CLI reads
+// .env files from its working directory, `dev` reads .dev.vars next to a config).
+export function localSecretFiles(dir) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter(localSecretName).sort();
+}
+
 // Refuse to run with Cloudflare credentials in the environment or with any local
-// secret file under apps/ (.dev.vars* or .env*), which wrangler would load.
+// secret file (.dev.vars* or .env*) at the repository root or under apps/.
 export function edgeRefusals(root = repositoryRoot, source = process.env) {
   const refusals = [];
   for (const name of ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_KEY"])
     if (typeof source[name] === "string" && source[name] !== "")
       refusals.push("EDGE_CLOUDFLARE_CREDENTIAL_SET:" + name);
+  for (const name of localSecretFiles(root)) refusals.push("EDGE_LOCAL_SECRET_FILE:" + name);
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name);
-      if (/^\.dev\.vars/.test(entry.name) || /^\.env/.test(entry.name))
+      if (localSecretName(entry.name))
         refusals.push("EDGE_LOCAL_SECRET_FILE:" + relative(root, path).replaceAll("\\", "/"));
       else if (entry.isDirectory() && !["node_modules", ".git"].includes(entry.name)) walk(path);
     }
@@ -122,12 +139,37 @@ function refuseUnsafe(root = repositoryRoot) {
   if (refusals.length) throw Error("EDGE_REFUSED: " + refusals.join(", "));
 }
 
-export function runWrangler(args, { cwd = repositoryRoot, timeout = 180000 } = {}) {
+// wrangler's CLI loads .env, .env.local, .env.<env> and .env.<env>.local from its
+// working directory into its own environment on every command, whatever
+// CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV says, unless --env-file names other files;
+// with --env-file, `dev` also stops reading .dev.vars. Every child therefore gets
+// an empty env file in its throwaway HOME. The one exception is Env type
+// generation (`edgeTypes`), whose committed header records every flag: it runs
+// only in a clean staged copy of the Worker outside the checkout.
+export function wranglerInvocation(args, home, { envFile = true } = {}) {
+  const empty = join(home, "empty.env");
+  if (envFile) writeFileSync(empty, "", { mode: 0o600 });
+  return Object.freeze({
+    args: [wranglerBin, ...args, ...(envFile ? ["--env-file=" + empty] : [])],
+    env: edgeChildEnvironment(home),
+  });
+}
+function refuseLocalSecretFiles(cwd) {
+  const found = localSecretFiles(cwd);
+  if (found.length)
+    throw Error(
+      "EDGE_REFUSED: " + found.map((name) => "EDGE_LOCAL_SECRET_FILE:" + name).join(", "),
+    );
+}
+
+export function runWrangler(args, { cwd = repositoryRoot, timeout = 180000, envFile = true } = {}) {
+  refuseLocalSecretFiles(cwd);
   const home = mkdtempSync(join(tmpdir(), "morrow-edge-home-"));
   try {
-    const result = spawnSync(process.execPath, [wranglerBin, ...args], {
+    const invocation = wranglerInvocation(args, home, { envFile });
+    const result = spawnSync(process.execPath, invocation.args, {
       cwd,
-      env: edgeChildEnvironment(home),
+      env: invocation.env,
       encoding: "utf8",
       timeout,
       maxBuffer: 32 << 20,
@@ -143,7 +185,8 @@ export function runWrangler(args, { cwd = repositoryRoot, timeout = 180000 } = {
 }
 
 // In-process wrangler API (readConfig, getMiniflareWorkerOptions) behind the same
-// scrubbed settings: a throwaway HOME and no provider variables in process.env.
+// scrubbed settings: a throwaway HOME, no provider variables in process.env, and
+// Miniflare options built with the empty env file (no .dev.vars, no .env).
 let wranglerApi;
 export async function loadWranglerApi() {
   if (!wranglerApi) {
@@ -154,13 +197,21 @@ export async function loadWranglerApi() {
         )
       )
         delete process.env[name];
-    Object.assign(
-      process.env,
-      edgeChildEnvironment(mkdtempSync(join(tmpdir(), "morrow-edge-home-")), {}),
-    );
-    wranglerApi = await import(
+    const home = mkdtempSync(join(tmpdir(), "morrow-edge-home-"));
+    Object.assign(process.env, edgeChildEnvironment(home, {}));
+    const envFiles = [join(home, "empty.env")];
+    writeFileSync(envFiles[0], "", { mode: 0o600 });
+    const api = await import(
       pathToFileURL(join(repositoryRoot, "node_modules/wrangler/wrangler-dist/cli.js")).href
     );
+    wranglerApi = Object.freeze({
+      ...api,
+      unstable_getMiniflareWorkerOptions: (config, environment, options) =>
+        api.unstable_getMiniflareWorkerOptions(config, environment, {
+          ...options,
+          envFiles: [...envFiles],
+        }),
+    });
   }
   return wranglerApi;
 }
@@ -206,7 +257,7 @@ export function edgeTypes({ check = false, root = repositoryRoot } = {}) {
     const staging = mkdtempSync(join(tmpdir(), "morrow-edge-types-"));
     try {
       const fresh = stageWorker(worker, root, staging);
-      const generated = runWrangler(typesArgs, { cwd: fresh });
+      const generated = runWrangler(typesArgs, { cwd: fresh, envFile: false });
       if (generated.status !== 0 || wranglerDiagnostic(generated.output))
         throw Error("EDGE_TYPES_FAILED:" + worker.key + "\n" + generated.output);
       const text = readFileSync(join(fresh, "worker-configuration.d.ts"), "utf8");
@@ -220,7 +271,10 @@ export function edgeTypes({ check = false, root = repositoryRoot } = {}) {
       const checked = mkdtempSync(join(tmpdir(), "morrow-edge-types-check-"));
       try {
         const copy = stageWorker(worker, root, checked, { keepTypes: true });
-        const verdict = runWrangler(["types", "--check", ...typesArgs.slice(1)], { cwd: copy });
+        const verdict = runWrangler(["types", "--check", ...typesArgs.slice(1)], {
+          cwd: copy,
+          envFile: false,
+        });
         if (verdict.status !== 0 || wranglerDiagnostic(verdict.output))
           throw Error("EDGE_TYPES_CHECK_FAILED:" + worker.key + "\n" + verdict.output);
       } finally {
@@ -626,11 +680,15 @@ function devArgs(protocol) {
     ...(protocol ? ["--local-protocol=" + protocol] : []),
   ];
 }
-function startDev(protocol, stdio) {
+// `extraEnvironment` exists only for the smoke's negative control (provider
+// markers placed directly in wrangler's own environment).
+function startDev(protocol, stdio, extraEnvironment = {}) {
+  refuseLocalSecretFiles(repositoryRoot);
   const home = mkdtempSync(join(tmpdir(), "morrow-edge-home-"));
-  const child = spawn(process.execPath, [wranglerBin, ...devArgs(protocol)], {
+  const invocation = wranglerInvocation(devArgs(protocol), home);
+  const child = spawn(process.execPath, invocation.args, {
     cwd: repositoryRoot,
-    env: edgeChildEnvironment(home),
+    env: { ...invocation.env, ...extraEnvironment },
     stdio,
   });
   child.on("exit", () => rmSync(home, { recursive: true, force: true }));
@@ -652,30 +710,56 @@ const portFree = (host, port) =>
     server.listen({ host, port, exclusive: true }, () => server.close(() => done(true)));
   });
 
-// AC23: unbound dev over http (as in CI), with provider markers in the parent shell.
-export async function edgeSmokeDev() {
-  refuseUnsafe();
-  if (!existsSync(spaIndex)) throw Error("EDGE_SPA_DIST_MISSING: run `npm run build` first");
+// One local request with Node's own client: the https phase accepts wrangler's
+// throwaway self-signed certificate, which never leaves the run.
+const localRequest = (protocol, path, method = "GET") =>
+  new Promise((done, failed) => {
+    const { host, port } = edgeDevOrigin;
+    const client = protocol === "https" ? httpsRequest : httpRequest;
+    const request = client(
+      { host, port, path, method, rejectUnauthorized: false, timeout: 2000 },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => (body += chunk));
+        response.on("end", () =>
+          done({ status: response.statusCode, headers: response.headers, body }),
+        );
+        response.on("error", failed);
+      },
+    );
+    request.on("timeout", () => request.destroy(Error("EDGE_LOCAL_REQUEST_TIMEOUT")));
+    request.on("error", failed);
+    request.end();
+  });
+// The "<worker> has access to the following bindings:" tables wrangler dev prints.
+export function devBindingTables(output) {
+  const tables = {};
+  const pattern = /^(\S+) has access to the following bindings:\n[^\n]*\n((?:env\.[^\n]*\n)*)/gm;
+  for (const match of stripColour(output).matchAll(pattern))
+    tables[match[1]] = [...match[2].matchAll(/^env\.([A-Za-z0-9_]+)/gm)].map((row) => row[1]);
+  return tables;
+}
+const nonLoopbackIpv4 = () =>
+  Object.values(networkInterfaces())
+    .flat()
+    .filter((row) => row && row.family === "IPv4" && !row.internal)
+    .map((row) => row.address);
+
+// AC23: the unbound dev pair over http (as in CI), then over https (the committed
+// `dev.local_protocol`). Negative control: the provider markers are placed in
+// wrangler's own environment, as if the scrub had failed; the broker must still
+// bind none of them and no marker value may appear in the output.
+async function smokeDevPhase(protocol, markers, check) {
   const { host, port } = edgeDevOrigin;
   if (!(await portFree(host, port))) throw Error("EDGE_DEV_PORT_IN_USE:" + port);
-  const markers = [
-    [
-      "WORKOS_API_KEY",
-      ["sk", "test", Math.random().toString(36).slice(2).padEnd(16, "x")].join("_"),
-    ],
-    [
-      "MORROW_DB_PASSWORD_MORROW_API",
-      "synthetic-" + Math.random().toString(36).slice(2) + "-marker",
-    ],
-  ];
-  for (const [name, value] of markers) process.env[name] = value;
-  const checks = [];
-  const check = (name, passed) => {
-    checks.push({ name, passed });
-    if (!passed) throw Error("EDGE_SMOKE_FAILED:" + name);
-  };
+  const label = (name) => protocol + ":" + name;
   let output = "";
-  const child = startDev("http", ["ignore", "pipe", "pipe"]);
+  const child = startDev(
+    protocol === "http" ? "http" : undefined,
+    ["ignore", "pipe", "pipe"],
+    Object.fromEntries(markers),
+  );
   child.stdout.on("data", (chunk) => (output += chunk));
   child.stderr.on("data", (chunk) => (output += chunk));
   const exited = new Promise((done) =>
@@ -687,53 +771,108 @@ export async function edgeSmokeDev() {
     let health;
     while (Date.now() - started < 30000) {
       try {
-        health = await fetch(`http://${host}:${port}/healthz`, {
-          signal: AbortSignal.timeout(2000),
-        });
+        health = await localRequest(protocol, "/healthz");
         break;
       } catch {
         await new Promise((done) => setTimeout(done, 250));
       }
     }
-    check("healthz_reachable_within_30s", health !== undefined);
-    const body = await health.text();
+    check(label("healthz_reachable_within_30s"), health !== undefined);
     check(
-      "healthz_unbound_not_ready",
-      health.status === 200 && body === '{"schemaVersion":1,"service":"api","ready":false}',
+      label("healthz_unbound_not_ready"),
+      health.status === 200 && health.body === '{"schemaVersion":1,"service":"api","ready":false}',
     );
-    check("healthz_no_store", health.headers.get("cache-control") === "no-store");
-    const spa = await fetch(`http://${host}:${port}/`);
-    const html = await spa.text();
-    check("spa_index_served", spa.status === 200 && html.includes('<div id="root"></div>'));
+    check(label("healthz_no_store"), health.headers["cache-control"] === "no-store");
+    const spa = await localRequest(protocol, "/");
     check(
-      "spa_headers_applied",
-      /frame-ancestors 'none'/.test(spa.headers.get("content-security-policy") ?? "") &&
-        spa.headers.get("x-content-type-options") === "nosniff",
+      label("spa_index_served"),
+      spa.status === 200 && spa.body.includes('<div id="root"></div>'),
     );
-    const login = await fetch(`http://${host}:${port}/auth/login`, { method: "POST" });
     check(
-      "unbound_login_unavailable",
-      login.status === 503 && (await login.text()) === '{"code":"unavailable"}',
+      label("spa_headers_applied"),
+      /frame-ancestors 'none'/.test(spa.headers["content-security-policy"] ?? "") &&
+        spa.headers["x-content-type-options"] === "nosniff",
     );
-    check("loopback_ipv6_not_listening", !(await portOpen("::1", port)));
+    const login = await localRequest(protocol, "/auth/login", "POST");
+    check(
+      label("unbound_login_unavailable"),
+      login.status === 503 && login.body === '{"code":"unavailable"}',
+    );
+    if (protocol === "https") {
+      const plain = await localRequest("http", "/healthz").catch(() => null);
+      check(label("plain_http_not_served"), plain === null || plain.status !== 200);
+    }
+    const tables = devBindingTables(output);
+    check(
+      label("broker_binds_only_morrow_environment"),
+      JSON.stringify(tables["morrow-development-broker"]) === '["MORROW_ENVIRONMENT"]',
+    );
+    check(
+      label("api_binds_only_broker_and_environment"),
+      JSON.stringify(tables["morrow-development-api"]) === '["BROKER","MORROW_ENVIRONMENT"]',
+    );
+    const missing = /Missing required secrets: ([^\n]*)/.exec(stripColour(output))?.[1] ?? "";
+    check(
+      label("broker_reports_marker_secrets_missing"),
+      markers.every(([name]) => missing.split(/[ ,.]+/).includes(name)),
+    );
+    check(label("loopback_ipv6_not_listening"), !(await portOpen("::1", port)));
+    const addresses = nonLoopbackIpv4();
+    const reachable = [];
+    for (const address of addresses) if (await portOpen(address, port)) reachable.push(address);
+    check(label("no_non_loopback_ipv4_listening"), reachable.length === 0);
   } finally {
     child.kill("SIGTERM");
     const killer = setTimeout(() => child.kill("SIGKILL"), 10000);
     exit = await exited;
     clearTimeout(killer);
-    for (const [name] of markers) delete process.env[name];
   }
-  check("exited_after_sigterm", exit.signal !== "SIGKILL");
+  check(label("exited_after_sigterm"), exit.signal !== "SIGKILL");
   await new Promise((done) => setTimeout(done, 500));
-  check("port_closed_after_exit", !(await portOpen(host, port)));
+  check(label("port_closed_after_exit"), !(await portOpen(host, port)));
   check(
-    "no_marker_in_dev_output",
+    label("no_marker_in_dev_output"),
     markers.every(([, value]) => !output.includes(value)),
   );
+}
+
+export async function edgeSmokeDev() {
+  refuseUnsafe();
+  if (!existsSync(spaIndex)) throw Error("EDGE_SPA_DIST_MISSING: run `npm run build` first");
+  const markers = [
+    [
+      "WORKOS_API_KEY",
+      ["sk", "test", Math.random().toString(36).slice(2).padEnd(16, "x")].join("_"),
+    ],
+    [
+      "MORROW_DB_PASSWORD_MORROW_API",
+      "synthetic-" + Math.random().toString(36).slice(2) + "-marker",
+    ],
+  ];
+  const checks = [];
+  const check = (name, passed) => {
+    checks.push({ name, passed });
+    if (!passed) throw Error("EDGE_SMOKE_FAILED:" + name);
+  };
+  // First layer: markers in the parent shell never reach a wrangler child.
+  const scrubbed = edgeChildEnvironment(tmpdir(), {
+    ...process.env,
+    ...Object.fromEntries(markers),
+  });
+  check(
+    "parent_markers_scrubbed_from_child_environment",
+    markers.every(
+      ([name, value]) => !Object.hasOwn(scrubbed, name) && !Object.values(scrubbed).includes(value),
+    ),
+  );
+  // Second layer, end to end, with the markers inside wrangler's own environment.
+  await smokeDevPhase("http", markers, check);
+  await smokeDevPhase("https", markers, check);
   writeArtifact("edge/smoke-dev.json", {
     generated_at: new Date().toISOString(),
     scope:
-      "Unbound `wrangler dev` of api + broker over http on 127.0.0.1:8787 with a scrubbed environment; no account, credential or network.",
+      "Unbound `wrangler dev` of api + broker on 127.0.0.1:8787 over http and then https, with an isolated HOME, an empty --env-file and synthetic provider markers placed in wrangler's own environment as a negative control; no account, credential or network.",
+    nonLoopbackIpv4Checked: nonLoopbackIpv4().length,
     checks,
   });
   return checks;

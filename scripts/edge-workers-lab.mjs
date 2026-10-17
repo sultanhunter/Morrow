@@ -834,8 +834,14 @@ await (async () => {
   } finally {
     await mf.dispose().catch(() => {});
   }
-  // M5 (measured): Miniflare refuses to start a pair whose named entrypoint is missing.
-  const passed = check("AC28:M5_missing_entrypoint_refused", refused !== null);
+  // M5 (measured): Miniflare refuses to start a pair whose named entrypoint is
+  // missing; any other startup failure does not count.
+  const passed = check(
+    "AC28:M5_missing_entrypoint_refused",
+    refused !== null &&
+      refused.includes("has no such named entrypoint") &&
+      refused.includes('"ApiBroker"'),
+  );
   cases.push({
     name: "AC28_missing_entrypoint_refused_to_start",
     passed,

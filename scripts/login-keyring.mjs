@@ -16,7 +16,7 @@ import {
   realpathSync,
   writeSync,
 } from "node:fs";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { artifactsRoot, repositoryRoot } from "./artifacts.mjs";
 
@@ -28,9 +28,10 @@ export const keyringWindowMs = Object.freeze({
 const fail = (code) => {
   throw Error(code);
 };
+// Segment-aware: `<root>/..keys/x` is inside, `<root>/../x` is not.
 const inside = (child, parent) => {
   const path = relative(parent, child);
-  return path === "" || (!path.startsWith("..") && !isAbsolute(path));
+  return path === "" || (path !== ".." && !path.startsWith(".." + sep) && !isAbsolute(path));
 };
 
 export function parseKeyringArguments(argv) {
