@@ -40,7 +40,6 @@ None for local work. Hosted staging (M1) waits on the owner actions below.
 - **Sign-offs:**
   - Plan R1 (Tier 3).
   - The ADR-0005 §2 executor-class assignments. The quoted approval covers §1 (kill switches) and §3 (self-approval) only.
-  - Approve or reject ADR-0008, the Shopify connector runtime (Proposed).
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check (not an approving review) before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
 - **M1 prerequisites (P04.T01i):**

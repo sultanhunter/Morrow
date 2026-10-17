@@ -1,6 +1,6 @@
 # ADR-0008 Shopify connector runtime: Cloudflare Workers with the `@shopify/shopify-api` web adapter
 
-- Status: **Proposed. Pending owner approval.**
+- Status: Accepted 2026-10-18
 - Date: 2026-10-17 (drafted)
 - Affects: P04.T02a §D8 (connector placeholder), P08.T02, P09.T01, P09.T02, P09.T04, P09.T05, `docs/contracts/shopify-sync.md`, `apps/shopify-connector`
 
@@ -48,6 +48,10 @@
 
 ## Approval
 
-**Not approved.** On 2026-10-17 the owner approved the second batch of decisions (ADR-0007, ADR-0009, ADR-0010, ADR-0011). This ADR was not among them, and it stays Proposed.
+Owner approval, 2026-10-18, in chat. The owner selected **"Cloudflare Worker (Recommended)"** in answer to:
 
-Approval is required before any Shopify credential, route, broker method or deployment for the connector. P04.T02a does not wait for it, because its connector is a fail-closed placeholder.
+> Shopify connector runtime (ADR-0008, needed before the Shopify package, P09). Shopify's React Router app package only runs on Node, but its core @shopify/shopify-api library has a Cloudflare Workers adapter. Run the connector as a Cloudflare Worker on that library, so everything stays on one platform with keys in the broker?
+
+The approved option read: "One platform and one deploy pipeline; secret-dependent Shopify calls stay in the broker. We write a little more glue than the template gives."
+
+This approval selects the runtime only. Shopify credentials, routes, broker methods and deployment still follow the P08.T02 broker trust model and its credential-custody ADR (ADR-0007 item 4), and each hosted effect still needs its own approval.
