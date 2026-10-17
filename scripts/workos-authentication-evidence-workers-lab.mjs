@@ -460,8 +460,6 @@ try {
         task: "P05.T01k",
         boundary: "composition",
         selected_policy_sequence: 78,
-        canonical_sequence: JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
-          .sequence,
         observed_at: new Date().toISOString(),
         scope:
           "Actual pinned local workerd qualifying canonical78 selected human-session policy with independently native-RSA-signed fake tokens and synthetic session pages. No provider key, network, local identity/session/grant or merchant access.",

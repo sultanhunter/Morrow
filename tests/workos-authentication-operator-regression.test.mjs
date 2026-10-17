@@ -3,7 +3,6 @@ import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
   cpSync,
-  existsSync,
   linkSync,
   mkdirSync,
   mkdtempSync,
@@ -27,11 +26,6 @@ import {
   verifyFrozenWorkosAuthenticationReport,
   workosAuthenticationRegressionFailure,
 } from "../scripts/workos-authentication-operator-regression.mjs";
-import {
-  loadWorkosAuthenticationOperatorScope,
-  claimWorkosAuthenticationOperatorRun,
-  prepareWorkosAuthenticationOperatorActivation,
-} from "../scripts/workos-authentication-operator-input.mjs";
 
 const source = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const archive = join(source, "docs/history/workos-authentication-operator-80");
@@ -277,35 +271,6 @@ test("181 laboratory report rejects missing checks, weakened cleanup, engine dri
   }
   writeFileSync(p, original);
   assert.equal(verifyFrozenWorkosAuthenticationReport(f.root).checks.length, 181);
-});
-test("current82 native scope and preparation deny plan83 before private effects", () => {
-  assert.throws(() => loadWorkosAuthenticationOperatorScope());
-  const root = join(tmpdir(), "morrow-auth82-current-plan-denied-" + Date.now());
-  assert.deepEqual(
-    prepareWorkosAuthenticationOperatorActivation(root, join(root, "missing-binding.json")),
-    { outcome: "held", reason: "preparation_denied", credentialReads: 0, providerRequests: 0 },
-  );
-  assert.equal(existsSync(root), false);
-  let traps = 0;
-  const hostile = new Proxy(
-    {},
-    {
-      get() {
-        traps++;
-        throw Error();
-      },
-      ownKeys() {
-        traps++;
-        throw Error();
-      },
-      getPrototypeOf() {
-        traps++;
-        throw Error();
-      },
-    },
-  );
-  assert.equal(claimWorkosAuthenticationOperatorRun(hostile), null);
-  assert.equal(traps, 0);
 });
 test("fixed regression entry rejects private arguments before Docker or source execution", () => {
   const secret = "synthetic_private_path_not_reflected";

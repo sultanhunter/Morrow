@@ -777,13 +777,11 @@ VALUES (${literal(value.receiptId)},${literal(org)},${literal(workspace)},${lite
   }
   return { image, version };
 });
-const source = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
 writeArtifact(
   "labs/workspace-revocation.json",
   JSON.stringify(
     {
       task: "P05.T01c",
-      canonical_sequence: source.sources.plan.sequence,
       observed_at: new Date().toISOString(),
       scope:
         "Actual application lifecycle transaction and shared identity/policy read boundary on isolated PostgreSQL17.11. Synthetic owner-seeded receipts, approvals, sessions and constraint facts only; no production issuer or hosted identity.",

@@ -13,7 +13,6 @@ import {
 import {
   frozenE2B60Fixture,
   currentE2BFixture,
-  currentE2BPlanSequence,
   e2bRepositoryRoot,
 } from "./fixtures/frozen-e2b-60.mjs";
 
@@ -71,10 +70,7 @@ test("injected image transport needs an isolated evidence sink before any reques
   assert.equal(calls, 0);
 });
 test("mock image proof stays outside active evidence and has no provider-call claim", async () => {
-  const active = resolve(
-      e2bRepositoryRoot,
-      "docs/evidence/P04.T01h/owned-image-qualification.json",
-    ),
+  const active = resolve(e2bRepositoryRoot, ".artifacts/e2b/owned-image-qualification.json"),
     before = existsSync(active) ? readFileSync(active) : null;
   const folder = realpathSync(mkdtempSync(join(tmpdir(), "morrow-image-evidence-")));
   try {
@@ -148,7 +144,7 @@ test("current67 image controller denies original60 plan before any request", asy
     );
     assert.equal(calls, 0);
     assert.equal(
-      existsSync(resolve(current.root, "docs/evidence/P04.T01h/owned-image-qualification.json")),
+      existsSync(resolve(current.root, ".artifacts/e2b/owned-image-qualification.json")),
       false,
     );
   } finally {
@@ -157,7 +153,7 @@ test("current67 image controller denies original60 plan before any request", asy
   }
 });
 
-test("unrelated current plan denies completed67 image controller before any request", async () => {
+test("committed activation gate denies completed67 image controller before any request", async () => {
   const current = currentE2BFixture(),
     previous = process.cwd();
   current.useCurrentPlan();
@@ -165,10 +161,9 @@ test("unrelated current plan denies completed67 image controller before any requ
   let calls = 0;
   try {
     assert.equal(
-      JSON.parse(current.read("docs/plan/source.json")).sources.plan.sequence,
-      currentE2BPlanSequence(),
+      JSON.parse(current.read("infra/labs/e2b-activation.json")).active_profile_sequence,
+      null,
     );
-    assert.notEqual(currentE2BPlanSequence(), 67);
     await assert.rejects(
       mainE2BOwnedImageQualification(["--verify-public-image"], {
         fetch: async () => {
@@ -180,7 +175,7 @@ test("unrelated current plan denies completed67 image controller before any requ
     );
     assert.equal(calls, 0);
     assert.equal(
-      existsSync(resolve(current.root, "docs/evidence/P04.T01h/owned-image-qualification.json")),
+      existsSync(resolve(current.root, ".artifacts/e2b/owned-image-qualification.json")),
       false,
     );
   } finally {

@@ -599,8 +599,6 @@ try {
         task: "P05.T01k",
         boundary: "selection",
         selected_policy_sequence: 78,
-        canonical_sequence: JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
-          .sequence,
         observed_at: new Date().toISOString(),
         scope:
           "Actual pinned local workerd qualifying canonical78 selected human-session policy with native-RSA-signed synthetic tokens, owning T01i evidence and fixed injected SQL clients. SQL eligibility/constraints are qualified separately in PostgreSQL. Private selection snapshots are nonauthorizing historical observations; no provider, production adapter, session or merchant access.",

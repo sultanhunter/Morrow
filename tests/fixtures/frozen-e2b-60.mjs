@@ -13,9 +13,12 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const e2bRepositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
-export const currentE2BPlanSequence = () =>
-  JSON.parse(readFileSync(resolve(e2bRepositoryRoot, "docs/plan/source.json"), "utf8")).sources.plan
-    .sequence;
+// A synthetic plan snapshot that is neither 60 nor 67, for the archived scripts that
+// still read docs/plan/source.json inside their own temporary root.
+const unrelatedPlan = new URL("./e2b-plan-unrelated.json", import.meta.url);
+export const unrelatedE2BPlanSequence = JSON.parse(readFileSync(unrelatedPlan, "utf8")).sources.plan
+  .sequence;
+const activationGate = "infra/labs/e2b-activation.json";
 const archiveRoot = fileURLToPath(new URL("./e2b-source-60/", import.meta.url));
 const manifest = JSON.parse(readFileSync(resolve(archiveRoot, "manifest.json"), "utf8"));
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -34,13 +37,23 @@ function fixture(frozen) {
       mkdirSync(dirname(target), { recursive: true });
       copyFileSync(resolve(frozen ? archiveRoot : e2bRepositoryRoot, path), target);
     }
-    mkdirSync(resolve(root, "docs/plan"), { recursive: true });
-    copyFileSync(
-      frozen
-        ? new URL("./e2b-plan-60.json", import.meta.url)
-        : new URL("./e2b-plan-67.json", import.meta.url),
-      resolve(root, "docs/plan/source.json"),
-    );
+    if (frozen) {
+      // The archived60 scripts read their isolated plan snapshot.
+      mkdirSync(resolve(root, "docs/plan"), { recursive: true });
+      copyFileSync(
+        new URL("./e2b-plan-60.json", import.meta.url),
+        resolve(root, "docs/plan/source.json"),
+      );
+    } else {
+      // Current scripts read the committed activation gate; the copy activates the
+      // completed67 profile so downstream account/quote/access checks stay exercised.
+      const gate = JSON.parse(readFileSync(resolve(e2bRepositoryRoot, activationGate), "utf8"));
+      mkdirSync(resolve(root, "infra/labs"), { recursive: true });
+      writeFileSync(
+        resolve(root, activationGate),
+        JSON.stringify({ ...gate, active_profile_sequence: 67 }, null, 2) + "\n",
+      );
+    }
     mkdirSync(resolve(root, "docs/evidence/P04.T01h"), { recursive: true });
     if (frozen) {
       const binding = (paths) =>
@@ -67,16 +80,18 @@ function fixture(frozen) {
     // Run the copied controller and its copied dependencies, never the active source.
     script: (path) => resolve(root, path),
     loader: resolve(e2bRepositoryRoot, "node_modules/tsx/dist/loader.mjs"),
+    // Frozen copies see an unrelated plan; current copies see the repository's
+    // committed activation gate, which names no active profile.
     useCurrentPlan: () =>
-      copyFileSync(
-        resolve(e2bRepositoryRoot, "docs/plan/source.json"),
-        resolve(root, "docs/plan/source.json"),
-      ),
+      frozen
+        ? copyFileSync(unrelatedPlan, resolve(root, "docs/plan/source.json"))
+        : copyFileSync(resolve(e2bRepositoryRoot, activationGate), resolve(root, activationGate)),
     dispose: () => rmSync(root, { recursive: true, force: true }),
   };
 }
 
-// Exact public60 code/configuration or completed67 public sources with their
-// isolated plan snapshot; no private credential, live report or new authority.
+// Exact public60 code/configuration with its isolated plan snapshot, or completed67
+// public sources with an isolated activation gate; no private credential, live
+// report or new authority.
 export const frozenE2B60Fixture = () => fixture(true);
 export const currentE2BFixture = () => fixture(false);

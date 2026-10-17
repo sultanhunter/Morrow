@@ -24,11 +24,7 @@ const { createSelfLogoutFixtureHarness } = await tsImport(
 );
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const held = () => Error("MANAGED_LOGIN_POSTGRESQL_HELD");
-if (
-  process.version !== "v24.13.0" ||
-  JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 94
-)
-  throw held();
+if (process.version !== "v24.13.0") throw held();
 const args = process.argv.slice(2);
 if (args.length > 1 || (args.length && !/^--attempt=[a-z][a-z0-9-]{0,31}$/.test(args[0])))
   throw held();
@@ -54,10 +50,6 @@ const paths = [
   "infra/identity-login-role-prerequisites.sql",
   "infra/identity-logout-role-prerequisites.sql",
   "migrations/manifest.json",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
-  "docs/plan/build-plan.md",
-  "docs/plan/source.json",
   "package.json",
   "package-lock.json",
   ...[
@@ -81,7 +73,9 @@ const paths = [
   ].map((n) => "packages/identity/src/" + n + ".ts"),
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json"));
-if (manifest.migrations.length !== 11) throw held();
+// Every published migration must be present in order and checksum-verified; this
+// lab applies the first eleven, and later migrations may follow them.
+if (manifest.migrations.length < 11) throw held();
 for (const [i, row] of manifest.migrations.entries()) {
   if (row.sequence !== i + 1 || hash(readFileSync("migrations/" + row.file)) !== row.sha256)
     throw held();
@@ -1174,7 +1168,6 @@ for (const [path, digest] of Object.entries(sourceDigests))
 const report = {
   schema_version: 1,
   task: "P05.T01u",
-  current_plan_sequence: 94,
   status: failure || cleanupFailures.length ? "held" : "passed",
   scope:
     "independent_managed_Workers_capsule_keys_real_PostgreSQL17_fixed_four_role_native_transport",

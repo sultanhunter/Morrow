@@ -5,12 +5,12 @@ import {validateProviders,inspectReadiness,inspectSyntheticActivation} from '../
 import {estimateWarmComponents} from '../scripts/cost-estimate.mjs';
 
 const registry=read('docs/decisions/providers.json'),bindings=read('docs/decisions/provider-bindings.json'),catalogue=read('docs/contracts/capabilities.json'),deps=read('docs/decisions/dependencies.json'),sources=read('docs/research/sources.json');
-const validate=(r,b)=>validateProviders(r,b,catalogue,deps,sources,read('docs/plan/source.json').sources.plan.sequence);
+const validate=(r,b)=>validateProviders(r,b,catalogue,deps,sources);
 test('every advertised capability has a gated provider/implementation route',()=>assert.deepEqual(validate(registry,bindings),[]));
 for(const [name,change,expected] of [
   ['missing capability route',(_,b)=>b.bindings.pop(),/missing provider binding/],
   ['duplicate route',(_,b)=>b.bindings.push(structuredClone(b.bindings[0])),/duplicate binding/],
-  ['unrecorded selection',(r)=>r.plan_sequence=999,/unrecorded provider decision/],
+  ['malformed decision revision',(r)=>r.plan_sequence='67',/unrecorded provider decision/],
   ['untracked provider',(_,b)=>b.bindings[0].provider='invented',/unknown capability\/provider/],
   ['wrong dependency',(_,b)=>b.bindings[0].provider_dependency='D02',/wrong decision linkage/],
   ['unqualified activation',(r)=>r.providers[0].activation='active',/unsupported activation/],

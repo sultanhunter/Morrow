@@ -56,8 +56,6 @@ const sourcePaths = [
   "infra/identity-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/plan/source.json",
-  "docs/plan/build-plan.md",
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 const migrations = manifest.migrations.slice(0, 8).map((m) => {
@@ -68,13 +66,6 @@ const migrations = manifest.migrations.slice(0, 8).map((m) => {
 });
 if (migrations.length !== 8 || migrations[7].m.sequence !== 8)
   throw Error("BROWSER_SESSION_MIGRATION_REQUIRED");
-const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
-if (
-  !Number.isSafeInteger(plan.sequence) ||
-  plan.sequence < 81 ||
-  plan.sha256 !== hash(readFileSync("docs/plan/build-plan.md"))
-)
-  throw Error("BROWSER_SESSION_PLAN_REQUIRED");
 const sources = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
 const secrets = [],
   pools = [],
@@ -881,7 +872,6 @@ for (const [p, d] of Object.entries(sources))
 const report = {
   schemaVersion: 1,
   packet: "P05.T01m",
-  executionSequence: plan.sequence,
   observedAt: new Date().toISOString(),
   scope:
     "Synthetic owning evidence and private local session persistence; no provider, browser, public issuer or live qualification.",

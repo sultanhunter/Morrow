@@ -245,8 +245,6 @@ try {
     JSON.stringify(
       {
         task: "P05.T01f",
-        canonical_sequence: JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
-          .sequence,
         observed_at: new Date().toISOString(),
         scope:
           "Actual pinned local workerd; independent native synthetic RSA signer; no real provider token, keyset, network, session, membership or grant",

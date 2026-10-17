@@ -25,14 +25,6 @@ const migrations = selectedMigrations.map((record, index) => {
     throw Error("MIGRATION_CHECKSUM");
   return { record, text };
 });
-const source = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
-if (
-  !Number.isSafeInteger(source.sources.plan.sequence) ||
-  source.sources.plan.sequence < 79 ||
-  source.sources.plan.path !== "docs/plan/build-plan.md" ||
-  hash(readFileSync(source.sources.plan.path)) !== source.sources.plan.sha256
-)
-  throw Error("CHALLENGE_LAB_PLAN_INVALID");
 const sourcePaths = [
   "scripts/authentication-challenge-lab.mjs",
   "scripts/local-identity-sql.mjs",
@@ -46,8 +38,6 @@ const sourcePaths = [
   "infra/identity-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/plan/build-plan.md",
-  "docs/plan/source.json",
   ".nvmrc",
   "package-lock.json",
 ];
@@ -652,8 +642,6 @@ writeArtifact(
     {
       task: "P05.T01k",
       primitive: "P05.T01b authentication challenge",
-      canonical_sequence: source.sources.plan.sequence,
-      execution_sequence: source.sources.plan.sequence,
       fixture_protocol_sequence: 79,
       selected_policy_sequence: 78,
       sources: sourceDigests,

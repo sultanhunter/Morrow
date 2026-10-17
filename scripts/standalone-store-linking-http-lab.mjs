@@ -48,23 +48,12 @@ const paths = [
   "infra/identity-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/plan/source.json",
-  "docs/packets/P05.T01q.md",
-  "docs/packets/P05.T01r.md",
-  "docs/packets/P05.T01s.md",
-  "docs/packets/P05.T01t.md",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
-  "docs/plan/build-plan.md",
   ".nvmrc",
   "package-lock.json",
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 for (const m of manifest.migrations.slice(0, 9)) paths.push("migrations/" + m.file);
 const sourceDigests = Object.fromEntries(paths.map((p) => [p, hash(readFileSync(p))]));
-const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
-assert.equal(plan.sequence, 94);
-assert.equal(plan.sha256, hash(readFileSync("docs/plan/build-plan.md")));
 const queryTrace = [],
   allPools = [],
   responseTexts = [];
@@ -488,7 +477,6 @@ check(
 const report = {
   schemaVersion: 1,
   task: "P05.T03b",
-  canonicalSequence: 94,
   qualification: "actual_local_http_and_postgresql",
   checks,
   sourceDigests,

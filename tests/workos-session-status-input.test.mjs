@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import test from "node:test";
 import {
   claimWorkosSessionStatusRun,
@@ -11,20 +10,15 @@ import {
 } from "../scripts/workos-session-status-input.mjs";
 import { runWorkosSessionStatusCommand } from "../scripts/workos-session-status-operator.mjs";
 
-// All twelve original75 input/claim/privacy cases remain byte-exact in the
-// archive and run in the fixed checked-copy43-test regression. Current source
-// must not rebind the completed operator to a newer plan.
-const source = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// The completed native75 operator is retired: current source must never load its
+// scope, prepare a private activation, claim a run or request the provider.
 function temporary(t) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "morrow-current-status-test-")));
   chmodSync(root, 0o700);
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return root;
 }
-test("current plan invalidates completed75 scope before private input", () => {
-  assert.ok(
-    JSON.parse(readFileSync(join(source, "docs/plan/source.json"))).sources.plan.sequence >= 76,
-  );
+test("retired native75 scope is denied before private input", () => {
   assert.throws(
     () => loadWorkosSessionStatusScope(),
     /^Error: WORKOS_SESSION_STATUS_INPUT_UNAVAILABLE$/,

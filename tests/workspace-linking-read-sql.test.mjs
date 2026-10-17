@@ -4,16 +4,11 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 const read = (p) => readFileSync(new URL("../" + p, import.meta.url), "utf8");
 const hash = (v) => createHash("sha256").update(v).digest("hex");
-test("linking read migration appends to the exact published eight-migration manifest", () => {
+// Published-migration immutability is pinned in tests/migration-history.test.mjs.
+test("linking read migration is migration9 and every manifest entry matches its file", () => {
   const current = JSON.parse(read("migrations/manifest.json"));
-  const previous = JSON.parse(
-    read("docs/history/workos-authentication-operator-82/migrations/manifest.json"),
-  );
-  assert.equal(current.migrations.length, 11);
-  assert.deepEqual(current.migrations.slice(0, 8), previous.migrations);
   for (const m of current.migrations) assert.equal(hash(read("migrations/" + m.file)), m.sha256);
   assert.equal(current.migrations[8].sequence, 9);
-  assert.equal(current.migrations[8].reviewRef, "docs/evidence/P05.T03b/review.json");
 });
 test("new lookup and status add no table or mutation and keep private helper ungranted", () => {
   const sql = read("migrations/0009.workspace-linking-read-boundaries.sql");

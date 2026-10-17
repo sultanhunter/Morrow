@@ -245,20 +245,10 @@ const paths = [
   "scripts/standalone-login-workers-lab.mjs",
   "tests/fixtures/workos-authentication-evidence.mjs",
   "tests/standalone-login.test.mjs",
-  "docs/plan/build-plan.md",
-  "docs/plan/source.json",
-  "docs/packets/P05.T01p.md",
-  "docs/packets/P05.T01q.md",
-  "docs/packets/P05.T01r.md",
-  "docs/packets/P05.T01s.md",
-  "docs/packets/P05.T01t.md",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
   "package-lock.json",
   "package.json",
   ".github/workflows/ci.yml",
 ];
-assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 94);
 const sourceDigests = Object.fromEntries(
   paths.sort().map((path) => [path, hash(readFileSync(path))]),
 );
@@ -318,7 +308,6 @@ try {
     assert.equal(hash(readFileSync(path)), digest, "Source changed: " + path);
   const report = {
     task: "P05.T01p",
-    current_plan_sequence: 94,
     qualification:
       "actual_local_workerd_nodejs_compat_Fetch_WebCrypto_AESGCM_unchanged69_owning76_77_M_with_synthetic_SQL_and_independent_native_RSA",
     compatibilityDate: "2026-07-30",

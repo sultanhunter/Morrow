@@ -20,8 +20,6 @@ const packageVersion = (name) =>
   JSON.parse(readFileSync(`node_modules/${name}/package.json`)).version;
 if (packageVersion("miniflare") !== "4.20260730.0" || packageVersion("workerd") !== "1.20260730.1")
   throw Error("U01_PINNED_RUNTIME_REQUIRED");
-if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 94)
-  throw Error("U01_CURRENT94_REQUIRED");
 const attempt = process.argv.slice(2);
 if (attempt.length > 1 || (attempt.length && !/^--attempt=[a-z][a-z0-9-]{0,31}$/.test(attempt[0])))
   throw Error("U01_CLOSED_ATTEMPT_NAME_REQUIRED");
@@ -34,10 +32,6 @@ const paths = [
   "scripts/fixtures/managed-login-cleanup-gate.mjs",
   "scripts/managed-login-lifetime-workers-lab.mjs",
   "tests/managed-login-cleanup-gate.test.mjs",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
-  "docs/plan/build-plan.md",
-  "docs/plan/source.json",
   "package-lock.json",
   "package.json",
   "scripts/fixtures/managed-login-request-worker.ts",
@@ -886,7 +880,6 @@ const status =
 const report = {
   schema_version: 1,
   task: "P05.T01u",
-  current_plan_sequence: 94,
   phase: "U01_unchanged_generic_and_U05_managed_native_request_lifetime",
   status,
   source_digests: sourceDigests,

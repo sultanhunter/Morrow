@@ -209,7 +209,6 @@ try {
     JSON.stringify(
       {
         task: "P05.T01m",
-        canonicalSequence: 81,
         qualification: "actual_local_workerd_with_independent_native_RSA_and_synthetic_SQL",
         observedAt: new Date().toISOString(),
         cases: cases.length,

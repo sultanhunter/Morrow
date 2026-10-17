@@ -29,7 +29,7 @@ import { mainE2BLab } from "../scripts/e2b-development-lab.mjs";
 import {
   frozenE2B60Fixture,
   currentE2BFixture,
-  currentE2BPlanSequence,
+  unrelatedE2BPlanSequence,
 } from "./fixtures/frozen-e2b-60.mjs";
 
 const projectId = "a1234567-1234-4234-8234-123456789abc";
@@ -156,7 +156,7 @@ test("unqualified run denies before credentials, journal or provider calls", (t)
 test("readonly discovery preparation cannot read credentials or overwrite live qualification", (t) => {
   const frozen = frozenE2B60Fixture();
   t.after(frozen.dispose);
-  const destination = "docs/evidence/P04.T01h/template-qualification.json";
+  const destination = ".artifacts/e2b/template-qualification.json";
   const previous = existsSync(destination) ? readFileSync(destination, "utf8") : null;
   const out = spawnSync(
     process.execPath,
@@ -188,7 +188,7 @@ test("current plan denies a frozen60 allocation before private input", (t) => {
   assert.equal(out.status, 2, out.stderr);
   assert.match(out.stdout, /PREREQUISITES_UNQUALIFIED/);
   const report = JSON.parse(frozen.read("docs/evidence/P04.T01h/live.json"));
-  assert.equal(report.plan_sequence, currentE2BPlanSequence());
+  assert.equal(report.plan_sequence, unrelatedE2BPlanSequence);
   assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"));
   assert.equal(report.private_input_read, false);
   assert.equal(report.provider_calls, false);
@@ -526,22 +526,21 @@ test("current67 runtime still needs fresh allocation authority before private in
     { encoding: "utf8", cwd: current.root },
   );
   assert.equal(out.status, 2, out.stderr);
-  const report = JSON.parse(current.read("docs/evidence/P04.T01h/live.json"));
+  const report = JSON.parse(current.read(".artifacts/e2b/live.json"));
   assert.equal(report.plan_sequence, 67);
   assert.equal(report.provider_calls, false);
   assert.equal(report.private_input_read, false);
   assert.ok(report.blockers.includes("E2B_LAB_ACCESS_UNQUALIFIED"));
 });
 
-test("unrelated current plan denies frozen67 runtime allocation before private input", (t) => {
+test("committed activation gate denies frozen67 runtime allocation before private input", (t) => {
   const current = currentE2BFixture();
   t.after(current.dispose);
   current.useCurrentPlan();
   assert.equal(
-    JSON.parse(current.read("docs/plan/source.json")).sources.plan.sequence,
-    currentE2BPlanSequence(),
+    JSON.parse(current.read("infra/labs/e2b-activation.json")).active_profile_sequence,
+    null,
   );
-  assert.notEqual(currentE2BPlanSequence(), 67);
   const before = current.read("infra/labs/e2b-development.json");
   const out = spawnSync(
     process.execPath,
@@ -555,8 +554,8 @@ test("unrelated current plan denies frozen67 runtime allocation before private i
     { encoding: "utf8", cwd: current.root },
   );
   assert.equal(out.status, 2, out.stderr);
-  const report = JSON.parse(current.read("docs/evidence/P04.T01h/live.json"));
-  assert.equal(report.plan_sequence, currentE2BPlanSequence());
+  const report = JSON.parse(current.read(".artifacts/e2b/live.json"));
+  assert.equal(report.plan_sequence, null);
   assert.equal(report.provider_calls, false);
   assert.equal(report.private_input_read, false);
   assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"));

@@ -12,8 +12,6 @@ import { writeArtifact } from "./artifacts.mjs";
 if (process.version !== "v24.13.0") throw Error("PINNED_NODE_REQUIRED");
 const sdkPackage = JSON.parse(readFileSync("node_modules/@neondatabase/serverless/package.json"));
 if (sdkPackage.version !== "1.2.0") throw Error("PINNED_NEON_SDK_REQUIRED");
-if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 94)
-  throw Error("CURRENT94_REQUIRED");
 const hostname = "ep-controlled-fixture.c-14.us-east-1.aws.neon.tech";
 const syntheticPasswordMarker = ["MorrowSynthetic", "T88", "PG", "password", "only"].join("-");
 const hash = (data) => createHash("sha256").update(data).digest("hex");
@@ -22,11 +20,6 @@ const paths = [
   "scripts/fixtures/controlled-neon-pg-wire-oracle.mjs",
   "scripts/controlled-neon-workers-lab.mjs",
   "tests/controlled-neon-pg-wire-oracle.test.mjs",
-  "docs/packets/P05.T01t.md",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
-  "docs/plan/build-plan.md",
-  "docs/plan/source.json",
   "package-lock.json",
   "packages/identity/src/controlled-neon-login-pool.ts",
   "packages/identity/src/controlled-neon-login-profiles.ts",
@@ -756,7 +749,6 @@ for (const [path, expected] of Object.entries(sourceDigests)) {
 }
 const report = {
   task: "P05.T01t",
-  current_plan_sequence: 94,
   phase: "native101_and_actual_sdk_independent_wire_local_engineering_only",
   status: failure ? "held" : "passed",
   failure,

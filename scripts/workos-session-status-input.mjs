@@ -97,21 +97,6 @@ export const workosSessionStatusSourcePaths = Object.freeze([
 function identity(s) {
   return [s.dev, s.ino, s.uid, s.size, s.mtimeMs, s.ctimeMs].join(":");
 }
-function sourceBytes(root, name) {
-  const path = resolve(root, name);
-  if (realpathSync(path) !== path) throw unavailable();
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-  try {
-    const before = fstatSync(fd);
-    if (!before.isFile() || before.nlink !== 1 || before.size > 16 * 1024 * 1024)
-      throw unavailable();
-    const bytes = readFileSync(fd);
-    if (identity(before) !== identity(fstatSync(fd))) throw unavailable();
-    return bytes;
-  } finally {
-    closeSync(fd);
-  }
-}
 const scopeKeys = [
   "schemaVersion",
   "planSequence",
@@ -133,42 +118,11 @@ function scopeOf(text) {
     throw unavailable();
   return s;
 }
-export function loadWorkosSessionStatusScope(root = repository) {
-  try {
-    if (
-      typeof root !== "string" ||
-      !isAbsolute(root) ||
-      resolve(root) !== root ||
-      realpathSync(root) !== root
-    )
-      throw unavailable();
-    const p = JSON.parse(sourceBytes(root, "docs/plan/source.json")).sources?.plan;
-    const planDigest = sha(sourceBytes(root, "docs/plan/build-plan.md"));
-    if (
-      p?.page_id !== "page_b1ef27b80b788191b91e67cbb52f1037" ||
-      p.sequence !== 75 ||
-      p.sha256 !== planDigest ||
-      sourceBytes(root, ".nvmrc").toString().trim() !== "24.13.0"
-    )
-      throw unavailable();
-    const profileJson = sourceBytes(root, profilePath).toString("utf8");
-    parseWorkosSessionStatusProfile(profileJson);
-    const files = workosSessionStatusSourcePaths.map((path) => [
-      path,
-      sha(sourceBytes(root, path)),
-    ]);
-    return JSON.stringify({
-      schemaVersion: 1,
-      planSequence: 75,
-      planDigest,
-      sourceDigest: sha(JSON.stringify(files)),
-      profileDigest: sha(profileJson),
-      profileJson,
-      observerProfileJson: workosSessionStatusObserverProfile(profileJson),
-    });
-  } catch {
-    throw unavailable();
-  }
+// The native75 session-status reader is retired: its one approved GET allowance was
+// consumed. Native scope loading is denied unconditionally instead of relying on a
+// plan-sequence mismatch (ADR-0002). Re-enabling it needs a new owner-approved ADR.
+export function loadWorkosSessionStatusScope() {
+  throw unavailable();
 }
 function inside(child, parent) {
   const p = relative(parent, child);

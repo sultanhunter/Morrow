@@ -45,7 +45,7 @@ export function validateCatalogue(catalogue, dependencies, tasks, types) {
   if (domains.size !== catalogue.domain_names.length) errors.push('unexpected domain');
   for (const d of dependencies) {
     if (!taskIds.has(d.resolve_in) || !d.owner || !['Open','Design recorded'].includes(d.status) || d.activation !== 'blocked_until_qualified') errors.push(`invalid dependency gate: ${d.id}`);
-    if (d.status === 'Design recorded' && (!Number.isInteger(d.design_sequence) || d.design_sequence > catalogue.plan_sequence || d.engineering_status !== 'not_implemented' || d.controlled_test_status !== 'not_run' || d.production_permission_status !== 'pending')) errors.push(`unsupported qualification claim: ${d.id}`);
+    if (d.status === 'Design recorded' && (!Number.isInteger(d.design_sequence) || d.engineering_status !== 'not_implemented' || d.controlled_test_status !== 'not_run' || d.production_permission_status !== 'pending')) errors.push(`unsupported qualification claim: ${d.id}`);
   }
   return errors;
 }

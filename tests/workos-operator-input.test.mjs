@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
@@ -15,8 +16,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   loadPublicWorkosOperatorScope,
   isWorkosOperatorSourceDirectory,
@@ -26,6 +28,8 @@ import {
   workosOperatorSourcePaths,
 } from "../scripts/workos-operator-input.mjs";
 import { runWorkosOperatorCommand } from "../scripts/workos-operator.mjs";
+
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function fixture(t) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "morrow-workos-input-")));
@@ -193,13 +197,40 @@ test("caller proxy scope is rejected before coercion or private file creation", 
   );
   assert.equal(traps, 0);
 });
-test("completed native74 rejects current plan before private preparation", () => {
+test("retired native74 rejects the repository root before private preparation", () => {
   assert.throws(() => loadPublicWorkosOperatorScope(), /WORKOS_OPERATOR_INPUT_UNAVAILABLE/);
+  assert.throws(
+    () => loadPublicWorkosOperatorScope(repositoryRoot),
+    /WORKOS_OPERATOR_INPUT_UNAVAILABLE/,
+  );
 });
-test("current plan drift denies native74 preparation without creating a private root", (t) => {
+test("retired native74 denies preparation without creating a private root", (t) => {
   const root = join(privateParent(t), "operator");
   assert.throws(() => prepareWorkosOperatorActivation(root), /WORKOS_OPERATOR_INPUT_UNAVAILABLE/);
   assert.equal(existsSync(root), false);
+});
+test("native CLI rejects an absent private root without effects or private output", () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      join(repositoryRoot, "scripts/workos-operator.mjs"),
+      "start",
+      "/nonexistent-morrow-private-root",
+    ],
+    {
+      cwd: repositoryRoot,
+      env: { PATH: "" },
+      encoding: "utf8",
+      timeout: 5000,
+    },
+  );
+  assert.equal(result.status, 1);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    state: "held",
+    reason: "operator_unavailable",
+    providerSessionCleanup: "unknown",
+  });
+  assert.equal(result.stderr, "");
 });
 test("execution source-directory predicate rejects an unrelated cwd", (t) => {
   const original = process.cwd(),

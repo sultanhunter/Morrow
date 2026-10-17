@@ -32,11 +32,6 @@ const migrations = manifest.migrations.slice(0, 7).map((m) => {
 });
 if (migrations.length !== 7 || migrations[6].m.sequence !== 7)
   throw Error("RESOLUTION_MIGRATION_REQUIRED");
-// Capture the measured plan at startup; later plan changes cannot relabel a run.
-const planSequence = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
-  .sequence;
-if (!Number.isSafeInteger(planSequence) || planSequence < 78)
-  throw Error("SELECTED_POLICY_PLAN_REQUIRED");
 const adapterMetrics = [];
 const faultInjectionMetrics = [];
 const outcome = await localPostgresLab("P05.T01k", async ({ id, sql, image, version }) => {
@@ -923,15 +918,10 @@ writeArtifact(
   JSON.stringify(
     {
       packet: "P05.T01k",
-      planSequence,
       selectedPolicySequence: 78,
       synthetic: true,
       qualificationScope:
         "Current selected human-session policy with explicit oauth fixture through unchanged token/composition/selection into isolated SQL; SQL-specific fault and constraint scenarios use labeled trusted synthetic readers. No provider or issuer qualification.",
-      historicalReport: {
-        path: "docs/evidence/P05.T01j/postgresql-lab.json",
-        sha256: "5a06e6fc90e3368873c86ede58e2f11f12f6f0daeece0459ed06f5ffca21f826",
-      },
       providerRequests: 0,
       engine: outcome.image,
       version: outcome.version,

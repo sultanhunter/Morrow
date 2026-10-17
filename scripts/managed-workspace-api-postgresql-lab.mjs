@@ -47,10 +47,7 @@ const held = () => Error("MANAGED_WORKSPACE_POSTGRESQL_HELD");
 const require = (condition) => {
   if (!condition) throw held();
 };
-require(
-  process.version === "v24.13.0" &&
-    JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence === 94,
-);
+require(process.version === "v24.13.0");
 const args = process.argv.slice(2);
 require(args.length <= 1 && (!args.length || /^--attempt=[a-z][a-z0-9-]{0,31}$/.test(args[0])));
 const reportName =
@@ -78,9 +75,6 @@ const paths = [
   "infra/identity-login-role-prerequisites.sql",
   "infra/identity-logout-role-prerequisites.sql",
   "migrations/manifest.json",
-  "docs/packets/P05.T01v.md",
-  "docs/plan/build-plan.md",
-  "docs/plan/source.json",
   "package.json",
   "package-lock.json",
   ...[
@@ -115,7 +109,9 @@ const paths = [
   ].map((name) => "packages/identity/src/" + name + ".ts"),
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json"));
-require(manifest.migrations.length === 11);
+// Every published migration must be present in order and checksum-verified; this
+// lab applies the first eleven, and later migrations may follow them.
+require(manifest.migrations.length >= 11);
 for (const [i, row] of manifest.migrations.entries()) {
   require(row.sequence === i + 1 && hash(readFileSync("migrations/" + row.file)) === row.sha256);
   paths.push("migrations/" + row.file);
@@ -978,7 +974,6 @@ for (const [path, digest] of Object.entries(sourceDigests))
 const report = {
   schema_version: 1,
   task: "P05.T01v",
-  current_plan_sequence: 94,
   status: failure || cleanupFailures.length ? "held" : "passed",
   scope: "configured_local_same_application_Worker_seven_restricted_roles_real_PostgreSQL17",
   source_digests: sourceDigests,

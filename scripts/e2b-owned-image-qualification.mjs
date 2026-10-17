@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { e2bActivationProfile } from "./e2b-development-input.mjs";
 import { ownedBuildSourceBinding } from "./e2b-owned-build-input.mjs";
 import { qualifyE2BOwnedBaseImage } from "../packages/runtime-adapters/src/e2b/owned-image.ts";
 
@@ -10,8 +11,7 @@ export async function mainE2BOwnedImageQualification(
   dependencies = {},
 ) {
   if (argv.length && !(argv.length === 1 && argv[0] === "--verify-public-image")) return 2;
-  const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
-  if (plan.sources.plan.sequence !== 67) throw Error("E2B_OWNED_IMAGE_CURRENT_PLAN_DENIED");
+  if (e2bActivationProfile() !== 67) throw Error("E2B_OWNED_IMAGE_CURRENT_PLAN_DENIED");
   const source = ownedBuildSourceBinding(".");
   const live = argv.length === 1;
   const { evidenceDirectory, ...runtimeOverrides } = dependencies;
@@ -32,7 +32,7 @@ export async function mainE2BOwnedImageQualification(
   if (!injected && evidenceDirectory !== undefined)
     throw Error("E2B_OWNED_IMAGE_TEST_EVIDENCE_SINK_DENIED");
   const destination = resolve(
-    evidenceDirectory ?? "docs/evidence/P04.T01h",
+    evidenceDirectory ?? ".artifacts/e2b",
     `${live ? "owned-image-qualification" : "owned-image-preparation"}.json`,
   );
   mkdirSync(resolve(destination, ".."), { recursive: true });

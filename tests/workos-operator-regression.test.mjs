@@ -267,25 +267,6 @@ test("synthetic output is writable only in the copy and archive evidence stays b
   assert.deepEqual(readFileSync(join(archive, name)), original);
   assert.equal(verifyFrozenWorkosOperatorArchive().files.length, 42);
 });
-test("native CLI rejects an absent private root without effects or private output", () => {
-  const result = spawnSync(
-    process.execPath,
-    [join(source, "scripts/workos-operator.mjs"), "start", "/nonexistent-morrow-private-root"],
-    {
-      cwd: source,
-      env: { PATH: "" },
-      encoding: "utf8",
-      timeout: 5000,
-    },
-  );
-  assert.equal(result.status, 1);
-  assert.deepEqual(JSON.parse(result.stdout), {
-    state: "held",
-    reason: "operator_unavailable",
-    providerSessionCleanup: "unknown",
-  });
-  assert.equal(result.stderr, "");
-});
 test("regression CLI rejects caller arguments instead of accepting another fixture or activation", () => {
   const result = spawnSync(
     process.execPath,

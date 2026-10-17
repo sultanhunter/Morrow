@@ -100,8 +100,6 @@ try {
     JSON.stringify(
       {
         task: "P04.T01b",
-        plan_sequence: JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
-          .sequence,
         scope:
           "Pinned local workerd runtime with synthetic driver/identity; not hosted Neon, TLS, pool reuse, provider identity or deployment qualification",
         runtime: "miniflare4.20260730.0",

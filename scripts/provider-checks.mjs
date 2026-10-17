@@ -1,6 +1,6 @@
 // Documentary gate checks for P01. This module cannot enable a connector or
 // authorize dispatch. Later services must verify actual current evidence.
-export function validateProviders(registry, bindings, catalogue, dependencies, sources, planSequence) {
+export function validateProviders(registry, bindings, catalogue, dependencies, sources) {
   const errors=[];
   const fail=message=>errors.push(message);
   const providers=new Map(registry.providers.map(p=>[p.id,p]));
@@ -9,7 +9,7 @@ export function validateProviders(registry, bindings, catalogue, dependencies, s
   const sourceMap=new Map(sources.map(s=>[s.id,s]));
   if(providers.size!==registry.providers.length) fail('duplicate provider');
   for(const document of [registry,bindings]) {
-    if(document.schema_version!==1 || !Number.isInteger(document.plan_sequence) || document.plan_sequence>planSequence) fail('unrecorded provider decision revision');
+    if(document.schema_version!==1 || !Number.isInteger(document.plan_sequence)) fail('unrecorded provider decision revision');
   }
   for(const p of providers.values()) {
     if(!p.id || !p.owner || !p.version || !p.test_account_plan || !p.restrictions || !p.blocking_packages.length || p.decision_ids.some(d=>!deps.has(d))) fail(`${p.id}: missing provider ownership or qualification plan`);

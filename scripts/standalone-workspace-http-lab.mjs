@@ -60,15 +60,6 @@ const paths = [
   "infra/identity-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/plan/source.json",
-  "docs/packets/P05.T01q.md",
-  "docs/packets/P05.T01r.md",
-  "docs/packets/P05.T01s.md",
-  "docs/packets/P05.T01t.md",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
-  "docs/plan/build-plan.md",
-  "docs/packets/P05.T01o.md",
   ".nvmrc",
   "package.json",
   "package-lock.json",
@@ -86,13 +77,7 @@ for (const [index, migration] of manifest.migrations.slice(0, 8).entries()) {
   paths.push("migrations/" + migration.file);
 }
 if (manifest.migrations.length < 8) throw Error("STANDALONE_HTTP_EIGHT_MIGRATIONS_REQUIRED");
-const plan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
-if (
-  process.version !== "v24.13.0" ||
-  plan.sequence < 94 ||
-  plan.sha256 !== hash(readFileSync(plan.path))
-)
-  throw Error("STANDALONE_HTTP_SOURCE_REQUIRED");
+if (process.version !== "v24.13.0") throw Error("STANDALONE_HTTP_SOURCE_REQUIRED");
 const sources = Object.fromEntries(paths.map((path) => [path, hash(readFileSync(path))]));
 const engineProfile = JSON.parse(readFileSync("infra/local-engine.json", "utf8"));
 if (!/^postgres@sha256:[a-f0-9]{64}$/.test(engineProfile.image))
@@ -794,7 +779,6 @@ for (const [path, digest] of Object.entries(sources))
 const report = {
   schemaVersion: 1,
   task: "P05.T01o",
-  canonicalSequence: plan.sequence,
   observedAt: new Date().toISOString(),
   sources,
   appliedMigrations: 8,

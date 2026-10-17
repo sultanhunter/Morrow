@@ -22,8 +22,6 @@ const hash = (v) => createHash("sha256").update(v).digest("hex"),
   };
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 const selectedMigrations = manifest.migrations.slice(0, 10);
-const executionPlan = JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan;
-const executionSequence = executionPlan.sequence;
 const sourcePaths = [
   "scripts/login-flow-custody-lab.mjs",
   "scripts/local-postgres-lab.mjs",
@@ -45,22 +43,10 @@ const sourcePaths = [
   "infra/identity-login-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
-  "docs/plan/source.json",
-  "docs/plan/build-plan.md",
-  "docs/packets/P05.T01p.md",
-  "docs/packets/P05.T01r.md",
-  "docs/packets/P05.T01s.md",
-  "docs/packets/P05.T01t.md",
-  "docs/packets/P05.T01u.md",
-  "docs/packets/P05.T01v.md",
   ...selectedMigrations.map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
 if (
-  !Number.isSafeInteger(executionSequence) ||
-  executionSequence < 84 ||
-  executionPlan.path !== "docs/plan/build-plan.md" ||
-  executionPlan.sha256 !== hash(readFileSync("docs/plan/build-plan.md")) ||
   selectedMigrations.length !== 10 ||
   selectedMigrations.some(
     (m, index) =>
@@ -888,7 +874,6 @@ check(
 const report = {
   schema_version: 1,
   packet: "P05.T01p",
-  canonical_sequence: executionSequence,
   fixture_protocol_sequence: 84,
   scope: "synthetic_private_login_custody_actual_postgresql",
   provider_requests: 0,

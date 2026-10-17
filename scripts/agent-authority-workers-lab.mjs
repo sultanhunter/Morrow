@@ -128,8 +128,6 @@ try {
     JSON.stringify(
       {
         task: "P05.T04a",
-        canonical_sequence: JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan
-          .sequence,
         observed_at: new Date().toISOString(),
         scope:
           "Actual pinned local workerd with synthetic agent authority readers; no hosted deployment, SQL ownership, provider authentication or dispatch qualification",

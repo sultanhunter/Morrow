@@ -282,13 +282,11 @@ const report = await localPostgresLab("P05.T01a", async ({ id, sql, image, versi
   );
   return { image, version };
 });
-const source = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
 writeArtifact(
   "labs/identity.json",
   JSON.stringify(
     {
       task: "P05.T01a",
-      plan_sequence: source.sources.plan.sequence,
       observed_at: new Date().toISOString(),
       scope:
         "Actual isolated PostgreSQL17.11 immutable application migration and unprivileged SQL tenant boundary. Synthetic issuer/session data only; no WorkOS/provider/production authentication or capability authorization.",
