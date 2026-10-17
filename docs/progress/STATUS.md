@@ -27,7 +27,7 @@ Delivered in P03.T04c/d:
 
 ## Last green commit
 
-`d797b1a` on `main`, the merge of PR #5. Its PR head `fedb4e6` passed hosted run 39070332528 on all 10 jobs. Runs take about 4.5 minutes, against 21.5 minutes for the old serial job.
+`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. Runs take about 4.5 minutes, against 21.5 minutes for the old serial job.
 
 ## Next actions
 
@@ -49,7 +49,6 @@ None for local work. Hosted staging (M1) waits on the owner actions below.
 
 - **Sign-offs:**
   - Plan R1 (Tier 3).
-  - The ADR-0005 §2 executor-class assignments. The quoted approval covers §1 (kill switches) and §3 (self-approval) only.
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check (not an approving review) before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
 - **M1 prerequisites (P04.T01i):**
