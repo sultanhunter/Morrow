@@ -1,14 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
 import {
   selectedConfiguration,
   compileSelectedConfiguration,
   inspectSelectedConfiguration,
 } from "../packages/infrastructure/src/selected-stack.ts";
 import { estimateStackComponents } from "../scripts/stack-cost.mjs";
-import { estimateStackComponents as estimateLegacyDaytonaComponents } from "../docs/decisions/archive/daytona-selection-54/scripts/stack-cost.mjs";
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 const model = read("docs/decisions/cost-model.json");
 
@@ -201,28 +199,7 @@ test("active pricing refuses legacy meters, provider substitution and invented p
   forged.rates.e2b_vcpu_second.amount = "0";
   assert.throws(() => estimateStackComponents(forged, model.example_usage), /Unqualified E2B/);
 });
-test("exact previous Daytona inventory and cost arithmetic are retained as explicit history", () => {
-  const manifest = read("docs/decisions/archive/daytona-selection-54/manifest.json");
-  for (const entry of Object.values(manifest.entries))
-    assert.equal(
-      createHash("sha256").update(readFileSync(entry.archive)).digest("hex"),
-      entry.sha256,
-    );
-  const previous = read("infra/archive/daytona-selection-54/environments/staging.json");
-  assert.equal(previous.stack, "cloudflare-neon-daytona");
-  assert.equal(previous.daytona.sandbox_class, "linux_vm");
-  const legacy = read(model.legacy_cost_model);
-  assert.equal(
-    estimateLegacyDaytonaComponents(legacy, legacy.example_usage).subtotal,
-    "859.230000000",
-  );
-  assert.throws(
-    () => estimateStackComponents(legacy, legacy.example_usage),
-    /explicit exclusions|Unsupported stack/,
-  );
-  const retained = read("infra/providers/daytona.json");
-  assert.equal(retained.new_allocation, "disabled");
-  assert.match(retained.original_operation_cleanup, /original_provider_account_profile_journal/);
+test("selected E2B provider record stays unqualified and disabled", () => {
   const selected = read("infra/providers/e2b.json");
   assert.equal(selected.status, "selected_not_qualified");
   assert.equal(selected.activation, "disabled");

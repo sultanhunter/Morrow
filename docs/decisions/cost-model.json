@@ -176,6 +176,5 @@
     "BOUND_RUNTIME_SUBSCRIPTION",
     "PINNED_TEMPLATE_RESOURCE_AND_ACCOUNT_QUOTE",
     "PAUSED_RESOURCE_AND_OTHER_RUNTIME_METERS"
-  ],
-  "legacy_cost_model": "docs/decisions/archive/daytona-selection-54/docs/decisions/cost-model.json"
+  ]
 }

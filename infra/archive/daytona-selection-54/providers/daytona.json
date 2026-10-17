@@ -1,9 +1,0 @@
-{
-  "schema_version": 1,
-  "plan_sequence": 45,
-  "provider": "daytona",
-  "status": "selected_not_qualified",
-  "account_id": null,
-  "activation": "disabled",
-  "configuration_source": "infra/environments/{environment}.json"
-}

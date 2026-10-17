@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { inspectSecrets, inspectMigrations } from "../scripts/delivery-checks.mjs";
+import {
+  inspectSecrets,
+  inspectMigrations,
+  lockedBundleAncestor,
+} from "../scripts/delivery-checks.mjs";
 for (const [name, text] of [
   ["openai", "sk-proj-" + "A".repeat(50)],
   ["github", "ghp_" + "B".repeat(40)],
@@ -47,3 +51,28 @@ test("reordered migrations deny", () =>
       { [file]: sql },
     ).includes("INVALID_MIGRATION_RECORD"),
   ));
+test("bundle integrity requires an integrity-checked registry ancestor", () => {
+  const path = "node_modules/example/node_modules/embedded";
+  const bundled = { [path]: { inBundle: true } };
+  assert.equal(lockedBundleAncestor(path, bundled), false);
+  assert.equal(
+    lockedBundleAncestor(path, {
+      ...bundled,
+      "node_modules/example": {
+        integrity: "sha512-example",
+        resolved: "https://registry.npmjs.org/example.tgz",
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    lockedBundleAncestor(path, {
+      ...bundled,
+      "node_modules/example": {
+        integrity: "sha512-example",
+        resolved: "https://untrusted.invalid/example.tgz",
+      },
+    }),
+    false,
+  );
+});

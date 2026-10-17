@@ -1,5 +1,13 @@
-import { environmentNames } from "./environments.js";
-import { serviceProfiles } from "./service-identities.js";
+const environmentNames = ["development", "staging", "production"] as const;
+const serviceProfiles = [
+  "api",
+  "workers",
+  "connector",
+  "credential-broker",
+  "task-execution",
+  "deployment",
+  "recovery",
+] as const;
 
 export const operationalCodes = [
   "DEPENDENCY_UNAVAILABLE",

@@ -61,16 +61,7 @@ export function lockedBundleAncestor(path, packages) {
 }
 function verify() {
   const paths = [];
-  const skip = new Set([
-    "node_modules",
-    ".git",
-    "build",
-    "dist",
-    ".react-router",
-    "cdk.out",
-    "work",
-    ".artifacts",
-  ]);
+  const skip = new Set(["node_modules", ".git", "build", "dist", ".react-router", ".artifacts"]);
   function walk(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const p = (dir === "." ? "" : dir + "/") + entry.name;
