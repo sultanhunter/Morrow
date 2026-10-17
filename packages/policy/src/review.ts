@@ -52,6 +52,7 @@ export type ReviewCode =
   | "REVIEW_POLICY_NOT_CURRENT"
   | "TENANT_MISMATCH"
   | "TARGET_SCOPE_MISMATCH"
+  | "PARAMETERS_DIGEST_MISMATCH"
   | "PROPOSAL_DIGEST_MISMATCH"
   // ceilings and quorum (§7 items 2-3)
   | "CREDITS_SUM_MISMATCH"
@@ -425,7 +426,8 @@ export function checkProposal(
   const f = parseProposalFacts(facts);
   const capability = capabilities.get(p.capabilityId)!;
   const codes: ReviewCode[] = [];
-  // Every ref lies in the trusted organization, workspace and proposal store.
+  // Every ref lies in the trusted organization, workspace and proposal store,
+  // and the scope names exactly the proposal store (none for a storeless one).
   // The review policy is per workspace, so its store is checked as currency below.
   const inStore = (r: { organizationId: string; workspaceId: string; storeId: string | null }) =>
     sameTenant(r, f) && r.storeId === p.storeId;
@@ -433,8 +435,7 @@ export function checkProposal(
     !sameTenant(p, f) ||
     p.storeId !== f.storeId ||
     !sameTenant(p.scope, f) ||
-    p.scope.storeIds.some((s) => s !== p.storeId) ||
-    (p.storeId === null && p.scope.storeIds.length > 0) ||
+    !same(p.scope.storeIds, p.storeId === null ? [] : [p.storeId]) ||
     !p.scope.resources.every(inStore) ||
     !p.targets.every((t) => inStore(t.resource)) ||
     !inStore(p.parametersRef) ||
@@ -450,6 +451,8 @@ export function checkProposal(
     )
   )
     codes.push("TARGET_SCOPE_MISMATCH");
+  // The parameters reference and the bound parameters digest name one artifact.
+  if (p.parametersRef.digest !== p.parametersDigest) codes.push("PARAMETERS_DIGEST_MISMATCH");
   const risk = riskClassFor(p.capabilityId);
   if (p.risk !== risk) codes.push("RISK_CLASS_MISMATCH");
   if (p.irreversible !== capability.irreversible) codes.push("IRREVERSIBLE_MISMATCH");
@@ -466,7 +469,8 @@ export function checkProposal(
     codes.push("REVIEW_POLICY_NOT_CURRENT");
   codes.push(...ceilingCodes(p));
   if (p.proposalDigest !== proposalDigest(p)) codes.push("PROPOSAL_DIGEST_MISMATCH");
-  // Quorum must be reachable by eligible non-conflicted reviewers, or by a solo owner.
+  // Quorum must be reachable by eligible reviewers who may approve, or by a solo
+  // owner. Under `allowed` conflicted reviewers may approve, so they count too.
   const rule = effectiveRule(f.reviewPolicy.rules, risk, capability.irreversible);
   const conflicted = conflictSet(p);
   const candidates = f.eligibleReviewerPrincipalIds.filter(
@@ -477,9 +481,12 @@ export function checkProposal(
     rule.selfApproval === "allowed"
       ? candidates.length
       : candidates.filter((id) => !conflicted.has(id)).length;
+  // The fold takes the solo path only for a conflicted owner (§7 items 5-6); an
+  // owner outside the conflict set is an ordinary candidate, counted above.
   const solo =
     rule.selfApproval === "solo_owner_typed_confirmation" &&
     candidates.includes(f.ownership.ownerPrincipalId) &&
+    conflicted.has(f.ownership.ownerPrincipalId) &&
     soloOwnerStatus(
       f.ownership,
       f.ownership.ownerPrincipalId,
@@ -518,10 +525,18 @@ function derive(parent: Current_Proposal, selected: unknown): Current_Proposal |
   const cost = costSum(targets);
   if (cost === "mixed") return "COST_SUM_MISMATCH";
   const derivedFrom = { parentRef, selectedTargetIndexes: [...indexes] };
+  // The scope narrows to the selected change set: only the selected targets'
+  // resources and fields, in the parent's order, so the scope digest changes too.
+  const scope = {
+    ...parent.scope,
+    resources: parent.scope.resources.filter((r) => targets.some((t) => same(r, t.resource))),
+    fields: parent.scope.fields.filter((field) => targets.some((t) => t.fields.includes(field))),
+  };
   const content: Current_Proposal = {
     ...parent,
     id: "derived_" + canonicalDigest(derivedFrom),
     revision: 1,
+    scope,
     targets,
     maximumCredits: creditSum(targets).toString(),
     maximumCost: cost,
@@ -644,9 +659,10 @@ function parseState(value: unknown): ReviewState {
       v.commands.length <= 100000 &&
       v.commands.every(
         (c) =>
-          closed(c, ["commandId", "requestDigest", "result"]) &&
+          closed(c, ["commandId", "requestDigest", "reviewer", "result"]) &&
           valid("Id", c.commandId) &&
-          valid("Digest", c.requestDigest),
+          valid("Digest", c.requestDigest) &&
+          valid("HumanActorRef", c.reviewer),
       ),
     "REVIEW_FACTS_INVALID",
   );
@@ -694,6 +710,7 @@ function parseAttempt(value: unknown, root: Current_Proposal): DecisionAttempt {
         "input",
         "at",
         "reviewerEligible",
+        "eligibleReviewerPrincipalIds",
         "ownership",
         "currentPolicy",
       ]) &&
@@ -703,6 +720,7 @@ function parseAttempt(value: unknown, root: Current_Proposal): DecisionAttempt {
       validateCapabilityInput("governance.approval.decide", v.input) &&
       valid("UtcTime", v.at) &&
       typeof v.reviewerEligible === "boolean" &&
+      ids(v.eligibleReviewerPrincipalIds, 1000) &&
       isWorkspaceOwnershipFacts(v.ownership) &&
       isPolicy(v.currentPolicy),
     "REVIEW_INPUT_INVALID",
@@ -736,19 +754,38 @@ function decideOne(state: ReviewState, a: DecisionAttempt): Step {
     },
     invalidate: [],
   });
-  // Idempotency per (commandId, requestDigest): a replay changes nothing.
-  const recorded = state.commands.find((c) => c.commandId === a.commandId);
-  if (recorded)
-    return recorded.requestDigest === a.requestDigest
-      ? { state, result: recorded.result, invalidate: [] }
-      : fail("COMMAND_CONFLICT");
   const root = state.members[0]!;
   const { decision } = a.input;
-  if (!same(a.input.proposalRef, proposalRef(root.proposal))) return fail("DIGEST_MISMATCH");
-  if (a.input.expectedRevision !== state.revision) return fail("STALE_REVISION");
   const policy = a.currentPolicy;
   const currentPolicyRef = reviewPolicyRef(policy);
+  // Every member shares the root's capability, so one effective rule covers the family.
+  const rule = ruleFor(policy, root.proposal);
+  // Idempotency per (commandId, requestDigest): the recorded reviewer's replay
+  // returns the recorded result and changes nothing.
+  const recorded = state.commands.find((c) => c.commandId === a.commandId);
+  if (recorded && recorded.requestDigest === a.requestDigest && same(recorded.reviewer, a.reviewer))
+    return { state, result: recorded.result, invalidate: [] };
+  // The reviewer comes first (§7 items 4 and 13): an ineligible, foreign-tenant
+  // or unlisted reviewer gets one uniform denial, whatever the family's state.
+  if (
+    !a.reviewerEligible ||
+    !sameTenant(a.reviewer, root.proposal) ||
+    (rule.eligibleReviewerPrincipalIds !== null &&
+      !rule.eligibleReviewerPrincipalIds.includes(a.reviewer.principalId))
+  )
+    return fail("REVIEWER_DENIED");
+  if (recorded) return fail("COMMAND_CONFLICT");
   const approved = state.members.find((m) => m.approval.status === "approved");
+  // Only the confirming solo reviewer of an approved member may cancel; anyone
+  // else learns nothing more about the family.
+  const soloDecision = approved?.approval.decisions.find((d) => d.soloOwnerConfirmation !== null);
+  if (
+    decision.decision === "cancel_before_effective" &&
+    (!soloDecision || !same(soloDecision.reviewer, a.reviewer))
+  )
+    return fail("CANCEL_NOT_ALLOWED");
+  if (!same(a.input.proposalRef, proposalRef(root.proposal))) return fail("DIGEST_MISMATCH");
+  if (a.input.expectedRevision !== state.revision) return fail("STALE_REVISION");
   const members = [...state.members];
   const commit = (
     changed: readonly ReviewMember[],
@@ -781,6 +818,7 @@ function decideOne(state: ReviewState, a: DecisionAttempt): Step {
     const command: ReviewCommandRecord = {
       commandId: a.commandId,
       requestDigest: a.requestDigest,
+      reviewer: a.reviewer,
       result,
     };
     return {
@@ -803,18 +841,12 @@ function decideOne(state: ReviewState, a: DecisionAttempt): Step {
     updatedAt: a.at,
   });
 
-  // Cancel (§7 item 11): only the confirming solo reviewer, before effectiveAt.
+  // Cancel (§7 item 11): only the confirming solo reviewer (checked above), before effectiveAt.
   if (decision.decision === "cancel_before_effective") {
     if (!approved) return fail("CANCEL_NOT_ALLOWED");
     if (decision.expectedDecisionDigest !== approved.proposal.proposalDigest)
       return fail("DIGEST_MISMATCH");
-    const solo = approved.approval.decisions.find((d) => d.soloOwnerConfirmation !== null);
-    if (
-      !solo ||
-      !same(solo.reviewer, a.reviewer) ||
-      approved.approval.effectiveAt === null ||
-      ms(a.at) >= ms(approved.approval.effectiveAt)
-    )
+    if (approved.approval.effectiveAt === null || ms(a.at) >= ms(approved.approval.effectiveAt))
       return fail("CANCEL_NOT_ALLOWED");
     const cancelled = { ...approved, approval: touch(approved.approval, { status: "cancelled" }) };
     return commit(
@@ -857,19 +889,12 @@ function decideOne(state: ReviewState, a: DecisionAttempt): Step {
     return fail("REVIEW_POLICY_NOT_CURRENT");
   // A derived approval shares the root approval's creation time, so a selection
   // never extends the pending window (§7 item 10).
-  const rule = ruleFor(policy, proposal);
   const pendingExpiresAt =
     member?.approval.expiresAt ??
     earliest(proposal.expiresAt, plusSeconds(root.approval.createdAt, rule.pendingExpirySeconds));
   if (ms(a.at) >= ms(pendingExpiresAt)) return fail("APPROVAL_EXPIRED");
-  // Eligibility (§7 item 4): current grants, the same tenant and the rule's reviewer list.
-  if (
-    !a.reviewerEligible ||
-    !sameTenant(a.reviewer, proposal) ||
-    (rule.eligibleReviewerPrincipalIds !== null &&
-      !rule.eligibleReviewerPrincipalIds.includes(a.reviewer.principalId))
-  )
-    return fail("REVIEWER_DENIED");
+  // A reviewer decides once per approval. Deciding the root and then a derivation
+  // is two approvals of nested change sets; each member counts its own quorum.
   if (member?.approval.decisions.some((d) => d.reviewer.principalId === a.reviewer.principalId))
     return fail("DUPLICATE_REVIEWER");
   // Conflict set (§7 items 5-6): proposer, requester and beneficiaries, inherited by derivations.
@@ -944,7 +969,12 @@ function decideOne(state: ReviewState, a: DecisionAttempt): Step {
     );
   } else if (
     solo ||
-    decisions.filter((d) => d.decision === "approve").length >= base.requiredApprovals
+    // Earlier approvals count only while their reviewer is still eligible.
+    decisions.filter(
+      (d) =>
+        d.decision === "approve" &&
+        (d === entry || a.eligibleReviewerPrincipalIds.includes(d.reviewer.principalId)),
+    ).length >= base.requiredApprovals
   ) {
     // A solo decision meets the quorum alone and takes effect after the cool-down.
     const effectiveAt = solo ? plusSeconds(a.at, coolDownSeconds) : a.at;
@@ -983,8 +1013,9 @@ function decideOne(state: ReviewState, a: DecisionAttempt): Step {
   else next = { ...next, updatedAt: a.at };
   const decided: ReviewMember = { proposal, approval: next };
   const changed: ReviewMember[] = [decided];
-  // An approval supersedes every other pending member of the family.
-  if (next.status === "approved")
+  // An approval supersedes every other pending member of the family, and a
+  // rejection (always of the root) closes the family.
+  if (next.status === "approved" || next.status === "rejected")
     for (const m of state.members)
       if (m.proposal.id !== proposal.id && m.approval.status === "pending") {
         changed.push({ ...m, approval: touch(m.approval, { status: "invalidated" }) });
@@ -994,7 +1025,7 @@ function decideOne(state: ReviewState, a: DecisionAttempt): Step {
             "pending",
             "invalidated",
             "work_service",
-            "superseded_by_partial_approval",
+            next.status === "approved" ? "superseded_by_partial_approval" : "family_rejected",
           ),
         );
       }
@@ -1030,7 +1061,8 @@ export function foldDecisions(
 // --- Dispatch (§7 item 10) ------------------------------------------------------
 /**
  * Whether the family's approved member may dispatch at `facts.now`. Run at
- * `effectiveAt` and again at dispatch. REVIEW_POLICY_NOT_CURRENT and
+ * `effectiveAt` and again at dispatch. REVIEW_POLICY_NOT_CURRENT,
+ * REVIEWER_DENIED (an approving reviewer lost eligibility) and
  * SOLO_OWNER_STATUS_LOST invalidate the approval (`approved→invalidated`).
  */
 export function dispatchCheck(state: ReviewState, facts: DispatchFacts): "ok" | ReviewCode {
@@ -1038,10 +1070,11 @@ export function dispatchCheck(state: ReviewState, facts: DispatchFacts): "ok" | 
   const f = snapshot<DispatchFacts>(
     facts,
     (v) =>
-      closed(v, ["now", "currentPolicy", "ownership"]) &&
+      closed(v, ["now", "currentPolicy", "ownership", "eligibleReviewerPrincipalIds"]) &&
       valid("UtcTime", v.now) &&
       isPolicy(v.currentPolicy) &&
-      isWorkspaceOwnershipFacts(v.ownership),
+      isWorkspaceOwnershipFacts(v.ownership) &&
+      ids(v.eligibleReviewerPrincipalIds, 1000),
     "REVIEW_FACTS_INVALID",
   );
   if (!sameTenant(f.currentPolicy, s.members[0]!.proposal))
@@ -1054,7 +1087,17 @@ export function dispatchCheck(state: ReviewState, facts: DispatchFacts): "ok" | 
     !same(member.proposal.reviewPolicyRef, approval.reviewPolicyRef)
   )
     return "REVIEW_POLICY_NOT_CURRENT";
+  // No recorded decision confers authority: the approving reviewers must still be
+  // eligible now, enough of them to meet the quorum (or the solo owner alone).
   const solo = approval.decisions.find((d) => d.soloOwnerConfirmation !== null);
+  const stillEligible = (d: Current_ApprovalDecision) =>
+    d.decision === "approve" && f.eligibleReviewerPrincipalIds.includes(d.reviewer.principalId);
+  if (
+    solo
+      ? !stillEligible(solo)
+      : approval.decisions.filter(stillEligible).length < approval.requiredApprovals
+  )
+    return "REVIEWER_DENIED";
   if (
     solo &&
     (!soloOwnerStatus(

@@ -166,12 +166,18 @@ export interface ReviewState {
 export interface ReviewCommandRecord {
   readonly commandId: string;
   readonly requestDigest: string;
+  /** The reviewer who issued the command; only they can replay it. */
+  readonly reviewer: Current_HumanActorRef;
   readonly result: ReviewAttemptSuccess;
 }
 
 /** One `governance.approval.decide` command, with the trusted facts current when it runs. */
 export interface DecisionAttempt {
   readonly commandId: string;
+  /**
+   * The CommandEnvelope digest, covering the actor and the whole decide input.
+   * A replay must also come from the recorded reviewer, or it is a COMMAND_CONFLICT.
+   */
   readonly requestDigest: string;
   /** The authenticated reviewer. */
   readonly reviewer: Current_HumanActorRef;
@@ -180,6 +186,12 @@ export interface DecisionAttempt {
   readonly at: string;
   /** `reviewerEligible` for the decided targets, from current grants. */
   readonly reviewerEligible: boolean;
+  /**
+   * Principals currently eligible to review the decided proposal (each passes
+   * `reviewerEligible` for its targets now). An earlier approval counts toward
+   * the quorum only while its reviewer is listed: no recorded decision confers authority.
+   */
+  readonly eligibleReviewerPrincipalIds: readonly string[];
   readonly ownership: WorkspaceOwnershipFacts;
   /** The workspace's single current ReviewPolicy. */
   readonly currentPolicy: Current_ReviewPolicy;
@@ -190,6 +202,12 @@ export interface DispatchFacts {
   readonly now: string;
   readonly currentPolicy: Current_ReviewPolicy;
   readonly ownership: WorkspaceOwnershipFacts;
+  /**
+   * Principals currently eligible to review the approved proposal (each passes
+   * `reviewerEligible` for its targets at `now`). The approval dispatches only
+   * while `requiredApprovals` of its approving reviewers (or its solo owner) are listed.
+   */
+  readonly eligibleReviewerPrincipalIds: readonly string[];
 }
 
 /** A state-machine edge the fold applied; each exists in the v1.1 transition table. */

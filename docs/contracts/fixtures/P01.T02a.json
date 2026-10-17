@@ -1254,14 +1254,6 @@
             "connectionId": null,
             "kind": "product",
             "id": "product_1"
-          },
-          {
-            "organizationId": "org_a",
-            "workspaceId": "workspace_a",
-            "storeId": "store_a",
-            "connectionId": null,
-            "kind": "product",
-            "id": "product_2"
           }
         ],
         "fields": [
@@ -1361,7 +1353,7 @@
           1
         ]
       },
-      "proposalDigest": "d3e0ef34b62827ddb9d81dcec681d66138f00fe7225d4d6ffa619cd87a2ccd3c",
+      "proposalDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
       "expiresAt": "2026-10-25T09:00:00Z"
     }
   },
@@ -1404,14 +1396,6 @@
             "connectionId": null,
             "kind": "product",
             "id": "product_1"
-          },
-          {
-            "organizationId": "org_a",
-            "workspaceId": "workspace_a",
-            "storeId": "store_a",
-            "connectionId": null,
-            "kind": "product",
-            "id": "product_2"
           }
         ],
         "fields": [
@@ -1511,7 +1495,7 @@
           1
         ]
       },
-      "proposalDigest": "d3e0ef34b62827ddb9d81dcec681d66138f00fe7225d4d6ffa619cd87a2ccd3c",
+      "proposalDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
       "expiresAt": "2026-10-25T09:00:00Z"
     }
   },
@@ -3313,7 +3297,7 @@
         0,
         1
       ],
-      "expectedDecisionDigest": "d3e0ef34b62827ddb9d81dcec681d66138f00fe7225d4d6ffa619cd87a2ccd3c",
+      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
       "soloOwnerConfirmation": null,
       "comment": null
     }
@@ -3326,7 +3310,7 @@
     "value": {
       "decision": "cancel_before_effective",
       "selectedTargetIndexes": null,
-      "expectedDecisionDigest": "d3e0ef34b62827ddb9d81dcec681d66138f00fe7225d4d6ffa619cd87a2ccd3c",
+      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
       "soloOwnerConfirmation": null,
       "comment": null
     }
@@ -3342,7 +3326,7 @@
         0,
         1
       ],
-      "expectedDecisionDigest": "d3e0ef34b62827ddb9d81dcec681d66138f00fe7225d4d6ffa619cd87a2ccd3c",
+      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
       "soloOwnerConfirmation": null,
       "comment": null
     }
@@ -3355,7 +3339,7 @@
     "value": {
       "decision": "cancel_before_effective",
       "selectedTargetIndexes": null,
-      "expectedDecisionDigest": "d3e0ef34b62827ddb9d81dcec681d66138f00fe7225d4d6ffa619cd87a2ccd3c",
+      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
       "soloOwnerConfirmation": "approve 2 changes for 20 credits",
       "comment": null
     }
@@ -3381,7 +3365,7 @@
           0,
           1
         ],
-        "expectedDecisionDigest": "d3e0ef34b62827ddb9d81dcec681d66138f00fe7225d4d6ffa619cd87a2ccd3c",
+        "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
         "soloOwnerConfirmation": null,
         "comment": null
       },
@@ -3521,14 +3505,6 @@
               "connectionId": null,
               "kind": "product",
               "id": "product_1"
-            },
-            {
-              "organizationId": "org_a",
-              "workspaceId": "workspace_a",
-              "storeId": "store_a",
-              "connectionId": null,
-              "kind": "product",
-              "id": "product_2"
             }
           ],
           "fields": [
@@ -3628,7 +3604,7 @@
             1
           ]
         },
-        "proposalDigest": "d3e0ef34b62827ddb9d81dcec681d66138f00fe7225d4d6ffa619cd87a2ccd3c",
+        "proposalDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
         "expiresAt": "2026-10-25T09:00:00Z"
       }
     }
@@ -3859,6 +3835,18 @@
     "to": "invalidated",
     "actor": "work_service",
     "guard": "superseded_by_partial_approval",
+    "version": "1.1",
+    "guardPassed": true,
+    "allowed": true
+  },
+  {
+    "id": "P01.T02a.state.approval_family_rejected",
+    "kind": "transition",
+    "aggregate": "approval",
+    "from": "pending",
+    "to": "invalidated",
+    "actor": "work_service",
+    "guard": "family_rejected",
     "version": "1.1",
     "guardPassed": true,
     "allowed": true

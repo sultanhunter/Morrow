@@ -56,6 +56,10 @@ const plus = (time, seconds) => new Date(Date.parse(time) + seconds * 1000).toIS
 const sha = (text) => createHash("sha256").update(text, "utf8").digest("hex");
 // Every transition any fold emits, for AC25.
 const emitted = [];
+// Principals whose current grants make them eligible reviewers, unless a test narrows it.
+const everyone = ["human_maya", "human_leo", "human_ana", "human_ben", "human_olivia"];
+const dispatchOf = (state, facts) =>
+  dispatchCheck(state, { eligibleReviewerPrincipalIds: everyone, ...facts });
 function family(p, pol = policy()) {
   return {
     revision: 1,
@@ -90,6 +94,7 @@ function attempt(state, reviewer, decision = {}, overrides = {}) {
     },
     at: at(0),
     reviewerEligible: true,
+    eligibleReviewerPrincipalIds: everyone,
     ownership: team(),
     currentPolicy: policy(),
     ...overrides,
@@ -197,6 +202,16 @@ test("AC13: each server-derived field has its own mismatch code", () => {
   const unscoped = refund();
   unscoped.targets[0].fields = ["amount"];
   only(unscoped, facts(base), "TARGET_SCOPE_MISMATCH");
+  // The parameters reference and the bound parameters digest must name one artifact.
+  const parameters = refund();
+  parameters.parametersRef.digest = "d".repeat(64);
+  only(parameters, facts(base), "PARAMETERS_DIGEST_MISMATCH");
+  // A store-scoped proposal's scope names exactly its store; a storeless one names none.
+  for (const storeIds of [[], ["store_b"], ["store_a", "store_b"]]) {
+    const stores = refund();
+    stores.scope.storeIds = storeIds;
+    only(stores, facts(base), "TENANT_MISMATCH");
+  }
   // A stored digest that does not cover the content.
   assert.deepEqual(checkProposal({ ...refund(), proposalDigest: "d".repeat(64) }, facts(base)), [
     "PROPOSAL_DIGEST_MISMATCH",
@@ -224,6 +239,7 @@ test("AC14: partial approval derives a deterministic proposal and digest", () =>
     ...parent,
     id: "derived_" + oracle(derivedFrom),
     revision: 1,
+    scope: { ...parent.scope, resources: parent.scope.resources.slice(0, 2) },
     targets: parent.targets.slice(0, 2),
     maximumCredits: "20",
     maximumCost: null,
@@ -234,6 +250,28 @@ test("AC14: partial approval derives a deterministic proposal and digest", () =>
   assert.equal(derived.proposalDigest, seal(derived).proposalDigest);
   for (const key of ["createdAt", "updatedAt", "expiresAt", "requestedBy", "proposedBy"])
     assert.deepEqual(derived[key], parent[key], key);
+  // The scope is the exact selected change set: the selected targets' resources
+  // and fields only, so the scope digest an approval binds differs from the parent's.
+  assert.deepEqual(
+    derived.scope.resources,
+    derived.targets.map((t) => t.resource),
+  );
+  assert.notEqual(oracle(derived.scope), oracle(parent.scope));
+  const mixedFields = proposal({ fields: ["title", "body_html"] });
+  mixedFields.targets[1].fields = ["body_html"];
+  mixedFields.targets[2].fields = ["title"];
+  const bodyOnly = previewSelection(seal(mixedFields), [1]).proposal;
+  assert.deepEqual(bodyOnly.scope.fields, ["body_html"]);
+  assert.deepEqual(bodyOnly.scope.resources, [mixedFields.targets[1].resource]);
+  assert.deepEqual(previewSelection(seal(mixedFields), [0, 2]).proposal.scope.fields, [
+    "title",
+    "body_html",
+  ]);
+  // The fixture is the library's own derivation of the valid fixture proposal.
+  assert.deepEqual(
+    previewSelection(fixture("P01.T02a.proposal.valid"), [0, 1]).proposal,
+    fixture("P01.T02a.proposal.derived"),
+  );
   assert.equal(validateCurrentDefinition("Proposal", derived), true);
   assert.equal(
     validateCapabilityOutput("governance.approval.preview", { proposal: derived }),
@@ -320,6 +358,9 @@ test("AC16: at most one member of a family is approved", () => {
   const derivedApproval = approvalOf(approved.state, "approval_" + pair.id);
   assert.equal(validateCurrentDefinition("Approval", derivedApproval), true);
   assert.equal(derivedApproval.createdAt, state.members[0].approval.createdAt);
+  // The derived approval binds the narrowed scope, not the parent's.
+  assert.equal(derivedApproval.scopeDigest, oracle(pair.scope));
+  assert.notEqual(derivedApproval.scopeDigest, state.members[0].approval.scopeDigest);
   const s = approved.state;
   assert.equal(code(one(s, human("ana"))), "FAMILY_CONFLICT");
   const sibling = previewSelection(parent, [2]).proposal;
@@ -337,6 +378,37 @@ test("AC16: at most one member of a family is approved", () => {
   assert.equal(code(one(family(fresh), human("ana"))), "approved");
 });
 
+test("AC16: rejecting the root closes the family and invalidates its pending derivations", () => {
+  const two = policy({ external: { ...defaults.rules.external, requiredApprovals: 2 } });
+  const parent = proposal({ reviewPolicy: two });
+  const state = family(parent, two);
+  const pair = previewSelection(parent, [0, 1]).proposal;
+  const selectPair = { selectedTargetIndexes: [0, 1], expectedDecisionDigest: pair.proposalDigest };
+  const partial = one(state, human("leo"), selectPair, { currentPolicy: two });
+  assert.equal(code(partial), "pending");
+  const derivedId = "approval_" + pair.id;
+  const before = approvalOf(partial.state, derivedId);
+  const rejected = one(partial.state, human("ana"), { decision: "reject" }, { currentPolicy: two });
+  assert.equal(code(rejected), "rejected");
+  assert.deepEqual(rejected.invalidate, [approvalRef(before)]);
+  assert.equal(approvalOf(rejected.state, "approval_a").status, "rejected");
+  assert.equal(approvalOf(rejected.state, derivedId).status, "invalidated");
+  assert.deepEqual(
+    rejected.result.transitions.map(
+      (t) => `${t.approvalId}:${t.from}>${t.to}:${t.actor}:${t.guard}`,
+    ),
+    [
+      "approval_a:pending>rejected:eligible_human_reviewer:eligible_rejection_exact_digest_and_current_policy",
+      `${derivedId}:pending>invalidated:work_service:family_rejected`,
+    ],
+  );
+  // Nothing in the closed family can be decided.
+  assert.equal(
+    code(one(rejected.state, human("ben"), selectPair, { currentPolicy: two })),
+    "APPROVAL_NOT_PENDING",
+  );
+});
+
 test("AC17: in a team, the requester cannot approve a financial change; another member can", () => {
   const financial = proposal({
     capabilityId: "ads.budget.change",
@@ -352,7 +424,7 @@ test("AC17: in a team, the requester cannot approve a financial change; another 
   const approval = leo.state.members[0].approval;
   assert.equal(approval.effectiveAt, approval.decidedAt);
   assert.equal(
-    dispatchCheck(leo.state, { now: approval.effectiveAt, currentPolicy: policy(), ownership }),
+    dispatchOf(leo.state, { now: approval.effectiveAt, currentPolicy: policy(), ownership }),
     "ok",
   );
   const external = proposal({ requestedBy: human("maya") });
@@ -427,10 +499,19 @@ test("AC19: the solo owner approves with the exact phrase after a cool-down, and
     actor: "solo_owner",
     guard: "typed_confirmation_recorded_cool_down_scheduled",
   });
-  const dispatch = (now) =>
-    dispatchCheck(approved.state, { now, currentPolicy: policy(), ownership });
+  const dispatch = (now) => dispatchOf(approved.state, { now, currentPolicy: policy(), ownership });
   assert.equal(dispatch(plus(approval.effectiveAt, -1)), "APPROVAL_NOT_EFFECTIVE");
   assert.equal(dispatch(approval.effectiveAt), "ok");
+  // The solo owner's decision confers nothing once their own grants lapse.
+  assert.equal(
+    dispatchOf(approved.state, {
+      now: approval.effectiveAt,
+      currentPolicy: policy(),
+      ownership,
+      eligibleReviewerPrincipalIds: ["human_leo"],
+    }),
+    "REVIEWER_DENIED",
+  );
   for (const wrong of [
     "Approve 2 changes for 20 credits",
     "approve 2 changes for 20 credits ",
@@ -453,7 +534,7 @@ test("AC19: the solo owner approves with the exact phrase after a cool-down, and
   assert.equal(code(cancelled), "cancelled");
   assert.equal(cancelled.result.transitions[0].to, "cancelled");
   assert.equal(
-    dispatchCheck(cancelled.state, { now: at(6), currentPolicy: policy(), ownership }),
+    dispatchOf(cancelled.state, { now: at(6), currentPolicy: policy(), ownership }),
     "NOT_APPROVED",
   );
   assert.equal(code(cancel(approved.state, 5)), "CANCEL_NOT_ALLOWED");
@@ -536,7 +617,7 @@ test("AC20: no takeover through the kill switch or a manufactured solo status", 
   const approved = one(family(p), olivia, phrase, { ownership: owner });
   const effectiveAt = approved.state.members[0].approval.effectiveAt;
   const check = (ownership) =>
-    dispatchCheck(approved.state, { now: effectiveAt, currentPolicy: policy(), ownership });
+    dispatchOf(approved.state, { now: effectiveAt, currentPolicy: policy(), ownership });
   assert.equal(check(owner), "ok");
   assert.equal(check({ ...owner, activeHumanMembershipCount: 2 }), "SOLO_OWNER_STATUS_LOST");
   assert.equal(check({ ...owner, lastMembershipChangeAt: at(1) }), "SOLO_OWNER_STATUS_LOST");
@@ -560,7 +641,7 @@ test("AC20: no takeover through the kill switch or a manufactured solo status", 
   );
   assert.equal(code(shortApproved), "approved");
   const later = (ownership) =>
-    dispatchCheck(shortApproved.state, { now: at(90), currentPolicy: short, ownership });
+    dispatchOf(shortApproved.state, { now: at(90), currentPolicy: short, ownership });
   assert.equal(later(owner), "ok");
   assert.equal(later({ ...owner, lastMembershipChangeAt: at(1) }), "SOLO_OWNER_STATUS_LOST");
   // A rule that denies self-approval refuses even the solo owner's exact phrase.
@@ -622,6 +703,59 @@ test("AC21: quorum, idempotent replay, command conflicts and duplicate reviewers
       .state.members[0].approval.status,
     "approved",
   );
+  // Only the recorded reviewer can replay a command: anyone else gets a conflict,
+  // or the uniform denial when they are not an eligible reviewer.
+  assert.equal(fold(s, { ...leo, reviewer: human("ana") }).results[0].code, "COMMAND_CONFLICT");
+  assert.equal(
+    fold(s, { ...leo, reviewer: human("ana"), reviewerEligible: false }).results[0].code,
+    "REVIEWER_DENIED",
+  );
+  assert.equal(
+    fold(s, { ...leo, reviewer: human("zoe", { workspaceId: "workspace_b" }) }).results[0].code,
+    "REVIEWER_DENIED",
+  );
+  // A reviewer decides once per approval: Leo, who approved the whole proposal,
+  // may also approve a selection of it, which is its own approval with its own quorum.
+  const pair = previewSelection(p, [0, 1]).proposal;
+  const selectPair = { selectedTargetIndexes: [0, 1], expectedDecisionDigest: pair.proposalDigest };
+  const leoPair = again(human("leo"), selectPair);
+  assert.equal(leoPair.results[0].status, "pending");
+  assert.equal(approvalOf(leoPair.state, "approval_a").decisions.length, 1);
+  assert.equal(approvalOf(leoPair.state, "approval_" + pair.id).decisions.length, 1);
+  const s2 = leoPair.state;
+  assert.equal(
+    fold(s2, attempt(s2, human("leo"), selectPair, { currentPolicy: two })).results[0].code,
+    "DUPLICATE_REVIEWER",
+  );
+  // An earlier approval counts toward the quorum only while its reviewer is still eligible.
+  const withoutLeo = ["human_maya", "human_ana", "human_ben"];
+  const anaAfterLeoRevoked = again(human("ana"), {}, { eligibleReviewerPrincipalIds: withoutLeo });
+  assert.equal(anaAfterLeoRevoked.results[0].status, "pending");
+  const s3 = anaAfterLeoRevoked.state;
+  const ben = fold(
+    s3,
+    attempt(s3, human("ben"), {}, { currentPolicy: two, eligibleReviewerPrincipalIds: withoutLeo }),
+  );
+  assert.equal(ben.results[0].status, "approved");
+  assert.equal(approvalOf(ben.state, "approval_a").decisions.length, 3);
+  // Under `allowed`, conflicted reviewers may approve, so they count toward the quorum.
+  const threeExternal = policy({ external: { ...defaults.rules.external, requiredApprovals: 3 } });
+  const byMaya = proposal({ reviewPolicy: threeExternal, requestedBy: human("maya") });
+  assert.deepEqual(
+    checkProposal(
+      byMaya,
+      facts(byMaya, {
+        reviewPolicy: threeExternal,
+        eligibleReviewerPrincipalIds: ["human_maya", "human_leo", "human_ana"],
+      }),
+    ),
+    [],
+  );
+  const mayaState = family(byMaya, threeExternal);
+  assert.equal(
+    code(one(mayaState, human("maya"), {}, { currentPolicy: threeExternal })),
+    "pending",
+  );
   // Quorum 3 with two eligible non-conflicted reviewers cannot be met.
   const three = policy({ financial: { ...defaults.rules.financial, requiredApprovals: 3 } });
   const financial = proposal({
@@ -641,6 +775,40 @@ test("AC21: quorum, idempotent replay, command conflicts and duplicate reviewers
       }),
     ),
     [],
+  );
+  // The solo path meets a quorum only for a conflicted owner, as in the fold. A
+  // solo owner outside the conflict set is one ordinary approval of two.
+  const twoFinancial = policy({ financial: { ...defaults.rules.financial, requiredApprovals: 2 } });
+  const soloFacts = (p) =>
+    facts(p, {
+      reviewPolicy: twoFinancial,
+      eligibleReviewerPrincipalIds: ["human_olivia"],
+      ownership: solo(),
+    });
+  const byAna = proposal({
+    capabilityId: "ads.budget.change",
+    credits: ["10"],
+    requestedBy: human("ana"),
+    reviewPolicy: twoFinancial,
+  });
+  assert.deepEqual(checkProposal(byAna, soloFacts(byAna)), ["QUORUM_UNREACHABLE"]);
+  const byOlivia = proposal({
+    capabilityId: "ads.budget.change",
+    credits: ["10"],
+    requestedBy: human("olivia"),
+    reviewPolicy: twoFinancial,
+  });
+  assert.deepEqual(checkProposal(byOlivia, soloFacts(byOlivia)), []);
+  assert.equal(
+    code(
+      one(
+        family(byOlivia, twoFinancial),
+        human("olivia"),
+        { soloOwnerConfirmation: confirmationPhrase(byOlivia) },
+        { ownership: solo(), currentPolicy: twoFinancial },
+      ),
+    ),
+    "approved",
   );
 });
 
@@ -745,6 +913,95 @@ test("AC22: reviewer eligibility composes the human evaluator and the rule's rev
   );
 });
 
+test("AC22: ineligible, unlisted and foreign reviewers get one uniform denial whatever the family state", () => {
+  const p = proposal();
+  const state = family(p);
+  const pending = state.members[0].approval;
+  const approvedState = one(state, human("ana")).state;
+  const rejectedState = one(state, human("ana"), { decision: "reject" }).state;
+  const listed = policy({
+    external: { ...defaults.rules.external, eligibleReviewerPrincipalIds: ["human_ana"] },
+  });
+  const outsiders = [
+    [human("leo"), { reviewerEligible: false }],
+    [human("zoe", { workspaceId: "workspace_b" }), {}],
+    [human("zoe", { organizationId: "org_b", workspaceId: "workspace_b" }), {}],
+    [human("leo"), { currentPolicy: listed }],
+  ];
+  const cases = [
+    ["approved family", approvedState, {}, {}],
+    ["rejected family", rejectedState, {}, {}],
+    ["reject on a closed family", rejectedState, { decision: "reject" }, {}],
+    ["expired approval", state, {}, { at: pending.expiresAt }],
+    ["revised policy", state, {}, { currentPolicy: policy({}, 2) }],
+    ["wrong digest", state, { expectedDecisionDigest: "e".repeat(64) }, {}],
+    ["stale revision", approvedState, {}, { stale: true }],
+    ["cancel", approvedState, { decision: "cancel_before_effective" }, {}],
+  ];
+  const denied = { ok: false, code: "REVIEWER_DENIED", ...reviewError("REVIEWER_DENIED") };
+  for (const [reviewer, who] of outsiders)
+    for (const [name, s, decision, { stale, ...overrides }] of cases) {
+      const a = attempt(s, reviewer, decision, { ...overrides, ...who });
+      if (stale) a.input.expectedRevision = s.revision - 1;
+      const { commandId: _c, requestDigest: _r, ...result } = fold(s, a).results[0];
+      assert.deepEqual(result, denied, `${reviewer.principalId} ${reviewer.workspaceId}: ${name}`);
+    }
+  // An eligible reviewer who did not confirm a solo approval cannot cancel it,
+  // and learns nothing about its digest.
+  const olivia = human("olivia");
+  const financial = proposal({
+    capabilityId: "ads.budget.change",
+    credits: ["10"],
+    requestedBy: olivia,
+  });
+  const soloApproved = one(
+    family(financial),
+    olivia,
+    { soloOwnerConfirmation: confirmationPhrase(financial) },
+    { ownership: solo() },
+  ).state;
+  for (const expectedDecisionDigest of [financial.proposalDigest, "e".repeat(64)])
+    assert.equal(
+      code(
+        one(
+          soloApproved,
+          human("leo"),
+          { decision: "cancel_before_effective", expectedDecisionDigest },
+          { ownership: solo() },
+        ),
+      ),
+      "CANCEL_NOT_ALLOWED",
+    );
+});
+
+test("AC22: dispatch rechecks that the approving reviewers are still eligible", () => {
+  const two = policy({ external: { ...defaults.rules.external, requiredApprovals: 2 } });
+  const p = proposal({ reviewPolicy: two });
+  const state = family(p, two);
+  const leo = one(state, human("leo"), {}, { currentPolicy: two });
+  const both = one(leo.state, human("ana"), {}, { currentPolicy: two });
+  assert.equal(code(both), "approved");
+  const dispatch = (eligibleReviewerPrincipalIds) =>
+    dispatchOf(both.state, {
+      now: at(1),
+      currentPolicy: two,
+      ownership: team(),
+      eligibleReviewerPrincipalIds,
+    });
+  assert.equal(dispatch(["human_leo", "human_ana"]), "ok");
+  assert.equal(dispatch(everyone), "ok");
+  // Leo's membership or approve grant was revoked after he approved.
+  assert.equal(dispatch(["human_ana"]), "REVIEWER_DENIED");
+  // Another eligible member who never approved does not stand in for him.
+  assert.equal(dispatch(["human_ana", "human_ben"]), "REVIEWER_DENIED");
+  assert.equal(dispatch([]), "REVIEWER_DENIED");
+  assert.equal(reviewError("REVIEWER_DENIED").category, "denied");
+  assert.throws(
+    () => dispatchCheck(both.state, { now: at(1), currentPolicy: two, ownership: team() }),
+    ReviewBoundaryError,
+  );
+});
+
 test("AC23: review policy shape, defaults and the effective rule", () => {
   const rules = structuredClone(defaults.rules);
   assert.equal(validateCurrentDefinition("ReviewPolicyRules", rules), true);
@@ -829,7 +1086,7 @@ test("AC23: review policy shape, defaults and the effective rule", () => {
   );
   const approved = one(state, human("leo"));
   assert.equal(
-    dispatchCheck(approved.state, { now: at(1), currentPolicy: revised, ownership: team() }),
+    dispatchOf(approved.state, { now: at(1), currentPolicy: revised, ownership: team() }),
     "REVIEW_POLICY_NOT_CURRENT",
   );
   assert.deepEqual(reviewPolicyRef(policy()), policyRef(policy()));
@@ -854,7 +1111,7 @@ test("AC24: pending and approved expiry take the earlier deadline; dispatch at e
   const approvedSooner = one(family(sooner), human("leo"));
   assert.equal(approvedSooner.state.members[0].approval.expiresAt, "2026-10-19T00:00:00Z");
   const dispatch = (state, now) =>
-    dispatchCheck(state, { now, currentPolicy: pol, ownership: team() });
+    dispatchOf(state, { now, currentPolicy: pol, ownership: team() });
   assert.equal(dispatch(approvedLater.state, a.expiresAt), "APPROVAL_EXPIRED");
   assert.equal(dispatch(approvedLater.state, plus(a.expiresAt, -1)), "ok");
   assert.equal(dispatch(family(later), at(1)), "NOT_APPROVED");
@@ -998,6 +1255,7 @@ test("AC25: transition rows are versioned and every emitted transition exists at
       "approved>cancelled:solo_owner:before_effective_at",
       "pending>approved:eligible_human_reviewer:quorum_met_exact_digest_scope_and_current_policy",
       "pending>approved:solo_owner:typed_confirmation_recorded_cool_down_scheduled",
+      "pending>invalidated:work_service:family_rejected",
       "pending>invalidated:work_service:superseded_by_partial_approval",
       "pending>rejected:eligible_human_reviewer:eligible_rejection_exact_digest_and_current_policy",
     ],

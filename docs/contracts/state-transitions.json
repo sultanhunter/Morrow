@@ -356,6 +356,13 @@
         "actor": "work_service",
         "guard": "superseded_by_partial_approval",
         "since": "1.1"
+      },
+      {
+        "from": "pending",
+        "to": "invalidated",
+        "actor": "work_service",
+        "guard": "family_rejected",
+        "since": "1.1"
       }
     ],
     "operation": [
