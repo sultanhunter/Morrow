@@ -33,7 +33,7 @@ Actions are pinned by full commit SHA: checkout `3d3c42e5…` (v7), setup-node `
 
 ## Artifacts
 
-Each job, and each matrix leg, uploads one artifact named `morrow-<job>[-<shard or group>]-<run id>-<attempt>`, for example `morrow-postgres-pg-http-<run id>-1`. Artifacts are kept for 90 days. [ADR-0008 (CI artifacts are the evidence)](../decisions/adr/ADR-0008-ci-artifacts-are-evidence.md) still holds; the only difference is that its single `morrow-ci-<run id>-<attempt>` artifact is now one artifact per job. The `unit` job may produce no reports, so its upload ignores an empty directory. Every other job fails its upload step if no reports were written.
+Each job, and each matrix leg, uploads one artifact named `morrow-<job>[-<shard or group>]-<run id>-<attempt>`, for example `morrow-postgres-pg-http-<run id>-1`. Artifacts are kept for 90 days. [ADR-0012 (CI artifacts are the evidence)](../decisions/adr/ADR-0012-ci-artifacts-are-evidence.md) still holds; the only difference is that its single `morrow-ci-<run id>-<attempt>` artifact is now one artifact per job. The `unit` job may produce no reports, so its upload ignores an empty directory. Every other job fails its upload step if no reports were written.
 
 ## Required check
 
@@ -68,4 +68,4 @@ Reports go to the git-ignored `.artifacts/` directory unless `MORROW_ARTIFACTS_D
 
 ## Frozen regression replay
 
-`.github/workflows/frozen-regressions.yml` is optional and can only be started by hand (`workflow_dispatch`). It is not a required check. It checks out the archive tag `codex-archive-f89ad75`, never the current tree. There it replays the frozen 71/74/75/80/82 WorkOS operator regressions retired by ADR-0007, together with their unit tests. The uploaded `frozen*.json` paths are tracked at the tag, so a report that a failed replay never rewrote would still be there. The upload therefore runs only when every replay and unit test succeeded and the archived tree's own secret scan (`verify:delivery`) passed. The replays rewrite tracked reports inside that archived tree, so this job has no clean-tree gate.
+`.github/workflows/frozen-regressions.yml` is optional and can only be started by hand (`workflow_dispatch`). It is not a required check. It checks out the archive tag `codex-archive-f89ad75`, never the current tree. There it replays the frozen 71/74/75/80/82 WorkOS operator regressions retired by ADR-0013, together with their unit tests. The uploaded `frozen*.json` paths are tracked at the tag, so a report that a failed replay never rewrote would still be there. The upload therefore runs only when every replay and unit test succeeded and the archived tree's own secret scan (`verify:delivery`) passed. The replays rewrite tracked reports inside that archived tree, so this job has no clean-tree gate.

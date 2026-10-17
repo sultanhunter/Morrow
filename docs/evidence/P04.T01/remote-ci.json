@@ -1,9 +1,0 @@
-{
-  "repository": "https://github.com/sultanhunter/Morrow",
-  "source_commit": "54949de7a82c579e5a82a20c2e4beaf0cc7cca51",
-  "run": "https://github.com/sultanhunter/Morrow/actions/runs/37490758758",
-  "conclusion": "success",
-  "scope": "Hosted locked install, bundle repair, full554test pipeline, nine scaffold guards and pinned CloudFormation validation; no AWS account, provider, merchant or production qualification",
-  "release_protection": "pending; not a coding blocker",
-  "paid_resources_created": false
-}

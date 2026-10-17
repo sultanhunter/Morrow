@@ -1,6 +1,6 @@
 name: Frozen WorkOS regressions (archive replay)
 # Optional, manual replay of the frozen 71/74/75/80/82 WorkOS operator
-# regressions retired by ADR-0007. It checks out the archive tag, never the
+# regressions retired by ADR-0013. It checks out the archive tag, never the
 # current tree, and uses the archived sources and lockfile. It is not a
 # required check. The replays rewrite the tracked reports of that tree, so
 # this job has no clean-tree gate. The uploaded paths are tracked at the tag,

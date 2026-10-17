@@ -57,7 +57,7 @@
     "development_container_lab": {
       "profile": "synthetic-development",
       "status": "retired",
-      "retired_by": "docs/decisions/adr/ADR-0007-retire-aws-cdk-daytona-frozen-regressions.md",
+      "retired_by": "docs/decisions/adr/ADR-0013-retire-aws-cdk-daytona-frozen-regressions.md",
       "merchant_execution": false,
       "free_credit_eligibility": "unconfirmed",
       "provider_creation_enabled": false,

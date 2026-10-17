@@ -1,6 +1,6 @@
 # Morrow selected infrastructure
 
-Canonical sequence59 selects Cloudflare Workers/Workflows/Queues/R2, Neon PostgreSQL and replaceable E2B Linux microVM execution. WorkOS remains identity. The AWS/CDK/Temporal baseline was never deployed and its code is retired (ADR-0007); its definitions and cost records are at the tag `codex-archive-f89ad75`. No AWS account or Temporal namespace is needed.
+Canonical sequence59 selects Cloudflare Workers/Workflows/Queues/R2, Neon PostgreSQL and replaceable E2B Linux microVM execution. WorkOS remains identity. The AWS/CDK/Temporal baseline was never deployed and its code is retired (ADR-0013); its definitions and cost records are at the tag `codex-archive-f89ad75`. No AWS account or Temporal namespace is needed.
 
 ## Active local tooling
 
@@ -38,7 +38,7 @@ P04.T01c at canonical48 records an approved temporary Neon Free laboratory in do
 
 P04.T01d at canonical50 is the approved restricted Neon authority laboratory: all three immutable migrations and nine FORCE RLS tables installed, with25 actual checks and verified run-owned fixture cleanup. Only the staging administrator has explicit SET access to the NOLOGIN schema owner; morrow_api has no owner/administrative membership or database/schema CREATE. The opt-in qualification runner holds partial state and requires readback before resume, preserving its private credential. No default CI invocation makes provider calls. This result qualifies synthetic database authority from local workerd, not hosted authentication, Cloudflare deployment, rotation/recovery or launch. ShopifyFlow was deleted after exact owner confirmation; it is not a Morrow resource.
 
-P04.T01e and P04.T01f, the Daytona support record and synthetic container laboratory, are retired with their code and `@daytona/sdk` (ADR-0007). Daytona never created a key, sandbox or provider call, so no cleanup path is kept; the history is at the tag `codex-archive-f89ad75`. Root `overrides` pin `sharp` and miniflare's `undici` to advisory-fixed versions.
+P04.T01e and P04.T01f, the Daytona support record and synthetic container laboratory, are retired with their code and `@daytona/sdk` (ADR-0013). Daytona never created a key, sandbox or provider call, so no cleanup path is kept; the history is at the tag `codex-archive-f89ad75`. Root `overrides` pin `sharp` and miniflare's `undici` to advisory-fixed versions.
 
 Current P04.T01h: `npm run lab:e2b-development` prepares offline and does not read credentials or contact E2B. `--run <private-input>` requires a current owned free-project/resource/quote/access receipt; `--cleanup <original-operation-UUID> <private-input>` uses the original journal even after current selection/source/credits change. Private files remain outside repositories, owner-only, no symlinks; uncertain effects hold the operation slot. Never use connect for inspection/cleanup. Static metrics prove actual key-project binding; native pinned-build and controller security reads precede allocation. SDK/getInfo configuration does not qualify live egress or memory persistence; controlled live engineering and production P12 remain pending. The recorded 65 build, 66 runtime and 67 diagnostic reports and their source closures are at the tag `codex-archive-f89ad75` (docs/history/INDEX.md).
 

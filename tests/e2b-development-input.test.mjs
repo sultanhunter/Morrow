@@ -569,7 +569,7 @@ test("activation gate yields a profile only for the exact valid shape and fails 
   const valid = {
     schema_version: 1,
     active_profile_sequence: 67,
-    decision: "docs/decisions/adr/ADR-0007-retire-aws-cdk-daytona-frozen-regressions.md",
+    decision: "docs/decisions/adr/ADR-0013-retire-aws-cdk-daytona-frozen-regressions.md",
   };
   const reader = (content) => (path, encoding) => {
     assert.equal(path, gatePath);

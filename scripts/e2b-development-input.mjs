@@ -47,7 +47,7 @@ const keys = (value, expected) =>
   !Array.isArray(value) &&
   Object.keys(value).sort().join(",") === [...expected].sort().join(",");
 
-// Explicit committed activation gate (ADR-0007). New allocation, owned builds, image
+// Explicit committed activation gate (ADR-0013). New allocation, owned builds, image
 // verification and template discovery need the active recipe profile sequence named
 // here; a missing, unreadable or malformed gate, or a null value, denies them. Only the
 // exact shape with a positive safe-integer sequence and a decision reference activates.

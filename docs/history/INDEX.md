@@ -29,13 +29,13 @@ Check out the whole archived tree in its own worktree, never in this checkout:
 git worktree add "$TMPDIR/morrow-archive" codex-archive-f89ad75
 ```
 
-Remove it afterwards with `git worktree remove "$TMPDIR/morrow-archive"`. The archived tree's scripts and lockfile are the originals. Their native provider paths were already denied at that commit; ADR-0007 describes the optional replay.
+Remove it afterwards with `git worktree remove "$TMPDIR/morrow-archive"`. The archived tree's scripts and lockfile are the originals. Their native provider paths were already denied at that commit; ADR-0013 describes the optional replay.
 
-Older documents still link to `docs/evidence/...` and `docs/history/...`, in particular `docs/packets/*.md`, `docs/plan/build-plan.md`, `docs/progress/checkpoint.md` (now at the tag only) and ADR-0007. Read any of those links as `codex-archive-f89ad75:<path>`. Migration review records in `migrations/manifest.json` and the provider-lab evidence fields in `docs/decisions/morrow-provider-lab.json` are already written in that form.
+Older documents still link to `docs/evidence/...` and `docs/history/...`, in particular `docs/packets/*.md`, `docs/plan/build-plan.md`, `docs/progress/checkpoint.md` (now at the tag only) and ADR-0013. Read any of those links as `codex-archive-f89ad75:<path>`. Migration review records in `migrations/manifest.json` and the provider-lab evidence fields in `docs/decisions/morrow-provider-lab.json` are already written in that form.
 
 ## Evidence from here on
 
-- The engineering evidence for a commit is its green CI run and the artifact that run uploads (ADR-0008, ADR-0002). Labs and verifiers write to the git-ignored `.artifacts/` directory, or to `MORROW_ARTIFACTS_DIR`. CI secret-scans that directory before upload and keeps the artifact for 90 days.
+- The engineering evidence for a commit is its green CI run and the artifact that run uploads (ADR-0012, ADR-0002). Labs and verifiers write to the git-ignored `.artifacts/` directory, or to `MORROW_ARTIFACTS_DIR`. CI secret-scans that directory before upload and keeps the artifact for 90 days.
 - Reports are not committed. To see a past report, download that run's artifact within the retention window or rerun the commit.
 - Commit only what ADR-0002 lists: live-provider effect records in `docs/evidence/live/YYYY-MM-DD-<provider>-<action>.md`, human-gated results, acceptance tables in `docs/acceptance/PNN.md`, and ADRs.
 
@@ -53,7 +53,7 @@ Inputs that code reads were moved out of `docs/evidence/` first, with the same b
 
 ## Terminal provider state
 
-ADR-0007 cites these records to show that no provider operation is still open. Every path is at the tag.
+ADR-0013 cites these records to show that no provider operation is still open. Every path is at the tag.
 
 | Provider | Outcome | Record |
 | --- | --- | --- |

@@ -46,14 +46,16 @@
 - P05.T02a: grant lifecycle and tenant conformance harness.
 - P05.T04b: persisted agent authority.
 
-**7. Dependency-edge fixes.**
-- P08 depends on P06 plus the P07.T01 ArtifactRef contract.
-- P11.T01–T03 depend on P06, P08 and P09 plus the P01 source-authority rules. P10 is needed only for proposals that originate from context or agents.
-- P12 splits into two parts:
+**7. Engineering-start edges (two-track only).** The dependency table now has two columns, "engineering may start on" and "qualification inputs". The qualification inputs are unchanged from the sequence-94 plan. Engineering may start as follows:
+- P08 starts on P06 plus the P07.T01 ArtifactRef contract.
+- P11.T01–T03 start on reviewed P06, P08 and P09 interfaces plus the P01 source-authority rules.
+- P12 is grouped into two parts:
   - P12a (trusted): P12.T03 and P12.T04, plus the P12.T01 port and lease interfaces.
   - P12b (isolated): P12.T01 profile qualification, P12.T02 and P12.T05.
-- P13 engineering depends on P10.T01, P11 and P12a. P13 qualification still needs all of P12. Code and browser tools stay hard-denied until P12b qualifies.
-- P14 slices depend on the APIs they consume.
+- P13 engineering starts on P10.T01, P11 and P12a. Code and browser tools stay hard-denied until P12b qualifies.
+- P14 slices start on the APIs they consume.
+
+Narrowing any qualification input needs a separate owner-approved ADR. One example is P11's dependency on P10, which could be limited to proposals that originate from context or agents.
 
 ## Consequences
 
