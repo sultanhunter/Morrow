@@ -489,6 +489,9 @@ function installedBound(
     );
   });
 }
+// Agents never view or execute a human_only capability (ADR-0005). They may only
+// propose one, and only where a proposal path exists: a kill switch or a
+// reviewed capability. Grants, titles and delegation cannot widen this.
 function allowedOperation(op: PermissionRequest) {
   const c = capabilities.get(op.capabilityId);
   return (
@@ -496,7 +499,8 @@ function allowedOperation(op: PermissionRequest) {
     ["view", "propose", "execute"].includes(op.verb) &&
     op.capabilityId !== "governance.connection.connect" &&
     !c.eligible_principal.startsWith("operator_") &&
-    !c.eligible_principal.startsWith("eligible_human_")
+    !c.eligible_principal.startsWith("eligible_human_") &&
+    (c.executor !== "human_only" || (op.verb === "propose" && (c.kill_switch || c.review_required)))
   );
 }
 function activeWindow(start: string, end: string, revoked: string | null, now: number) {

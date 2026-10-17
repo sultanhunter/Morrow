@@ -48,3 +48,10 @@ The contracts also do not say who may approve a proposal, whether self-approval 
 Owner approval, 2026-10-17, in chat: **"Accept proposed defaults (Recommended)"**. The approved text was:
 
 > Kill switches (pause ads, disable agent, revoke member, disconnect store, revoke release) are human-only and act without a second approver. No self-approval for spend/messages/access changes, except a solo owner with typed confirmation.
+
+Owner confirmation of §2, 2026-10-18, in chat. The owner selected **"Confirm as listed (Recommended)"** for the executor-class assignments that PR-A applies:
+
+- **21 `human_only`:** permissions, membership invite and revoke, store connect and disconnect, approval decisions, budgets, privacy export and erase, publishing or revoking agent releases, installing, activating, upgrading or disabling agents, pausing ads, approving creative and knowledge, routine activation and task takeover.
+- **23 `agent_after_approval`:** catalog publishing, ad budgets and campaigns, email and support sends, refunds and cancellations, fulfillment, inventory changes, theme and extension publishing.
+- **41 `agent_direct_write`:** internal Morrow drafts, proposals, tasks, comments, reports and image generation.
+- **18 `agent_direct_read`.**

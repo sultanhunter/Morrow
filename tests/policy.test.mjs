@@ -451,3 +451,67 @@ for (const capability of [
     f.grant.scope.fields = ["digest"];
     assert.equal(await reason(f), "capability_denied");
   });
+
+// P01.T02a PR-A (AC08): kill switches act without a second approver (ADR-0005).
+function retarget(f, capabilityId, verb, kind, fields) {
+  const target = { ...resource, kind, id: `${kind}_a` };
+  f.request = { capabilityId, verb, resource: target, accountId: "account_a", fields };
+  f.authority.resource = structuredClone(target);
+  f.grant.capabilityId = capabilityId;
+  f.grant.verbs = [verb];
+  f.grant.scope.resources = [structuredClone(target)];
+  f.grant.scope.fields = [...fields];
+  return f;
+}
+for (const [capabilityId, kind, fields, verification] of [
+  ["governance.membership.revoke", "member", ["membership"], []],
+  ["governance.connection.disconnect", "workspace", ["connection_state"], []],
+  ["agents.installation.disable", "installation", ["dispatch_state"], []],
+  ["ads.campaign.pause", "campaign", ["delivery_status"], ["provider_effect_verification"]],
+])
+  test("AC08: a human executes " + capabilityId + " with no approval obligation", async () => {
+    const f = retarget(fixture(), capabilityId, "execute", kind, fields);
+    const r = await service(f.authority).decide(f.request);
+    assert.equal(r.decision.allowed, true);
+    assert.deepEqual(r.obligations, ["recheck_at_dispatch", "kill_switch_record", ...verification]);
+    assert.ok(!r.obligations.includes("exact_approval"));
+    assert.ok(!r.obligations.includes("budget_reservation"));
+    // Proposing a stop records nothing and needs no approval either.
+    const proposal = retarget(fixture(), capabilityId, "propose", kind, fields);
+    assert.deepEqual((await service(proposal.authority).decide(proposal.request)).obligations, [
+      "recheck_at_dispatch",
+    ]);
+    // A stop still needs a current grant for the verb.
+    f.grant.verbs = ["view"];
+    assert.equal(await reason(f), "capability_denied");
+  });
+test("AC08: reversals still require exact approval", async () => {
+  const f = retarget(fixture(), "ads.campaign.activate", "execute", "campaign", [
+    "delivery_status",
+  ]);
+  assert.deepEqual((await service(f.authority).decide(f.request)).obligations, [
+    "recheck_at_dispatch",
+    "exact_approval",
+    "budget_reservation",
+    "provider_effect_verification",
+  ]);
+  for (const [capabilityId, kind] of [
+    ["agents.installation.activate", "installation"],
+    ["governance.membership.invite", "member"],
+    ["governance.grants.revise", "member"],
+  ]) {
+    const g = retarget(fixture(), capabilityId, "execute", kind, ["status"]);
+    assert.deepEqual((await service(g.authority).decide(g.request)).obligations, [
+      "recheck_at_dispatch",
+      "exact_approval",
+    ]);
+  }
+});
+test("AC08: entitlement and provider limits still apply to a stop in PR-A", async () => {
+  const f = retarget(fixture(), "ads.campaign.pause", "execute", "campaign", ["delivery_status"]);
+  f.authority.providerAllowed = false;
+  assert.equal(await reason(f), "provider_denied");
+  f.authority.providerAllowed = true;
+  f.authority.entitlementAllowed = false;
+  assert.equal(await reason(f), "entitlement_denied");
+});

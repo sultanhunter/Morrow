@@ -158,9 +158,17 @@ const observed = await localPostgresLab("P05.T01c", async ({ id, sql, image, ver
         grants: [grant],
       }),
     }).decide(request);
+    // Contract v1.1 (ADR-0005 §1): revoke is a human_only kill switch, so the
+    // shared policy asks for a KillSwitchRecord instead of a separate approval.
+    // The migration-0004 receipt below still carries approval_evidence_id until
+    // P05.T01z replaces this path with the KillSwitchRecord path.
     check(
-      "fixture_" + n + "_shared_policy_requires_separate_approval",
-      preflight.decision.allowed && preflight.obligations.includes("exact_approval"),
+      "fixture_" + n + "_shared_policy_kill_switch_without_separate_approval",
+      preflight.decision.allowed &&
+        preflight.obligations.includes("recheck_at_dispatch") &&
+        preflight.obligations.includes("kill_switch_record") &&
+        !preflight.obligations.includes("exact_approval") &&
+        !preflight.obligations.includes("budget_reservation"),
     );
     const targetGrant = (w) => ({
       ...grant,

@@ -962,10 +962,20 @@ async function exerciseWriters(ctx) {
         grants: [g],
       }),
     }).decide(req);
+    // Contract v1.1 (ADR-0005 §1): membership revoke is a human_only kill
+    // switch with no separate approval; the migration-0004 receipt still
+    // carries approval_evidence_id until P05.T01z replaces that path.
+    const killSwitch = capabilityId === "governance.membership.revoke";
     check(
-      "grant_" + capabilityId + "_" + f.n + "_policy",
+      "grant_" + capabilityId + "_" + f.n + (killSwitch ? "_policy_kill_switch" : "_policy"),
       pre.decision.allowed &&
-        (capabilityId === "workspace.goal.create" || pre.obligations.includes("exact_approval")),
+        (capabilityId === "workspace.goal.create" ||
+          (killSwitch
+            ? pre.obligations.includes("recheck_at_dispatch") &&
+              pre.obligations.includes("kill_switch_record") &&
+              !pre.obligations.includes("exact_approval") &&
+              !pre.obligations.includes("budget_reservation")
+            : pre.obligations.includes("exact_approval"))),
     );
     admin(
       `INSERT INTO morrow_identity.grants VALUES(${lit(g.id)},${lit(f.organization)},${lit(f.workspace)},${lit(f.membership)},${lit(f.principal)},${lit(JSON.stringify(g))}::jsonb);`,
