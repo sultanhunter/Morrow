@@ -57,7 +57,7 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 
 ## Delivery flow
 - One short-lived branch (`claude/<task-id>-<slug>`) and one PR per bounded packet.
-- PRs target the integration branch `codex/morrow-foundation` until the owner approves the first merge into `main`. Merge on green CI.
+- PRs target `main`, the trunk (ADR-0014). Claude merges its own PR once the hosted `foundation` check is green on the exact head and the Tier 2 AI review has passed.
 - Never push to `main`, force-push, or delete tags or branches without owner approval.
 - Each PR changes observable behaviour or retires a named risk, and carries its tests.
 - Review tiers:

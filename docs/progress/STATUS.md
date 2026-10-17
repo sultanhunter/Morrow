@@ -2,51 +2,66 @@
 
 Updated 2026-10-17. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
 
-## Active packet
+## Active packets
 
-P03.T04c repository overhaul and P03.T04d governance documents, on branch `claude/p03-t04c-overhaul` (base `f89ad75`). Pull request #2 into `codex/morrow-foundation` is open (base confirmed). Its first hosted run of the parallel workflow passed at `5825b09`, the P03.T04c commits. `4d7f9ae` (P03.T04d) and the governance review-fix commit after it are local and have not run in hosted CI. Record: `docs/packets/P03.T04c.md` and plan Package 03.
+`main` is the trunk (ADR-0014). The integration branch `codex/morrow-foundation` and the P03.T04c/d overhaul (PR #2) are merged into it. Three packets are in progress, each on its own branch from the overhaul head; their PRs will target `main`:
+- **P04.T02a** deployable composition root (`claude/p04-t02a-composition-root`; ADR-0007, `docs/packets/P04.T02a.md`).
+- **P05.T01x Part A** forward migration 0012 that removes plan-number identifiers (`claude/p05-t01x-a-protocol-names`; `docs/packets/P05.T01x.md`).
+- **P01.T02a PR-A** executor classes and human-only kill switches (`claude/p01-t02a-a-executors`; ADR-0005, `docs/packets/P01.T02a.md`).
 
-- P03.T04c: outputs go to `.artifacts/` and CI artifacts (ADR-0012); plan, sequence and hash coupling removed; AWS CDK, Daytona and the frozen regressions retired (ADR-0013); `docs/evidence` and `docs/history` pruned to the archive tag (`docs/history/INDEX.md`); parallel CI jobs, the job split planned as P03.T04e (`docs/development/ci.md`).
-- P03.T04d: `CLAUDE.md`, the `AGENTS.md` pointer, ADR-0001 to ADR-0013, plan R1 with contract v1.1 split into P01.T02a-T02c and the first package 6 slices (P06.T01a-T01c, P06.T02a), `npm run plan:check` inside `npm run verify`, and the packets P01.T02a, P03.T04c, P04.T02a, P05.T01w (deferral stub), P05.T01x and P06.T01a. P05.T01v is closed.
-- Governance review fixes: the dependency table's qualification inputs and boundaries are restored to the final pre-R1 plan (ADR-0003 item 7); the OperationLedger stays at M4 (P06.T01c), and until it lands staging provider effects use per-action approvals or cards whose caps do not rely on it, with manual reconciliation from live-provider records; `plan:check` defines lettered IDs only by the bold text that opens a list entry, keeps a range's end ID and lints `CLAUDE.md` read-only.
-- Task status: P01.T01-T04, P02.T01 and P03.T01-T04 were recorded Verified on self-review alone and are now `Self-reviewed` in `docs/progress/tasks.json`; their packets carry a plan R1 status banner. `verify:foundation` rejects unknown status values and checks that the plan's defined task and acceptance IDs equal `tasks.json` in order.
+Delivered in P03.T04c/d:
+- Outputs go to `.artifacts/` and CI artifacts (ADR-0012).
+- Plan, sequence and hash coupling are removed.
+- AWS CDK, Daytona and the frozen regressions are retired (ADR-0013).
+- `docs/evidence` and `docs/history` are removed from the tree (recover them from the archive tag via `docs/history/INDEX.md`).
+- CI runs as parallel jobs (`docs/development/ci.md`).
+- `CLAUDE.md`, the `AGENTS.md` pointer, ADR-0001 to ADR-0013, plan R1 with `npm run plan:check`, and the next packets. ADR-0014 (merge authority, `main` as trunk) lands in PR #3.
 
 ## Last green commit
 
-`5825b09` (Remove committed evidence and history; install governance docs and final ADRs), hosted CI run 39039205040 on PR #2 (`pull_request` event): `static`, both unit shards, `workers-api`, `workers`, `pg-core`, `pg-linking`, `pg-http`, `pgwire` and `foundation` all succeeded; seven artifacts (the unit shards wrote no reports, as designed); 4 min 23 s wall time. Pending hosted CI: `4d7f9ae` and the review-fix commit, which pass `npm run ci`, `npm test`, `npm run plan:check` and `npm run smoke:scaffold` locally.
+`b9fb432` (merge of PR #2 into `codex/morrow-foundation`). PR #1's hosted run 39043798037 succeeded on it across all jobs: `static`, two unit shards, `workers-api`, `workers`, `pg-core`, `pg-linking`, `pg-http`, `pgwire` and `foundation`. `main` is at `f9ab367`, which has the same tree, and its push run 39044164847 also succeeded. PR #2's own runs 39039205040 and 39043168173 on `claude/p03-t04c-overhaul` also succeeded. Each run took about 4.5 minutes, against 21.5 minutes for the old serial job.
 
 ## Next actions
 
-1. Push `4d7f9ae` and the review-fix commit to PR #2 (`claude/p03-t04c-overhaul`) and confirm their hosted run; then owner review and merge into `codex/morrow-foundation`.
-2. Then P04.T02a (deployable composition root; `docs/packets/P04.T02a.md`, ADR-0007) and P05.T01x (Part A migration 0012, then Part B signup under ADR-0009; `docs/packets/P05.T01x.md`), per their packets. P06.T01a (ADR-0010) may run in parallel.
-3. P01.T02a PR-A, executors and kill switches (ADR-0005); PR-B, review policy and exact proposals (ADR-0011), follows.
+1. Finish, review and merge the three active packets (Tier 2 AI review, then green `foundation`).
+2. P05.T01x Part B, signup and workspace list (ADR-0009). It needs P01.T02a PR-B (ADR-0011) first.
+3. P06.T01a, work commands on the tenant data pattern (ADR-0010). P01.T02b and T02c contracts.
+4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
 
-Open plan follow-ups: superseded banners on `docs/references/*`, which still link to the frozen Page; the rest of the P03.T04e scope (formatting ignore file, unit-test concurrency, shared PostgreSQL 17 template-database harness, heavy-fault job); the P05.T01x Part B PR splits the plan's P05.T01x bullet into sub-bullets (2,000-character line limit).
+Open plan follow-ups:
+- Superseded banners on `docs/references/*`.
+- The rest of P03.T04e: a formatting ignore file, unit-test concurrency, a shared PostgreSQL 17 template-database harness and a heavy-fault job.
+- The P05.T01x Part B PR splits the plan's P05.T01x bullet into sub-bullets, to respect the 2,000-character line limit.
 
 ## Blockers
 
-None for local work. Hosted staging (M1, P04.T01i) waits on the owner actions below.
+None for local work. Hosted staging (M1) waits on the owner actions below.
 
 ## Pending owner actions
 
-- Sign off plan R1 on PR #2 (Tier 3). It covers the P01.T02a-T02c and P06 splits, the OperationLedger at M4 (P06.T01c) with staging effects before it handled as above, and the dependency table (new engineering-start column; qualification inputs as in the final pre-R1 plan).
-- Confirm the ADR-0005 §2 executor-class assignments: governance grant, membership, connection and delegation changes `human_only`; spend, communication and external writes `agent_after_approval`. The quoted approval covers §1 (kill switches) and §3 (self-approval), not §2.
-- Approve or reject ADR-0008 (Shopify connector runtime, Proposed).
-- Confirm the previous Codex Morrow task is stopped and no longer writes to the repository or the pull request.
-- Decide the first squash merge of `codex/morrow-foundation` into `main`, and the review identity (a machine user for Claude or a ruleset bypass) so required review does not deadlock with one GitHub account.
-- Decide: GitHub Pro or an organization, for enforced branch protection before release merges or privileged deployment.
-- M1 prerequisites (P04.T01i):
-  - sign-ins: register the domain and create a dedicated Cloudflare account, then share its account ID (an identifier, not a secret); Neon CLI authentication and an operator password reset; WorkOS staging callback configuration and API key rotation, once the domain exists;
-  - spending decisions: Cloudflare Workers Paid, the domain and Neon Launch;
-  - staging approval cards (pending decision; no card may name the Morrow ledger before P06.T01c) or per-action approvals for each M1 effect: deploys, hosted migrations and sign-in tests.
-- Rotate the E2B personal key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.
-- Later: a Shopify Partner account and a development store (never the live shop); an OpenAI staging project.
-- Optional console clean-up: E2B template `pdht65h2trfuizuvmotc` (build `4324bde3`, ready and retained), the WorkOS loopback callback `127.0.0.1:4110` and the WorkOS staging test user.
+- **Sign-offs:**
+  - Plan R1 (Tier 3).
+  - The ADR-0005 §2 executor-class assignments. The quoted approval covers §1 (kill switches) and §3 (self-approval) only.
+  - Approve or reject ADR-0008, the Shopify connector runtime (Proposed).
+- **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check (not an approving review) before the first hosted deploy (ADR-0014).
+- **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
+- **M1 prerequisites (P04.T01i):**
+  - Register the domain.
+  - Create a dedicated Cloudflare account and share its account ID (an identifier, not a secret).
+  - Authenticate the Neon CLI and reset the operator password.
+  - Once the domain exists: configure the WorkOS staging callback and rotate the API key.
+  - Decide on spending: Cloudflare Workers Paid, the domain, and Neon Launch for staging.
+  - Approve each M1 effect individually (deploys, hosted migrations, sign-in tests) or approve standing staging cards. No card may rely on the Morrow OperationLedger before P06.T01c lands.
+- **Credential rotation:** rotate the E2B personal key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.
+- **Later:**
+  - A Shopify Partner account and a fresh development store, never the live shop.
+  - An OpenAI staging project with a budget cap.
+- **Optional console clean-up:** E2B template `pdht65h2trfuizuvmotc`, the WorkOS loopback callback `127.0.0.1:4110`, and the WorkOS staging test user.
 
 ## Open unknown-outcome provider operations
 
-None. `docs/history/INDEX.md` cites the terminal state of every earlier provider operation (Daytona; E2B 65, 66 and 67; WorkOS 71, 74, 75, 80 and 82) at the archive tag. The console clean-up items above have known outcomes.
+None. `docs/history/INDEX.md` cites the terminal state of every earlier provider operation at the archive tag.
 
 ## Active approval cards
 
-None. Every earlier provider allowance (E2B 65/66/67, WorkOS 71/74/75/80/82) is consumed, and no standing staging approval card exists.
+None. Every earlier provider allowance is consumed.
