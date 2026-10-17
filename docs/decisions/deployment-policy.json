@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "plan_sequence": 67,
+  "merchant_data_region": "United States primary storage",
+  "cloudflare_private_processing": true,
+  "production_database": {
+    "provider": "Neon",
+    "engine_family": "postgresql",
+    "major_version": 17,
+    "minor_version": null,
+    "minor_status": "P04 actual provider compatibility preflight",
+    "plan": "Scale",
+    "maximum_cu": null,
+    "auto_pause": "qualify actual traffic/pool/latency behavior; not assumed idle"
+  },
+  "staging_database": {
+    "provider": "Neon",
+    "plan": "Launch",
+    "maximum_cu": null,
+    "auto_pause": "qualify connection lifecycle",
+    "availability_slo": false
+  },
+  "runtime": {
+    "provider": "E2B",
+    "boundary": "qualified hardware-isolated Linux microVM per execution workspace through replaceable provider adapter",
+    "sandbox_class": "linux_microvm",
+    "task_role": false,
+    "direct_internet": false,
+    "database_access": false,
+    "credentials_in_model": false,
+    "egress": "leased authenticated broker/proxy only; actual network behavior unqualified",
+    "qualification_status": "not_run",
+    "project_id": null,
+    "region": null,
+    "template_id": null,
+    "template_build_id": null,
+    "image_digest": null,
+    "provider_replaceable": true,
+    "existing_operation_provider_pinned": true,
+    "public_preview": false,
+    "dispatch": "disabled"
+  },
+  "retention_days": {
+    "working_files_after_close": 7,
+    "raw_webhooks": 7,
+    "normalized_cache": 90,
+    "audit_content_free": 365,
+    "diagnostic_logs_redacted": 14,
+    "pitr_prod": 30,
+    "pitr_staging": 7,
+    "workflow_closed_prod": 30,
+    "workflow_closed_staging": 7,
+    "daily_recovery_prod": 35,
+    "daily_recovery_staging": 7
+  },
+  "deletion_overrides_content_retention": true,
+  "restore_erasure_replay": true,
+  "full_processor_us_residency_claim": false,
+  "stack": "cloudflare-neon-runtime",
+  "global_processing": "permitted_under_approved_data_policy"
+}

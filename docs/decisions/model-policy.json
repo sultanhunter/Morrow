@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "plan_sequence": 46,
+  "provider": "openai",
+  "api": "Responses v1 / Images v1",
+  "default_model": "gpt-6.1-sol",
+  "escalation_model": "gpt-6-astra",
+  "image_model": "gpt-image-2.5-sunburst",
+  "identifier_kind": "documented_alias",
+  "immutable_snapshot": null,
+  "alias_drift_policy": "hold affected rollout and re-evaluate pinned routing release; no invented snapshot",
+  "reasoning": "high default; bounded effort/attempts per role",
+  "store": false,
+  "regional_endpoint": null,
+  "regional_project_status": "not_verified",
+  "zero_data_retention_status": "not_granted",
+  "private_content_dispatch": "blocked_until_account_retention_and_data_policy_qualified",
+  "automatic_fallback": false,
+  "max_short_context_input_tokens": 272000,
+  "initial_rates_per_million": {
+    "sol_input": "2",
+    "sol_output": "10",
+    "astra_input": "10",
+    "astra_output": "50"
+  },
+  "rate_exclusions": [
+    "cached input/write policy",
+    "long context",
+    "regional surcharge",
+    "service tier",
+    "image input/output/quality",
+    "web search/tool charges",
+    "reasoning output and retries"
+  ],
+  "quality_status": "not_evaluated",
+  "sources": [
+    "S65",
+    "S66",
+    "S67",
+    "S68"
+  ],
+  "regional_endpoint_required": "explicit_customer_or_applicable_obligation_only"
+}

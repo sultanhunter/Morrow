@@ -1,0 +1,351 @@
+{
+  "schema_version": 1,
+  "plan_sequence": 67,
+  "observed_at": "2026-10-14",
+  "providers": [
+    {
+      "id": "morrow",
+      "name": "Morrow core",
+      "version": "contracts:v1",
+      "decision_ids": [
+        "D01",
+        "D07",
+        "D11",
+        "D12",
+        "D16",
+        "D15"
+      ],
+      "sources": [],
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "not_applicable",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P05",
+        "P06",
+        "P07",
+        "P10",
+        "P11",
+        "P15",
+        "P16"
+      ],
+      "test_account_plan": "Synthetic two-tenant/local database fixtures; no production authority engine exists.",
+      "restrictions": "Internal code review, concurrency, isolation, retention and domain qualification.",
+      "qualification_evidence": []
+    },
+    {
+      "id": "shopify",
+      "name": "Shopify",
+      "version": "admin-graphql:2026-10",
+      "decision_ids": [
+        "D02",
+        "D11",
+        "D12",
+        "D13",
+        "D14"
+      ],
+      "sources": [
+        "S01",
+        "S02",
+        "S28",
+        "S29",
+        "S30",
+        "S31",
+        "S32",
+        "S45"
+      ],
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P09",
+        "P11",
+        "P17"
+      ],
+      "test_account_plan": "Create a separate Morrow development store and public app; do not mutate the observed live or unrelated development stores.",
+      "restrictions": "Public app review, protected data, historical orders, theme exemption and field/staff eligibility. Standalone workspace with thin connector controls only; connector classification/UI review and specific billing eligibility remain unqualified.",
+      "qualification_evidence": []
+    },
+    {
+      "id": "public_web",
+      "name": "Morrow isolated browser/fetch",
+      "version": "runtime-profile:v1",
+      "decision_ids": [
+        "D03"
+      ],
+      "sources": [
+        "S20"
+      ],
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "not_applicable",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P12",
+        "P17"
+      ],
+      "test_account_plan": "Controlled public fixture site and malicious redirect/DNS/private-address fixtures in isolated pool.",
+      "restrictions": "Sandbox and egress confinement qualification; no direct merchant-account sessions.",
+      "qualification_evidence": []
+    },
+    {
+      "id": "google_search",
+      "name": "Google Search Console",
+      "version": "webmasters:v1",
+      "decision_ids": [
+        "D04"
+      ],
+      "sources": [
+        "S06",
+        "S07"
+      ],
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P08",
+        "P17"
+      ],
+      "test_account_plan": "Owner-authorized test property and consent-screen test users; local signed fixtures before OAuth.",
+      "restrictions": "Google app/consent verification as applicable, current property access and token scope.",
+      "qualification_evidence": []
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "version": "responses:v1/images:v1",
+      "decision_ids": [
+        "D05",
+        "D06",
+        "D15"
+      ],
+      "sources": [
+        "S65",
+        "S66",
+        "S67",
+        "S68"
+      ],
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P12",
+        "P13",
+        "P17"
+      ],
+      "test_account_plan": "Separate US-configured project, synthetic products and capped test budgets; no request issued.",
+      "restrictions": "Account/model/region/retention eligibility and held-out quality/cost evaluation.",
+      "qualification_evidence": []
+    },
+    {
+      "id": "meta",
+      "name": "Meta Marketing API",
+      "version": "graph:v26.0",
+      "decision_ids": [
+        "D08"
+      ],
+      "sources": [
+        "S46",
+        "S47",
+        "S48",
+        "S49"
+      ],
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P08",
+        "P17"
+      ],
+      "test_account_plan": "Owner-controlled app/account and paused fixtures; do not purchase ads for conformance.",
+      "restrictions": "Advanced ads_read/ads_management, business/app review and selected page/Instagram creative permissions.",
+      "qualification_evidence": []
+    },
+    {
+      "id": "klaviyo",
+      "name": "Klaviyo",
+      "version": "revision:2026-07-15",
+      "decision_ids": [
+        "D09"
+      ],
+      "sources": [
+        "S50",
+        "S51",
+        "S52",
+        "S53",
+        "S54",
+        "S55",
+        "S56",
+        "S57",
+        "S58"
+      ],
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P08",
+        "P17"
+      ],
+      "test_account_plan": "Controlled account, synthetic profiles/segments and owner-controlled recipients; no customer sends.",
+      "restrictions": "OAuth app readiness, provider plan/channel consent and marketplace review as applicable.",
+      "qualification_evidence": []
+    },
+    {
+      "id": "gorgias",
+      "name": "Gorgias",
+      "version": "unversioned-rest:qualified-schema-digest",
+      "decision_ids": [
+        "D10"
+      ],
+      "sources": [
+        "S59",
+        "S60",
+        "S61",
+        "S62",
+        "S63",
+        "S64"
+      ],
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P08",
+        "P17"
+      ],
+      "test_account_plan": "Developer draft app and separate sandbox ticket/account; no customer replies.",
+      "restrictions": "Public OAuth app review, exact account scopes, API schema snapshot and async-send conformance.",
+      "qualification_evidence": []
+    },
+    {
+      "id": "cloudflare",
+      "name": "Cloudflare",
+      "version": "Workers/Workflows/Queues/R2:selected-contract-v1",
+      "decision_ids": [
+        "D18",
+        "D19"
+      ],
+      "sources": [
+        "S17",
+        "S18",
+        "S75",
+        "S80",
+        "S81",
+        "S82",
+        "S83"
+      ],
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P04",
+        "P18"
+      ],
+      "test_account_plan": "Owned Cloudflare login observed; create isolated Morrow resource bindings only after reviewed account and cost qualification.",
+      "restrictions": "Private API/session responses uncached; broker-only keys; scoped bindings, R2 erasure/recovery and actual workflow version/wait tests required.",
+      "qualification_evidence": []
+    },
+    {
+      "id": "workos",
+      "name": "WorkOS",
+      "version": "AuthKit/SSO/DirectorySync",
+      "decision_ids": [
+        "D20"
+      ],
+      "sources": [
+        "S26"
+      ],
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P05",
+        "P18"
+      ],
+      "test_account_plan": "Owned Morrow staging project prepared; callback/credential exchange/provider authentication remain unqualified.",
+      "restrictions": "Provider processing/retention terms, identity lifecycle/linking, SSO/SCIM and connection-cost evidence; no default US-only processing requirement.",
+      "qualification_evidence": []
+    },
+    {
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P04",
+        "P18"
+      ],
+      "qualification_evidence": [],
+      "id": "neon",
+      "name": "Neon",
+      "version": "PostgreSQL17;@neondatabase/serverless1.2.0",
+      "decision_ids": [
+        "D17"
+      ],
+      "sources": [
+        "S76",
+        "S84",
+        "S85",
+        "S88"
+      ],
+      "restrictions": "US primary storage; runtime/issuer/maintenance roles separate; interactive transaction SET LOCAL/RLS isolation and actual recovery required.",
+      "test_account_plan": "Owned Morrow development/staging project required; provider account availability and actual activation remain unverified."
+    },
+    {
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P04",
+        "P12",
+        "P18"
+      ],
+      "qualification_evidence": [],
+      "id": "e2b",
+      "name": "E2B",
+      "version": "LinuxMicroVM:execution-profile-v1",
+      "decision_ids": [
+        "D17"
+      ],
+      "sources": [
+        "S97",
+        "S98",
+        "S99"
+      ],
+      "restrictions": "Pinned Linux microVM template/build and effective deny-by-default egress require qualification. No direct database/provider keys. Paused resources lack a native TTL; persist original cleanup, deadline and fenced writer. Production SaaS/data-processing terms, actual account quotas and bound quote remain pending.",
+      "test_account_plan": "Separate Morrow owned project, verified free entitlement and specifically authorized private access before the bounded synthetic laboratory. Selection or signup is not qualified project authority."
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@morrow/runtime-adapters",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./e2b/development": "./src/e2b/development-transport.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "e2b": "2.56.0"
+  }
+}

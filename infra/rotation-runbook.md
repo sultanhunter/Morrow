@@ -1,0 +1,11 @@
+# Credential rotation and operational signals
+
+The local lab proves SCRAM authentication on PostgreSQL17.11, candidate rejection, new-login verification, abrupt client-worker death and committed SQL durability. Its AES-GCM credential fixture is process-local, not AWS secret storage. `npm run lab:operations` requires Docker; no network, ports, host mounts or persistent data. It removes only its newly created container. Reports exclude passwords/ciphertext/SQL/errors.
+
+For an actual environment: bind account, region, role, secret identity and deployment revision. An owner-qualified rotation principal, separate from model/task/execution profiles, must have the exact provider update privileges. Current broker is retrieval-only; no such write principal or schedule is activated. Define provider-specific create/set/test/finish steps and retry IDs before enabling rotation. Require an authenticated new connection before promoting a candidate. Never log a secret, SQL statement, arbitrary error or raw provider response. Events use fixed codes/opaque correlation IDs; metric dimensions contain only environment/service/code.
+
+Changing a database password affects new connections; existing sessions must be deliberately recycled. Observe each service reconnecting to the verified revision, drain old pools and terminate stale sessions only within owner-approved scope. IAM DB authentication and external OAuth refresh have different lifecycles; do not reuse this password lab as qualification for them. On uncertainty, keep the candidate unpromoted and hold consequential work; investigate authoritative credential/provider state before retry or rollback. A local invalid-readiness check is not a failed AWS deployment exercise.
+
+Bind dashboards and alert routes from operations.json only after actual service signals, justified thresholds and eligible recipients exist. Exercise alert delivery with redacted evidence before declaring paging functional. Presently there is no dashboard deployment, alert recipient, scheduled rotation, live ECS service, AWS Secrets Manager rotation or Temporal worker. P04.A02 real integration remains pending.
+
+Sources: [PostgreSQL17 password authentication](https://www.postgresql.org/docs/17/auth-password.html), [AWS secret rotation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/rotating-secrets.html).

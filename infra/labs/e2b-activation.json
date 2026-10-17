@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "active_profile_sequence": null,
+  "decision": "docs/decisions/adr/ADR-0013-retire-aws-cdk-daytona-frozen-regressions.md"
+}

@@ -1,0 +1,1002 @@
+{
+  "version": 1,
+  "routes": [
+    {
+      "id": "home",
+      "pattern": "/w/:workspaceId",
+      "title": "Home",
+      "data": [
+        "current_scope",
+        "attention_queue",
+        "active_goals",
+        "verified_changes"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": null,
+      "components": [
+        "ScopeHeader",
+        "AttentionList",
+        "GoalList",
+        "EvidenceSummary"
+      ]
+    },
+    {
+      "id": "ask",
+      "pattern": "/w/:workspaceId/ask",
+      "title": "Ask",
+      "data": [
+        "conversation",
+        "selected_agent",
+        "linked_work",
+        "context_scope"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "home",
+      "components": [
+        "ScopeHeader",
+        "Conversation",
+        "LinkedWork"
+      ]
+    },
+    {
+      "id": "work",
+      "pattern": "/w/:workspaceId/work",
+      "title": "Work",
+      "data": [
+        "objectives",
+        "owners",
+        "status",
+        "budget",
+        "outputs"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": null,
+      "components": [
+        "ScopeHeader",
+        "WorkList",
+        "WorkFilters"
+      ]
+    },
+    {
+      "id": "task",
+      "pattern": "/w/:workspaceId/work/:taskId",
+      "title": "Task",
+      "data": [
+        "objective",
+        "explicit_scope",
+        "contributors",
+        "artifacts",
+        "activity",
+        "conversation"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "work",
+      "components": [
+        "ScopeHeader",
+        "ArtifactTabs",
+        "ArtifactEditor",
+        "Conversation",
+        "ActivityList",
+        "DecisionSummary"
+      ]
+    },
+    {
+      "id": "inbox",
+      "pattern": "/w/:workspaceId/inbox",
+      "title": "Inbox",
+      "data": [
+        "questions",
+        "approvals",
+        "access",
+        "exceptions"
+      ],
+      "journey": "J13",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": null,
+      "components": [
+        "ScopeHeader",
+        "DecisionList",
+        "TypeFilters"
+      ]
+    },
+    {
+      "id": "review",
+      "pattern": "/w/:workspaceId/review/:proposalId",
+      "title": "Review",
+      "data": [
+        "immutable_proposal",
+        "store_account",
+        "diff",
+        "cost",
+        "eligible_reviewer",
+        "expiry"
+      ],
+      "journey": "J13",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "inbox",
+      "components": [
+        "ProposalScope",
+        "ChangeComparison",
+        "ExactReviewAction",
+        "ExpiryNotice"
+      ]
+    },
+    {
+      "id": "catalog",
+      "pattern": "/w/:workspaceId/catalog",
+      "title": "Catalog",
+      "data": [
+        "authorized_products",
+        "freshness",
+        "draft_changes",
+        "review_state"
+      ],
+      "journey": "J02",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "assets",
+      "components": [
+        "ScopeHeader",
+        "ResourceTable",
+        "BulkSelection",
+        "FreshnessNotice"
+      ]
+    },
+    {
+      "id": "assets",
+      "pattern": "/w/:workspaceId/assets",
+      "title": "Assets",
+      "data": [
+        "artifact_revisions",
+        "source_fidelity",
+        "contact_sheets"
+      ],
+      "journey": "J04",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": null,
+      "components": [
+        "ScopeHeader",
+        "AssetGrid",
+        "ResourceFilters",
+        "RevisionHistory"
+      ]
+    },
+    {
+      "id": "agents",
+      "pattern": "/w/:workspaceId/agents",
+      "title": "Agents",
+      "data": [
+        "installations",
+        "scope",
+        "health",
+        "cost",
+        "routines"
+      ],
+      "journey": "J14",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": null,
+      "components": [
+        "ScopeHeader",
+        "AgentList",
+        "CapabilitySummary",
+        "RoutineStatus"
+      ]
+    },
+    {
+      "id": "agent_store",
+      "pattern": "/w/:workspaceId/agent-store",
+      "title": "Agent Store",
+      "data": [
+        "outcomes",
+        "publisher",
+        "requirements",
+        "samples",
+        "release_versions"
+      ],
+      "journey": "J14",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "agents",
+      "components": [
+        "ScopeHeader",
+        "ReleaseList",
+        "Requirements",
+        "SampleSummary"
+      ]
+    },
+    {
+      "id": "builder",
+      "pattern": "/w/:workspaceId/agents/new",
+      "title": "Builder",
+      "data": [
+        "purpose",
+        "skills",
+        "inputs",
+        "connections",
+        "authority",
+        "evaluation"
+      ],
+      "journey": "J14",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "agents",
+      "components": [
+        "ScopeHeader",
+        "PurposeForm",
+        "SetupQuestion",
+        "AuthorityRequest",
+        "SampleSummary"
+      ]
+    },
+    {
+      "id": "knowledge",
+      "pattern": "/w/:workspaceId/knowledge",
+      "title": "Knowledge",
+      "data": [
+        "approved_facts",
+        "policies",
+        "sources",
+        "hypotheses"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": null,
+      "components": [
+        "ScopeHeader",
+        "KnowledgeList",
+        "SourceAuthority",
+        "FreshnessNotice"
+      ]
+    },
+    {
+      "id": "connections",
+      "pattern": "/w/:workspaceId/connections",
+      "title": "Connections",
+      "data": [
+        "account_identity",
+        "grants",
+        "health",
+        "sync",
+        "recovery"
+      ],
+      "journey": "J13",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "settings",
+      "components": [
+        "ScopeHeader",
+        "ConnectionList",
+        "AccountIdentity",
+        "ConnectionRecovery"
+      ]
+    },
+    {
+      "id": "settings",
+      "pattern": "/w/:workspaceId/settings",
+      "title": "Settings",
+      "data": [
+        "membership",
+        "resource_grants",
+        "policies",
+        "billing",
+        "usage"
+      ],
+      "journey": "J13",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": null,
+      "components": [
+        "ScopeHeader",
+        "SettingsNavigation",
+        "MembershipList",
+        "UsageSummary"
+      ]
+    },
+    {
+      "id": "operator_authoring",
+      "pattern": "/operator/releases",
+      "title": "Owner expertise workbench",
+      "data": [
+        "research",
+        "fixtures",
+        "evaluations",
+        "review",
+        "publishing"
+      ],
+      "journey": "J14",
+      "hosts": [
+        "operator_console"
+      ],
+      "namespace": "operator",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": null,
+      "components": [
+        "OperatorScope",
+        "ReleaseResearch",
+        "EvaluationResults",
+        "PublicationReview"
+      ]
+    },
+    {
+      "id": "product",
+      "pattern": "/w/:workspaceId/catalog/:productId",
+      "title": "Product",
+      "data": [
+        "source_values",
+        "draft_diff",
+        "freshness"
+      ],
+      "journey": "J02",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "catalog",
+      "components": [
+        "ScopeHeader",
+        "ResourceDetail",
+        "ChangeComparison"
+      ]
+    },
+    {
+      "id": "work_artifact",
+      "pattern": "/w/:workspaceId/work/:taskId/artifacts/:artifactId",
+      "title": "Work artifact",
+      "data": [
+        "task",
+        "artifact_revision",
+        "lineage"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "task",
+      "components": [
+        "ScopeHeader",
+        "ArtifactEditor",
+        "RevisionHistory",
+        "Conversation"
+      ]
+    },
+    {
+      "id": "asset",
+      "pattern": "/w/:workspaceId/assets/:artifactId",
+      "title": "Asset",
+      "data": [
+        "artifact_revision",
+        "lineage",
+        "review"
+      ],
+      "journey": "J04",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "assets",
+      "components": [
+        "ScopeHeader",
+        "ArtifactViewer",
+        "RevisionHistory"
+      ]
+    },
+    {
+      "id": "agent",
+      "pattern": "/w/:workspaceId/agents/:installationId",
+      "title": "Agent",
+      "data": [
+        "release",
+        "scope",
+        "routines",
+        "health"
+      ],
+      "journey": "J14",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "agents",
+      "components": [
+        "ScopeHeader",
+        "AgentDetail",
+        "CapabilitySummary",
+        "RoutineStatus"
+      ]
+    },
+    {
+      "id": "agent_listing",
+      "pattern": "/w/:workspaceId/agent-store/:releaseId",
+      "title": "Agent Store listing",
+      "data": [
+        "publisher",
+        "release",
+        "requirements",
+        "sample"
+      ],
+      "journey": "J14",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "agent_store",
+      "components": [
+        "ScopeHeader",
+        "ReleaseDetail",
+        "Requirements",
+        "SampleSummary"
+      ]
+    },
+    {
+      "id": "builder_draft",
+      "pattern": "/w/:workspaceId/agents/drafts/:draftId",
+      "title": "Agent draft",
+      "data": [
+        "saved_draft",
+        "questions",
+        "dependencies",
+        "authority"
+      ],
+      "journey": "J14",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "builder",
+      "components": [
+        "ScopeHeader",
+        "PurposeForm",
+        "SetupQuestion",
+        "AuthorityRequest"
+      ]
+    },
+    {
+      "id": "connection",
+      "pattern": "/w/:workspaceId/connections/:connectionId",
+      "title": "Connection",
+      "data": [
+        "account",
+        "scope",
+        "health",
+        "recovery"
+      ],
+      "journey": "J13",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "connections",
+      "components": [
+        "ScopeHeader",
+        "AccountIdentity",
+        "ConnectionRecovery"
+      ]
+    },
+    {
+      "id": "knowledge_item",
+      "pattern": "/w/:workspaceId/knowledge/:knowledgeId",
+      "title": "Knowledge source",
+      "data": [
+        "authority",
+        "revision",
+        "freshness",
+        "access"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "knowledge",
+      "components": [
+        "ScopeHeader",
+        "SourceAuthority",
+        "RevisionHistory"
+      ]
+    },
+    {
+      "id": "question",
+      "pattern": "/w/:workspaceId/inbox/questions/:questionId",
+      "title": "Question",
+      "data": [
+        "question",
+        "respondent",
+        "task",
+        "answer_revision"
+      ],
+      "journey": "J13",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "inbox",
+      "components": [
+        "ScopeHeader",
+        "QuestionDetail",
+        "AnswerForm"
+      ]
+    },
+    {
+      "id": "exception",
+      "pattern": "/w/:workspaceId/inbox/exceptions/:operationId",
+      "title": "Exception",
+      "data": [
+        "operation",
+        "known_outcome",
+        "next_owner"
+      ],
+      "journey": "J13",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "inbox",
+      "components": [
+        "ScopeHeader",
+        "OutcomeNotice",
+        "OperationEvidence"
+      ]
+    },
+    {
+      "id": "settings_section",
+      "pattern": "/w/:workspaceId/settings/:section",
+      "title": "Settings section",
+      "data": [
+        "section_scope",
+        "current_revision"
+      ],
+      "journey": "J13",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "settings",
+      "components": [
+        "ScopeHeader",
+        "SettingsNavigation",
+        "SettingsForm"
+      ],
+      "parameter_enums": {
+        "section": [
+          "people",
+          "governance",
+          "usage",
+          "billing",
+          "notifications",
+          "stores"
+        ]
+      }
+    }
+  ],
+  "plan_sequence": 43
+}

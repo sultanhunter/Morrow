@@ -1,0 +1,18 @@
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {root,read,sha} from './foundation.mjs';
+import {validateProviders} from './provider-checks.mjs';
+import {estimateStackComponents} from './stack-cost.mjs';
+import {writeArtifact} from './artifacts.mjs';
+const registry=read('docs/decisions/providers.json'),bindings=read('docs/decisions/provider-bindings.json');
+const inputs=['docs/decisions/providers.json','docs/decisions/provider-bindings.json','docs/decisions/deployment-policy.json','docs/decisions/capacity-targets.json','docs/decisions/cost-model.json','docs/decisions/model-policy.json','docs/research/sources.json'];
+const errors=validateProviders(registry,bindings,read('docs/contracts/capabilities.json'),read('docs/decisions/dependencies.json'),read('docs/research/sources.json'));
+const deployment=read('docs/decisions/deployment-policy.json');
+if(deployment.stack!=='cloudflare-neon-runtime'||deployment.runtime.provider!=='E2B'||deployment.runtime.sandbox_class!=='linux_microvm'||!deployment.runtime.provider_replaceable||!deployment.runtime.existing_operation_provider_pinned||deployment.runtime.dispatch!=='disabled'||!deployment.cloudflare_private_processing||deployment.global_processing!=='permitted_under_approved_data_policy'||deployment.full_processor_us_residency_claim||!deployment.deletion_overrides_content_retention||!deployment.restore_erasure_replay) errors.push('Data boundary/erasure drift');
+if(deployment.runtime.task_role||deployment.runtime.direct_internet||deployment.runtime.database_access||deployment.runtime.credentials_in_model) errors.push('Untrusted runtime has privileged access');
+if(!registry.providers.some(p=>p.id==='e2b')||registry.providers.some(p=>p.id==='daytona')||bindings.bindings.some(b=>b.provider==='daytona')) errors.push('Selected runtime provider registry drift');
+const model=read('docs/decisions/model-policy.json');
+if(model.store||model.automatic_fallback||model.regional_project_status!=='not_verified'||model.zero_data_retention_status!=='not_granted') errors.push('Unsupported model data/access claim');
+const report={task:'P01.T03',generated_at:new Date().toISOString(),providers:registry.providers.length,bindings:bindings.bindings.length,scope:'Documentary feasibility and selected design consistency only; no real provider, runtime, billing, merchant or production qualification.',input_digests:Object.fromEntries(inputs.map(p=>[p,sha(readFileSync(resolve(root,p),'utf8'))])),cost_components:estimateStackComponents(read('docs/decisions/cost-model.json'),read('docs/decisions/cost-model.json').example_usage),errors};
+writeArtifact('verify/providers.json',report);
+if(errors.length){console.error(errors.join('\n'));process.exitCode=1;}else console.log(`PASS: ${report.providers} selected provider boundaries and ${report.bindings} capability bindings. All production activation gates remain blocked.`);

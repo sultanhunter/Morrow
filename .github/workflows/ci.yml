@@ -1,0 +1,273 @@
+name: Morrow foundation
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: foundation-${{ github.ref }}
+  cancel-in-progress: true
+# Independent jobs run in parallel; `foundation` aggregates them and is the
+# single required status check. Every job that checks out the repository writes
+# its reports to MORROW_ARTIFACTS_DIR, secret-scans that directory, uploads it
+# only when the scan passes, and ends by requiring an unchanged checkout.
+# docs/development/ci.md describes the layout.
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Route reports outside the checkout
+        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Format, typecheck, verify, build, scaffold denial guards, lab example and infrastructure checks
+        run: npm run ci:static
+      - name: Secret-scan generated reports before upload
+        id: artifact_scan
+        if: always()
+        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
+      - name: Upload generated reports
+        if: always() && steps.artifact_scan.outcome == 'success'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: morrow-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/morrow-artifacts
+          if-no-files-found: error
+          overwrite: false
+          include-hidden-files: false
+          retention-days: 90
+      - name: Require an unchanged checkout
+        if: always()
+        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
+
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Route reports outside the checkout
+        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run one shard of the repository tests, one file at a time
+        env:
+          TEST_SHARD: "${{ matrix.shard }}/2"
+        run: npm run test:shard
+      - name: Secret-scan generated reports before upload
+        id: artifact_scan
+        if: always()
+        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
+      - name: Upload generated reports
+        if: always() && steps.artifact_scan.outcome == 'success'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: morrow-${{ github.job }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/morrow-artifacts
+          if-no-files-found: ignore
+          overwrite: false
+          include-hidden-files: false
+          retention-days: 90
+      - name: Require an unchanged checkout
+        if: always()
+        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
+
+  workers-api:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Route reports outside the checkout
+        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Exercise configured native workspace API and request-owned lifetime
+        run: npm run lab:workspace-api-workers
+      - name: Secret-scan generated reports before upload
+        id: artifact_scan
+        if: always()
+        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
+      - name: Upload generated reports
+        if: always() && steps.artifact_scan.outcome == 'success'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: morrow-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/morrow-artifacts
+          if-no-files-found: error
+          overwrite: false
+          include-hidden-files: false
+          retention-days: 90
+      - name: Require an unchanged checkout
+        if: always()
+        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
+
+  workers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Route reports outside the checkout
+        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Exercise the other Workers laboratories in the local Workers runtime, one at a time
+        run: npm run lab:group:workers
+      - name: Secret-scan generated reports before upload
+        id: artifact_scan
+        if: always()
+        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
+      - name: Upload generated reports
+        if: always() && steps.artifact_scan.outcome == 'success'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: morrow-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/morrow-artifacts
+          if-no-files-found: error
+          overwrite: false
+          include-hidden-files: false
+          retention-days: 90
+      - name: Require an unchanged checkout
+        if: always()
+        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
+
+  postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [pg-core, pg-linking, pg-http]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Route reports outside the checkout
+        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Pull the pinned PostgreSQL image
+        run: docker pull "$(node -p 'require("./infra/local-engine.json").image')"
+      - name: Record the isolated pinned PostgreSQL engine build
+        if: matrix.group == 'pg-core'
+        run: >-
+          node --input-type=module --eval 'import {localPostgresLab} from "./scripts/local-postgres-lab.mjs"; await localPostgresLab("P04.engine-diagnostic", async ({image,version}) => console.log(JSON.stringify({image,version})));'
+      - name: Exercise the isolated PostgreSQL laboratories in this group, one at a time
+        env:
+          LAB_GROUP: ${{ matrix.group }}
+        run: npm run "lab:group:$LAB_GROUP"
+      - name: Secret-scan generated reports before upload
+        id: artifact_scan
+        if: always()
+        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
+      - name: Upload generated reports
+        if: always() && steps.artifact_scan.outcome == 'success'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: morrow-${{ github.job }}-${{ matrix.group }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/morrow-artifacts
+          if-no-files-found: error
+          overwrite: false
+          include-hidden-files: false
+          retention-days: 90
+      - name: Require an unchanged checkout
+        if: always()
+        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
+
+  pgwire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Route reports outside the checkout
+        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Pull the pinned PostgreSQL image
+        run: docker pull "$(node -p 'require("./infra/local-engine.json").image')"
+      - name: Exercise controlled Neon, managed login and workspace API over PG wire against isolated PostgreSQL
+        run: npm run lab:group:pgwire
+      - name: Secret-scan generated reports before upload
+        id: artifact_scan
+        if: always()
+        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
+      - name: Upload generated reports
+        if: always() && steps.artifact_scan.outcome == 'success'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: morrow-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/morrow-artifacts
+          if-no-files-found: error
+          overwrite: false
+          include-hidden-files: false
+          retention-days: 90
+      - name: Require an unchanged checkout
+        if: always()
+        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
+
+  # Same name as the former single job, so the required status check is
+  # unchanged. A skipped, cancelled or failed job fails this check.
+  foundation:
+    if: always()
+    needs: [static, unit, workers-api, workers, postgres, pgwire]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          test -n "$RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || { echo "required job: $r"; exit 1; }; done

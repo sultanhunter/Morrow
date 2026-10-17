@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "observed_on": "2026-10-10",
+  "project_name": "Morrow",
+  "environment_kind": "staging",
+  "environment_id": "environment_01M4HG7FV7X8EFXE1J9S6GG00R",
+  "application_name": "Morrow Workspace",
+  "application_id": "app_01M4HG7GEJJWTKG4W16RB98VZE",
+  "client_id": "client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+  "dashboard": "https://dashboard.workos.com/environment_01M4HG7FV7X8EFXE1J9S6GG00R/get-started",
+  "production_created": false,
+  "key_copied": false,
+  "callbacks_configured": false,
+  "authentication_qualified": false,
+  "scope": "Observed owned staging selectors only; not secret configuration, deployed identity mapping or activation authority.",
+  "plan_sequence": 43
+}

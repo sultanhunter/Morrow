@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "task": "P04.T01h",
+  "planSequence": 67,
+  "scope": "builtin_synthetic_operator",
+  "projectId": "22220c06-b76d-47b2-98d7-a1069d611e8f",
+  "workspaceId": "477b25a3-cd53-441c-b9ce-01c3bb48e378",
+  "image": "e2bdev/base@sha256:4a369f01a820fe5e65f53c2c5727a78899daf86f0541b721097f289559c8b73f",
+  "cpu": 2,
+  "memoryMiB": 512,
+  "minFreeDiskMiB": 0,
+  "maximumObservationMs": 600000,
+  "estimatedCreditCeilingUsd": "0.25",
+  "retainReadyTemplate": true,
+  "buildQuote": null,
+  "buildAuthorization": null,
+  "merchantRouting": false
+}

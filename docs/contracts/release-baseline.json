@@ -1,0 +1,9 @@
+{
+  "status": "unreleased_v1_documentary_freeze",
+  "schemas": {
+    "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
+    "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
+    "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5"
+  },
+  "change_policy": "Any schema delta requires reviewed compatibility/migration evidence and deliberate baseline update; generation never updates this baseline."
+}

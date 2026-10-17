@@ -1,0 +1,209 @@
+import {
+  createWorkersManagedLoginHandler,
+  snapshotManagedLoginResponseMetrics,
+} from "../../packages/identity/src/managed-login-request.js";
+import { createWorkersFixedWorkosLoginPort } from "../../packages/identity/src/fixed-workos-login-port.js";
+
+declare const MANAGED_LOGIN_FIXTURE_JSON: string;
+type Control = Readonly<{ deadlineMs: number; signal: AbortSignal }>;
+type Setup = {
+  configurationJson: string;
+  capsuleKeyringJson: string;
+  bindingJson: string;
+  passwordByRole: Record<string, string>;
+  releaseMode: "normal" | "gate" | "reject" | "late_gate" | "session_reject";
+  wrongPassword: boolean;
+  gateNonce: string;
+  clockOffsetMs: number;
+  bindCutoff?: { initialNowMs: number; encryptUntilMs: number } | null;
+};
+type Context = { waitUntil(pending: Promise<unknown>): void };
+const setup = JSON.parse(MANAGED_LOGIN_FIXTURE_JSON) as Setup;
+const binding = JSON.parse(setup.bindingJson),
+  configuration = JSON.parse(setup.configurationJson),
+  profile = JSON.parse(configuration.verificationProfileJson);
+let firstRealClock: number | undefined,
+  clockFloor = 0,
+  loginReleaseCount = 0;
+const bindClock = { progressed: false, advancedAtMs: 0, originalDeadlineStillLive: false };
+const now = () => {
+  if (!setup.bindCutoff) return Date.now() + setup.clockOffsetMs;
+  const real = Date.now();
+  firstRealClock ??= real;
+  return Math.max(clockFloor, setup.bindCutoff.initialNowMs + real - firstRealClock);
+};
+const incorrectPasswordMarker = ["synthetic", "incorrect", "pg", "marker"].join("_");
+const held = () => Error("MANAGED_LOGIN_FIXTURE_HELD");
+const expect = (value: unknown) => {
+  if (!value) throw held();
+};
+expect(
+  ["normal", "gate", "reject", "late_gate", "session_reject"].includes(setup.releaseMode) &&
+    typeof setup.wrongPassword === "boolean" &&
+    /^[a-f0-9]{32}$/.test(setup.gateNonce) &&
+    Number.isSafeInteger(setup.clockOffsetMs) &&
+    (!setup.bindCutoff ||
+      (Object.keys(setup.bindCutoff).sort().join() === "encryptUntilMs,initialNowMs" &&
+        Number.isSafeInteger(setup.bindCutoff.initialNowMs) &&
+        setup.bindCutoff.initialNowMs >= 0 &&
+        setup.bindCutoff.initialNowMs <= 8640000000000000 - 5000 &&
+        setup.bindCutoff.encryptUntilMs === setup.bindCutoff.initialNowMs + 4000)),
+);
+const roles = [
+  "morrow_identity_login",
+  "morrow_identity_preauth",
+  "morrow_identity_resolution",
+  "morrow_identity_sessions",
+];
+const leases = { borrows: 0, releaseAttempts: 0, releaseAcknowledgements: 0, activeLeases: 0 };
+const workos = { borrows: 0, releaseAttempts: 0, releaseAcknowledgements: 0, activeLeases: 0 };
+const workosNamespace = JSON.stringify({
+  schemaVersion: 1,
+  providerId: "workos",
+  environmentId: profile.environmentId,
+  applicationId: profile.applicationId,
+  clientId: profile.clientId,
+  purpose: "list_active_sessions",
+});
+// This is module-startup CPU-only preparation. It issues no provider request,
+// borrows no credential. Managed initialization starts only inside each entry attempt.
+const providerPort = await createWorkersFixedWorkosLoginPort({
+  configurationJson: setup.configurationJson,
+  now,
+  sessionCredentialBroker: {
+    async borrow(namespaceJson: string, control: Control) {
+      expect(
+        namespaceJson === workosNamespace && !control.signal.aborted && now() < control.deadlineMs,
+      );
+      workos.borrows++;
+      workos.activeLeases++;
+      const revocation = new AbortController();
+      let released = false;
+      return {
+        namespaceJson,
+        credential: "platform_management_marker_87_only",
+        expiresAtMs: now() + 60000,
+        revocationSignal: revocation.signal,
+        async release(c: Control) {
+          workos.releaseAttempts++;
+          expect(!released && !c.signal.aborted && now() < c.deadlineMs);
+          released = true;
+          workos.releaseAcknowledgements++;
+          workos.activeLeases--;
+        },
+      };
+    },
+  },
+});
+const handler = createWorkersManagedLoginHandler({
+  configurationJson: setup.configurationJson,
+  capsuleKeyringJson: setup.capsuleKeyringJson,
+  bindingJson: setup.bindingJson,
+  now,
+  providerPort,
+  credentialBroker: {
+    async borrow(namespaceJson: string, control: Control) {
+      const n = JSON.parse(namespaceJson);
+      expect(
+        roles.includes(n.role) &&
+          namespaceJson ===
+            JSON.stringify({
+              schemaVersion: 1,
+              providerId: "neon",
+              environment: binding.environment,
+              projectId: binding.projectId,
+              branchId: binding.branchId,
+              hostname: binding.hostname,
+              database: binding.database,
+              role: n.role,
+              purpose: "primary_and_one_same_role_observer",
+            }) &&
+          !control.signal.aborted &&
+          now() < control.deadlineMs,
+      );
+      const id = ++leases.borrows,
+        revocation = new AbortController();
+      leases.activeLeases++;
+      let released = false;
+      return {
+        namespaceJson,
+        password: setup.wrongPassword ? incorrectPasswordMarker : setup.passwordByRole[n.role],
+        expiresAtMs: now() + 60000,
+        revocationSignal: revocation.signal,
+        async release(c: Control) {
+          leases.releaseAttempts++;
+          expect(!released && !c.signal.aborted && now() < c.deadlineMs);
+          released = true;
+          if (
+            setup.releaseMode === "reject" ||
+            (setup.releaseMode === "session_reject" && n.role === "morrow_identity_sessions")
+          )
+            throw held();
+          if (setup.releaseMode === "gate" || setup.releaseMode === "late_gate") {
+            const base = `https://morrow-managed-gate.test/${setup.gateNonce}`;
+            const response = await fetch(base + "/lease/" + id, {
+              redirect: "manual",
+              // late_gate deliberately models an uncancellable credential
+              // provider. Source C still expires and must withhold its ack.
+              ...(setup.releaseMode === "late_gate" ? {} : { signal: c.signal }),
+            });
+            expect(response.status === 200 && (await response.text()) === "u-managed-release-open");
+            const marker = await fetch(base + "/complete/" + id, {
+              method: "POST",
+              headers: { "content-type": "text/plain" },
+              body: "u-managed-release-read",
+              redirect: "manual",
+              ...(setup.releaseMode === "late_gate" ? {} : { signal: c.signal }),
+            });
+            expect(marker.status === 200 && (await marker.text()) === "u-managed-marker-ack");
+          }
+          if (setup.bindCutoff && n.role === "morrow_identity_login" && ++loginReleaseCount === 2) {
+            // Dedicated one-begin fixture only: advance trusted time at the
+            // actual bind transaction's normal lease acknowledgement. No new
+            // timer, await, gate, budget or source business capability is added.
+            clockFloor = setup.bindCutoff.encryptUntilMs;
+            bindClock.progressed = true;
+            bindClock.advancedAtMs = now();
+            bindClock.originalDeadlineStillLive = !c.signal.aborted && now() < c.deadlineMs;
+          }
+          leases.releaseAcknowledgements++;
+          leases.activeLeases--;
+          console.debug(
+            JSON.stringify({
+              event: "morrow_fixture_lease_ack",
+              lease: id,
+              inOriginalCleanup: !c.signal.aborted && now() < c.deadlineMs,
+              releaseAttempts: leases.releaseAttempts,
+              releaseAcknowledgements: leases.releaseAcknowledgements,
+              activeLeases: leases.activeLeases,
+            }),
+          );
+        },
+      };
+    },
+  },
+});
+export default {
+  fetch(request: Request, env: unknown, ctx: Context): Promise<Response> {
+    // The real platform request and ctx reach the synchronous managed entry
+    // immediately. No initialization, body read, gate admission or timer occurs
+    // in this fixture before the handler creates its original attempt.
+    return handler.fetch(request, env, ctx).then((response) => {
+      const headers = new Headers(response.headers);
+      headers.set(
+        "x-morrow-fixture-metrics",
+        JSON.stringify({
+          response: snapshotManagedLoginResponseMetrics(response),
+          leases: { ...leases },
+          workos: { ...workos },
+          fixtureClock: setup.bindCutoff ? { ...bindClock, currentNowMs: now() } : null,
+        }),
+      );
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    });
+  },
+};

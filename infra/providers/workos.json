@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "role": "identity_only_Morrow_owns_grants",
+  "environment_clients": {
+    "development": {
+      "client_id": null,
+      "secret_reference": null,
+      "redirect_origins": []
+    },
+    "staging": {
+      "client_id": null,
+      "secret_reference": null,
+      "redirect_origins": []
+    },
+    "production": {
+      "client_id": null,
+      "secret_reference": null,
+      "redirect_origins": []
+    }
+  },
+  "enterprise_connections": "per_customer_separate_qualified_SSO_SCIM",
+  "US_processing_terms": "pending",
+  "deployment_status": "not_qualified"
+}

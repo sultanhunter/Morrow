@@ -1,0 +1,3084 @@
+{
+  "schema_version": 1,
+  "plan_sequence": 67,
+  "bindings": [
+    {
+      "capability": "workspace.goal.create",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.goal.create"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.task.create",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.task.create"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.task.assign",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.task.assign"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.task.delegate",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.task.delegate"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.task.takeover",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.task.takeover"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.task.pause",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.task.pause"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.task.resume",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.task.resume"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.task.cancel",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.task.cancel"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.question.request",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.question.request"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.question.answer",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.question.answer"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.artifact.read",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.artifact.read"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.artifact.edit",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.artifact.edit"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.comment.create",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.comment.create"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.knowledge.approve",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.knowledge.approve"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.knowledge.read",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.knowledge.read"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.routine.configure",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.routine.configure"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "workspace.routine.activate",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query workspace.routine.activate"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P14.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "catalog.products.read",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "query products/product; variant/media connections"
+      ],
+      "required_scopes": [
+        "read_products"
+      ],
+      "sources": [
+        "S01"
+      ],
+      "readback": "Persist scoped product projections with API response version and cursor/freshness.",
+      "restriction": "",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P09.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "catalog.audit.create",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query catalog.audit.create"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P09.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "catalog.content.propose",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query catalog.content.propose"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P09.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "catalog.content.publish",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation productUpdate(product: ProductUpdateInput)"
+      ],
+      "required_scopes": [
+        "write_products"
+      ],
+      "sources": [
+        "S03"
+      ],
+      "readback": "Read product title/descriptionHtml/seo after userErrors check.",
+      "restriction": "Staff product update permission; exact allowlisted fields.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P09.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "catalog.variants.propose",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query catalog.variants.propose"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P09.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "catalog.variants.publish",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation productVariantsBulkUpdate(allowPartialUpdates:false)"
+      ],
+      "required_scopes": [
+        "write_products"
+      ],
+      "sources": [
+        "S33"
+      ],
+      "readback": "Read variant IDs, prices/options; no unsupported partial-success claim.",
+      "restriction": "",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P09.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "catalog.collection.propose",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query catalog.collection.propose"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P09.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "catalog.collection.publish",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation collectionUpdate(collection: CollectionUpdateInput)",
+        "mutation collectionReorderProducts; query job"
+      ],
+      "required_scopes": [
+        "write_products"
+      ],
+      "sources": [
+        "S34",
+        "S35"
+      ],
+      "readback": "Compare final membership/sort to approved diff; poll returned job.",
+      "restriction": "Manual vs rule collection; plan/field restrictions. Exact inclusion input must be schema-qualified.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P09.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "catalog.channel.publish",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation publishablePublish; query publishedOnPublication"
+      ],
+      "required_scopes": [
+        "write_publications"
+      ],
+      "sources": [
+        "S36"
+      ],
+      "readback": "Read selected product/collection publication state.",
+      "restriction": "Active product and channel constraints; no all-channel default.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P09.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "search.public.inspect",
+      "provider": "public_web",
+      "mode": "runtime",
+      "operations": [
+        "brokered GET/HEAD; isolated Playwright public-page inspection"
+      ],
+      "required_scopes": [],
+      "sources": [
+        "S20"
+      ],
+      "readback": "Timestamped URL, redirects, content digest and observation artifact.",
+      "restriction": "No private addresses, merchant cookies or secrets; source content untrusted.",
+      "remaining_gap": null,
+      "version": "runtime-profile:v1",
+      "provider_dependency": "D03",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "search.performance.read",
+      "provider": "google_search",
+      "mode": "api",
+      "operations": [
+        "POST /webmasters/v3/sites/{siteUrl}/searchAnalytics/query"
+      ],
+      "required_scopes": [
+        "https://www.googleapis.com/auth/webmasters.readonly"
+      ],
+      "sources": [
+        "S06",
+        "S07"
+      ],
+      "readback": "Property/day/query/page coverage and Pacific reporting dates.",
+      "restriction": "Data is not exhaustive nor dedicated AI-citation reporting.",
+      "remaining_gap": null,
+      "version": "webmasters:v1",
+      "provider_dependency": "D04",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "search.audit.create",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query search.audit.create"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "search.improvements.propose",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query search.improvements.propose"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "search.citations.observe",
+      "provider": "openai",
+      "mode": "model",
+      "operations": [
+        "POST /v1/responses with web_search; gpt-6.1-sol"
+      ],
+      "required_scopes": [],
+      "sources": [
+        "S65",
+        "S66"
+      ],
+      "readback": "Store prompt/locale/model/date, cited URLs and repeatability metadata.",
+      "restriction": "Synthetic API observation, no consumer-chatbot share or guaranteed inclusion.",
+      "remaining_gap": null,
+      "version": "responses:v1/images:v1",
+      "provider_dependency": "D05",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "search.results.report",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query search.results.report"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "creative.brief.create",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query creative.brief.create"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "creative.image.generate",
+      "provider": "openai",
+      "mode": "model",
+      "operations": [
+        "POST /v1/images/generations; gpt-image-2.5-sunburst"
+      ],
+      "required_scopes": [],
+      "sources": [
+        "S65",
+        "S68"
+      ],
+      "readback": "Persist approved input/output digests, model/parameters, cost and fidelity review.",
+      "restriction": "Account region/retention eligibility and bounded quality/size. No automatic publication.",
+      "remaining_gap": null,
+      "version": "responses:v1/images:v1",
+      "provider_dependency": "D06",
+      "effect": "billable_job",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "creative.contact_sheet.create",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query creative.contact_sheet.create"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "creative.image.revise",
+      "provider": "openai",
+      "mode": "model",
+      "operations": [
+        "POST /v1/images/edits; gpt-image-2.5-sunburst"
+      ],
+      "required_scopes": [],
+      "sources": [
+        "S65",
+        "S68"
+      ],
+      "readback": "Persist approved input/output digests, model/parameters, cost and fidelity review.",
+      "restriction": "Account region/retention eligibility and bounded quality/size. No automatic publication.",
+      "remaining_gap": null,
+      "version": "responses:v1/images:v1",
+      "provider_dependency": "D06",
+      "effect": "billable_job",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "creative.image.approve",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query creative.image.approve"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "creative.media.attach",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation productUpdate(product, media: CreateMediaInput[])"
+      ],
+      "required_scopes": [
+        "write_products"
+      ],
+      "sources": [
+        "S03"
+      ],
+      "readback": "Read product media relationship, alt text and READY status.",
+      "restriction": "Allowlisted product and signed authorized asset; creation receipt is not readiness.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "analytics.report.create",
+      "provider": "morrow",
+      "mode": "projection",
+      "operations": [
+        "versioned governed metric projection over authorized Shopify/Meta/Klaviyo facts"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Report metric version, source currencies/timezones, freshness, missing facts and provider attribution.",
+      "restriction": "Not all Shopify Analytics reports; never invent omitted source metrics.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D07",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P10.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "analytics.anomaly.investigate",
+      "provider": "morrow",
+      "mode": "projection",
+      "operations": [
+        "versioned governed metric projection over authorized Shopify/Meta/Klaviyo facts"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Report metric version, source currencies/timezones, freshness, missing facts and provider attribution.",
+      "restriction": "Not all Shopify Analytics reports; never invent omitted source metrics.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D07",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P10.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "analytics.assortment.propose",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query analytics.assortment.propose"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P10.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "ads.accounts.read",
+      "provider": "meta",
+      "mode": "api",
+      "operations": [
+        "GET /v26.0/me/adaccounts; GET /v26.0/act_{id}"
+      ],
+      "required_scopes": [
+        "ads_read"
+      ],
+      "sources": [
+        "S46",
+        "S47"
+      ],
+      "readback": "Read selected account ID, permitted tasks and current status.",
+      "restriction": "Business discovery may need an additional separately reviewed scope; no business_management blanket request.",
+      "remaining_gap": null,
+      "version": "graph:v26.0",
+      "provider_dependency": "D08",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "ads.performance.read",
+      "provider": "meta",
+      "mode": "api",
+      "operations": [
+        "GET /v26.0/act_{id}/insights; async report result if needed"
+      ],
+      "required_scopes": [
+        "ads_read"
+      ],
+      "sources": [
+        "S46",
+        "S48",
+        "S71"
+      ],
+      "readback": "Account/date/currency/attribution-window and pagination-complete aggregate report.",
+      "restriction": "",
+      "remaining_gap": null,
+      "version": "graph:v26.0",
+      "provider_dependency": "D08",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "ads.campaign.propose",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query ads.campaign.propose"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "ads.campaign.create_paused",
+      "provider": "meta",
+      "mode": "api",
+      "operations": [
+        "POST /v26.0/act_{id}/campaigns",
+        "POST /v26.0/act_{id}/adsets",
+        "POST /v26.0/act_{id}/adcreatives",
+        "POST /v26.0/act_{id}/ads"
+      ],
+      "required_scopes": [
+        "ads_management"
+      ],
+      "sources": [
+        "S46",
+        "S48"
+      ],
+      "readback": "Read all returned IDs, parent-account relationships and PAUSED/effective status.",
+      "restriction": "Exact bundle payload, page/Instagram access, objective and targeting eligibility qualified separately; partial bundle recovery.",
+      "remaining_gap": "Chosen creative identity/permissions depend on controlled account; activation blocked until conformance.",
+      "version": "graph:v26.0",
+      "provider_dependency": "D08",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "ads.campaign.activate",
+      "provider": "meta",
+      "mode": "api",
+      "operations": [
+        "/v26.0/POST campaign/adset/ad IDs status=ACTIVE"
+      ],
+      "required_scopes": [
+        "ads_management"
+      ],
+      "sources": [
+        "S46",
+        "S49"
+      ],
+      "readback": "Read effective delivery and budget at each approved level; report rejection/pending review truthfully.",
+      "restriction": "Explicit account and level; provider budget is not Morrow liability ceiling.",
+      "remaining_gap": null,
+      "version": "graph:v26.0",
+      "provider_dependency": "D08",
+      "effect": "spend",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "ads.budget.change",
+      "provider": "meta",
+      "mode": "api",
+      "operations": [
+        "/v26.0/POST approved campaign OR adset daily_budget/lifetime_budget"
+      ],
+      "required_scopes": [
+        "ads_management"
+      ],
+      "sources": [
+        "S46",
+        "S49"
+      ],
+      "readback": "Read budget owner and approved amounts in account currency.",
+      "restriction": "Explicit account and level; provider budget is not Morrow liability ceiling.",
+      "remaining_gap": null,
+      "version": "graph:v26.0",
+      "provider_dependency": "D08",
+      "effect": "spend",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "ads.campaign.pause",
+      "provider": "meta",
+      "mode": "api",
+      "operations": [
+        "/v26.0/POST approved campaign/adset/ad IDs status=PAUSED"
+      ],
+      "required_scopes": [
+        "ads_management"
+      ],
+      "sources": [
+        "S46",
+        "S49"
+      ],
+      "readback": "Read paused delivery; retain incurred spend and uncertain-operation reconciliation.",
+      "restriction": "Explicit account and level; provider budget is not Morrow liability ceiling.",
+      "remaining_gap": null,
+      "version": "graph:v26.0",
+      "provider_dependency": "D08",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "ads.audience.select",
+      "provider": "meta",
+      "mode": "api",
+      "operations": [
+        "GET /v26.0/act_{id}/customaudiences"
+      ],
+      "required_scopes": [
+        "ads_read"
+      ],
+      "sources": [
+        "S46",
+        "S48"
+      ],
+      "readback": "Read authorized audience metadata without customer members.",
+      "restriction": "Account eligibility/terms; no upload of raw customer lists.",
+      "remaining_gap": null,
+      "version": "graph:v26.0",
+      "provider_dependency": "D08",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "lifecycle.segment.read",
+      "provider": "klaviyo",
+      "mode": "api",
+      "operations": [
+        "GET /api/segments"
+      ],
+      "required_scopes": [
+        "segments:read"
+      ],
+      "sources": [
+        "S51"
+      ],
+      "readback": "Read segment definitions/count availability; label unverified consent coverage.",
+      "restriction": "Provider send suppression remains authoritative; aggregate segment does not prove every recipient consent.",
+      "remaining_gap": null,
+      "version": "revision:2026-07-15",
+      "provider_dependency": "D09",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "lifecycle.campaign.propose",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query lifecycle.campaign.propose"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "lifecycle.campaign.create_draft",
+      "provider": "klaviyo",
+      "mode": "api",
+      "operations": [
+        "POST /api/campaigns",
+        "PATCH /api/campaign-messages/{id}",
+        "POST /api/templates",
+        "POST /api/campaign-message-assign-template"
+      ],
+      "required_scopes": [
+        "campaigns:write",
+        "templates:write"
+      ],
+      "sources": [
+        "S52",
+        "S53",
+        "S54",
+        "S55"
+      ],
+      "readback": "Read unsent campaign/message/template linkage and exact approved content.",
+      "restriction": "Initial channel=email; other advertised channels need specific connector qualification; template limits apply.",
+      "remaining_gap": null,
+      "version": "revision:2026-07-15",
+      "provider_dependency": "D09",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "lifecycle.campaign.send",
+      "provider": "klaviyo",
+      "mode": "api",
+      "operations": [
+        "POST /api/campaign-send-jobs",
+        "GET /api/campaign-send-jobs/{id}"
+      ],
+      "required_scopes": [
+        "campaigns:write",
+        "campaigns:read"
+      ],
+      "sources": [
+        "S56",
+        "S57"
+      ],
+      "readback": "Poll job and provider delivery aggregates; distinguish scheduled/queued/sent/delivered.",
+      "restriction": "Exact consent-aware audience/channel/time/content; no duplicate send on timeout.",
+      "remaining_gap": null,
+      "version": "revision:2026-07-15",
+      "provider_dependency": "D09",
+      "effect": "communication",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "lifecycle.performance.read",
+      "provider": "klaviyo",
+      "mode": "api",
+      "operations": [
+        "POST /api/campaign-values-reports"
+      ],
+      "required_scopes": [
+        "campaigns:read"
+      ],
+      "sources": [
+        "S58"
+      ],
+      "readback": "Record source metric definitions/date/filter and coverage.",
+      "restriction": "POST query is read semantics; lower endpoint rate limit.",
+      "remaining_gap": null,
+      "version": "revision:2026-07-15",
+      "provider_dependency": "D09",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "support.case.read",
+      "provider": "gorgias",
+      "mode": "api",
+      "operations": [
+        "GET /api/tickets/{id}; GET /api/tickets/{id}/messages"
+      ],
+      "required_scopes": [
+        "tickets:read"
+      ],
+      "sources": [
+        "S60",
+        "S69",
+        "S70"
+      ],
+      "readback": "Scoped transcript; join only separately authorized customer/order context.",
+      "restriction": "customers:read only if separate customer fields are consumed; account:read validates account identity.",
+      "remaining_gap": null,
+      "version": "unversioned-rest:qualified-schema-digest",
+      "provider_dependency": "D10",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "support.reply.propose",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query support.reply.propose"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "support.reply.send",
+      "provider": "gorgias",
+      "mode": "api",
+      "operations": [
+        "POST /api/tickets/{id}/messages",
+        "GET created message"
+      ],
+      "required_scopes": [
+        "tickets:write",
+        "tickets:read"
+      ],
+      "sources": [
+        "S60",
+        "S63"
+      ],
+      "readback": "Read sent_datetime/status after asynchronous send; do not treat 201 as delivery.",
+      "restriction": "Exact recipient/channel/body; internal note explicit; no force bypass of failed attached actions.",
+      "remaining_gap": null,
+      "version": "unversioned-rest:qualified-schema-digest",
+      "provider_dependency": "D10",
+      "effect": "communication",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "support.case.escalate",
+      "provider": "gorgias",
+      "mode": "api",
+      "operations": [
+        "PUT /api/tickets/{id}: assignee_user/team, priority, explicit internal note"
+      ],
+      "required_scopes": [
+        "tickets:write",
+        "tickets:read"
+      ],
+      "sources": [
+        "S60",
+        "S64"
+      ],
+      "readback": "Read assigned user/team, priority or final status.",
+      "restriction": "Validate account team/user IDs; escalation note needs separately qualified internal-message route.",
+      "remaining_gap": null,
+      "version": "unversioned-rest:qualified-schema-digest",
+      "provider_dependency": "D10",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "support.case.close",
+      "provider": "gorgias",
+      "mode": "api",
+      "operations": [
+        "PUT /api/tickets/{id}: status=closed"
+      ],
+      "required_scopes": [
+        "tickets:write",
+        "tickets:read"
+      ],
+      "sources": [
+        "S60",
+        "S64"
+      ],
+      "readback": "Read assigned user/team, priority or final status.",
+      "restriction": "Validate account team/user IDs; escalation note needs separately qualified internal-message route.",
+      "remaining_gap": null,
+      "version": "unversioned-rest:qualified-schema-digest",
+      "provider_dependency": "D10",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "orders.read",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "query orders/order; fulfillmentOrders; returns/refunds"
+      ],
+      "required_scopes": [
+        "read_orders"
+      ],
+      "sources": [
+        "S01",
+        "S02"
+      ],
+      "readback": "Persist only granted fields; report historical/order/fulfillment coverage.",
+      "restriction": "read_all_orders adds separately approved historical access; relevant fulfillment read scopes are location-specific.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "orders.exceptions.triage",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query orders.exceptions.triage"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "orders.cancel",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation orderCancel; query job/order"
+      ],
+      "required_scopes": [
+        "write_orders"
+      ],
+      "sources": [
+        "S38"
+      ],
+      "readback": "Poll job and final order cancellation/refund/restock state.",
+      "restriction": "Explicit irreversible effect and notification/refund consequences.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "orders.fulfillment.create",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation fulfillmentCreate"
+      ],
+      "required_scopes": [
+        "write_merchant_managed_fulfillment_orders"
+      ],
+      "sources": [
+        "S39"
+      ],
+      "readback": "Read fulfillment order quantities and created fulfillment.",
+      "restriction": "Assigned/third-party scopes only for qualified applicable routes; fulfill-and-ship permission; explicit lines and notification flag.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "orders.fulfillment.tracking_update",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation fulfillmentTrackingInfoUpdate"
+      ],
+      "required_scopes": [
+        "write_merchant_managed_fulfillment_orders"
+      ],
+      "sources": [
+        "S40"
+      ],
+      "readback": "Read exact tracking fields and declared notification flag.",
+      "restriction": "",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "orders.return.create",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation returnCreate; query return"
+      ],
+      "required_scopes": [
+        "write_returns"
+      ],
+      "sources": [
+        "S41"
+      ],
+      "readback": "Read return lines, state and reverse-fulfillment reference.",
+      "restriction": "Qualified line state; return does not issue a refund.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "orders.refund.create",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation refundCreate; query order.refunds/transactions"
+      ],
+      "required_scopes": [
+        "write_orders"
+      ],
+      "sources": [
+        "S01",
+        "S09"
+      ],
+      "readback": "Reconcile refund ID, transaction status, amount/currency and restock.",
+      "restriction": "No support-reply authority confers refund permission.",
+      "remaining_gap": "Reference headline says orders rather than write_orders; reconcile pinned schema/app scope and staff refund requirements in controlled conformance before activation.",
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D02",
+      "effect": "spend",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "inventory.levels.read",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "query inventoryItems/inventoryLevels.quantities"
+      ],
+      "required_scopes": [
+        "read_inventory"
+      ],
+      "sources": [
+        "S43"
+      ],
+      "readback": "Read item/location/current quantities and freshness.",
+      "restriction": "",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D11",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "inventory.risk.report",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query inventory.risk.report"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "inventory.adjust.propose",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query inventory.adjust.propose"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "inventory.quantity.adjust",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation inventoryAdjustQuantities @idempotent"
+      ],
+      "required_scopes": [
+        "write_inventory"
+      ],
+      "sources": [
+        "S42"
+      ],
+      "readback": "Reconcile adjustment-group and current quantities; reuse logical operation key.",
+      "restriction": "Configured source authority and location grants.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D11",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "inventory.quantity.set",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation inventorySetQuantities @idempotent"
+      ],
+      "required_scopes": [
+        "write_inventory"
+      ],
+      "sources": [
+        "S05"
+      ],
+      "readback": "Read quantity against approved compareQuantity and operation receipt.",
+      "restriction": "Only configured authoritative source; no blind overwrite.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D11",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T02",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "finance.costs.read",
+      "provider": "morrow",
+      "mode": "projection",
+      "operations": [
+        "Shopify InventoryItem.unitCost + order/refund projections",
+        "authorized versioned fee/shipping cost ledger import"
+      ],
+      "required_scopes": [],
+      "sources": [
+        "S43"
+      ],
+      "readback": "Report source/revision/currency/coverage; label unknown costs and hypothetical margin.",
+      "restriction": "Shopify facts require read_inventory/read_orders and eligible cost fields; import schema/authority qualifies in P07/P10.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D12",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "finance.margin.report",
+      "provider": "morrow",
+      "mode": "projection",
+      "operations": [
+        "Shopify InventoryItem.unitCost + order/refund projections",
+        "authorized versioned fee/shipping cost ledger import"
+      ],
+      "required_scopes": [],
+      "sources": [
+        "S43"
+      ],
+      "readback": "Report source/revision/currency/coverage; label unknown costs and hypothetical margin.",
+      "restriction": "Shopify facts require read_inventory/read_orders and eligible cost fields; import schema/authority qualifies in P07/P10.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D12",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "finance.reconciliation.propose",
+      "provider": "morrow",
+      "mode": "projection",
+      "operations": [
+        "Shopify InventoryItem.unitCost + order/refund projections",
+        "authorized versioned fee/shipping cost ledger import"
+      ],
+      "required_scopes": [],
+      "sources": [
+        "S43"
+      ],
+      "readback": "Report source/revision/currency/coverage; label unknown costs and hypothetical margin.",
+      "restriction": "Shopify facts require read_inventory/read_orders and eligible cost fields; import schema/authority qualifies in P07/P10.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D12",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T03",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "storefront.ux.audit",
+      "provider": "public_web",
+      "mode": "runtime",
+      "operations": [
+        "brokered GET/HEAD; isolated Playwright public-page inspection"
+      ],
+      "required_scopes": [],
+      "sources": [
+        "S20"
+      ],
+      "readback": "Timestamped URL, redirects, content digest and observation artifact.",
+      "restriction": "No private addresses, merchant cookies or secrets; source content untrusted.",
+      "remaining_gap": null,
+      "version": "runtime-profile:v1",
+      "provider_dependency": "D03",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T04",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "storefront.change.propose",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query storefront.change.propose"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T04",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "storefront.extension.prepare",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query storefront.extension.prepare"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T04",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "storefront.extension.activate",
+      "provider": "shopify",
+      "mode": "human_handoff",
+      "operations": [
+        "GET /admin/themes/current/editor?context=apps&activateAppId={client_id}/{handle}",
+        "merchant previews and saves"
+      ],
+      "required_scopes": [
+        "read_themes"
+      ],
+      "sources": [
+        "S45"
+      ],
+      "readback": "Saved app configuration plus qualified theme/storefront readback.",
+      "restriction": "Opening editor is waiting-for-human; actor needs Shopify native permission. Read scope validates compatibility, not a write grant.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D13",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T04",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "storefront.theme.preview_write",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation themeFilesUpsert on non-live theme"
+      ],
+      "required_scopes": [
+        "write_themes"
+      ],
+      "sources": [
+        "S04"
+      ],
+      "readback": "Read allowlisted file checksums and preview results.",
+      "restriction": "Shopify exemption, no live-theme target.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D14",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T04",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "storefront.theme.publish",
+      "provider": "shopify",
+      "mode": "api",
+      "operations": [
+        "mutation themePublish"
+      ],
+      "required_scopes": [
+        "write_themes"
+      ],
+      "sources": [
+        "S44"
+      ],
+      "readback": "Read currently live theme ID; smoke-test affected pages.",
+      "restriction": "Shopify exemption; exact approved theme revision.",
+      "remaining_gap": null,
+      "version": "admin-graphql:2026-10",
+      "provider_dependency": "D14",
+      "effect": "external_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "core_body_defined_provider_adapter_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P17.T04",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "governance.membership.invite",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.membership.invite"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P05.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "governance.grants.revise",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.grants.revise"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P05.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "governance.membership.revoke",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.membership.revoke"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P05.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "governance.connection.connect",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.connection.connect"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P05.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "governance.connection.disconnect",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.connection.disconnect"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P05.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "governance.approval.decide",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.approval.decide"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P05.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "governance.usage.read",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.usage.read"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P05.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "governance.budget.revise",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.budget.revise"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P05.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "governance.audit.export",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.audit.export"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P05.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "governance.privacy.export",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.privacy.export"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P05.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "governance.privacy.erase",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query governance.privacy.erase"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P05.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "agents.listing.read",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query agents.listing.read"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "read",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "agents.builder.describe",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query agents.builder.describe"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "agents.installation.stage",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query agents.installation.stage"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "agents.installation.sample",
+      "provider": "morrow",
+      "mode": "runtime",
+      "operations": [
+        "leased qualified runtime with approved fixture and current provisional sample mandate"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned sample/evaluation artifacts and settled usage; no implicit real-provider write authority.",
+      "restriction": "",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D15",
+      "effect": "billable_job",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "agents.installation.activate",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query agents.installation.activate"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "agents.installation.upgrade",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query agents.installation.upgrade"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "agents.installation.disable",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query agents.installation.disable"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "agents.installation.uninstall",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query agents.installation.uninstall"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D01",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "agents.skill.research",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query agents.skill.research"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D16",
+      "effect": "internal_write",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "agents.release.evaluate",
+      "provider": "morrow",
+      "mode": "runtime",
+      "operations": [
+        "leased qualified runtime with approved fixture and current provisional sample mandate"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned sample/evaluation artifacts and settled usage; no implicit real-provider write authority.",
+      "restriction": "",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D16",
+      "effect": "billable_job",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "reconcile provider outcome before redispatch; retain liability"
+    },
+    {
+      "capability": "agents.release.publish",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query agents.release.publish"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D16",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    },
+    {
+      "capability": "agents.release.revoke",
+      "provider": "morrow",
+      "mode": "internal",
+      "operations": [
+        "planned typed Morrow command/query agents.release.revoke"
+      ],
+      "required_scopes": [],
+      "sources": [],
+      "readback": "Versioned authoritative record or artifact per capability contract.",
+      "restriction": "Existing schema is a contract, not a running handler.",
+      "remaining_gap": null,
+      "version": "contracts:v1",
+      "provider_dependency": "D16",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P16.T01",
+        "P17.T01"
+      ],
+      "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
+      "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
+    }
+  ]
+}

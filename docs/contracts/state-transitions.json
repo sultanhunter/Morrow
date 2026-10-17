@@ -1,0 +1,591 @@
+{
+  "version": 1,
+  "ownership": {
+    "business_records": "PostgreSQL work service",
+    "execution_progress": "Durable orchestrator",
+    "artifact_content": "Object store; authoritative revision metadata in PostgreSQL",
+    "provider_state": "Connected source of truth; local projection retains freshness"
+  },
+  "transitions": {
+    "goal": [
+      {
+        "from": "draft",
+        "to": "active",
+        "actor": "owner",
+        "guard": "scope_and_success_criteria"
+      },
+      {
+        "from": "active",
+        "to": "paused",
+        "actor": "owner",
+        "guard": "current_revision"
+      },
+      {
+        "from": "paused",
+        "to": "active",
+        "actor": "owner",
+        "guard": "current_grants"
+      },
+      {
+        "from": "active",
+        "to": "achieved",
+        "actor": "owner",
+        "guard": "accepted_completion_evidence"
+      },
+      {
+        "from": "draft",
+        "to": "cancelled",
+        "actor": "owner",
+        "guard": "current_revision"
+      },
+      {
+        "from": "active",
+        "to": "cancelled",
+        "actor": "owner",
+        "guard": "child_cancellation_reconciled"
+      },
+      {
+        "from": "paused",
+        "to": "cancelled",
+        "actor": "owner",
+        "guard": "child_cancellation_reconciled"
+      }
+    ],
+    "task": [
+      {
+        "from": "draft",
+        "to": "ready",
+        "actor": "owner",
+        "guard": "inputs_and_scope_valid"
+      },
+      {
+        "from": "ready",
+        "to": "queued",
+        "actor": "work_service",
+        "guard": "dispatch_eligible"
+      },
+      {
+        "from": "queued",
+        "to": "running",
+        "actor": "runtime",
+        "guard": "current_lease_and_grants"
+      },
+      {
+        "from": "running",
+        "to": "waiting_input",
+        "actor": "work_service",
+        "guard": "open_blocking_question"
+      },
+      {
+        "from": "running",
+        "to": "waiting_approval",
+        "actor": "work_service",
+        "guard": "immutable_pending_proposal"
+      },
+      {
+        "from": "waiting_input",
+        "to": "queued",
+        "actor": "work_service",
+        "guard": "eligible_answer_committed"
+      },
+      {
+        "from": "waiting_approval",
+        "to": "queued",
+        "actor": "work_service",
+        "guard": "exact_current_approval"
+      },
+      {
+        "from": "running",
+        "to": "paused",
+        "actor": "owner",
+        "guard": "stop_new_dispatch"
+      },
+      {
+        "from": "queued",
+        "to": "paused",
+        "actor": "owner",
+        "guard": "stop_new_dispatch"
+      },
+      {
+        "from": "waiting_input",
+        "to": "paused",
+        "actor": "owner",
+        "guard": "stop_new_dispatch"
+      },
+      {
+        "from": "waiting_approval",
+        "to": "paused",
+        "actor": "owner",
+        "guard": "stop_new_dispatch"
+      },
+      {
+        "from": "paused",
+        "to": "queued",
+        "actor": "owner",
+        "guard": "current_grants_and_budget"
+      },
+      {
+        "from": "running",
+        "to": "succeeded",
+        "actor": "work_service",
+        "guard": "accepted_completion_evidence"
+      },
+      {
+        "from": "running",
+        "to": "failed",
+        "actor": "work_service",
+        "guard": "reconciled_failure_evidence"
+      },
+      {
+        "from": "queued",
+        "to": "cancelling",
+        "actor": "owner",
+        "guard": "cancel_requested"
+      },
+      {
+        "from": "running",
+        "to": "cancelling",
+        "actor": "owner",
+        "guard": "cancel_requested"
+      },
+      {
+        "from": "waiting_input",
+        "to": "cancelling",
+        "actor": "owner",
+        "guard": "cancel_requested"
+      },
+      {
+        "from": "waiting_approval",
+        "to": "cancelling",
+        "actor": "owner",
+        "guard": "cancel_requested"
+      },
+      {
+        "from": "paused",
+        "to": "cancelling",
+        "actor": "owner",
+        "guard": "cancel_requested"
+      },
+      {
+        "from": "cancelling",
+        "to": "cancelled",
+        "actor": "work_service",
+        "guard": "submitted_effects_and_liabilities_reconciled"
+      }
+    ],
+    "run": [
+      {
+        "from": "queued",
+        "to": "running",
+        "actor": "runtime",
+        "guard": "current_lease_and_grants"
+      },
+      {
+        "from": "running",
+        "to": "waiting",
+        "actor": "runtime",
+        "guard": "durable_wait_recorded"
+      },
+      {
+        "from": "waiting",
+        "to": "running",
+        "actor": "runtime",
+        "guard": "current_lease_and_grants"
+      },
+      {
+        "from": "running",
+        "to": "paused",
+        "actor": "owner",
+        "guard": "stop_new_dispatch"
+      },
+      {
+        "from": "paused",
+        "to": "running",
+        "actor": "runtime",
+        "guard": "current_lease_and_grants"
+      },
+      {
+        "from": "running",
+        "to": "succeeded",
+        "actor": "runtime",
+        "guard": "completion_evidence"
+      },
+      {
+        "from": "running",
+        "to": "failed",
+        "actor": "runtime",
+        "guard": "failure_evidence"
+      },
+      {
+        "from": "queued",
+        "to": "cancelled",
+        "actor": "work_service",
+        "guard": "no_submitted_effects"
+      },
+      {
+        "from": "running",
+        "to": "cancelled",
+        "actor": "work_service",
+        "guard": "submitted_effects_reconciled"
+      },
+      {
+        "from": "waiting",
+        "to": "cancelled",
+        "actor": "work_service",
+        "guard": "submitted_effects_reconciled"
+      },
+      {
+        "from": "paused",
+        "to": "cancelled",
+        "actor": "work_service",
+        "guard": "submitted_effects_reconciled"
+      }
+    ],
+    "question": [
+      {
+        "from": "open",
+        "to": "answered",
+        "actor": "eligible_respondent",
+        "guard": "answer_matches_schema_and_revision"
+      },
+      {
+        "from": "open",
+        "to": "cancelled",
+        "actor": "owner",
+        "guard": "current_revision"
+      },
+      {
+        "from": "open",
+        "to": "expired",
+        "actor": "work_service",
+        "guard": "expiry_elapsed"
+      }
+    ],
+    "approval": [
+      {
+        "from": "pending",
+        "to": "approved",
+        "actor": "eligible_human_reviewer",
+        "guard": "exact_digest_scope_and_current_policy"
+      },
+      {
+        "from": "pending",
+        "to": "rejected",
+        "actor": "eligible_human_reviewer",
+        "guard": "exact_digest_scope_and_current_policy"
+      },
+      {
+        "from": "pending",
+        "to": "expired",
+        "actor": "work_service",
+        "guard": "expiry_elapsed"
+      },
+      {
+        "from": "pending",
+        "to": "invalidated",
+        "actor": "work_service",
+        "guard": "proposal_or_authority_changed"
+      },
+      {
+        "from": "approved",
+        "to": "expired",
+        "actor": "work_service",
+        "guard": "expiry_elapsed"
+      },
+      {
+        "from": "approved",
+        "to": "invalidated",
+        "actor": "work_service",
+        "guard": "proposal_or_authority_changed"
+      },
+      {
+        "from": "pending",
+        "to": "cancelled",
+        "actor": "owner",
+        "guard": "current_revision"
+      }
+    ],
+    "operation": [
+      {
+        "from": "planned",
+        "to": "awaiting_approval",
+        "actor": "action_service",
+        "guard": "review_required"
+      },
+      {
+        "from": "planned",
+        "to": "authorized",
+        "actor": "action_service",
+        "guard": "current_grants_and_preconditions"
+      },
+      {
+        "from": "awaiting_approval",
+        "to": "authorized",
+        "actor": "action_service",
+        "guard": "exact_current_approval"
+      },
+      {
+        "from": "awaiting_approval",
+        "to": "rejected",
+        "actor": "action_service",
+        "guard": "eligible_rejection"
+      },
+      {
+        "from": "authorized",
+        "to": "reserved",
+        "actor": "budget_service",
+        "guard": "atomic_liability_reservation"
+      },
+      {
+        "from": "authorized",
+        "to": "dispatching",
+        "actor": "action_service",
+        "guard": "non_billable_current_grants_and_lease"
+      },
+      {
+        "from": "reserved",
+        "to": "dispatching",
+        "actor": "action_service",
+        "guard": "current_grants_lease_and_reserved_ceiling"
+      },
+      {
+        "from": "dispatching",
+        "to": "submitted",
+        "actor": "connector",
+        "guard": "provider_submission_receipt"
+      },
+      {
+        "from": "dispatching",
+        "to": "uncertain",
+        "actor": "connector",
+        "guard": "unknown_external_outcome"
+      },
+      {
+        "from": "submitted",
+        "to": "verifying",
+        "actor": "connector",
+        "guard": "provider_terminal_result"
+      },
+      {
+        "from": "submitted",
+        "to": "uncertain",
+        "actor": "connector",
+        "guard": "unknown_external_outcome"
+      },
+      {
+        "from": "verifying",
+        "to": "verified",
+        "actor": "action_service",
+        "guard": "declared_postconditions_verified"
+      },
+      {
+        "from": "verifying",
+        "to": "uncertain",
+        "actor": "connector",
+        "guard": "verification_unavailable"
+      },
+      {
+        "from": "uncertain",
+        "to": "verifying",
+        "actor": "connector",
+        "guard": "reconciled_provider_result"
+      },
+      {
+        "from": "uncertain",
+        "to": "failed",
+        "actor": "action_service",
+        "guard": "verified_no_effect"
+      },
+      {
+        "from": "authorized",
+        "to": "conflict",
+        "actor": "action_service",
+        "guard": "precondition_changed_before_dispatch"
+      },
+      {
+        "from": "reserved",
+        "to": "conflict",
+        "actor": "action_service",
+        "guard": "precondition_changed_before_dispatch"
+      },
+      {
+        "from": "dispatching",
+        "to": "failed",
+        "actor": "connector",
+        "guard": "verified_no_effect"
+      },
+      {
+        "from": "submitted",
+        "to": "cancel_requested",
+        "actor": "owner",
+        "guard": "provider_cancel_supported_or_recorded_request"
+      },
+      {
+        "from": "uncertain",
+        "to": "cancel_requested",
+        "actor": "owner",
+        "guard": "reconciliation_continues"
+      },
+      {
+        "from": "cancel_requested",
+        "to": "cancelled",
+        "actor": "connector",
+        "guard": "verified_provider_cancellation_and_liability"
+      },
+      {
+        "from": "cancel_requested",
+        "to": "verifying",
+        "actor": "connector",
+        "guard": "submitted_effect_completed_before_cancel"
+      },
+      {
+        "from": "planned",
+        "to": "cancelled",
+        "actor": "owner",
+        "guard": "no_submitted_effects"
+      },
+      {
+        "from": "authorized",
+        "to": "cancelled",
+        "actor": "owner",
+        "guard": "no_submitted_effects"
+      },
+      {
+        "from": "reserved",
+        "to": "cancelled",
+        "actor": "owner",
+        "guard": "reservation_released_without_submission"
+      }
+    ],
+    "artifact": [
+      {
+        "from": "uploading",
+        "to": "processing",
+        "actor": "artifact_service",
+        "guard": "upload_verified"
+      },
+      {
+        "from": "processing",
+        "to": "ready",
+        "actor": "artifact_service",
+        "guard": "content_integrity_and_scan"
+      },
+      {
+        "from": "uploading",
+        "to": "failed",
+        "actor": "artifact_service",
+        "guard": "upload_failed"
+      },
+      {
+        "from": "processing",
+        "to": "failed",
+        "actor": "artifact_service",
+        "guard": "processing_failed"
+      },
+      {
+        "from": "ready",
+        "to": "quarantined",
+        "actor": "artifact_service",
+        "guard": "integrity_or_source_revocation"
+      },
+      {
+        "from": "ready",
+        "to": "deleted",
+        "actor": "privacy_service",
+        "guard": "authorized_deletion"
+      },
+      {
+        "from": "quarantined",
+        "to": "deleted",
+        "actor": "privacy_service",
+        "guard": "authorized_deletion"
+      }
+    ],
+    "installation": [
+      {
+        "from": "draft",
+        "to": "staged",
+        "actor": "installer",
+        "guard": "resolved_dependencies_and_configuration"
+      },
+      {
+        "from": "staged",
+        "to": "validating",
+        "actor": "installer",
+        "guard": "provisional_scope_and_budget"
+      },
+      {
+        "from": "validating",
+        "to": "active",
+        "actor": "installer",
+        "guard": "qualified_sample_and_current_grants"
+      },
+      {
+        "from": "validating",
+        "to": "failed",
+        "actor": "installer",
+        "guard": "sample_or_activation_failed"
+      },
+      {
+        "from": "active",
+        "to": "suspended",
+        "actor": "work_service",
+        "guard": "revocation_or_quarantine"
+      },
+      {
+        "from": "active",
+        "to": "disabled",
+        "actor": "owner",
+        "guard": "stop_new_dispatch"
+      },
+      {
+        "from": "disabled",
+        "to": "active",
+        "actor": "installer",
+        "guard": "current_grants_and_qualified_revision"
+      },
+      {
+        "from": "suspended",
+        "to": "active",
+        "actor": "installer",
+        "guard": "remediated_qualified_dependencies_and_grants"
+      },
+      {
+        "from": "draft",
+        "to": "uninstalled",
+        "actor": "owner",
+        "guard": "cleanup_provisional_authority"
+      },
+      {
+        "from": "staged",
+        "to": "uninstalled",
+        "actor": "owner",
+        "guard": "cleanup_provisional_authority"
+      },
+      {
+        "from": "failed",
+        "to": "uninstalled",
+        "actor": "owner",
+        "guard": "cleanup_provisional_authority"
+      },
+      {
+        "from": "active",
+        "to": "uninstalled",
+        "actor": "owner",
+        "guard": "schedules_stopped_effects_reconciled"
+      },
+      {
+        "from": "disabled",
+        "to": "uninstalled",
+        "actor": "owner",
+        "guard": "schedules_stopped_effects_reconciled"
+      },
+      {
+        "from": "suspended",
+        "to": "uninstalled",
+        "actor": "owner",
+        "guard": "schedules_stopped_effects_reconciled"
+      }
+    ]
+  }
+}

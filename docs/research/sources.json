@@ -1,0 +1,966 @@
+[
+  {
+    "id": "S01",
+    "url": "https://shopify.dev/docs/api/usage/access-scopes",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "App scopes constrain store data; historical orders beyond 60 days need additional access. Operation-specific field permissions remain a qualification gate."
+  },
+  {
+    "id": "S02",
+    "url": "https://shopify.dev/docs/apps/launch/protected-customer-data",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Customer-data requirements must be qualified separately from installation scopes."
+  },
+  {
+    "id": "S03",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/productUpdate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Product content writes require write_products and product-update permission; variant updates require another operation."
+  },
+  {
+    "id": "S04",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/themeFilesUpsert",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Theme file modification requires write_themes and a Shopify exemption."
+  },
+  {
+    "id": "S05",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/inventorySetQuantities",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Absolute quantity writes require source-of-truth authority; compare quantity protects concurrency; current versions require an idempotency directive."
+  },
+  {
+    "id": "S06",
+    "url": "https://developers.google.com/webmaster-tools/v1/searchanalytics/query",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Search Analytics supports authorized property queries, including a read-only OAuth scope; reporting dates use Pacific Time."
+  },
+  {
+    "id": "S07",
+    "url": "https://developers.google.com/search/docs/appearance/ai-features",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Google AI-feature traffic is included in overall Web search reporting; no dedicated schema or guaranteed inclusion follows from optimization."
+  },
+  {
+    "id": "S08",
+    "url": "https://developers.facebook.com/docs/marketing-api/overview/authorization/",
+    "status": "unavailable",
+    "observed_at": "2026-10-06",
+    "finding": "Official page could not be retrieved. Meta endpoints scopes version and external-business approval route remain unverified."
+  },
+  {
+    "id": "S09",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/refundCreate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Refund creation has distinct payment and restock consequences. Exact scope and staff checks must be resolved against the pinned schema; latest documentation wording is insufficient for a production grant."
+  },
+  {
+    "id": "S10",
+    "url": "https://json-schema.org/specification",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "JSON Schema 2020-12 selected for versioned closed core contracts."
+  },
+  {
+    "id": "S11",
+    "url": "https://ajv.js.org/json-schema.html",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Use the separate 2020-12 validator entry point; do not coerce types or infer authority."
+  },
+  {
+    "id": "S12",
+    "url": "https://www.rfc-editor.org/rfc/rfc8785",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Canonical JSON representation precedes exact-content SHA-256 proposal hashing."
+  },
+  {
+    "id": "S13",
+    "url": "https://github.com/erdtman/canonicalize",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Pinned canonicalize package implements JCS; fixture hashing does not authenticate an actor."
+  },
+  {
+    "id": "S14",
+    "url": "https://temporal.io/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Pay-as-you-go has no base monthly fee; actions and history storage are usage charged.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S15",
+    "url": "https://docs.temporal.io/evaluate/cloud/regions",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "AWS us-east-1 is a supported Temporal Cloud region; namespace configuration must be evidenced.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S16",
+    "url": "https://docs.temporal.io/cloud/namespaces",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Closed history retention is configurable from one to ninety days.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S17",
+    "url": "https://developers.cloudflare.com/workers/platform/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Workers Standard has a monthly base; direct static asset serving has separate free request treatment.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S18",
+    "url": "https://developers.cloudflare.com/data-localization/how-to/workers/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Ordinary Workers processing is not regional; Regional Services applies to configured custom domains with documented caveats.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S19",
+    "url": "https://aws.amazon.com/fargate/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Linux x86 us-east-1 compute examples supply separate per-second CPU and memory prices; network and other fees are additional.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S20",
+    "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-security-considerations.html",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Tasks isolate compute, but containers inside one task share network and ephemeral storage. Task isolation does not prove egress confinement.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S21",
+    "url": "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2-auto-pause.html",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Zero-ACU pause requires supported versions/configuration; open connections and some integrations prevent pause. Storage charges and resume latency remain.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S22",
+    "url": "https://aws.amazon.com/rds/aurora/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Published Aurora Standard examples supply ACU, storage and I/O rates. A specific regional deployment still needs a current quote.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S23",
+    "url": "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Managing.Backups.html",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Aurora continuous backup retention supports one through thirty-five days; restore needs testing.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S24",
+    "url": "https://aws.amazon.com/elasticloadbalancing/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "US-East ALB example has hourly and LCU usage charges.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S25",
+    "url": "https://aws.amazon.com/vpc/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Public IPv4 is hourly charged. NAT example reviewed is Ohio, not a verified Virginia quote.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S26",
+    "url": "https://workos.com/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "AuthKit has a free first-million MAU tier. Production SSO and directory connections carry per-connection minimums; staging is free.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S27",
+    "url": "https://www.postgresql.org/docs/17/ddl-rowsecurity.html",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "RLS needs non-bypass application roles and owner/force-policy discipline; it supplements application authority.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S28",
+    "url": "https://shopify.dev/docs/apps/launch/distribution",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Unrelated merchant stores require public distribution; custom distribution cannot use Shopify billing. Distribution choice is consequential.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S29",
+    "url": "https://shopify.dev/docs/api/usage/versioning",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "2026-10 is the observed latest stable Admin API; pin requests and check response version rather than silent fall-forward.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S30",
+    "url": "https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "New App Pricing supports usage billing, Partner API subscription queries and AppEvents usage. It does not enforce usage caps.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S31",
+    "url": "https://shopify.dev/docs/apps/launch/billing",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Public App Store charging uses Shopify-provided billing; standalone entry does not imply an alternative payment route.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S32",
+    "url": "https://shopify.dev/docs/apps/build/compliance/privacy-law-compliance",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Public apps require mandatory privacy topics, verified HMAC and request completion within documented deadlines.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S33",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/productVariantsBulkUpdate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_products and variant-update permission; allowPartialUpdates defaults false.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S34",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionUpdate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_products plus permitted input fields/staff action and plan eligibility; modern collection input replaces deprecated paths.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S35",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionReorderProducts",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_products; manual sorting, asynchronous job and sequential moves require qualified readback.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S36",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/publishablePublish",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_publications and product/catalog edit permission; product status and publication constraints apply.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S37",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/fileCreate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Files are asynchronously processed. Alternative scope routes exist; file creation does not prove product attachment.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S38",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/orderCancel",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_orders or specific marketplace/buyer alternatives; cancellation is irreversible and can refund, restock or notify.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S39",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/fulfillmentCreate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Fulfillment-order-specific scopes and fulfill-and-ship permission; explicit line quantities avoid default-all fulfillment.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S40",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/fulfillmentTrackingInfoUpdate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Fulfillment scopes and staff permission apply; notifications are a separate declared consequence.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S41",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/returnCreate",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_returns or marketplace alternative; creates an approved open return and reverse fulfillment.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S42",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/inventoryAdjustQuantities",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_inventory and quantity-change permission; current API requires @idempotent. Delta writes need operation reconciliation.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S43",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/objects/InventoryItem",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "read_inventory or read_products; unitCost also depends on View product costs permission when granular permissions apply.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S44",
+    "url": "https://shopify.dev/docs/api/admin-graphql/latest/mutations/themePublish",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "write_themes and Shopify exemption required for publication.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S45",
+    "url": "https://shopify.dev/docs/apps/build/online-store/theme-app-extensions/configuration",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Supported deep links lead to merchant preview and Save; use client_id/api_key rather than deprecated UUID parameters.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S46",
+    "url": "https://www.postman.com/meta/facebook-marketing-api/documentation/0zr4mes/facebook-marketing-api-mapi",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Meta-owned collection documents ads_read/ads_management and Advanced Access for other businesses accounts.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S47",
+    "url": "https://github.com/facebook/facebook-nodejs-business-sdk/blob/main/src/api.js",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Official SDK source reports Marketing API v26.0 and SDK 26.0.2. Package version alone is not access approval.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S48",
+    "url": "https://github.com/facebook/facebook-nodejs-business-sdk/blob/main/src/objects/ad-account.js",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Official SDK exposes campaign/ad-set/creative/ad creation and custom-audience edges. Field eligibility still needs account conformance.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S49",
+    "url": "https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/campaign.py",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Official campaign object supports status and budget updates; successful delivery is distinct from resource creation.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S50",
+    "url": "https://developers.klaviyo.com/en/docs/set_up_oauth",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Partner integrations use OAuth/PKCE and least privilege; token and revoke endpoints use a.klaviyo.com.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S51",
+    "url": "https://developers.klaviyo.com/en/reference/get_segments",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "segments:read, revision 2026-07-15; segment reporting does not by itself prove recipient consent.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S52",
+    "url": "https://developers.klaviyo.com/en/reference/create_campaign",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:write, revision 2026-07-15; draft campaign creation is separate from sending.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S53",
+    "url": "https://developers.klaviyo.com/en/reference/update_campaign_message",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:write permits campaign-message update; revision header is explicit.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S54",
+    "url": "https://developers.klaviyo.com/en/reference/create_template",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "templates:write; provider template limits apply.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S55",
+    "url": "https://developers.klaviyo.com/en/reference/assign_template_to_campaign_message",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:write; assign a non-reusable template copy to a message.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S56",
+    "url": "https://developers.klaviyo.com/en/reference/send_campaign",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:write; send is an asynchronous campaign-send-job request.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S57",
+    "url": "https://developers.klaviyo.com/en/reference/get_campaign_send_job",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:read; poll campaign-send-job. A queued job is not delivery evidence.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S58",
+    "url": "https://developers.klaviyo.com/en/reference/query_campaign_values",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "campaigns:read; aggregate values reporting has a lower rate limit than CRUD.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S59",
+    "url": "https://developers.gorgias.com/docs/private-vs-public-app",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Public marketplace apps use OAuth and review; private own-account key setup is a different distribution path.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S60",
+    "url": "https://developers.gorgias.com/docs/oauth2-scopes",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "tickets read/write cover case/message actions; request separate customer/account/user scopes only as needed.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S61",
+    "url": "https://developers.gorgias.com/docs/set-up-oauth2-app-store",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "OAuth account subdomain/token lifecycle needs validation. Refresh revocation alone may leave issued access tokens valid until expiry.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S62",
+    "url": "https://developers.gorgias.com/docs/overview",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Developer app draft and sandbox prerequisites require provider account setup; vendor review evidence is separate.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S63",
+    "url": "https://developers.gorgias.com/reference/create-ticket-message",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "POST tickets/{id}/messages creates an asynchronously sent reply or explicit internal note. Creation is not proof of send.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S64",
+    "url": "https://developers.gorgias.com/reference/update-ticket",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "PUT tickets/{id} supports assignment/priority/status; follow response with scoped ticket readback.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S65",
+    "url": "https://developers.openai.com/api/docs/guides/your-data",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "store:false is distinct from approved ZDR/MAM. US regional endpoint/project eligibility and endpoint/model restrictions need evidence.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S66",
+    "url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Responses API for tool calling. Standard short-context text rates are $2 input/$10 output per million; long context, cache writes, regional and service-tier terms matter.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S67",
+    "url": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Standard short-context text rates are $10 input/$50 output per million; alias availability is not an invented immutable snapshot.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S68",
+    "url": "https://developers.openai.com/api/docs/guides/image-generation",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "GPT Image 2.5 Sunburst/Flare use direct generation/edit APIs or Responses tools; select size/quality and budget, retain provenance.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S69",
+    "url": "https://developers.gorgias.com/reference/get-ticket",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "GET /api/tickets/{id} reads a scoped ticket for case readback.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S70",
+    "url": "https://developers.gorgias.com/reference/list-ticket-messages",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "GET /api/tickets/{ticket_id}/messages reads ticket messages; permission filtering remains required.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S71",
+    "url": "https://www.postman.com/meta/facebook-marketing-api/request/u38qbri/get-insight-details-from-an-adaccount-l4",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Meta-owned collection documents account Insights GET path and aggregate spend/currency fields.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S72",
+    "url": "https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "App Pricing subscription state and usage are distinct; verify active subscription server-side. Exact API, meters and no-charge development integration qualify in P18.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S73",
+    "url": "https://www.shopify.com/partners/terms",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Applicable app charges, revenue scope and reporting need separate treatment; external billing permission does not itself establish fee exemption.",
+    "evidence_kind": "primary_agreement"
+  },
+  {
+    "id": "S74",
+    "url": "https://community.shopify.dev/t/does-a-split-billing-model-satisfy-1-2-1-shopify-origin-installs-billing-api-pre-existing-platform-customers-direct-billing/36909",
+    "status": "verified",
+    "observed_at": "2026-10-06",
+    "finding": "Developer Support distinguishes existing paid independent SaaS relationships from Shopify-acquired/free accounts. Morrow-specific qualification and usage-only facts remain unresolved.",
+    "evidence_kind": "official_support_guidance"
+  },
+  {
+    "id": "S75",
+    "url": "https://developers.cloudflare.com/workflows/reference/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Workflows requests/CPU share Workers allowances; steps and retained state are separately billed."
+  },
+  {
+    "id": "S76",
+    "url": "https://github.com/neondatabase/website/blob/main/content/docs/introduction/plans.md",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Neon Launch and Scale have no monthly minimum; Scale supports thirty-day PITR. Compute, logical storage, change history and snapshots are separately billed."
+  },
+  {
+    "id": "S77",
+    "url": "https://www.daytona.io/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Listed CPU/RAM/disk rates are usage based; disk free allowance is conservatively excluded from planning arithmetic."
+  },
+  {
+    "id": "S78",
+    "url": "https://www.daytona.io/docs/en/billing/",
+    "status": "verified",
+    "observed_at": "2026-10-11",
+    "finding": "Terminal stopped/paused VMs bill reserved disk only even when disk quota is released; preserved memory is not billed. Transitions bill all resources. One-time top-ups add wallet credit; snapshot charges survive sandbox deletion."
+  },
+  {
+    "id": "S79",
+    "url": "https://www.daytona.io/docs/en/isolation/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Default container and explicit VM classes have different isolation boundaries. VM has its own kernel; network policy must be tested."
+  },
+  {
+    "id": "S80",
+    "url": "https://developers.cloudflare.com/r2/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Standard R2 storage and operations are metered, with included allowances and free direct egress."
+  },
+  {
+    "id": "S81",
+    "url": "https://developers.cloudflare.com/secrets-store/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Cloudflare Secrets Store is in open beta; actual key custody and production suitability require qualification."
+  },
+  {
+    "id": "S82",
+    "url": "https://developers.cloudflare.com/r2/buckets/bucket-locks/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Bucket locks prevent overwriting/deletion and can conflict with erasure requirements."
+  },
+  {
+    "id": "S83",
+    "url": "https://developers.cloudflare.com/api/resources/workflows/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Workflow API exposes versions and instance events/status; actual retained-version behavior needs qualification."
+  },
+  {
+    "id": "S84",
+    "url": "https://github.com/neondatabase/serverless",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Client/Pool WebSocket sessions support interactive transactions; serverless connections must be created, used and closed inside one request."
+  },
+  {
+    "id": "S85",
+    "url": "https://raw.githubusercontent.com/neondatabase/serverless/main/CONFIG.md",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Per-client secure WebSocket, exact proxy and authentication pipelining settings are available; pure-JS pg TLS is experimental."
+  },
+  {
+    "id": "S86",
+    "url": "https://developers.cloudflare.com/workers/runtime-apis/web-standards/",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Workers forbids eval and new Function; runtime schema compilation cannot be used."
+  },
+  {
+    "id": "S87",
+    "url": "https://ajv.js.org/standalone.html",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "AJV standalone generation supports ahead-of-time validators for runtimes disallowing dynamic code generation."
+  },
+  {
+    "id": "S88",
+    "url": "https://registry.npmjs.org/@neondatabase/serverless/1.2.0",
+    "status": "verified",
+    "observed_at": "2026-10-10",
+    "finding": "Official npm driver1.2.0, Node>=19 and integrity verified before locked installation."
+  },
+  {
+    "id": "S89",
+    "url": "https://www.daytona.io/docs/en/limits/",
+    "status": "verified",
+    "observed_at": "2026-10-11",
+    "finding": "Tier3 requires a $500 top-up; Tier4 requires $2000 every30days. Paused/stopped VMs free disk quota separately from billing. Published tier resources are not proof of this organization Linux VM quota."
+  },
+  {
+    "id": "S90",
+    "url": "https://www.daytona.io/docs/en/network-limits/",
+    "status": "verified",
+    "observed_at": "2026-10-11",
+    "finding": "Tier3/4 sandbox rules replace default full internet without essential-service bypass. Network policy mutation requires WRITE_SANDBOXES; proxy environment variables alone do not enforce egress. Actual VM behavior requires qualification."
+  },
+  {
+    "id": "S91",
+    "url": "https://www.daytona.io/docs/en/sandboxes/",
+    "status": "verified",
+    "observed_at": "2026-10-11",
+    "finding": "Linux VMs use existing VM snapshots. Pause preserves files/memory; stop preserves files and clears memory. Archive is unsupported. Idle pause/stop settings and deletion completion require explicit handling."
+  },
+  {
+    "id": "S92",
+    "url": "https://www.daytona.io/docs/en/typescript-sdk/daytona/",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Official creation options include explicit snapshot/name/labels, idle controls, private preview and wall TTL. Version0.224.0 is pinned for the development-only adapter."
+  },
+  {
+    "id": "S93",
+    "url": "https://registry.npmjs.org/@daytona/sdk/0.224.0",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Official SDK0.224.0 metadata/integrity verified before ignore-scripts locked installation. Constructor defaults/telemetry and retry behavior inspected; live CLI defers construction and denies implicit .env/DAYTONA settings."
+  },
+  {
+    "id": "S94",
+    "url": "https://www.daytona.io/docs/en/persistence/",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Container filesystem survives stop/start, while process memory is cleared. Pause/resume memory is VM-only."
+  },
+  {
+    "id": "S95",
+    "url": "https://www.daytona.io/docs/en/api-keys/",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "GET /api-keys/current provides organization key metadata without manage:api_keys. Actual organization, sandbox permissions and expiry are verified before allocation; missing binding denies."
+  },
+  {
+    "id": "S96",
+    "url": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Braces<=3.0.3 has an unpatched nested-pattern stack-exhaustion advisory. SDK glob/directory operations remain outside the fixed Buffer/path lab flow; no zero-advisory claim."
+  },
+  {
+    "id": "S97",
+    "url": "https://e2b.dev/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Hobby advertises $100 one-time credits/no card, $0 subscription, one-hour continuous sessions/20 concurrent; CPU $0.000014/vCPU-second and RAM $0.0000045/GiB-second. Pro $150/month plus usage. Actual owned entitlement/resources and paused-resource meters still require qualification."
+  },
+  {
+    "id": "S98",
+    "url": "https://docs.e2b.dev/sandbox/persistence",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Pause preserves files and memory; paused instances have no automatic expiry. Connect extends runtime; kill and original deadline/cleanup handling must be explicit."
+  },
+  {
+    "id": "S99",
+    "url": "https://docs.e2b.dev/network/internet-access",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Internet defaults on. Disable explicitly; domain rules allow DNS and inspect HTTP Host/TLS SNI with shared-endpoint caveats; actual application-level denial is required."
+  },
+  {
+    "id": "S100",
+    "url": "https://modal.com/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Starter $0 subscription plus usage/$30 monthly compute credits. Sandboxes have distinct CPU/RAM rates; do not use Function unit pricing. Team has a fixed subscription."
+  },
+  {
+    "id": "S101",
+    "url": "https://modal.com/docs/guide/billing",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "A payment method is required to use Modal. Starter usage need not be prepaid; credits do not eliminate other applicable charges."
+  },
+  {
+    "id": "S102",
+    "url": "https://modal.com/blog/vm-sandboxes-agent-computers",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "VM Sandboxes GA1October2026; explicitly select vm because default remains gVisor. API compatibility is not Morrow isolation qualification."
+  },
+  {
+    "id": "S103",
+    "url": "https://modal.com/docs/guide/sandbox-networking",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Full network blocking and CIDR allowlists documented; domain filtering Beta/TLS-only and DNS caveats require effective tests."
+  },
+  {
+    "id": "S104",
+    "url": "https://modal.com/docs/guide/sandbox-snapshots",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Filesystem snapshots and Alpha memory snapshots differ; native handles/expiry are not portable cross-vendor checkpoints."
+  },
+  {
+    "id": "S105",
+    "url": "https://developers.cloudflare.com/agents/tools/sandbox/",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Current attached Linux sandbox runs in its own VM; default Internet disabled. Local Docker does not qualify hosted behavior."
+  },
+  {
+    "id": "S106",
+    "url": "https://developers.cloudflare.com/containers/platform/pricing/",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Hosted Containers require Workers Paid; compute, memory, disk and transfer billed alongside Worker/DO use."
+  },
+  {
+    "id": "S107",
+    "url": "https://registry.npmjs.org/e2b/2.56.0",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Official e2b2.56.0 metadata/integrity verified before ignore-scripts locked installation; requires Node>=22.19 and Undici8.11.2. Adapter is scripts-only and imports SDK inside provider folder."
+  },
+  {
+    "id": "S108",
+    "url": "https://docs.e2b.dev/projects",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "API keys are project-scoped; no public scopes/expiry introspection assumed. Fixed project metrics API authorizes the exact requested team UUID."
+  },
+  {
+    "id": "S109",
+    "url": "https://github.com/e2b-dev/runtime/blob/main/packages/api/internal/handlers/team_metrics.go",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Native authenticated metrics handler checks requested team/project ID against key-bound ID before query; exact200boundedJSON proof cannot be replaced by invented scope metadata."
+  },
+  {
+    "id": "S110",
+    "url": "https://docs.e2b.dev/template/tags",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Template tags are mutable. Immutable templateID:buildUUID and ready native CPU/RAM/disk/envd read bind the lab quote; SDK getInfo does not attest disk/buildID."
+  },
+  {
+    "id": "S111",
+    "url": "https://docs.e2b.dev/faq/sandbox-lifetime",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Native timeout bounds running time only; paused sandboxes have no automatic expiry. Persist original deadline and reconcile/kill via static control-plane operations; connect resumes/extends."
+  },
+  {
+    "id": "S112",
+    "url": "https://docs.e2b.dev/network/restrict-public-access",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Disable public service traffic and retain authenticated controller proof. Network configuration is not effective egress evidence; file persistence is not RAM/process proof."
+  },
+  {
+    "id": "S113",
+    "url": "https://docs.e2b.dev/workspaces",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Public docs formerly describe project billing. Actual14Oct2026 console now states shared workspace invoices/payment methods/credit; new Morrow workspace requires card for all project APIs and has$0 credit. Actual account eligibility overrides no-card advertising."
+  },
+  {
+    "id": "S114",
+    "url": "https://e2b.dev/terms",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Owner handled signup acceptance. Public terms impose downstream service/access restrictions; applicable SaaS/enterprise integration and data processing eligibility remain an explicit launch qualification, not inferred from signup."
+  },
+  {
+    "id": "S115",
+    "url": "https://github.com/e2b-dev/E2B/blob/main/packages/js-sdk/src/sandbox/sandboxApi.ts",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Pinned SDK static getInfo/list/pause/kill preserve control-plane inspection; connect resumes. Creation is non-idempotent: original closed metadata, single allocation and exhaustive running/paused reconciliation are required."
+  },
+  {
+    "id": "S116",
+    "url": "https://registry.npmjs.org/undici/8.12.1",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Actual E2B dependency locked to official Undici8.12.1; metadata/integrity verified, Node>=22.19. Miniflare separately remains7.29.1. Parent-only overrides did not force8.11.2 in npm workspace resolution, so ineffective override was removed; actual lock evidence governs."
+  },
+  {
+    "id": "S117",
+    "url": "https://github.com/e2b-dev/runtime/blob/main/spec/openapi.yml",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Documented native v2 sandbox control-plane requests used with redirect:error and bounded original-origin validation. SDK controlled307 forwards synthetic X-API-Key and can map foreign404 as absence; fixed apiUrl is insufficient."
+  },
+  {
+    "id": "S118",
+    "url": "https://docs.e2b.dev/api-reference/filesystem/upload-a-file-and-ensure-the-parent-directories-exist-if-the-file-exists-it-will-be-overwritten",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Fixed sandbox.e2b.app/files upload uses E2b-Sandbox-Id/E2b-Sandbox-Port49983/X-Access-Token, FormData Blob and native bounded serialized-JSON reply which may be text/plain. Only builtin marker permitted."
+  },
+  {
+    "id": "S119",
+    "url": "https://docs.e2b.dev/api-reference/filesystem/download-a-file",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Fixed native envd GET files downloads bounded text with owned routing/controller header. Redirect/error/file404 cannot prove sandbox absence; project API key never reaches file origin."
+  },
+  {
+    "id": "S120",
+    "url": "https://github.com/e2b-dev/runtime/blob/50fc41af77ff0877d4224e5e4ded5e7f308b5476/packages/api/internal/handlers/template_alias.go",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Pinned handler requires alias ownership even when public; actual approved project alias lookup returned403. No alternate JWT/public-ID guess is a qualification fallback."
+  },
+  {
+    "id": "S121",
+    "url": "https://docs.e2b.dev/api-reference/templates/list-templates-v2",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Bound owned-template catalogue is the read-only discovery path; complete pagination and owned ready immutable resource evidence precede runtime qualification. Current approved account has no suitable ready build."
+  },
+  {
+    "id": "S122",
+    "url": "https://docs.e2b.dev/api-reference/templates/create-template-v3",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Template registration/building is a distinct provider mutation. Resource fields and minFreeDiskMb are not a maximum build lifetime/cost/disk guarantee; explicit reviewed recipe and authorization remain required."
+  },
+  {
+    "id": "S123",
+    "url": "https://github.com/e2b-dev/runtime/blob/50fc41af77ff0877d4224e5e4ded5e7f308b5476/packages/api/internal/template-manager/template_status.go",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Pinned source attempts build cancellation after one hour but logs cancellation failures; this is not a verified deployed service lifetime or cost ceiling."
+  },
+  {
+    "id": "S124",
+    "url": "https://github.com/e2b-dev/runtime/blob/50fc41af77ff0877d4224e5e4ded5e7f308b5476/packages/api/internal/handlers/template_delete.go",
+    "status": "verified",
+    "observed_at": "2026-10-14",
+    "finding": "Public deletion soft-deletes catalogue/build records; it does not itself cancel an active builder. Catalogue404 cannot prove compute stopped."
+  },
+  {
+    "id": "S125",
+    "url": "https://docs.e2b.dev/faq/calculate-sandbox-price",
+    "status": "verified",
+    "observed_at": "2026-10-15",
+    "finding": "Current official running-only formula/rates:0.000014USD/vCPU-second plus0.0000045USD/GiB-second; included disk, paused/killed unbilled. Explicit2vCPU/512MiB for600seconds estimates0.018150USD credit. Build/ready-image zero pricing today is separately supported by Dennis\u2019s owner-supplied reply; source-bound dated trial quote only, not a permanent or hard per-operation cap."
+  },
+  {
+    "id": "S126",
+    "url": "https://registry-1.docker.io/v2/e2bdev/base/manifests/sha256:4a369f01a820fe5e65f53c2c5727a78899daf86f0541b721097f289559c8b73f",
+    "status": "verified",
+    "observed_at": "2026-10-15",
+    "finding": "Three anonymous exact-origin HTTPS reads verified the fixed index and Linuxamd64 child raw SHA256/header/size/media metadata. No blobs/layers/configuration files/E2B keys or compute. Officialhost IPv4 flags fixed localfamilyprobing without changing TLS/origin. Proof is input provenance, not hosted rootfs/owned image attestation."
+  },
+  {
+    "id": "S127",
+    "url": "https://github.com/e2b-dev/runtime/blob/1a77d1175e9d49bc9f24a249d794c747a162306f/packages/api/internal/orchestrator/analytics.go",
+    "status": "verified",
+    "observed_at": "2026-10-15",
+    "finding": "Source observation at60: customer sandbox execution events differ from template-build telemetry and billing collector/ledger is absent. This source alone cannot prove free template builds; current zero build/image price is separately qualified by the owner-supplied Dennis support reply at65."
+  },
+  {
+    "id": "S128",
+    "url": "https://docs.e2b.dev/faq/build-limits",
+    "status": "verified",
+    "observed_at": "2026-10-15",
+    "finding": "Whole-build limit1hour from running start, waiting40minutes; disk free-space allowance is above image size. Broad replacement wording is not a supported client teardown proof. Dennis specifically confirms no active builder cancel or stopped-compute proof; Morrow holds unknown attempts and never cancels by replacement/deletion."
+  },
+  {
+    "id": "S129",
+    "url": "https://e2b.dev/terms",
+    "status": "verified",
+    "observed_at": "2026-10-15",
+    "finding": "Account Access, Pricing and Payment section2 provides at least30days notice for new/increased service fees. Read-only verification of existing terms; no new agreement accepted. Current support pricing does not settle production commercial SaaS/enterprise qualification."
+  }
+]

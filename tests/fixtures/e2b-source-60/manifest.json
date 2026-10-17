@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "planSequence": 60,
+  "runtimeSourceSha256": "1a3995f691cdb4447653c21d3f091953791fb544c1c36992eb86a37d6b423891",
+  "ownedBuildSourceSha256": "ec7ddde2e284ed289dfae670e00b4bf5cfecc089d54dcf0cf87e557f8fda3ce8",
+  "files": {
+    "packages/infrastructure/src/synthetic-runtime-lab.ts": "3d6f6375b5b3f151eada039441d96d0f069b45af3aefa2ae67efb6a35b3ceb25",
+    "packages/runtime-adapters/src/e2b/development-transport.ts": "3d2cf71460ecf1bc9fea23cd2eb930842a26e378726ff3ff35e7b485759991c2",
+    "packages/runtime-adapters/src/e2b/development-native.ts": "1ab774f8ddba5d8fda9be532bc3869598964402a9382e69da4bcd0900985be12",
+    "packages/runtime-adapters/package.json": "61dfb1db475c95abd11d6ee5c9e6f8f576e999e5e659164b45e063b64f3648fb",
+    "scripts/e2b-development-input.mjs": "98c61933d72c3468feed8c0842ff66ece48591a0760672e0f3417117ca24b6b4",
+    "scripts/e2b-development-lab.mjs": "687a8b4c85fb4a09c47d33644906299c7040995a253c9647eb8eb3083c0cbbb9",
+    "scripts/e2b-template-qualification.mjs": "59f17590c04f170364a3fe0c1d438b0554c6ac09b4f60d93ebf9e8be315a67a3",
+    "infra/labs/e2b-development.json": "84a02ad814d8f389bfa3e42f488b6199120516b3781a73b12e5fdce06581e11c",
+    "package-lock.json": "e7607deb0640f6ff649503dcf453b78a99e27c886fa8582a603dc0ed1396fba7",
+    "packages/runtime-adapters/src/e2b/owned-image.ts": "282a506c689ab14c4f5dab86fe0dddf660a7297324eee251de82f89d005311e4",
+    "packages/runtime-adapters/src/e2b/owned-build.ts": "d4a33dbcadde8f720d4bba313eff70fb814eead7e4d0a481869e9624d8cc24f5",
+    "scripts/e2b-owned-build-input.mjs": "59704cde8a9d216df56a4f499430c4aa0b5ad6dac881a49ad5666381d7b0480f",
+    "scripts/e2b-owned-image-qualification.mjs": "b62644a679894be3ec371e181a3122d84c40c1a676a2ecf68c04321758e5684b",
+    "scripts/e2b-owned-build-lab.mjs": "f8238e5273c4a493af5a29dc7c5791be4f58068ac10102392359ef68b6957870",
+    "infra/labs/e2b-owned-build.json": "bf84a41ff12c4db1d8d497997025aab9c0fd662542b1e675909b1d52021f2075",
+    "infra/labs/e2b-development-account.json": "ac9ad87f9168177b3a3247c12e01d01d237d5ace38df8b02cae2a4ada2c00eff"
+  },
+  "runtimeSources": [
+    "packages/infrastructure/src/synthetic-runtime-lab.ts",
+    "packages/runtime-adapters/src/e2b/development-transport.ts",
+    "packages/runtime-adapters/src/e2b/development-native.ts",
+    "packages/runtime-adapters/package.json",
+    "scripts/e2b-development-input.mjs",
+    "scripts/e2b-development-lab.mjs",
+    "scripts/e2b-template-qualification.mjs",
+    "infra/labs/e2b-development.json",
+    "package-lock.json"
+  ],
+  "ownedBuildSources": [
+    "packages/runtime-adapters/src/e2b/owned-image.ts",
+    "packages/runtime-adapters/src/e2b/owned-build.ts",
+    "scripts/e2b-owned-build-input.mjs",
+    "scripts/e2b-owned-image-qualification.mjs",
+    "scripts/e2b-owned-build-lab.mjs",
+    "packages/runtime-adapters/src/e2b/development-transport.ts",
+    "scripts/e2b-development-input.mjs",
+    "infra/labs/e2b-owned-build.json",
+    "package-lock.json"
+  ]
+}

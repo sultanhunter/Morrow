@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "plan_sequence": 75,
+  "provider_id": "workos",
+  "environment_kind": "staging",
+  "environment_id": "environment_01M4HG7FV7X8EFXE1J9S6GG00R",
+  "application_id": "app_01M4HG7GEJJWTKG4W16RB98VZE",
+  "client_id": "client_01M4HG7GA0DX8C3PFSQHBP4BN3",
+  "revision": 1,
+  "api_origin": "https://api.workos.com",
+  "max_observations": 1,
+  "max_gets": 4,
+  "page_limit": 100,
+  "page_bytes": 131072,
+  "total_bytes": 524288,
+  "max_seconds": 10,
+  "observation_age_seconds": 5,
+  "credential_capability": "broad_environment",
+  "actual_provider_status": "awaiting_owner_key_approval",
+  "merchant_routes_enabled": false
+}

@@ -1,0 +1,4950 @@
+[
+  {
+    "id": "P01.A01.owner_content_publish_with_all_gates.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "owner content publish with all gates",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.owner_content_publish_with_all_gates.standalone",
+    "capability": "catalog.content.publish",
+    "description": "owner content publish with all gates",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.seo_can_draft.standalone_session_b",
+    "capability": "catalog.content.propose",
+    "description": "seo can draft",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.propose"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.seo_can_draft.standalone",
+    "capability": "catalog.content.propose",
+    "description": "seo can draft",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.propose"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.seo_title_does_not_grant_refunds.standalone_session_b",
+    "capability": "orders.refund.create",
+    "description": "seo title does not grant refunds",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.propose"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "refund amount",
+          "currency",
+          "lines",
+          "shipping",
+          "restock consequences"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "refund amount"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "CAPABILITY_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.seo_title_does_not_grant_refunds.standalone",
+    "capability": "orders.refund.create",
+    "description": "seo title does not grant refunds",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.propose"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "refund amount",
+          "currency",
+          "lines",
+          "shipping",
+          "restock consequences"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "refund amount"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "CAPABILITY_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.seo_title_does_not_grant_ad_spend.standalone_session_b",
+    "capability": "ads.campaign.activate",
+    "description": "seo title does not grant ad spend",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.propose"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "delivery status",
+          "explicit budget"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "CAPABILITY_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.seo_title_does_not_grant_ad_spend.standalone",
+    "capability": "ads.campaign.activate",
+    "description": "seo title does not grant ad spend",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.propose"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "delivery status",
+          "explicit budget"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "CAPABILITY_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.draft_grant_does_not_grant_publication.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "draft grant does not grant publication",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.propose"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "CAPABILITY_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.draft_grant_does_not_grant_publication.standalone",
+    "capability": "catalog.content.publish",
+    "description": "draft grant does not grant publication",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.propose"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "CAPABILITY_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.revoked_owner_denied.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "revoked owner denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": true,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "PRINCIPAL_REVOKED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.revoked_owner_denied.standalone",
+    "capability": "catalog.content.publish",
+    "description": "revoked owner denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": true,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "PRINCIPAL_REVOKED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.cross_tenant_denied.standalone_session_b",
+    "capability": "catalog.products.read",
+    "description": "cross tenant denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-b",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "TENANT_OR_WORKSPACE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.cross_tenant_denied.standalone",
+    "capability": "catalog.products.read",
+    "description": "cross tenant denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-b",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "TENANT_OR_WORKSPACE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.cross_workspace_denied.standalone_session_b",
+    "capability": "catalog.products.read",
+    "description": "cross workspace denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-b",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "TENANT_OR_WORKSPACE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.cross_workspace_denied.standalone",
+    "capability": "catalog.products.read",
+    "description": "cross workspace denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-b",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "TENANT_OR_WORKSPACE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.wrong_store_denied.standalone_session_b",
+    "capability": "catalog.products.read",
+    "description": "wrong store denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-b",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "STORE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.wrong_store_denied.standalone",
+    "capability": "catalog.products.read",
+    "description": "wrong store denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-b",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "STORE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.wrong_resource_denied.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "wrong resource denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-b",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "RESOURCE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.wrong_resource_denied.standalone",
+    "capability": "catalog.content.publish",
+    "description": "wrong resource denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-b",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "RESOURCE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.wrong_meta_account_denied.standalone_session_b",
+    "capability": "ads.performance.read",
+    "description": "wrong meta account denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "ads.performance.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "spend",
+          "impressions",
+          "clicks",
+          "provider attribution"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-b",
+        "fields": [
+          "spend"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ACCOUNT_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.wrong_meta_account_denied.standalone",
+    "capability": "ads.performance.read",
+    "description": "wrong meta account denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "ads.performance.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "spend",
+          "impressions",
+          "clicks",
+          "provider attribution"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-b",
+        "fields": [
+          "spend"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ACCOUNT_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.seo_price_field_denied.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "seo price field denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "price"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "FIELD_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.seo_price_field_denied.standalone",
+    "capability": "catalog.content.publish",
+    "description": "seo price field denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "price"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "FIELD_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.restricted_field_grant_denied.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "restricted field grant denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": []
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "FIELD_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.restricted_field_grant_denied.standalone",
+    "capability": "catalog.content.publish",
+    "description": "restricted field grant denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": []
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "FIELD_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.owner_cannot_bypass_provider_review.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "owner cannot bypass provider review",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": false,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "PROVIDER_NOT_QUALIFIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.owner_cannot_bypass_provider_review.standalone",
+    "capability": "catalog.content.publish",
+    "description": "owner cannot bypass provider review",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": false,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "PROVIDER_NOT_QUALIFIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.owner_cannot_bypass_provider_permission.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "owner cannot bypass provider permission",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": false,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "PROVIDER_PERMISSION_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.owner_cannot_bypass_provider_permission.standalone",
+    "capability": "catalog.content.publish",
+    "description": "owner cannot bypass provider permission",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": false,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "PROVIDER_PERMISSION_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.subscription_does_not_grant_authority.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "subscription does not grant authority",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "CAPABILITY_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.subscription_does_not_grant_authority.standalone",
+    "capability": "catalog.content.publish",
+    "description": "subscription does not grant authority",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "CAPABILITY_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.missing_entitlement_denied.standalone_session_b",
+    "capability": "creative.image.generate",
+    "description": "missing entitlement denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "creative.image.generate"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "authorized input assets",
+          "generation parameters"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "authorized input assets"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": false,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ENTITLEMENT_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.missing_entitlement_denied.standalone",
+    "capability": "creative.image.generate",
+    "description": "missing entitlement denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "creative.image.generate"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "authorized input assets",
+          "generation parameters"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "authorized input assets"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": false,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ENTITLEMENT_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.changed_proposal_requires_new_review.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "changed proposal requires new review",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v2",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "EXACT_APPROVAL_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.changed_proposal_requires_new_review.standalone",
+    "capability": "catalog.content.publish",
+    "description": "changed proposal requires new review",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v2",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "EXACT_APPROVAL_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.expired_review_denied.standalone_session_b",
+    "capability": "orders.refund.create",
+    "description": "expired review denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "orders.refund.create"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "refund amount",
+          "currency",
+          "lines",
+          "shipping",
+          "restock consequences"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "refund amount"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": false,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "EXACT_APPROVAL_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.expired_review_denied.standalone",
+    "capability": "orders.refund.create",
+    "description": "expired review denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "orders.refund.create"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "refund amount",
+          "currency",
+          "lines",
+          "shipping",
+          "restock consequences"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "refund amount"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": false,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "EXACT_APPROVAL_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.ineligible_reviewer_denied.standalone_session_b",
+    "capability": "orders.refund.create",
+    "description": "ineligible reviewer denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "orders.refund.create"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "refund amount",
+          "currency",
+          "lines",
+          "shipping",
+          "restock consequences"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "refund amount"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": false,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "EXACT_APPROVAL_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.ineligible_reviewer_denied.standalone",
+    "capability": "orders.refund.create",
+    "description": "ineligible reviewer denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "orders.refund.create"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "refund amount",
+          "currency",
+          "lines",
+          "shipping",
+          "restock consequences"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "refund amount"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": false,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "EXACT_APPROVAL_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.stale_product_precondition_denied.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "stale product precondition denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": false,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "PRECONDITION_CONFLICT"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.stale_product_precondition_denied.standalone",
+    "capability": "catalog.content.publish",
+    "description": "stale product precondition denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": false,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "PRECONDITION_CONFLICT"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.spend_without_reservation_denied.standalone_session_b",
+    "capability": "ads.campaign.activate",
+    "description": "spend without reservation denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "ads.campaign.activate"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "delivery status",
+          "explicit budget"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": false,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "BUDGET_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.spend_without_reservation_denied.standalone",
+    "capability": "ads.campaign.activate",
+    "description": "spend without reservation denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "ads.campaign.activate"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "delivery status",
+          "explicit budget"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": false,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "BUDGET_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.spend_above_ceiling_denied.standalone_session_b",
+    "capability": "ads.campaign.activate",
+    "description": "spend above ceiling denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "ads.campaign.activate"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "delivery status",
+          "explicit budget"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "201",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "BUDGET_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.spend_above_ceiling_denied.standalone",
+    "capability": "ads.campaign.activate",
+    "description": "spend above ceiling denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "ads.campaign.activate"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "delivery status",
+          "explicit budget"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "201",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "BUDGET_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.mixed_currency_budget_denied.standalone_session_b",
+    "capability": "ads.campaign.activate",
+    "description": "mixed currency budget denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "ads.campaign.activate"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "delivery status",
+          "explicit budget"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "EUR",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "BUDGET_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.mixed_currency_budget_denied.standalone",
+    "capability": "ads.campaign.activate",
+    "description": "mixed currency budget denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "ads.campaign.activate"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "delivery status",
+          "explicit budget"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "EUR",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "BUDGET_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.inventory_absolute_write_without_authority_denied.standalone_session_b",
+    "capability": "inventory.quantity.set",
+    "description": "inventory absolute write without authority denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "inventory.quantity.set"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "absolute quantity",
+          "location",
+          "compare quantity"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "absolute quantity"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": false,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "SOURCE_AUTHORITY_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.inventory_absolute_write_without_authority_denied.standalone",
+    "capability": "inventory.quantity.set",
+    "description": "inventory absolute write without authority denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "inventory.quantity.set"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "absolute quantity",
+          "location",
+          "compare quantity"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "absolute quantity"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": false,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "SOURCE_AUTHORITY_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.merchant_cannot_publish_firstparty_release.standalone_session_b",
+    "capability": "agents.release.publish",
+    "description": "merchant cannot publish firstparty release",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "agents.release.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "immutable digest",
+          "listing",
+          "publication state"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "immutable digest"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "OPERATOR_AUTHORITY_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.merchant_cannot_publish_firstparty_release.standalone",
+    "capability": "agents.release.publish",
+    "description": "merchant cannot publish firstparty release",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "agents.release.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "immutable digest",
+          "listing",
+          "publication state"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "immutable digest"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "OPERATOR_AUTHORITY_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.explicit_operator_can_publish_qualified_release.standalone_session_b",
+    "capability": "agents.release.publish",
+    "description": "explicit operator can publish qualified release",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": true,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "agents.release.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "immutable digest",
+          "listing",
+          "publication state"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "immutable digest"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.explicit_operator_can_publish_qualified_release.standalone",
+    "capability": "agents.release.publish",
+    "description": "explicit operator can publish qualified release",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": true,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "agents.release.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "immutable digest",
+          "listing",
+          "publication state"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "immutable digest"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.agent_cannot_be_human_reviewer.standalone_session_b",
+    "capability": "governance.approval.decide",
+    "description": "agent cannot be human reviewer",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "governance.approval.decide"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "exact resources",
+          "fields",
+          "parameters",
+          "cost",
+          "expiry"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "governance.approval.decide"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "exact resources",
+          "fields",
+          "parameters",
+          "cost",
+          "expiry"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "exact resources"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "HUMAN_REVIEWER_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.agent_cannot_be_human_reviewer.standalone",
+    "capability": "governance.approval.decide",
+    "description": "agent cannot be human reviewer",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "governance.approval.decide"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "exact resources",
+          "fields",
+          "parameters",
+          "cost",
+          "expiry"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "governance.approval.decide"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "exact resources",
+          "fields",
+          "parameters",
+          "cost",
+          "expiry"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "exact resources"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "HUMAN_REVIEWER_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.expired_agent_mandate_denied.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "expired agent mandate denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": false,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "MANDATE_EXPIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.expired_agent_mandate_denied.standalone",
+    "capability": "catalog.content.publish",
+    "description": "expired agent mandate denied",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": false,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "MANDATE_EXPIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.delegation_cannot_bypass_seo_authority.standalone_session_b",
+    "capability": "orders.refund.create",
+    "description": "delegation cannot bypass seo authority",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "orders.refund.create"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "refund amount",
+          "currency",
+          "lines",
+          "shipping",
+          "restock consequences"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.propose"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "refund amount",
+          "currency",
+          "lines",
+          "shipping",
+          "restock consequences"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "refund amount"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ORIGIN_SCOPE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.delegation_cannot_bypass_seo_authority.standalone",
+    "capability": "orders.refund.create",
+    "description": "delegation cannot bypass seo authority",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "orders.refund.create"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "refund amount",
+          "currency",
+          "lines",
+          "shipping",
+          "restock consequences"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.propose"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "refund amount",
+          "currency",
+          "lines",
+          "shipping",
+          "restock consequences"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "refund amount"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ORIGIN_SCOPE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.delegation_cannot_widen_store_scope.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "delegation cannot widen store scope",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-b"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ORIGIN_SCOPE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.delegation_cannot_widen_store_scope.standalone",
+    "capability": "catalog.content.publish",
+    "description": "delegation cannot widen store scope",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-b"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ORIGIN_SCOPE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.bounded_agent_can_publish_with_current_authority.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "bounded agent can publish with current authority",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.bounded_agent_can_publish_with_current_authority.standalone",
+    "capability": "catalog.content.publish",
+    "description": "bounded agent can publish with current authority",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.revoked_origin_cannot_keep_agent_authority.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "revoked origin cannot keep agent authority",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": true,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ORIGIN_SCOPE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.revoked_origin_cannot_keep_agent_authority.standalone",
+    "capability": "catalog.content.publish",
+    "description": "revoked origin cannot keep agent authority",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": true,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ORIGIN_SCOPE_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.agent_requires_bound_origin.standalone_session_b",
+    "capability": "catalog.content.publish",
+    "description": "agent requires bound origin",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ORIGIN_SCOPE_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.agent_requires_bound_origin.standalone",
+    "capability": "catalog.content.publish",
+    "description": "agent requires bound origin",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ORIGIN_SCOPE_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.denied.domain_surface.shopify_admin",
+    "capability": "catalog.content.publish",
+    "description": "owner content publish with all gates",
+    "request": {
+      "host": "shopify_admin",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "HOST_INVALID"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.denied.domain_surface.shopify_connector",
+    "capability": "catalog.content.publish",
+    "description": "owner content publish with all gates",
+    "request": {
+      "host": "shopify_connector",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.content.publish"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO title",
+          "SEO description"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "HOST_INVALID"
+      ]
+    }
+  }
+]

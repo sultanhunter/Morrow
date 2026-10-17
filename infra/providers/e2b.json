@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "plan_sequence": 67,
+  "provider": "e2b",
+  "status": "selected_not_qualified",
+  "project_id": null,
+  "region": null,
+  "sandbox_class": "linux_microvm",
+  "template_id": null,
+  "template_build_id": null,
+  "image_digest": null,
+  "activation": "disabled",
+  "configuration_source": "infra/environments/{environment}.json",
+  "qualification_evidence": []
+}

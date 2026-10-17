@@ -1,0 +1,17 @@
+{
+  "source": "https://github.com/Shopify/shopify-app-template-react-router",
+  "commit": "93348fe7dbd8e1a33eea69e2bbba1990d136b0da",
+  "adapted": [
+    "app/root.tsx",
+    "app/entry.server.tsx",
+    "app/shopify.server.ts",
+    "framework package versions"
+  ],
+  "removed": [
+    "example product mutations",
+    "embedded domain screens",
+    "SQLite/Prisma sessions",
+    "template deploy commands"
+  ],
+  "status": "local scaffold; actual connector/UI/distribution and API version qualification pending P09"
+}
