@@ -15,11 +15,11 @@ Delivered in P03.T04c/d:
 - AWS CDK, Daytona and the frozen regressions are retired (ADR-0013).
 - `docs/evidence` and `docs/history` are removed from the tree (recover them from the archive tag via `docs/history/INDEX.md`).
 - CI runs as parallel jobs (`docs/development/ci.md`).
-- `CLAUDE.md`, the `AGENTS.md` pointer, ADR-0001 to ADR-0014, plan R1 with `npm run plan:check`, and the next packets.
+- `CLAUDE.md`, the `AGENTS.md` pointer, ADR-0001 to ADR-0013, plan R1 with `npm run plan:check`, and the next packets. ADR-0014 (merge authority, `main` as trunk) lands in PR #3.
 
 ## Last green commit
 
-`b9fb432` on `main` (merge of PR #2). Hosted CI run 39043798037 succeeded across all jobs: `static`, two unit shards, `workers-api`, `workers`, `pg-core`, `pg-linking`, `pg-http`, `pgwire` and `foundation`. Earlier runs on the same branch also succeeded: 39039205040 and 39043168173, about 4.5 minutes each against 21.5 minutes for the old serial job.
+`b9fb432` (merge of PR #2 into `codex/morrow-foundation`). PR #1's hosted run 39043798037 succeeded on it across all jobs: `static`, two unit shards, `workers-api`, `workers`, `pg-core`, `pg-linking`, `pg-http`, `pgwire` and `foundation`. `main` is at `f9ab367`, which has the same tree. PR #2's own runs 39039205040 and 39043168173 on `claude/p03-t04c-overhaul` also succeeded. Each run took about 4.5 minutes, against 21.5 minutes for the old serial job.
 
 ## Next actions
 
@@ -43,14 +43,15 @@ None for local work. Hosted staging (M1) waits on the owner actions below.
   - Plan R1 (Tier 3).
   - The ADR-0005 §2 executor-class assignments. The quoted approval covers §1 (kill switches) and §3 (self-approval) only.
   - Approve or reject ADR-0008, the Shopify connector runtime (Proposed).
-- **GitHub:** decide on GitHub Pro or an organization, so `main` gets enforced branch protection requiring `foundation` before the first hosted deploy.
+- **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check (not an approving review) before the first hosted deploy (ADR-0014).
+- **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
 - **M1 prerequisites (P04.T01i):**
   - Register the domain.
   - Create a dedicated Cloudflare account and share its account ID (an identifier, not a secret).
   - Authenticate the Neon CLI and reset the operator password.
   - Once the domain exists: configure the WorkOS staging callback and rotate the API key.
-  - Decide on spending: Cloudflare Workers Paid, the domain, and Neon Launch for the restore drill.
-  - Approve each M1 effect individually (deploys, hosted migrations, sign-in tests) or approve standing staging cards.
+  - Decide on spending: Cloudflare Workers Paid, the domain, and Neon Launch for staging.
+  - Approve each M1 effect individually (deploys, hosted migrations, sign-in tests) or approve standing staging cards. No card may rely on the Morrow OperationLedger before P06.T01c lands.
 - **Credential rotation:** rotate the E2B personal key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.
 - **Later:**
   - A Shopify Partner account and a fresh development store, never the live shop.

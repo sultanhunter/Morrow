@@ -2,29 +2,36 @@
 
 - Status: Accepted
 - Date: 2026-10-17
-- Amends: ADR-0002 "Flow", which said PRs target `codex/morrow-foundation` until the owner approves the first merge into `main` and that the owner merges.
+- Amends:
+  - ADR-0002 "Flow", which had PRs target `codex/morrow-foundation` until the owner approved the first merge into `main`.
+  - The plan's Package 3 rule that enforced repository protection must exist before merging release code.
 
 ## Context
 
-The overhaul (PR #2) passed hosted CI twice. Claude Code's permission check then blocked Claude from merging it as a "merge without review", because ADR-0002 did not give Claude merge authority. The owner then authorized merges explicitly.
+The overhaul (PR #2) passed hosted CI. Claude Code's permission check then blocked Claude from merging it as a "merge without review", because no record gave Claude merge authority. The owner then authorized merges explicitly.
 
 ## Decision
 
-1. Claude merges its own pull requests after two conditions hold:
+1. **Who merges.** Claude merges its own pull requests once both of these hold:
    - the hosted `foundation` check is green on the exact head;
    - the Tier 2 AI review (separate context, same model family) has passed, with its findings resolved or recorded.
-2. The integration branch `codex/morrow-foundation` is merged into `main` once, with a merge commit that keeps the history. From then on `main` is the trunk: each packet uses a short-lived `claude/<task-id>-<slug>` branch and a PR into `main`.
-3. These rules from ADR-0002 still apply:
-   - no force-push;
-   - no deletion of tags (including `codex-archive-f89ad75`);
-   - no merging with a failing or skipped required check;
-   - no bypassing review findings marked high severity.
-4. Before the first hosted deploy, `main` gets enforced branch protection that requires `foundation`. This needs GitHub Pro or an organization, which is a pending owner decision. Until then, the rules above are the protection.
+2. **Trunk.** On 2026-10-17 the integration branch `codex/morrow-foundation` was merged into `main` through PR #1 (merge `f9ab367`).
+   - Claude chose a merge commit, which keeps the reviewed history, over the squash merge that earlier drafts proposed. The owner's approval did not choose a merge strategy.
+   - From now on `main` is the trunk. Each packet uses a short-lived `claude/<task-id>-<slug>` branch and a PR into `main`.
+3. **Rules that still hold**, carried over from ADR-0002 "Flow":
+   - Changes reach `main` only by merging a pull request. Nothing is pushed directly to `main`.
+   - No force-push.
+   - No tag deletion (this includes `codex-archive-f89ad75`) and no branch deletion without owner approval.
+4. **Additional rules:**
+   - No merge with a failing, cancelled or skipped required check. The `foundation` aggregator treats a skipped job as a failure (docs/development/ci.md).
+   - No merge while a high-severity review finding is unresolved.
+5. **Branch protection.** Enforced protection on `main` requires the `foundation` check and does not require an approving review, so a single GitHub account cannot deadlock. It must exist before privileged deployment (the first hosted deploy). It needs GitHub Pro or an organization on GitHub Team, which is a pending owner decision. Until then, the rules in items 3 and 4 are the protection.
 
 ## Consequences
 
-- Delivery does not wait on the owner for routine merges. Material changes still need an owner-approved ADR before implementation (ADR-0002).
-- Because `main` carries the reviewed history, deployment workflows can later trigger from it.
+- Routine merges do not wait on the owner. Material changes still need an owner-approved ADR before implementation (ADR-0002).
+- GitHub records these merges under the owner's account, because Claude acts with the owner's token. Each PR Claude merges therefore states that Claude merged it under ADR-0014. Such a merge is not a Tier 3 owner approval.
+- Deployment workflows can later run from `main`.
 
 ## Approval
 
