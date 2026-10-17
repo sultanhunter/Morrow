@@ -62,6 +62,11 @@ const published = [
     "0011.self-browser-family-logout.sql",
     "089ff5487030df8f085045f37f523522540759752b7fde25abf91629396f28c4",
   ],
+  [
+    12,
+    "0012.login-protocol-v1.sql",
+    "52e9f699956ec8932056b22b2dc5294e540225562730666e0a87d00dfe857579",
+  ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));

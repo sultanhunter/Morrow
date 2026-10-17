@@ -47,7 +47,7 @@ export function createFixedWorkosProviderOracle(options = {}) {
     options.configurationJson ??
     JSON.stringify({
       schemaVersion: 1,
-      controllerProtocol: "morrow-local-login-84",
+      controllerProtocol: "morrow-login-v1",
       origin,
       retentionTier: "development",
       authenticationBindingJson,

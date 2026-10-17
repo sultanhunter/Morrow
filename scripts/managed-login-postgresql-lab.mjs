@@ -73,11 +73,10 @@ const paths = [
   ].map((n) => "packages/identity/src/" + n + ".ts"),
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json"));
-// Every published migration must be present in order and checksum-verified. The
-// self-logout fixture applies exactly the first eleven, so the count stays exact until
-// this lab also applies later migrations; a twelfth migration must fail here.
-if (manifest.migrations.length !== 11) throw held();
-for (const [i, row] of manifest.migrations.entries()) {
+// The login fixture applies 0001-0012; those entries must be present in order and
+// checksum-verified. Later manifest entries are not applied by this lab.
+if (manifest.migrations.length < 12) throw held();
+for (const [i, row] of manifest.migrations.slice(0, 12).entries()) {
   if (row.sequence !== i + 1 || hash(readFileSync("migrations/" + row.file)) !== row.sha256)
     throw held();
   paths.push("migrations/" + row.file);
@@ -401,7 +400,7 @@ try {
         });
       }
       const auth = await engine.sealSetup();
-      check("all_eleven_original_migrations_installed", appliedMigrations === 11);
+      check("all_twelve_migrations_installed", appliedMigrations === 12);
       check(
         "attested_owned_internal_no_publication_topology",
         engine.topology.internalNetwork &&
@@ -439,7 +438,7 @@ try {
                 if (
                   !roles.includes(parameters.user) ||
                   parameters.database !== "morrow" ||
-                  !/^morrow_t88_[a-f0-9]{32}_[po]$/.test(parameters.application_name)
+                  !/^morrow_id_[a-f0-9]{32}_[po]$/.test(parameters.application_name)
                 )
                   throw held();
               },
@@ -1196,7 +1195,7 @@ const report = {
   actualInternetRequests: 0,
   actualProviderRequests: 0,
   limitations: [
-    "Owned T helper/transport provenance retains P05.T01t labels and fresh t88 names; this is measured fresh U state, not an old resource.",
+    "Owned T helper/transport provenance retains P05.T01t labels and fresh morrow_id_ application names; this is measured fresh U state, not an old resource.",
     "No hosted Neon, WorkOS account/key, browser sign-in, application ingress or merchant state is used.",
     "Credential rejection remains unknown before independent read-only reconciliation and final physical administrator/container cleanup; physical absence never supplies its acknowledgement.",
     "The bind-cutoff case uses a dedicated fixture-only monotonic trusted clock, crossing key E during the second login-role normal lease acknowledgement while the same original entry D is live; it is not fleet wall-clock or emergency key revocation proof.",

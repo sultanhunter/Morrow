@@ -109,11 +109,10 @@ const paths = [
   ].map((name) => "packages/identity/src/" + name + ".ts"),
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json"));
-// Every published migration must be present in order and checksum-verified. The
-// self-logout fixture applies exactly the first eleven, so the count stays exact until
-// this lab also applies later migrations; a twelfth migration must fail here.
-require(manifest.migrations.length === 11);
-for (const [i, row] of manifest.migrations.entries()) {
+// The login fixture applies 0001-0012; those entries must be present in order and
+// checksum-verified. Later manifest entries are not applied by this lab.
+require(manifest.migrations.length >= 12);
+for (const [i, row] of manifest.migrations.slice(0, 12).entries()) {
   require(row.sequence === i + 1 && hash(readFileSync("migrations/" + row.file)) === row.sha256);
   paths.push("migrations/" + row.file);
 }
@@ -281,7 +280,7 @@ try {
         authorityFixtures.push({ configured, admitted, link, count, oversized });
       }
       const auth = await engine.sealSetup();
-      check("all_eleven_unchanged_migrations", appliedMigrations === 11);
+      check("all_twelve_unchanged_migrations", appliedMigrations === 12);
       check(
         "seven_scram_offers_and_nine_closed_probes",
         auth.scramOfferedRoles === 7 &&
@@ -407,7 +406,7 @@ try {
                 require(
                   roles.includes(parameters.user) &&
                     parameters.database === "morrow" &&
-                    /^morrow_t88_[a-f0-9]{32}_[po]$/.test(parameters.application_name),
+                    /^morrow_id_[a-f0-9]{32}_[po]$/.test(parameters.application_name),
                 );
               },
               onMessage(message) {

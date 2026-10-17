@@ -70,7 +70,7 @@ async function configuration(
     ]);
     if (
       c.schemaVersion !== 1 ||
-      c.protocol !== "morrow-local-self-logout-85" ||
+      c.protocol !== "morrow-self-logout-v1" ||
       c.providerId !== "workos" ||
       typeof c.origin !== "string" ||
       encoder.encode(c.origin).length > 512 ||

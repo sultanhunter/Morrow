@@ -1,18 +1,9 @@
-import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
 import { createStandaloneLoginFixtureHarness } from "./standalone-login-fixture.mjs";
 import { localSelfLogoutSqlPool } from "../local-self-logout-sql.mjs";
-export function createSelfLogoutFixtureHarness(context) {
-  const h = createStandaloneLoginFixtureHarness(context);
-  context.sql(readFileSync("infra/identity-logout-role-prerequisites.sql", "utf8"), "morrow");
-  const migration = JSON.parse(readFileSync("migrations/manifest.json", "utf8")).migrations[10];
-  const bytes = readFileSync("migrations/" + migration.file);
-  if (
-    migration.sequence !== 11 ||
-    createHash("sha256").update(bytes).digest("hex") !== migration.sha256
-  )
-    throw Error("SELF_LOGOUT_FIXTURE_MIGRATION_UNQUALIFIED");
-  h.admin(bytes.toString("utf8"));
+// The login harness applies the exact current manifest, 0011 and the logout role
+// prerequisites included; this harness adds only the logout executor and configuration.
+export function createSelfLogoutFixtureHarness(context, options = {}) {
+  const h = createStandaloneLoginFixtureHarness(context, options);
   context.sql("ALTER ROLE morrow_identity_logout LOGIN;", "morrow");
   const logoutRolePools = [];
   return Object.freeze({
@@ -21,7 +12,7 @@ export function createSelfLogoutFixtureHarness(context) {
     logoutConfiguration(configured) {
       return JSON.stringify({
         schemaVersion: 1,
-        protocol: "morrow-local-self-logout-85",
+        protocol: "morrow-self-logout-v1",
         origin: configured.origin,
         providerId: "workos",
         environmentId: configured.f.environment,
