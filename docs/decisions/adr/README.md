@@ -10,6 +10,7 @@ Material decisions (ADR-0002) are recorded here before dependent implementation.
 | [0004](ADR-0004-authority-session-defaults.md) | Session lifetime, kill switches, review policy, executor classes | Accepted 2026-10-17 |
 | [0005](ADR-0005-pre-install-billing-state.md) | Billing state before any Shopify store is installed | Accepted 2026-10-17 |
 | [0007](ADR-0007-retire-aws-cdk-daytona-frozen-regressions.md) | Retire the AWS CDK foundation, the Daytona laboratory and the frozen WorkOS operator regressions | Accepted 2026-10-17 |
+| [0008](ADR-0008-ci-artifacts-are-evidence.md) | CI runs and their uploaded artifacts are the evidence | Accepted 2026-10-17 |
 
 Number 0006 is reserved for the R1 governance revision of this set.
 

@@ -100,9 +100,10 @@ const paths = [
 ];
 if (process.version !== "v24.13.0") throw Error("LOGOUT_HTTPS_SOURCE_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-// Every published migration must be present in order and checksum-verified; this
-// lab applies the first eleven, and later migrations may follow them.
-if (manifest.migrations.length < 11) throw Error("LOGOUT_HTTPS_ELEVEN_MIGRATIONS_REQUIRED");
+// Every published migration must be present in order and checksum-verified. The
+// self-logout fixture applies exactly the first eleven, so the count stays exact until
+// this lab also applies later migrations; a twelfth migration must fail here.
+if (manifest.migrations.length !== 11) throw Error("LOGOUT_HTTPS_ELEVEN_MIGRATIONS_REQUIRED");
 for (const [i, m] of manifest.migrations.entries()) {
   if (m.sequence !== i + 1 || hash(readFileSync("migrations/" + m.file)) !== m.sha256)
     throw Error("LOGOUT_HTTPS_MIGRATION_HASH");

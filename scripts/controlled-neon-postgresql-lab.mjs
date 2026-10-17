@@ -51,9 +51,10 @@ const paths = [
   "node_modules/@neondatabase/serverless/index.mjs",
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-// Every published migration must be present in order and checksum-verified; this
-// lab applies the original eleven, and later migrations may follow them.
-if (manifest.migrations.length < 11) throw Error("CONTROLLED_PG_ORIGINAL_MIGRATIONS_REQUIRED");
+// Every published migration must be present in order and checksum-verified. The
+// self-logout fixture applies exactly the first eleven, so the count stays exact until
+// this lab also applies later migrations; a twelfth migration must fail here.
+if (manifest.migrations.length !== 11) throw Error("CONTROLLED_PG_ORIGINAL_MIGRATIONS_REQUIRED");
 for (const [i, row] of manifest.migrations.entries()) {
   if (row.sequence !== i + 1 || hash(readFileSync("migrations/" + row.file)) !== row.sha256)
     throw Error("CONTROLLED_PG_MIGRATION_DRIFT");

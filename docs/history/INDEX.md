@@ -1,6 +1,6 @@
 # History index
 
-Before the P03.T04c overhaul, the repository committed every lab, verifier and CI report under `docs/evidence/`, and kept frozen source closures, plan snapshots and superseded records under `docs/history/`. Together they were about 70 MB (1,123 evidence files and 498 history files). ADR-0002 takes both directories out of the working tree. Nothing under `scripts/`, `tests/`, `packages/`, `apps/`, `infra/` or `.github/` reads them.
+Before the P03.T04c overhaul, the repository committed every lab, verifier and CI report under `docs/evidence/`, and kept frozen source closures, plan snapshots and superseded records under `docs/history/`. Together they were about 70 MB (1,123 evidence files and 498 history files). ADR-0002 takes both directories out of the working tree, leaving only this index. Nothing under `scripts/`, `tests/`, `packages/`, `apps/`, `infra/` or `.github/` reads them. While they are still tracked on a branch (see `docs/progress/STATUS.md`), treat them as this archive, not as current evidence.
 
 They are preserved, byte for byte, at an annotated tag:
 
@@ -35,7 +35,7 @@ Older documents still link to `docs/evidence/...` and `docs/history/...`, in par
 
 ## Evidence from here on
 
-- The engineering evidence for a commit is its green CI run and the artifact that run uploads (ADR 0001 CI artifacts, ADR-0002). Labs and verifiers write to the git-ignored `.artifacts/` directory, or to `MORROW_ARTIFACTS_DIR`. CI secret-scans that directory before upload and keeps the artifact for 90 days.
+- The engineering evidence for a commit is its green CI run and the artifact that run uploads (ADR-0008, ADR-0002). Labs and verifiers write to the git-ignored `.artifacts/` directory, or to `MORROW_ARTIFACTS_DIR`. CI secret-scans that directory before upload and keeps the artifact for 90 days.
 - Reports are not committed. To see a past report, download that run's artifact within the retention window or rerun the commit.
 - Commit only what ADR-0002 lists: live-provider effect records in `docs/evidence/live/YYYY-MM-DD-<provider>-<action>.md`, human-gated results, acceptance tables in `docs/acceptance/PNN.md`, and ADRs.
 
@@ -49,7 +49,7 @@ Inputs that code reads were moved out of `docs/evidence/` first, with the same b
 | `docs/evidence/P02.T03/browser-checks.json` | `docs/design/browser-checks.json` |
 | `docs/evidence/P04.T01h/history/build-65/owned-build-qualification.json` | `tests/fixtures/e2b-observed-build-65.json` |
 
-`infra/labs/e2b-development-account.json` still names the 65 builder price record (`docs/evidence/P04.T01h/e2b-support-pricing-65.json`). That file is no longer in the tree, so `ownedBuildPriceSourceValid` cannot read it and the owned-build quote check fails closed. A new build would need a new quote and an ADR in any case.
+`infra/labs/e2b-development-account.json` still names the 65 builder price record (`docs/evidence/P04.T01h/e2b-support-pricing-65.json`). No code reads that field, and no check depends on the file: the null activation gate denies new builds first, and the committed owned-build profile (`infra/labs/e2b-owned-build.json`) has `buildQuote: null`, so `ownedBuildPriceSourceValid` rejects it without reading any price record. A new build would need a new quote and an ADR in any case.
 
 ## Terminal provider state
 

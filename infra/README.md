@@ -30,7 +30,7 @@ Restore into quarantine; verify R2 revision manifests and relational integrity, 
 
 ## Next bounded implementation
 
-Read docs/packets/P04.T01a.md and the live build plan. Qualify owned staging provider bindings and implement selected adapters with pinned official SDK/tool versions, preserving all existing SQL migrations and P05 identity/policy work. Local CI and scaffold guards precede controlled hosted tests; actual service identity, rotation, recovery and activation remain open. No paid provisioning, credential copying or deployment is performed by this reconciliation.
+Read docs/packets/P04.T01a.md and the build plan (docs/plan/build-plan.md). Qualify owned staging provider bindings and implement selected adapters with pinned official SDK/tool versions, preserving all existing SQL migrations and P05 identity/policy work. Local CI and scaffold guards precede controlled hosted tests; actual service identity, rotation, recovery and activation remain open. No paid provisioning, credential copying or deployment is performed by this reconciliation.
 
 P04.T01b under canonical46 implements the first request-scoped Neon driver and generates runtime validators ahead of time. Run `npm run contracts:generate` for reviewed schema changes, `npm run verify:boundaries` for exact reproduction and `npm run lab:workers` for the pinned local runtime fixture. The fixture denies outbound requests and uses no actual database or credentials. Actual account/transport/network/recovery qualification remains pending.
 

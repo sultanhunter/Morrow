@@ -50,10 +50,11 @@ const sourcePaths = [
   ...manifest.migrations.map((m) => "migrations/" + m.file),
 ];
 const sourceHashes = Object.fromEntries(sourcePaths.map((p) => [p, hash(readFileSync(p))]));
-// Every published migration must be present in order and checksum-verified; this
-// lab applies the first eleven, and later migrations may follow them.
+// Every published migration must be present in order and checksum-verified. The
+// self-logout fixture applies exactly the first eleven, so the count stays exact until
+// this lab also applies later migrations; a twelfth migration must fail here.
 if (
-  manifest.migrations.length < 11 ||
+  manifest.migrations.length !== 11 ||
   manifest.migrations.some(
     (m, i) => m.sequence !== i + 1 || hash(readFileSync("migrations/" + m.file)) !== m.sha256,
   )
@@ -304,7 +305,7 @@ const observed = await localPostgresLab("P05.T01q-sql", async (context) => {
     };
   }
   try {
-    check("eleven_original_immutable_migrations_present", manifest.migrations.length >= 11);
+    check("eleven_exact_immutable_migrations", manifest.migrations.length === 11);
     check(
       "dedicated_logout_role_safe",
       context

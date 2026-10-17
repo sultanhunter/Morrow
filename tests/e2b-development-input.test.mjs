@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
+  e2bActivationProfile,
   inspectE2BLabAccount,
   loadE2BLabInput,
   loadE2BReadOnlyAccess,
@@ -27,6 +28,7 @@ import {
 } from "../packages/infrastructure/src/synthetic-runtime-lab.ts";
 import { mainE2BLab } from "../scripts/e2b-development-lab.mjs";
 import {
+  e2bRepositoryRoot,
   frozenE2B60Fixture,
   currentE2BFixture,
   unrelatedE2BPlanSequence,
@@ -560,6 +562,84 @@ test("committed activation gate denies frozen67 runtime allocation before privat
   assert.equal(report.private_input_read, false);
   assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"));
   assert.deepEqual(current.read("infra/labs/e2b-development.json"), before);
+});
+
+test("activation gate yields a profile only for the exact valid shape and fails closed otherwise", () => {
+  const gatePath = "infra/labs/e2b-activation.json";
+  const valid = {
+    schema_version: 1,
+    active_profile_sequence: 67,
+    decision: "docs/decisions/adr/ADR-0007-retire-aws-cdk-daytona-frozen-regressions.md",
+  };
+  const reader = (content) => (path, encoding) => {
+    assert.equal(path, gatePath);
+    assert.equal(encoding, "utf8");
+    if (content instanceof Error) throw content;
+    return typeof content === "string" ? content : JSON.stringify(content);
+  };
+  assert.equal(e2bActivationProfile(reader(valid)), 67);
+  // The committed repository gate names no active profile.
+  assert.equal(
+    e2bActivationProfile((path, encoding) =>
+      readFileSync(resolve(e2bRepositoryRoot, path), encoding),
+    ),
+    null,
+  );
+  const without = (key) => Object.fromEntries(Object.entries(valid).filter(([k]) => k !== key));
+  for (const [label, content] of [
+    ["missing file", Object.assign(Error("ENOENT: no such file"), { code: "ENOENT" })],
+    ["unreadable file", Object.assign(Error("EACCES: permission denied"), { code: "EACCES" })],
+    ["invalid JSON", "{"],
+    ["empty file", ""],
+    ["JSON null", "null"],
+    ["JSON number", "67"],
+    ["array", [valid]],
+    ["schema_version 2", { ...valid, schema_version: 2 }],
+    ["schema_version string", { ...valid, schema_version: "1" }],
+    ["extra key", { ...valid, enabled: true }],
+    ["missing decision", without("decision")],
+    ["missing sequence", without("active_profile_sequence")],
+    ["non-string decision", { ...valid, decision: 7 }],
+    ["string sequence", { ...valid, active_profile_sequence: "67" }],
+    ["float sequence", { ...valid, active_profile_sequence: 67.5 }],
+    ["negative sequence", { ...valid, active_profile_sequence: -67 }],
+    ["zero sequence", { ...valid, active_profile_sequence: 0 }],
+    ["unsafe integer sequence", { ...valid, active_profile_sequence: 2 ** 53 }],
+    ["boolean sequence", { ...valid, active_profile_sequence: true }],
+    ["array sequence", { ...valid, active_profile_sequence: [67] }],
+    ["null sequence", { ...valid, active_profile_sequence: null }],
+  ])
+    assert.equal(e2bActivationProfile(reader(content)), null, label);
+});
+
+test("missing or malformed activation gate denies allocation before private input", (t) => {
+  for (const [label, gate] of [
+    ["missing", null],
+    ["malformed", '{"schema_version":1,"active_profile_sequence":"67","decision":"x"}\n'],
+  ]) {
+    const current = currentE2BFixture();
+    t.after(current.dispose);
+    const gatePath = join(current.root, "infra/labs/e2b-activation.json");
+    if (gate === null) rmSync(gatePath);
+    else writeFileSync(gatePath, gate);
+    const out = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        current.loader,
+        current.script("scripts/e2b-development-lab.mjs"),
+        "--run",
+        "/never/read-private-input",
+      ],
+      { encoding: "utf8", cwd: current.root },
+    );
+    assert.equal(out.status, 2, `${label}: ${out.stderr}`);
+    const report = JSON.parse(current.read(".artifacts/e2b/live.json"));
+    assert.equal(report.plan_sequence, null, label);
+    assert.equal(report.provider_calls, false, label);
+    assert.equal(report.private_input_read, false, label);
+    assert.ok(report.blockers.includes("E2B_LAB_SELECTED_PLAN_DENIED"), label);
+  }
 });
 
 test("runtime CLI refuses disabled TLS before an original cleanup key is loaded", async (t) => {

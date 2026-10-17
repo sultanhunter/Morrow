@@ -47,15 +47,18 @@ const keys = (value, expected) =>
   !Array.isArray(value) &&
   Object.keys(value).sort().join(",") === [...expected].sort().join(",");
 
-// Explicit committed activation gate (ADR-0002). New allocation, owned builds, image
+// Explicit committed activation gate (ADR-0007). New allocation, owned builds, image
 // verification and template discovery need the active recipe profile sequence named
-// here; a missing, unreadable or malformed gate, or a null value, denies them.
+// here; a missing, unreadable or malformed gate, or a null value, denies them. Only the
+// exact shape with a positive safe-integer sequence and a decision reference activates.
 export function e2bActivationProfile(readFile = readFileSync) {
   try {
     const gate = JSON.parse(readFile("infra/labs/e2b-activation.json", "utf8"));
     return keys(gate, ["schema_version", "active_profile_sequence", "decision"]) &&
       gate.schema_version === 1 &&
-      Number.isSafeInteger(gate.active_profile_sequence)
+      typeof gate.decision === "string" &&
+      Number.isSafeInteger(gate.active_profile_sequence) &&
+      gate.active_profile_sequence > 0
       ? gate.active_profile_sequence
       : null;
   } catch {

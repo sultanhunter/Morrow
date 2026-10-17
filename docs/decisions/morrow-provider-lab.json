@@ -56,15 +56,16 @@
     "paid_credit_balance_usd": "0.00",
     "development_container_lab": {
       "profile": "synthetic-development",
-      "status": "local_engineering_candidate",
+      "status": "retired",
+      "retired_by": "docs/decisions/adr/ADR-0007-retire-aws-cdk-daytona-frozen-regressions.md",
       "merchant_execution": false,
       "free_credit_eligibility": "unconfirmed",
       "provider_creation_enabled": false,
       "live_tests": "not_run",
       "free_credit_request": "sent_awaiting_response",
-      "profile_file": "infra/labs/daytona-development.json",
-      "command": "npm run lab:daytona-development",
-      "cleanup_resume": "original_operation_inspect_delete_only"
+      "profile_file": "codex-archive-f89ad75:infra/labs/daytona-development.json",
+      "command_at_archive_tag": "npm run lab:daytona-development",
+      "cleanup_resume": "none_retained_no_provider_resource_created"
     }
   },
   "cloudflare_deployment": false,

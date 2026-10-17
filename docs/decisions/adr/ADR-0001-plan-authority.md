@@ -19,7 +19,7 @@ From 6 to 17 October 2026, the only plan authority was a ChatGPT Pages document 
 2. Material decisions are recorded under `docs/decisions/adr/ADR-NNNN-*.md` **before** dependent implementation. Each record quotes the owner's approval and its date. ADR-0002 defines "material".
 3. The ChatGPT Page is frozen at sequence 95 and kept as history. It is not edited further and confers no authority.
 4. `docs/references/*` (HLD, skills/Agent Store, visual foundation) remain supporting detail. Where they conflict with the plan, the plan wins.
-5. `npm run plan:check` replaces `scripts/sync-plan.mjs`. It checks for 18 packages, 80 parent task IDs, 73 acceptance IDs and line-length/governance lint.
+5. `scripts/sync-plan.mjs` and `npm run plan:sync` are removed. `npm run verify:foundation`, which runs in `npm run verify` and in CI, checks the plan instead: the parent task IDs (80) and acceptance IDs (73) found in `build-plan.md` must equal, in order, those in `docs/progress/tasks.json`, across 18 packages. There is no separate `plan:check` script and no line-length or governance lint (correction, 2026-10-17: an earlier wording of this item promised both).
 
 ## Consequences
 
