@@ -1,5 +1,5 @@
-// morrow-<env>-connector: a fail-closed 503 placeholder until ADR-0008
-// (Proposed) is approved. It binds only MORROW_ENVIRONMENT; no Shopify secret,
+// morrow-<env>-connector: a fail-closed 503 placeholder until P09.T01 builds
+// the ADR-0008 runtime. It binds only MORROW_ENVIRONMENT; no Shopify secret,
 // route or provider call exists.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",

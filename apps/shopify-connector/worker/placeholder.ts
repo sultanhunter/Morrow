@@ -1,6 +1,6 @@
-// morrow-<env>-connector (P04.T02a D8). A fail-closed placeholder until ADR-0008
-// (connector runtime, Proposed) is approved: no Shopify secret, route or
-// provider call exists, and it binds only MORROW_ENVIRONMENT.
+// morrow-<env>-connector (P04.T02a D8). A fail-closed placeholder until P09.T01
+// builds the ADR-0008 connector runtime: no Shopify secret, route or provider
+// call exists, and it binds only MORROW_ENVIRONMENT.
 
 const headers = {
   "content-type": "application/json; charset=utf-8",

@@ -43,7 +43,7 @@ These rules apply to the development and staging environments. Production cannot
    - The broker trusts every caller that holds the binding. It performs none of P04.T02's fresh policy, scope, operation and budget checks.
    - That is acceptable only for pre-authentication identity calls and role leases.
    - Only strings, booleans and integer budgets cross RPC. Every failure is the single error `BROKER_HELD`, logged with a fixed code and no values. Nothing retries.
-4. **Barred credentials.** Shopify, OpenAI, E2B and every other merchant, model or provider credential must not be bound to the broker under v0. They wait for the P08.T02 broker trust model and the owner-approved P08 credential-custody ADR that plan R1 requires before P08.T02 implementation. The same applies to the Shopify broker operations proposed in ADR-0008.
+4. **Barred credentials.** Shopify, OpenAI, E2B and every other merchant, model or provider credential must not be bound to the broker under v0. They wait for the P08.T02 broker trust model and the owner-approved P08 credential-custody ADR that plan R1 requires before P08.T02 implementation. The same applies to the Shopify broker operations placed by ADR-0008.
 5. **Residual risks accepted** (packet OQ2, option A). R1 and R2 are accepted for development and staging.
    - **Plan reading.** The issuer roles remain separate PostgreSQL roles, as P04.T02 requires, and are leased like the other runtime roles. The "platform root credentials" of the Secrets row are among the credentials that no Worker holds (item 2, last row).
    - **Compensating controls.** P04.T01i applies these as hosted operations (not migrations), under its own owner approvals, and sizes them:

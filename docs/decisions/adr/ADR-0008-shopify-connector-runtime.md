@@ -7,7 +7,7 @@
 ## Context
 
 - **Hosting.** The selected stack (owner selection, 2026-10-14) runs the connector as a separate Cloudflare Worker. A Node host is not selected.
-- **Plan R1.** The P04.T02a bullet requires this connector-runtime ADR, because it is material. It names the default design that this ADR proposes: a Worker with Neon-backed session storage, using `@shopify/shopify-api`'s Workers/Web adapter where the React Router package cannot run, with secret-dependent Shopify operations in the broker. Until approval, only the placeholder of item 6 exists.
+- **Plan R1.** The P04.T02a bullet requires this connector-runtime ADR, because it is material. It named the default design this ADR records: a Worker with Neon-backed session storage, using `@shopify/shopify-api`'s Workers/Web adapter where the React Router package cannot run, with secret-dependent Shopify operations in the broker.
 - **Locked dependency tree (measured 2026-10-17).**
   - `apps/shopify-connector` pins `@shopify/shopify-app-react-router` 3.0.1. Its package exports only a `server/adapters/node` adapter.
   - It depends on `@shopify/shopify-api` 15.0.0, which ships `cf-worker`, `web-api` and `node` adapters.
@@ -16,7 +16,7 @@
 - **Security invariant 23:** a connector context is not a session. **Security invariant 3:** connector routes deny by default.
 - **The current connector** is the P04.T02a 503 placeholder. No Shopify app, credential or call exists.
 
-## Proposed decision
+## Decision
 
 1. **Runtime.**
    - The connector is the Cloudflare Worker `morrow-<env>-connector`.
@@ -31,14 +31,15 @@
 3. **Trust model.** These broker operations are added only under the P08.T02 broker trust model and the P08 credential-custody ADR, never under the v0 model of ADR-0007.
 4. **Session and token storage.** Shopify session storage is Neon-backed. Any token-bearing record follows the P08 credential-custody design: encrypted, in a broker-only schema that only the broker's database role can read. The connector Worker never reads raw offline tokens.
 5. **Connector surface.** The connector serves install, link, status, reconnect, disconnect and return only. It resolves the installation from validated server context and never acts as a workspace session or authorizes domain capabilities (invariant 23; P09.T02).
-6. **Until approval.** The connector remains the P04.T02a 503 placeholder. It binds only `MORROW_ENVIRONMENT`, and no Shopify secret, route or provider call exists.
+6. **Until P09.T01.** The connector remains the P04.T02a 503 placeholder, and it binds only `MORROW_ENVIRONMENT`. No Shopify secret or broker operation exists before P08.T02 and the P08 credential-custody ADR.
 
-## Consequences if accepted
+## Consequences
 
 - P09.T01 and P09.T02 engineering targets Workers and the web adapter. Embedded-presentation qualification (CSP, session token and cookie behaviour) stays in P09.T02.
 - The existing React Router Node app in `apps/shopify-connector` becomes development scaffolding only. P09.T01 decides what of it is kept or replaced.
 - The broker's Shopify methods, webhook ingress (P09.T04) and the compliance topics (P09.T05) follow `shopify-sync.md` and the P08.T02 broker.
 - `@shopify/shopify-api` upgrades within the approved major version are routine (ADR-0002). A runtime or host change needs a superseding ADR.
+- In the locked `@shopify/shopify-api` 15.0.0, `shopifyApi()` will not initialize without `apiSecretKey`. Because the connector binds no secret, only the broker can initialize the library with the real secret. P09.T01 records how the connector uses the library's secret-free parts and delegates the rest to the broker. This is the extra glue the owner accepted.
 
 ## Alternatives considered
 
@@ -54,4 +55,10 @@ Owner approval, 2026-10-18, in chat. The owner selected **"Cloudflare Worker (Re
 
 The approved option read: "One platform and one deploy pipeline; secret-dependent Shopify calls stay in the broker. We write a little more glue than the template gives."
 
-This approval selects the runtime only. Shopify credentials, routes, broker methods and deployment still follow the P08.T02 broker trust model and its credential-custody ADR (ADR-0007 item 4), and each hosted effect still needs its own approval.
+Scope of the approval:
+
+- **Decided by the owner's answer:** item 1 (runtime: a Cloudflare Worker on `@shopify/shopify-api`) and item 2 (every secret-dependent Shopify call stays in the broker).
+- **Restated from existing records:** item 3 restates ADR-0007 item 4. Item 5 restates the settled thin-connector scope and Security invariant 23. Item 6 follows from ADR-0007 and P04.T02a.
+- **Not covered by the question:** item 4. Neon-backed session storage follows the selected stack. Its token-custody details stay subject to the owner-approved P08 credential-custody ADR, which is not yet written (see ADR-0007 item 4).
+
+Shopify credentials, routes, broker methods and deployment still need that P08 ADR and the P08.T02 broker trust model. Each hosted effect still needs its own approval.

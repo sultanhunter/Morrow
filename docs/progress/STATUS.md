@@ -4,8 +4,18 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active packets
 
-`main` is the trunk (ADR-0014). The integration branch `codex/morrow-foundation` and the P03.T04c/d overhaul (PR #2) are merged into it. P05.T01x Part A (PR #4: migration 0012, the `morrow-login-v1`, `morrow-self-logout-v1` and `morrow_id_` renames, `lab:login-protocol-v1`) and P01.T02a PR-A (PR #6: executor classes and human-only kill switches; ADR-0005) are merged into `main`. In progress:
-- **P04.T02a** deployable composition root (`claude/p04-t02a-composition-root`, PR #5; ADR-0007, `docs/packets/P04.T02a.md`). `main` merged on 2026-10-18; its tests and labs now use the 0012 identifiers and apply migrations 0001–0012 (packet "Implementation notes: migration 0012"). Hosted run 39069081910 passed all 10 jobs on `5a3c66b` (`pgwire`: `lab:edge-postgresql` 7 cases, 50 checks). Tier 2 review findings are applied; the new head needs its own green run before merge.
+`main` is the trunk (ADR-0014). These are merged into it:
+- PR #1: the foundation.
+- PR #2: the P03.T04c/d overhaul.
+- PR #3: ADR-0014.
+- PR #4: P05.T01x Part A. Migration 0012 retires plan-number identifiers: `morrow-login-v1`, `morrow-self-logout-v1`, `morrow_id_`.
+- PR #5: P04.T02a, the deployable composition root. It adds the api, broker, orchestrator and connector-placeholder Workers, `scripts/edge.mjs`, and the `lab:edge-workers` and `lab:edge-postgresql` labs (ADR-0007).
+- PR #6: P01.T02a PR-A, executor classes and human-only kill switches (ADR-0005, §2 confirmed 2026-10-18).
+
+In progress:
+- **ADR-0008 acceptance** (PR #7): the Shopify connector is a Cloudflare Worker on `@shopify/shopify-api`, and secret-dependent calls stay in the broker.
+- **P01.T02a PR-B** (`claude/p01-t02a-b-review-policy`): review policy, Proposal@2, Approval@2 (ADR-0011).
+- **Packet designs:** P01.T04a, P01.T02c, P06.T01b, P03.T04e (shared PostgreSQL harness), P14.T01a (provisional UI), P05.T01y and P05.T01z.
 
 Delivered in P03.T04c/d:
 - Outputs go to `.artifacts/` and CI artifacts (ADR-0012).
@@ -17,11 +27,11 @@ Delivered in P03.T04c/d:
 
 ## Last green commit
 
-`b9fb432` (merge of PR #2 into `codex/morrow-foundation`). PR #1's hosted run 39043798037 succeeded on it across all jobs: `static`, two unit shards, `workers-api`, `workers`, `pg-core`, `pg-linking`, `pg-http`, `pgwire` and `foundation`. `main` is at `f9ab367`, which has the same tree, and its push run 39044164847 also succeeded. PR #2's own runs 39039205040 and 39043168173 on `claude/p03-t04c-overhaul` also succeeded. Each run took about 4.5 minutes, against 21.5 minutes for the old serial job.
+`d797b1a` on `main`, the merge of PR #5. Its PR head `fedb4e6` passed hosted run 39070332528 on all 10 jobs. Runs take about 4.5 minutes, against 21.5 minutes for the old serial job.
 
 ## Next actions
 
-1. Finish, review and merge P04.T02a (Tier 2 AI review, then green `foundation`).
+1. Merge P01.T02a PR-B once reviewed and green.
 2. P05.T01x Part B, signup and workspace list (ADR-0009). It needs P01.T02a PR-B (ADR-0011) first.
 3. P06.T01a, work commands on the tenant data pattern (ADR-0010). P01.T02b and T02c contracts.
 4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
