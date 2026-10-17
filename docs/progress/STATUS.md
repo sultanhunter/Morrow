@@ -6,7 +6,7 @@ Updated 2026-10-17. Rewrite this file in place (at most 80 lines). The pre-overh
 
 `main` is the trunk (ADR-0014). The integration branch `codex/morrow-foundation` and the P03.T04c/d overhaul (PR #2) are merged into it. Three packets are in progress, each on its own branch from the overhaul head; their PRs will target `main`:
 - **P04.T02a** deployable composition root (`claude/p04-t02a-composition-root`; ADR-0007, `docs/packets/P04.T02a.md`).
-- **P05.T01x Part A** forward migration 0012 that removes plan-number identifiers (`claude/p05-t01x-a-protocol-names`; `docs/packets/P05.T01x.md`).
+- **P05.T01x Part A** forward migration 0012 that removes plan-number identifiers (`claude/p05-t01x-a-protocol-names`; `docs/packets/P05.T01x.md`). Committed locally, rebased on `main`: migration 0012, the `morrow-login-v1`, `morrow-self-logout-v1` and `morrow_id_` renames, and `lab:login-protocol-v1`. Awaiting its PR into `main`, hosted CI (including the Linux-only `pgwire` labs, which AC03 and AC04 still wait on) and Tier 2 review (`docs/acceptance/P05.md`).
 - **P01.T02a PR-A** executor classes and human-only kill switches (`claude/p01-t02a-a-executors`; ADR-0005, `docs/packets/P01.T02a.md`).
 
 Delivered in P03.T04c/d:
