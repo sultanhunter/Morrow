@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomUUID, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
@@ -12,6 +12,7 @@ import {
 import { authenticationExchangeAdmissionSql as preauthSql } from "../packages/identity/src/authentication-exchange-admission.ts";
 import { runControlledPreauth } from "../packages/identity/src/login-preauth-control.ts";
 import { createLoginAttempt } from "../packages/identity/src/standalone-login-protocol.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const hash = (v) => createHash("sha256").update(v).digest("hex"),
   checks = [],
   check = (name, value) => {
@@ -906,11 +907,7 @@ const report = {
     "Historical receipt attribution never proves dispatch, delivery, or current authority.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01v/regressions/login-flow-custody.json",
-  JSON.stringify(report, null, 2) + "\n",
-);
+writeArtifact("labs/login-flow-custody.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   JSON.stringify({
     packet: report.packet,

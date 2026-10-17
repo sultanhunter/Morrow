@@ -21,11 +21,8 @@ jobs:
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
-      - name: Quarantine fixed reports before validation
-        id: validation_evidence_prepare
-        env:
-          CI_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: node scripts/ci-validation-evidence.mjs prepare
+      - name: Route reports outside the checkout
+        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
       - name: Install locked dependencies
         id: install_dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -89,9 +86,6 @@ jobs:
       - name: Exercise controlled Neon profiles through native Workers WebSocket and PG wire
         id: workers_controlled_neon
         run: npm run lab:controlled-neon-workers
-      - name: Exercise preserved75 session observation with synthetic providers only
-        id: frozen75
-        run: npm run lab:workos-session-status-frozen75
       - name: Record the isolated pinned PostgreSQL engine build
         id: sql_engine
         run: >-
@@ -135,18 +129,6 @@ jobs:
       - name: Exercise isolated PostgreSQL browser session admission
         id: sql_admission
         run: npm run lab:browser-session-admission
-      - name: Exercise isolated WorkOS operator with SQL and loopback only
-        id: frozen71
-        run: npm run lab:workos-operator
-      - name: Exercise preserved74 WorkOS signature operator with synthetic providers only
-        id: frozen74
-        run: npm run lab:workos-operator-frozen74
-      - name: Exercise preserved80 full authentication operator with synthetic providers only
-        id: frozen80
-        run: npm run lab:workos-authentication-operator
-      - name: Exercise preserved82 full authentication operator with synthetic providers only
-        id: frozen82
-        run: npm run lab:workos-authentication-operator-current
       - name: Exercise actual browser request to workspace HTTP and PostgreSQL
         id: http_workspace
         run: npm run lab:standalone-workspace-http
@@ -171,20 +153,20 @@ jobs:
       - name: Exercise fixed WorkOS wire to local HTTPS login and logout
         id: https_fixed_provider
         run: npm run lab:fixed-workos-login-https
-      - name: Collect pending validation evidence
-        id: validation_evidence_collect
+      - name: Secret-scan generated reports before upload
+        id: artifact_scan
         if: always()
-        env:
-          CI_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-          CI_STEP_RESULTS: ${{ toJSON(steps) }}
-        run: node scripts/ci-validation-evidence.mjs collect
-      - name: Preserve fresh validation evidence
+        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
+      - name: Require an unchanged checkout
         if: always()
+        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
+      - name: Upload generated reports
+        if: always() && steps.artifact_scan.outcome == 'success'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: morrow-validation-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/morrow-validation-evidence-${{ github.run_id }}-${{ github.run_attempt }}/artifact
+          name: morrow-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/morrow-artifacts
           if-no-files-found: error
           overwrite: false
           include-hidden-files: false
-          retention-days: 3
+          retention-days: 90

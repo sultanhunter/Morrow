@@ -1,7 +1,8 @@
-import { readFileSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { inspectImports, inspectCompatibility, isBoundarySource } from "./boundary-checks.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 const files = [];
 function walk(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -154,21 +155,13 @@ negatives.push({
   passed: inspectCompatibility(baseline, changed).length > 0,
 });
 if (negatives.some((x) => !x.passed)) errors.push("Negative guard failed");
-mkdirSync("docs/evidence/P03.T02", { recursive: true });
-writeFileSync(
-  "docs/evidence/P03.T02/boundaries.json",
-  JSON.stringify(
-    {
-      scope:
-        "Source import/dependency and unreleased contract-freeze checks; not a security sandbox, production tenant authority or live runtime/provider qualification.",
-      files: files.length,
-      negative_checks: negatives,
-      errors,
-    },
-    null,
-    2,
-  ) + "\n",
-);
+writeArtifact("verify/boundaries.json", {
+  scope:
+    "Source import/dependency and unreleased contract-freeze checks; not a security sandbox, production tenant authority or live runtime/provider qualification.",
+  files: files.length,
+  negative_checks: negatives,
+  errors,
+});
 if (errors.length) throw Error(errors.join("\n"));
 console.log(
   `PASS: ${files.length} source modules, ${negatives.length} deliberate boundary/schema failures detected.`,

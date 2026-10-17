@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Miniflare, Log, LogLevel } from "miniflare";
+import { writeArtifact } from "./artifacts.mjs";
 const paths = [
   "packages/identity/src/authentication-exchange-admission.ts",
   "scripts/fixtures/authentication-exchange-admission-worker.ts",
@@ -52,9 +53,8 @@ try {
   assert.equal(outbound, 0);
   result.checks.push({ name: "zero_provider_requests", passed: true });
   const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
-  mkdirSync("docs/evidence/P05.T01d", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P05.T01d/workers-lab.json",
+  writeArtifact(
+    "labs/authentication-exchange-workers.json",
     JSON.stringify(
       {
         task: "P05.T01d",

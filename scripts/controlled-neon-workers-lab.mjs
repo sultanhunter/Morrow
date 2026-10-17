@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import {
   createControlledNeonPgOracle,
@@ -7,6 +7,7 @@ import {
   controlledNeonWireSql,
 } from "./fixtures/controlled-neon-pg-wire-oracle.mjs";
 import { Log, LogLevel, Miniflare, Response as MiniflareResponse, WebSocketPair } from "miniflare";
+import { writeArtifact } from "./artifacts.mjs";
 
 if (process.version !== "v24.13.0") throw Error("PINNED_NODE_REQUIRED");
 const sdkPackage = JSON.parse(readFileSync("node_modules/@neondatabase/serverless/package.json"));
@@ -842,10 +843,7 @@ if (
   )
 )
   throw Error("CONTROLLED_NEON_REPORT_SECRET_FENCE");
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01v/regressions/controlled-neon-workers.json", serializedReport, {
-  flag: "w",
-});
+writeArtifact("labs/controlled-neon-workers.json", serializedReport);
 if (failure) {
   process.exitCode = 1;
   process.stdout.write(

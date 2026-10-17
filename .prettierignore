@@ -3,3 +3,4 @@ build
 dist
 .react-router
 packages/contracts/src/generated
+.artifacts

@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import canonicalize from "canonicalize";
@@ -25,6 +25,7 @@ import {
   validateDefinition,
   validateCapabilityInput,
 } from "../packages/contracts/src/validation.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const checks = [];
 const check = (name, ok) => {
   if (!ok) throw Error("BROWSER_SESSION_LAB_FAILED:" + name);
@@ -898,8 +899,7 @@ const report = {
     "No cookie, refresh transport, production adapter or end-user revocation issuer.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01m", { recursive: true });
-writeFileSync("docs/evidence/P05.T01m/postgresql-lab.json", JSON.stringify(report, null, 2) + "\n");
+writeArtifact("labs/browser-session-admission.json", JSON.stringify(report, null, 2) + "\n");
 console.log("PASS browser session admission PostgreSQL lab " + checks.length + " checks");
 async function exerciseWriters(ctx) {
   const {

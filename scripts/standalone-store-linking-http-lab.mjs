@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer, request as httpRequest } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
 import { localStandaloneSqlPool } from "./local-standalone-sql.mjs";
 import {
@@ -15,6 +15,7 @@ import { createStandaloneStoreLinking } from "../packages/identity/src/standalon
 import { identitySql } from "../packages/identity/src/index.ts";
 import { workspaceStoreLinkingControlSql } from "../packages/identity/src/workspace-store-linking-control.ts";
 import { workspaceStoreLinkingSql } from "../packages/identity/src/workspace-store-linking.ts";
+import { writeArtifact } from "./artifacts.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const checks = [];
@@ -508,8 +509,7 @@ assert.equal(
   privateSecrets.some((s) => text.includes(s)),
   false,
 );
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01v/regressions/standalone-store-linking-http.json", text);
+writeArtifact("labs/standalone-store-linking-http.json", text);
 console.log(
   "PASS: " +
     checks.length +

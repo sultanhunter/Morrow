@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
 import { createFixedWorkosProviderOracle } from "./fixtures/fixed-workos-provider.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 assert.equal(process.version, "v24.13.0");
 assert.equal(JSON.parse(readFileSync("docs/plan/source.json", "utf8")).sources.plan.sequence, 94);
@@ -291,8 +292,7 @@ for (const secret of [
   "worker_management_marker_86_only",
 ])
   assert.ok(!text.includes(secret), "private fixture material is not reported");
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01v/regressions/fixed-provider-workers.json", text);
+writeArtifact("labs/fixed-workos-login-workers.json", text);
 console.log(
   `PASS: ${cases.length} fixed WorkOS provider Workers cases; ${result.checks.length} checks; zero outbound requests; runtime disposed.`,
 );

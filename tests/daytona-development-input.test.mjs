@@ -20,6 +20,7 @@ import {
   parseDevelopmentLabInput,
 } from "../scripts/daytona-development-input.mjs";
 import { archivedDevelopmentLabBinding } from "../scripts/daytona-development-lab.mjs";
+import { artifactPath } from "../scripts/artifacts.mjs";
 import {
   developmentLabConfiguration,
   prepareDevelopmentLabOperation,
@@ -197,7 +198,7 @@ test("default and malformed CLI invocations cannot read a key or instantiate pro
   const originalPreparation = readFileSync("docs/evidence/P04.T01f/preparation.json", "utf8");
   const prepared = spawnSync(process.execPath, ["--import", "tsx", script], { encoding: "utf8" });
   assert.equal(prepared.status, 0, prepared.stderr);
-  const report = JSON.parse(readFileSync("docs/evidence/P04.T01f/archive.json"));
+  const report = JSON.parse(readFileSync(artifactPath("daytona/archive.json")));
   assert.equal(report.provider_calls, false);
   assert.equal(report.private_input_read, false);
   assert.equal(report.live_ready, false);
@@ -232,7 +233,7 @@ test("default and malformed CLI invocations cannot read a key or instantiate pro
   );
   assert.equal(cleanup.status, 2);
   assert.match(cleanup.stdout, /LIVE_PREREQUISITES_UNQUALIFIED/);
-  const live = JSON.parse(readFileSync("docs/evidence/P04.T01f/cleanup.json"));
+  const live = JSON.parse(readFileSync(artifactPath("daytona/cleanup.json")));
   assert.equal(live.provider_calls, false);
   assert.equal(live.status, "blocked");
 });

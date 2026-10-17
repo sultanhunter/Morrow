@@ -1,8 +1,9 @@
-import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {root,read,sha} from './foundation.mjs';
 import {allocationDigest,ContractCreditLedger,billing} from './billing-checks.mjs';
 import {inspectReadiness} from './provider-checks.mjs';
+import {writeArtifact} from './artifacts.mjs';
 
 const source=read('docs/plan/source.json'),f=read('docs/contracts/fixtures/P01.A04.json');
 f.allocation.allocationDigest=allocationDigest(f.allocation);f.facts.approvedAllocationDigest=f.allocation.allocationDigest;
@@ -32,7 +33,7 @@ for(const d of decisions.consumed_decisions) {
   if(!original||original.status!=='Design recorded'||original.activation!=='blocked_until_qualified')errors.push('readiness/activation drift '+d.id);
   if(!d.reviewRef||d.reviewDigest!==sha(readFileSync(resolve(root,d.reviewRef),'utf8')))errors.push('review receipt changed '+d.id);
 }
-const inputs=['docs/contracts/schemas/v1/billing.schema.json','docs/contracts/fixtures/P01.A04.json','docs/contracts/billing-entitlements.md','docs/contracts/budgets.md','docs/decisions/billing-ownership.md','docs/decisions/readiness.json','docs/evidence/P01.T04/review.md','scripts/billing-checks.mjs','tests/billing.test.mjs'];
+const inputs=['docs/contracts/schemas/v1/billing.schema.json','docs/contracts/fixtures/P01.A04.json','docs/contracts/billing-entitlements.md','docs/contracts/budgets.md','docs/decisions/billing-ownership.md','docs/decisions/readiness.json','docs/decisions/reviews/P01.T04-review.md','scripts/billing-checks.mjs','tests/billing.test.mjs'];
 const report={task:'P01.T04',generated_at:new Date().toISOString(),plan_sequence:source.sources.plan.sequence,billing_definitions:Object.keys(billing.$defs).length,checks,scope:'Synthetic design, exact arithmetic and semantic walkthroughs only. No concurrent database, rate activation, provider charge, independent review or merchant usability proof.',input_digests:Object.fromEntries(inputs.map(p=>[p,sha(readFileSync(resolve(root,p),'utf8'))])),errors};
-mkdirSync(resolve(root,'docs/evidence/P01.T04'),{recursive:true});writeFileSync(resolve(root,'docs/evidence/P01.T04/verification.json'),JSON.stringify(report,null,2)+'\n');
+writeArtifact('verify/billing.json',report);
 if(errors.length){console.error(errors.join('\n'));process.exitCode=1;}else console.log(`PASS: ${report.billing_definitions} billing definitions and ${checks.length} billing/readiness walkthroughs. Billing activation remains blocked.`);

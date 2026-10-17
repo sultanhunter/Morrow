@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
@@ -14,6 +14,7 @@ import {
   createWorkspacePermissionBoundary,
 } from "../packages/policy/src/index.ts";
 import { validateDefinition } from "../packages/contracts/src/validation.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const checks = [];
 const check = (name, condition) => {
   if (!condition) throw Error("WORKSPACE_REVOCATION_LAB_FAILED:" + name);
@@ -776,10 +777,9 @@ VALUES (${literal(value.receiptId)},${literal(org)},${literal(workspace)},${lite
   }
   return { image, version };
 });
-mkdirSync("docs/evidence/P05.T01", { recursive: true });
 const source = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
-writeFileSync(
-  "docs/evidence/P05.T01/workspace-revocation-lab.json",
+writeArtifact(
+  "labs/workspace-revocation.json",
   JSON.stringify(
     {
       task: "P05.T01c",

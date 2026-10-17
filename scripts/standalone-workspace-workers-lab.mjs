@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
+import { writeArtifact } from "./artifacts.mjs";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const secret = Buffer.alloc(32, 27).toString("base64url"),
@@ -199,8 +200,7 @@ try {
   const publicText = JSON.stringify(report, null, 2) + "\n";
   for (const privateValue of [secret, token, hash(secret), hash(token), csrf])
     assert.ok(!publicText.includes(privateValue));
-  mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-  writeFileSync("docs/evidence/P05.T01v/regressions/standalone-workspace-workers.json", publicText);
+  writeArtifact("labs/standalone-workspace-workers.json", publicText);
   console.log(
     `PASS: ${cases.length} standalone workspace Workers cases; ${result.checks.length} checks; zero outbound requests.`,
   );

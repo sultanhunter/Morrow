@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
@@ -7,6 +7,7 @@ import {
   createAuthenticationExchangeAdmission,
   authenticationExchangeAdmissionSql,
 } from "../packages/identity/src/authentication-exchange-admission.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const checks = [];
 const check = (name, ok) => {
   if (!ok) throw Error("AUTH_EXCHANGE_LAB_FAILED:" + name);
@@ -885,9 +886,8 @@ const sources = [
   "scripts/local-authentication-exchange-sql.mjs",
   "scripts/authentication-exchange-admission-lab.mjs",
 ];
-mkdirSync("docs/evidence/P05.T01d", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01d/postgresql-lab.json",
+writeArtifact(
+  "labs/authentication-exchange.json",
   JSON.stringify(
     {
       task: "P05.T01d",

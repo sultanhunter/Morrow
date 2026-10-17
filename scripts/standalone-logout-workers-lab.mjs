@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
+import { writeArtifact } from "./artifacts.mjs";
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const proof = "A".repeat(43),
   unavailable = "logout_unavailable",
@@ -238,8 +239,7 @@ try {
   const text = JSON.stringify(report, null, 2) + "\n";
   for (const value of [proof, "B".repeat(42) + "A", "private-marker", "SYNTHETIC_PRIVATE_FAULT"])
     assert.ok(!text.includes(value));
-  mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-  writeFileSync("docs/evidence/P05.T01v/regressions/logout-workers-lab.json", text);
+  writeArtifact("labs/standalone-logout-workers.json", text);
   console.log(
     `PASS: ${cases.length} standalone logout Workers cases; ${result.checks.length} checks; zero outbound requests.`,
   );

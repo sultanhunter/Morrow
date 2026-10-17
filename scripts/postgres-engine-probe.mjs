@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { writeArtifact } from "./artifacts.mjs";
 const config = JSON.parse(readFileSync("infra/local-engine.json", "utf8"));
 if (
   !/^postgres@sha256:[a-f0-9]{64}$/.test(config.image) ||
@@ -142,7 +143,7 @@ try {
     if (record) record.cleanup = "owned ephemeral container removed";
   }
 }
-writeFileSync("docs/evidence/P04.T01/postgres-engine.json", JSON.stringify(record, null, 2) + "\n");
+writeArtifact("labs/postgres-engine.json", record);
 console.log(
   "PASS: actual PostgreSQL17.11 startup, transaction commit/rollback and container isolation; ephemeral probe removed.",
 );

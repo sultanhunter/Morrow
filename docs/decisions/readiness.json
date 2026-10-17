@@ -9,7 +9,7 @@
     {
       "id": "D01",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T02/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T02-review.md",
       "reviewDigest": "efdd33027593c99a898d733f8396627989d0c90ee710d53d0de1827c7c52d737",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -17,7 +17,7 @@
     {
       "id": "D02",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -25,7 +25,7 @@
     {
       "id": "D03",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -33,7 +33,7 @@
     {
       "id": "D04",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -41,7 +41,7 @@
     {
       "id": "D05",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -49,7 +49,7 @@
     {
       "id": "D06",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -57,7 +57,7 @@
     {
       "id": "D07",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T02/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T02-review.md",
       "reviewDigest": "efdd33027593c99a898d733f8396627989d0c90ee710d53d0de1827c7c52d737",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -65,7 +65,7 @@
     {
       "id": "D08",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -73,7 +73,7 @@
     {
       "id": "D09",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -81,7 +81,7 @@
     {
       "id": "D10",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -89,7 +89,7 @@
     {
       "id": "D11",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T02/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T02-review.md",
       "reviewDigest": "efdd33027593c99a898d733f8396627989d0c90ee710d53d0de1827c7c52d737",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -97,7 +97,7 @@
     {
       "id": "D12",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -105,7 +105,7 @@
     {
       "id": "D13",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -113,7 +113,7 @@
     {
       "id": "D14",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -121,7 +121,7 @@
     {
       "id": "D15",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -129,7 +129,7 @@
     {
       "id": "D16",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T02/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T02-review.md",
       "reviewDigest": "efdd33027593c99a898d733f8396627989d0c90ee710d53d0de1827c7c52d737",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -137,7 +137,7 @@
     {
       "id": "D17",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -145,7 +145,7 @@
     {
       "id": "D18",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -153,7 +153,7 @@
     {
       "id": "D19",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -161,7 +161,7 @@
     {
       "id": "D20",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T03/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T03-review.md",
       "reviewDigest": "a8b188a0e7c3b4991880597217d77580570df0aeff20ab7330ac2f334582cfc2",
       "qualification": "documentary_design_only",
       "activation": "blocked"
@@ -169,7 +169,7 @@
     {
       "id": "D21",
       "status": "recorded",
-      "reviewRef": "docs/evidence/P01.T04/review.md",
+      "reviewRef": "docs/decisions/reviews/P01.T04-review.md",
       "reviewDigest": "21a7a96df938565a73ffefca5769b55e039b93829c8881898595958de865f65d",
       "qualification": "documentary_design_only",
       "activation": "blocked"

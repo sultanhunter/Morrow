@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { writeArtifact } from "./artifacts.mjs";
 const children = [],
   checks = [],
   logs = [];
@@ -102,20 +102,12 @@ try {
   );
   const dev = await poll("http://127.0.0.1:4193/dev/fixture");
   check("Explicit synthetic connector entry starts without credentials", dev.status === 200);
-  mkdirSync("docs/evidence/P03.T01", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P03.T01/smoke.json",
-    JSON.stringify(
-      {
-        generated_at: new Date().toISOString(),
-        scope:
-          "Local production build HTTP status/headers and no-dispatch worker only, no authenticated tenant/provider qualification.",
-        checks,
-      },
-      null,
-      2,
-    ) + "\n",
-  );
+  writeArtifact("smoke/scaffold.json", {
+    generated_at: new Date().toISOString(),
+    scope:
+      "Local production build HTTP status/headers and no-dispatch worker only, no authenticated tenant/provider qualification.",
+    checks,
+  });
   console.log(`PASS: ${checks.length} scaffold guards.`);
 } finally {
   for (const p of children) p.kill("SIGTERM");

@@ -1,5 +1,5 @@
 import { createServer, request as httpsRequest } from "node:https";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createWorkspaceApiHttpListener } from "../apps/api/src/workspace-router.ts";
 import { createStandaloneLoginBridge } from "../packages/identity/src/standalone-login.ts";
@@ -24,6 +24,7 @@ import { seedStandaloneLinkingFixture } from "./fixtures/standalone-linking-fixt
 import { standaloneSqlLiteral as lit } from "./standalone-session-fixtures.mjs";
 import { localStandaloneSqlPool } from "./local-standalone-sql.mjs";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 const hash = (x) => createHash("sha256").update(x).digest("hex");
 const checks = [];
 const check = (name, value) => {
@@ -845,8 +846,7 @@ const report = {
   ],
 };
 const text = JSON.stringify(report, null, 2) + "\n";
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01v/regressions/logout-https-postgresql-lab.json", text);
+writeArtifact("labs/standalone-logout-https.json", text);
 console.log(
   "PASS: " +
     checks.length +

@@ -1,10 +1,11 @@
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import {
   validateDefinition,
   validateCapabilityInput,
   validateCapabilityOutput,
 } from "../packages/contracts/src/validation.ts";
+import { writeArtifact } from "./artifacts.mjs";
 export const lab = JSON.parse(
   readFileSync(new URL("../docs/development/lab-fixtures.json", import.meta.url), "utf8"),
 );
@@ -86,7 +87,6 @@ export function runLab(mode = "partial") {
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result = runLab(process.argv[2] ?? "partial");
-  mkdirSync("docs/evidence/P03.T03", { recursive: true });
-  writeFileSync("docs/evidence/P03.T03/example.json", JSON.stringify(result, null, 2) + "\n");
+  writeArtifact("lab/example.json", result);
   console.log(JSON.stringify(result, null, 2));
 }

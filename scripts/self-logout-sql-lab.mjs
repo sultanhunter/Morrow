@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomUUID, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
@@ -9,6 +9,7 @@ import {
   createSelfLogoutControl,
   selfLogoutSql as sql,
 } from "../packages/identity/src/self-logout-control.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const hash = (s) => createHash("sha256").update(s).digest("hex");
 const checks = [],
   check = (name, passed) => {
@@ -791,11 +792,7 @@ const report = {
     "Already-ended acknowledgement correlates original immutable family state, not a new command receipt or browser delivery.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01v/regressions/self-logout-postgresql-lab.json",
-  JSON.stringify(report, null, 2) + "\n",
-);
+writeArtifact("labs/self-logout-sql.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   JSON.stringify({
     packet: "P05.T01q",

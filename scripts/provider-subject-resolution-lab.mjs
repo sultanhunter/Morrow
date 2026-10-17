@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
 import { localProviderSubjectPool } from "./local-provider-subject-sql.mjs";
@@ -8,6 +8,7 @@ import {
 } from "../packages/identity/src/workos-workspace-selection.ts";
 import { createWorkosAuthenticationEvidence } from "../packages/identity/src/workos-authentication-evidence.ts";
 import { buildWorkosAuthenticationEvidenceFixture } from "../tests/fixtures/workos-authentication-evidence.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 const checks = [];
 const check = (name, ok) => {
@@ -917,9 +918,8 @@ INSERT INTO morrow_identity.provider_subject_profile_bindings VALUES(${literal(f
   return { image, version };
 });
 
-mkdirSync("docs/evidence/P05.T01m", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01m/legacy-provider-subject-resolution-lab.json",
+writeArtifact(
+  "labs/provider-subject-resolution.json",
   JSON.stringify(
     {
       packet: "P05.T01k",

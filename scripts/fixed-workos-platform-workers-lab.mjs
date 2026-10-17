@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
 import { createPlatformWorkosProviderOracle } from "./fixtures/fixed-workos-platform-provider.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 if (process.version !== "v24.13.0") throw Error("PINNED_NODE_REQUIRED");
@@ -426,10 +427,7 @@ const report = {
 const text = JSON.stringify(report, null, 2) + "\n";
 for (const secret of secrets)
   if (secret && text.includes(secret)) throw Error("REPORT_SECRET_FENCE_HELD");
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01v/regressions/platform-workers-lab.json", text, {
-  flag: "wx",
-});
+writeArtifact("labs/fixed-workos-platform-workers.json", text);
 if (failure) {
   process.exitCode = 1;
   process.stdout.write(failure + "; report preserved; runtime disposal=" + disposed + "\n");

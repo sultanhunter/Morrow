@@ -1,8 +1,9 @@
-import { cpSync, readdirSync, readFileSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { cpSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, resolve, relative } from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
+import { writeArtifact } from "./artifacts.mjs";
 export function treeDigest(root) {
   const files = [];
   function walk(directory) {
@@ -55,25 +56,17 @@ function repair() {
     throw Error("REPAIR_BEHAVIOR_CHECK_FAILED");
   // This nesting shape caused the published upstream stack-exhaustion issue.
   expand("{".repeat(4000) + "a,b" + "}".repeat(4000));
-  mkdirSync("docs/evidence/P04.T01", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P04.T01/dependency-repair.json",
-    JSON.stringify(
-      {
-        scope:
-          "Reproducible fixed upstream package replacement for a bundled CDK advisory; not an upstream release fix",
-        cdk_version: manifest.cdk_version,
-        fixed_version: manifest.fixed_version,
-        fixed_tree_sha256: manifest.fixed_tree_sha256,
-        behavior_check: "passed",
-        deep_nesting_regression: "passed; 4000 nested groups",
-        registry_audit:
-          "npm audit still flags original bundled package in lock; keep upstream advisory pending, never report zero",
-      },
-      null,
-      2,
-    ) + "\n",
-  );
+  writeArtifact("deps/repair.json", {
+    scope:
+      "Reproducible fixed upstream package replacement for a bundled CDK advisory; not an upstream release fix",
+    cdk_version: manifest.cdk_version,
+    fixed_version: manifest.fixed_version,
+    fixed_tree_sha256: manifest.fixed_tree_sha256,
+    behavior_check: "passed",
+    deep_nesting_regression: "passed; 4000 nested groups",
+    registry_audit:
+      "npm audit still flags original bundled package in lock; keep upstream advisory pending, never report zero",
+  });
   console.log(
     "PASS: reviewed CDK bundle repair and checksum/behavior readback; upstream advisory remains recorded.",
   );

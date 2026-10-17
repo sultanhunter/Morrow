@@ -1,10 +1,11 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
 import { localIdentityPool } from "./local-identity-sql.mjs";
 import { createAuthenticationChallenges } from "../packages/identity/src/authentication-challenges.ts";
 import { identitySql } from "../packages/identity/src/index.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const checks = [];
 const check = (name, ok) => {
   if (!ok) throw Error("CHALLENGE_LAB_FAILED:" + name);
@@ -645,9 +646,8 @@ const observed = await localPostgresLab(
 );
 if (sourceDigests.some(({ path, sha256 }) => hash(readFileSync(path)) !== sha256))
   throw Error("CHALLENGE_LAB_SOURCE_CHANGED");
-mkdirSync("docs/evidence/P05.T01k", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01k/authentication-challenge-lab.json",
+writeArtifact(
+  "labs/authentication-challenge.json",
   JSON.stringify(
     {
       task: "P05.T01k",

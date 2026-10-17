@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
+import { writeArtifact } from "./artifacts.mjs";
 
 const now = Date.UTC(2026, 9, 15, 15, 0, 0);
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -591,9 +592,8 @@ try {
     "scripts/workos-workspace-selection-workers-lab.mjs",
     "package-lock.json",
   ];
-  mkdirSync("docs/evidence/P05.T01m", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P05.T01m/legacy-selection-workers-lab.json",
+  writeArtifact(
+    "labs/workos-workspace-selection-workers.json",
     JSON.stringify(
       {
         task: "P05.T01k",

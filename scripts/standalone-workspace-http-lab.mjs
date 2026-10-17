@@ -3,7 +3,7 @@ import { createServer, request as httpRequest } from "node:http";
 import { connect as connectSocket } from "node:net";
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createWorkspaceHttpListener } from "../apps/api/src/workspace-http.ts";
 import { createStandaloneWorkspaceBootstrap } from "../packages/identity/src/standalone-workspace-bootstrap.ts";
 import { identitySql } from "../packages/identity/src/index.ts";
@@ -14,6 +14,7 @@ import {
 } from "./standalone-session-fixtures.mjs";
 import { localStandaloneSqlPool } from "./local-standalone-sql.mjs";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const checks = [];
@@ -816,11 +817,7 @@ const report = {
     "Late acquisition returns a held response first; separately owned disposal is measured after client delivery.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01v/regressions/standalone-workspace-http.json",
-  JSON.stringify(report, null, 2) + "\n",
-);
+writeArtifact("labs/standalone-workspace-http.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   "PASS: " + checks.length + " actual standalone HTTP/PostgreSQL checks; zero provider requests.",
 );

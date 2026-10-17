@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
 import { buildWorkosAuthenticationEvidenceFixture } from "../tests/fixtures/workos-authentication-evidence.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const fixture = buildWorkosAuthenticationEvidenceFixture();
 const cases = [
@@ -338,8 +339,7 @@ try {
   const publicText = JSON.stringify(report, null, 2) + "\n";
   for (const secret of [fixture.token, fixture.claims.sub, fixture.claims.sid, "synthetic-code"])
     assert.ok(!publicText.includes(secret));
-  mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-  writeFileSync("docs/evidence/P05.T01v/regressions/login-workers-lab.json", publicText);
+  writeArtifact("labs/standalone-login-workers.json", publicText);
   console.log(
     `PASS: ${cases.length} standalone login Workers cases; ${result.checks.length} checks; zero outbound requests.`,
   );

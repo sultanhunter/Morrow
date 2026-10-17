@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { build } from "esbuild";
 import { Miniflare, Log, LogLevel } from "miniflare";
@@ -11,6 +11,7 @@ import { createPgFrontendParser } from "./fixtures/controlled-neon-pg-wire-oracl
 import { createSelfLogoutFixtureHarness } from "./fixtures/self-logout-fixture.mjs";
 import { createPlatformWorkosProviderOracle } from "./fixtures/fixed-workos-platform-provider.mjs";
 import { createBoundedLoginCookieJar } from "./fixtures/login-https.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 const hash = (v) => createHash("sha256").update(v).digest("hex");
 const paths = [
@@ -749,8 +750,7 @@ if (
   )
 )
   throw Error("CONTROLLED_PG_PRIVATE_REPORT_HELD");
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01v/regressions/controlled-neon-postgresql.json", serialized);
+writeArtifact("labs/controlled-neon-postgresql.json", serialized);
 if (failure || cleanupFailure) throw Error("CONTROLLED_NEON_POSTGRESQL_LAB_HELD:" + stage);
 console.log(
   "PASS: " +

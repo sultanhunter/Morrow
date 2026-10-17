@@ -1,7 +1,8 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { root, read, sha, validateCatalogue, inspectAuthority } from './foundation.mjs';
 import { renderDocuments } from './render-catalogue.mjs';
+import { writeArtifact } from './artifacts.mjs';
 
 const catalogue = read('docs/contracts/capabilities.json');
 const deps = read('docs/decisions/dependencies.json');
@@ -33,7 +34,6 @@ const results = cases.map(test=>{
   return {id:test.id,capability:c.id,host:test.request.host,expected:test.expected,actual,passed};
 });
 const report = {task:'P01.T01',generated_at:new Date().toISOString(),plan_sequence:source.sources.plan.sequence,plan_digest:source.sources.plan.sha256,capabilities:catalogue.capabilities.length,domains:catalogue.domain_names.length,packages:18,tasks:expectedTasks.length,acceptance_cases:expectedCases.length,walkthrough_cases:results.length,scope:'Catalogue consistency and synthetic authority walkthroughs only; not production enforcement or provider qualification.',input_digests:Object.fromEntries(['docs/contracts/capabilities.json','docs/decisions/dependencies.json','docs/acceptance/P01.A01-fixtures.json'].map(p=>[p,sha(readText(p))])),errors,results};
-mkdirSync(resolve(root,'docs/evidence/P01.T01'),{recursive:true});
-writeFileSync(resolve(root,'docs/evidence/P01.T01/verification.json'),JSON.stringify(report,null,2)+'\n');
+writeArtifact('verify/foundation.json',report);
 if (errors.length) { console.error(errors.join('\n'));process.exitCode=1; }
 else console.log(`PASS: ${report.capabilities} capabilities, ${report.domains} domains, ${report.tasks} tasks, ${report.walkthrough_cases} synthetic walkthrough cases. Production gates remain pending.`);

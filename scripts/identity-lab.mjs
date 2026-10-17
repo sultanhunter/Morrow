@@ -1,8 +1,9 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
 import { identitySql } from "../packages/identity/src/index.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const checks = [];
 function check(name, condition) {
   if (!condition) throw Error("IDENTITY_LAB_CHECK_FAILED:" + name);
@@ -281,10 +282,9 @@ const report = await localPostgresLab("P05.T01a", async ({ id, sql, image, versi
   );
   return { image, version };
 });
-mkdirSync("docs/evidence/P05.T01", { recursive: true });
 const source = JSON.parse(readFileSync("docs/plan/source.json", "utf8"));
-writeFileSync(
-  "docs/evidence/P05.T01/identity-lab.json",
+writeArtifact(
+  "labs/identity.json",
   JSON.stringify(
     {
       task: "P05.T01a",

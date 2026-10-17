@@ -1,5 +1,5 @@
 import { createServer, request as httpsRequest } from "node:https";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createWorkspaceApiHttpListener } from "../apps/api/src/workspace-router.ts";
 import { createStandaloneLoginBridge } from "../packages/identity/src/standalone-login.ts";
@@ -25,6 +25,7 @@ import { seedStandaloneLinkingFixture } from "./fixtures/standalone-linking-fixt
 import { standaloneSqlLiteral as lit } from "./standalone-session-fixtures.mjs";
 import { localStandaloneSqlPool } from "./local-standalone-sql.mjs";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const checks = [];
@@ -895,8 +896,7 @@ const privateValues = [
 ];
 if (privateValues.some((value) => text.includes(value)))
   throw Error("FIXED_PROVIDER_HTTPS_REPORT_PRIVACY");
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync("docs/evidence/P05.T01v/regressions/fixed-provider-https.json", text);
+writeArtifact("labs/fixed-workos-login-https.json", text);
 console.log(
   "PASS: " +
     checks.length +

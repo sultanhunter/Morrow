@@ -2,7 +2,7 @@ import { createServer, request as httpsRequest } from "node:https";
 import { createServer as createHttpServer, request as httpRequest } from "node:http";
 import { connect as connectSocket } from "node:net";
 import { spawn } from "node:child_process";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createWorkspaceApiHttpListener } from "../apps/api/src/workspace-router.ts";
 import { createStandaloneLoginBridge } from "../packages/identity/src/standalone-login.ts";
@@ -25,6 +25,7 @@ import { seedStandaloneLinkingFixture } from "./fixtures/standalone-linking-fixt
 import { standaloneSqlLiteral as lit } from "./standalone-session-fixtures.mjs";
 import { localStandaloneSqlPool } from "./local-standalone-sql.mjs";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 let diagnostic = () => {};
@@ -1299,11 +1300,7 @@ const report = {
     "Source digests are selected reviewed inputs, not a complete third-party dependency closure.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01v/regressions/login-https-postgresql-lab.json",
-  JSON.stringify(report, null, 2) + "\n",
-);
+writeArtifact("labs/standalone-login-https.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   "PASS: " +
     checks.length +

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Miniflare, Log, LogLevel } from "miniflare";
+import { writeArtifact } from "./artifacts.mjs";
 
 const paths = [
   "packages/identity/src/workspace-store-linking.ts",
@@ -53,9 +54,8 @@ try {
   assert.equal(outbound, 0);
   result.checks.push({ name: "zero_provider_requests", passed: true });
   const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
-  mkdirSync("docs/evidence/P05.T03", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P05.T03/workers-lab.json",
+  writeArtifact(
+    "labs/workspace-store-linking-workers.json",
     JSON.stringify(
       {
         task: "P05.T03a",

@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
@@ -13,6 +13,7 @@ import {
   workspaceStoreLinkingControlSql,
 } from "../packages/identity/src/workspace-store-linking-control.ts";
 import { workspaceStoreLinkingSql } from "../packages/identity/src/workspace-store-linking.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const hash = (v) => createHash("sha256").update(v).digest("hex");
 let failedCheck = null;
 const checks = [],
@@ -865,11 +866,7 @@ const report = {
 };
 if (new Set(checks.map((x) => x.name)).size !== checks.length)
   throw Error("LINKING_READ_DUPLICATE_CHECK");
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync(
-  "docs/evidence/P05.T01v/regressions/workspace-linking-read.json",
-  JSON.stringify(report, null, 2) + "\n",
-);
+writeArtifact("labs/workspace-linking-read.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   JSON.stringify({
     packet: report.packet,

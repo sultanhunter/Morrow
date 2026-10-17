@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
 import { randomBytes, randomUUID } from "node:crypto";
 import { localPostgresLab, containerCommand } from "./local-postgres-lab.mjs";
 import { encryptedLabFixtures } from "./encrypted-lab-fixtures.mjs";
 import { encodeOperationalEvent } from "../packages/infrastructure/src/operations.ts";
 import { inspectProvisioningReadiness } from "../packages/infrastructure/src/readiness.ts";
+import { writeArtifact } from "./artifacts.mjs";
 const start = performance.now();
 const correlationId = randomUUID();
 const events = [];
@@ -215,8 +215,7 @@ try {
 }
 report.elapsed_ms = Math.round(performance.now() - start);
 report.cleanup = "owned ephemeral container removed";
-mkdirSync("docs/evidence/P04.T03", { recursive: true });
-writeFileSync("docs/evidence/P04.T03/operations-lab.json", JSON.stringify(report, null, 2) + "\n");
+writeArtifact("labs/operations.json", JSON.stringify(report, null, 2) + "\n");
 console.log(
   "PASS: actual local SCRAM rotation, abrupt client death, durable committed rows and redacted signals; cloud qualification pending.",
 );

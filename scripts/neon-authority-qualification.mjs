@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { randomBytes, createHash } from "node:crypto";
 import { build } from "esbuild";
@@ -6,6 +6,7 @@ import { Miniflare, Log, LogLevel } from "miniflare";
 import { loadNeonPreflightInput, publicNeonPreflightBinding } from "./neon-preflight-input.mjs";
 import { loadNeonAuthorityResume } from "./neon-authority-input.mjs";
 import { neonPreflightEgressScript } from "./neon-preflight-egress.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 const mode = process.argv[2];
 if (
   !["--install-and-test", "--resume-roles-and-test", "--inspect"].includes(mode) ||
@@ -37,27 +38,19 @@ const files = [
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const report = (status, extra = {}) => {
   if (!binding) return;
-  mkdirSync("docs/evidence/P04.T01d", { recursive: true });
-  writeFileSync(
-    "docs/evidence/P04.T01d/qualification.json",
-    JSON.stringify(
-      {
-        task: "P04.T01d",
-        observed_at: new Date().toISOString(),
-        status,
-        phase,
-        binding,
-        checks,
-        fixture_cleanup_verified: cleanup,
-        ...extra,
-        source_digests: Object.fromEntries(files.map((f) => [f, sha(readFileSync(f))])),
-        scope:
-          "Actual Neon restricted roles/migrations and synthetic application authority in local workerd. Not WorkOS authentication, Cloudflare deployment, rotation/recovery or launch acceptance.",
-      },
-      null,
-      2,
-    ) + "\n",
-  );
+  writeArtifact("neon/authority-qualification.json", {
+    task: "P04.T01d",
+    observed_at: new Date().toISOString(),
+    status,
+    phase,
+    binding,
+    checks,
+    fixture_cleanup_verified: cleanup,
+    ...extra,
+    source_digests: Object.fromEntries(files.map((f) => [f, sha(readFileSync(f))])),
+    scope:
+      "Actual Neon restricted roles/migrations and synthetic application authority in local workerd. Not WorkOS authentication, Cloudflare deployment, rotation/recovery or launch acceptance.",
+  });
 };
 try {
   const root = resolve("../../morrow-private-staging");

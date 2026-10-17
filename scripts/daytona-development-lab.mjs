@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { artifactPath } from "./artifacts.mjs";
 import {
   compileDevelopmentLabConfiguration,
   prepareDevelopmentLabOperation,
@@ -70,7 +71,7 @@ export async function mainDevelopmentLab(argv = process.argv.slice(2)) {
   const source = developmentLabSourceBinding(".");
   const mode = "cleanup";
   const blockers = inspectDevelopmentLabAccount(account, Date.now(), mode);
-  const destination = "docs/evidence/P04.T01f";
+  const destination = artifactPath("daytona");
   mkdirSync(destination, { recursive: true });
   const base = {
     task: "P04.T01f",

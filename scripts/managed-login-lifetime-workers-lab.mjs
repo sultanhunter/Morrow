@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare, Response as MiniflareResponse, WebSocketPair } from "miniflare";
 import {
@@ -12,6 +12,7 @@ import {
   createManagedLoginCleanupGate,
   createManagedLoginReleaseGate,
 } from "./fixtures/managed-login-cleanup-gate.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 if (process.version !== "v24.13.0") throw Error("U01_PINNED_NODE_REQUIRED");
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -24,11 +25,10 @@ if (JSON.parse(readFileSync("docs/plan/source.json")).sources.plan.sequence !== 
 const attempt = process.argv.slice(2);
 if (attempt.length > 1 || (attempt.length && !/^--attempt=[a-z][a-z0-9-]{0,31}$/.test(attempt[0])))
   throw Error("U01_CLOSED_ATTEMPT_NAME_REQUIRED");
-const reportPath =
-  "docs/evidence/P05.T01v/regressions/managed-login-lifetime" +
+const reportName =
+  "labs/managed-login-lifetime-workers" +
   (attempt.length ? "-" + attempt[0].slice(10) : "") +
   ".json";
-if (existsSync(reportPath)) throw Error("U01_IMMUTABLE_REPORT_EXISTS");
 const paths = [
   "scripts/fixtures/managed-login-lifetime-worker.ts",
   "scripts/fixtures/managed-login-cleanup-gate.mjs",
@@ -935,11 +935,10 @@ const report = {
     "The after-C row records a late-open attempt, actual read/ack only if observed, and native cancellation or unknown otherwise; it does not label an unobserved late acknowledgement as measured. Rejected, stalled and after-C credential acknowledgements remain conservative unknowns; forced fixture/runtime disposal cannot upgrade source cleanup. Cross-isolate SQL continuity, real browser, hosted and merchant qualification are separate.",
   ],
 };
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
 const reportText = JSON.stringify(report, null, 2) + "\n";
 if (privateMarkers.some((marker) => marker && reportText.includes(marker)))
   throw Error("U_MANAGED_SECRET_FENCE");
-writeFileSync(reportPath, reportText, { flag: "wx" });
+const reportPath = writeArtifact(reportName, reportText);
 process.stdout.write(
   JSON.stringify({ report: reportPath, status, cases: cases.length, checks: checks.length }) + "\n",
 );

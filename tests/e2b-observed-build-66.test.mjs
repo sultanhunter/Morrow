@@ -16,9 +16,7 @@ import {
 import { discoverE2BDevelopmentOwnedTemplates } from "../packages/runtime-adapters/src/e2b/development-transport.ts";
 import { createE2BNativeDevelopmentTransport } from "../packages/runtime-adapters/src/e2b/development-native.ts";
 
-const history = JSON.parse(
-  readFileSync("docs/evidence/P04.T01h/history/build-65/owned-build-qualification.json", "utf8"),
-);
+const history = JSON.parse(readFileSync("tests/fixtures/e2b-observed-build-65.json", "utf8"));
 const record = history.result.record,
   observed = history.result.observation;
 const clock = observed.finishedAtMs + 1000;

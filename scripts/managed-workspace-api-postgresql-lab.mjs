@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
 import { tsImport } from "tsx/esm/api";
@@ -16,6 +16,7 @@ import {
 import { createPlatformWorkosProviderOracle } from "./fixtures/fixed-workos-platform-provider.mjs";
 import { createBoundedLoginCookieJar } from "./fixtures/login-https.mjs";
 import { localStandaloneSqlPool } from "./local-standalone-sql.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 const { createSelfLogoutFixtureHarness } = await tsImport(
   "./fixtures/self-logout-fixture.mjs",
@@ -52,11 +53,8 @@ require(
 );
 const args = process.argv.slice(2);
 require(args.length <= 1 && (!args.length || /^--attempt=[a-z][a-z0-9-]{0,31}$/.test(args[0])));
-const reportPath =
-  "docs/evidence/P05.T01v/workspace-api-postgresql" +
-  (args.length ? "-" + args[0].slice(10) : "") +
-  ".json";
-require(!existsSync(reportPath));
+const reportName =
+  "labs/workspace-api-postgresql" + (args.length ? "-" + args[0].slice(10) : "") + ".json";
 const paths = [
   "scripts/managed-workspace-api-postgresql-lab.mjs",
   "scripts/fixtures/managed-workspace-api-worker.ts",
@@ -1020,8 +1018,7 @@ const secretFenceClear = !privateMarkers.some((marker) => marker && text.include
 privateMarkers.fill("");
 privateMarkers.length = 0;
 require(secretFenceClear);
-mkdirSync("docs/evidence/P05.T01v", { recursive: true });
-writeFileSync(reportPath, text, { flag: "wx" });
+const reportPath = writeArtifact(reportName, text);
 process.stdout.write(
   JSON.stringify({
     report: reportPath,

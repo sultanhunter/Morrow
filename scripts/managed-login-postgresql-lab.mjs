@@ -1,5 +1,5 @@
 import { createHash, createCipheriv, randomBytes, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { Miniflare, Log, LogLevel } from "miniflare";
 import { tsImport } from "tsx/esm/api";
@@ -14,6 +14,7 @@ import {
 } from "./fixtures/controlled-neon-pg-wire-oracle.mjs";
 import { createPlatformWorkosProviderOracle } from "./fixtures/fixed-workos-platform-provider.mjs";
 import { createBoundedLoginCookieJar } from "./fixtures/login-https.mjs";
+import { writeArtifact } from "./artifacts.mjs";
 
 // Fixed loader for the unchanged fixture's existing .ts transitive imports.
 // No caller path or executable selector is accepted.
@@ -31,11 +32,8 @@ if (
 const args = process.argv.slice(2);
 if (args.length > 1 || (args.length && !/^--attempt=[a-z][a-z0-9-]{0,31}$/.test(args[0])))
   throw held();
-const reportPath =
-  "docs/evidence/P05.T01v/regressions/managed-login-postgresql" +
-  (args.length ? "-" + args[0].slice(10) : "") +
-  ".json";
-if (existsSync(reportPath)) throw Error("MANAGED_LOGIN_IMMUTABLE_REPORT_EXISTS");
+const reportName =
+  "labs/managed-login-postgresql" + (args.length ? "-" + args[0].slice(10) : "") + ".json";
 const paths = [
   "scripts/managed-login-postgresql-lab.mjs",
   "scripts/fixtures/managed-login-request-worker.ts",
@@ -1216,8 +1214,7 @@ const report = {
 const text = JSON.stringify(report, null, 2) + "\n";
 if (privateMarkers.some((marker) => marker && text.includes(marker)))
   throw Error("MANAGED_LOGIN_PG_SECRET_FENCE");
-mkdirSync("docs/evidence/P05.T01v/regressions", { recursive: true });
-writeFileSync(reportPath, text, { flag: "wx" });
+const reportPath = writeArtifact(reportName, text);
 process.stdout.write(
   JSON.stringify({
     report: reportPath,
