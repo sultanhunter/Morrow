@@ -59,6 +59,16 @@ export function checkKeyringDestination(
   { root = repositoryRoot, artifacts = artifactsRoot() } = {},
 ) {
   if (!isAbsolute(out) || resolve(out) !== out) fail("LOGIN_KEYRING_OUT_NOT_ABSOLUTE");
+  const guarded = [root, artifacts].flatMap((path) => {
+    try {
+      return [path, realpathSync(path)];
+    } catch {
+      return [path];
+    }
+  });
+  // Refuse by location first, so a destination inside the checkout or the
+  // artifacts directory is refused even when its parent does not exist yet.
+  if (guarded.some((path) => inside(out, path))) fail("LOGIN_KEYRING_OUT_INSIDE_CHECKOUT");
   const parent = dirname(out);
   let real;
   try {
@@ -67,14 +77,6 @@ export function checkKeyringDestination(
     fail("LOGIN_KEYRING_OUT_PARENT_MISSING");
   }
   if (real !== parent || !lstatSync(parent).isDirectory()) fail("LOGIN_KEYRING_OUT_PARENT_SYMLINK");
-  const guarded = [root, artifacts].flatMap((path) => {
-    try {
-      return [path, realpathSync(path)];
-    } catch {
-      return [path];
-    }
-  });
-  if (guarded.some((path) => inside(out, path))) fail("LOGIN_KEYRING_OUT_INSIDE_CHECKOUT");
   try {
     lstatSync(out);
   } catch (error) {
