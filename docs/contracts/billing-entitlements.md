@@ -1,33 +1,122 @@
 # Billing and entitlements
 
-Version 1 draft, selected by canonical sequences 16–22. Owner: Morrow platform owner. P01 defines records and semantics; P11/P12 enforce dispatch; P18 qualifies real billing. Review: Codex semantic self-review, integration/production qualification separate.
+Owner: Morrow platform owner. Decisions: ADR-0015 (billing routes by origin; supersedes ADR-0006) with its follow-up decisions OQ-1 to OQ-3, and ADR-0011 Q8 (kill switches). Packet: P01.T04a. P01 defines records and semantics; P11.T04a enforces admission and reservations; P18.T01a-c qualify both payment routes. No checkout, charge, purchase, refund, provider call or credential exists in P01.
 
-## Ownership and trust
+## Two routes, chosen by origin
 
-One Shopify installation/shop owns BillingAccount. Organization membership does not pool subscriptions or authorize another shop's charges. Multi-store tasks bind named payers, installation/store IDs, subscription evidence and revisions in an immutable CostAllocation. Proposal parameters/reference bind allocation digest and revision. Payer, split, rate, meter or currency changes require renewed exact review. Current authority, approval and entitlement are independent requirements.
+Each workspace has exactly one billing route, held server-side in a `WorkspaceBillingRoute` record:
 
-EntitlementSnapshot is a server projection of verified provider evidence with bounded validity and current revision. Reconcile subscription changes before paid dispatch and deny when known cancelled, suspended, past due or uninstalled. A checkout return, URL plan handle, browser login, agent prompt or valid schema does not prove payment/authority. Credentials stay in the broker; records carry identifiers/digests.
+- **`morrow_direct`**: Morrow sells. Stripe Billing collects, Stripe Tax computes tax, and Morrow is the seller of record. Only a website signup that pays before any store is linked reaches it.
+- **`shopify_app_pricing`**: Shopify App Pricing collects, with the same tiers. Every other paying workspace, including every merchant who arrives from Shopify.
 
-Shopify App Pricing is the sole selected provider in this version. External billing/origin routing, connector classification and fee treatment remain unqualified. An external route needs reviewed eligibility and a versioned adapter before activation. Connection-only UI does not change billing ownership. See billing-ownership.md.
+The route is unset until the workspace's first completed payment and never changes afterwards. A checkout return, return URL, query value, plan handle, browser login, prompt or valid-looking schema never sets or proves it.
 
-## One work-credit balance
+### Rules R1-R11
 
-CreditGrant distinguishes included/purchased credits, payment evidence, terms revision, effective time and optional expiry. CreditWallet projects available/reserved/consumed whole internal units. A displayed work credit may contain smaller published units. Credits price complete work; they are neither cash nor provider tokens. P18 applies each verified grant once; schemas do not mint credits.
+An **association** is an installation's `workspace_store_links` row (migration 0005: one per installation, never reassigned or deleted). A **current link** is an association whose installation is installed and whose connection is not disconnected.
 
-Standard packages differ principally by paid credit quantity. Managed inference, tools and bounded execution use a versioned work rate card. Minimum revenue and costed enterprise terms cover persistent resources and service commitments. Extra credits require explicit purchase or an owner-authorized capped mandate; top-ups default off. Published rates, renewal, rollover, expiry, proration, refunds, discounts, rounding, platform-caused retries and overages require explicit pre-charge qualification. No provisional prices are activated.
+| Phase | Condition | Purchase surface | Paid work |
+| --- | --- | --- | --- |
+| `open` | no route; origin `website`; no installation ever associated | `morrow` (`subscribe` only) | denied (`BILLING_NO_ROUTE`) |
+| `shopify_bound` | no route; origin `shopify_install`, or any installation ever associated | `shopify` while a link is current, else `none` | denied (`BILLING_NO_ROUTE`) |
+| `morrow_direct` | route fixed to `morrow_direct` | `morrow` | per entitlement and credits |
+| `shopify_app_pricing` | route fixed to `shopify_app_pricing` | `shopify` while a link is current, else `none` | per entitlement and credits |
 
-## Accounting and lifecycle
+- **R1 Origin.** Written once, in the creating transaction. `website` only for the website signup flow when no unconsumed install handoff exists for the creating principal or browser family; `shopify_install` for every other or unrecognized flow. The install handoff (P09.T02a) is kept after it expires, so an expired handoff still routes signup to the install continuation. A missing route record reads as `shopify_install`, so a reader gap never offers Morrow checkout.
+- **R2 Shopify binding.** The first association of any installation with a workspace that has no route sets `shopifyBoundAt` in the link transaction; it is never cleared. Linking is never denied for billing reasons. The same transaction re-classifies the installation's held payments and enqueues expiry of the workspace's open Morrow checkout sessions.
+- **R3 Completed payment.** Money actually collected: a verified event with `amountPaid > 0`. A $0 invoice (trial, 100% coupon, customer balance, credit note), Stripe `trialing`, an App Pricing trial or null `currentBillingCycle`, a free plan, a 100% discount and a $0 development-store contract never fix a route or grant credits. The route fixes once, in the transaction that accepts the first completed payment: a Stripe `subscription_period` fixes `morrow_direct` only in phase `open`; an App Pricing `subscription_period` of an associated installation fixes `shopify_app_pricing` only in phase `shopify_bound`. Morrow's serialized route-row lock orders them, never provider timestamps.
+- **R4 Immutability.** No API, client input, provider event or operator flag switches a fixed route. Moving a paying workspace needs a new owner decision.
+- **R5 Payers.** `morrow_direct`: one storeless BillingAccount for the workspace (one Stripe customer and subscription) pays for work on every currently linked store. `shopify_app_pricing`: one BillingAccount per associated installation, created at its first completed payment and kept across disconnects; its credits are spendable only while its link is current. Another shop's subscription never pays for work on this shop.
+- **R6 Multi-store.** Linking or disconnecting never changes the route, creates a `morrow_direct` payer, or writes a reservation, liability or meter event. Shopify-route multi-store work declares an explicit allocation. No account of another workspace is ever charged.
+- **R7 No double billing.** A Stripe payment for a `shopify_bound` or `shopify_app_pricing` workspace (including one completed before a link but verified after it), an App Pricing payment on any installation of a `morrow_direct` workspace, a second subscription for the same payer while the current one is not terminal, a payment on a terminal subscription and a top-up without a billable subscription are **route conflicts**. A conflict fixes, entitles and grants nothing, and is keyed by `(workspace, payment route, subscriptionKey)` (or `paymentKey` for a top-up), so repeat invoices attach to one open conflict.
+- **R8 Held payments.** A verified payment that cannot be classified yet is held by `paymentKey`: never dropped, never refunded automatically. Reasons: `INSTALLATION_NOT_ASSOCIATED` (re-classified in the link transaction), `CUSTOMER_NOT_MAPPED` and `NOT_MORROW_INITIATED` (resolved only by P18.T01c with owner approval), `TERMS_MISMATCH`, and `SUBSCRIPTION_NOT_CURRENT` (re-classified when that period is accepted).
+- **R9 Mode.** The environment comes from the composition root, never from a request or provider event. Stripe mode is the `livemode` of the event and of the object read back, on the account the broker verified. Shopify has no test flag: a record is `test` when the installation's shop is a development store or the cycle's effective price is $0, else `live`. Production accepts only `live`; development and staging only `test`. A record in the other mode neither fixes, entitles nor grants (`PAYMENT_MODE_REFUSED`).
+- **R10 Morrow's ledger is the only credit source.** `creditUnits` come only from the versioned `BillingTerms` table, keyed by the price or plan read back from the provider object; a published price key keeps its credit quantity forever. An unknown key, a kind or currency that disagrees, or a plan change with no entry is held as `TERMS_MISMATCH`. Morrow grants once per `(route, mode, paymentKey)`; credits are still reserved before dispatch (P11.T04a). Stripe billing-credit objects are never created or read. `morrow_direct` top-ups are one-off Stripe invoices granted after `invoice.paid`. Shopify-route extra credits are post-paid usage under a Morrow `UsageCap` (zero by default), settled as v1 `UsageLiability` and `MeterEvent` records, never a payment event or a grant.
+- **R11 Reversals.** A verified refund or dispute of a granted payment is a `PaymentReversal`. While it is `open`, the payer is not billable even though Stripe reports the subscription `active`; existing reservations follow the retained-work contract. A reversal of a payment that granted nothing is recorded only.
 
-Reserve all allocation shares atomically before paid work. CreditReservation holds maximum credits; payer monetary liabilities and VendorCostReservation hold separate cash ceilings. Children/tools/retries consume aggregate root/payer budgets. Admission checks current provider eligibility and qualified rate/cost margins, including the lowest effective purchased-credit price and bounded low-token work. The P01 examples supply synthetic qualification facts; no real schedule or dispatch exists.
+## What is paid work (implemented in P01.T04a PR-A)
 
-UsageLiability distinguishes merchant credits, merchant cash liability and attributable actual vendor cost. Unknown vendor cost is null/uncertain, never invented zero. Verified settlement binds pinned rate evidence, releases only proven unused commitments, and preserves consumed usage and bills. Cancellation is not zero usage evidence.
+`docs/contracts/paid-work.json` is the one table. `isPaidWork(capabilityId, verb)` (`@morrow/policy/paid-work`) is true when the capability is unknown (fail closed), or when its effect is `billable_job`, `spend`, `external_write` or `communication`, it is not a kill switch and the verb is not `view`, `propose`, `approve` or `delegate`. `execute` and `administer` are therefore gated on 27 catalogue capabilities (28 have a paid effect; `ads.campaign.pause` is a kill switch). The human evaluator returns `entitlement_denied` only when `!entitlementAllowed && isPaidWork`, so reads, setup, linking, invitations, approvals, exports, privacy and every kill switch never read entitlement; `provider_denied` still comes first for every capability. The agent kernel is unchanged: every agent operation is metered model work, so it checks entitlement on every operation (`agent-authority.md`).
 
-MeterEvent binds reconciled usage, original subscription and meter independently from credit settlement. Its stable ID/payload digest survive status changes. Submitted/uncertain events cannot receive new IDs or blind retries. P18 supplies durable outbox, exact provider deduplication and historical reconciliation. Acceptance requires a provider receipt; a local digest alone is not proof.
+`inspectPaidWork` (`npm run verify:billing`) enforces PW1 (closed table, unique enum members, `execute` and `administer` always gated, `view` and `approve` never), PW2 (no kill switch is paid), PW3 (every `budget_reservation` capability is paid), PW4 (no `read`, `internal_write` or `control` capability is paid) and PW5 (no row of `owner-bootstrap-v1`, `workspace-member-v1` or `workspace-admin-v1` is paid with its template verbs; the lists are in `fixtures/P01.T04a.json`). Narrowing the table is a billing change and needs an ADR.
 
-Cancellation/suspension stops new paid dispatch. Uninstall also revokes shop API access immediately; other authorized shops remain connected. Unsent reservations can release; submitted liabilities reconcile without new commercial work. Credit exhaustion preserves ordinary granted reads, approvals, export/deletion/privacy handling. Billing/legal retention and merchant-content deletion follow separate reviewed classes.
+**Entitlement writers.** `entitlementAllowed` is set only by the billing constraints reader (`createBillingConstraintsReader`, PR-B) and copied by its two forwarders, `createHumanPolicyService` and `createWorkspacePermissionBoundary`. Every other product builder under `apps/` and `packages/` passes a literal `false`. `inspectEntitlementWriters` (`npm run verify:boundaries`) fails any other write with `ENTITLEMENT_WRITER_UNAPPROVED:<file>:<line>`. A later reader (P05.T04b) adds itself to the allowlist in its own reviewed PR.
+
+## Test entitlement seed (ADR-0015 follow-up decision OQ-2 (a))
+
+`TestEntitlementSeed` is an owner-run, audited, capped and expiring test entitlement for one workspace and named stores (`mode` is always `test`). `evaluateTestEntitlementSeed` (`@morrow/policy/billing-state`) accepts it only in `development` and `staging`, between `validFrom` and `validUntil`, and only for its own tenant. An accepted seed covers the named stores and gives one storeless seed payer whose `creditUnits` is the cap. Production readers refuse every seed without reading it (`SEED_REFUSED_IN_PRODUCTION`). A seed fixes no route, creates no account on either route and is never a payment. The M4 packets build its table and writer; each use on hosted staging needs a per-action owner approval. The OQ-3 review allowance (one named development store in production, per-action owner approval) extends the writer later (P18.T01b/P18.T05); it is not accepted by this contract.
+
+## Contracts
+
+`schemas/v1.1/billing.schema.json` (`urn:morrow:contracts:billing:v1.1`) is the billing layer of contract v1.1; billing v1 stays byte-identical, and a billing definition resolves to the newest billing layer that defines it (`contract-versions.md`). It adds `BillingRoute`, `PaymentMode`, the canonical keys (`PaymentKey`, `SubscriptionKey`, `PriceKey` and their per-route forms), `WorkspaceBillingRoute`, `VerifiedPaymentEvent`, `PaymentReversal`, `BillingTerms`, `UsageCap`, `UsdBillingMoney` and `TestEntitlementSeed`, and replaces `BillingAccount`, `EntitlementSnapshot`, `CreditGrant`, `AllocationShare` and `CostAllocation` (`changes.json`, ADR-0015). Route couplings are `oneOf` branches of closed objects: a Morrow-direct account, entitlement and share are storeless; a Shopify one names its installation and store; a Shopify event is never a top-up; keys must match the route. Every key is a valid core `Id`. `CreditWallet`, `CreditReservation`, `UsageLiability`, `MeterEvent` and `VendorCostReservation` keep their v1 shapes; `MeterEvent.subscriptionId` holds a `SubscriptionKey`. JSON Schema cannot reject a terms table that repeats a `(route, mode, priceKey)` with different credits, so the billing library rejects it (`BILLING_INPUT_INVALID`).
+
+### Provider status to v1 entitlement status
+
+| Provider observation (read back) | v1 status | Billable |
+| --- | --- | --- |
+| Stripe `active` | `active` | yes |
+| Stripe `trialing` | `pending` | no (no free tier; the owner may change it by ADR) |
+| Stripe `incomplete` | `pending` | no |
+| Stripe `incomplete_expired` | `cancelled` (terminal) | no |
+| Stripe `past_due` | `past_due` | no |
+| Stripe `unpaid`, `paused` | `suspended` | no |
+| Stripe `canceled` | `cancelled` (terminal) | no |
+| Stripe `active` with `cancel_at_period_end` | `active`, `validUntil` at most the period end | until then |
+| App Pricing subscription present, cycle started, effective price > 0, not frozen | `active` | yes |
+| App Pricing `trialEndsAt` in the future or `currentBillingCycle` null | `pending` | no |
+| App Pricing effective price $0 (free plan, 100% discount, development-store no-charge contract) | `pending` | no |
+| App Pricing latest `SUBSCRIPTION_FROZEN` not followed by `SUBSCRIPTION_UNFROZEN` | `suspended` | no |
+| App Pricing `cancelAtEndOfCycle` or `SUBSCRIPTION_CANCELLATION_SCHEDULED` | `active`, `validUntil` at most `currentBillingCycle.endTime` | until then |
+| App Pricing `activeSubscription` null after a subscription, or `SUBSCRIPTION_CANCELED` | `cancelled` (terminal) | no |
+| `app/uninstalled` (ADR-0008 HMAC path) | `uninstalled` (terminal) | no |
+
+### Provider payment to event kind and amount
+
+Stripe `billing_reason` `subscription_create` or `subscription_cycle` is a `subscription_period`; `subscription_update` (a proration invoice) is a `plan_change`; `manual` on a Morrow top-up invoice is a `top_up`; any other reason is held as `TERMS_MISMATCH`. `amountPaid` is the invoice's `amount_paid` on a `paid` invoice that was not paid out of band. On Shopify, a period's amount is the cycle's effective recurring price once the cycle has started and while the subscription is not frozen; P18.T01b confirms against the Partner API reference which record proves each cycle's charge before it emits any Shopify event.
+
+## Persistence requirements (no migration in P01.T04a)
+
+1. **Route row.** One per workspace, inserted in the creating transaction with the origin from `originForCreation`, by P05.T01x if its Part B has not merged, otherwise by the first billing child (which backfills `website` only for workspaces that predate the install handoff). A trigger refuses changes to a set `origin`, `route`, `mode` or `route_fixed_at`, and any clearing of `shopify_bound_at`. The link writer sets `shopify_bound_at` under the row lock.
+2. **Install handoff (P09.T02a).** Bound to the installation, the receiving browser family and, after sign-in, the principal; consumed only by the install continuation; retained after expiry; read by signup in its creating transaction.
+3. **Accounts and customers.** One `morrow_direct` account per workspace, created in the route-fixing transaction; one Shopify account per installation, created at its first completed payment. The Stripe customer mapping is one-to-one (`UNIQUE (workspace_id)`, `UNIQUE (stripe_customer_id)`); the customer is created in the broker with an idempotency key before the first checkout, and Checkout always passes it, never `customer_email`.
+4. **Grants.** `UNIQUE (route, mode, payment_key)`; the grant and its wallet credit commit together; a duplicate insert is a replay.
+5. **Ingress and provider reads.** The event writer has no browser session. Stripe: one public api route forwards the raw body and `Stripe-Signature` unparsed over the service binding to the broker, which verifies the signature over the raw bytes (5-minute tolerance; the previous secret only during a rotation roll), checks `livemode` and the account, deduplicates by event id and reads the object back before any write. The tenant comes only from the customer mapping, cross-checked against the OperationLedger operation named in metadata. Shopify App Pricing sends no subscription webhooks: the welcome-link redirect's `shop` and `plan_handle` only schedule a Partner API read; the shop id comes from the OAuth-verified installation. Handlers acknowledge after commit and read back an unknown commit.
+6. **Outbound Stripe writes and unknown outcomes.** Each carries an idempotency key bound to its OperationLedger operation and the operation id in metadata. On an unknown outcome: read back first; replay with the same key only after proven absence and under 23 hours; otherwise hold for P18.T01c; never send with a new key.
+7. **Checkout intent and the link race.** Checkout intents are recorded under the route-row lock with the route revision, one open session per workspace. The success return proves nothing; the broker reads the session and invoice back. A payment completed at Stripe but verified after a link is `ROUTE_MISMATCH`.
+8. **Reader.** The billing facts reader runs in the same tenant-scoped transaction as the identity read, under FORCE RLS, with no tenant or actor parameter.
+9. **Conflicts.** Append-only, one open conflict per key; P18.T01c's first remediation (owner-approved per action) stops the renewal, and refunds follow.
+10. **Held payments.** Append-only by `paymentKey`, never deleted or refunded automatically.
+11. **Reversals.** `charge.refunded`, `charge.dispute.created` and `charge.dispute.closed` trigger a readback; rows are append-only by revision.
+
+## Denials, surfaces and obligations
+
+Billing denials use frozen ErrorEnvelope rows (`BILLING_DENIAL_ENVELOPES`, P01.T04a PR-B). No message names a provider, price or checkout, so a denial cannot expose Morrow checkout to a Shopify-origin merchant, and every payer denial shares one envelope.
+
+| Codes | `code` / `retryClass` | Safe message |
+| --- | --- | --- |
+| `BILLING_NO_ROUTE` | `denied` / `recheck_before_retry` | "Paid work starts once this workspace has an active plan." |
+| `BILLING_NOT_ACTIVE`, `STORE_NOT_BILLABLE` | `denied` / `recheck_before_retry` | "A plan covering this work is not active." |
+| `STORE_NOT_LINKED` | `denied` / `recheck_before_retry` | "This store is not connected to this workspace." |
+| `ALLOCATION_REQUIRED`, `PAYER_SELECTION_REQUIRED` | `missing_input` / `recheck_before_retry` | "Choose which store pays for this work." |
+| `PAYER_NOT_BILLABLE`, `PAYER_OUTSIDE_WORK_SCOPE`, `DUPLICATE_PAYER_OR_STORE` | `denied` / `recheck_before_retry` | "This payer cannot pay for this work." |
+| `ENTITLEMENT_NOT_CURRENT` | `conflict` / `recheck_before_retry` | "Billing changed; review the work again." |
+| `PURCHASE_ROUTE_MISMATCH` | `denied` / `never` | "Manage this workspace's plan where it was purchased." |
+| `SUBSCRIPTION_EXISTS` | `conflict` / `never` | "This workspace already has a plan; change it instead." |
+| `SUBSCRIPTION_REQUIRED` | `missing_input` / `recheck_before_retry` | "Choose a plan first." |
+| `BILLING_FACTS_INVALID`, `BILLING_INPUT_INVALID` | `unavailable` / `safe_read_retry` | "Billing status is unavailable. Try again." |
+
+Payment outcomes, held reasons, conflict codes and `PAYMENT_MODE_REFUSED` are internal and never shown. `CREDITS_EXHAUSTED` (`budget_exhausted`) stays with P11.T04a.
+
+**Call-to-action rule.** A purchase link or purchase wording on any Morrow surface comes only from `billingCallToAction` (PR-B): P14 screens, notifications, inbox items, emails, the Coordinator's and agents' billing tool results, and P11.T04a's `CREDITS_EXHAUSTED` message. In a Shopify phase it never returns a Morrow billing path, the word "checkout", a provider name, a price or a currency. Connector screens show none and never describe off-platform billing, even for stores of `morrow_direct` workspaces.
+
+**Consumer obligations.** P05.T01x Part B: the route row, `!isPaidWork` for every template v1 row, AC37 on ADR-0015. P05.T01z PR-A: `!isPaidWork` for every row of the membership templates. P06.T01a and every other authority builder: `entitlementAllowed: false`. P09.T02a: the install handoff, the link transaction's `shopifyBoundAt`, held-payment re-classification and checkout expiry, the development-store flag at OAuth, and connector returns that never land on a checkout-offering page. P18.T01a: the purchase guard under `/workspace/:workspaceId/billing/morrow/`, Checkout, Billing, Tax and portal on the mapped customer, ingress, readback, reversals and persistence items 3-7. P18.T01b: Partner API reads, canonical Shopify keys, usage meters and caps, development-store mode and the ADR-0015 item 3 plan-step design. P18.T01c: reconciliation, conflicts, held payments and reversals. P11.T04a: admission keyed on `isPaidWork`, payer selection with the bound allocation, atomic reservation and dispatch recheck. P05.T04b: the agent reader sets `entitlementAllowed` from the billing library and joins the writer allowlist. P14, P06.T02a, P07.T03 and P13: purchase links only from `billingCallToAction`, each with a test. Launch gates (P18.T05, owner): Stripe live activation, entity, bank account and tax registrations; App Review evidence; the OQ-3 allowance in the review notes; no Payment Links or Pricing Tables; the revenue-share treatment.
+
+## One work-credit balance and accounting
+
+CreditGrant distinguishes included and purchased credits, the payment it came from, the terms revision, effective time and optional expiry. CreditWallet projects available, reserved and consumed whole internal units. Credits price complete work; they are neither cash nor provider tokens. Extra credits need an explicit purchase or an owner-authorized capped mandate; top-ups default off. Prices, tiers, credit quantities, trials, proration, refunds and top-up terms are P18 pricing decisions (ADR-0015 item 4); no provisional price is active.
+
+Reserve all allocation shares atomically before paid work. CreditReservation holds maximum credits; payer liabilities and VendorCostReservation hold separate cash ceilings. UsageLiability separates merchant credits, merchant cash liability and actual vendor cost; unknown vendor cost is uncertain, never zero. MeterEvent binds reconciled usage to the original subscription and meter; a submitted or uncertain event never gets a new id or a blind retry. Cancellation and suspension stop new paid dispatch; unsent reservations release; submitted liabilities reconcile without new commercial work. Credit exhaustion never blocks reads, approvals, exports, privacy handling or stops.
 
 ## Validation and evidence
 
-billing.schema.json adds 12 closed definitions alongside core.schema.json. Reject unknown fields, coercion, invalid revisions, float credit counts and unspecified currencies. Money is an exact decimal string; credits are exact integer strings. Never infer FX. Semantic checks require current server scope, subscription evidence/revision, rate, budget and exact allocation review. Service failures use core ErrorEnvelope; synthetic inspectors emit review reasons without sensitive payloads.
-
-scripts/billing-checks.mjs is a deterministic contract simulator. It cannot prove concurrent transactions, account grants, rate economics, real inference usage, webhook ordering or invoice acceptance. P06/P11/P12/P18 implement durable enforcement and integration. No checkout, charge, purchase, refund or model request occurs in P01. Breaking meaning requires a version/migration; consumers pin reviewed schemas. Run npm run verify:billing and npm run test:billing.
+Reject unknown fields, coercion, invalid revisions, float credit counts and unspecified currencies. Money is an exact decimal string; credits are exact integer strings; never infer FX. Service failures use the core ErrorEnvelope. `scripts/billing-checks.mjs` is a deterministic contract simulator; it cannot prove concurrent transactions, provider ordering or invoice acceptance. Run `npm run verify:billing`, `npm run verify:contracts`, `npm run verify:boundaries` and `npm run test:billing`.

@@ -6,3 +6,5 @@ export const validators: Readonly<Record<string, (value: unknown) => boolean>>;
 export const currentDefinitionSelectors: Readonly<Record<string, string>>;
 /** Effective `<capability id>.<input|output>` -> exact body selector. */
 export const capabilityBodySelectors: Readonly<Record<string, string>>;
+/** Effective billing definition name -> exact selector (newest billing layer that defines it). */
+export const currentBillingDefinitionSelectors: Readonly<Record<string, string>>;

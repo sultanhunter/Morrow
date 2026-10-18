@@ -6,7 +6,8 @@
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
     "docs/contracts/schemas/v1.1/core.schema.json": "ef844177fc7fd5057defe0d66020310a670c68cd092ec4e9fec69349d49e3ed6",
-    "docs/contracts/schemas/v1.1/capabilities.schema.json": "43c7adce5fc995c6b3528c9c2489a0a616a1736fb3cbd3452eb90320b8a65962"
+    "docs/contracts/schemas/v1.1/capabilities.schema.json": "43c7adce5fc995c6b3528c9c2489a0a616a1736fb3cbd3452eb90320b8a65962",
+    "docs/contracts/schemas/v1.1/billing.schema.json": "a9ff54a92406600972286eadcf16f55f82901b9fe9e1585e54bb005c81b81cc8"
   },
   "replacements": [
     {
@@ -56,18 +57,50 @@
       "name": "governance.approval.decide.input",
       "replaces": "capabilities:governance.approval.decide.input",
       "adr": "ADR-0011"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "BillingAccount",
+      "replaces": "billing:BillingAccount",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "EntitlementSnapshot",
+      "replaces": "billing:EntitlementSnapshot",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "CreditGrant",
+      "replaces": "billing:CreditGrant",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "AllocationShare",
+      "replaces": "billing:AllocationShare",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "CostAllocation",
+      "replaces": "billing:CostAllocation",
+      "adr": "ADR-0015"
     }
   ],
-  "definitions": 365,
+  "definitions": 389,
   "definitions_by_source": {
     "core": 116,
     "capabilities": 206,
     "billing": 12,
     "core-v1.1": 21,
-    "capabilities-v1.1": 10
+    "capabilities-v1.1": 10,
+    "billing-v1.1": 24
   },
   "current_definitions": 135,
+  "current_billing_definitions": 31,
   "capabilities": 105,
   "capability_body_overrides": 10,
-  "generated_sha256": "eeee7159bec1fe2873ab211e77a5faf5d6239ec0a55b35fe963cf46bc0bf2170"
+  "generated_sha256": "ba0e99a38666d18a1d6894b75ca3959472a9d340cb5d9da4191b17ac0483d068"
 }

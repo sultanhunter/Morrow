@@ -75,6 +75,16 @@ const fixture = (letter) => {
 };
 const a = fixture("a"),
   b = fixture("b");
+// P01.T04a AC31: a paid capability (billable_job) next to the unpaid setup grant.
+const paid = {
+  grant: {
+    ...a.grant,
+    id: "grant_a_paid",
+    capabilityId: "creative.image.generate",
+    scope: { ...a.grant.scope, fields: ["briefRef"] },
+  },
+  request: { ...a.request, capabilityId: "creative.image.generate", fields: ["briefRef"] },
+};
 const observed = await localPostgresLab("P05.T02b", async ({ id, sql, image, version }) => {
   sql("CREATE DATABASE morrow; CREATE DATABASE morrow_grants_rollback;");
   sql(readFileSync("infra/identity-role-prerequisites.sql", "utf8"), "morrow");
@@ -121,7 +131,7 @@ const observed = await localPostgresLab("P05.T02b", async ({ id, sql, image, ver
  INSERT INTO morrow_identity.workspaces (id,organization_id,display_name,active) VALUES ('workspace_a','org_a','Workspace A',true),('workspace_b','org_b','Workspace B',true);
  INSERT INTO morrow_identity.workspace_memberships VALUES ('org_a','workspace_a','membership_a',true),('org_b','workspace_b','membership_b',true);
  INSERT INTO morrow_identity.sessions VALUES ('session_a','human_a','org_a',${literal(digests[0])},'workos','synthetic_a',statement_timestamp()+interval '1 hour',NULL),('session_b','human_b','org_b',${literal(digests[1])},'workos','synthetic_b',statement_timestamp()+interval '1 hour',NULL);`);
-  for (const f of [a, b])
+  for (const f of [a, b, { ...a, grant: paid.grant }])
     admin(
       `INSERT INTO morrow_identity.grants VALUES (${literal(f.grant.id)},${literal(f.actor.organizationId)},${literal(f.actor.workspaceId)},${literal(f.actor.membershipId)},${literal(f.actor.principalId)},${literal(JSON.stringify(f.grant))}::jsonb);`,
     );
@@ -220,9 +230,14 @@ const observed = await localPostgresLab("P05.T02b", async ({ id, sql, image, ver
         return { providerAllowed: true, entitlementAllowed: false };
       },
     });
+    // Entitlement gates only paid work (P01.T04a AC31): setup stays allowed.
+    check(
+      "unrouted_setup_not_billing_gated",
+      (await entitlement.decide(digests[0], "workspace_a", a.request)).decision.allowed,
+    );
     check(
       "sql_identity_does_not_bypass_entitlement_constraints",
-      (await entitlement.decide(digests[0], "workspace_a", a.request)).decision.reason ===
+      (await entitlement.decide(digests[0], "workspace_a", paid.request)).decision.reason ===
         "entitlement_denied",
     );
     admin("UPDATE morrow_identity.grants SET payload=payload-'validFrom' WHERE id='grant_a';");

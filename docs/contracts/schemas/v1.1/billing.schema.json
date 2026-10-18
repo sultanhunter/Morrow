@@ -1,0 +1,1992 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:morrow:contracts:billing:v1.1",
+  "title": "Morrow billing contract version 1.1",
+  "$comment": "Billing routes by origin (ADR-0015; P01.T04a). Additions and declared replacements over https://morrow.local/contracts/v1/billing.schema.json, which stays byte-identical. A billing definition resolves here first, then in billing v1 (docs/contracts/contract-versions.md). Replacements of v1 names are listed in changes.json.",
+  "$defs": {
+    "BillingRoute": {
+      "description": "A workspace's one billing route (ADR-0015): Morrow sells on Stripe Billing with Stripe Tax, or Shopify App Pricing collects.",
+      "type": "string",
+      "enum": [
+        "morrow_direct",
+        "shopify_app_pricing"
+      ]
+    },
+    "PaymentMode": {
+      "description": "Provider mode of a billing record or event. Production accepts only live; development and staging accept only test (R9).",
+      "type": "string",
+      "enum": [
+        "live",
+        "test"
+      ]
+    },
+    "StripePaymentKey": {
+      "description": "A Stripe invoice: stripe:invoice:in_<id>. A PaymentIntent, Checkout Session or Charge id is never a payment key.",
+      "type": "string",
+      "pattern": "^stripe:invoice:in_[A-Za-z0-9]{8,100}$"
+    },
+    "ShopifyPeriodKey": {
+      "description": "One App Pricing billing period: shopify:app:<n>:shop:<n>:cycle:<currentBillingCycle.startTime>, numeric GID tails without leading zeros and UTC to the second.",
+      "type": "string",
+      "pattern": "^shopify:app:(?:0|[1-9][0-9]{0,19}):shop:(?:0|[1-9][0-9]{0,19}):cycle:[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    },
+    "ShopifyPlanChangeKey": {
+      "description": "One App Pricing plan change: shopify:app:<n>:shop:<n>:update:<SUBSCRIPTION_UPDATED occurredAt>.",
+      "type": "string",
+      "pattern": "^shopify:app:(?:0|[1-9][0-9]{0,19}):shop:(?:0|[1-9][0-9]{0,19}):update:[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    },
+    "PaymentKey": {
+      "description": "Canonical key of one verified payment. Morrow grants credits at most once per (route, mode, paymentKey). Every key is a valid core Id.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StripePaymentKey"
+        },
+        {
+          "$ref": "#/$defs/ShopifyPeriodKey"
+        },
+        {
+          "$ref": "#/$defs/ShopifyPlanChangeKey"
+        }
+      ]
+    },
+    "StripeSubscriptionKey": {
+      "description": "A Stripe subscription: stripe:sub:sub_<id>.",
+      "type": "string",
+      "pattern": "^stripe:sub:sub_[A-Za-z0-9]{8,100}$"
+    },
+    "ShopifySubscriptionKey": {
+      "description": "An App Pricing subscription: shopify:app:<n>:shop:<n>:created:<SUBSCRIPTION_CREATED occurredAt>, recorded at first observation and never re-derived.",
+      "type": "string",
+      "pattern": "^shopify:app:(?:0|[1-9][0-9]{0,19}):shop:(?:0|[1-9][0-9]{0,19}):created:[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    },
+    "SubscriptionKey": {
+      "description": "Canonical key of one provider subscription; valid as a core Id, so it fits v1 subscriptionId fields.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StripeSubscriptionKey"
+        },
+        {
+          "$ref": "#/$defs/ShopifySubscriptionKey"
+        }
+      ]
+    },
+    "StripePriceKey": {
+      "description": "A Stripe price: stripe:price:price_<id>.",
+      "type": "string",
+      "pattern": "^stripe:price:price_[A-Za-z0-9]{8,100}$"
+    },
+    "ShopifyPriceKey": {
+      "description": "An App Pricing plan handle read back from the Partner API: shopify:plan:<handle>. A redirect's plan_handle is never a source.",
+      "type": "string",
+      "pattern": "^shopify:plan:[A-Za-z0-9_-]{1,100}$"
+    },
+    "PriceKey": {
+      "description": "Key of a provider price or plan in Morrow's terms table. A published key keeps its credit quantity forever.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StripePriceKey"
+        },
+        {
+          "$ref": "#/$defs/ShopifyPriceKey"
+        }
+      ]
+    },
+    "UsdBillingMoney": {
+      "description": "An exact non-negative USD amount (App Pricing prices are USD only).",
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,15})(\\.[0-9]{1,9})?$"
+        },
+        "currency": {
+          "type": "string",
+          "const": "USD"
+        }
+      },
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "additionalProperties": false
+    },
+    "WorkspaceBillingRoute": {
+      "description": "The server-held billing route of one workspace. Written only by trusted server writers; never a request field. route, mode, routeFixedAt and fixingPaymentKey are all null or all set. Morrow-direct is fixed only for a website workspace that was never Shopify-bound; Shopify only for a Shopify-bound one.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "origin": {
+              "type": "string",
+              "enum": [
+                "website",
+                "shopify_install"
+              ]
+            },
+            "shopifyBoundAt": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "route": {
+              "type": "null"
+            },
+            "mode": {
+              "type": "null"
+            },
+            "routeFixedAt": {
+              "type": "null"
+            },
+            "fixingPaymentKey": {
+              "type": "null"
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "organizationId",
+            "workspaceId",
+            "origin",
+            "shopifyBoundAt",
+            "route",
+            "mode",
+            "routeFixedAt",
+            "fixingPaymentKey",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "origin": {
+              "type": "string",
+              "const": "website"
+            },
+            "shopifyBoundAt": {
+              "type": "null"
+            },
+            "route": {
+              "const": "morrow_direct"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "routeFixedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "fixingPaymentKey": {
+              "$ref": "#/$defs/StripePaymentKey"
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "organizationId",
+            "workspaceId",
+            "origin",
+            "shopifyBoundAt",
+            "route",
+            "mode",
+            "routeFixedAt",
+            "fixingPaymentKey",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "origin": {
+              "type": "string",
+              "enum": [
+                "website",
+                "shopify_install"
+              ]
+            },
+            "shopifyBoundAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "route": {
+              "const": "shopify_app_pricing"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "routeFixedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "fixingPaymentKey": {
+              "$ref": "#/$defs/ShopifyPeriodKey"
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "organizationId",
+            "workspaceId",
+            "origin",
+            "shopifyBoundAt",
+            "route",
+            "mode",
+            "routeFixedAt",
+            "fixingPaymentKey",
+            "revision"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "VerifiedPaymentEvent": {
+      "description": "A provider payment Morrow verified server-side and read back (Stripe invoice.paid; an App Pricing cycle from a Partner API read). amountPaid is the money collected; creditUnits come only from BillingTerms. Tenant ids are null together only for an unattributed event. Stripe operationId is the OperationLedger operation the object traces to, or null when it traces to none (held NOT_MORROW_INITIATED). A Shopify event is never a top_up.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "organizationId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workspaceId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "route": {
+              "const": "morrow_direct"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "paymentKey": {
+              "$ref": "#/$defs/StripePaymentKey"
+            },
+            "kind": {
+              "type": "string",
+              "const": "subscription_period"
+            },
+            "subscriptionKey": {
+              "$ref": "#/$defs/StripeSubscriptionKey"
+            },
+            "priceKey": {
+              "$ref": "#/$defs/StripePriceKey"
+            },
+            "fromPriceKey": {
+              "type": "null"
+            },
+            "periodStart": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "periodEnd": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "installationId": {
+              "type": "null"
+            },
+            "storeId": {
+              "type": "null"
+            },
+            "operationId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "amountPaid": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+            },
+            "providerEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "verifiedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "organizationId",
+            "workspaceId",
+            "route",
+            "mode",
+            "paymentKey",
+            "kind",
+            "subscriptionKey",
+            "priceKey",
+            "fromPriceKey",
+            "periodStart",
+            "periodEnd",
+            "installationId",
+            "storeId",
+            "operationId",
+            "amountPaid",
+            "providerEvidenceRef",
+            "verifiedAt"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "type": "object",
+                "properties": {
+                  "organizationId": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "organizationId"
+                ]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "type": "null"
+                  }
+                }
+              },
+              "else": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "organizationId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workspaceId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "route": {
+              "const": "morrow_direct"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "paymentKey": {
+              "$ref": "#/$defs/StripePaymentKey"
+            },
+            "kind": {
+              "type": "string",
+              "const": "plan_change"
+            },
+            "subscriptionKey": {
+              "$ref": "#/$defs/StripeSubscriptionKey"
+            },
+            "priceKey": {
+              "$ref": "#/$defs/StripePriceKey"
+            },
+            "fromPriceKey": {
+              "$ref": "#/$defs/StripePriceKey"
+            },
+            "periodStart": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "periodEnd": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "installationId": {
+              "type": "null"
+            },
+            "storeId": {
+              "type": "null"
+            },
+            "operationId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "amountPaid": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+            },
+            "providerEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "verifiedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "organizationId",
+            "workspaceId",
+            "route",
+            "mode",
+            "paymentKey",
+            "kind",
+            "subscriptionKey",
+            "priceKey",
+            "fromPriceKey",
+            "periodStart",
+            "periodEnd",
+            "installationId",
+            "storeId",
+            "operationId",
+            "amountPaid",
+            "providerEvidenceRef",
+            "verifiedAt"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "type": "object",
+                "properties": {
+                  "organizationId": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "organizationId"
+                ]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "type": "null"
+                  }
+                }
+              },
+              "else": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "organizationId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workspaceId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "route": {
+              "const": "morrow_direct"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "paymentKey": {
+              "$ref": "#/$defs/StripePaymentKey"
+            },
+            "kind": {
+              "type": "string",
+              "const": "top_up"
+            },
+            "subscriptionKey": {
+              "type": "null"
+            },
+            "priceKey": {
+              "$ref": "#/$defs/StripePriceKey"
+            },
+            "fromPriceKey": {
+              "type": "null"
+            },
+            "periodStart": {
+              "type": "null"
+            },
+            "periodEnd": {
+              "type": "null"
+            },
+            "installationId": {
+              "type": "null"
+            },
+            "storeId": {
+              "type": "null"
+            },
+            "operationId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "amountPaid": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+            },
+            "providerEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "verifiedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "organizationId",
+            "workspaceId",
+            "route",
+            "mode",
+            "paymentKey",
+            "kind",
+            "subscriptionKey",
+            "priceKey",
+            "fromPriceKey",
+            "periodStart",
+            "periodEnd",
+            "installationId",
+            "storeId",
+            "operationId",
+            "amountPaid",
+            "providerEvidenceRef",
+            "verifiedAt"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "type": "object",
+                "properties": {
+                  "organizationId": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "organizationId"
+                ]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "type": "null"
+                  }
+                }
+              },
+              "else": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "organizationId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workspaceId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "route": {
+              "const": "shopify_app_pricing"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "paymentKey": {
+              "$ref": "#/$defs/ShopifyPeriodKey"
+            },
+            "kind": {
+              "type": "string",
+              "const": "subscription_period"
+            },
+            "subscriptionKey": {
+              "$ref": "#/$defs/ShopifySubscriptionKey"
+            },
+            "priceKey": {
+              "$ref": "#/$defs/ShopifyPriceKey"
+            },
+            "fromPriceKey": {
+              "type": "null"
+            },
+            "periodStart": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "periodEnd": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "installationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "storeId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "operationId": {
+              "type": "null"
+            },
+            "amountPaid": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+            },
+            "providerEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "verifiedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "organizationId",
+            "workspaceId",
+            "route",
+            "mode",
+            "paymentKey",
+            "kind",
+            "subscriptionKey",
+            "priceKey",
+            "fromPriceKey",
+            "periodStart",
+            "periodEnd",
+            "installationId",
+            "storeId",
+            "operationId",
+            "amountPaid",
+            "providerEvidenceRef",
+            "verifiedAt"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "type": "object",
+                "properties": {
+                  "organizationId": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "organizationId"
+                ]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "type": "null"
+                  }
+                }
+              },
+              "else": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "organizationId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workspaceId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "route": {
+              "const": "shopify_app_pricing"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "paymentKey": {
+              "$ref": "#/$defs/ShopifyPlanChangeKey"
+            },
+            "kind": {
+              "type": "string",
+              "const": "plan_change"
+            },
+            "subscriptionKey": {
+              "$ref": "#/$defs/ShopifySubscriptionKey"
+            },
+            "priceKey": {
+              "$ref": "#/$defs/ShopifyPriceKey"
+            },
+            "fromPriceKey": {
+              "$ref": "#/$defs/ShopifyPriceKey"
+            },
+            "periodStart": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "periodEnd": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "installationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "storeId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "operationId": {
+              "type": "null"
+            },
+            "amountPaid": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+            },
+            "providerEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "verifiedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "organizationId",
+            "workspaceId",
+            "route",
+            "mode",
+            "paymentKey",
+            "kind",
+            "subscriptionKey",
+            "priceKey",
+            "fromPriceKey",
+            "periodStart",
+            "periodEnd",
+            "installationId",
+            "storeId",
+            "operationId",
+            "amountPaid",
+            "providerEvidenceRef",
+            "verifiedAt"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "type": "object",
+                "properties": {
+                  "organizationId": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "organizationId"
+                ]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "type": "null"
+                  }
+                }
+              },
+              "else": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "PaymentReversal": {
+      "description": "A verified refund or dispute of a payment (R11), read back before any write. While open, the payer whose payment it reverses is not billable. A reversal of a payment that granted nothing is recorded only.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "organizationId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workspaceId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "route": {
+              "const": "morrow_direct"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "paymentKey": {
+              "$ref": "#/$defs/StripePaymentKey"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "refund",
+                "dispute"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "open",
+                "cleared"
+              ]
+            },
+            "amount": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+            },
+            "providerEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "verifiedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "organizationId",
+            "workspaceId",
+            "route",
+            "mode",
+            "paymentKey",
+            "kind",
+            "status",
+            "amount",
+            "providerEvidenceRef",
+            "verifiedAt",
+            "revision"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "type": "object",
+                "properties": {
+                  "organizationId": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "organizationId"
+                ]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "type": "null"
+                  }
+                }
+              },
+              "else": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "organizationId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "workspaceId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "route": {
+              "const": "shopify_app_pricing"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "paymentKey": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ShopifyPeriodKey"
+                },
+                {
+                  "$ref": "#/$defs/ShopifyPlanChangeKey"
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "refund",
+                "dispute"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "open",
+                "cleared"
+              ]
+            },
+            "amount": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+            },
+            "providerEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "verifiedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "organizationId",
+            "workspaceId",
+            "route",
+            "mode",
+            "paymentKey",
+            "kind",
+            "status",
+            "amount",
+            "providerEvidenceRef",
+            "verifiedAt",
+            "revision"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "type": "object",
+                "properties": {
+                  "organizationId": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "organizationId"
+                ]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "type": "null"
+                  }
+                }
+              },
+              "else": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "BillingTerms": {
+      "description": "Morrow's versioned terms table: the only source of creditUnits (R10). Keyed by the provider price or plan read back from the provider object. A (route, mode, priceKey) appears once; the billing library rejects a table that repeats one. Values are fixtures until P18 pricing.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "termsRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "uniqueItems": true,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "route": {
+                    "const": "morrow_direct"
+                  },
+                  "mode": {
+                    "$ref": "#/$defs/PaymentMode"
+                  },
+                  "priceKey": {
+                    "$ref": "#/$defs/StripePriceKey"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "subscription_period",
+                      "top_up"
+                    ]
+                  },
+                  "currency": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Currency"
+                  },
+                  "creditUnits": {
+                    "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+                  }
+                },
+                "required": [
+                  "route",
+                  "mode",
+                  "priceKey",
+                  "kind",
+                  "currency",
+                  "creditUnits"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "route": {
+                    "const": "shopify_app_pricing"
+                  },
+                  "mode": {
+                    "$ref": "#/$defs/PaymentMode"
+                  },
+                  "priceKey": {
+                    "$ref": "#/$defs/ShopifyPriceKey"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "const": "subscription_period"
+                  },
+                  "currency": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Currency"
+                  },
+                  "creditUnits": {
+                    "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+                  }
+                },
+                "required": [
+                  "route",
+                  "mode",
+                  "priceKey",
+                  "kind",
+                  "currency",
+                  "creditUnits"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "planChanges": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 400,
+          "uniqueItems": true,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "route": {
+                    "const": "morrow_direct"
+                  },
+                  "mode": {
+                    "$ref": "#/$defs/PaymentMode"
+                  },
+                  "fromPriceKey": {
+                    "$ref": "#/$defs/StripePriceKey"
+                  },
+                  "toPriceKey": {
+                    "$ref": "#/$defs/StripePriceKey"
+                  },
+                  "creditUnits": {
+                    "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+                  }
+                },
+                "required": [
+                  "route",
+                  "mode",
+                  "fromPriceKey",
+                  "toPriceKey",
+                  "creditUnits"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "route": {
+                    "const": "shopify_app_pricing"
+                  },
+                  "mode": {
+                    "$ref": "#/$defs/PaymentMode"
+                  },
+                  "fromPriceKey": {
+                    "$ref": "#/$defs/ShopifyPriceKey"
+                  },
+                  "toPriceKey": {
+                    "$ref": "#/$defs/ShopifyPriceKey"
+                  },
+                  "creditUnits": {
+                    "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+                  }
+                },
+                "required": [
+                  "route",
+                  "mode",
+                  "fromPriceKey",
+                  "toPriceKey",
+                  "creditUnits"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "termsRevision",
+        "entries",
+        "planChanges"
+      ],
+      "additionalProperties": false
+    },
+    "UsageCap": {
+      "description": "Morrow's cap on post-paid Shopify-route extra credits for one installation's current cycle and meter (R10). Shopify route only; zero by default (top-ups default off).",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "billingAccountId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "subscriptionKey": {
+          "$ref": "#/$defs/ShopifySubscriptionKey"
+        },
+        "periodStart": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "meterKey": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "maximumCredits": {
+          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+        },
+        "maximumLiability": {
+          "$ref": "#/$defs/UsdBillingMoney"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "organizationId",
+        "workspaceId",
+        "billingAccountId",
+        "installationId",
+        "storeId",
+        "subscriptionKey",
+        "periodStart",
+        "meterKey",
+        "maximumCredits",
+        "maximumLiability",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "BillingAccount": {
+      "description": "BillingAccount@2 (replaces billing v1 BillingAccount; changes.json). Morrow-direct: the workspace's one storeless account. Shopify: one account per associated installation, kept across disconnects.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 2
+            },
+            "id": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "route": {
+              "const": "morrow_direct"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "installationId": {
+              "type": "null"
+            },
+            "storeId": {
+              "type": "null"
+            },
+            "currency": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Currency"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "active",
+                "suspended",
+                "cancelled"
+              ]
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "id",
+            "organizationId",
+            "workspaceId",
+            "route",
+            "mode",
+            "installationId",
+            "storeId",
+            "currency",
+            "status",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 2
+            },
+            "id": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "route": {
+              "const": "shopify_app_pricing"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "installationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "storeId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "currency": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Currency"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "active",
+                "suspended",
+                "cancelled",
+                "uninstalled"
+              ]
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "id",
+            "organizationId",
+            "workspaceId",
+            "route",
+            "mode",
+            "installationId",
+            "storeId",
+            "currency",
+            "status",
+            "revision"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "EntitlementSnapshot": {
+      "description": "EntitlementSnapshot@2 (replaces billing v1 EntitlementSnapshot; changes.json): a server projection of a fresh provider read. subscriptionId holds the SubscriptionKey; installation and store follow the account's rule.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 2
+            },
+            "billingAccountId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "route": {
+              "const": "morrow_direct"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "installationId": {
+              "type": "null"
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "storeId": {
+              "type": "null"
+            },
+            "subscriptionId": {
+              "$ref": "#/$defs/StripeSubscriptionKey"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "pending",
+                "past_due",
+                "suspended",
+                "cancelled"
+              ]
+            },
+            "providerEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "verifiedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "validUntil": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "billingAccountId",
+            "route",
+            "mode",
+            "installationId",
+            "organizationId",
+            "workspaceId",
+            "storeId",
+            "subscriptionId",
+            "status",
+            "providerEvidenceRef",
+            "verifiedAt",
+            "validUntil",
+            "revision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 2
+            },
+            "billingAccountId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "route": {
+              "const": "shopify_app_pricing"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "installationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "storeId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "subscriptionId": {
+              "$ref": "#/$defs/ShopifySubscriptionKey"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "pending",
+                "past_due",
+                "suspended",
+                "cancelled",
+                "uninstalled"
+              ]
+            },
+            "providerEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "verifiedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "validUntil": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "revision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "billingAccountId",
+            "route",
+            "mode",
+            "installationId",
+            "organizationId",
+            "workspaceId",
+            "storeId",
+            "subscriptionId",
+            "status",
+            "providerEvidenceRef",
+            "verifiedAt",
+            "validUntil",
+            "revision"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CreditGrant": {
+      "description": "CreditGrant@2 (replaces billing v1 CreditGrant; changes.json). Unique per (route, mode, paymentKey). Shopify-route extra credits are post-paid usage, never a grant, so a Shopify grant is always included.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 2
+            },
+            "id": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "billingAccountId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "route": {
+              "const": "morrow_direct"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "paymentKey": {
+              "$ref": "#/$defs/StripePaymentKey"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "included",
+                "purchased"
+              ]
+            },
+            "creditUnits": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+            },
+            "termsRevision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            },
+            "purchaseEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "effectiveAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "expiresAt": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "id",
+            "billingAccountId",
+            "route",
+            "mode",
+            "paymentKey",
+            "kind",
+            "creditUnits",
+            "termsRevision",
+            "purchaseEvidenceRef",
+            "effectiveAt",
+            "expiresAt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 2
+            },
+            "id": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "billingAccountId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "route": {
+              "const": "shopify_app_pricing"
+            },
+            "mode": {
+              "$ref": "#/$defs/PaymentMode"
+            },
+            "paymentKey": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ShopifyPeriodKey"
+                },
+                {
+                  "$ref": "#/$defs/ShopifyPlanChangeKey"
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "included"
+              ]
+            },
+            "creditUnits": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+            },
+            "termsRevision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            },
+            "purchaseEvidenceRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+            },
+            "effectiveAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "expiresAt": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "id",
+            "billingAccountId",
+            "route",
+            "mode",
+            "paymentKey",
+            "kind",
+            "creditUnits",
+            "termsRevision",
+            "purchaseEvidenceRef",
+            "effectiveAt",
+            "expiresAt"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AllocationShare": {
+      "description": "AllocationShare@2 (replaces billing v1 AllocationShare; changes.json): a storeless share pays from a Morrow-direct account; a store-bound share from that store's Shopify account.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "billingAccountId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "installationId": {
+              "type": "null"
+            },
+            "storeId": {
+              "type": "null"
+            },
+            "entitlementRevision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            },
+            "maximumCredits": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+            },
+            "maximumLiability": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+            }
+          },
+          "required": [
+            "billingAccountId",
+            "installationId",
+            "storeId",
+            "entitlementRevision",
+            "maximumCredits",
+            "maximumLiability"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "billingAccountId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "installationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "storeId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "entitlementRevision": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+            },
+            "maximumCredits": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+            },
+            "maximumLiability": {
+              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+            }
+          },
+          "required": [
+            "billingAccountId",
+            "installationId",
+            "storeId",
+            "entitlementRevision",
+            "maximumCredits",
+            "maximumLiability"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CostAllocation": {
+      "description": "CostAllocation@2 (replaces billing v1 CostAllocation; changes.json): v1 fields over v1.1 shares.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "taskId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "rootRunId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "rateRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "meterKey": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "maximumCredits": {
+          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+        },
+        "shares": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AllocationShare"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "allocationDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "taskId",
+        "rootRunId",
+        "revision",
+        "rateRevision",
+        "meterKey",
+        "maximumCredits",
+        "shares",
+        "allocationDigest"
+      ],
+      "additionalProperties": false
+    },
+    "TestEntitlementSeed": {
+      "description": "An owner-run, audited, capped and expiring test entitlement for one workspace and named stores (ADR-0015 follow-up decision OQ-2 (a)). Accepted only in development and staging; production readers refuse it. It fixes no route, creates no account on either route and is never a payment.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "seedId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "mode": {
+          "type": "string",
+          "const": "test"
+        },
+        "storeIds": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+          },
+          "minItems": 0,
+          "maxItems": 100,
+          "uniqueItems": true
+        },
+        "creditUnits": {
+          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+        },
+        "validFrom": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "validUntil": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "approvalRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "organizationId",
+        "workspaceId",
+        "seedId",
+        "mode",
+        "storeIds",
+        "creditUnits",
+        "validFrom",
+        "validUntil",
+        "approvalRef",
+        "revision"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

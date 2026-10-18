@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {read} from '../scripts/foundation.mjs';
 import {digest} from '../scripts/contract-checks.mjs';
-import {billingValidators,units,money,allocationDigest,meterDigest,inspectAllocation,inspectUsage,inspectMeter,ContractCreditLedger} from '../scripts/billing-checks.mjs';
+import {billingValidators,units,money,allocationDigest,meterDigest,inspectAllocation,inspectUsage,inspectMeter,ContractCreditLedger,inspectPaidWork,paidWorkPredicate,permissionVerbs} from '../scripts/billing-checks.mjs';
+import {isPaidWork,paidWorkCapabilityIds} from '../packages/policy/src/paid-work.ts';
 
 function example() {
   const f=structuredClone(read('docs/contracts/fixtures/P01.A04.json'));
@@ -95,3 +96,44 @@ test('unknown meter submission cannot get a new id or blind retry',()=>{
 test('meter can reconcile an unknown result with the same immutable identity',()=>{const f=settled(),e=meter(f);f.ledger.recordMeter(e);e.status='submitted';e.attemptCount=1;f.ledger.recordMeter(e);e.status='uncertain';f.ledger.recordMeter(e);e.status='accepted';e.providerReceiptRef=digest({qualifiedReceipt:'fixture-only'});f.ledger.recordMeter(e);const before=f.ledger.snapshot();f.ledger.recordMeter(e);assert.deepEqual(f.ledger.snapshot(),before);});
 test('meter cannot change subscription or rate on retry',()=>{const f=settled(),e=meter(f);f.ledger.recordMeter(e);e.subscriptionId='subscription-other';e.payloadDigest=meterDigest(e);assert.throws(()=>f.ledger.recordMeter(e),/METER_INVALID/);});
 test('accepted meter needs a receipt and a previous submission',()=>{const f=settled(),e=meter(f);e.status='accepted';e.attemptCount=1;assert.ok(inspectMeter(e,f.usage[0],f.facts.entitlements['payer-1']).includes('METER_RECEIPT_MISSING'));e.providerReceiptRef='a'.repeat(64);assert.throws(()=>f.ledger.recordMeter(e),/METER_DUPLICATE_LIABILITY/);});
+
+// P01.T04a AC01: the paid-work table (docs/contracts/paid-work.json), rules PW1-PW5.
+const paidWork=read('docs/contracts/paid-work.json'),catalogue=read('docs/contracts/capabilities.json'),templates=read('docs/contracts/fixtures/P01.T04a.json').templates;
+test('AC01: the paid-work table passes PW1-PW5',()=>assert.deepEqual(inspectPaidWork(paidWork,catalogue,templates),[]));
+test('AC01: execute is paid exactly on the paid-effect capabilities that are not kill switches (27 today)',()=>{
+  const expected=catalogue.capabilities.filter(c=>paidWork.paidEffects.includes(c.effect)&&!c.kill_switch).map(c=>c.id).sort();
+  assert.deepEqual([...paidWorkCapabilityIds],expected);assert.equal(expected.length,27);
+  assert.equal(catalogue.capabilities.filter(c=>paidWork.paidEffects.includes(c.effect)).length,28);
+  assert.ok(Object.isFrozen(paidWorkCapabilityIds));
+});
+test('AC01: an unknown capability is paid work (fail closed)',()=>{for(const verb of permissionVerbs)assert.equal(isPaidWork('invented.capability',verb),true);assert.equal(isPaidWork('constructor','view'),true);assert.equal(isPaidWork('__proto__','view'),true);});
+test('AC01: the library and the reviewers\' predicate agree on every catalogue pair',()=>{
+  const spec=paidWorkPredicate(paidWork,catalogue);
+  for(const c of catalogue.capabilities)for(const verb of permissionVerbs)assert.equal(isPaidWork(c.id,verb),spec(c.id,verb),c.id+' '+verb);
+});
+for(const [name,change,expected] of [
+  ['read added to paidEffects',t=>t.paidEffects.push('read'),'PAID_WORK_TABLE_INVALID:PW4'],
+  ['control added to paidEffects',t=>t.paidEffects.push('control'),'PAID_WORK_TABLE_INVALID:PW4'],
+  ['billable_job dropped',t=>t.paidEffects.splice(t.paidEffects.indexOf('billable_job'),1),'PAID_WORK_TABLE_INVALID:PW3'],
+  ['spend dropped',t=>t.paidEffects.splice(t.paidEffects.indexOf('spend'),1),'PAID_WORK_TABLE_INVALID:PW3'],
+  ['execute never gated',t=>t.neverGatedVerbs.push('execute'),'PAID_WORK_TABLE_INVALID:PW1'],
+  ['administer never gated',t=>t.neverGatedVerbs.push('administer'),'PAID_WORK_TABLE_INVALID:PW1'],
+  ['view gated',t=>t.neverGatedVerbs.splice(t.neverGatedVerbs.indexOf('view'),1),'PAID_WORK_TABLE_INVALID:PW1'],
+  ['an extra key',t=>{t.killSwitchesPaid=true;},'PAID_WORK_TABLE_INVALID:PW1'],
+  ['a duplicate effect',t=>t.paidEffects.push('spend'),'PAID_WORK_TABLE_INVALID:PW1'],
+  ['an unknown effect',t=>t.paidEffects.push('model_call'),'PAID_WORK_TABLE_INVALID:PW1'],
+  ['an unknown verb',t=>t.neverGatedVerbs.push('connect'),'PAID_WORK_TABLE_INVALID:PW1'],
+  ['a missing ADR',t=>{t.adr=[];},'PAID_WORK_TABLE_INVALID:PW1'],
+])test('AC01: the paid-work table rejects '+name,()=>{const t=structuredClone(paidWork);change(t);assert.ok(inspectPaidWork(t,catalogue,templates).includes(expected),JSON.stringify(inspectPaidWork(t,catalogue,templates)));});
+test('AC01: kill switches are never paid (PW2); a spending kill switch is caught by PW3',()=>{
+  for(const c of catalogue.capabilities.filter(x=>x.kill_switch))for(const verb of permissionVerbs)assert.equal(isPaidWork(c.id,verb),false,c.id+' '+verb);
+  const c=structuredClone(catalogue);c.capabilities.find(x=>x.id==='governance.membership.revoke').effect='spend';
+  assert.deepEqual(inspectPaidWork(paidWork,c,templates),['PAID_WORK_TABLE_INVALID:PW3']);
+});
+for(const id of ['owner-bootstrap-v1','workspace-member-v1','workspace-admin-v1'])test('AC01: a paid row added to '+id+' fails PW5',()=>{
+  const t=structuredClone(templates);t[id].push({capabilityId:'creative.image.generate',verbs:['execute'],fields:['briefRef']});
+  assert.deepEqual(inspectPaidWork(paidWork,catalogue,t),['PAID_WORK_TABLE_INVALID:PW5:'+id]);
+  const u=structuredClone(templates);u[id].push({capabilityId:'invented.capability',verbs:['view'],fields:['x']});
+  assert.deepEqual(inspectPaidWork(paidWork,catalogue,u),['PAID_WORK_TABLE_INVALID:PW5:'+id]);
+});
+test('AC01: the three template lists must all be present',()=>{const t=structuredClone(templates);delete t['workspace-admin-v1'];assert.deepEqual(inspectPaidWork(paidWork,catalogue,t),['PAID_WORK_TABLE_INVALID:PW5']);});

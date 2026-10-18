@@ -1,6 +1,6 @@
 # Morrow status
 
-Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
+Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
 
 ## Active packets
 
@@ -11,10 +11,11 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #6: P01.T02a PR-A, executor classes and human-only kill switches (ADR-0005, §2 confirmed 2026-10-18).
 - PR #7: ADR-0008 accepted (connector on Cloudflare Workers with `@shopify/shopify-api`; secret-dependent calls in the broker).
 - PR #8: P01.T02a PR-B, review policy, Proposal@2, Approval@2 and `@morrow/policy/review` (ADR-0011).
+- PR #9: ADR-0015 to ADR-0018 (billing by origin, collaboration, membership, task-free proposals), the redesigned P01.T04a packet and its OQ-1 to OQ-3 decisions.
 
 In progress:
-- **Owner decisions of 2026-10-18** (branch `claude/decisions-billing-collab`): ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
-- **P01.T04a** has landed on that branch. Its owner questions OQ-1 to OQ-3 were resolved on 2026-10-18 (ADR-0015 follow-up decisions). Its PR-A and PR-B are the next billing step.
+- **P01.T04a PR-A** (paid-work gate and billing contracts; branch `claude/p01-t04a-a-paid-work-gate`): entitlement now gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities); `inspectEntitlementWriters` in `verify:boundaries`; the contract v1.1 billing layer (`schemas/v1.1/billing.schema.json`, five declared replacements); the OQ-2 test entitlement seed branch (`@morrow/policy/billing-state`, AC33); the P18.T01a–c plan children. Local format, typecheck, verify and targeted suites pass; full CI, hosted CI, Tier 2 and security review are open. PR-B (route library) follows.
+- **Open PRs touching the same files:** #10 (P05.T01x Part B: migration 0013, v1.1 core, `index.ts` connect rule) and #12 (migrations 0014–0015). Whichever merges later rebases under P01.T04a §4.5: append `changes.json` entries, recompute `release-baseline.json` hashes, rerun `npm run contracts:generate`. P06.T01a must pass `entitlementAllowed: false` once it meets `inspectEntitlementWriters`.
 - **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
 
 ## Decisions recorded 2026-10-18
@@ -28,18 +29,17 @@ In progress:
 
 ## Last green commit
 
-`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7 and #8 merged after it (`main` is at `80b6897`); record their runs here once confirmed.
+`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7 to #9 merged after it (`main` is at `400aa44`); record their runs here once confirmed.
 
 ## Next actions
 
-1. Review and merge the decisions branch (documents only; Tier 2 AI review).
-2. P05.T01x Part B, signup and workspace list (ADR-0009); P01.T02a PR-B is merged.
-3. P06.T01a, work commands on the tenant data pattern (ADR-0010). Then the ADR-0018 Proposal@2 edit, P06.T01b, P01.T02c (ADR-0016) and P01.T02b.
-4. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library), after the decisions branch merges.
-5. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
+1. P01.T04a PR-A: open the PR, Tier 2 AI review plus `/security-review`, hosted CI; then PR-B (billing route library).
+2. P05.T01x Part B (PR #10) and P06.T01a: review and merge, rebasing contracts as above.
+3. The ADR-0018 Proposal@2 edit, P06.T01b, P01.T02c (ADR-0016) and P01.T02b.
+4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
 
 Open plan follow-ups:
-- Superseded banners on `docs/references/*`; `docs/contracts/billing-entitlements.md` still names App Pricing as the only route (P01.T04a updates it).
+- Superseded banners on `docs/references/*`.
 - The rest of P03.T04e: formatting ignore file, unit-test concurrency, shared PostgreSQL 17 template-database harness, heavy-fault job.
 - The P05.T01x Part B PR splits the plan's P05.T01x bullet into sub-bullets, to respect the 2,000-character line limit.
 
@@ -55,7 +55,8 @@ None for local work. Hosted staging (M1) waits on the owner actions below. Billi
 - **M1 prerequisites (P04.T01i):** register the domain; create a dedicated Cloudflare account and share its account ID (an identifier, not a secret); authenticate the Neon CLI and reset the operator password; once the domain exists, configure the WorkOS staging callback and rotate the API key; decide on spending (Workers Paid, the domain, Neon Launch for staging); approve each M1 effect individually or approve standing staging cards. No card may rely on the OperationLedger before P06.T01c lands.
 - **Credential rotation:** rotate the E2B personal key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.
 - **Billing (ADR-0015):**
-  - When payments work starts: create a Stripe account in test mode.
+  - When payments work starts: create a Stripe account in test mode (before P18.T01a).
+  - Per action, later: the hosted staging test entitlement seed for M4 (OQ-2), and the production App Review allowance before submission (OQ-3).
   - Before live billing: a legal business entity, a bank account, a tax advisor, and tax registrations where required; then Stripe live activation.
   - For the Shopify route: the Shopify Partner payout and tax profile.
   - Before launch: a written answer from Shopify on whether its revenue share covers Morrow-direct revenue, and the App Review outcome for the split model.

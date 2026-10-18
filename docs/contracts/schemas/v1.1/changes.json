@@ -1,6 +1,6 @@
 {
   "contract_version": "morrow.contracts.v1.1",
-  "policy": "Every v1.1 definition that reuses a v1 name, and every v1.1 capability body that overrides a v1 body, is listed here. Each one is a replacement, not compatible with the v1 shape in either direction; writers emit only the current shape. Checked by inspectDeclaredReplacements in scripts/boundary-checks.mjs.",
+  "policy": "Every v1.1 definition that reuses a v1 name (core or billing), and every v1.1 capability body that overrides a v1 body, is listed here. Each one is a replacement, not compatible with the v1 shape in either direction; writers emit only the current shape. Checked by inspectDeclaredReplacements in scripts/boundary-checks.mjs.",
   "changes": [
     {
       "kind": "capability_body",
@@ -57,6 +57,41 @@
       "replaces": "capabilities:governance.approval.decide.input",
       "reason": "The decision becomes a ReviewDecisionInput bound to the exact proposal digest, with an optional target selection, solo-owner confirmation and cancel before effect, in place of the v1 DecisionRef.",
       "adr": "ADR-0011"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "BillingAccount",
+      "replaces": "billing:BillingAccount",
+      "reason": "BillingAccount@2: schemaVersion 2; a route and a mode; a Morrow-direct account is storeless (installationId and storeId null, never uninstalled), so the shop-only v1 account cannot represent it. A v1 account is not a valid BillingAccount@2.",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "EntitlementSnapshot",
+      "replaces": "billing:EntitlementSnapshot",
+      "reason": "EntitlementSnapshot@2: schemaVersion 2; a route and a mode; subscriptionId holds a route-matched SubscriptionKey; installation and store follow the account's rule.",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "CreditGrant",
+      "replaces": "billing:CreditGrant",
+      "reason": "CreditGrant@2: schemaVersion 2; a route, a mode and the PaymentKey that makes a grant unique per (route, mode, paymentKey); a Shopify grant is always included.",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "AllocationShare",
+      "replaces": "billing:AllocationShare",
+      "reason": "AllocationShare@2: installationId and storeId are both null for a storeless Morrow-direct payer, or both set for a Shopify payer; v1 required both.",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "CostAllocation",
+      "replaces": "billing:CostAllocation",
+      "reason": "CostAllocation@2: schemaVersion 2 over AllocationShare@2 shares.",
+      "adr": "ADR-0015"
     }
   ]
 }

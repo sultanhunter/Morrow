@@ -12,6 +12,7 @@ import {
   repositoryRoot,
   schemasByKind,
   currentDefinitionSelectors,
+  currentBillingDefinitionSelectors,
   capabilityBodySelectors,
 } from "./contract-sources.mjs";
 
@@ -54,6 +55,7 @@ export async function generateRuntimeValidators(root = repositoryRoot) {
       selectors[`${source.kind}:${definition}`] = name;
     }
   const current = currentDefinitionSelectors(byKind);
+  const currentBilling = currentBillingDefinitionSelectors(byKind);
   const bodies = capabilityBodySelectors(
     byKind,
     catalogue.capabilities.map((c) => c.id),
@@ -68,6 +70,10 @@ export async function generateRuntimeValidators(root = repositoryRoot) {
     frozen(
       "capabilityBodySelectors",
       Object.entries(bodies).map(([name, selector]) => [name, JSON.stringify(selector)]),
+    ) +
+    frozen(
+      "currentBillingDefinitionSelectors",
+      Object.entries(currentBilling).map(([name, selector]) => [name, JSON.stringify(selector)]),
     );
   const bundled = await build({
     stdin: { contents: code, sourcefile: "morrow-runtime-validators.js", resolveDir: root },
@@ -90,7 +96,9 @@ export async function generateRuntimeValidators(root = repositoryRoot) {
     "/** Effective definition name -> exact selector (newest core layer that defines it). */\n" +
     "export const currentDefinitionSelectors: Readonly<Record<string, string>>;\n" +
     "/** Effective `<capability id>.<input|output>` -> exact body selector. */\n" +
-    "export const capabilityBodySelectors: Readonly<Record<string, string>>;\n";
+    "export const capabilityBodySelectors: Readonly<Record<string, string>>;\n" +
+    "/** Effective billing definition name -> exact selector (newest billing layer that defines it). */\n" +
+    "export const currentBillingDefinitionSelectors: Readonly<Record<string, string>>;\n";
   const countByKind = Object.fromEntries(
     sources.map((s) => [s.kind, Object.keys(s.schema.$defs).length]),
   );
@@ -100,6 +108,7 @@ export async function generateRuntimeValidators(root = repositoryRoot) {
     definitions: Object.keys(selectors).length,
     definitions_by_source: countByKind,
     current_definitions: Object.keys(current).length,
+    current_billing_definitions: Object.keys(currentBilling).length,
     capability_bodies: Object.keys(bodies).length,
     inputs: Object.fromEntries(sources.map((s) => [s.path, hash(s.text)])),
     compiler: { ajv: "8.20.0", formats: "3.0.1", esbuild: "0.25.12" },
