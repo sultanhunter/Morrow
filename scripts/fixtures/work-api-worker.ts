@@ -66,14 +66,42 @@ function bridge(env: Env, labCase: string): WorkSqlConnector {
   };
 }
 
+// Miniflare's dispatchFetch rewrites Host to its loopback address and streams
+// bodies with Transfer-Encoding, so the laboratory sends a closed description and
+// the exact browser-shaped Request is built here, inside workerd (as the P05
+// Workers labs do). The handler then sees what the edge would deliver.
+interface LabRequest {
+  readonly method: string;
+  readonly url: string;
+  readonly headers: Record<string, string>;
+  readonly body: string | null;
+  readonly bytes: number[] | null;
+  readonly labCase: string;
+}
 export default {
-  fetch(request: Request, env: Env, ctx: Context): Promise<Response> {
-    const labCase = request.headers.get("X-Lab-Case") ?? "";
+  async fetch(request: Request, env: Env, ctx: Context): Promise<Response> {
+    if (new URL(request.url).pathname !== "/__lab/request")
+      return new Response(null, { status: 404 });
+    const spec = (await request.json()) as LabRequest;
+    let built: Request;
+    try {
+      built = new Request(spec.url, {
+        method: spec.method,
+        headers: spec.headers,
+        ...(spec.bytes
+          ? { body: new Uint8Array(spec.bytes) }
+          : spec.body !== null
+            ? { body: spec.body }
+            : {}),
+      });
+    } catch {
+      return Response.json({ unrepresentable: true }, { status: 599 });
+    }
     const handler = createWorkApiHandler({
       origin,
-      connector: bridge(env, labCase),
+      connector: bridge(env, spec.labCase),
       now: () => Date.now(),
     });
-    return handler.fetch(request, env, ctx);
+    return handler.fetch(built, env, ctx);
   },
 };

@@ -154,13 +154,19 @@ await withWorkDatabase("P06.T01a.work-workers", async (db) => {
   });
   try {
     await mf.ready;
+    // The exact request is built inside workerd from this closed description.
+    function dispatch(spec) {
+      return mf.dispatchFetch("http://lab.invalid/__lab/request", {
+        method: "POST",
+        body: JSON.stringify({ body: null, bytes: null, labCase: "", ...spec }),
+      });
+    }
     async function send(p, method, path, body, options = {}) {
       const headers = {
         Cookie: "__Host-morrow_session=" + p.secret,
         "Sec-Fetch-Site": "same-origin",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Dest": "empty",
-        ...(options.labCase ? { "X-Lab-Case": options.labCase } : {}),
       };
       if (method === "POST")
         Object.assign(headers, {
@@ -169,10 +175,13 @@ await withWorkDatabase("P06.T01a.work-workers", async (db) => {
           "X-Morrow-Request": "1",
           "Idempotency-Key": options.key ?? randomUUID(),
         });
-      const response = await mf.dispatchFetch(
-        workFixtureOrigin + "/workspace/" + p.workspace + "/work" + path,
-        { method, headers, body: body === undefined ? undefined : JSON.stringify(body) },
-      );
+      const response = await dispatch({
+        method,
+        url: workFixtureOrigin + "/workspace/" + p.workspace + "/work" + path,
+        headers,
+        body: body === undefined ? null : JSON.stringify(body),
+        labCase: options.labCase ?? "",
+      });
       const text = await response.text();
       return { status: response.status, text, body: JSON.parse(text), headers: response.headers };
     }
@@ -191,20 +200,19 @@ await withWorkDatabase("P06.T01a.work-workers", async (db) => {
       const headers = Object.fromEntries(
         Object.entries(c.headers).filter(([, v]) => v !== null && v !== undefined),
       );
-      let response;
-      try {
-        response = await mf.dispatchFetch(workFixtureOrigin + c.path, {
-          method: c.method,
-          headers,
-          body:
-            c.method === "GET" || c.method === "DELETE"
-              ? undefined
-              : c.bytes
-                ? new Uint8Array(c.bytes)
-                : c.body,
-        });
-      } catch {
-        check("AC21:" + name, c.optional === true);
+      const bodied = c.method !== "GET" && c.method !== "DELETE";
+      const response = await dispatch({
+        method: c.method,
+        url: workFixtureOrigin + c.path,
+        headers,
+        body: bodied && !c.bytes ? (c.body ?? null) : null,
+        bytes: bodied && c.bytes ? c.bytes : null,
+      });
+      if (response.status === 599) {
+        // workerd cannot construct this request (a transport header); only an
+        // optional case may be unrepresentable.
+        await response.arrayBuffer();
+        check("AC21:" + name + ":unrepresentable_in_workerd", c.optional === true);
         continue;
       }
       const body = await response.json();
@@ -216,9 +224,13 @@ await withWorkDatabase("P06.T01a.work-workers", async (db) => {
         !response.headers.has("access-control-allow-origin");
       // workerd may normalise a transport header before the Worker sees it; an
       // optional case then reaches the next check, which still never opens SQL.
+      // The report names an optional case the runtime normalised, so it is never
+      // mistaken for an exact match.
+      const normalised =
+        !passed && c.optional === true && response.status >= 400 && response.status < 500;
       check(
-        "AC21:" + name,
-        passed || (c.optional === true && response.status >= 400 && response.status < 500),
+        "AC21:" + name + (normalised ? ":runtime_normalised_" + response.status : ""),
+        passed || normalised,
       );
       guarded++;
     }
