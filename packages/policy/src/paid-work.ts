@@ -8,16 +8,59 @@
 import table from "../../../docs/contracts/paid-work.json";
 import catalogue from "../../../docs/contracts/capabilities.json";
 
-// Fail closed at import: a table that is not closed, or that would exempt
-// execute or administer, never loads.
-if (
-  Object.keys(table).sort().join(",") !== "adr,neverGatedVerbs,paidEffects,schema_version" ||
-  table.schema_version !== 1 ||
-  (table.neverGatedVerbs as readonly string[]).some((verb) =>
-    ["execute", "administer"].includes(verb),
-  )
-)
-  throw new Error("PAID_WORK_TABLE_INVALID");
+const capabilityEffects: readonly string[] = Object.freeze([
+  "read",
+  "internal_write",
+  "external_write",
+  "spend",
+  "communication",
+  "control",
+  "billable_job",
+]);
+const permissionVerbs: readonly string[] = Object.freeze([
+  "view",
+  "propose",
+  "approve",
+  "execute",
+  "delegate",
+  "administer",
+]);
+const members = (value: unknown, allowed: readonly string[]): value is readonly string[] =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  new Set(value).size === value.length &&
+  value.every((item) => typeof item === "string" && allowed.includes(item));
+
+/**
+ * Rule PW1 of `inspectPaidWork`, checked again at import: a closed object with
+ * `schema_version` 1 and ADR ids; `paidEffects` and `neverGatedVerbs` are
+ * non-empty arrays of unique, known effects and verbs; `execute` and
+ * `administer` are never exempt; `view` and `approve` always are.
+ */
+export function paidWorkTableValid(value: unknown): boolean {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const t = value as Record<string, unknown>;
+  const adr = t.adr,
+    effects = t.paidEffects,
+    verbs = t.neverGatedVerbs;
+  return (
+    Object.keys(t).sort().join(",") === "adr,neverGatedVerbs,paidEffects,schema_version" &&
+    t.schema_version === 1 &&
+    Array.isArray(adr) &&
+    adr.length > 0 &&
+    new Set(adr).size === adr.length &&
+    adr.every((id) => typeof id === "string" && /^ADR-\d{4}$/.test(id)) &&
+    members(effects, capabilityEffects) &&
+    members(verbs, permissionVerbs) &&
+    !verbs.some((verb) => verb === "execute" || verb === "administer") &&
+    verbs.includes("view") &&
+    verbs.includes("approve")
+  );
+}
+
+// Fail closed at import: a malformed table, or one that would exempt execute or
+// administer, never loads, so a typo cannot silently stop gating paid work.
+if (!paidWorkTableValid(table)) throw new Error("PAID_WORK_TABLE_INVALID");
 const paidEffects: ReadonlySet<string> = new Set(table.paidEffects);
 const neverGatedVerbs: ReadonlySet<string> = new Set(table.neverGatedVerbs);
 const capabilities: ReadonlyMap<string, { readonly effect: string; readonly killSwitch: boolean }> =

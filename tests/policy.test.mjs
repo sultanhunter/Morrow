@@ -663,7 +663,8 @@ test("P01.T04a AC05: every ADR grant template row works without entitlement; pai
     kind: "workspace",
     id: "workspace_a",
   };
-  let rows = 0;
+  let rows = 0,
+    connectApprove = 0;
   for (const [template, list] of Object.entries(templates))
     for (const row of list)
       for (const verb of row.verbs) {
@@ -696,13 +697,21 @@ test("P01.T04a AC05: every ADR grant template row works without entitlement; pai
         assert.deepEqual(unentitled, await decide(true), label);
         // Billing never decides a template row. Whether the kernel evaluates
         // `approve` on connect is the connection rule's business (P05.T01x §14),
-        // not billing's, so that one row is checked only for billing neutrality.
+        // not billing's: today that rule allows only `administer`, so the one
+        // exception is pinned to its exact reason until PR #10 changes the rule.
         assert.notEqual(unentitled.decision.reason, "entitlement_denied", label);
         if (row.capabilityId !== "governance.connection.connect" || verb === "administer")
           assert.equal(unentitled.decision.allowed, true, label);
+        else {
+          assert.equal(verb, "approve", label);
+          assert.equal(unentitled.decision.reason, "capability_denied", label);
+          connectApprove++;
+        }
         rows++;
       }
   assert.ok(rows >= 40, String(rows));
+  // owner-bootstrap-v1 and workspace-admin-v1 each hold connect `approve`.
+  assert.equal(connectApprove, 2);
   for (const capabilityId of [
     "creative.image.generate",
     "catalog.content.publish",

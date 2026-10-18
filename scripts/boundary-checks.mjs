@@ -319,9 +319,17 @@ export function inspectSupersededUse(file, code, replaced, replacedBilling = [])
 // and the two forwarders that copy a CurrentConstraintsReader result. Every other
 // product builder under apps/ and packages/ passes a literal `false`, which the
 // evaluators read only for paid work. A P05.T04b agent reader adds its function
-// here in its own reviewed PR. Type declarations are not writes; tests/ and
-// scripts/ are out of scope, as are `*.test.*` files. Not hermetic: a spread or
-// a value copied through an untyped helper needs review.
+// here in its own reviewed PR. A write is an object property, shorthand, getter
+// or method; a class field or constructor parameter property; an assignment
+// through `.`, `[]` or a logical-assignment operator; a `defineProperty`/`set`
+// call; or an entries pair such as `Object.fromEntries([[key, value]])`. The key
+// may be written directly, as a string, or through a variable bound to the
+// field's name, and a computed key that is not a literal is a write when its
+// object or class also declares `providerAllowed`. Type declarations are not
+// writes; tests/ and scripts/ are out of scope, as are `*.test.*` files. Not
+// hermetic: a spread, or a value copied through an untyped helper or an opaque
+// key, needs review; createWorkspacePermissionBoundary also accepts only a plain
+// closed boolean pair from a CurrentConstraintsReader.
 export const entitlementWriterAllowlist = Object.freeze({
   "packages/policy/src/billing-state.ts": Object.freeze(["createBillingConstraintsReader"]),
   "packages/policy/src/index.ts": Object.freeze([
@@ -341,6 +349,18 @@ export function inspectEntitlementWriters(file, code) {
   const allowed = entitlementWriterAllowlist[path] ?? [];
   const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, scriptKind(file));
   const errors = [];
+  const strip = (node) => {
+    while (
+      node &&
+      (ts.isParenthesizedExpression(node) ||
+        ts.isAsExpression(node) ||
+        ts.isSatisfiesExpression(node) ||
+        ts.isTypeAssertionExpression(node) ||
+        ts.isNonNullExpression(node))
+    )
+      node = node.expression;
+    return node;
+  };
   const stringText = (node) =>
     node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
       ? node.text
@@ -351,16 +371,47 @@ export function inspectEntitlementWriters(file, code) {
       : ts.isComputedPropertyName(name)
         ? stringText(name.expression)
         : stringText(name);
-  const literalFalse = (node) => {
-    while (
-      node &&
-      (ts.isParenthesizedExpression(node) ||
-        ts.isAsExpression(node) ||
-        ts.isSatisfiesExpression(node) ||
-        ts.isTypeAssertionExpression(node))
+  const literalFalse = (node) => strip(node)?.kind === ts.SyntaxKind.FalseKeyword;
+  // Names bound to the field's string anywhere in the file, so that
+  // `const k = "entitlementAllowed"; f[k] = true` is a write too.
+  const aliases = new Set();
+  const collect = (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      stringText(strip(node.initializer)) === entitlementField
     )
-      node = node.expression;
-    return node?.kind === ts.SyntaxKind.FalseKeyword;
+      aliases.add(node.name.text);
+    ts.forEachChild(node, collect);
+  };
+  collect(source);
+  const isKey = (node) => {
+    const key = strip(node);
+    return (
+      stringText(key) === entitlementField ||
+      (!!key && ts.isIdentifier(key) && aliases.has(key.text))
+    );
+  };
+  const nameIs = (name) =>
+    ts.isComputedPropertyName(name) ? isKey(name.expression) : nameText(name) === entitlementField;
+  // A computed key that is not a literal, in an object or class that also
+  // declares `providerAllowed`, may name the field and counts as a write.
+  const opaqueBesideProvider = (node) => {
+    if (!ts.isComputedPropertyName(node.name)) return false;
+    const key = strip(node.name.expression);
+    if (stringText(key) !== null || ts.isNumericLiteral(key)) return false;
+    const container = node.parent;
+    const members = ts.isObjectLiteralExpression(container)
+      ? container.properties
+      : ts.isClassLike(container)
+        ? container.members
+        : [];
+    return members.some(
+      (member) =>
+        member.name &&
+        !ts.isComputedPropertyName(member.name) &&
+        nameText(member.name) === "providerAllowed",
+    );
   };
   const functionName = (node) => {
     if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && node.name)
@@ -389,28 +440,54 @@ export function inspectEntitlementWriters(file, code) {
     ts.SyntaxKind.AmpersandAmpersandEqualsToken,
     ts.SyntaxKind.QuestionQuestionEqualsToken,
   ]);
+  const calleeName = (expression) =>
+    ts.isIdentifier(expression)
+      ? expression.text
+      : ts.isPropertyAccessExpression(expression)
+        ? expression.name.text
+        : null;
   const visit = (node) => {
-    if (ts.isPropertyAssignment(node) && nameText(node.name) === entitlementField)
-      write(node, node.initializer);
-    else if (ts.isShorthandPropertyAssignment(node) && node.name.text === entitlementField)
+    if (
+      (ts.isPropertyAssignment(node) || ts.isPropertyDeclaration(node)) &&
+      (nameIs(node.name) || opaqueBesideProvider(node))
+    )
+      // A class field with no initializer is flagged too.
+      write(node, node.initializer ?? null);
+    else if (
+      (ts.isShorthandPropertyAssignment(node) ||
+        ts.isGetAccessorDeclaration(node) ||
+        ts.isMethodDeclaration(node)) &&
+      (nameIs(node.name) || opaqueBesideProvider(node))
+    )
       write(node, null);
-    else if (ts.isGetAccessorDeclaration(node) && nameText(node.name) === entitlementField)
+    else if (
+      ts.isParameter(node) &&
+      ts.isParameterPropertyDeclaration(node, node.parent) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === entitlementField
+    )
       write(node, null);
     else if (
       ts.isBinaryExpression(node) &&
       assignment.has(node.operatorToken.kind) &&
       ((ts.isPropertyAccessExpression(node.left) && node.left.name.text === entitlementField) ||
-        (ts.isElementAccessExpression(node.left) &&
-          stringText(node.left.argumentExpression) === entitlementField))
+        (ts.isElementAccessExpression(node.left) && isKey(node.left.argumentExpression)))
     )
       write(node, node.operatorToken.kind === ts.SyntaxKind.EqualsToken ? node.right : null);
     else if (
       ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ["defineProperty", "set"].includes(node.expression.name.text) &&
-      node.arguments.some((argument) => stringText(argument) === entitlementField)
+      ["defineProperty", "set"].includes(calleeName(node.expression)) &&
+      node.arguments.some(isKey)
     )
       write(node, null);
+    else if (
+      ts.isArrayLiteralExpression(node) &&
+      ts.isArrayLiteralExpression(node.parent) &&
+      node.elements.length > 0 &&
+      isKey(node.elements[0])
+    )
+      // An entries pair: Object.fromEntries([[key, value]]), new Map([[key, value]]).
+      write(node, node.elements[1] ?? null);
     ts.forEachChild(node, visit);
   };
   visit(source);

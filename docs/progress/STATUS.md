@@ -14,8 +14,8 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #9: ADR-0015 to ADR-0018 (billing by origin, collaboration, membership, task-free proposals), the redesigned P01.T04a packet and its OQ-1 to OQ-3 decisions.
 
 In progress:
-- **P01.T04a PR-A** (paid-work gate and billing contracts; branch `claude/p01-t04a-a-paid-work-gate`): entitlement now gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities); `inspectEntitlementWriters` in `verify:boundaries`; the contract v1.1 billing layer (`schemas/v1.1/billing.schema.json`, five declared replacements); the OQ-2 test entitlement seed branch (`@morrow/policy/billing-state`, AC33); the P18.T01a–c plan children. Local format, typecheck, verify and targeted suites pass; full CI, hosted CI, Tier 2 and security review are open. PR-B (route library) follows.
-- **Open PRs touching the same files:** #10 (P05.T01x Part B: migration 0013, v1.1 core, `index.ts` connect rule) and #12 (migrations 0014–0015). Whichever merges later rebases under P01.T04a §4.5: append `changes.json` entries, recompute `release-baseline.json` hashes, rerun `npm run contracts:generate`. P06.T01a must pass `entitlementAllowed: false` once it meets `inspectEntitlementWriters`.
+- **P01.T04a PR-A** (paid-work gate and billing contracts; branch `claude/p01-t04a-a-paid-work-gate`): entitlement now gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities); `inspectEntitlementWriters` in `verify:boundaries`; the contract v1.1 billing layer (`schemas/v1.1/billing.schema.json`, five declared replacements); the OQ-2 test entitlement seed branch (`@morrow/policy/billing-state`, AC33); the P18.T01a–c plan children. Tier 2 AI review (separate context, same model family) findings are applied; local format, typecheck, verify, targeted suites and `lab:permissions` (AC31) pass; full CI, hosted CI (including `lab:workers`) and `/security-review` are open. PR-B (route library) follows.
+- **Open PRs touching the same files:** #10 (P05.T01x Part B: migration 0013, v1.1 core, `index.ts` connect rule) and #12 (migrations 0014–0015). Whichever merges later rebases under P01.T04a §4.5: append `changes.json` entries, recompute `release-baseline.json` hashes, rerun `npm run contracts:generate`. PR-A obliges P05.T01x Part B only to assert `!isPaidWork` for its template rows; the route row needs `originForCreation`, which P01.T04a PR-B ships, so PR #10's "Only if P01.T04a merges before Part B" means PR-B. P06.T01a must pass `entitlementAllowed: false` (and take PR-A's `P06.T01a.md:204` wording) once it meets `inspectEntitlementWriters`.
 - **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
 
 ## Decisions recorded 2026-10-18
@@ -49,7 +49,7 @@ None for local work. Hosted staging (M1) waits on the owner actions below. Billi
 
 ## Pending owner actions
 
-- **Sign-offs:** plan R1 (Tier 3).
+- **Sign-offs:** plan R1 (Tier 3). The P01 contract sign-off also freezes the v1.1 billing layer, including two choices made in PR-A review: Shopify-route money is USD-only, and `AllocationShare@2` is a declared superset of v1.
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
 - **M1 prerequisites (P04.T01i):** register the domain; create a dedicated Cloudflare account and share its account ID (an identifier, not a secret); authenticate the Neon CLI and reset the operator password; once the domain exists, configure the WorkOS staging callback and rotate the API key; decide on spending (Workers Paid, the domain, Neon Launch for staging); approve each M1 effect individually or approve standing staging cards. No card may rely on the OperationLedger before P06.T01c lands.

@@ -179,15 +179,21 @@ export function evaluateTestEntitlementSeed(
 }
 
 /**
- * Whether an accepted seed entitles `request`: same tenant, and the request is
- * storeless or on a store the seed names. Callers read it only for paid work
- * (`isPaidWork`); a refused, inactive or hand-built evaluation never entitles.
+ * Whether an accepted seed entitles `request` at `now`: `now` is before the
+ * seed's `validUntil`, the tenant matches, and the request is storeless or on a
+ * store the seed names. Callers read it only for paid work (`isPaidWork`); a
+ * refused, inactive, expired or hand-built evaluation never entitles, so a
+ * retained evaluation stops entitling when its seed expires. Throws
+ * `BILLING_INPUT_INVALID` for a bad time.
  */
 export function testSeedEntitles(
   evaluation: TestSeedEvaluation,
   request: PermissionRequest,
+  now: string,
 ): boolean {
+  if (!utcTime(now)) throw new BillingBoundaryError("BILLING_INPUT_INVALID");
   if (!issued.has(evaluation) || evaluation.status !== "accepted") return false;
+  if (Date.parse(now) >= Date.parse(evaluation.payer.validUntil)) return false;
   const resource = request.resource;
   if (
     resource.organizationId !== evaluation.organizationId ||

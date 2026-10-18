@@ -16,7 +16,7 @@ Owner: Morrow platform owner. Decisions: ADR-0005 (kill switches, executor class
 
 ## Replacements
 
-A v1.1 definition that reuses a v1 name, or a v1.1 capability body that overrides a v1 body, is a **replacement**. Replacements are not compatible with the v1 shape in either direction: the objects are closed, and required properties are added, dropped or retyped (Proposal@2 and Approval@2 in PR-B also change their const `schemaVersion`). Nothing is deployed, so writers emit only the current shape. Each replacement is listed in `schemas/v1.1/changes.json` as `{kind, name, replaces, reason, adr}`.
+A v1.1 definition that reuses a v1 name, or a v1.1 capability body that overrides a v1 body, is a **replacement**. Replacements are not compatible with the v1 shape in either direction: the objects are closed, and required properties are added, dropped or retyped (Proposal@2 and Approval@2 in PR-B also change their const `schemaVersion`). The one exception is billing `AllocationShare@2`, a superset of v1 (see the billing layer below). Nothing is deployed, so writers emit only the current shape. Each replacement is listed in `schemas/v1.1/changes.json` as `{kind, name, replaces, reason, adr}`.
 
 PR-A of P01.T02a declares five `capability_body` replacements, all under ADR-0005:
 
@@ -51,10 +51,10 @@ New v1.1 definitions in PR-A: `HumanActorRef`, `KillSwitchControl`, `CampaignRef
 | `BillingAccount` | `schemaVersion` 1, `provider: "shopify_app_pricing"`, required installation and store | `schemaVersion` 2; `route` and `mode`; a storeless Morrow-direct branch (never `uninstalled`) or a Shopify branch with its installation and store |
 | `EntitlementSnapshot` | `schemaVersion` 1, shop-only | `schemaVersion` 2; `route` and `mode`; `subscriptionId` holds the route's `SubscriptionKey` |
 | `CreditGrant` | `schemaVersion` 1 | `schemaVersion` 2; `route`, `mode` and the `PaymentKey` that makes it unique; a Shopify grant is always `included` |
-| `AllocationShare` | required installation and store | both null (Morrow-direct payer) or both set (Shopify payer) |
+| `AllocationShare` | required installation and store | both null (Morrow-direct payer) or both set (Shopify payer). A superset of v1: a v1 share is a valid store-bound share. This is safe because a share is stored only inside a `CostAllocation`, whose `schemaVersion` keeps v1 and v1.1 allocations apart |
 | `CostAllocation` | `schemaVersion` 1 over v1 shares | `schemaVersion` 2 over v1.1 shares |
 
-New definitions: `BillingRoute`, `PaymentMode`, `StripePaymentKey`, `ShopifyPeriodKey`, `ShopifyPlanChangeKey`, `PaymentKey`, `StripeSubscriptionKey`, `ShopifySubscriptionKey`, `SubscriptionKey`, `StripePriceKey`, `ShopifyPriceKey`, `PriceKey`, `UsdBillingMoney`, `WorkspaceBillingRoute`, `VerifiedPaymentEvent`, `PaymentReversal`, `BillingTerms`, `UsageCap` and `TestEntitlementSeed` (ADR-0015 follow-up decision OQ-2 (a)). The semantics are in `billing-entitlements.md`. Couplings are `oneOf` branches of closed objects. Every key is a valid core `Id`; Shopify GID tails have no leading zeros and times are UTC to the second, so each provider object has one key.
+New definitions: `BillingRoute`, `PaymentMode`, `StripePaymentKey`, `ShopifyPeriodKey`, `ShopifyPlanChangeKey`, `PaymentKey`, `StripeSubscriptionKey`, `ShopifySubscriptionKey`, `SubscriptionKey`, `StripePriceKey`, `ShopifyPriceKey`, `PriceKey`, `UsdBillingMoney`, `WorkspaceBillingRoute`, `VerifiedPaymentEvent`, `PaymentReversal`, `BillingTerms`, `UsageCap` and `TestEntitlementSeed` (ADR-0015 follow-up decision OQ-2 (a)). The semantics are in `billing-entitlements.md`. Couplings are `oneOf` branches of closed objects. Every Shopify-route amount and currency is USD (App Pricing prices are USD only): event `amountPaid`, reversal `amount`, terms entry `currency`, account `currency` and `UsageCap.maximumLiability`. Every key is a valid core `Id`; Shopify GID tails have no leading zeros and times are UTC to the second, so each provider object has one key.
 
 If v1.1 is frozen before a later billing addition merges, that addition opens `schemas/v1.2/billing.schema.json` (kind `billing-v1.2`, prefix `BillingV1_2`) with replacements in `schemas/v1.2/changes.json`.
 
@@ -73,7 +73,7 @@ The generated bundle `packages/contracts/src/generated/runtime-validators.mjs` e
 
 The generated types follow the same rule: `CapabilityInput<K>` is the effective body, `Current_<Name>` aliases (with `CurrentDefinitions` and `CurrentDefinitionName`) name the effective definitions, and `CurrentBilling_<Name>` aliases (with `CurrentBillingDefinitions` and `CurrentBillingDefinitionName`) the effective billing definitions. The v1 types stay exported for history.
 
-Validators are generated ahead of time with one Ajv 2020 instance (`npm run contracts:generate`). No schema is compiled at runtime, and the workerd lab runs every selector with code generation denied. Contract v1.1 grew the bundle from 1,594,826 to 1,658,971 bytes in P01.T02a PR-A (about 4 percent), to 1,837,054 bytes in P01.T02a PR-B (about 11 percent more, 15 percent over v1), and to 2,173,673 bytes with the billing layer (about 18 percent more; 120,854 to 143,287 bytes gzipped).
+Validators are generated ahead of time with one Ajv 2020 instance (`npm run contracts:generate`). No schema is compiled at runtime, and the workerd lab runs every selector with code generation denied. Contract v1.1 grew the bundle from 1,594,826 to 1,658,971 bytes in P01.T02a PR-A (about 4 percent), to 1,837,054 bytes in P01.T02a PR-B (about 11 percent more, 15 percent over v1), and to 2,179,296 bytes with the billing layer (about 19 percent more; 120,854 to 144,134 bytes gzipped).
 
 ## Checks
 

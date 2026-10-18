@@ -81,7 +81,7 @@ async function decide(evaluation, req) {
           resource: current.resource,
           accountId: null,
           providerAllowed: true,
-          entitlementAllowed: testSeedEntitles(evaluation, current),
+          entitlementAllowed: testSeedEntitles(evaluation, current, during),
           grants: [
             {
               ...grant,
@@ -116,21 +116,30 @@ test("AC33 (a): development and staging accept a current seed for its workspace 
     });
     // One storeless payer: storeless work and the named stores are covered.
     assert.equal(
-      testSeedEntitles(evaluation, request("creative.image.generate", "execute", null)),
+      testSeedEntitles(evaluation, request("creative.image.generate", "execute", null), during),
       true,
     );
     assert.equal(
-      testSeedEntitles(evaluation, request("creative.image.generate", "execute", "store_a")),
+      testSeedEntitles(
+        evaluation,
+        request("creative.image.generate", "execute", "store_a"),
+        during,
+      ),
       true,
     );
     assert.equal(
-      testSeedEntitles(evaluation, request("creative.image.generate", "execute", "store_c")),
+      testSeedEntitles(
+        evaluation,
+        request("creative.image.generate", "execute", "store_c"),
+        during,
+      ),
       false,
     );
     assert.equal(
       testSeedEntitles(
         evaluation,
         request("creative.image.generate", "execute", null, "workspace_w2"),
+        during,
       ),
       false,
     );
@@ -156,11 +165,11 @@ test("AC33 (a): development and staging accept a current seed for its workspace 
   );
   assert.deepEqual(storeless.coveredStoreIds, []);
   assert.equal(
-    testSeedEntitles(storeless, request("creative.image.generate", "execute", null)),
+    testSeedEntitles(storeless, request("creative.image.generate", "execute", null), during),
     true,
   );
   assert.equal(
-    testSeedEntitles(storeless, request("creative.image.generate", "execute", "store_a")),
+    testSeedEntitles(storeless, request("creative.image.generate", "execute", "store_a"), during),
     false,
   );
 });
@@ -188,7 +197,11 @@ test("AC33 (b): production readers refuse every seed without reading it", async 
     });
     for (const storeId of [null, "store_a"])
       assert.equal(
-        testSeedEntitles(evaluation, request("creative.image.generate", "execute", storeId)),
+        testSeedEntitles(
+          evaluation,
+          request("creative.image.generate", "execute", storeId),
+          during,
+        ),
         false,
       );
     assert.equal(
@@ -252,8 +265,20 @@ test("AC33 (d): the seed is capped, expiring, tenant-bound and pure", () => {
   assert.equal(expired.reason, "SEED_EXPIRED");
   for (const evaluation of [before, expired])
     assert.equal(
-      testSeedEntitles(evaluation, request("creative.image.generate", "execute", null)),
+      testSeedEntitles(evaluation, request("creative.image.generate", "execute", null), during),
       false,
+    );
+  // A retained accepted evaluation stops entitling at its seed's validUntil.
+  const accepted = evaluateTestEntitlementSeed(seed(), scope, during, "staging");
+  const storelessWork = request("creative.image.generate", "execute", null);
+  assert.equal(testSeedEntitles(accepted, storelessWork, "2026-10-25T09:59:59Z"), true);
+  for (const later of ["2026-10-25T10:00:00Z", "2026-11-01T00:00:00Z"])
+    assert.equal(testSeedEntitles(accepted, storelessWork, later), false, later);
+  for (const bad of ["yesterday", "2026-10-20T10:00:00+01:00", "", null, undefined])
+    assert.throws(
+      () => testSeedEntitles(accepted, storelessWork, bad),
+      boundary("BILLING_INPUT_INVALID"),
+      String(bad),
     );
   for (const [name, value] of [
     ["inverted window", { ...seed(), validFrom: "2026-10-25T10:00:00Z", validUntil: t0 }],
@@ -290,7 +315,7 @@ test("AC33 (d): the seed is capped, expiring, tenant-bound and pure", () => {
     payer: { ...evaluateTestEntitlementSeed(seed(), scope, during, "staging").payer },
   };
   assert.equal(
-    testSeedEntitles(forged, request("creative.image.generate", "execute", "store_a")),
+    testSeedEntitles(forged, request("creative.image.generate", "execute", "store_a"), during),
     false,
   );
   // Pure: repeated calls deep-equal, outputs frozen, later input mutation changes nothing.
@@ -305,7 +330,7 @@ test("AC33 (d): the seed is capped, expiring, tenant-bound and pure", () => {
       Object.isFrozen(first.coveredStoreIds),
   );
   assert.equal(
-    testSeedEntitles(first, request("creative.image.generate", "execute", "store_c")),
+    testSeedEntitles(first, request("creative.image.generate", "execute", "store_c"), during),
     false,
   );
 });

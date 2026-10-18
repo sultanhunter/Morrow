@@ -1,6 +1,6 @@
 {
   "contract_version": "morrow.contracts.v1.1",
-  "policy": "Every v1.1 definition that reuses a v1 name (core or billing), and every v1.1 capability body that overrides a v1 body, is listed here. Each one is a replacement, not compatible with the v1 shape in either direction; writers emit only the current shape. Checked by inspectDeclaredReplacements in scripts/boundary-checks.mjs.",
+  "policy": "Every v1.1 definition that reuses a v1 name (core or billing), and every v1.1 capability body that overrides a v1 body, is listed here. Each one is a replacement, and writers emit only the current shape. Each is incompatible with the v1 shape in both directions, except AllocationShare@2: it is a superset of v1 AllocationShare, never stored on its own, only inside CostAllocation@2, whose schemaVersion 2 keeps v1 and v1.1 allocations apart. Checked by inspectDeclaredReplacements in scripts/boundary-checks.mjs.",
   "changes": [
     {
       "kind": "capability_body",
@@ -83,7 +83,7 @@
       "kind": "billing_definition",
       "name": "AllocationShare",
       "replaces": "billing:AllocationShare",
-      "reason": "AllocationShare@2: installationId and storeId are both null for a storeless Morrow-direct payer, or both set for a Shopify payer; v1 required both.",
+      "reason": "AllocationShare@2: installationId and storeId are both null for a storeless Morrow-direct payer, or both set for a Shopify payer; v1 required both. It is a superset of v1 (a v1 share is a valid store-bound share), which is safe because a share is stored only inside a CostAllocation@2.",
       "adr": "ADR-0015"
     },
     {

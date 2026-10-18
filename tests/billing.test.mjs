@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {read} from '../scripts/foundation.mjs';
 import {digest} from '../scripts/contract-checks.mjs';
 import {billingValidators,units,money,allocationDigest,meterDigest,inspectAllocation,inspectUsage,inspectMeter,ContractCreditLedger,inspectPaidWork,paidWorkPredicate,permissionVerbs} from '../scripts/billing-checks.mjs';
-import {isPaidWork,paidWorkCapabilityIds} from '../packages/policy/src/paid-work.ts';
+import {isPaidWork,paidWorkCapabilityIds,paidWorkTableValid} from '../packages/policy/src/paid-work.ts';
 
 function example() {
   const f=structuredClone(read('docs/contracts/fixtures/P01.A04.json'));
@@ -125,6 +125,19 @@ for(const [name,change,expected] of [
   ['an unknown verb',t=>t.neverGatedVerbs.push('connect'),'PAID_WORK_TABLE_INVALID:PW1'],
   ['a missing ADR',t=>{t.adr=[];},'PAID_WORK_TABLE_INVALID:PW1'],
 ])test('AC01: the paid-work table rejects '+name,()=>{const t=structuredClone(paidWork);change(t);assert.ok(inspectPaidWork(t,catalogue,templates).includes(expected),JSON.stringify(inspectPaidWork(t,catalogue,templates)));});
+// The library repeats PW1 at import, so a malformed table never loads (PAID_WORK_TABLE_INVALID).
+test('AC01: the library accepts the reviewed table and rejects every PW1 failure',()=>{
+  assert.equal(paidWorkTableValid(paidWork),true);
+  for(const [name,change] of [
+    ['execute never gated',t=>t.neverGatedVerbs.push('execute')],['administer never gated',t=>t.neverGatedVerbs.push('administer')],
+    ['view gated',t=>t.neverGatedVerbs.splice(t.neverGatedVerbs.indexOf('view'),1)],['approve gated',t=>t.neverGatedVerbs.splice(t.neverGatedVerbs.indexOf('approve'),1)],
+    ['an extra key',t=>{t.killSwitchesPaid=true;}],['a missing key',t=>{delete t.adr;}],['schema version 2',t=>{t.schema_version=2;}],
+    ['a duplicate effect',t=>t.paidEffects.push('spend')],['an unknown effect',t=>t.paidEffects.push('model_call')],['a typo in an effect',t=>{t.paidEffects[t.paidEffects.indexOf('billable_job')]='billable-job';}],
+    ['an unknown verb',t=>t.neverGatedVerbs.push('connect')],['a duplicate verb',t=>t.neverGatedVerbs.push('view')],['a missing ADR',t=>{t.adr=[];}],['a malformed ADR',t=>{t.adr=['ADR-15'];}],
+    ['a string of effects',t=>{t.paidEffects='spend';}],['a string of verbs',t=>{t.neverGatedVerbs='view';}],['no effects',t=>{t.paidEffects=[];}],['a non-string effect',t=>t.paidEffects.push(1)],
+  ]){const t=structuredClone(paidWork);change(t);assert.equal(paidWorkTableValid(t),false,name);}
+  for(const value of [null,[],'table',1])assert.equal(paidWorkTableValid(value),false,String(value));
+});
 test('AC01: kill switches are never paid (PW2); a spending kill switch is caught by PW3',()=>{
   for(const c of catalogue.capabilities.filter(x=>x.kill_switch))for(const verb of permissionVerbs)assert.equal(isPaidWork(c.id,verb),false,c.id+' '+verb);
   const c=structuredClone(catalogue);c.capabilities.find(x=>x.id==='governance.membership.revoke').effect='spend';

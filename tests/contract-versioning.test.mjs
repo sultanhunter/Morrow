@@ -444,20 +444,114 @@ test("P01.T04a AC30: the billing v1.1 schema accepts the fixture and rejects the
     "event.plan_change_without_from_price",
     "event.negative_amount",
     "event.credit_units_field",
-    "terms.repeated_price_key",
+    "event.shopify_period_non_usd",
+    "event.shopify_plan_change_non_usd",
+    "reversal.shopify_non_usd",
+    "terms.exact_duplicate_entry",
+    "terms.shopify_non_usd",
+    "account.shopify_non_usd",
     "usage_cap.non_usd",
     "usage_cap.morrow_direct_account",
     "seed.live_mode",
     "seed.route_field",
   ])
     assert.equal(t04aCase(id).valid, false, id);
-  // Replacements are not compatible with the v1 shape in either direction.
+  // Shapes the schema accepts on purpose: a Morrow-direct account in another
+  // currency, and two semantic errors the billing library refuses in PR-B (a
+  // repeated price key with other credits; an allocation mixing both routes).
+  for (const id of [
+    "account.morrow_direct_eur",
+    "reversal.shopify_refund",
+    "terms.repeated_price_key_other_credits",
+    "allocation.two_routes",
+  ])
+    assert.equal(t04aCase(id).valid, true, id);
+  // Every Shopify-route amount is UsdBillingMoney and every Shopify currency is USD.
+  const billingV11 = layered["billing-v1.1"];
+  const shopifyMoney = [];
+  const visitShopify = (node, path) => {
+    if (Array.isArray(node)) return node.forEach((child, i) => visitShopify(child, `${path}/${i}`));
+    if (!node || typeof node !== "object") return;
+    if (node.properties?.route?.const === "shopify_app_pricing")
+      for (const [key, value] of Object.entries(node.properties)) {
+        const text = JSON.stringify(value);
+        if (key === "currency") shopifyMoney.push([`${path}.${key}`, value.const === "USD"]);
+        else if (/BillingMoney/.test(text))
+          shopifyMoney.push([`${path}.${key}`, value.$ref === "#/$defs/UsdBillingMoney"]);
+      }
+    for (const [key, value] of Object.entries(node)) visitShopify(value, `${path}/${key}`);
+  };
+  visitShopify(billingV11.$defs, "");
+  assert.deepEqual(
+    shopifyMoney.map(([path]) => path),
+    [
+      "/VerifiedPaymentEvent/oneOf/3.amountPaid",
+      "/VerifiedPaymentEvent/oneOf/4.amountPaid",
+      "/PaymentReversal/oneOf/1.amount",
+      "/BillingTerms/properties/entries/items/oneOf/1.currency",
+      "/BillingAccount/oneOf/1.currency",
+    ],
+  );
+  for (const [path, usd] of shopifyMoney) assert.equal(usd, true, path);
+  assert.equal(
+    billingV11.$defs.UsageCap.properties.maximumLiability.$ref,
+    "#/$defs/UsdBillingMoney",
+  );
+  // Replacements are not compatible with the v1 shape in either direction,
+  // except AllocationShare@2, a declared superset of v1 that is stored only
+  // inside CostAllocation@2 (changes.json policy).
+  const v1 = (name, value) => validateDefinition("billing", name, value);
+  const current = (name, value) => validateCurrentBillingDefinition(name, value);
   const v1Account = t04aCase("account.v1_shape").value;
-  assert.equal(validateDefinition("billing", "BillingAccount", v1Account), true);
-  assert.equal(validateCurrentBillingDefinition("BillingAccount", v1Account), false);
-  const account = t04aCase("account.morrow_direct").value;
-  assert.equal(validateDefinition("billing", "BillingAccount", account), false);
-  assert.equal(validateCurrentBillingDefinition("BillingAccount", account), true);
+  assert.equal(v1("BillingAccount", v1Account), true);
+  assert.equal(current("BillingAccount", v1Account), false);
+  for (const id of ["account.morrow_direct", "account.shopify"]) {
+    const account = t04aCase(id).value;
+    assert.equal(v1("BillingAccount", account), false, id);
+    assert.equal(current("BillingAccount", account), true, id);
+  }
+  const strip = (value, ...keys) =>
+    Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
+  const v1Snapshot = {
+    ...strip(t04aCase("entitlement.shopify").value, "route", "mode"),
+    schemaVersion: 1,
+    subscriptionId: "subscription_1",
+  };
+  assert.equal(v1("EntitlementSnapshot", v1Snapshot), true);
+  assert.equal(current("EntitlementSnapshot", v1Snapshot), false);
+  for (const id of ["entitlement.morrow_direct", "entitlement.shopify"]) {
+    assert.equal(v1("EntitlementSnapshot", t04aCase(id).value), false, id);
+    assert.equal(current("EntitlementSnapshot", t04aCase(id).value), true, id);
+  }
+  const v1Grant = t04aCase("grant.v1_shape").value;
+  assert.equal(v1("CreditGrant", v1Grant), true);
+  assert.equal(current("CreditGrant", v1Grant), false);
+  for (const id of ["grant.morrow_direct_purchased", "grant.shopify_included"]) {
+    assert.equal(v1("CreditGrant", t04aCase(id).value), false, id);
+    assert.equal(current("CreditGrant", t04aCase(id).value), true, id);
+  }
+  const storeShare = t04aCase("share.store").value;
+  const v1Allocation = {
+    ...t04aCase("allocation.v1_schema_version").value,
+    shares: [structuredClone(storeShare)],
+  };
+  assert.equal(v1("CostAllocation", v1Allocation), true);
+  assert.equal(current("CostAllocation", v1Allocation), false);
+  const allocation = t04aCase("allocation.valid").value;
+  assert.equal(v1("CostAllocation", allocation), false);
+  assert.equal(current("CostAllocation", allocation), true);
+  // The superset: a v1 share is a valid store-bound share; a storeless share is not v1.
+  assert.equal(v1("AllocationShare", storeShare), true);
+  assert.equal(current("AllocationShare", storeShare), true);
+  const storeless = t04aCase("share.storeless").value;
+  assert.equal(v1("AllocationShare", storeless), false);
+  assert.equal(current("AllocationShare", storeless), true);
+  assert.deepEqual(
+    changes.changes
+      .filter((c) => c.kind === "billing_definition" && /superset of v1/.test(c.reason))
+      .map((c) => c.name),
+    ["AllocationShare"],
+  );
   // Every key fits a core Id, so it fits the v1 subscriptionId and meter fields.
   for (const c of t04a.cases.filter((c) => c.id.startsWith("P01.T04a.key.") && c.valid))
     assert.equal(validateDefinition("core", "Id", c.value), true, c.id);
@@ -601,6 +695,23 @@ test("P01.T04a AC29: only the billing reader and its two forwarders set entitlem
     'const facts = { ["entitlementAllowed"]: true };',
     "const facts = { get entitlementAllowed() { return true; } };",
     'Object.defineProperty(facts, "entitlementAllowed", { value: true });',
+    // Class fields (with or without an initializer) and parameter properties.
+    "class Facts { readonly entitlementAllowed = true; }",
+    "class Facts { readonly providerAllowed = true; readonly entitlementAllowed = true; }",
+    "class Facts { entitlementAllowed: boolean = allowed; }",
+    "class Facts { declare entitlementAllowed: boolean; }",
+    "class Facts { constructor(readonly entitlementAllowed: boolean) {} }",
+    "class Facts { constructor(private entitlementAllowed: boolean) {} }",
+    "const facts = { entitlementAllowed() { return true; } };",
+    // A key bound to the field's name, an entries pair, and an opaque computed
+    // key beside providerAllowed.
+    'const k = "entitlementAllowed"; const facts = { [k]: true };',
+    'const k = "entitlementAllowed" as const; facts[k] = true;',
+    'const k = "entitlementAllowed"; Reflect.set(facts, k, true);',
+    'Object.fromEntries([["entitlementAllowed", true]]);',
+    'new Map([["entitlementAllowed", allowed]]);',
+    "const facts = { providerAllowed: true, [key()]: true };",
+    "class Facts { providerAllowed = true; [Keys.entitlement] = true; }",
   ])
     flagged(code);
   flagged(
@@ -616,7 +727,13 @@ test("P01.T04a AC29: only the billing reader and its two forwarders set entitlem
     "interface Facts { readonly entitlementAllowed: boolean }",
     "type Facts = { entitlementAllowed: boolean };",
     'closed(v, ["providerAllowed", "entitlementAllowed"]);',
+    'closed(v, ["entitlementAllowed", "providerAllowed"]);',
     "if (!facts.entitlementAllowed) deny();",
+    "class Facts { readonly entitlementAllowed = false; }",
+    "class Facts { constructor(entitlementAllowed: boolean) {} }",
+    'Object.fromEntries([["entitlementAllowed", false]]);',
+    'const facts = { providerAllowed: true, ["entitlementAllowed"]: false };',
+    "const byKey = { [key]: value };",
   ])
     assert.deepEqual(inspectEntitlementWriters(outside, code), [], code);
   // Labs, fixtures, tests and *.test.* files are out of scope.

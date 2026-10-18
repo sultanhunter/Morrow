@@ -367,7 +367,19 @@ export function createWorkspacePermissionBoundary(
               at,
             );
             if (!preliminary.decision.allowed) return facts(before, false, false);
-            const conditions = await constraints.readCurrent(currentRequest, before.identity.actor);
+            const conditions: unknown = await constraints.readCurrent(
+              currentRequest,
+              before.identity.actor,
+            );
+            // Copy only a plain, closed pair of booleans: a class instance, getter,
+            // extra field or non-boolean value fails closed before it is read.
+            if (
+              !plainJson(conditions) ||
+              !closed(conditions, ["providerAllowed", "entitlementAllowed"]) ||
+              typeof conditions.providerAllowed !== "boolean" ||
+              typeof conditions.entitlementAllowed !== "boolean"
+            )
+              throw new PolicyBoundaryError("POLICY_AUTHORITY_UNAVAILABLE");
             // Constraint lookup may wait: reload SQL authority and reject a changed
             // policy rather than returning a stale allow after revocation.
             const after = await scope.readWorkspaceAuthority();

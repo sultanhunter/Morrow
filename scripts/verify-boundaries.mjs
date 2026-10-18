@@ -271,6 +271,16 @@ for (const [name, code] of [
   ["entitlement_writer_literal_true", "const facts = { entitlementAllowed: true };"],
   ["entitlement_writer_variable", "const facts = { entitlementAllowed: allowed };"],
   ["entitlement_writer_assignment", "facts.entitlementAllowed = true;"],
+  ["entitlement_writer_class_field", "class Facts { readonly entitlementAllowed = true; }"],
+  [
+    "entitlement_writer_parameter_property",
+    "class Facts { constructor(readonly entitlementAllowed: boolean) {} }",
+  ],
+  [
+    "entitlement_writer_aliased_key",
+    'const key = "entitlementAllowed"; const facts = { [key]: true };',
+  ],
+  ["entitlement_writer_entries_pair", 'Object.fromEntries([["entitlementAllowed", true]]);'],
 ])
   negatives.push({
     name,

@@ -276,7 +276,7 @@
       ]
     },
     "VerifiedPaymentEvent": {
-      "description": "A provider payment Morrow verified server-side and read back (Stripe invoice.paid; an App Pricing cycle from a Partner API read). amountPaid is the money collected; creditUnits come only from BillingTerms. Tenant ids are null together only for an unattributed event. Stripe operationId is the OperationLedger operation the object traces to, or null when it traces to none (held NOT_MORROW_INITIATED). A Shopify event is never a top_up.",
+      "description": "A provider payment Morrow verified server-side and read back (Stripe invoice.paid; an App Pricing cycle from a Partner API read). amountPaid is the money collected; creditUnits come only from BillingTerms. Tenant ids are null together only for an unattributed event. Stripe operationId is the OperationLedger operation the object traces to, or null when it traces to none (held NOT_MORROW_INITIATED). A Shopify event is never a top_up. Shopify-route amounts are USD (App Pricing prices are USD only).",
       "oneOf": [
         {
           "type": "object",
@@ -741,7 +741,7 @@
               "type": "null"
             },
             "amountPaid": {
-              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+              "$ref": "#/$defs/UsdBillingMoney"
             },
             "providerEvidenceRef": {
               "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
@@ -867,7 +867,7 @@
               "type": "null"
             },
             "amountPaid": {
-              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+              "$ref": "#/$defs/UsdBillingMoney"
             },
             "providerEvidenceRef": {
               "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
@@ -932,7 +932,7 @@
       ]
     },
     "PaymentReversal": {
-      "description": "A verified refund or dispute of a payment (R11), read back before any write. While open, the payer whose payment it reverses is not billable. A reversal of a payment that granted nothing is recorded only.",
+      "description": "A verified refund or dispute of a payment (R11), read back before any write. While open, the payer whose payment it reverses is not billable. A reversal of a payment that granted nothing is recorded only. Shopify-route amounts are USD.",
       "oneOf": [
         {
           "type": "object",
@@ -1100,7 +1100,7 @@
               ]
             },
             "amount": {
-              "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/BillingMoney"
+              "$ref": "#/$defs/UsdBillingMoney"
             },
             "providerEvidenceRef": {
               "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
@@ -1162,7 +1162,7 @@
       ]
     },
     "BillingTerms": {
-      "description": "Morrow's versioned terms table: the only source of creditUnits (R10). Keyed by the provider price or plan read back from the provider object. A (route, mode, priceKey) appears once; the billing library rejects a table that repeats one. Values are fixtures until P18 pricing.",
+      "description": "Morrow's versioned terms table: the only source of creditUnits (R10). Keyed by the provider price or plan read back from the provider object. A Shopify entry is a USD subscription_period. The schema rejects only an exactly repeated entry; the billing library rejects a table that repeats a (route, mode, priceKey) with different values. Values are fixtures until P18 pricing.",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -1231,7 +1231,8 @@
                     "const": "subscription_period"
                   },
                   "currency": {
-                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Currency"
+                    "type": "string",
+                    "const": "USD"
                   },
                   "creditUnits": {
                     "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
@@ -1383,7 +1384,7 @@
       "additionalProperties": false
     },
     "BillingAccount": {
-      "description": "BillingAccount@2 (replaces billing v1 BillingAccount; changes.json). Morrow-direct: the workspace's one storeless account. Shopify: one account per associated installation, kept across disconnects.",
+      "description": "BillingAccount@2 (replaces billing v1 BillingAccount; changes.json). Morrow-direct: the workspace's one storeless account. Shopify: one account per associated installation, kept across disconnects. A Shopify account is in USD.",
       "oneOf": [
         {
           "type": "object",
@@ -1471,7 +1472,8 @@
               "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
             },
             "currency": {
-              "$ref": "urn:morrow:contracts:core:v1#/$defs/Currency"
+              "type": "string",
+              "const": "USD"
             },
             "status": {
               "type": "string",
