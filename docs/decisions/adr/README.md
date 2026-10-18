@@ -22,6 +22,7 @@ Material decisions (ADR-0002) are recorded here before dependent implementation.
 | [0016](ADR-0016-collaboration-contracts-v1-1.md) | Collaboration contracts v1.1: conversations, Asks, mentions, inbox, projects and EventEnvelope@2 | Accepted 2026-10-18 |
 | [0017](ADR-0017-membership-authority.md) | Membership authority and the membership contract additions | Accepted 2026-10-18 |
 | [0018](ADR-0018-proposals-without-a-task.md) | Proposals without a task: human governance proposals only | Accepted 2026-10-18 |
+| [0019](ADR-0019-staging-environment.md) | Staging environment: workers.dev origin, continuous deploy and sign-in abuse protection | Proposed, awaiting owner approval |
 
 ADR-0012 and ADR-0013 record how the P03.T04c overhaul implemented ADR-0002; earlier drafts of them used the numbers 0001, 0007 and 0008.
 
