@@ -1,24 +1,70 @@
-import { writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { root, read } from './foundation.mjs';
+import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { root, read } from "./foundation.mjs";
 
 export function renderDocuments(catalogue, dependencies) {
-  const dep = Object.fromEntries(dependencies.map(d => [d.id,d]));
-  const header = '# Capability and authority catalogue\n\nP01.T01 candidate, version 0.1.0-draft. The canonical build plan controls this implementation record. Every capability remains Proposed and blocked from activation. Typed references and lists below are proposed shapes; P01.T02 resolves their nested schemas, validation and retention durations. P01.T03 qualifies exact provider APIs/scopes and access.\n\n';
-  let md = header + '## Common request and result envelopes\n\nScopedRequestV1: schemaVersion (integer); commandId (opaque ID); trusted principal reference; organization/workspace identity resolved server-side; explicit store/account/resource/field scope; expected aggregate revision for writes; immutable proposal and approval references when required; correlation ID. Browser host flags or shop URLs never establish tenant authority.\n\nEvidenceResultV1: status (closed enum to be specified in P01.T02); operation/run/record ID as appropriate; evidence references with provider identity, observation time, source revision, coverage and lineage; safe structured failure. Error categories: denied, missing input, conflict, unavailable, rate limited, rejected, uncertain, budget exhausted. Never expose inaccessible records in denials. External submission is not completion: reconcile the declared postcondition.\n\nEach field listed is required and non-null in this proposed shape. Optionality and bounded array limits are resolved explicitly in P01.T02 rather than assumed in code. Source authority: provider facts for live state, eligible human-approved evidence for claims, Morrow for work and decisions. No generated text becomes authoritative merely because it is recent.\n\n';
+  const dep = Object.fromEntries(dependencies.map((d) => [d.id, d]));
+  const header =
+    "# Capability and authority catalogue\n\nP01.T01 candidate, version 0.1.0-draft. The canonical build plan controls this implementation record. Every capability remains Proposed and blocked from activation. Typed references and lists below are proposed shapes; P01.T02 resolves their nested schemas, validation and retention durations. P01.T03 qualifies exact provider APIs/scopes and access.\n\n";
+  let md =
+    header +
+    "## Common request and result envelopes\n\nScopedRequestV1: schemaVersion (integer); commandId (opaque ID); trusted principal reference; organization/workspace identity resolved server-side; explicit store/account/resource/field scope; expected aggregate revision for writes; immutable proposal and approval references when required; correlation ID. Browser host flags or shop URLs never establish tenant authority.\n\nEvidenceResultV1: status (closed enum to be specified in P01.T02); operation/run/record ID as appropriate; evidence references with provider identity, observation time, source revision, coverage and lineage; safe structured failure. Error categories: denied, missing input, conflict, unavailable, rate limited, rejected, uncertain, budget exhausted. Never expose inaccessible records in denials. External submission is not completion: reconcile the declared postcondition.\n\nEach field listed is required and non-null in this proposed shape. Optionality and bounded array limits are resolved explicitly in P01.T02 rather than assumed in code. Source authority: provider facts for live state, eligible human-approved evidence for claims, Morrow for work and decisions. No generated text becomes authoritative merely because it is recent.\n\n";
   for (const domain of catalogue.domain_names) {
     md += `## ${domain}\n\n`;
-    for (const c of catalogue.capabilities.filter(c=>c.domain===domain)) {
-      const shape = x => Object.entries(x.fields).map(([k,v])=>`${k}: ${v.type}`).join('; ');
-      md += `### ${c.id}\n\n${c.name}. Owner: ${c.owner}. Effect: ${c.effect}. Provider: ${dep[c.provider_dependency].key} (${c.provider_dependency}, ${dep[c.provider_dependency].status}).\n\nInput: ${shape(c.input)}. Output: ${shape(c.output)}.\n\nAuthority: ${c.eligible_principal}; explicit grant ${c.grant}. ${c.resource_scope} Fields: ${c.field_scope.join(', ')}. Executor: ${c.executor}${c.kill_switch ? '; kill switch' : ''}${c.irreversible ? '; irreversible (ADR-0011 Q4: the irreversible review rule is merged in)' : ''}. Review gate: ${c.kill_switch ? 'none; a kill switch executes without a second approver but needs a current human grant, a recorded reason, an append-only KillSwitchRecord and owner notification (ADR-0005)' : c.review_required ? 'required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02' : 'no action approval by default; grants and other policy gates still apply'}.\n\nRetention: ${c.retention_class}. Verification: ${c.verification}. Failure: ${c.failure_behavior}\n\nTrace: ${c.journey}; ${c.implementation_tasks.join(', ')}; ${c.acceptance_cases.join(', ')}. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; ${c.layout}\n\n`;
+    for (const c of catalogue.capabilities.filter((c) => c.domain === domain)) {
+      const shape = (x) =>
+        Object.entries(x.fields)
+          .map(([k, v]) => `${k}: ${v.type}`)
+          .join("; ");
+      md += `### ${c.id}\n\n${c.name}. Owner: ${c.owner}. Effect: ${c.effect}. Provider: ${dep[c.provider_dependency].key} (${c.provider_dependency}, ${dep[c.provider_dependency].status}).\n\nInput: ${shape(c.input)}. Output: ${shape(c.output)}.\n\nAuthority: ${c.eligible_principal}; explicit grant ${c.grant}. ${c.resource_scope} Fields: ${c.field_scope.join(", ")}. Executor: ${c.executor}${c.kill_switch ? "; kill switch" : ""}${c.irreversible ? "; irreversible (ADR-0011 Q4: the irreversible review rule is merged in)" : ""}. Review gate: ${c.kill_switch ? "none; a kill switch executes without a second approver but needs a current human grant, a recorded reason, an append-only KillSwitchRecord and owner notification (ADR-0005)" : c.review_required ? "required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02" : "no action approval by default; grants and other policy gates still apply"}.\n\nRetention: ${c.retention_class}. Verification: ${c.verification}. Failure: ${c.failure_behavior}\n\nTrace: ${c.journey}; ${c.implementation_tasks.join(", ")}; ${c.acceptance_cases.join(", ")}. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; ${c.layout}\n\n`;
     }
   }
-  md += '## Retention classes\n\n' + Object.entries(catalogue.retention_classes).map(([id,r])=>`- ${id}, ${r.name}: ${r.policy}`).join('\n') + '\n';
-  const permissions = '# Permission matrix\n\nRoles propose defaults; server grants determine authority. Owner is not a provider-permission bypass. View, propose, approve, execute, delegate and administration are separate grants. Executor classes (contract v1.1, ADR-0005): agents get no verb on a human_only capability except propose, and only where a proposal path exists (a kill switch or a reviewed capability); agent_after_approval needs an exact approval; agent_direct_write and agent_direct_read keep the existing bounded agent authority. Kill switches act without a second approver. An agent installation intersects its owner, initiating principal, selected resource scope, current provider grants and mandate. A question or approval cannot repair a denied grant. Background work requires a current explicit mandate.\n\n| Principal | Typical eligible path | Explicit boundary |\n| --- | --- | --- |\n| Small-brand owner | Granted store reads, drafting, eligible review and bounded execution | Provider access, budgets, field limits and exact review still apply |\n| SEO specialist | Scoped product/public-page evidence, audits, copy/SEO drafts | No price, customer cases, refunds, ad spend or role administration by title |\n| Creative specialist | Approved source images, briefs, bounded generation, contact sheets | Fidelity approval does not grant media publication |\n| Ads specialist | Named ad accounts, aggregate reporting, draft/paused campaigns if granted | Audience and activation/spend authority remain separate |\n| Support specialist | Assigned cases, scoped order facts, eligible reply workflows | Reply authority does not grant refunds or financial read access |\n| Inventory operator | Named items/locations, reconciliation and authorized proposals | Absolute writes need configured source-of-truth authority |\n| Finance specialist | Explicit cost fields and governed margin evidence | Costs do not become readable to unrelated teams via derived artifacts |\n| Agent/coordinator | Intersection of installation and originating authority | Role name, tool availability, delegation and offline tokens cannot widen grants |\n| Operator author/reviewer/publisher | Separate explicit first-party namespace permissions | Merchant ownership never grants release publishing or production customer access |\n\n## Per-operation grants\n\n| Capability | Eligible principal | Fields | Review | Executor | Kill switch |\n| --- | --- | --- | --- | --- | --- |\n' + catalogue.capabilities.map(c=>`| ${c.id} | ${c.eligible_principal} | ${c.field_scope.join(', ')} | ${c.review_required ? 'Required' : 'Grant checks'} | ${c.executor} | ${c.kill_switch ? 'Yes' : 'No'} |`).join('\n') + '\n';
-  const parity = '# Surface responsibility matrix\n\nThe full workspace exists in standalone Morrow. The thin Shopify connector supports verified install/link/status/reconnect/disconnect/return only; it cannot dispatch these domain capabilities. These are contracts, not qualified UI. Historical filename retained for references.\n\n| Journey | Domain | Standalone work | Shopify connector |\n| --- | --- | --- | --- |\n' + catalogue.domain_names.map(domain=>{const cs=catalogue.capabilities.filter(c=>c.domain===domain); return `| ${cs[0].journey} | ${domain} | ${cs.map(c=>c.id).join(', ')} | No domain execution; safe verified return to Morrow |`;}).join('\n') + '\n\nBrowser/session resume and connector return preserve existing work, revisions and immutable proposal targets. A different selected store cannot retarget a review.\n';
-  const trace = '# Capability traceability\n\nContract coverage only. Real provider evidence, executable authorization and merchant outcome gates remain future package qualifications. All launch domains remain committed even when a provider is unresolved.\n\n| Capability | Journey | Implementation tasks | Acceptance cases | Dependency |\n| --- | --- | --- | --- | --- |\n' + catalogue.capabilities.map(c=>`| ${c.id} | ${c.journey} | ${c.implementation_tasks.join(', ')} | ${c.acceptance_cases.join(', ')} | ${c.provider_dependency} |`).join('\n') + '\n';
-  return {'capabilities.md':md,'permission-matrix.md':permissions,'surface-parity.md':parity,'traceability.md':trace};
+  md +=
+    "## Retention classes\n\n" +
+    Object.entries(catalogue.retention_classes)
+      .map(([id, r]) => `- ${id}, ${r.name}: ${r.policy}`)
+      .join("\n") +
+    "\n";
+  const permissions =
+    "# Permission matrix\n\nRoles propose defaults; server grants determine authority. Owner is not a provider-permission bypass. View, propose, approve, execute, delegate and administration are separate grants. Executor classes (contract v1.1, ADR-0005): agents get no verb on a human_only capability except propose, and only where a proposal path exists (a kill switch or a reviewed capability); agent_after_approval needs an exact approval; agent_direct_write and agent_direct_read keep the existing bounded agent authority. Kill switches act without a second approver. An agent installation intersects its owner, initiating principal, selected resource scope, current provider grants and mandate. A question or approval cannot repair a denied grant. Background work requires a current explicit mandate.\n\n| Principal | Typical eligible path | Explicit boundary |\n| --- | --- | --- |\n| Small-brand owner | Granted store reads, drafting, eligible review and bounded execution | Provider access, budgets, field limits and exact review still apply |\n| SEO specialist | Scoped product/public-page evidence, audits, copy/SEO drafts | No price, customer cases, refunds, ad spend or role administration by title |\n| Creative specialist | Approved source images, briefs, bounded generation, contact sheets | Fidelity approval does not grant media publication |\n| Ads specialist | Named ad accounts, aggregate reporting, draft/paused campaigns if granted | Audience and activation/spend authority remain separate |\n| Support specialist | Assigned cases, scoped order facts, eligible reply workflows | Reply authority does not grant refunds or financial read access |\n| Inventory operator | Named items/locations, reconciliation and authorized proposals | Absolute writes need configured source-of-truth authority |\n| Finance specialist | Explicit cost fields and governed margin evidence | Costs do not become readable to unrelated teams via derived artifacts |\n| Agent/coordinator | Intersection of installation and originating authority | Role name, tool availability, delegation and offline tokens cannot widen grants |\n| Operator author/reviewer/publisher | Separate explicit first-party namespace permissions | Merchant ownership never grants release publishing or production customer access |\n\n## Per-operation grants\n\n| Capability | Eligible principal | Fields | Review | Executor | Kill switch |\n| --- | --- | --- | --- | --- | --- |\n" +
+    catalogue.capabilities
+      .map(
+        (c) =>
+          `| ${c.id} | ${c.eligible_principal} | ${c.field_scope.join(", ")} | ${c.review_required ? "Required" : "Grant checks"} | ${c.executor} | ${c.kill_switch ? "Yes" : "No"} |`,
+      )
+      .join("\n") +
+    "\n";
+  const parity =
+    "# Surface responsibility matrix\n\nThe full workspace exists in standalone Morrow. The thin Shopify connector supports verified install/link/status/reconnect/disconnect/return only; it cannot dispatch these domain capabilities. These are contracts, not qualified UI. Historical filename retained for references.\n\n| Journey | Domain | Standalone work | Shopify connector |\n| --- | --- | --- | --- |\n" +
+    catalogue.domain_names
+      .map((domain) => {
+        const cs = catalogue.capabilities.filter((c) => c.domain === domain);
+        return `| ${cs[0].journey} | ${domain} | ${cs.map((c) => c.id).join(", ")} | No domain execution; safe verified return to Morrow |`;
+      })
+      .join("\n") +
+    "\n\nBrowser/session resume and connector return preserve existing work, revisions and immutable proposal targets. A different selected store cannot retarget a review.\n";
+  const trace =
+    "# Capability traceability\n\nContract coverage only. Real provider evidence, executable authorization and merchant outcome gates remain future package qualifications. All launch domains remain committed even when a provider is unresolved.\n\n| Capability | Journey | Implementation tasks | Acceptance cases | Dependency |\n| --- | --- | --- | --- | --- |\n" +
+    catalogue.capabilities
+      .map(
+        (c) =>
+          `| ${c.id} | ${c.journey} | ${c.implementation_tasks.join(", ")} | ${c.acceptance_cases.join(", ")} | ${c.provider_dependency} |`,
+      )
+      .join("\n") +
+    "\n";
+  return {
+    "capabilities.md": md,
+    "permission-matrix.md": permissions,
+    "surface-parity.md": parity,
+    "traceability.md": trace,
+  };
 }
 if (process.argv[1] === new URL(import.meta.url).pathname) {
-  for (const [file,md] of Object.entries(renderDocuments(read('docs/contracts/capabilities.json'),read('docs/decisions/dependencies.json')))) writeFileSync(resolve(root,'docs/contracts',file),md);
+  for (const [file, md] of Object.entries(
+    renderDocuments(
+      read("docs/contracts/capabilities.json"),
+      read("docs/decisions/dependencies.json"),
+    ),
+  ))
+    writeFileSync(resolve(root, "docs/contracts", file), md);
 }

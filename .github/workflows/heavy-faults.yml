@@ -1,0 +1,83 @@
+name: Morrow heavy faults
+# Optional heavy fault matrices (P03.T04e §4): repeated unit stress now, and later the
+# PostgreSQL harness stress and the P06 soak and race matrices. It runs by hand
+# (workflow_dispatch) and weekly. It is never a required check and `foundation` does not
+# need it. The `gate` job skips a scheduled run when the head commit is 8 days old or
+# more, so an idle repository spends no Actions minutes; a manual run always proceeds.
+# `gate` writes no report, so it has no scan, upload or clean-tree steps. `heavy` uses
+# the same hardened step sequence as ci.yml. docs/development/ci.md describes it.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 3 * * 1"
+permissions:
+  contents: read
+concurrency:
+  group: heavy-faults
+  cancel-in-progress: false
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Run on manual dispatch, or when the head commit is under 8 days old
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          committed="$(git log -1 --format=%ct)"
+          age=$(( $(date +%s) - committed ))
+          if [ "$EVENT_NAME" = workflow_dispatch ] || [ "$age" -lt 691200 ]; then run=true; else run=false; fi
+          echo "event $EVENT_NAME, head commit age ${age}s, run=$run"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  heavy:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [unit-stress]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Route reports outside the checkout
+        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run this heavy fault suite
+        env:
+          HEAVY_SUITE: ${{ matrix.suite }}
+        run: npm run "heavy:$HEAVY_SUITE"
+      - name: Secret-scan generated reports before upload
+        id: artifact_scan
+        if: always()
+        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
+      - name: Upload generated reports
+        if: always() && steps.artifact_scan.outcome == 'success'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: morrow-${{ github.job }}-${{ matrix.suite }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/morrow-artifacts
+          if-no-files-found: error
+          overwrite: false
+          include-hidden-files: false
+          retention-days: 90
+      - name: Require an unchanged checkout
+        if: always()
+        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"

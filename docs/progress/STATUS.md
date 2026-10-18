@@ -16,10 +16,10 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #12: P06.T01a (ADR-0010), merged as `06e4dfe`: migrations 0014 (identity bridge and organization interlock) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the `pg-work` CI group. Verified waits for the P05 exit gate.
 - PR #13: the ADR-0018 Proposal@2 edit (P01.T02a-AC27), merged as `08e5ebf`: nullable `taskId` only for human governance proposals, `TASK_REQUIRED`/`TASK_MISMATCH` and the `requestedBy` derivation in `checkProposal`. It unblocks P06.T01b PR-1.
 - PR #14: P01.T04a PR-A, merged as `bba3cec`: entitlement gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities), `inspectEntitlementWriters`, the contract v1.1 billing layer and the OQ-2 test entitlement seed branch. It applied the "Part B and P06.T01a merge first" coordination (P01.T04a §8.1, §9).
+- PR #15: P14.T01a PR-1, merged as `5ad6cc7` (provisional under ADR-0003): the option 1 shell, sign-in, workspace entry and sign-out over HTTP, the dev-only fixture mode, the a11y matrix and the CI `ui` job (`docs/acceptance/P14.md`). PR-2 (account and work wiring) follows.
 
 In progress:
-- **P14.T01a PR-1** (PR #15, branch `claude/p14-t01a-provisional-ui`, provisional under ADR-0003): the option 1 shell, sign-in, workspace entry and sign-out over HTTP, the dev-only fixture mode, the 156-case a11y matrix and the CI `ui` job (`docs/acceptance/P14.md`). Merged with `main` at `bba3cec` on 2026-10-19. Part B landed first, so `composed.loginBodyVersion` is now 2 and the unit test that feeds the client body to the server's `loginStartInput` passes; Part B's `account` route entry is the only one; `scripts/navigation-examples.mjs` stays deleted (`@morrow/contracts/routes` is the one matcher); the browser lab keeps its `hook` on top of Part B's `accountOnboarding` harness. Local format, typecheck, verify and unit tests pass on the merged head; the hosted `foundation` and `ui` jobs, the Tier 2 AI review (separate context, same model family) and `/security-review` on the merged head are open. PR-2 (account and work wiring) follows.
-- **P03.T04e PR-A** (PR #11): one formatting config, concurrent unit tests, manifest `executeAs`, heavy-faults workflow. The rest of P03.T04e ships in later PRs.
+- **P03.T04e PR-A** (PR #11, branch `claude/p03-t04e-a-format-concurrency`): `prettier --check .` under one reviewed `.prettierignore`, unit test files run concurrently through `scripts/run-tests.mjs` with an empty serial list, required `executeAs` and pinned prerequisites on every `migrations/manifest.json` row, and `heavy-faults.yml` (manual plus weekly `unit-stress`). Merged with `main` at `5ad6cc7` on 2026-10-19: rows 12-15 now carry `executeAs`; row 13 pins `infra/identity-onboarding-role-prerequisites.sql` and row 14 `infra/work-role-prerequisites.sql` (the first migration that names the work roles); the files from PRs #9-#15 are re-formatted in one mechanical commit listed in `.git-blame-ignore-revs`. Local format, typecheck, verify and unit tests pass on the merged head; hosted CI and the Tier 2 AI review on it are open. After merge: one `workflow_dispatch` run of `heavy-faults.yml` on `main` (AC22).
 
 ## Decisions recorded 2026-10-18
 
@@ -32,21 +32,22 @@ In progress:
 
 ## Last green commit
 
-`08e5ebf` on `main`, the merge of PR #13: push run 39168226191 passed. Earlier: `06e4dfe` (PR #12) push run 39166650248; `e51e5b7` (PR #10) push run 39160961579, all 10 jobs; `400aa44` (PR #9) push run 39131819189. The push run 39169685269 on `bba3cec` (PR #14) was still running when this file was written; record its result.
+`bba3cec` on `main`, the merge of PR #14: push run 39169685269 passed. Earlier: `08e5ebf` (PR #13) push run 39168226191; `06e4dfe` (PR #12) push run 39166650248; `e51e5b7` (PR #10) push run 39160961579, all 10 jobs. The push run 39171677853 on `5ad6cc7` (PR #15) was still running when this file was written; record its result.
 
 ## Next actions
 
-1. P14.T01a PR-1 (PR #15): hosted `foundation` and `ui` green on the merged head, the Tier 2 AI review and `/security-review` (request client, sign-in redirect, browser storage, fixture isolation, lab artifacts), then merge. Then PR-2 (account and work wiring), whose dependencies have merged.
+1. P03.T04e PR-A (PR #11): hosted `foundation` green on the merged head and the Tier 2 AI review, then merge and dispatch `heavy-faults.yml` on `main` (AC22). Then P14.T01a PR-2 (account and work wiring).
 2. P01.T04a PR-B (billing route library).
 3. P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
-4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
+4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11). Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.
 
 Open plan follow-ups:
-- P06.T01a AC08 soak: set `MORROW_WORK_SOAK=1` for `lab:work-postgresql` in the P03.T04e heavy job (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
+- P06.T01a AC08 soak: a `heavy:*` script that runs `lab:work-postgresql` with `MORROW_WORK_SOAK=1` in `heavy-faults.yml` (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
 - Work routes in production: production cannot map today (ADR-0007 item 9), so the deployed api serves them 401 with no SQL. Whoever enables production mapping must also gate the work routes on P09.T05 (packet hard ordering b).
 - Superseded banners on `docs/references/*`.
 - A forward migration (0016 or later) that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
-- The rest of P03.T04e: formatting ignore file, unit-test concurrency, shared PostgreSQL 17 template-database harness, heavy-fault job.
+- The rest of P03.T04e: PR-B, the shared PostgreSQL 17 template-database harness and its `pg-suites` and `pg-stress` legs.
+- Timing fixes (routine, ADR-0002) if hosted `unit-stress` confirms them: `tests/broker-client.test.mjs` AC30 and the `tests/standalone-login-http.test.mjs` 5,000 ms entry-timeout case each flaked once under loaded-host local stress.
 
 ## Blockers
 
