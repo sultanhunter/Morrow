@@ -1,6 +1,6 @@
 # ADR-0006 Billing state of a workspace before any Shopify store is installed
 
-- Status: Accepted
+- Status: Superseded by ADR-0015 (2026-10-18). Accepted 2026-10-17.
 - Date: 2026-10-17
 - Affects: P01.T04a, P11.T04, P18 billing tasks, `docs/decisions/billing-ownership.md`
 
@@ -32,3 +32,7 @@ Whether to pursue any direct (non-Shopify) billing exception is **pending an own
 ## Approval
 
 Owner approval, 2026-10-17, in chat: **"Accept proposed defaults (Recommended)"**. The default reads: "Pre-install workspaces can onboard and invite but can't run paid work until a linked shop has a Shopify App Pricing subscription."
+
+## Superseded
+
+ADR-0015 (Owner approval, 2026-10-18) supersedes this record. Billing now has two routes chosen by origin: workspaces created on the Morrow website pay through Morrow checkout (Stripe Billing with Stripe Tax) before they connect a store, and merchants who arrive from Shopify pay through Shopify App Pricing. ADR-0015 item 5 replaces the pre-install state above with a pre-payment state. The decision text above is kept unchanged as history.
