@@ -136,9 +136,31 @@ Scope of the approval:
 
 ### Follow-up owner decisions (P01.T04a OQ-1 to OQ-3, 2026-10-18)
 
-The owner chose the recommended option for each:
+On 2026-10-18 the owner answered three questions in chat. Each option shown in chat summarized a packet option, and the owner chose it as written in `docs/packets/P01.T04a.md`.
 
-1. **Who may buy:** "Decide with checkout (Recommended)". Purchase permission is defined with the Stripe checkout in P18.T01a. Owners who signed up earlier receive it through a later grant template or audited issuance (P05.T02a). Signup template v1 is unchanged.
-2. **How M4 runs paid work:** "Test entitlement seed (Recommended)". An audited, owner-run tool gives one workspace and its named stores a capped, expiring test entitlement. It applies to development and staging only. On hosted staging, each use needs a per-action owner approval. Production readers refuse the entitlement, and the production composition binds no writer.
-3. **App Review:** "Review allowance (Recommended)". In production, the owner approves, per action, a capped and expiring credit allowance for one named development-store installation used as the review store. The allowance is listed in the App Review notes. It fixes no billing route and creates no free merchant tier.
+1. **OQ-1, who may buy.** The owner chose **"Decide with checkout (Recommended)"**:
 
+   > Define purchase permission when the Stripe checkout itself is built (P18.T01a). Existing owners get it through a later grant template. Nothing changes in signup now.
+
+   This is packet option (b). The chat summary did not mention one detail of that option: owners can also receive the permission through audited grant issuance (P05.T02a).
+
+2. **OQ-2, how M4 runs paid work.** The owner chose **"Test entitlement seed (Recommended)"**:
+
+   > An audited tool, run by you, gives one workspace a capped, expiring test entitlement on development/staging only. Production refuses it.
+
+   This is packet option (a). Details of that option the chat summary did not mention:
+   - The seed also names the workspace's stores.
+   - Each use on hosted staging needs a per-action owner approval.
+   - The production composition binds no seed writer, apart from the development-store extension in item 3.
+   - The seed fixes no billing route, creates no account, and is never treated as a payment.
+
+3. **OQ-3, App Review.** The owner chose **"Review allowance (Recommended)"**:
+
+   > In production you approve a capped, expiring credit allowance for one named review dev store, noted in the App Review submission. No general free tier.
+
+   This is packet option (a). Details of that option the chat summary did not mention:
+   - The owner approves the allowance per action.
+   - The allowance is recorded by the OQ-2 seed writer, extended to production for development-store installations only.
+   - It fixes no billing route and creates no free merchant tier.
+
+**Effect on item 5.** Item 5 requires paid work to have an active entitlement on the workspace's fixed route. The OQ-2 test seed and the OQ-3 review allowance are the only two entitlements that exist without a fixed route. Both are capped, expiring, audited and owner-run.

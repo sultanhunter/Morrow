@@ -18,7 +18,7 @@ Material decisions (ADR-0002) are recorded here before dependent implementation.
 | [0012](ADR-0012-ci-artifacts-are-evidence.md) | CI runs and their uploaded artifacts are the evidence | Accepted 2026-10-17 |
 | [0013](ADR-0013-retire-aws-cdk-daytona-frozen-regressions.md) | Retire the AWS CDK foundation, the Daytona laboratory and the frozen WorkOS operator regressions | Accepted 2026-10-17 |
 | [0014](ADR-0014-merge-authority-and-trunk.md) | Merge authority and main as the trunk | Accepted 2026-10-17 |
-| [0015](ADR-0015-billing-routes-by-origin.md) | Billing routes by origin: Morrow checkout on Stripe Billing and Stripe Tax, Shopify App Pricing for Shopify-origin merchants | Accepted 2026-10-18; supersedes ADR-0006 |
+| [0015](ADR-0015-billing-routes-by-origin.md) | Billing routes by origin: Morrow checkout on Stripe Billing and Stripe Tax, Shopify App Pricing for Shopify-origin merchants | Accepted 2026-10-18; supersedes ADR-0006; follow-up decisions on P01.T04a OQ-1 to OQ-3 |
 | [0016](ADR-0016-collaboration-contracts-v1-1.md) | Collaboration contracts v1.1: conversations, Asks, mentions, inbox, projects and EventEnvelope@2 | Accepted 2026-10-18 |
 | [0017](ADR-0017-membership-authority.md) | Membership authority and the membership contract additions | Accepted 2026-10-18 |
 | [0018](ADR-0018-proposals-without-a-task.md) | Proposals without a task: human governance proposals only | Accepted 2026-10-18 |
