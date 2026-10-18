@@ -229,6 +229,24 @@ test("a connect reviewer needs an explicit approve grant; approve never performs
     f.grant.verbs = ["view", "propose", "approve", "execute", "delegate", "administer"];
     assert.equal(await reason(f), "capability_denied", verb);
   }
+  // An approve-only holder cannot perform the connect itself.
+  f.request.verb = "administer";
+  f.grant.verbs = ["approve"];
+  assert.equal(await reason(f), "capability_denied");
+  // Agents, installations and mandates never review a connect, even with the grant.
+  f.request.verb = "approve";
+  f.grant.verbs = ["administer", "approve"];
+  for (const change of [
+    (a) => (a.kind = "agent"),
+    (a) => (a.installationId = "installation_a"),
+    (a) => (a.mandateId = "mandate_a"),
+  ]) {
+    const g = structuredClone(f);
+    change(g.authority.actor);
+    change(g.grant.principal);
+    g.authority.grants = [g.grant];
+    assert.equal(await reason(g), "origin_denied");
+  }
 });
 test("workspace linking needs one grant covering the actual connection input fields before review", async () => {
   const f = fixture();

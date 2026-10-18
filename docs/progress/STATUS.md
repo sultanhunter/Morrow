@@ -14,7 +14,7 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #9: the owner decisions of 2026-10-18: ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
 
 In progress:
-- **P05.T01x Part B** (`claude/p05-t01x-b-signup`, ADR-0009): migration 0013 (account login, enrollment at the first verified sign-in, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, contract v1.1 additions and route `account`, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers). Review findings addressed (merged with `main`; 0013 checks all ten executors; AC38 journey to bootstrap and logout in workerd). Awaiting its PR, hosted CI (the `pgwire` job is a merge gate for the bundle-level AC27/AC38 evidence) and Tier 2 review, where `/security-review` must sign off the kernel change. Deviations are in the packet's "Implementation notes (Part B)".
+- **P05.T01x Part B** (`claude/p05-t01x-b-signup`, ADR-0009): migration 0013 (account login, enrollment at the first verified sign-in, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, contract v1.1 additions and route `account`, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers). Review findings addressed (merged with `main`; 0013 checks all ten executors; AC38 journey to bootstrap and logout in workerd). Awaiting its PR, hosted CI (the `pgwire` job is a merge gate for the bundle-level AC27/AC38 evidence) and Tier 2 review. The AI security review (separate context, same model family) of the kernel change found no merge blocker; its test gap is closed. Deviations are in the packet's "Implementation notes (Part B)".
 - **P01.T04a** PR-A and PR-B are the next billing step (OQ-1 to OQ-3 resolved 2026-10-18).
 - **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
 
@@ -40,6 +40,7 @@ In progress:
 
 Open plan follow-ups:
 - Superseded banners on `docs/references/*`; `docs/contracts/billing-entitlements.md` still names App Pricing as the only route (P01.T04a updates it).
+- A forward migration after 0013 that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
 - The rest of P03.T04e: formatting ignore file, unit-test concurrency, shared PostgreSQL 17 template-database harness, heavy-fault job.
 
 ## Blockers
@@ -50,7 +51,6 @@ None for local work. Hosted staging (M1) waits on the owner actions below. Billi
 
 - **Sign-offs:**
   - Plan R1 (Tier 3).
-  - P05.T01x Part B, before merge: The kernel change (connect also evaluates `approve`; ADR-0009 item 7, ADR-0011 Q5) needs Tier 2 `/security-review` sign-off.
   - P05.T01x Part B, before hosted login (M1): account login start is anonymous, so its per-profile windows (10 per 10 s, 100 open) let anyone block every sign-in on a profile (packet §11). Decide whether Turnstile or the edge per-IP limiter gates hosted login activation in every environment, not only sign-up beyond the allowlist (ADR-0009 item 8).
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
