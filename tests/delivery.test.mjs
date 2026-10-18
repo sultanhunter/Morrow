@@ -122,31 +122,41 @@ test("a missing or malformed executeAs denies", () => {
   );
 });
 test("a prerequisite outside its directory, malformed or without bytes denies", () => {
+  // Each case passes bytes for every file it names, so only its shape or path can fail.
+  const namedBytes = (prerequisites) =>
+    Object.fromEntries(
+      (Array.isArray(prerequisites) ? prerequisites : [])
+        .filter((entry) => typeof entry?.file === "string")
+        .map((entry) => [entry.file, prerequisiteSql]),
+    );
   for (const prerequisites of [
     [],
     {},
     "infra/example-role-prerequisites.sql",
     [prerequisite.file],
     [null],
+    [[prerequisite.file, prerequisite.sha256]],
     [{ file: prerequisite.file }],
+    [{ ...prerequisite, runAs: "postgres" }],
+    [{ ...prerequisite, sha256: prerequisite.sha256.toUpperCase() }],
+    [{ ...prerequisite, sha256: prerequisite.sha256.slice(1) }],
+    [{ ...prerequisite, sha256: "wrong" }],
     [{ ...prerequisite, file: "scripts/example-role-prerequisites.sql" }],
     [{ ...prerequisite, file: "infra/../infra/example-role-prerequisites.sql" }],
     [{ ...prerequisite, file: "infra/sub/example-role-prerequisites.sql" }],
     [{ ...prerequisite, file: "infra/example-role.sql" }],
     [{ ...prerequisite, file: "infra/Example-role-prerequisites.sql" }],
-    [{ ...prerequisite, file: "infra/other-role-prerequisites.sql" }],
   ])
     assert.deepEqual(
-      inspectMigrations(withRows({ prerequisites }), rowFiles(1), prerequisiteBytes),
+      inspectMigrations(withRows({ prerequisites }), rowFiles(1), namedBytes(prerequisites)),
       ["INVALID_PREREQUISITE"],
       JSON.stringify(prerequisites),
     );
-  assert.deepEqual(
-    inspectMigrations(withRows({ prerequisites: [prerequisite] }), rowFiles(1), {
-      [prerequisite.file]: undefined,
-    }),
-    ["INVALID_PREREQUISITE"],
-  );
+  for (const bytes of [{}, { [prerequisite.file]: undefined }])
+    assert.deepEqual(
+      inspectMigrations(withRows({ prerequisites: [prerequisite] }), rowFiles(1), bytes),
+      ["INVALID_PREREQUISITE"],
+    );
   // The default directory is infra/; a fixture directory must be named explicitly.
   const fixture = { ...prerequisite, file: "tests/fixtures/pg-harness/example-prerequisites.sql" };
   assert.deepEqual(
@@ -154,6 +164,18 @@ test("a prerequisite outside its directory, malformed or without bytes denies", 
       [fixture.file]: prerequisiteSql,
     }),
     ["INVALID_PREREQUISITE"],
+  );
+});
+test("a prerequisite file that no row names denies", () => {
+  assert.deepEqual(inspectMigrations(withRows({}), rowFiles(1), prerequisiteBytes), [
+    "UNREVIEWED_PREREQUISITE_FILE",
+  ]);
+  assert.deepEqual(
+    inspectMigrations(withRows({ prerequisites: [prerequisite] }), rowFiles(1), {
+      ...prerequisiteBytes,
+      "infra/unused-role-prerequisites.sql": prerequisiteSql,
+    }),
+    ["UNREVIEWED_PREREQUISITE_FILE"],
   );
 });
 test("changed prerequisite bytes deny", () =>
@@ -195,6 +217,13 @@ test("the repository manifest passes with its prerequisite files", () => {
   );
   assert.deepEqual(inspectMigrations(repositoryManifest, migrationSql, infra), []);
   assert.deepEqual(inspectMigrations(repositoryManifest, migrationSql), ["INVALID_PREREQUISITE"]);
+  assert.deepEqual(
+    inspectMigrations(repositoryManifest, migrationSql, {
+      ...infra,
+      "infra/work-role-prerequisites.sql": prerequisiteSql,
+    }),
+    ["UNREVIEWED_PREREQUISITE_FILE"],
+  );
 });
 test("bundle integrity requires an integrity-checked registry ancestor", () => {
   const path = "node_modules/example/node_modules/embedded";

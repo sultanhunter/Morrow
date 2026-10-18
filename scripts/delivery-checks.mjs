@@ -20,11 +20,23 @@ export function inspectSecrets(text) {
 }
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const executeAsRole = /^morrow_[a-z][a-z0-9_]{0,47}$/;
+const sha256Hex = /^[0-9a-f]{64}$/;
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-// Pure: the caller passes migration SQL by file name and prerequisite bytes by repository
-// path. Every row names the restricted owner role it is applied under (`executeAs`). A row
-// that needs administrator setup first lists pinned `prerequisites` ({file, sha256}) under
-// prerequisiteDirectory, and each prerequisite file belongs to exactly one row.
+// A prerequisite entry is exactly {file, sha256}; any other key (say a `runAs`) denies
+// rather than being silently ignored by the administrator-run consumer.
+const isPrerequisiteEntry = (value) =>
+  typeof value === "object" &&
+  value !== null &&
+  Object.getPrototypeOf(value) === Object.prototype &&
+  Object.keys(value).sort().join() === "file,sha256" &&
+  typeof value.file === "string" &&
+  typeof value.sha256 === "string" &&
+  sha256Hex.test(value.sha256);
+// Pure: the caller passes migration SQL by file name and every prerequisite file's bytes by
+// repository path. Every row names the restricted owner role it is applied under
+// (`executeAs`). A row that needs administrator setup first lists pinned `prerequisites`
+// ({file, sha256}) under prerequisiteDirectory; each prerequisite file belongs to exactly
+// one row, and a passed prerequisite file that no row names denies.
 export function inspectMigrations(
   manifest,
   files,
@@ -42,6 +54,7 @@ export function inspectMigrations(
     "^" + escapeRegExp(prerequisiteDirectory) + "/[a-z0-9-]+-prerequisites\\.sql$",
   );
   const prerequisiteFiles = new Set();
+  const namedPrerequisites = new Set();
   let previous = 0;
   const names = new Set();
   for (const entry of manifest.migrations) {
@@ -70,10 +83,10 @@ export function inspectMigrations(
       else
         for (const prerequisite of entry.prerequisites) {
           const file = prerequisite?.file;
+          if (typeof file === "string") namedPrerequisites.add(file);
           if (
-            typeof file !== "string" ||
+            !isPrerequisiteEntry(prerequisite) ||
             !prerequisitePath.test(file) ||
-            typeof prerequisite.sha256 !== "string" ||
             !Object.hasOwn(prerequisites, file) ||
             !(typeof prerequisites[file] === "string" || prerequisites[file] instanceof Uint8Array)
           ) {
@@ -88,6 +101,8 @@ export function inspectMigrations(
     }
   }
   if (Object.keys(files).some((name) => !names.has(name))) errors.push("UNREVIEWED_MIGRATION_FILE");
+  if (Object.keys(prerequisites).some((path) => !namedPrerequisites.has(path)))
+    errors.push("UNREVIEWED_PREREQUISITE_FILE");
   return [...new Set(errors)];
 }
 export function lockedBundleAncestor(path, packages) {
@@ -140,11 +155,13 @@ export function scanSecrets(root = ".") {
   return { paths, findings };
 }
 // Deliberate migration negatives: one synthetic reviewed row per override (0001.example.sql,
-// 0002.example.sql, …) with its SQL and one prerequisite file; each override replaces fields
-// of its row. Without overrides the rows pass, so each negative must yield exactly its code.
+// 0002.example.sql, …) with its SQL, plus bytes for every prerequisite file the rows name and
+// any extra files; each override replaces fields of its row. Without overrides or extra files
+// the rows pass, so each negative must yield exactly its code.
 const syntheticSql = "BEGIN; SELECT 1; COMMIT;";
 const syntheticDigest = sha256(syntheticSql);
-function syntheticMigrationErrors(...overrides) {
+const examplePrerequisite = "infra/example-prerequisites.sql";
+function syntheticMigrationErrors(overrides, extraPrerequisites = {}) {
   const rows = overrides.map((override, index) => ({
     sequence: index + 1,
     file: `000${index + 1}.example.sql`,
@@ -153,10 +170,11 @@ function syntheticMigrationErrors(...overrides) {
     executeAs: "morrow_identity_owner",
     ...override,
   }));
+  const named = rows.flatMap((row) => (row.prerequisites ?? []).map(({ file }) => file));
   return inspectMigrations(
     { schema_version: 1, engine: "postgresql17", migrations: rows },
     Object.fromEntries(rows.map((row) => [row.file, syntheticSql])),
-    { "infra/example-prerequisites.sql": syntheticSql },
+    { ...Object.fromEntries(named.map((file) => [file, syntheticSql])), ...extraPrerequisites },
   );
 }
 const onlyError = (errors, code) => errors.length === 1 && errors[0] === code;
@@ -205,45 +223,71 @@ function verify() {
     },
     {
       name: "broken_migration_checksum",
-      passed: onlyError(syntheticMigrationErrors({ sha256: "wrong" }), "MIGRATION_CHECKSUM"),
+      passed: onlyError(syntheticMigrationErrors([{ sha256: "wrong" }]), "MIGRATION_CHECKSUM"),
     },
     {
       name: "missing_execute_as",
-      passed: onlyError(syntheticMigrationErrors({ executeAs: undefined }), "INVALID_EXECUTE_AS"),
+      passed: onlyError(syntheticMigrationErrors([{ executeAs: undefined }]), "INVALID_EXECUTE_AS"),
     },
     {
       name: "invalid_prerequisite_path",
       passed: onlyError(
-        syntheticMigrationErrors({
-          prerequisites: [{ file: "scripts/example-prerequisites.sql", sha256: syntheticDigest }],
-        }),
+        syntheticMigrationErrors([
+          {
+            prerequisites: [{ file: "scripts/example-prerequisites.sql", sha256: syntheticDigest }],
+          },
+        ]),
+        "INVALID_PREREQUISITE",
+      ),
+    },
+    {
+      name: "open_prerequisite_entry",
+      passed: onlyError(
+        syntheticMigrationErrors([
+          {
+            prerequisites: [
+              {
+                file: examplePrerequisite,
+                sha256: syntheticDigest,
+                runAs: "morrow_identity_owner",
+              },
+            ],
+          },
+        ]),
         "INVALID_PREREQUISITE",
       ),
     },
     {
       name: "broken_prerequisite_checksum",
       passed: onlyError(
-        syntheticMigrationErrors({
-          prerequisites: [{ file: "infra/example-prerequisites.sql", sha256: "wrong" }],
-        }),
+        syntheticMigrationErrors([
+          { prerequisites: [{ file: examplePrerequisite, sha256: "0".repeat(64) }] },
+        ]),
         "PREREQUISITE_CHECKSUM",
       ),
     },
     {
       name: "duplicate_prerequisite",
       passed: onlyError(
-        syntheticMigrationErrors(
-          { prerequisites: [{ file: "infra/example-prerequisites.sql", sha256: syntheticDigest }] },
-          { prerequisites: [{ file: "infra/example-prerequisites.sql", sha256: syntheticDigest }] },
-        ),
+        syntheticMigrationErrors([
+          { prerequisites: [{ file: examplePrerequisite, sha256: syntheticDigest }] },
+          { prerequisites: [{ file: examplePrerequisite, sha256: syntheticDigest }] },
+        ]),
         "DUPLICATE_PREREQUISITE",
+      ),
+    },
+    {
+      name: "unreviewed_prerequisite_file",
+      passed: onlyError(
+        syntheticMigrationErrors([{}], { [examplePrerequisite]: syntheticSql }),
+        "UNREVIEWED_PREREQUISITE_FILE",
       ),
     },
   ];
   writeArtifact("verify/delivery.json", {
     generated_at: new Date().toISOString(),
     scope:
-      "Known-pattern secret guard, dependency locking (bundles bound to integrity-checked parent tarballs), migration metadata/checksum/envelope and executeAs/pinned-prerequisite metadata only; not complete secret assurance or PostgreSQL execution. Hosted CI evidenced separately; release protection pending.",
+      "Known-pattern secret guard, dependency locking (bundles bound to integrity-checked parent tarballs), migration metadata/checksum/envelope and executeAs/pinned-prerequisite metadata (every infra/*-prerequisites.sql named by exactly one row) only; not complete secret assurance or PostgreSQL execution. Hosted CI evidenced separately; release protection pending.",
     scanned_files: paths.length,
     dependency_records: Object.keys(lock.packages).length,
     migrations: manifest.migrations.length,

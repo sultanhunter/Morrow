@@ -1,13 +1,1 @@
-{
-  "schemaVersion": 1,
-  "serial": [
-    {
-      "file": "tests/broker-client.test.mjs",
-      "reason": "AC30 requires a never-answering broker to be reported not ready between 990 and 1,100 ms of wall-clock time; a timer delayed over 100 ms by parallel files fails it (1,160 ms at concurrency 8)."
-    },
-    {
-      "file": "tests/standalone-login-http.test.mjs",
-      "reason": "The HTTP entry timeout case needs the 5,000 ms entry timer to abort the dispatched handler before the 503 reaches the client; under CPU contention from parallel files the handler saw no abort (concurrency 8)."
-    }
-  ]
-}
+{ "schemaVersion": 1, "serial": [] }

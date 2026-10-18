@@ -423,13 +423,8 @@ test("heavy-faults.yml runs by hand or weekly behind the change gate and is neve
     "node scripts/run-tests.mjs --repeat=5 --concurrency=8 --junit=heavy/unit",
   );
 
-  // The required check does not wait for it.
-  assert.deepEqual([...ci.jobs.foundation.needs].sort(), [
-    "pgwire",
-    "postgres",
-    "static",
-    "unit",
-    "workers",
-    "workers-api",
-  ]);
+  // The required check does not wait for it. (foundation needing exactly the ci.yml jobs is
+  // checked above, and `needs` cannot reach another workflow; this names the intent.)
+  for (const job of Object.keys(heavyFaults.jobs))
+    assert.ok(!ci.jobs.foundation.needs.includes(job), `foundation must not need ${job}`);
 });

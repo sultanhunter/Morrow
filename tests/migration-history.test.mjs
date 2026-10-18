@@ -68,8 +68,13 @@ const published = [
     "52e9f699956ec8932056b22b2dc5294e540225562730666e0a87d00dfe857579",
   ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
-// Administrator prerequisites are immutable like migrations (P03.T04e §3.1): each published
-// row keeps exactly these pinned files, and a later role goes in a new file on its new row.
+// From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each
+// published row keeps exactly these pinned files, and a later role goes in a new file on its
+// new row. The pins are the bytes as they stand, not each row's original setup: before this
+// rule, the roles of migrations 0004-0008 (lifecycle, linking, preauth, resolution, sessions)
+// were appended to row 1's file next to their migrations. Row 1's file is therefore
+// cumulative and valid only on a fresh database, applied before row 1; applying
+// prerequisites row by row to a database already past row 1 is unsupported (input to P04.T01i).
 const publishedPrerequisites = new Map([
   [
     1,

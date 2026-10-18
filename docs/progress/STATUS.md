@@ -11,11 +11,11 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #4: P05.T01x Part A. Migration 0012 retires plan-number identifiers: `morrow-login-v1`, `morrow-self-logout-v1`, `morrow_id_`.
 - PR #5: P04.T02a, the deployable composition root. It adds the api, broker, orchestrator and connector-placeholder Workers, `scripts/edge.mjs`, and the `lab:edge-workers` and `lab:edge-postgresql` labs (ADR-0007).
 - PR #6: P01.T02a PR-A, executor classes and human-only kill switches (ADR-0005, §2 confirmed 2026-10-18).
+- PR #7 (`6caf65d`): ADR-0008 accepted. The Shopify connector is a Cloudflare Worker on `@shopify/shopify-api`, and secret-dependent calls stay in the broker.
+- PR #8 (`80b6897`): P01.T02a PR-B, review policy, Proposal@2 and Approval@2 (ADR-0011): AC11-AC26, the pure review library `@morrow/policy/review` and contract v1.1 replacements.
 
 In progress:
-- **ADR-0008 acceptance** (PR #7): the Shopify connector is a Cloudflare Worker on `@shopify/shopify-api`, and secret-dependent calls stay in the broker.
-- **P01.T02a PR-B** (`claude/p01-t02a-b-review-policy`): review policy, Proposal@2, Approval@2 (ADR-0011). Implemented and reviewed: AC11-AC26, the pure review library `@morrow/policy/review` and contract v1.1 replacements; full local pipeline passed; awaiting PR CI and merge.
-- **P03.T04e PR-A** (`claude/p03-t04e-a-format-concurrency`): `prettier --check .` with one reviewed `.prettierignore`, unit test files run concurrently through `scripts/run-tests.mjs` with a measured serial list (`broker-client`, `standalone-login-http`), required `executeAs` and pinned prerequisites in `migrations/manifest.json`, and `heavy-faults.yml` (manual plus weekly `unit-stress`). Implemented locally (AC01-AC08 in `docs/acceptance/P03.md`); awaiting Tier 2 review and hosted CI. After merge: one `workflow_dispatch` run of `heavy-faults.yml` on `main` (AC22), its run ID recorded here.
+- **P03.T04e PR-A** (`claude/p03-t04e-a-format-concurrency`): `prettier --check .` with one reviewed `.prettierignore`, unit test files run concurrently through `scripts/run-tests.mjs` with an empty serial list (Phase 0 M1 reproduced no failure), required `executeAs` and pinned prerequisites in `migrations/manifest.json` (every `infra/*-prerequisites.sql` named by exactly one row), and `heavy-faults.yml` (manual plus weekly `unit-stress`). Implemented locally (AC01-AC08 in `docs/acceptance/P03.md`); Tier 2 AI review findings addressed; awaiting hosted CI. After merge: one `workflow_dispatch` run of `heavy-faults.yml` on `main` (AC22), its run ID recorded here.
 - **Packet designs:** P01.T04a, P01.T02c, P06.T01b, P03.T04e PR-B (shared PostgreSQL template harness), P14.T01a (provisional UI), P05.T01y and P05.T01z.
 
 Delivered in P03.T04c/d:
@@ -28,18 +28,19 @@ Delivered in P03.T04c/d:
 
 ## Last green commit
 
-`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. Runs take about 4.5 minutes, against 21.5 minutes for the old serial job.
+Last recorded: `d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. Runs take about 4.5 minutes, against 21.5 minutes for the old serial job. `main` has since advanced through PRs #6-#8 to `80b6897`; their run IDs are not recorded here yet.
 
 ## Next actions
 
-1. Merge P01.T02a PR-B once reviewed and green.
-2. P05.T01x Part B, signup and workspace list (ADR-0009). It needs P01.T02a PR-B (ADR-0011) first.
+1. Merge P03.T04e PR-A once hosted CI is green, then dispatch `heavy-faults.yml` on `main` (AC22).
+2. P05.T01x Part B, signup and workspace list (ADR-0009); its P01.T02a PR-B dependency (ADR-0011) is merged.
 3. P06.T01a, work commands on the tenant data pattern (ADR-0010). P01.T02b and T02c contracts.
-4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
+4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.
 
 Open plan follow-ups:
 - Superseded banners on `docs/references/*`.
 - The rest of P03.T04e: PR-B, the shared PostgreSQL 17 template-database harness and its `pg-suites` and `pg-stress` legs.
+- Timing fixes (routine, ADR-0002) if hosted `unit-stress` confirms them: `tests/broker-client.test.mjs` AC30 and the `tests/standalone-login-http.test.mjs` 5,000 ms entry-timeout case each flaked once under loaded-host local stress.
 - The P05.T01x Part B PR splits the plan's P05.T01x bullet into sub-bullets, to respect the 2,000-character line limit.
 
 ## Blockers
