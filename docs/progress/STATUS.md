@@ -50,7 +50,7 @@ None for local work. Hosted staging (M1) waits on the owner actions below. Billi
 
 - **Sign-offs:**
   - Plan R1 (Tier 3).
-  - P05.T01x Part B, before merge: approve the packet §14 amendment to §9 and AC28 (`GET /workspaces` accepts an absent `Origin`, as the bootstrap GET does; POST still requires it), or have both routes revert to exact Origin. The kernel change (connect also evaluates `approve`; ADR-0009 item 7, ADR-0011 Q5) needs Tier 2 `/security-review` sign-off.
+  - P05.T01x Part B, before merge: The kernel change (connect also evaluates `approve`; ADR-0009 item 7, ADR-0011 Q5) needs Tier 2 `/security-review` sign-off.
   - P05.T01x Part B, before hosted login (M1): account login start is anonymous, so its per-profile windows (10 per 10 s, 100 open) let anyone block every sign-in on a profile (packet §11). Decide whether Turnstile or the edge per-IP limiter gates hosted login activation in every environment, not only sign-up beyond the allowlist (ADR-0009 item 8).
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
