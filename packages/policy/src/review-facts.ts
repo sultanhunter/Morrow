@@ -114,30 +114,37 @@ export interface KillSwitchTargetFacts {
 }
 
 /**
+ * The work task of a proposal and its requester, which exist together
+ * (ADR-0018). `taskId` is the task the producer attached the proposal to,
+ * after its task-attach check, never a value copied from the proposal it
+ * built; `requestedBy` is that task's initiator, or the mandate owner for
+ * background work. Both are null when the producer attached no task, which is
+ * valid only for a human proposer of a Governance-domain capability (agents
+ * always need a task; `checkProposal` reports anything else as
+ * `TASK_REQUIRED`). The library then derives `requestedBy` as the proposer,
+ * who stays in the conflict set in both roles (ADR-0018 item 3).
+ */
+export type ProposalTaskFacts =
+  | { readonly taskId: string; readonly requestedBy: Current_HumanActorRef }
+  | { readonly taskId: null; readonly requestedBy: null };
+
+/**
  * Trusted facts `checkProposal` compares a server-built proposal against
  * (P01.T02a §7 items 1-3). The catalogue effect and irreversible flag are not
- * facts: the review library reads them from the compiled catalogue.
+ * facts: the review library reads them from the compiled catalogue. The task
+ * pairing is a union so a producer cannot build a task without a requester,
+ * or the reverse; the library still rejects either at runtime.
  */
-export interface ProposalFacts {
+export type ProposalFacts = ProposalTaskFacts & ProposalFactsFields;
+
+/** The fields of ProposalFacts besides the task pairing. */
+export interface ProposalFactsFields {
   /** The trusted organization, workspace and store of the request. */
   readonly organizationId: string;
   readonly workspaceId: string;
   readonly storeId: string | null;
   /** The authenticated actor that built the proposal. */
   readonly proposedBy: Current_ActorRef;
-  /**
-   * The work task the producer attached the proposal to, after its task-attach
-   * check, or null when it attached none. Null is valid only for a human
-   * proposer of a Governance-domain capability; agents always need a task
-   * (ADR-0018). `checkProposal` reports anything else as `TASK_REQUIRED`.
-   */
-  readonly taskId: string | null;
-  /**
-   * The task initiator, or the mandate owner for background work. Null exactly
-   * when `taskId` is null: the library then derives `requestedBy` as the
-   * proposer, who stays in the conflict set in both roles (ADR-0018 item 3).
-   */
-  readonly requestedBy: Current_HumanActorRef | null;
   /**
    * Principals who benefit from the change. For access_change: those receiving
    * the grant, membership or ownership, plus the requester of any originating

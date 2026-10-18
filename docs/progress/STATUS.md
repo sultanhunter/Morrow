@@ -1,6 +1,6 @@
 # Morrow status
 
-Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
+Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
 
 ## Active packets
 
@@ -11,12 +11,12 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #6: P01.T02a PR-A, executor classes and human-only kill switches (ADR-0005, §2 confirmed 2026-10-18).
 - PR #7: ADR-0008 accepted (connector on Cloudflare Workers with `@shopify/shopify-api`; secret-dependent calls in the broker).
 - PR #8: P01.T02a PR-B, review policy, Proposal@2, Approval@2 and `@morrow/policy/review` (ADR-0011).
+- PR #9: the owner decisions of 2026-10-18: ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
 
 In progress:
-- **Owner decisions of 2026-10-18** (branch `claude/decisions-billing-collab`): ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
-- **P01.T04a** has landed on that branch. Its owner questions OQ-1 to OQ-3 were resolved on 2026-10-18 (ADR-0015 follow-up decisions). Its PR-A and PR-B are the next billing step.
+- **ADR-0018 Proposal@2 edit** (branch `claude/p01-t02a-c-proposal-task-optional`, P01.T02a-AC27): nullable `taskId` only for human governance proposals (schema rule: a `governance.*` capability and a `HumanActorRef` proposer), `TASK_REQUIRED`/`TASK_MISMATCH` and the `requestedBy` derivation in `checkProposal`, and the `ProposalTaskFacts` union. It blocks P06.T01b PR-1.
+- **P01.T04a** (packet merged in PR #9; OQ-1 to OQ-3 resolved 2026-10-18): its PR-A and PR-B are the next billing step.
 - **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
-- **ADR-0018 Proposal@2 edit** (branch `claude/p01-t02a-c-proposal-task-optional`): nullable `taskId` for human governance proposals, `TASK_REQUIRED`/`TASK_MISMATCH` and the `requestedBy` derivation in `checkProposal` (P01.T02a-AC27). Needs its PR, Tier 2 and security reviews, and hosted CI; it must merge before P06.T01b PR-1.
 
 ## Decisions recorded 2026-10-18
 
@@ -29,14 +29,14 @@ In progress:
 
 ## Last green commit
 
-`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7 and #8 merged after it (`main` is at `80b6897`); record their runs here once confirmed.
+`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7, #8 and #9 merged after it (`main` is at `400aa44`, the merge of PR #9); record their runs here once confirmed.
 
 ## Next actions
 
-1. Review and merge the decisions branch (documents only; Tier 2 AI review).
-2. P05.T01x Part B, signup and workspace list (ADR-0009); P01.T02a PR-B is merged.
-3. P06.T01a, work commands on the tenant data pattern (ADR-0010). Then the ADR-0018 Proposal@2 edit, P06.T01b, P01.T02c (ADR-0016) and P01.T02b.
-4. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library), after the decisions branch merges.
+1. The ADR-0018 Proposal@2 edit (this branch): its Tier 2 AI review (separate context, same model family) findings are addressed. Open its PR, record that review and the `/security-review` result on it, and get hosted CI green. It must merge before P06.T01b PR-1.
+2. P05.T01x Part B, signup and workspace list (ADR-0009).
+3. P06.T01a, work commands on the tenant data pattern (ADR-0010). Then P06.T01b (after item 1), P01.T02c (ADR-0016) and P01.T02b.
+4. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library).
 5. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
 
 Open plan follow-ups:

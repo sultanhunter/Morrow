@@ -1,6 +1,6 @@
 // P01.T02a PR-B: review policy, exact proposals and the review library
-// (AC12-AC25) in packages/policy/src/review.ts, through the typed library and
-// docs/contracts/fixtures/P01.T02a.json. ADR-0011.
+// (AC12-AC25, and AC27 for ADR-0018) in packages/policy/src/review.ts, through
+// the typed library and docs/contracts/fixtures/P01.T02a.json. ADR-0011.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -480,9 +480,16 @@ test("AC27: only a human-made governance proposal may have no task, and its requ
   // The facts carry a requester exactly when they carry a task.
   for (const forged of [{ requestedBy: leo }, { taskId: "task_a" }])
     assert.throws(() => checkProposal(grant, { ...facts(grant), ...forged }), ReviewBoundaryError);
-  // Agents always need a task: the schema refuses a task-less agent or service
-  // proposal, so the library refuses it at its boundary.
-  for (const id of ["P01.T02a.proposal.taskless_agent", "P01.T02a.proposal.taskless_service"]) {
+  // Agents always need a task. Without one the schema requires a governance.*
+  // capability and a HumanActorRef proposer, so it refuses a task-less agent,
+  // service, mandate-bearing or non-governance proposal, and the library
+  // refuses each at its boundary.
+  for (const id of [
+    "P01.T02a.proposal.taskless_agent",
+    "P01.T02a.proposal.taskless_service",
+    "P01.T02a.proposal.taskless_human_mandate",
+    "P01.T02a.proposal.taskless_human_not_governance",
+  ]) {
     const refused = fixture(id);
     assert.equal(validateCurrentDefinition("Proposal", refused), false, id);
     assert.equal(
@@ -491,6 +498,18 @@ test("AC27: only a human-made governance proposal may have no task, and its requ
     );
     assert.throws(() => checkProposal(refused, facts(refused)), ReviewBoundaryError);
   }
+  for (const shape of [
+    { installationId: "installation_a" },
+    { workspaceId: null },
+    { membershipId: null },
+  ]) {
+    const proposedBy = human("leo", shape);
+    assert.equal(validateCurrentDefinition("Proposal", taskless({ proposedBy })), false);
+    assert.equal(
+      validateCurrentDefinition("Proposal", taskless({ proposedBy, taskId: "task_a" })),
+      true,
+    );
+  }
   // A producer that attaches no task to an agent proposal gets TASK_REQUIRED.
   const agentWork = proposal({ ...governance, proposedBy: agent, requestedBy: human("maya") });
   assert.deepEqual(checkProposal(agentWork, facts(agentWork)), []);
@@ -498,18 +517,23 @@ test("AC27: only a human-made governance proposal may have no task, and its requ
     checkProposal(agentWork, facts(agentWork, { taskId: null, requestedBy: null })),
     ["TASK_MISMATCH", "TASK_REQUIRED", "REQUESTED_BY_MISMATCH"],
   );
-  // A human proposal outside the Governance domain needs a task; the schema
-  // checks only the proposer, the library checks the domain.
-  const publish = proposal({ proposedBy: leo, requestedBy: leo, taskId: null });
-  assert.equal(validateCurrentDefinition("Proposal", publish), true);
-  assert.deepEqual(checkProposal(publish, facts(publish)), ["TASK_REQUIRED"]);
-  // The proposal names exactly the task the producer attached: dropping it
-  // would drop the task initiator from the conflict set.
+  // A human proposal outside the Governance domain needs a task: the library
+  // checks the catalogue domain when the producer attached none.
+  const publish = proposal({ proposedBy: leo, requestedBy: leo });
+  assert.deepEqual(checkProposal(publish, facts(publish)), []);
+  assert.deepEqual(checkProposal(publish, facts(publish, { taskId: null, requestedBy: null })), [
+    "TASK_MISMATCH",
+    "TASK_REQUIRED",
+  ]);
+  // The proposal names exactly the task the producer attached, so the stored
+  // proposal and its conflict set follow the producer's record. Whether a human
+  // governance proposal has a task is the producer's choice (ADR-0018).
   const onTask = taskless({ taskId: "task_a", requestedBy: human("ben") });
   assert.deepEqual(checkProposal(onTask, facts(onTask)), []);
   for (const taskId of [null, "task_b"])
     assert.deepEqual(checkProposal(seal({ ...onTask, taskId }), facts(onTask)), ["TASK_MISMATCH"]);
-  // The Governance domain is exactly the governance.* capabilities (the P06.T01b SQL CHECK).
+  // The Governance domain is exactly the governance.* capabilities (the schema
+  // pattern and the P06.T01b SQL CHECK).
   for (const c of catalogue.capabilities)
     assert.equal(c.domain === "Governance", c.id.startsWith("governance."), c.id);
   // Derived proposals inherit the null task with the conflict set.

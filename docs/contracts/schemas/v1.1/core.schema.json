@@ -354,7 +354,7 @@
           "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
         },
         "taskId": {
-          "description": "The work task the proposal belongs to. Null only for a human-made Governance-domain proposal (ADR-0018): this schema requires a human proposer when it is null, and checkProposal also requires a Governance-domain capability. Agents always name a task.",
+          "description": "The work task the proposal belongs to. Null only for a human-made Governance-domain proposal (ADR-0018): when it is null this schema requires a governance.* capability and a HumanActorRef proposer, and checkProposal also checks the catalogue domain and that requestedBy is the proposer. Agents always name a task.",
           "anyOf": [
             {
               "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
@@ -527,16 +527,12 @@
           "then": {
             "type": "object",
             "properties": {
+              "capabilityId": {
+                "type": "string",
+                "pattern": "^governance\\."
+              },
               "proposedBy": {
-                "type": "object",
-                "properties": {
-                  "kind": {
-                    "const": "human"
-                  }
-                },
-                "required": [
-                  "kind"
-                ]
+                "$ref": "#/$defs/HumanActorRef"
               }
             }
           }

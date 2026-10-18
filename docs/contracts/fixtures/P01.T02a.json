@@ -1970,6 +1970,216 @@
     }
   },
   {
+    "id": "P01.T02a.proposal.taskless_human_not_governance",
+    "kind": "schema",
+    "selector": "core-v1.1:Proposal",
+    "valid": false,
+    "value": {
+      "schemaVersion": 2,
+      "id": "proposal_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "taskId": null,
+      "capabilityId": "catalog.content.publish",
+      "scope": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeIds": [
+          "store_a"
+        ],
+        "accountIds": [],
+        "resources": [
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          }
+        ],
+        "fields": [
+          "title"
+        ]
+      },
+      "targets": [
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          "expectedSourceRevision": "source_revision_0",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "0",
+          "maximumCost": null
+        }
+      ],
+      "parametersRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "artifact",
+        "id": "parameters_proposal_a",
+        "revision": 1,
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "parametersDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "maximumCredits": "0",
+      "maximumCost": null,
+      "risk": "external",
+      "irreversible": false,
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "proposedBy": {
+        "kind": "human",
+        "principalId": "human_leo",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_leo",
+        "installationId": null,
+        "mandateId": null
+      },
+      "requestedBy": {
+        "kind": "human",
+        "principalId": "human_leo",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_leo",
+        "installationId": null,
+        "mandateId": null
+      },
+      "beneficiaryPrincipalIds": [],
+      "contextTaint": "none",
+      "partialApproval": "allowed",
+      "derivedFrom": null,
+      "proposalDigest": "584d97f9fef339aca7a57aee1a17c5dc8a43611c4fd1a20f7242677b4c82afc8",
+      "expiresAt": "2026-10-25T09:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.proposal.taskless_human_mandate",
+    "kind": "schema",
+    "selector": "core-v1.1:Proposal",
+    "valid": false,
+    "value": {
+      "schemaVersion": 2,
+      "id": "proposal_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "taskId": null,
+      "capabilityId": "governance.grants.revise",
+      "scope": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeIds": [
+          "store_a"
+        ],
+        "accountIds": [],
+        "resources": [
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "member",
+            "id": "member_0"
+          }
+        ],
+        "fields": [
+          "status"
+        ]
+      },
+      "targets": [
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "member",
+            "id": "member_0"
+          },
+          "expectedSourceRevision": "source_revision_0",
+          "fields": [
+            "status"
+          ],
+          "maximumCredits": "0",
+          "maximumCost": null
+        }
+      ],
+      "parametersRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "artifact",
+        "id": "parameters_proposal_a",
+        "revision": 1,
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "parametersDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "maximumCredits": "0",
+      "maximumCost": null,
+      "risk": "access_change",
+      "irreversible": false,
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "proposedBy": {
+        "kind": "human",
+        "principalId": "human_leo",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_leo",
+        "installationId": null,
+        "mandateId": "mandate_a"
+      },
+      "requestedBy": {
+        "kind": "human",
+        "principalId": "human_leo",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_leo",
+        "installationId": null,
+        "mandateId": null
+      },
+      "beneficiaryPrincipalIds": [
+        "human_ana"
+      ],
+      "contextTaint": "none",
+      "partialApproval": "allowed",
+      "derivedFrom": null,
+      "proposalDigest": "379467753bd582bc1cfc62b7c26309786c620579cef2df29986ab652a088b1b9",
+      "expiresAt": "2026-10-25T09:00:00Z"
+    }
+  },
+  {
     "id": "P01.T02a.proposal.negative_total",
     "kind": "schema",
     "selector": "core-v1.1:Proposal",
