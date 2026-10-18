@@ -962,5 +962,141 @@
     "status": "verified",
     "observed_at": "2026-10-15",
     "finding": "Account Access, Pricing and Payment section2 provides at least30days notice for new/increased service fees. Read-only verification of existing terms; no new agreement accepted. Current support pricing does not settle production commercial SaaS/enterprise qualification."
+  },
+  {
+    "id": "S130",
+    "url": "https://shopify.dev/docs/apps/launch/shopify-app-store/app-store-requirements",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Requirement 1.2: apps that use off-platform billing cannot be distributed through the Shopify App Store unless Shopify has notified otherwise; all app charges must use Shopify App Pricing or the Billing API. Listed and unlisted public apps alike. Requirements 2.3.1-2.3.3: install only on Shopify services, no manual shop-domain entry, OAuth first. No last-updated date shown.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S131",
+    "url": "https://shopify.dev/changelog/posts/shopify-app-pricing-charge-for-usage-recurring-subscriptions-or-both",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "2026-05-12: Shopify App Pricing replaces Managed Pricing as the default billing solution; the Billing API continues but is legacy. App Pricing has no one-time purchases, at most five usage meters per plan billed monthly, no usage caps and USD prices only.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S132",
+    "url": "https://community.shopify.dev/t/unlisted-public-app-is-shopify-billing-api-mandatory-or-can-we-use-stripe/32021",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Shopify staff, 2026-04-02 (reaffirmed 2026-06-26 and 2026-07-16): limited-visibility billing exemptions are no longer granted; unlisted public apps must use Shopify billing for any charges. Forum guidance, not a contract.",
+    "evidence_kind": "official_support_guidance"
+  },
+  {
+    "id": "S133",
+    "url": "https://community.shopify.dev/t/billing-requirement-1-2-separating-app-store-installs-shopify-pricing-from-preexisting-saas-customers-stripe/35728",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Shopify staff, 2026-07-03: a split by origin needs no permission, but the app can fail review if a Shopify merchant can install from the App Store and reach the Stripe billing flow; keep non-Shopify billing completely separate.",
+    "evidence_kind": "official_support_guidance"
+  },
+  {
+    "id": "S134",
+    "url": "https://community.shopify.dev/t/app-review-rejected-for-using-stripe-for-off-platform-acquisitions/37764",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "2026-09-17: a reviewer rejected an app that combined Shopify App Pricing with off-platform billing after creating an account on the developer website without installing the app; suspended until 30 September, unresolved. Risk 1 of ADR-0015.",
+    "evidence_kind": "official_support_guidance"
+  },
+  {
+    "id": "S135",
+    "url": "https://community.shopify.dev/t/split-billing-for-a-multi-channel-saas-does-a-shopify-billed-path-for-app-store-installs-satisfy-1-2-1/36474",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Shopify staff, 2026-07-31: a split with a Shopify-billed path for App Store installs lines up with requirement 1.2.1, keyed to an existing paid subscription. The reply addresses billing only, not the embedded-experience requirement 2.2.2.",
+    "evidence_kind": "official_support_guidance"
+  },
+  {
+    "id": "S136",
+    "url": "https://community.shopify.dev/t/off-platform-billing-shown-to-shopify-merchants-during-onboarding/34000",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Shopify staff, 2026-05-08: a merchant who installs through Shopify should never be sent to an off-platform checkout; keep origin server-side and detect existing direct customers to avoid double billing.",
+    "evidence_kind": "official_support_guidance"
+  },
+  {
+    "id": "S137",
+    "url": "https://community.shopify.dev/t/can-an-unlisted-public-app-bill-clients-off-platform-or-is-shopify-billing-required/35773",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Shopify staff, 2026-07-27: the billing requirement sits on the app, not on the individual user; the revenue question is separate from the billing requirement. Revenue scope for direct billing is unresolved (ADR-0015 Risk 2).",
+    "evidence_kind": "official_support_guidance"
+  },
+  {
+    "id": "S138",
+    "url": "https://shopify.dev/docs/apps/launch/distribution/revenue-share",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Developers keep 100% of the first USD 1 million lifetime gross app revenue and 85% above it; all billing carries a 2.9% processing fee and applicable sales tax; revenue share is on gross sales, refunds not deducted. Off-platform revenue is not addressed.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S139",
+    "url": "https://stripe.com/us/billing/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Stripe Billing: 0.7% of billing volume, including transactions processed on and off Stripe and excluding one-off invoices. Card processing fees are separate; the US card rate was not confirmed because the pricing page served another region.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S140",
+    "url": "https://stripe.com/us/tax/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Stripe Tax: US$0.50 per transaction where the business is registered to collect tax, including ten calculation API calls per transaction.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S141",
+    "url": "https://docs.stripe.com/tax/filing",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Without a merchant of record the business files and remits tax for every registered location; Register for me does not prepare returns or remit tax; automated filing covers only some jurisdictions. Morrow needs a tax advisor.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S142",
+    "url": "https://docs.stripe.com/tax/supported-countries/european-union",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "A business based outside the EU may need to register to collect VAT from its first sale in an EU country; reverse charge applies to B2B sales only with a valid VAT ID.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S143",
+    "url": "https://docs.stripe.com/api/idempotent_requests",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Idempotency keys are up to 255 characters, kept at least 24 hours, rejected on changed parameters, and replay the saved response including 500 errors. Bind each key to the OperationLedger operation identity.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S144",
+    "url": "https://docs.stripe.com/webhooks",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Live-mode delivery retries for up to three days with backoff; event order is not guaranteed; library signature tolerance defaults to five minutes. Deduplicate by event ID and reconcile by readback.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S145",
+    "url": "https://docs.stripe.com/billing/subscriptions/usage-based/billing-credits",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Billing credit grants apply only to metered prices at invoice finalisation, not to one-off invoices; no hold before usage; credits may not be stored value or pay third parties. Not usable as the Morrow work-credit ledger.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S146",
+    "url": "https://raw.githubusercontent.com/stripe/stripe-node/master/package.json",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "stripe-node 23.0.0 (published 2026-10-01) exports workerd and worker entry points. No dependency is added before an approved payments packet pins a version.",
+    "evidence_kind": "primary_documentation"
   }
 ]

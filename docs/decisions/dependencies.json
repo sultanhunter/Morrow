@@ -395,7 +395,7 @@
   {
     "id": "D21",
     "key": "morrow_billing",
-    "decision": "Shop installation billing ownership, one work-credit balance and separate merchant/provider liabilities",
+    "decision": "Billing routes by origin (Shopify App Pricing or Morrow-direct Stripe Billing and Stripe Tax, ADR-0015), payer ownership, one work-credit balance and separate merchant/provider liabilities",
     "owner": "Morrow platform owner",
     "resolve_in": "P01.T04",
     "status": "Design recorded",
@@ -407,7 +407,21 @@
     "sources": [
       "S72",
       "S73",
-      "S74"
+      "S74",
+      "S130",
+      "S133",
+      "S134",
+      "S136",
+      "S137",
+      "S138",
+      "S139",
+      "S140",
+      "S141",
+      "S142",
+      "S143",
+      "S144",
+      "S145",
+      "S146"
     ]
   }
 ]
