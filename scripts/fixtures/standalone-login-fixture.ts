@@ -30,6 +30,9 @@ export function createStandaloneLoginFixture(input: {
   exchangeOutput?: string;
   providerPage?: string;
   roleFlags?: Record<string, unknown>;
+  // Milliseconds from the admission clock to the generation's expiry (default 15 minutes,
+  // the pre-P05.T01y lifetime; P05.T01y generations live up to 30 minutes).
+  admissionLifetimeMs?: number;
 }) {
   let at = input.at,
     eligible = input.eligibility !== false;
@@ -247,7 +250,7 @@ export function createStandaloneLoginFixture(input: {
                   family_id: values[19],
                   generation_id: values[20],
                   provider_binding_id: "9bcc50b3-047a-49c4-89e6-0a425121fd20",
-                  expires_at_ms: String(at + 900000),
+                  expires_at_ms: String(at + (input.admissionLifetimeMs ?? 900000)),
                   audit_id: "45c901f7-5792-4b47-8ea8-5fab2331e91c",
                 },
               ],

@@ -78,6 +78,11 @@ const published = [
     "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
   ],
   [15, "0015.work-state.sql", "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9"],
+  [
+    16,
+    "0016.browser-session-lifecycle.sql",
+    "ac947dd48f0bd5d802ebd85bf5e610cafa50809458988e8c25aa7157b12d64c8",
+  ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));

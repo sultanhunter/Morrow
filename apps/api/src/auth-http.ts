@@ -200,13 +200,13 @@ function snapshot(plan: AuthDeliveryPlan, path: string, method: string) {
   const cookie = plan.cookies[0];
   if (cookie !== undefined) {
     const match =
-      /^(__Host-morrow_login|__Host-morrow_session)=([A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]); Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=([1-9][0-9]{0,2})$/.exec(
+      /^(__Host-morrow_login|__Host-morrow_session)=([A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]); Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=([1-9][0-9]{0,3})$/.exec(
         cookie,
       );
     if (!match) throw Error("AUTH_HTTP_DELIVERY_INVALID");
     const login = match[1] === "__Host-morrow_login";
     if (
-      Number(match[3]) > (login ? 300 : 900) ||
+      Number(match[3]) > (login ? 300 : 1800) ||
       (login
         ? !(method === "POST" && path === "/auth/login" && plan.status === 200)
         : !(

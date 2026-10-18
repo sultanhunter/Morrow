@@ -2,6 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import {
+  expectedReplacement,
+  functionDefinition,
+  sessionLifecycleReplacements,
+} from "./fixtures/session-lifecycle-replacements.mjs";
 
 const read = (p) => readFileSync(p, "utf8");
 const hash = (p) => createHash("sha256").update(readFileSync(p)).digest("hex");
@@ -56,4 +61,92 @@ test("migration8 retains every non-session revocation and linking guard", () => 
       "   JOIN morrow_identity.session_eligibility(h.session_digest,h.workspace_id::text) s ON s.principal_id=p.id::text AND s.organization_id=o.id::text AND s.membership_id=h.actor_membership_id::text",
     );
   assert.equal(body(migration, "link_workspace_store"), link);
+});
+
+// P05.T01y (migration 0016, ADR-0004): static checks. PostgreSQL behaviour is qualified
+// by lab:session-lifecycle-sql.
+const lifecycle = read("migrations/0016.browser-session-lifecycle.sql");
+test("P05.T01y: 0016 is one owner transaction after 0015 that drops no function", () => {
+  const entry = manifest.migrations.find((m) => m.file === "0016.browser-session-lifecycle.sql");
+  assert.deepEqual(
+    { sequence: entry.sequence, executeAs: entry.executeAs, reviewRef: entry.reviewRef },
+    { sequence: 16, executeAs: "morrow_identity_owner", reviewRef: "docs/packets/P05.T01y.md" },
+  );
+  assert.equal(manifest.migrations[15], entry);
+  assert.match(lifecycle, /^BEGIN;[\s\S]+COMMIT;\s*$/);
+  assert.equal(lifecycle.match(/^BEGIN;$/gm).length, 1);
+  assert.equal(lifecycle.match(/^COMMIT;$/gm).length, 1);
+  assert.doesNotMatch(lifecycle, /\bDROP\s+(FUNCTION|TABLE|TRIGGER|POLICY|ROLE)\b/i);
+  assert.doesNotMatch(
+    lifecycle,
+    /\bSET\s+(LOCAL\s+)?ROLE\b|\bSECURITY\s+INVOKER\b|\$[A-Za-z_]\w*\$/,
+  );
+  assert.doesNotMatch(lifecycle, /\bCREATE\s+ROLE\b|\bALTER\s+ROLE\b|\bGRANT\s+morrow_/i);
+  assert.match(lifecycle, /RAISE EXCEPTION 'SESSION_LIFECYCLE_PREREQUISITES_INVALID'/);
+  // The only dynamic SQL is the fixed privilege loop over named new functions.
+  assert.equal(lifecycle.match(/\bEXECUTE format\(/g).length, 1);
+  assert.match(
+    lifecycle,
+    /GRANT EXECUTE ON FUNCTION morrow_identity\.rotate_self_browser_generation\(text,text,text,text,text,text,text,text,text,text\) TO morrow_identity_logout;\nCOMMIT;\n$/,
+  );
+  assert.equal(lifecycle.match(/\bGRANT\b/g).length, 1);
+});
+
+test("P05.T01y: each replaced body differs from its predecessor only in the reviewed lines", () => {
+  const replaced = [
+    ...lifecycle.matchAll(/CREATE OR REPLACE FUNCTION morrow_identity\.(\w+)\(/g),
+  ].map((m) => m[1]);
+  assert.deepEqual(replaced.sort(), sessionLifecycleReplacements.map((e) => e.name).sort());
+  for (const entry of sessionLifecycleReplacements)
+    assert.equal(
+      functionDefinition(lifecycle, entry.name),
+      expectedReplacement(read, entry),
+      entry.name,
+    );
+  // The old family-time predicate survives in no replaced or new body (15-minute literals
+  // remain only where a legacy-shape family is recognised).
+  const bodies = [...lifecycle.matchAll(/CREATE (?:OR REPLACE )?FUNCTION[\s\S]*?\$\$;/g)].map((m) =>
+    m[0].replace(/\s/g, ""),
+  );
+  for (const text of bodies)
+    assert.doesNotMatch(
+      text,
+      /g\.created_at(=|<>)f\.created_at|g\.expires_at(=|<>)f\.expires_at|current_generation=1\b/,
+    );
+});
+
+test("P05.T01y: every new function has a fixed search path; only rotation is a definer", () => {
+  const created = [
+    ...lifecycle.matchAll(/CREATE FUNCTION morrow_identity\.(\w+)\([\s\S]*?(?:AS \$\$)/g),
+  ];
+  assert.deepEqual(created.map((m) => m[1]).sort(), [
+    "browser_generation_fits_family",
+    "browser_new_lifetimes",
+    "check_browser_generation_insert",
+    "preserve_session_signout_record",
+    "record_organization_session_signout",
+    "rotate_self_browser_generation",
+    "self_session_role_safe",
+  ]);
+  for (const [header, name] of created) {
+    assert.match(header, /SET search_path=pg_catalog,morrow_identity,pg_temp AS \$\$$/, name);
+    assert.equal(/SECURITY DEFINER/.test(header), name === "rotate_self_browser_generation", name);
+  }
+  // Lifetimes: 12-hour families, 30-minute generations, and the 1000-generation cap.
+  assert.match(lifecycle, /SELECT p_instant\+interval '12 hours',p_instant\+interval '30 minutes'/);
+  assert.match(
+    lifecycle,
+    /current_generation BETWEEN 1 AND 1000 AND expires_at=created_at\+interval '12 hours'/,
+  );
+  assert.match(lifecycle, /expires_at<=created_at\+interval '30 minutes'\);/);
+  // The sign-out trigger locks the principal FOR SHARE before it reads the clock.
+  const trigger = functionDefinition(lifecycle, "record_organization_session_signout");
+  assert.ok(
+    trigger.indexOf("WHERE id=OLD.principal_id FOR SHARE;") <
+      trigger.indexOf("instant:=clock_timestamp();"),
+  );
+  assert.match(
+    lifecycle,
+    /CREATE TRIGGER membership_organization_signout AFTER UPDATE OF active,principal_id,organization_id OR DELETE ON morrow_identity\.memberships/,
+  );
 });
