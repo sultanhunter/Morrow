@@ -8,7 +8,6 @@ import { createStandaloneLogout } from "../packages/identity/src/standalone-logo
 import { selfLogoutSql } from "../packages/identity/src/self-logout-control.ts";
 import { loginFlowCustodySql } from "../packages/identity/src/login-flow-custody.ts";
 import { authenticationExchangeAdmissionSql } from "../packages/identity/src/authentication-exchange-admission.ts";
-import { workspaceSelectionSql } from "../packages/identity/src/workos-workspace-selection.ts";
 import { browserSessionAdmissionSql } from "../packages/identity/src/workos-browser-session-admission.ts";
 import { identitySql } from "../packages/identity/src/index.ts";
 import { createStandaloneWorkspaceBootstrap } from "../packages/identity/src/standalone-workspace-bootstrap.ts";
@@ -77,7 +76,6 @@ const paths = [
   "packages/identity/src/login-preauth-control.ts",
   "packages/identity/src/login-flow-custody.ts",
   "packages/identity/src/authentication-exchange-admission.ts",
-  "packages/identity/src/workos-workspace-selection.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
   "packages/identity/src/workos-authentication-evidence.ts",
   "packages/identity/src/workos-session-token.ts",
@@ -97,6 +95,7 @@ const paths = [
   "infra/identity-role-prerequisites.sql",
   "infra/identity-login-role-prerequisites.sql",
   "infra/identity-logout-role-prerequisites.sql",
+  "infra/identity-onboarding-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
   ".nvmrc",
@@ -108,10 +107,10 @@ const paths = [
 ];
 if (process.version !== "v24.13.0") throw Error("FIXED_PROVIDER_HTTPS_SOURCE_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-// The login fixture applies 0001-0012; those entries must be present in order and
+// The login fixture applies 0001-0013 (account login, P05.T01x); they must be present in order and
 // checksum-verified. Later manifest entries are not applied by this lab.
-if (manifest.migrations.length < 12) throw Error("FIXED_PROVIDER_HTTPS_MIGRATIONS_REQUIRED");
-for (const [index, entry] of manifest.migrations.slice(0, 12).entries()) {
+if (manifest.migrations.length < 13) throw Error("FIXED_PROVIDER_HTTPS_MIGRATIONS_REQUIRED");
+for (const [index, entry] of manifest.migrations.slice(0, 13).entries()) {
   if (
     entry.sequence !== index + 1 ||
     hash(readFileSync("migrations/" + entry.file)) !== entry.sha256
@@ -135,7 +134,7 @@ let ownedContainer,
 try {
   measured = await localPostgresLab("P05.T01r-https", async (engine) => {
     ownedContainer = engine.id;
-    const harness = createSelfLogoutFixtureHarness(engine);
+    const harness = createSelfLogoutFixtureHarness(engine, { accountOnboarding: true });
     const cases = [],
       readPools = [],
       clientClosures = [],
@@ -303,7 +302,6 @@ try {
       const specifications = {
         loginPool: ["morrow_identity_login", loginFlowCustodySql],
         preauthPool: ["morrow_identity_preauth", authenticationExchangeAdmissionSql],
-        selectionPool: ["morrow_identity_resolution", workspaceSelectionSql],
         sessionPool: ["morrow_identity_sessions", browserSessionAdmissionSql],
       };
       const pools = {};
@@ -381,7 +379,7 @@ try {
       const response = await request("/auth/login", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ schemaVersion: 1, workspaceId: c.f.workspace }),
+        body: JSON.stringify({ schemaVersion: 2 }),
       });
       check(
         "real_https_preauth_cookie_" + number,
@@ -478,7 +476,7 @@ try {
         "exact_real_69_reservation_precedes_cookie",
         exchangeReservations(c) === 1 &&
           harness.admin(
-            `SELECT count(*) FROM morrow_identity.browser_session_commands WHERE family_id=${lit(issued.family_id)} AND outcome='admitted';`,
+            `SELECT count(*) FROM morrow_identity.account_session_commands WHERE family_id=${lit(issued.family_id)} AND outcome='admitted';`,
           ) === "1",
       );
       check(

@@ -41,14 +41,10 @@ const dependencies = (
 const c = (deadline = Date.now() + 1000, signal = new AbortController().signal) =>
   Object.freeze({ deadlineMs: deadline, signal });
 const tick = () => new Promise((r) => setTimeout(r, 0));
-test("private constructors are inert, frozen and expose four fixed pools only", async () => {
+test("private constructors are inert, frozen and expose three fixed pools only", async () => {
   const pools = await createWorkersControlledNeonLoginPools(dependencies());
-  assert.deepEqual(Object.keys(pools).sort(), [
-    "loginPool",
-    "preauthPool",
-    "selectionPool",
-    "sessionPool",
-  ]);
+  // Account login (P05.T01x) selects no workspace, so the selection pool left the wiring.
+  assert.deepEqual(Object.keys(pools).sort(), ["loginPool", "preauthPool", "sessionPool"]);
   assert.ok(Object.isFrozen(pools));
   for (const pool of Object.values(pools)) assert.ok(Object.isFrozen(pool));
   for (const m of Object.values(snapshotControlledNeonLoginPoolMetrics(pools)))
@@ -237,12 +233,7 @@ test("regressing clock cannot borrow or replace the business clock", async () =>
 test("exact profile arities exclude maintenance and cross-role business SQL", () => {
   assert.deepEqual(
     Object.values(profiles).map((p) => p.role),
-    [
-      "morrow_identity_login",
-      "morrow_identity_preauth",
-      "morrow_identity_resolution",
-      "morrow_identity_sessions",
-    ],
+    ["morrow_identity_login", "morrow_identity_preauth", "morrow_identity_sessions"],
   );
   for (const p of Object.values(profiles))
     for (const statement of Object.values(p.statements)) {
@@ -262,15 +253,15 @@ test("exact profile arities exclude maintenance and cross-role business SQL", ()
     () =>
       snapshotControlledNeonParameters(
         profiles.loginPool,
-        profiles.sessionPool.statements.admit.text,
-        Array(27).fill("value"),
+        profiles.sessionPool.statements.admitAccount.text,
+        Array(21).fill("value"),
       ),
     held,
   );
   assert.throws(
     () =>
       snapshotControlledNeonParameters(
-        profiles.selectionPool,
+        profiles.sessionPool,
         controlledNeonMetadataSql.observer,
         Array(5).fill("value"),
       ),
@@ -278,20 +269,20 @@ test("exact profile arities exclude maintenance and cross-role business SQL", ()
   );
 });
 test("parameters deny wrong arity, sparse/extra/accessor/mutable nonstrings and malformed text", () => {
-  const p = profiles.selectionPool,
-    text = p.statements.resolve.text;
+  const p = profiles.sessionPool,
+    text = p.statements.admitAccount.text;
   for (const values of [
     [],
-    Array(9),
-    Array(9).fill(1),
-    Array(9).fill("\ud800"),
-    Array(9).fill("a\0b"),
-    Array(9).fill("x".repeat(2049)),
-    Object.assign(Array(9).fill("v"), { extra: 1 }),
+    Array(21),
+    Array(21).fill(1),
+    Array(21).fill("\ud800"),
+    Array(21).fill("a\0b"),
+    Array(21).fill("x".repeat(2049)),
+    Object.assign(Array(21).fill("v"), { extra: 1 }),
   ])
     assert.throws(() => snapshotControlledNeonParameters(p, text, values), held);
   let reads = 0;
-  const values = Array(9).fill("v");
+  const values = Array(21).fill("v");
   Object.defineProperty(values, "2", {
     get() {
       reads++;

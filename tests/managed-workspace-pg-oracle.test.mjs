@@ -603,19 +603,27 @@ function fixedProfiles() {
   );
   return context.exports;
 }
-test("two named engine wrappers select only fixed frozen four/seven role profiles", async () => {
+// P05.T01x Part B: the login profile drops the selection role (three roles) and the
+// workspace profile adds the onboarding executor (seven roles).
+test("two named engine wrappers select only fixed frozen three/seven role profiles", async () => {
   const exports = fixedProfiles(),
     original = await exports.controlledNeonPostgresqlLab(),
     next = await exports.managedWorkspacePostgresqlLab();
-  assert.equal(original.roles.length, 4);
+  assert.equal(original.roles.length, 3);
   assert.equal(next.roles.length, 7);
   assert.deepEqual(
     [...next.roles],
-    [...original.roles, "morrow_api", "morrow_identity_linking", "morrow_identity_logout"],
+    [
+      ...original.roles,
+      "morrow_api",
+      "morrow_identity_linking",
+      "morrow_identity_logout",
+      "morrow_identity_onboarding",
+    ],
   );
   assert.ok(Object.isFrozen(original));
   assert.ok(Object.isFrozen(next.roles));
-  assert.equal((await exports.controlledNeonPostgresqlLab(null, next)).roles.length, 4);
+  assert.equal((await exports.controlledNeonPostgresqlLab(null, next)).roles.length, 3);
   assert.equal(
     resolveControlledNeonPostgresqlEndpoint(Object.freeze({ host: "127.0.0.1", port: 5432 })),
     null,

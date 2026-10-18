@@ -393,7 +393,7 @@ export default {
                 "Content-Type": "application/json",
                 "X-Morrow-Request": "1",
               },
-              body: '{"schemaVersion":1,"workspaceId":"workspace_a"}',
+              body: '{"schemaVersion":2}',
             }),
           );
           const authorization = new URL(
@@ -426,7 +426,9 @@ export default {
           sqlReleased = fixture.releases.filter((value) => value.completed).length;
           expect(
             "owning_M_reached",
-            fixture.calls.some((value) => value.role === "sessions" && value.stage === "admit"),
+            fixture.calls.some(
+              (value) => value.role === "sessions" && value.stage === "admitAccount",
+            ),
           );
           output = "chain_success";
         }

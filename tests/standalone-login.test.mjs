@@ -26,7 +26,7 @@ function startRequest(change = {}) {
       "X-Morrow-Request": "1",
       ...change.headers,
     },
-    body: change.body ?? JSON.stringify({ schemaVersion: 1, workspaceId: "workspace_a" }),
+    body: change.body ?? JSON.stringify({ schemaVersion: 2 }),
     ...(change.signal ? { signal: change.signal } : {}),
   });
 }
@@ -85,10 +85,10 @@ test("start → real owning76/77/M composition emits only opaque cookie, then re
     f.external.map((v) => v.kind),
     ["exchange", "keyset", "page"],
   );
-  const rows = f.calls.filter((v) => v.role === "sessions" && v.stage === "admit");
+  const rows = f.calls.filter((v) => v.role === "sessions" && v.stage === "admitAccount");
   assert.equal(rows.length, 1);
   const secret = cookies[0].split("=")[1].split(";")[0];
-  assert.equal(rows[0].values[17], createHash("sha256").update(secret).digest("hex"));
+  assert.equal(rows[0].values[16], createHash("sha256").update(secret).digest("hex"));
   assert.equal(
     f.releases.every((v) => v.completed),
     true,
@@ -99,9 +99,13 @@ test("start → real owning76/77/M composition emits only opaque cookie, then re
   assert.equal(f.external.length, 3);
 });
 for (const [name, body] of Object.entries({
-  extra: '{"schemaVersion":1,"workspaceId":"workspace_a","role":"admin"}',
-  duplicate: '{"schemaVersion":1,"workspaceId":"workspace_a","workspaceId":"workspace_b"}',
-  bad_id: '{"schemaVersion":1,"workspaceId":"../admin"}',
+  // Account login (P05.T01x): the v1 workspace body is refused; only {"schemaVersion":2}.
+  v1_workspace: '{"schemaVersion":1,"workspaceId":"workspace_a"}',
+  extra: '{"schemaVersion":2,"role":"admin"}',
+  workspace: '{"schemaVersion":2,"workspaceId":"workspace_a"}',
+  duplicate: '{"schemaVersion":2,"schemaVersion":2}',
+  version: '{"schemaVersion":3}',
+  string_version: '{"schemaVersion":"2"}',
   syntax: "{",
   large: " ".repeat(513),
   invalid_utf8: new Uint8Array([255]),
@@ -204,7 +208,7 @@ for (const stage of ["provider:exchange", "provider:keyset"])
       stage.endsWith("exchange") ? ["exchange"] : ["exchange", "keyset"],
     );
     assert.equal(
-      f.calls.some((v) => v.role === "sessions" && v.stage === "admit"),
+      f.calls.some((v) => v.role === "sessions" && v.stage === "admitAccount"),
       false,
     );
   });
@@ -303,7 +307,10 @@ test("final expiry after M commit/disposal withholds cookie and does not reissue
     r = await b.fetch(callbackRequest(flow));
   assert.equal(r.headers.get("location"), "/auth/result");
   assert.equal(r.headers.has("set-cookie"), false);
-  assert.equal(f.calls.filter((v) => v.role === "sessions" && v.stage === "admit").length, 1);
+  assert.equal(
+    f.calls.filter((v) => v.role === "sessions" && v.stage === "admitAccount").length,
+    1,
+  );
 });
 test("disconnect after M release prevents synchronous transport handoff", async () => {
   const abort = new AbortController();
@@ -319,7 +326,10 @@ test("disconnect after M release prevents synchronous transport handoff", async 
     sinks++;
   });
   assert.equal(sinks, 0);
-  assert.equal(f.calls.filter((v) => v.role === "sessions" && v.stage === "admit").length, 1);
+  assert.equal(
+    f.calls.filter((v) => v.role === "sessions" && v.stage === "admitAccount").length,
+    1,
+  );
 });
 test("synchronous sink snapshots immutable output and cannot trigger credential resend", async () => {
   const f = fixture(),
@@ -370,7 +380,7 @@ for (const stage of [
   "login:commit",
   "login:release",
   "preauth:release",
-  "sessions:admit",
+  "sessions:admitAccount",
   "sessions:commit",
   "sessions:release",
 ])
@@ -395,11 +405,11 @@ for (const stage of [
     assert.equal(await r.text(), "");
     assert.equal(hit, true);
     assert.equal(
-      f.calls.filter((v) => v.role === "sessions" && v.stage === "admit").length,
+      f.calls.filter((v) => v.role === "sessions" && v.stage === "admitAccount").length,
       stage.startsWith("sessions") ? 1 : 0,
     );
     assert.ok(f.external.filter((v) => v.kind === "exchange").length <= 1);
-    if (stage === "sessions:admit") assert.equal(f.calls.at(-1).stage, "admit");
+    if (stage === "sessions:admitAccount") assert.equal(f.calls.at(-1).stage, "admitAccount");
   });
 test("concurrent callbacks can reserve/exchange/issue only once", async () => {
   const gate = deferred(),
@@ -422,7 +432,10 @@ test("concurrent callbacks can reserve/exchange/issue only once", async () => {
   gate.resolve();
   assert.equal((await first).headers.get("location"), "/");
   assert.equal(f.external.filter((v) => v.kind === "exchange").length, 1);
-  assert.equal(f.calls.filter((v) => v.role === "sessions" && v.stage === "admit").length, 1);
+  assert.equal(
+    f.calls.filter((v) => v.role === "sessions" && v.stage === "admitAccount").length,
+    1,
+  );
 });
 test("clock regression before provider prevents dispatch", async () => {
   const f = fixture({
@@ -462,7 +475,7 @@ test("abort in claimed-capsule disposal never reaches69 or provider", async () =
 test("factory refuses shared pool identity and insecure cookie origin", async () => {
   const f = fixture();
   await assert.rejects(
-    createStandaloneLoginBridge({ ...f, sessionPool: f.selectionPool }),
+    createStandaloneLoginBridge({ ...f, sessionPool: f.loginPool }),
     /CONFIGURATION_INVALID/,
   );
   const c = JSON.parse(f.configurationJson);
@@ -507,7 +520,7 @@ for (const change of [
     assert.equal(r.headers.has("set-cookie"), false);
     assert.equal(f.external.length, 1);
     assert.equal(
-      f.calls.some((v) => v.role === "sessions" && v.stage === "admit"),
+      f.calls.some((v) => v.role === "sessions" && v.stage === "admitAccount"),
       false,
     );
   });
@@ -588,7 +601,10 @@ test("abort during asynchronous M disposal never emits a cookie or repeats clean
   gate.resolve();
   await tick();
   assert.equal(f.releases.filter((v) => v.role === "sessions")[0].completed, true);
-  assert.equal(f.calls.filter((v) => v.role === "sessions" && v.stage === "admit").length, 1);
+  assert.equal(
+    f.calls.filter((v) => v.role === "sessions" && v.stage === "admitAccount").length,
+    1,
+  );
 });
 for (const [name, after, success] of [
   ["valid", 11000, true],
@@ -599,7 +615,7 @@ for (const [name, after, success] of [
     async () => {
       const f = fixture({
           stage: async (name, state) => {
-            if (name === "selection:resolve") state.setTime(native.at + after);
+            if (name === "sessions:connect") state.setTime(native.at + after);
           },
         }),
         b = await createStandaloneLoginBridge(f),
@@ -615,7 +631,7 @@ for (const [name, after, success] of [
         assert.equal(r.headers.get("location"), success ? "/" : "/auth/result");
         assert.equal(r.headers.getSetCookie().length, success ? 1 : 0);
         assert.equal(
-          f.calls.filter((v) => v.role === "sessions" && v.stage === "admit").length,
+          f.calls.filter((v) => v.role === "sessions" && v.stage === "admitAccount").length,
           success ? 1 : 0,
         );
       } finally {

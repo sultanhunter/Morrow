@@ -227,6 +227,41 @@ test("connection setup requires explicit connection capability/administer grant"
   assert.equal(result.decision.reason, "allowed");
   assert.deepEqual(result.obligations, ["recheck_at_dispatch", "exact_approval"]);
 });
+test("a connect reviewer needs an explicit approve grant; approve never performs the connect", async () => {
+  const f = fixture();
+  f.request.capabilityId = "governance.connection.connect";
+  f.grant.capabilityId = f.request.capabilityId;
+  f.request.verb = "approve";
+  f.grant.verbs = ["administer"];
+  assert.equal(await reason(f), "capability_denied");
+  f.grant.verbs = ["administer", "approve"];
+  const result = await service(f.authority).decide(f.request);
+  assert.equal(result.decision.reason, "allowed");
+  assert.deepEqual(result.obligations, ["recheck_at_dispatch"]);
+  for (const verb of ["view", "propose", "execute", "delegate"]) {
+    f.request.verb = verb;
+    f.grant.verbs = ["view", "propose", "approve", "execute", "delegate", "administer"];
+    assert.equal(await reason(f), "capability_denied", verb);
+  }
+  // An approve-only holder cannot perform the connect itself.
+  f.request.verb = "administer";
+  f.grant.verbs = ["approve"];
+  assert.equal(await reason(f), "capability_denied");
+  // Agents, installations and mandates never review a connect, even with the grant.
+  f.request.verb = "approve";
+  f.grant.verbs = ["administer", "approve"];
+  for (const change of [
+    (a) => (a.kind = "agent"),
+    (a) => (a.installationId = "installation_a"),
+    (a) => (a.mandateId = "mandate_a"),
+  ]) {
+    const g = structuredClone(f);
+    change(g.authority.actor);
+    change(g.grant.principal);
+    g.authority.grants = [g.grant];
+    assert.equal(await reason(g), "origin_denied");
+  }
+});
 test("workspace linking needs one grant covering the actual connection input fields before review", async () => {
   const f = fixture();
   const target = {
@@ -695,18 +730,13 @@ test("P01.T04a AC05: every ADR grant template row works without entitlement; pai
         const unentitled = await decide(false);
         const label = `${template} ${row.capabilityId} ${verb}`;
         assert.deepEqual(unentitled, await decide(true), label);
-        // Billing never decides a template row. Whether the kernel evaluates
-        // `approve` on connect is the connection rule's business (P05.T01x §14),
-        // not billing's: today that rule allows only `administer`, so the one
-        // exception is pinned to its exact reason until PR #10 changes the rule.
+        // Billing never decides a template row: every row is allowed without an
+        // entitlement, including connect `approve`, which the connection rule
+        // allows since P05.T01x Part B (ADR-0011 Q5, ADR-0009 item 7).
         assert.notEqual(unentitled.decision.reason, "entitlement_denied", label);
-        if (row.capabilityId !== "governance.connection.connect" || verb === "administer")
-          assert.equal(unentitled.decision.allowed, true, label);
-        else {
-          assert.equal(verb, "approve", label);
-          assert.equal(unentitled.decision.reason, "capability_denied", label);
+        assert.equal(unentitled.decision.allowed, true, label);
+        if (row.capabilityId === "governance.connection.connect" && verb === "approve")
           connectApprove++;
-        }
         rows++;
       }
   assert.ok(rows >= 40, String(rows));

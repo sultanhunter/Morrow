@@ -39,7 +39,7 @@ Every capability declares an `executor` (ADR-0005 §2, ADR-0011 Q7): `human_only
 
 ## Contract v1.1: agents and review (P01.T02a PR-B)
 
-An agent's proposal is a Proposal@2 built by the server: the agent is `proposedBy`, and `requestedBy` is the human task initiator or mandate owner, so the requester is conflicted for review like any proposer (ADR-0011 Q1). `contextTaint` records whether the run consumed untrusted external evidence; it is a field only, and the rule that acts on it needs its own ADR before P11.T02 enforces it. Approval@2 reviewers are human members only, and no decision, preview or source proposal confers authority on the executing agent: the gateway rechecks the intersection at dispatch.
+An agent's proposal is a Proposal@2 built by the server: the agent is `proposedBy`, and `requestedBy` is the human task initiator or mandate owner, so the requester is conflicted for review like any proposer (ADR-0011 Q1). An agent's proposal always names a task, including work under a mandate; only a human-made governance proposal may have none (ADR-0018). `contextTaint` records whether the run consumed untrusted external evidence; it is a field only, and the rule that acts on it needs its own ADR before P11.T02 enforces it. Approval@2 reviewers are human members only, and no decision, preview or source proposal confers authority on the executing agent: the gateway rechecks the intersection at dispatch.
 
 ## Contract v1.1: entitlement (P01.T04a, ADR-0015)
 

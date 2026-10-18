@@ -1,8 +1,12 @@
 import {
+  parseBrokerDatabaseBinding,
   workosSessionNamespace,
   type ApiBrokerRpc,
 } from "../../../packages/identity/src/broker-protocol.js";
 import type { ManagedWorkspaceApiDependencies } from "../../../packages/identity/src/managed-workspace-api.js";
+import { captureManagedWorkspaceBinding } from "../../../packages/identity/src/managed-workspace-binding.js";
+import { createNeonWorkConnector } from "../../../packages/work/src/neon-connector.js";
+import type { WorkApiDependencies } from "../../../packages/work/src/http.js";
 import {
   createBrokerHealth,
   createBrokerNeonCredentialBroker,
@@ -36,12 +40,13 @@ export function composeApiDependencies(
   now: () => number,
 ) {
   const port = createLazyWorkosLoginPort(values.login, now);
+  const credentialBroker = createBrokerNeonCredentialBroker(broker, now);
   const dependencies: ManagedWorkspaceApiDependencies = {
     login: {
       configurationJson: values.login,
       capsuleKeyringJson: values.keyring,
       bindingJson: values.binding,
-      credentialBroker: createBrokerNeonCredentialBroker(broker, now),
+      credentialBroker,
       providerPort: {
         exchange: port.exchange,
         readPublicKeyset: port.readPublicKeyset,
@@ -56,8 +61,24 @@ export function composeApiDependencies(
     workspaceConfigurationJson: values.workspace,
     logoutConfigurationJson: values.logout,
   };
+  // P06.T01a: the work API on the same origin, with one morrow_api_worker lease
+  // per request from the same broker binding (ADR-0010 item 2, ADR-0007).
+  const work: WorkApiDependencies = Object.freeze({
+    origin: captureManagedWorkspaceBinding({
+      loginConfigurationJson: values.login,
+      workspaceConfigurationJson: values.workspace,
+      logoutConfigurationJson: values.logout,
+      bindingJson: values.binding,
+    }).origin,
+    connector: createNeonWorkConnector(
+      parseBrokerDatabaseBinding(values.binding),
+      credentialBroker,
+    ),
+    now,
+  });
   return Object.freeze({
     dependencies,
+    work,
     readiness: () => port.readiness(values.keyring),
     brokerHealth: createBrokerHealth(broker, now),
   });
@@ -81,7 +102,7 @@ function select(env: unknown): Selected {
     try {
       const composed = composeApiDependencies(mapped.values, mapped.broker, () => Date.now());
       selected = {
-        api: createWorkspaceApiWorker(composed.dependencies),
+        api: createWorkspaceApiWorker(composed.dependencies, composed.work),
         readiness: composed.readiness,
         brokerHealth: composed.brokerHealth,
         keyringLogged: false,

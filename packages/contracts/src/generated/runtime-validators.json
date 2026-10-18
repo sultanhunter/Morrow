@@ -1,23 +1,23 @@
 {
   "schema_version": 2,
   "contract_version": "morrow.contracts.v1.1",
-  "definitions": 389,
+  "definitions": 392,
   "definitions_by_source": {
     "core": 116,
     "capabilities": 206,
     "billing": 12,
-    "core-v1.1": 21,
+    "core-v1.1": 24,
     "capabilities-v1.1": 10,
     "billing-v1.1": 24
   },
-  "current_definitions": 135,
+  "current_definitions": 138,
   "current_billing_definitions": 31,
   "capability_bodies": 210,
   "inputs": {
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "ef844177fc7fd5057defe0d66020310a670c68cd092ec4e9fec69349d49e3ed6",
+    "docs/contracts/schemas/v1.1/core.schema.json": "8b0f406037233bcbb0204ca489d681deff8f6331aaa51415ec434a700715a2f5",
     "docs/contracts/schemas/v1.1/capabilities.schema.json": "43c7adce5fc995c6b3528c9c2489a0a616a1736fb3cbd3452eb90320b8a65962",
     "docs/contracts/schemas/v1.1/billing.schema.json": "763f73b99def0b5d8b2083f0084c9504e823fa81a3e772db8b3c5a45f94d9490"
   },
@@ -28,7 +28,7 @@
   },
   "output": {
     "path": "packages/contracts/src/generated/runtime-validators.mjs",
-    "sha256": "7dc99ac8eb9ed0adb3a19b01e37a2f3365b6e1a45c3d1a3c3d1392c07b1a2f71"
+    "sha256": "a660753055914aae9d6de8e41b4622eb900f56baacc4a9fb39b1f7f19102d9c6"
   },
   "scope": "Ahead-of-time validators only; no runtime schema compilation or hosted qualification"
 }

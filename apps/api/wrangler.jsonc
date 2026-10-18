@@ -25,6 +25,8 @@
       "/auth/*",
       "/workspace",
       "/workspace/*",
+      "/workspaces",
+      "/organizations",
       "/api",
       "/api/*",
       "/healthz",

@@ -656,6 +656,8 @@ test("P01.T04a AC11: no request or capability input can carry a billing route", 
       if (/(?:Request|Input)$/.test(name) && !requests.some(([n]) => n.endsWith(":" + name)))
         requests.push([`${kind}:${name}`, layered[kind].$defs[name], layered[kind].$id]);
   assert.ok(requests.some(([name]) => name === "core-v1.1:ReviewDecisionInput"));
+  // P05.T01x Part B account requests are walked too (P01.T04a AC11).
+  assert.ok(requests.some(([name]) => name === "core-v1.1:OrganizationSignupRequest"));
   for (const [name, schema, base] of [...inputs, ...requests])
     assert.deepEqual(routeFields(schema, base, byId), [], name);
   // Planted negatives: a route property, or a reference to a route definition.

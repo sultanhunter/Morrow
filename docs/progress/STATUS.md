@@ -11,37 +11,41 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #6: P01.T02a PR-A, executor classes and human-only kill switches (ADR-0005, §2 confirmed 2026-10-18).
 - PR #7: ADR-0008 accepted (connector on Cloudflare Workers with `@shopify/shopify-api`; secret-dependent calls in the broker).
 - PR #8: P01.T02a PR-B, review policy, Proposal@2, Approval@2 and `@morrow/policy/review` (ADR-0011).
-- PR #9: ADR-0015 to ADR-0018 (billing by origin, collaboration, membership, task-free proposals), the redesigned P01.T04a packet and its OQ-1 to OQ-3 decisions.
+- PR #9: the owner decisions of 2026-10-18: ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
+- PR #10: P05.T01x Part B (ADR-0009), squash-merged as `e51e5b7`: migration 0013 (account login, enrollment, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers).
+- PR #12: P06.T01a (ADR-0010), merged as `06e4dfe`: migrations 0014 (identity bridge and organization interlock) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the `pg-work` CI group. Verified waits for the P05 exit gate.
+- PR #13: the ADR-0018 Proposal@2 edit (P01.T02a-AC27), merged as `08e5ebf`: nullable `taskId` only for human governance proposals, `TASK_REQUIRED`/`TASK_MISMATCH` and the `requestedBy` derivation in `checkProposal`. It unblocks P06.T01b PR-1.
 
 In progress:
-- **P01.T04a PR-A** (paid-work gate and billing contracts; branch `claude/p01-t04a-a-paid-work-gate`): entitlement now gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities); `inspectEntitlementWriters` in `verify:boundaries`; the contract v1.1 billing layer (`schemas/v1.1/billing.schema.json`, five declared replacements); the OQ-2 test entitlement seed branch (`@morrow/policy/billing-state`, AC33); the P18.T01a–c plan children. Tier 2 AI review (separate context, same model family) findings are applied; local format, typecheck, verify, targeted suites and `lab:permissions` (AC31) pass; full CI, hosted CI (including `lab:workers`) and `/security-review` are open. PR-B (route library) follows.
-- **Open PRs touching the same files:** #10 (P05.T01x Part B: migration 0013, v1.1 core, `index.ts` connect rule) and #12 (migrations 0014–0015). Whichever merges later rebases under P01.T04a §4.5: append `changes.json` entries, recompute `release-baseline.json` hashes, rerun `npm run contracts:generate`. PR-A obliges P05.T01x Part B only to assert `!isPaidWork` for its template rows; the route row needs `originForCreation`, which P01.T04a PR-B ships, so PR #10's "Only if P01.T04a merges before Part B" means PR-B. P06.T01a must pass `entitlementAllowed: false` (and take PR-A's `P06.T01a.md:204` wording) once it meets `inspectEntitlementWriters`.
-- **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
+- **P01.T04a PR-A** (PR #14, branch `claude/p01-t04a-a-paid-work-gate`): entitlement gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities), `inspectEntitlementWriters`, the contract v1.1 billing layer (five declared replacements) and the OQ-2 test entitlement seed branch. Merged with `main` at `08e5ebf` on 2026-10-19: `changes.json` entries appended after main's, baseline hashes recomputed, contracts regenerated (392 validators, 2,202,717 bytes). Part B and P06.T01a merged first, so this PR applies the "merges first" coordination (P01.T04a §8.1, §9): `!isPaidWork` for every template v1 row in `tests/account-onboarding.test.mjs`, `entitlementAllowed: false` in `packages/work/src/permissions.ts`, and the billing route row goes to the first billing child, not `create_first_organization`. AC05 now expects connect `approve` allowed under Part B's connect rule. Local format, typecheck, verify and unit tests pass on the merged head; hosted CI, the Tier 2 AI review (separate context, same model family) and `/security-review` on the merged head are open. PR-B (billing route library) follows.
+- **P03.T04e PR-A** (PR #11): one formatting config, concurrent unit tests, manifest `executeAs`, heavy-faults workflow. The rest of P03.T04e ships in later PRs.
+- **P14.T01a PR-1** (PR #15, provisional under ADR-0003): workspace UI shell, sign-in and navigation.
 
 ## Decisions recorded 2026-10-18
 
 - **ADR-0015 billing routes by origin** (supersedes ADR-0006). Website signups pay on Morrow checkout (Stripe Billing with Stripe Tax; Morrow is the seller) before linking a store. Every other paying workspace, including all Shopify-origin merchants, pays through Shopify App Pricing and never sees Morrow checkout. The route is fixed server-side at the first completed payment (plan Security invariant 24). Stripe is selected and blocked: no account, keys or provider calls until an approved packet.
 - **ADR-0016 collaboration contracts v1.1** (P01.T02c Q1-Q6): as recommended, except workspace admins (holders of `administer` on `workspace.conversation.create`) can read private Asks through audited, read-only reads.
 - **ADR-0017 membership authority** (P05.T01z Q1 and Q3): accepted as designed.
-- **ADR-0018 proposals without a task** (P06.T01b Q1): `taskId` may be null only for human-made governance proposals, with `requestedBy` = the proposer; agents always need a task. A routine P01.T02a follow-up PR makes the Proposal@2 candidate edit before P06.T01b PR-1 merges.
+- **ADR-0018 proposals without a task** (P06.T01b Q1): `taskId` may be null only for human-made governance proposals, with `requestedBy` = the proposer; agents always need a task (landed in PR #13).
 - **P01.T04a OQ-1 to OQ-3 (ADR-0015 follow-up decisions):** purchase permission is decided with the checkout (P18.T01a). M4 uses an owner-run test entitlement seed in development and staging. App Review gets an owner-approved review allowance. Future per-action owner approvals: the staging seed for M4, and the production review allowance before App Review submission.
 - **P03.T04e OQ-1 (routine):** the heavy CI job runs on `workflow_dispatch` plus a weekly schedule, the packet default.
 
 ## Last green commit
 
-`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7 to #9 merged after it (`main` is at `400aa44`); record their runs here once confirmed.
+`06e4dfe` on `main`, the merge of PR #12: push run 39166650248 passed. Earlier: `e51e5b7` (PR #10) push run 39160961579 passed all 10 jobs; `400aa44` (PR #9) push run 39131819189 passed. The push run 39168226191 on `08e5ebf` (PR #13) was still running when this file was written; record its result.
 
 ## Next actions
 
-1. P01.T04a PR-A: open the PR, Tier 2 AI review plus `/security-review`, hosted CI; then PR-B (billing route library).
-2. P05.T01x Part B (PR #10) and P06.T01a: review and merge, rebasing contracts as above.
-3. The ADR-0018 Proposal@2 edit, P06.T01b, P01.T02c (ADR-0016) and P01.T02b.
-4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
+1. P01.T04a PR-A (PR #14): hosted CI green on the merged head (including `lab:permissions` for AC31 and `lab:workers` for the billing selectors), the Tier 2 AI review and `/security-review` (authority and billing), then merge. Then PR-B (billing route library).
+2. P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
+3. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Open plan follow-ups:
+- P06.T01a AC08 soak: set `MORROW_WORK_SOAK=1` for `lab:work-postgresql` in the P03.T04e heavy job (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
+- Work routes in production: production cannot map today (ADR-0007 item 9), so the deployed api serves them 401 with no SQL. Whoever enables production mapping must also gate the work routes on P09.T05 (packet hard ordering b).
 - Superseded banners on `docs/references/*`.
+- A forward migration (0016 or later) that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
 - The rest of P03.T04e: formatting ignore file, unit-test concurrency, shared PostgreSQL 17 template-database harness, heavy-fault job.
-- The P05.T01x Part B PR splits the plan's P05.T01x bullet into sub-bullets, to respect the 2,000-character line limit.
 
 ## Blockers
 
@@ -49,19 +53,19 @@ None for local work. Hosted staging (M1) waits on the owner actions below. Billi
 
 ## Pending owner actions
 
-- **Sign-offs:** plan R1 (Tier 3). The P01 contract sign-off also freezes the v1.1 billing layer, including two choices made in PR-A review: Shopify-route money is USD-only, and `AllocationShare@2` is a declared superset of v1.
+- **Sign-offs:**
+  - Plan R1 (Tier 3). The P01 contract sign-off also freezes the v1.1 billing layer, including two PR-A review choices: Shopify-route money is USD-only, and `AllocationShare@2` is a declared superset of v1.
+  - P05.T01x Part B, before hosted login (M1): account login start is anonymous, so its per-profile windows (10 per 10 s, 100 open) let anyone block every sign-in on a profile (packet §11). Decide whether Turnstile or the edge per-IP limiter gates hosted login activation in every environment, not only sign-up beyond the allowlist (ADR-0009 item 8).
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
-- **M1 prerequisites (P04.T01i):** register the domain; create a dedicated Cloudflare account and share its account ID (an identifier, not a secret); authenticate the Neon CLI and reset the operator password; once the domain exists, configure the WorkOS staging callback and rotate the API key; decide on spending (Workers Paid, the domain, Neon Launch for staging); approve each M1 effect individually or approve standing staging cards. No card may rely on the OperationLedger before P06.T01c lands.
+- **M1 prerequisites (P04.T01i):** register the domain; create a dedicated Cloudflare account and share its account ID (an identifier, not a secret); authenticate the Neon CLI and reset the operator password; once the domain exists, configure the WorkOS staging callback and rotate the API key; decide on spending (Workers Paid, the domain, Neon Launch for staging); approve each M1 effect individually or approve standing staging cards. No card may rely on the OperationLedger before P06.T01c lands. For the work API (P06.T01a): create the `morrow_api_worker` login and place its password as the broker secret `MORROW_DB_PASSWORD_MORROW_API_WORKER`; broker health stays false until it is set.
 - **Credential rotation:** rotate the E2B personal key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.
 - **Billing (ADR-0015):**
   - When payments work starts: create a Stripe account in test mode (before P18.T01a).
   - Per action, later: the hosted staging test entitlement seed for M4 (OQ-2), and the production App Review allowance before submission (OQ-3).
-  - Before live billing: a legal business entity, a bank account, a tax advisor, and tax registrations where required; then Stripe live activation.
-  - For the Shopify route: the Shopify Partner payout and tax profile.
+  - Before live billing: a legal business entity, a bank account, a tax advisor, and tax registrations where required; then Stripe live activation. For the Shopify route: the Partner payout and tax profile.
   - Before launch: a written answer from Shopify on whether its revenue share covers Morrow-direct revenue, and the App Review outcome for the split model.
-- **Later:** a Shopify Partner account and a fresh development store, never the live shop; an OpenAI staging project with a budget cap.
-- **Optional console clean-up:** E2B template `pdht65h2trfuizuvmotc`, the WorkOS loopback callback `127.0.0.1:4110`, and the WorkOS staging test user.
+- **Later:** a Shopify Partner account and a fresh development store, never the live shop; an OpenAI staging project with a budget cap. **Optional console clean-up:** E2B template `pdht65h2trfuizuvmotc`, the WorkOS loopback callback `127.0.0.1:4110`, and the WorkOS staging test user.
 
 ## Open unknown-outcome provider operations
 
