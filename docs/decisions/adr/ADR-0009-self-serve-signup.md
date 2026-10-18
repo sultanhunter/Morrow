@@ -84,3 +84,7 @@ The recommended answers accepted are P05.T01x Q1 (this ADR's content and the pla
 The question's summary did not spell out items 1–6, the eligibility rule in item 10 or item 12. They are the recommended answers to Q1 and Q4b as written in the packet, including that signup is the only grant path that bypasses ReviewPolicy (item 2).
 
 Item 7 records two template alignments that follow from ADR-0011, approved in the same batch: `approve` on `governance.approval.decide`, and `view` on `governance.approval.preview`.
+
+## Notes
+
+- 2026-10-18: ADR-0015 supersedes ADR-0006. Item 7's "Pre-install billing" point now reads as ADR-0015's pre-payment state. It still holds, because no template capability has a spend or billable effect.
