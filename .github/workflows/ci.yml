@@ -3,18 +3,55 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: foundation-${{ github.ref }}
+  group: foundation-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
-# Independent jobs run in parallel; `foundation` aggregates them and is the
-# single required status check. Every job that checks out the repository writes
-# its reports to MORROW_ARTIFACTS_DIR, secret-scans that directory, uploads it
-# only when the scan passes, and ends by requiring an unchanged checkout.
-# docs/development/ci.md describes the layout.
+# P03.T04f: how much runs depends on the event, and `foundation` is the single required
+# status check in every case.
+# - A pull request runs everything, unless every file it changes is Markdown; then it runs
+#   only `checks`, which holds every check that reads Markdown (plan:check, verify, the
+#   unit tests). `scope` decides.
+# - A push to main runs only `checks`. Each pull request merged only after a green full
+#   run on its exact head, which already contained main (ADR-0014).
+# - workflow_dispatch runs everything, on main or any branch.
+# Every job that checks out the repository and writes reports routes them to
+# MORROW_ARTIFACTS_DIR, secret-scans that directory, uploads it only when the scan
+# passes, and ends by requiring an unchanged checkout. docs/development/ci.md describes
+# the layout.
 jobs:
-  static:
+  # Writes no report, so it has no scan, upload or clean-tree steps.
+  scope:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      full: ${{ steps.decide.outputs.full }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Run everything unless every file the pull request changes is Markdown
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          full=true
+          if [ "$EVENT_NAME" = pull_request ]; then
+            changed="$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")"
+            if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qv '\.md$'; then full=false; fi
+            echo "$(printf '%s\n' "$changed" | grep -c .) changed files"
+          fi
+          echo "event $EVENT_NAME, full=$full"
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+
+  checks:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -31,6 +68,8 @@ jobs:
         run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run the repository tests, parallel-safe files concurrently, then the serial list
+        run: npm test
       - name: Format, typecheck, verify, build, scaffold denial guards, lab example and infrastructure checks
         run: npm run ci:static
       - name: Secret-scan generated reports before upload
@@ -51,87 +90,9 @@ jobs:
         if: always()
         run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
 
-  unit:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Route reports outside the checkout
-        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
-      - name: Install locked dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Run one shard of the repository tests, parallel-safe files concurrently, then the serial list
-        env:
-          TEST_SHARD: "${{ matrix.shard }}/2"
-        run: npm run test:shard
-      - name: Secret-scan generated reports before upload
-        id: artifact_scan
-        if: always()
-        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
-      - name: Upload generated reports
-        if: always() && steps.artifact_scan.outcome == 'success'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: morrow-${{ github.job }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/morrow-artifacts
-          if-no-files-found: ignore
-          overwrite: false
-          include-hidden-files: false
-          retention-days: 90
-      - name: Require an unchanged checkout
-        if: always()
-        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
-
-  workers-api:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Route reports outside the checkout
-        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
-      - name: Install locked dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Exercise configured native workspace API and request-owned lifetime
-        run: npm run lab:workspace-api-workers
-      - name: Secret-scan generated reports before upload
-        id: artifact_scan
-        if: always()
-        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
-      - name: Upload generated reports
-        if: always() && steps.artifact_scan.outcome == 'success'
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: morrow-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/morrow-artifacts
-          if-no-files-found: error
-          overwrite: false
-          include-hidden-files: false
-          retention-days: 90
-      - name: Require an unchanged checkout
-        if: always()
-        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
-
   workers:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -169,6 +130,8 @@ jobs:
           --env npm_config_update_notifier=false --env npm_config_cache=/tmp/npm-cache
           --entrypoint /bin/sh "$(node -p 'require("./infra/local-engine.json").image')"
           -c 'npm run edge:dry-run && npm run smoke:edge-dev'
+      - name: Exercise configured native workspace API and request-owned lifetime
+        run: npm run lab:workspace-api-workers
       - name: Exercise the other Workers laboratories in the local Workers runtime, one at a time
         run: npm run lab:group:workers
       - name: Secret-scan generated reports before upload
@@ -189,13 +152,17 @@ jobs:
         if: always()
         run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
 
+  # Each leg runs its lab groups one lab at a time. `core-http` holds the two shorter
+  # groups, pg-core then pg-http, so one runner pays the setup and image pull once.
   postgres:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 14
     strategy:
       fail-fast: false
       matrix:
-        group: [pg-core, pg-linking, pg-http, pg-work]
+        leg: [core-http, linking, work]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -213,13 +180,21 @@ jobs:
       - name: Pull the pinned PostgreSQL image
         run: docker pull "$(node -p 'require("./infra/local-engine.json").image')"
       - name: Record the isolated pinned PostgreSQL engine build
-        if: matrix.group == 'pg-core'
+        if: matrix.leg == 'core-http'
         run: >-
           node --input-type=module --eval 'import {localPostgresLab} from "./scripts/local-postgres-lab.mjs"; await localPostgresLab("P04.engine-diagnostic", async ({image,version}) => console.log(JSON.stringify({image,version})));'
-      - name: Exercise the isolated PostgreSQL laboratories in this group, one at a time
-        env:
-          LAB_GROUP: ${{ matrix.group }}
-        run: npm run "lab:group:$LAB_GROUP"
+      - name: Exercise the pg-core laboratories, one at a time
+        if: matrix.leg == 'core-http'
+        run: npm run lab:group:pg-core
+      - name: Exercise the pg-http laboratories, one at a time
+        if: matrix.leg == 'core-http'
+        run: npm run lab:group:pg-http
+      - name: Exercise the pg-linking laboratories, one at a time
+        if: matrix.leg == 'linking'
+        run: npm run lab:group:pg-linking
+      - name: Exercise the pg-work laboratories, one at a time
+        if: matrix.leg == 'work'
+        run: npm run lab:group:pg-work
       - name: Secret-scan generated reports before upload
         id: artifact_scan
         if: always()
@@ -228,7 +203,7 @@ jobs:
         if: always() && steps.artifact_scan.outcome == 'success'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: morrow-${{ github.job }}-${{ matrix.group }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: morrow-${{ github.job }}-${{ matrix.leg }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/morrow-artifacts
           if-no-files-found: error
           overwrite: false
@@ -239,6 +214,8 @@ jobs:
         run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
 
   pgwire:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
@@ -281,6 +258,8 @@ jobs:
   # contrast matrix on the fixture build and on the production dist, then the
   # real-browser sign-in journey against the configured harness and PostgreSQL 17.
   ui:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -327,18 +306,33 @@ jobs:
         if: always()
         run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
 
-  # Same name as the former single job, so the required status check is
-  # unchanged. A skipped, cancelled or failed job fails this check.
+  # Same name as the former single job, so the required status check is unchanged. It
+  # runs on every event and fails unless `checks` succeeded and every lab job ended as
+  # this event requires: success on a full run, skipped on a push to main or a
+  # Markdown-only pull request. Any failed, cancelled or unexpectedly skipped job fails it.
   foundation:
     if: always()
-    needs: [static, unit, workers-api, workers, postgres, pgwire, ui]
+    needs: [scope, checks, workers, postgres, pgwire, ui]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Require every job to succeed
+      - name: Require every job this event runs to succeed
         env:
+          EVENT_NAME: ${{ github.event_name }}
           RESULTS: ${{ join(needs.*.result, ' ') }}
+          SCOPE: ${{ needs.scope.result }}
+          FULL: ${{ needs.scope.outputs.full }}
+          CHECKS: ${{ needs.checks.result }}
+          LABS: ${{ needs.workers.result }} ${{ needs.postgres.result }} ${{ needs.pgwire.result }} ${{ needs.ui.result }}
         run: |
-          echo "job results: $RESULTS"
+          echo "event $EVENT_NAME, scope $SCOPE (full=$FULL), job results: $RESULTS"
           test -n "$RESULTS"
-          for r in $RESULTS; do [ "$r" = success ] || { echo "required job: $r"; exit 1; }; done
+          test -n "$LABS"
+          [ "$CHECKS" = success ] || { echo "required job checks: $CHECKS"; exit 1; }
+          if [ "$EVENT_NAME" = push ] && [ "$SCOPE" = skipped ]; then mode=light
+          elif [ "$EVENT_NAME" != push ] && [ "$SCOPE" = success ] && [ "$FULL" = true ]; then mode=full
+          elif [ "$EVENT_NAME" = pull_request ] && [ "$SCOPE" = success ] && [ "$FULL" = false ]; then mode=light
+          else echo "required job scope: $SCOPE (full=$FULL) on $EVENT_NAME"; exit 1; fi
+          if [ "$mode" = full ]; then want=success; else want=skipped; fi
+          for r in $LABS; do [ "$r" = "$want" ] || { echo "lab job: $r, a $mode run requires $want"; exit 1; }; done
+          echo "foundation: $mode run"

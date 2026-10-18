@@ -1,11 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { listUnitFiles, runTests } from "../scripts/run-tests.mjs";
 
 // Structural checks of the GitHub workflows and the npm scripts they reach. They replace
 // the workflow assertions of the retired CI evidence collector: hardening settings,
 // the aggregator's dependencies, the secret-scan gate on uploads and complete lab coverage.
+// The `scope` and `foundation` shell steps of ci.yml are also executed here, with bash,
+// against simulated job results and a temporary git repository (P03.T04f).
 
 const workflowsDirectory = new URL("../.github/workflows/", import.meta.url);
 const scripts = JSON.parse(
@@ -126,6 +131,12 @@ const ci = workflows["ci.yml"];
 const heavyFaults = workflows["heavy-faults.yml"];
 const steps = (job) => job.steps ?? [];
 const uses = (step, action) => typeof step.uses === "string" && step.uses.startsWith(action + "@");
+// ci.yml (P03.T04f): `scope` decides, `checks` runs on every event, the lab jobs run only
+// on a full run, and `foundation` aggregates.
+const fullGate = "needs.scope.outputs.full == 'true'";
+const labJobIds = Object.keys(ci.jobs).filter(
+  (id) => !["scope", "checks", "foundation"].includes(id),
+);
 
 test("the YAML subset parser reads nested maps, sequences, flow lists and block scalars", () => {
   assert.deepEqual(
@@ -211,13 +222,17 @@ test("every upload is gated on a passing secret scan of what it uploads", () => 
           assert.ok(!step.if.includes("always()"), `${file} ${id}`);
       }
     }
-  assert.ok(uploads >= Object.keys(ci.jobs).length - 1);
+  assert.ok(uploads >= labJobIds.length + 1);
+  for (const [id, job] of Object.entries(ci.jobs)) {
+    const count = steps(job).filter((s) => uses(s, "actions/upload-artifact")).length;
+    assert.equal(count, id === "scope" || id === "foundation" ? 0 : 1, id);
+  }
 });
 
 // The hardened step sequence every report-writing job shares: checkout, setup-node from
 // .nvmrc, the artifacts directory outside the checkout, a locked install, the job body, an
 // always-run secret scan, an upload gated on that scan and the clean-tree gate.
-function assertHardenedSteps(id, job, { emptyUploadAllowed = false } = {}) {
+function assertHardenedSteps(id, job) {
   const jobSteps = steps(job);
   const at = (predicate) => jobSteps.findIndex(predicate);
   assert.equal(job["runs-on"], "ubuntu-24.04", id);
@@ -237,7 +252,7 @@ function assertHardenedSteps(id, job, { emptyUploadAllowed = false } = {}) {
   assert.equal(jobSteps[scan].run, 'node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"');
   assert.equal(jobSteps[upload].if, "always() && steps.artifact_scan.outcome == 'success'");
   assert.equal(jobSteps[upload].with.path, "${{ runner.temp }}/morrow-artifacts");
-  assert.equal(jobSteps[upload].with["if-no-files-found"], emptyUploadAllowed ? "ignore" : "error");
+  assert.equal(jobSteps[upload].with["if-no-files-found"], "error", id);
   assert.equal(upload, jobSteps.length - 2, id);
   const clean = jobSteps.at(-1);
   assert.equal(clean.if, "always()", id);
@@ -248,22 +263,265 @@ function assertHardenedSteps(id, job, { emptyUploadAllowed = false } = {}) {
 }
 
 test("every ci.yml job shares the hardened step sequence and foundation needs every job", () => {
-  const { foundation, ...jobs } = ci.jobs;
+  const { foundation, scope, ...jobs } = ci.jobs;
   assert.ok(foundation, "foundation keeps the required status check name");
-  assert.deepEqual([...foundation.needs].sort(), Object.keys(jobs).sort());
+  assert.ok(scope && jobs.checks, "scope and checks exist");
+  assert.deepEqual(
+    [...foundation.needs].sort(),
+    Object.keys(ci.jobs)
+      .filter((id) => id !== "foundation")
+      .sort(),
+  );
   assert.equal(foundation.if, "always()");
   assert.equal(foundation["runs-on"], "ubuntu-24.04");
+  assert.equal(foundation["timeout-minutes"], 5);
+  assert.equal(steps(foundation).length, 1);
+  // LABS names every lab job's result, so a new job cannot pass `foundation` unseen.
   const aggregate = foundation.steps.at(-1);
-  assert.equal(aggregate.env?.RESULTS, "${{ join(needs.*.result, ' ') }}");
-  assert.match(aggregate.run, /test -n "\$RESULTS"/);
-  assert.match(aggregate.run, /\[ "\$r" = success \] \|\| \{ [^}]*exit 1; \}/);
+  assert.deepEqual(aggregate.env, {
+    EVENT_NAME: "${{ github.event_name }}",
+    RESULTS: "${{ join(needs.*.result, ' ') }}",
+    SCOPE: "${{ needs.scope.result }}",
+    FULL: "${{ needs.scope.outputs.full }}",
+    CHECKS: "${{ needs.checks.result }}",
+    LABS: labJobIds.map((id) => "${{ needs." + id + ".result }}").join(" "),
+  });
   for (const [id, job] of Object.entries(jobs)) {
     assert.ok(
       Number.isInteger(job["timeout-minutes"]) && job["timeout-minutes"] <= timeoutLimit(id),
       id,
     );
-    assertHardenedSteps(id, job, { emptyUploadAllowed: id === "unit" });
+    assertHardenedSteps(id, job);
   }
+  // `checks` runs on every event; every other report-writing job runs only on a full run.
+  assert.equal(jobs.checks.needs, undefined);
+  assert.equal(jobs.checks.if, undefined);
+  assert.ok(labJobIds.length >= 4, labJobIds.join(","));
+  for (const id of labJobIds) {
+    assert.equal(ci.jobs[id].needs, "scope", id);
+    assert.equal(ci.jobs[id].if, fullGate, id);
+  }
+});
+
+// P03.T04f: no workflow-level path filter. A workflow skipped by `paths` never reports its
+// checks, and GitHub then shows a required `foundation` as pending, which blocks the merge
+// under branch protection and leaves nothing green for ADR-0014. `scope` narrows the run
+// inside the workflow instead, so `foundation` reports on every pull request.
+test("ci.yml runs on every pull request, on push to main and by hand, without path filters", () => {
+  assert.deepEqual(ci.on, {
+    pull_request: null,
+    push: { branches: ["main"] },
+    workflow_dispatch: null,
+  });
+  assert.ok(!/\bpaths(-ignore)?:/.test(workflowText("ci.yml")));
+  assert.deepEqual(ci.concurrency, {
+    group: "foundation-${{ github.event_name }}-${{ github.ref }}",
+    "cancel-in-progress": true,
+  });
+  // scope writes no report, so it is exempt from the scan, upload and clean-tree steps.
+  const { scope } = ci.jobs;
+  assert.equal(scope.if, "github.event_name != 'push'");
+  assert.equal(scope["runs-on"], "ubuntu-24.04");
+  assert.equal(scope["timeout-minutes"], 5);
+  assert.equal(scope.needs, undefined);
+  assert.deepEqual(scope.outputs, { full: "${{ steps.decide.outputs.full }}" });
+  assert.equal(steps(scope).length, 2);
+  assert.ok(uses(steps(scope)[0], "actions/checkout"));
+  assert.equal(steps(scope)[0].with["fetch-depth"], 0, "the diff needs the base commit");
+  const decide = steps(scope)[1];
+  assert.equal(decide.id, "decide");
+  assert.deepEqual(decide.env, {
+    EVENT_NAME: "${{ github.event_name }}",
+    BASE_SHA: "${{ github.event.pull_request.base.sha }}",
+    HEAD_SHA: "${{ github.event.pull_request.head.sha }}",
+  });
+  assert.equal(rootScriptsRun(decide.run).length, 0);
+});
+
+// Runs a ci.yml shell step the way GitHub runs an unspecified shell on Linux (bash -e).
+function runStep(script, env, cwd) {
+  return spawnSync("bash", ["-e", "-c", script], {
+    cwd,
+    encoding: "utf8",
+    env: { PATH: process.env.PATH, ...env },
+  });
+}
+
+test("foundation passes only when every job the event runs succeeded", () => {
+  const run = ci.jobs.foundation.steps.at(-1).run;
+  const all = (result) => labJobIds.map(() => result);
+  const outcome = ({ event, scope, full = "", checks = "success", labs }) => {
+    const env = {
+      EVENT_NAME: event,
+      RESULTS: [scope, checks, ...labs].join(" "),
+      SCOPE: scope,
+      FULL: full,
+      CHECKS: checks,
+      LABS: labs.join(" "),
+    };
+    const result = runStep(run, env);
+    return result.status === 0 ? "pass" : "fail";
+  };
+  const one = (result) => [result, ...all("success").slice(1)];
+  const oneSkipped = (result) => [result, ...all("skipped").slice(1)];
+  const cases = [
+    // A push to main runs only `checks`.
+    [{ event: "push", scope: "skipped", labs: all("skipped") }, "pass"],
+    [{ event: "push", scope: "skipped", checks: "failure", labs: all("skipped") }, "fail"],
+    [{ event: "push", scope: "skipped", checks: "cancelled", labs: all("skipped") }, "fail"],
+    [{ event: "push", scope: "skipped", checks: "skipped", labs: all("skipped") }, "fail"],
+    [{ event: "push", scope: "success", full: "true", labs: all("success") }, "fail"],
+    [{ event: "push", scope: "skipped", labs: oneSkipped("success") }, "fail"],
+    // A full pull request run needs every job.
+    [{ event: "pull_request", scope: "success", full: "true", labs: all("success") }, "pass"],
+    [{ event: "pull_request", scope: "success", full: "true", labs: one("failure") }, "fail"],
+    [{ event: "pull_request", scope: "success", full: "true", labs: one("cancelled") }, "fail"],
+    [{ event: "pull_request", scope: "success", full: "true", labs: one("skipped") }, "fail"],
+    [
+      {
+        event: "pull_request",
+        scope: "success",
+        full: "true",
+        checks: "failure",
+        labs: all("success"),
+      },
+      "fail",
+    ],
+    // A Markdown-only pull request runs only `checks`.
+    [{ event: "pull_request", scope: "success", full: "false", labs: all("skipped") }, "pass"],
+    [
+      { event: "pull_request", scope: "success", full: "false", labs: oneSkipped("success") },
+      "fail",
+    ],
+    [
+      {
+        event: "pull_request",
+        scope: "success",
+        full: "false",
+        checks: "failure",
+        labs: all("skipped"),
+      },
+      "fail",
+    ],
+    // scope must have decided.
+    [{ event: "pull_request", scope: "failure", labs: all("skipped") }, "fail"],
+    [{ event: "pull_request", scope: "cancelled", labs: all("skipped") }, "fail"],
+    [{ event: "pull_request", scope: "skipped", labs: all("skipped") }, "fail"],
+    [{ event: "pull_request", scope: "success", full: "", labs: all("skipped") }, "fail"],
+    // A manual run is always full.
+    [{ event: "workflow_dispatch", scope: "success", full: "true", labs: all("success") }, "pass"],
+    [{ event: "workflow_dispatch", scope: "success", full: "false", labs: all("skipped") }, "fail"],
+    [{ event: "workflow_dispatch", scope: "skipped", labs: all("skipped") }, "fail"],
+    // Nothing to inspect.
+    [{ event: "pull_request", scope: "success", full: "true", labs: [] }, "fail"],
+  ];
+  // Every position in LABS counts: one unexpected result anywhere fails the run.
+  for (const index of labJobIds.keys()) {
+    const at = (base, result) => base.map((r, i) => (i === index ? result : r));
+    cases.push(
+      [
+        {
+          event: "pull_request",
+          scope: "success",
+          full: "true",
+          labs: at(all("success"), "failure"),
+        },
+        "fail",
+      ],
+      [{ event: "push", scope: "skipped", labs: at(all("skipped"), "success") }, "fail"],
+    );
+  }
+  for (const [input, expected] of cases)
+    assert.equal(outcome(input), expected, JSON.stringify(input));
+});
+
+test("scope runs everything unless every file the pull request changes is Markdown", (t) => {
+  const run = steps(ci.jobs.scope)[1].run;
+  const root = mkdtempSync(join(tmpdir(), "morrow-ci-scope-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const repo = join(root, "repo");
+  const gitEnv = {
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: join(root, "gitconfig"),
+    GIT_AUTHOR_NAME: "ci-scope-test",
+    GIT_AUTHOR_EMAIL: "ci-scope-test@example.invalid",
+    GIT_COMMITTER_NAME: "ci-scope-test",
+    GIT_COMMITTER_EMAIL: "ci-scope-test@example.invalid",
+  };
+  writeFileSync(gitEnv.GIT_CONFIG_GLOBAL, "");
+  const git = (...args) => {
+    const result = spawnSync("git", args, {
+      cwd: repo,
+      encoding: "utf8",
+      env: { ...process.env, ...gitEnv },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  spawnSync("git", ["init", "-q", repo], { env: { ...process.env, ...gitEnv } });
+  const write = (path, text) => {
+    mkdirSync(dirname(join(repo, path)), { recursive: true });
+    writeFileSync(join(repo, path), text);
+  };
+  write("README.md", "readme\n");
+  write("docs/plan/build-plan.md", "plan\n");
+  write("docs/contracts/routes.json", "{}\n");
+  write("scripts/a.mjs", "export {};\n");
+  git("add", "-A");
+  git("commit", "-q", "-m", "base");
+  const base = git("rev-parse", "HEAD");
+  const branch = (name, change) => {
+    git("checkout", "-q", "-b", name, base);
+    change();
+    git("add", "-A");
+    git("commit", "-q", "--allow-empty", "-m", name);
+    return git("rev-parse", "HEAD");
+  };
+  const decide = (env) => {
+    const output = join(root, "output-" + Math.random().toString(36).slice(2));
+    writeFileSync(output, "");
+    const result = runStep(run, { ...gitEnv, GITHUB_OUTPUT: output, ...env }, repo);
+    return { status: result.status, output: readFileSync(output, "utf8") };
+  };
+  const pr = (head, from = base) =>
+    decide({ EVENT_NAME: "pull_request", BASE_SHA: from, HEAD_SHA: head });
+  const markdown = branch("markdown", () => {
+    write("README.md", "changed\n");
+    write("docs/plan/build-plan.md", "plan changed\n");
+    write("docs/packets/P99.T01a.md", "new\n");
+  });
+  // main moved on after the branch point; the three-dot diff ignores main's own changes.
+  const mainAhead = branch("main-ahead", () => write("scripts/a.mjs", "export const a = 1;\n"));
+  assert.deepEqual(pr(markdown), { status: 0, output: "full=false\n" });
+  assert.deepEqual(pr(markdown, mainAhead), { status: 0, output: "full=false\n" });
+  const removed = branch("removed", () => rmSync(join(repo, "README.md")));
+  assert.deepEqual(pr(removed), { status: 0, output: "full=false\n" });
+  for (const [name, change] of [
+    ["code", () => write("scripts/a.mjs", "export const b = 1;\n")],
+    ["contract-json-under-docs", () => write("docs/contracts/routes.json", "[]\n")],
+    [
+      "mixed",
+      () => {
+        write("README.md", "x\n");
+        write("scripts/b.mjs", "export {};\n");
+      },
+    ],
+    ["renamed-out-of-markdown", () => git("mv", "README.md", "README.txt")],
+    // Without --no-renames, git would list only the new .md name of a moved code file.
+    ["code-renamed-to-markdown", () => git("mv", "scripts/a.mjs", "scripts/a.md")],
+    ["markdown-lookalike", () => write("docs/notes.md.json", "{}\n")],
+    ["empty", () => {}],
+  ])
+    assert.deepEqual(pr(branch(name, change)), { status: 0, output: "full=true\n" }, name);
+  // A manual run is always full, without reading the diff.
+  assert.deepEqual(decide({ EVENT_NAME: "workflow_dispatch", BASE_SHA: "", HEAD_SHA: "" }), {
+    status: 0,
+    output: "full=true\n",
+  });
+  // An unreadable diff fails the job, so `foundation` fails; nothing is decided.
+  const broken = pr(markdown, "0".repeat(40));
+  assert.notEqual(broken.status, 0);
+  assert.equal(broken.output, "");
 });
 
 // Expands each workflow run step over its job's matrix and step env, then collects
@@ -278,7 +536,7 @@ const rootScriptsRun = (command) =>
     .map((segment) => /^npm run "?([A-Za-z0-9:._-]+)"?(.*)$/.exec(segment.trim()))
     .filter((m) => m && !/(^|\s)(--workspaces?|-w)(\s|=|$)/.test(m[2]))
     .map((m) => m[1]);
-function scriptsReachedBy(workflow) {
+function scriptsReachedBy(workflow, jobIds = Object.keys(workflow.jobs)) {
   const reached = new Map();
   const visit = (name, via, stack = []) => {
     assert.ok(Object.hasOwn(scripts, name), `${via} runs missing npm script ${name}`);
@@ -286,7 +544,8 @@ function scriptsReachedBy(workflow) {
     reached.set(name, (reached.get(name) ?? 0) + 1);
     for (const child of rootScriptsRun(scripts[name])) visit(child, name, [...stack, name]);
   };
-  for (const [id, job] of Object.entries(workflow.jobs)) {
+  for (const id of jobIds) {
+    const job = workflow.jobs[id];
     const axes = Object.entries(job.strategy?.matrix ?? {});
     let variants = [{}];
     for (const [axis, values] of axes)
@@ -311,7 +570,14 @@ function scriptsReachedBy(workflow) {
   }
   return reached;
 }
+// A full run (a pull request that changes more than Markdown, or a manual run) runs every
+// job; a push to main or a Markdown-only pull request runs only the ungated jobs.
 const scriptsReachedByCi = () => scriptsReachedBy(ci);
+const scriptsReachedByLightRun = () =>
+  scriptsReachedBy(
+    ci,
+    Object.keys(ci.jobs).filter((id) => ci.jobs[id].if !== fullGate),
+  );
 
 test("CI runs every lab script exactly once and covers the local npm run ci pipeline", async () => {
   const reached = scriptsReachedByCi();
@@ -322,35 +588,75 @@ test("CI runs every lab script exactly once and covers the local npm run ci pipe
     assert.equal(reached.get(name), 1, `${name} must run exactly once in CI`);
   }
   for (const name of reached.keys()) assert.ok(!labsOutsideCi(name), `${name} must not run in CI`);
-  // The unit shards run the same runner as `npm test`, split by file (P03.T04e §2).
+  // `checks` runs `npm test` itself: the runner lists every top-level tests/*.test.mjs
+  // file exactly once, parallel-safe or serial (P03.T04e §2), and CI passes no shard.
   assert.equal(scripts.test, "node scripts/run-tests.mjs");
-  assert.equal(scripts["test:shard"], scripts.test + " --shard=$TEST_SHARD");
-  const unit = ci.jobs.unit;
-  const shards = unit.strategy.matrix.shard;
-  assert.deepEqual(
-    shards,
-    shards.map((_, i) => i + 1),
+  assert.equal(scripts["test:shard"], undefined, "CI no longer shards the unit tests");
+  const testSteps = Object.values(ci.jobs).flatMap((job) =>
+    steps(job).filter((s) => typeof s.run === "string" && /\bnpm (run )?test\b/.test(s.run)),
   );
-  const shardValue = steps(unit).find((s) => s.run === "npm run test:shard")?.env?.TEST_SHARD;
-  assert.equal(shardValue, "${{ matrix.shard }}/" + shards.length);
-  // Every top-level tests/*.test.mjs file runs in exactly one CI shard, as the runner
-  // itself lists it for each shard value CI passes.
-  const runs = new Map();
-  for (const shard of shards) {
-    let listed = "";
-    const argv = ["--list", "--shard=" + shardValue.replace("${{ matrix.shard }}", shard)];
-    assert.equal(await runTests(argv, { write: (text) => (listed += text) }), 0);
-    const plan = JSON.parse(listed);
-    for (const file of [...plan.parallel, ...plan.serial])
-      runs.set(file, (runs.get(file) ?? 0) + 1);
-  }
+  assert.deepEqual(
+    testSteps.map((s) => [s.run, s.env]),
+    [["npm test", undefined]],
+  );
+  assert.ok(steps(ci.jobs.checks).includes(testSteps[0]));
+  let listed = "";
+  assert.equal(await runTests(["--list"], { write: (text) => (listed += text) }), 0);
+  const plan = JSON.parse(listed);
   const files = listUnitFiles();
   assert.ok(files.length > 50);
-  assert.deepEqual([...runs.keys()].sort(), files);
-  assert.ok([...runs.values()].every((count) => count === 1));
+  assert.deepEqual([...plan.parallel, ...plan.serial].sort(), files);
   for (const name of rootScriptsRun(scripts.ci))
-    assert.ok(reached.has(name === "test" ? "test:shard" : name), `CI must run ${name}`);
+    if (name !== "test") assert.ok(reached.has(name), `CI must run ${name}`);
   assert.ok(reached.has("smoke:scaffold"));
+});
+
+// P03.T04f: a push to main or a Markdown-only pull request still runs the static checks
+// (plan:check and every other check that reads Markdown) and the unit tests, but no lab.
+test("a light run keeps the static checks and unit tests and runs no lab or UI check", () => {
+  const light = scriptsReachedByLightRun();
+  for (const name of [
+    "format:check",
+    "typecheck",
+    "verify",
+    "plan:check",
+    "verify:delivery",
+    "build",
+    "smoke:scaffold",
+    "lab",
+  ])
+    assert.ok(light.has(name), name);
+  assert.ok(steps(ci.jobs.checks).some((s) => s.run === "npm test"));
+  for (const name of light.keys())
+    assert.ok(
+      !/^(lab|ui|edge):/.test(name) || name === "edge:check",
+      `${name} runs only in a full run`,
+    );
+  // Every lab, UI and edge script that CI runs is in a gated job.
+  const full = scriptsReachedByCi();
+  const gated = scriptsReachedBy(ci, labJobIds);
+  for (const name of full.keys())
+    if (/^(lab|ui):/.test(name) || name === "edge:dry-run")
+      assert.equal(gated.get(name), full.get(name), name);
+});
+
+// A light run skips the labs on the assumption that no lab reads Markdown; the static
+// checks and unit tests that do read it run on every event. A lab entry script that names
+// a Markdown file fails here, and must instead make `scope` treat that file as code.
+test("no script a gated CI job runs names a Markdown file", () => {
+  const entries = new Set();
+  for (const name of scriptsReachedBy(ci, labJobIds).keys())
+    for (const path of scripts[name].match(
+      /\b(?:scripts|tests)\/[A-Za-z0-9_./-]+\.(?:mjs|ts)\b/g,
+    ) ?? [])
+      entries.add(path);
+  assert.ok(entries.size >= 40, String(entries.size));
+  for (const path of entries)
+    assert.doesNotMatch(
+      readFileSync(new URL("../" + path, import.meta.url), "utf8"),
+      /\.md["'`]/,
+      path,
+    );
 });
 
 test("npm run verify runs the plan check, and CI reaches it", () => {
