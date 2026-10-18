@@ -46,11 +46,22 @@ import { writeArtifact } from "./artifacts.mjs";
 // Synthetic identities in a fresh network-none container only; no provider effect.
 const hash = (v) => createHash("sha256").update(v).digest("hex");
 const checks = [];
-const check = (name, passed) => {
+// `observed` is printed only when the check fails: closed values (SQLSTATEs, outcomes, counts)
+// that say which condition failed. It is withheld if it contains a lab secret.
+const check = (name, passed, observed) => {
   if (!/^[a-z][a-z0-9_]{0,127}$/.test(name) || checks.some((c) => c.name === name))
     throw Error("ACCOUNT_ONBOARDING_LAB_CHECK_NAME:" + name);
   if (passed !== true) {
-    console.error("ACCOUNT_ONBOARDING_LAB_FAILED_CHECK " + JSON.stringify({ check: name }));
+    const text = observed === undefined ? undefined : JSON.stringify(observed);
+    console.error(
+      "ACCOUNT_ONBOARDING_LAB_FAILED_CHECK " +
+        JSON.stringify({
+          check: name,
+          ...(text === undefined
+            ? {}
+            : { observed: secrets.some((s) => text.includes(s)) ? "withheld" : observed }),
+        }),
+    );
     throw Error("ACCOUNT_ONBOARDING_LAB_FAILED:" + name);
   }
   checks.push({ name, passed: true });
@@ -125,7 +136,7 @@ function sqlConnection(id, role = "postgres") {
   child.on("error", () => {});
   child.stdin.on("error", () => {});
   // Drained, never read: stderr is a separate pipe with no ordering against the stdout
-  // marker. Outcomes are read in-band on stdout (see underLockTimeout below).
+  // marker. Outcomes are read in-band on stdout (see waitBehind below).
   child.stderr.resume();
   child.stdout.on("data", (c) => {
     buffer += c;
@@ -2173,24 +2184,53 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
     }
 
     // Interleavings: signup against a family revoked while it waits; an admission against
-    // an in-flight signup, with lock_timeout to expose the shared profile wait; admission
-    // and signup against an in-flight revoke_workspace_access on the same profile.
+    // an in-flight signup on the same profile; admission and signup against an in-flight
+    // revoke_workspace_access on the same profile.
     {
-      // Raw executor calls: the wait is observed in pg_blocking_pids, never by a sleep, and
-      // no request budget can expire while a loaded host is slow.
-      // A lock_timeout probe reads psql's SQLSTATE in-band on stdout, after the statement:
-      // 55P03 (lock_not_available) when the statement gave up waiting for a lock, 00000 when
-      // it completed. psql's stderr is a separate pipe whose bytes can arrive after the
-      // stdout marker, so it never decides an outcome.
-      const underLockTimeout = async (connection, statement) => {
-        const lines = (
-          await connection.query(
-            `SET lock_timeout='300ms';\n${statement}\n\\echo :SQLSTATE\nRESET lock_timeout;`,
-          )
-        ).split("\n");
-        return { sqlstate: lines.at(-1), rows: lines.slice(0, -1) };
+      // Raw executor calls: every wait is observed in pg_blocking_pids naming the holder,
+      // never by a sleep or a lock timer, and no request budget can expire while a loaded
+      // host is slow.
+      // waitBehind runs one statement on `connection` while the backend `holderPid` holds a
+      // lock. An observer polls until pg_blocking_pids(probe) names the holder, then cancels
+      // the probe with pg_cancel_backend. The holder keeps its lock until the caller ends its
+      // transaction, so the cancel always lands while the probe waits. psql's SQLSTATE is
+      // read in-band on stdout after the statement: 57014 (query_canceled) for the cancelled
+      // statement, 00000 for one that completed. psql's stderr is a separate pipe whose bytes
+      // can arrive after the stdout marker, so it never decides an outcome. The ten-second
+      // bound only ends a probe that never waits on the holder; that probe is cancelled too
+      // and reported as not blocked.
+      const queryCanceled = "57014";
+      const waitBehind = async (observer, holderPid, connection, statement) => {
+        const probePid = Number(await connection.query("SELECT pg_backend_pid();"));
+        let settled = false;
+        const pending = connection.query(`${statement}\n\\echo :SQLSTATE`);
+        pending.then(
+          () => (settled = true),
+          () => (settled = true),
+        );
+        let blocked = false;
+        const end = Date.now() + 10000;
+        while (!blocked && !settled && Date.now() < end) {
+          blocked =
+            (await observer.query(
+              `SELECT ${Number(holderPid)}=ANY(pg_blocking_pids(${probePid}));`,
+            )) === "t";
+          if (!blocked) await new Promise((r) => setTimeout(r, 20));
+        }
+        const cancelled = settled
+          ? false
+          : (await observer.query(`SELECT pg_cancel_backend(${probePid});`)) === "t";
+        const lines = (await pending).split("\n");
+        return { blocked, cancelled, sqlstate: lines.at(-1), rows: lines.length - 1 };
       };
-      const lockNotAvailable = "55P03";
+      // The first outcome of a JSON row set, or a closed marker when there is none.
+      const firstOutcome = (text) => {
+        try {
+          return String(JSON.parse(text)[0]?.outcome ?? "none");
+        } catch {
+          return "unparsed";
+        }
+      };
       const waiting = await person();
       const holder = sqlConnection(context.id),
         signer0 = sqlConnection(context.id, "morrow_identity_onboarding"),
@@ -2216,12 +2256,12 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
           if (!blocked) await new Promise((r) => setTimeout(r, 20));
         }
         await holder.query("COMMIT;");
-        const outcome = JSON.parse(await pending)[0];
+        const outcome = firstOutcome(await pending);
+        const signups = rows("organization_signups", `principal_id=${lit(waiting.principal)}`);
         check(
           "interleave_signup_against_family_revoked_while_waiting",
-          blocked &&
-            outcome.outcome === "unauthenticated" &&
-            rows("organization_signups", `principal_id=${lit(waiting.principal)}`) === 0,
+          blocked && outcome === "unauthenticated" && signups === 0,
+          { blocked, outcome, signups },
         );
       } finally {
         await holder.close();
@@ -2230,34 +2270,50 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
       }
       const signer = await person();
       const onboardingRaw = sqlConnection(context.id, "morrow_identity_onboarding"),
-        sessions = sqlConnection(context.id, "morrow_identity_sessions");
+        sessions = sqlConnection(context.id, "morrow_identity_sessions"),
+        signupWatcher = sqlConnection(context.id);
       try {
-        await sessions.query("SELECT 1;");
+        const [signupPid] = await Promise.all([
+          onboardingRaw.query("SELECT pg_backend_pid();"),
+          sessions.query("SELECT 1;"),
+          signupWatcher.query("SELECT 1;"),
+        ]);
         await onboardingRaw.query("BEGIN;");
-        const reply = JSON.parse(
+        const reply = firstOutcome(
           await onboardingRaw.query(
             `SELECT COALESCE(json_agg(row_to_json(r)),'[]')::text FROM morrow_identity.create_first_organization(${lit(signer.digest)},${lit(randomUUID())},${lit(signer.profileId)},'Held','Main') r;`,
           ),
-        )[0];
+        );
         const t = await accountTuple(signer.profile, {
           subject: signer.who.subject,
           sid: wid("session", 777801),
         });
-        const probe = await underLockTimeout(sessions, directAdmit(t));
-        const timedOut = probe.sqlstate === lockNotAvailable && probe.rows.length === 0;
+        const admission = await waitBehind(signupWatcher, signupPid, sessions, directAdmit(t));
+        const written = {
+          commands: rows("account_session_commands", `command_id=${lit(t[0])}`),
+          audits: rows("browser_session_audits", `command_id=${lit(t[0])}`),
+        };
         await onboardingRaw.query("COMMIT;");
         const fresh = await accountTuple(signer.profile, {
           subject: signer.who.subject,
           sid: wid("session", 777802),
         });
-        const after = JSON.parse(await sessions.query(directAdmit(fresh)))[0];
+        const after = firstOutcome(await sessions.query(directAdmit(fresh)));
+        const seen = { signup: reply, admission, written, after };
+        const name = "interleave_admission_waits_behind_signup_profile_lock";
+        check(name + "_signup_created", reply === "created", seen);
+        check(name + "_blocked_by_signup", admission.blocked, seen);
         check(
-          "interleave_admission_waits_behind_signup_profile_lock",
-          reply.outcome === "created" && timedOut && after.outcome === "newly_admitted",
+          name + "_cancelled_while_waiting",
+          admission.sqlstate === queryCanceled && admission.rows === 0,
+          seen,
         );
+        check(name + "_nothing_written", written.commands === 0 && written.audits === 0, seen);
+        check(name + "_post_commit_admits", after === "newly_admitted", seen);
       } finally {
         await onboardingRaw.close();
         await sessions.close();
+        await signupWatcher.close();
       }
       // revoke_workspace_access (organization first, then the actor's session locks,
       // including its profile) holds the profile; an admission and a signup on that profile
@@ -2289,54 +2345,81 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
       );
       const revoker = sqlConnection(context.id, "morrow_identity_lifecycle"),
         admitter = sqlConnection(context.id, "morrow_identity_sessions"),
-        creator = sqlConnection(context.id, "morrow_identity_onboarding");
+        creator = sqlConnection(context.id, "morrow_identity_onboarding"),
+        revokeWatcher = sqlConnection(context.id);
       try {
-        await Promise.all([
+        const [revokerPid] = await Promise.all([
+          revoker.query("SELECT pg_backend_pid();"),
           admitter.query("SELECT 1;"),
           creator.query("SELECT 1;"),
-          revoker.query("SELECT 1;"),
+          revokeWatcher.query("SELECT 1;"),
         ]);
         const applied = await revoker.query(
           `BEGIN;SELECT outcome FROM morrow_identity.revoke_workspace_access(${[receipt, command, request, actor.digest, Oa, Wa, Ma, "1"].map(lit).join(",")});`,
         );
         const newcomer = freshSubject();
         const t = await accountTuple(rv, newcomer);
-        const admission = await underLockTimeout(admitter, directAdmit(t));
-        const admissionWaited =
-          admission.sqlstate === lockNotAvailable && admission.rows.length === 0;
+        const admission = await waitBehind(revokeWatcher, revokerPid, admitter, directAdmit(t));
         const otherKey = randomUUID();
         const createSql = `SELECT COALESCE(json_agg(row_to_json(r)),'[]')::text FROM morrow_identity.create_first_organization(${lit(other.digest)},${lit(otherKey)},${lit(rv.f.profile)},'Waiting Org','Main') r;`;
-        const creation = await underLockTimeout(creator, createSql);
-        const signupWaited = creation.sqlstate === lockNotAvailable && creation.rows.length === 0;
-        const nothingWritten =
-          rows("account_session_commands", `command_id=${lit(t[0])}`) === 0 &&
-          rows("browser_session_audits", `command_id=${lit(t[0])}`) === 0 &&
-          rows("provider_subject_mappings", `subject_id=${lit(newcomer.subject)}`) === 0 &&
-          rows("organization_signups", `principal_id=${lit(other.principal)}`) === 0;
+        const creation = await waitBehind(revokeWatcher, revokerPid, creator, createSql);
+        const written = {
+          commands: rows("account_session_commands", `command_id=${lit(t[0])}`),
+          audits: rows("browser_session_audits", `command_id=${lit(t[0])}`),
+          mappings: rows("provider_subject_mappings", `subject_id=${lit(newcomer.subject)}`),
+          signups: rows("organization_signups", `principal_id=${lit(other.principal)}`),
+        };
         await revoker.query("COMMIT;");
         // The same subject and provider session with fresh evidence: admit_account_family
         // bounds evidence to five seconds, and the cancelled attempt left no mapping, so the
         // admission after the commit enrols.
         const fresh = await accountTuple(rv, newcomer);
-        const retried = JSON.parse(await admitter.query(directAdmit(fresh)))[0];
-        const created = JSON.parse(await creator.query(createSql))[0];
+        const retried = firstOutcome(await admitter.query(directAdmit(fresh)));
+        const enrolment = commandRow(fresh[0]);
+        const created = firstOutcome(await creator.query(createSql));
         const actorList = await overview(actor.digest, rv.f.profile);
+        const listed = actorList.body?.workspaces?.length ?? null;
+        const seen = {
+          applied,
+          admission,
+          creation,
+          written,
+          retried,
+          enrolment,
+          created,
+          list: { status: actorList.status, workspaces: listed },
+        };
+        const name = "interleave_admission_and_signup_wait_behind_revoke_workspace_access";
+        check(name + "_applied", applied === "applied", seen);
+        check(name + "_admission_blocked_by_revoker", admission.blocked, seen);
         check(
-          "interleave_admission_and_signup_wait_behind_revoke_workspace_access",
-          applied === "applied" &&
-            admissionWaited &&
-            signupWaited &&
-            nothingWritten &&
-            retried.outcome === "newly_admitted" &&
-            commandRow(fresh[0]) === "admitted|enrolled" &&
-            created.outcome === "created" &&
-            actorList.status === 200 &&
-            actorList.body.workspaces.length === 0,
+          name + "_admission_cancelled_while_waiting",
+          admission.sqlstate === queryCanceled && admission.rows === 0,
+          seen,
         );
+        check(name + "_signup_blocked_by_revoker", creation.blocked, seen);
+        check(
+          name + "_signup_cancelled_while_waiting",
+          creation.sqlstate === queryCanceled && creation.rows === 0,
+          seen,
+        );
+        check(
+          name + "_nothing_written",
+          Object.values(written).every((n) => n === 0),
+          seen,
+        );
+        check(
+          name + "_post_commit_enrols",
+          retried === "newly_admitted" && enrolment === "admitted|enrolled",
+          seen,
+        );
+        check(name + "_same_signup_creates", created === "created", seen);
+        check(name + "_actor_list_empty", actorList.status === 200 && listed === 0, seen);
       } finally {
         await revoker.close();
         await admitter.close();
         await creator.close();
+        await revokeWatcher.close();
       }
     }
 

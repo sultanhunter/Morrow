@@ -14,7 +14,7 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #9: the owner decisions of 2026-10-18: ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
 
 In progress:
-- **P05.T01x Part B** (`claude/p05-t01x-b-signup`, ADR-0009): migration 0013 (account login, enrollment at the first verified sign-in, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, contract v1.1 additions and route `account`, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers). Review findings addressed (merged with `main`; 0013 checks all ten executors; AC38 journey to bootstrap and logout in workerd). Awaiting its PR, hosted CI (the `pgwire` job is a merge gate for the bundle-level AC27/AC38 evidence) and Tier 2 review. The AI security review (separate context, same model family) of the kernel change found no merge blocker; its test gap is closed. Deviations are in the packet's "Implementation notes (Part B)".
+- **P05.T01x Part B** (`claude/p05-t01x-b-signup`, ADR-0009): migration 0013 (account login, enrollment at the first verified sign-in, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, contract v1.1 additions and route `account`, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers). Review findings addressed (merged with `main`; 0013 checks all ten executors; AC38 journey to bootstrap and logout in workerd). PR #10 is open. Hosted run 39150345721 on `0aff09f` passed all 10 jobs, including `pgwire`, the merge gate for the bundle-level AC27/AC38 evidence. Later heads need their own green run, and Tier 2 review is still open. The AI security review (separate context, same model family) of the kernel change found no merge blocker; its test gap is closed. Deviations are in the packet's "Implementation notes (Part B)".
 - **P01.T04a** PR-A and PR-B are the next billing step (OQ-1 to OQ-3 resolved 2026-10-18).
 - **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
 
@@ -31,9 +31,11 @@ In progress:
 
 `d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7 to #9 merged after it (`main` is at `400aa44`); record their runs here once confirmed.
 
+PR #10 (P05.T01x Part B, branch `claude/p05-t01x-b-signup`): hosted run 39150345721 (`pull_request`) on `0aff09f` passed all 10 jobs (`pgwire`, `postgres (pg-linking)` and `foundation` included). It is the last green run on that branch. A later head needs its own green run before merge.
+
 ## Next actions
 
-1. Open the P05.T01x Part B PR; run Tier 2 review (`/code-review`, `/security-review`); merge once the hosted `foundation` check is green.
+1. P05.T01x Part B (PR #10): confirm hosted CI on the latest head; Tier 2 review (`/code-review`, `/security-review`); merge once the hosted `foundation` check is green on that exact head.
 2. P06.T01a, work commands on the tenant data pattern (ADR-0010), with migrations numbered after 0013. Then the ADR-0018 Proposal@2 edit, P06.T01b, P01.T02c (ADR-0016) and P01.T02b.
 3. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library).
 4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
