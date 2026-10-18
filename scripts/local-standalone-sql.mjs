@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 // disposable psql process with no host network, mounted credential or SQL argv.
 export function localStandaloneSqlPool(container, role, statements, options = {}) {
   if (
-    !["morrow_api", "morrow_identity_linking"].includes(role) ||
+    !["morrow_api", "morrow_identity_linking", "morrow_identity_onboarding"].includes(role) ||
     !Array.isArray(statements) ||
     !statements.length ||
     statements.length > 64 ||

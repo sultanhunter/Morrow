@@ -5,8 +5,9 @@
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "ef844177fc7fd5057defe0d66020310a670c68cd092ec4e9fec69349d49e3ed6",
-    "docs/contracts/schemas/v1.1/capabilities.schema.json": "43c7adce5fc995c6b3528c9c2489a0a616a1736fb3cbd3452eb90320b8a65962"
+    "docs/contracts/schemas/v1.1/core.schema.json": "8b0f406037233bcbb0204ca489d681deff8f6331aaa51415ec434a700715a2f5",
+    "docs/contracts/schemas/v1.1/capabilities.schema.json": "43c7adce5fc995c6b3528c9c2489a0a616a1736fb3cbd3452eb90320b8a65962",
+    "docs/contracts/schemas/v1.1/billing.schema.json": "763f73b99def0b5d8b2083f0084c9504e823fa81a3e772db8b3c5a45f94d9490"
   },
   "replacements": [
     {
@@ -56,18 +57,50 @@
       "name": "governance.approval.decide.input",
       "replaces": "capabilities:governance.approval.decide.input",
       "adr": "ADR-0011"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "BillingAccount",
+      "replaces": "billing:BillingAccount",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "EntitlementSnapshot",
+      "replaces": "billing:EntitlementSnapshot",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "CreditGrant",
+      "replaces": "billing:CreditGrant",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "AllocationShare",
+      "replaces": "billing:AllocationShare",
+      "adr": "ADR-0015"
+    },
+    {
+      "kind": "billing_definition",
+      "name": "CostAllocation",
+      "replaces": "billing:CostAllocation",
+      "adr": "ADR-0015"
     }
   ],
-  "definitions": 365,
+  "definitions": 392,
   "definitions_by_source": {
     "core": 116,
     "capabilities": 206,
     "billing": 12,
-    "core-v1.1": 21,
-    "capabilities-v1.1": 10
+    "core-v1.1": 24,
+    "capabilities-v1.1": 10,
+    "billing-v1.1": 24
   },
-  "current_definitions": 135,
+  "current_definitions": 138,
+  "current_billing_definitions": 31,
   "capabilities": 105,
   "capability_body_overrides": 10,
-  "generated_sha256": "eeee7159bec1fe2873ab211e77a5faf5d6239ec0a55b35fe963cf46bc0bf2170"
+  "generated_sha256": "916f6ffb07ed7de4819d17afe84a28963f6d4ffd509e4253c1d372569946634e"
 }

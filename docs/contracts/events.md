@@ -17,3 +17,9 @@ Duplicate delivery cannot repeat an operation; missing intermediate revisions tr
 ## Compatibility and evidence
 
 Every command/read declares schema version 1. Unknown fields and invalid enum values fail validation; no implicit coercion/default authority. Breaking fields/states/meaning require a new version and explicit migration with retained workflow histories. Additions remain opt-in via negotiated schema versions, not silently accepted fields. Consumers pin reviewed contract revisions. Run npm run verify:contracts and npm run test:contracts for contract fixture evidence; these do not prove production authorization or provider access. Open provider/region/retention/billing targets remain in the decision register and block consumers that need them.
+
+## Binding notes (P06.T01a, write side only)
+
+- **Ordering scope.** Outbox positions are gap-free and commit-ordered **per workspace**: each command appends under its workspace's stream lock, which it holds until COMMIT. Aggregate revisions order each aggregate; every aggregate revision has exactly one event. No order across workspaces is promised.
+- **Payload allowlist.** Payloads carry IDs and statuses only, enforced by a database CHECK: `goal.created` `{status}`; `goal.status_changed` and `task.status_changed` `{from,to}`; `task.created` `{goalId,status}`; `task.assigned` `{assignmentId,ownerPrincipalId}`; `question.requested` `{respondentPrincipalId}`; `question.answered` `{answerId}`; `question.cancelled` `{}`. Objectives, criteria, prompts and answers never enter the outbox.
+- **Deferred.** The EventEnvelope mapping, `payloadRef`, readers, cursors and delivery belong to P06.T02a; `causation_id` is null for human commands.

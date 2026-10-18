@@ -9,8 +9,8 @@
 | `static` | Format check, typecheck, `verify` (plan check, task inventory, contract and validator drift, import boundaries, migration checksums, repository secret scan), build, the Workers runtime typecheck and wrangler configuration/Env-type checks (`typecheck:edge`, `edge:check`), scaffold denial guards, the lab example and the infrastructure synth/permissions/readiness checks | `npm run ci:static` | 15 min |
 | `unit` (shards 1 and 2) | `tests/*.test.mjs`, split by file with `--test-shard`. Each shard runs its files one at a time. | `TEST_SHARD=1/2 npm run test:shard` | 15 min |
 | `workers-api` | `lab:workspace-api-workers`, the longest single lab | `npm run lab:workspace-api-workers` | 10 min |
-| `workers` | The SPA build, then `edge:dry-run` and `smoke:edge-dev` inside a `--network none` container (read-only checkout, the runner's Node mounted into the digest-pinned engine image), then the other 18 Miniflare/workerd labs including `lab:edge-workers` | `npm run edge:dry-run && npm run smoke:edge-dev && npm run lab:group:workers` | 15 min |
-| `postgres` (`pg-core`, `pg-linking`, `pg-http`) | The network-none PostgreSQL, HTTP and HTTPS labs. `pg-core` also records the pinned engine build first. | `npm run lab:group:pg-core` (and `pg-linking`, `pg-http`) | 12 min |
+| `workers` | The SPA build, then `edge:dry-run` and `smoke:edge-dev` inside a `--network none` container (read-only checkout, the runner's Node mounted into the digest-pinned engine image), then the other 19 Miniflare/workerd labs including `lab:edge-workers` and `lab:account-workers` | `npm run edge:dry-run && npm run smoke:edge-dev && npm run lab:group:workers` | 15 min |
+| `postgres` (`pg-core`, `pg-linking`, `pg-http`, `pg-work`) | The network-none PostgreSQL, HTTP and HTTPS labs. `pg-core` also records the pinned engine build first. `pg-work` runs the P06 work labs: tenant conformance, the work PostgreSQL acceptance lab and the workerd work lab (Miniflare over a SQL service binding) | `npm run lab:group:pg-core` (and `pg-linking`, `pg-http`, `pg-work`) | 12 min |
 | `pgwire` | The four PG-wire labs: controlled Neon, managed login, workspace API and the deployable api/broker journey (`lab:edge-postgresql`) | `npm run lab:group:pgwire` (Linux CI only) | 12 min |
 | `ui` | The P14.T01a provisional UI: pulls the pinned PostgreSQL image and installs the pinned Playwright Chromium, builds, then `ui:check` (112 fixture state cases at 1440/768/390/320 and 32 keyboard walks, under the exact `_headers` CSP), `ui:edge` (12 cases on the production dist under the unbound dev pair) and `lab:group:ui` (the real-browser sign-in journey against the P04.T02a harness and PostgreSQL 17; Linux only) | `npm run build && npm run ui:check && npm run ui:edge` | 20 min |
 | `foundation` | Aggregator: succeeds only when every job above succeeded | none | 5 min |
@@ -64,7 +64,7 @@ npm ci --ignore-scripts
 npm run ci:static
 TEST_SHARD=1/2 npm run test:shard && TEST_SHARD=2/2 npm run test:shard
 npm run lab:workspace-api-workers && npm run lab:group:workers
-npm run lab:group:pg-core && npm run lab:group:pg-linking && npm run lab:group:pg-http
+npm run lab:group:pg-core && npm run lab:group:pg-linking && npm run lab:group:pg-http && npm run lab:group:pg-work
 npx playwright install chromium && npm run ui:check && npm run ui:edge   # the ui job, without the journey
 npm run lab:workspace-ui-journey-local                                   # supporting evidence only
 git status --porcelain --untracked-files=all   # should print nothing

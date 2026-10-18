@@ -29,14 +29,15 @@ const port = (responder, overrides = {}) => {
     port: createHttpPort({
       client,
       composed: overrides.composed ?? composed,
-      loginBodyVersion: overrides.loginBodyVersion ?? 1,
+      loginBodyVersion: overrides.loginBodyVersion ?? loginBodyVersion,
       navigationSignal: overrides.navigationSignal ?? (() => undefined),
     }),
   };
 };
 const headers = (init) => new Headers(init.headers);
 
-test("AC05: one sign-in POST with the request header, JSON type, no key and the v1 body", async () => {
+test("AC05: one sign-in POST with the request header, JSON type, no key and the composed v2 body", async () => {
+  assert.equal(loginBodyVersion, 2);
   const { calls, port: p } = port(() =>
     json(200, { schemaVersion: 1, authorizationUrl: authorize }),
   );
@@ -46,7 +47,8 @@ test("AC05: one sign-in POST with the request header, JSON type, no key and the 
   const [{ path, init }] = calls;
   assert.equal(path, "/auth/login");
   assert.equal(init.method, "POST");
-  assert.equal(init.body, '{"schemaVersion":1,"workspaceId":"ws-1"}');
+  // v2 names no workspace, even when the sign-in starts from a workspace link.
+  assert.equal(init.body, '{"schemaVersion":2}');
   assert.equal(headers(init).get("x-morrow-request"), "1");
   assert.equal(headers(init).get("content-type"), "application/json");
   assert.equal(headers(init).has("idempotency-key"), false);
@@ -59,10 +61,12 @@ test("AC05: at body v2 the start is exactly {schemaVersion:2}; at v1 without a w
   });
   await v2.port.session.startSignIn(null);
   assert.equal(v2.calls[0].init.body, '{"schemaVersion":2}');
-  const v1 = port(() => json(200, {}));
+  const v1 = port(() => json(200, {}), { loginBodyVersion: 1 });
   assert.equal((await v1.port.session.startSignIn(null)).kind, "invalid");
   assert.equal((await v1.port.session.startSignIn("a/b")).kind, "invalid");
   assert.equal(v1.calls.length, 0);
+  await v1.port.session.startSignIn("ws-1");
+  assert.equal(v1.calls[0].init.body, '{"schemaVersion":1,"workspaceId":"ws-1"}');
 });
 test("AC05: only the pinned WorkOS origin and path navigate; anything else is 'couldn't start'", async () => {
   for (const authorizationUrl of [
@@ -85,8 +89,9 @@ test("AC05: only the pinned WorkOS origin and path navigate; anything else is 'c
   });
 });
 test("the login body version agrees with the server's current login start", async () => {
-  // Coordination guard (§4.14): P05.T01x Part B flips the server to the v2 body and must
-  // flip `loginBodyVersion` with it; this test fails on main if they disagree.
+  // Coordination guard (§4.14): the client's composed body must pass the server's current
+  // login start. P05.T01x Part B moved the server to the v2 body, so this build is at v2;
+  // the test fails if the two disagree again.
   const request = requests.login(loginBodyVersion, "ws-1");
   const attempt = createLoginAttempt(Date.now, new AbortController().signal, 5000);
   const accepted = await loginStartInput(

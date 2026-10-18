@@ -49,6 +49,9 @@ export type ReviewCode =
   | "BENEFICIARIES_MISMATCH"
   | "CONTEXT_TAINT_MISMATCH"
   | "PROPOSED_BY_MISMATCH"
+  // checkProposal: the work task (ADR-0018)
+  | "TASK_MISMATCH"
+  | "TASK_REQUIRED"
   | "REVIEW_POLICY_NOT_CURRENT"
   | "TENANT_MISMATCH"
   | "TARGET_SCOPE_MISMATCH"
@@ -381,6 +384,13 @@ export function confirmationPhrase(p: Current_Proposal): string {
 }
 
 // --- checkProposal (§7 items 1-3) -----------------------------------------------
+/**
+ * Whether a proposal may have no work task (ADR-0018): only when a human
+ * proposes a capability in the catalogue's Governance domain. Agents, and every
+ * other non-human proposer, always need a task, including work under a mandate.
+ */
+const taskOptional = (capabilityId: string, proposedBy: Current_ActorRef) =>
+  capabilities.get(capabilityId)?.domain === "Governance" && proposedBy.kind === "human";
 function parseProposalFacts(value: unknown): ProposalFacts {
   return snapshot<ProposalFacts>(
     value,
@@ -390,6 +400,7 @@ function parseProposalFacts(value: unknown): ProposalFacts {
         "workspaceId",
         "storeId",
         "proposedBy",
+        "taskId",
         "requestedBy",
         "beneficiaryPrincipalIds",
         "contextTaint",
@@ -402,7 +413,10 @@ function parseProposalFacts(value: unknown): ProposalFacts {
       valid("Id", v.workspaceId) &&
       (v.storeId === null || valid("Id", v.storeId)) &&
       valid("ActorRef", v.proposedBy) &&
-      valid("HumanActorRef", v.requestedBy) &&
+      // A task has an initiator or mandate owner; no task has none (ADR-0018).
+      (v.taskId === null
+        ? v.requestedBy === null
+        : valid("Id", v.taskId) && valid("HumanActorRef", v.requestedBy)) &&
       ids(v.beneficiaryPrincipalIds, 100) &&
       (v.contextTaint === "none" || v.contextTaint === "untrusted_external") &&
       isPolicy(v.reviewPolicy) &&
@@ -457,7 +471,14 @@ export function checkProposal(
   if (p.risk !== risk) codes.push("RISK_CLASS_MISMATCH");
   if (p.irreversible !== capability.irreversible) codes.push("IRREVERSIBLE_MISMATCH");
   if (!same(p.proposedBy, f.proposedBy)) codes.push("PROPOSED_BY_MISMATCH");
-  if (!same(p.requestedBy, f.requestedBy)) codes.push("REQUESTED_BY_MISMATCH");
+  // The work task is the one the producer attached (ADR-0018). Without one, the
+  // proposal must be human-made and in the Governance domain, and `requestedBy`
+  // is the proposer, so the proposer stays in the conflict set in both roles.
+  if (p.taskId !== f.taskId) codes.push("TASK_MISMATCH");
+  if ((p.taskId === null || f.taskId === null) && !taskOptional(p.capabilityId, f.proposedBy))
+    codes.push("TASK_REQUIRED");
+  if (!same(p.requestedBy, f.taskId === null ? f.proposedBy : f.requestedBy))
+    codes.push("REQUESTED_BY_MISMATCH");
   if (
     p.beneficiaryPrincipalIds.length !== f.beneficiaryPrincipalIds.length ||
     !p.beneficiaryPrincipalIds.every((id) => f.beneficiaryPrincipalIds.includes(id))

@@ -9,6 +9,7 @@ import {
   repositoryRoot,
   schemasByKind,
   currentDefinitionSelectors,
+  currentBillingDefinitionSelectors,
   capabilityBodySelectors,
 } from "./contract-sources.mjs";
 
@@ -126,6 +127,7 @@ export function generateContracts(root = repositoryRoot) {
   );
   const changes = JSON.parse(readFileSync(resolve(root, changesPath), "utf8"));
   const current = currentDefinitionSelectors(byKind);
+  const currentBilling = currentBillingDefinitionSelectors(byKind);
   const bodies = capabilityBodySelectors(
     byKind,
     catalogue.capabilities.map((c) => c.id),
@@ -143,6 +145,13 @@ export function generateContracts(root = repositoryRoot) {
   output += "}\nexport type CurrentDefinitionName = keyof CurrentDefinitions;\n";
   for (const [name, selector] of Object.entries(current))
     output += `export type Current_${identifier(name)} = ${nameOf(selector)};\n`;
+  // Effective billing definitions (newest billing layer; ADR-0015).
+  output += "export interface CurrentBillingDefinitions {\n";
+  for (const [name, selector] of Object.entries(currentBilling))
+    output += `  ${JSON.stringify(name)}: ${nameOf(selector)};\n`;
+  output += "}\nexport type CurrentBillingDefinitionName = keyof CurrentBillingDefinitions;\n";
+  for (const [name, selector] of Object.entries(currentBilling))
+    output += `export type CurrentBilling_${identifier(name)} = ${nameOf(selector)};\n`;
   output += "export interface CapabilityBodies {\n";
   for (const c of catalogue.capabilities)
     output += `  ${JSON.stringify(c.id)}: { input: ${nameOf(bodies[c.id + ".input"])}; output: ${nameOf(bodies[c.id + ".output"])}; };\n`;
@@ -164,6 +173,7 @@ export function generateContracts(root = repositoryRoot) {
       sources.map((s) => [s.kind, Object.keys(s.schema.$defs).length]),
     ),
     current_definitions: Object.keys(current).length,
+    current_billing_definitions: Object.keys(currentBilling).length,
     capabilities: catalogue.capabilities.length,
     capability_body_overrides: Object.values(bodies).filter(
       (selector) => !selector.startsWith("capabilities:"),

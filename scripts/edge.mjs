@@ -289,8 +289,8 @@ export function edgeTypes({ check = false, root = repositoryRoot } = {}) {
 }
 
 // Worker-owned sources are checked against the pinned runtime types. The DOM-typed
-// identity package (checked by `npm run typecheck`) is consumed through its emitted
-// declarations, so runtime and DOM libraries never meet in one program.
+// identity and work packages (checked by `npm run typecheck`) are consumed through
+// their emitted declarations, so runtime and DOM libraries never meet in one program.
 export function edgeTypecheck({ root = repositoryRoot } = {}) {
   refuseUnsafe(root);
   const staging = mkdtempSync(join(tmpdir(), "morrow-edge-typecheck-"));
@@ -328,6 +328,27 @@ export function edgeTypecheck({ root = repositoryRoot } = {}) {
       throw Error(
         "EDGE_IDENTITY_DECLARATIONS_FAILED\n" + declarations.stdout + declarations.stderr,
       );
+    // @morrow/work (P06.T01a) imports identity sources relatively, so its rootDir is
+    // packages/; its identity declarations are the same files emitted above.
+    const work = spawnSync(
+      process.execPath,
+      [
+        tscBin,
+        "-p",
+        "packages/work/tsconfig.json",
+        "--noEmit",
+        "false",
+        "--declaration",
+        "--emitDeclarationOnly",
+        "--rootDir",
+        "packages",
+        "--outDir",
+        join(staging, "packages"),
+      ],
+      { cwd: root, encoding: "utf8" },
+    );
+    if (work.status !== 0)
+      throw Error("EDGE_WORK_DECLARATIONS_FAILED\n" + work.stdout + work.stderr);
     cpSync(join(root, "tsconfig.base.json"), join(staging, "tsconfig.base.json"));
     symlinkSync(join(root, "node_modules"), join(staging, "node_modules"), "dir");
     const results = [];

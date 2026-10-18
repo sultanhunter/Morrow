@@ -188,3 +188,35 @@ export class ContractCreditLedger {
     this.#meterEvents.set(event.id,structuredClone(event));return structuredClone(event);
   }
 }
+
+// P01.T04a §1: the paid-work table (docs/contracts/paid-work.json). This predicate
+// is the reviewers' specification, written independently of
+// packages/policy/src/paid-work.ts; tests/billing.test.mjs compares the two over
+// every catalogue (capability, verb) pair. Failures: PAID_WORK_TABLE_INVALID:<rule>.
+export const capabilityEffects=['read','internal_write','external_write','spend','communication','control','billable_job'];
+export const permissionVerbs=['view','propose','approve','execute','delegate','administer'];
+export const grantTemplateIds=['owner-bootstrap-v1','workspace-member-v1','workspace-admin-v1'];
+export function paidWorkPredicate(table,catalogue) {
+  const capabilities=new Map(catalogue.capabilities.map(c=>[c.id,c])),effects=new Set(table.paidEffects),free=new Set(table.neverGatedVerbs);
+  return (id,verb)=>{const c=capabilities.get(id);if(!c)return true;if(c.kill_switch)return false;return effects.has(c.effect)&&!free.has(verb);};
+}
+export function inspectPaidWork(table,catalogue,templates) {
+  const errors=[],fail=rule=>errors.push('PAID_WORK_TABLE_INVALID:'+rule);
+  const members=(value,allowed)=>Array.isArray(value)&&value.length>0&&new Set(value).size===value.length&&value.every(x=>allowed.includes(x));
+  // PW1: closed object; unique enum members; execute and administer always gated; reads and approvals never (ADR-0015 item 5).
+  if(!table||typeof table!=='object'||Array.isArray(table)||Object.keys(table).sort().join()!=='adr,neverGatedVerbs,paidEffects,schema_version'||table.schema_version!==1
+    ||!Array.isArray(table.adr)||!table.adr.length||new Set(table.adr).size!==table.adr.length||!table.adr.every(a=>typeof a==='string'&&/^ADR-\d{4}$/.test(a))
+    ||!members(table.paidEffects,capabilityEffects)||!members(table.neverGatedVerbs,permissionVerbs)
+    ||table.neverGatedVerbs.some(v=>['execute','administer'].includes(v))||!['view','approve'].every(v=>table.neverGatedVerbs.includes(v))) {fail('PW1');return errors;}
+  const paid=paidWorkPredicate(table,catalogue);
+  // PW2: no kill switch is paid for any verb (ADR-0011 Q8).
+  if(catalogue.capabilities.some(c=>c.kill_switch&&permissionVerbs.some(v=>paid(c.id,v))))fail('PW2');
+  // PW3: every capability whose execute carries budget_reservation is paid.
+  if(catalogue.capabilities.some(c=>['spend','billable_job'].includes(c.effect)&&!paid(c.id,'execute')))fail('PW3');
+  // PW4: no read, internal_write or control capability is paid (linking, exports, privacy, billing management).
+  if(catalogue.capabilities.some(c=>['read','internal_write','control'].includes(c.effect)&&permissionVerbs.some(v=>paid(c.id,v))))fail('PW4');
+  // PW5: no row of the three ADR grant templates is paid with its template verbs.
+  if(!templates||typeof templates!=='object'||Object.keys(templates).sort().join()!==[...grantTemplateIds].sort().join())fail('PW5');
+  else for(const id of grantTemplateIds)if(!Array.isArray(templates[id])||!templates[id].length||templates[id].some(r=>!Array.isArray(r?.verbs)||!r.verbs.length||r.verbs.some(v=>paid(r.capabilityId,v))))fail('PW5:'+id);
+  return errors;
+}

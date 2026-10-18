@@ -7,6 +7,7 @@ import {
   validators,
   currentDefinitionSelectors,
   capabilityBodySelectors,
+  currentBillingDefinitionSelectors,
 } from "../packages/contracts/src/generated/runtime-validators.mjs";
 import {
   validateDefinition,
@@ -17,6 +18,7 @@ import {
   readSchemaSources,
   schemasByKind,
   currentDefinitionSelectors as expectedCurrent,
+  currentBillingDefinitionSelectors as expectedBilling,
   capabilityBodySelectors as expectedBodies,
 } from "../scripts/contract-sources.mjs";
 
@@ -68,6 +70,7 @@ test("every generated validator agrees with the original compiler on bounded val
   };
   add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.A02.json", "utf8")));
   add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.T02a.json", "utf8")));
+  add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.T04a.json", "utf8")));
   assert.equal(Object.keys(validators).length, definitionCount);
   let accepted = 0,
     rejected = 0;
@@ -113,13 +116,23 @@ test("effective selectors resolve to the newest layer and are frozen", () => {
       catalogue.capabilities.map((c) => c.id),
     ),
   );
-  for (const selectors of [validators, currentDefinitionSelectors, capabilityBodySelectors])
+  assert.deepEqual({ ...currentBillingDefinitionSelectors }, expectedBilling(byKind));
+  for (const selectors of [
+    validators,
+    currentDefinitionSelectors,
+    capabilityBodySelectors,
+    currentBillingDefinitionSelectors,
+  ])
     assert.ok(Object.isFrozen(selectors));
   for (const selector of [
     ...Object.values(currentDefinitionSelectors),
     ...Object.values(capabilityBodySelectors),
+    ...Object.values(currentBillingDefinitionSelectors),
   ])
     assert.ok(Object.hasOwn(validators, selector), selector);
+  // P01.T04a: billing resolves to the newest billing layer (ADR-0015).
+  assert.equal(currentBillingDefinitionSelectors.BillingAccount, "billing-v1.1:BillingAccount");
+  assert.equal(currentBillingDefinitionSelectors.CreditWallet, "billing:CreditWallet");
   assert.equal(currentDefinitionSelectors.ActorRef, "core:ActorRef");
   assert.equal(currentDefinitionSelectors.KillSwitchControl, "core-v1.1:KillSwitchControl");
   assert.equal(

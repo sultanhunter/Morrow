@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { definitionLayers, bodyLayers } from "./contract-sources.mjs";
+import { definitionLayers, bodyLayers, billingLayers } from "./contract-sources.mjs";
 const root = resolve(".");
 // Source organization checks for reviewed literal specifiers and recognized loaders.
 // This is not hermetic: aliases, custom module resolution and transitive code need
@@ -137,7 +137,7 @@ export function inspectImports(file, code) {
       errors.push("UI_SERVER_IMPORT");
     if (
       (ui || neutral) &&
-      /^@morrow\/(api|broker|workers|shopify-connector|policy|identity|infrastructure|connectors|runtime|runtime-adapters|secrets)(\/|$)/.test(
+      /^@morrow\/(api|broker|workers|shopify-connector|policy|identity|infrastructure|connectors|runtime|runtime-adapters|secrets|work)(\/|$)/.test(
         specifier,
       )
     )
@@ -273,12 +273,16 @@ export function inspectBaselineCoverage(baseline, schemaPaths) {
     )
     .map((path) => "UNBASELINED_SCHEMA:" + path);
 }
-// A newest-layer definition that reuses an older name, or a newest-layer
-// capability body that overrides an older body, is a replacement: it must be
-// declared in changes.json, and every declaration must name a real replacement.
-// `schemas` maps source kinds (contract-sources.mjs) to parsed schemas.
+// A newest-layer definition (core or billing) that reuses an older name, or a
+// newest-layer capability body that overrides an older body, is a replacement:
+// it must be declared in changes.json, and every declaration must name a real
+// replacement. `schemas` maps source kinds (contract-sources.mjs) to parsed schemas.
 export function inspectDeclaredReplacements(changes, schemas) {
-  const layers = { definition: definitionLayers, capability_body: bodyLayers };
+  const layers = {
+    definition: definitionLayers,
+    capability_body: bodyLayers,
+    billing_definition: billingLayers,
+  };
   const replaced = (kind, name) =>
     layers[kind].slice(1).find((older) => Object.hasOwn(schemas[older].$defs, name));
   const errors = [],
@@ -309,21 +313,30 @@ export function inspectDeclaredReplacements(changes, schemas) {
         errors.push("UNDECLARED_REPLACEMENT:" + name);
   return [...new Set(errors)];
 }
+const replacedNames = (changes, kind) =>
+  (Array.isArray(changes?.changes) ? changes.changes : [])
+    .filter((entry) => entry?.kind === kind && typeof entry.name === "string")
+    .map((entry) => entry.name);
 // Names of the core definitions changes.json declares replaced (Proposal,
 // Approval, and later T02b/T02c replacements such as Evidence@2).
-export const replacedDefinitionNames = (changes) =>
-  (Array.isArray(changes?.changes) ? changes.changes : [])
-    .filter((entry) => entry?.kind === "definition" && typeof entry.name === "string")
-    .map((entry) => entry.name);
+export const replacedDefinitionNames = (changes) => replacedNames(changes, "definition");
+// Names of the billing definitions changes.json declares replaced (ADR-0015:
+// BillingAccount, EntitlementSnapshot, CreditGrant, AllocationShare, CostAllocation).
+export const replacedBillingDefinitionNames = (changes) =>
+  replacedNames(changes, "billing_definition");
 // Generated files define every exact selector and type, replaced ones included.
 const generatedContracts = /^packages\/contracts\/src\/generated\//;
 // Product code under apps/ and packages/ must not validate or type a replaced v1
 // definition: `validateDefinition("core", <replaced>)`, a `"core:<replaced>"`
-// selector or a `Core_<replaced>` type. It uses the effective (current) selectors.
-export function inspectSupersededUse(file, code, replaced) {
+// selector or a `Core_<replaced>` type, and likewise `"billing"`, `"billing:"` and
+// `Billing_` for a replaced billing definition. It uses the effective selectors.
+export function inspectSupersededUse(file, code, replaced, replacedBilling = []) {
   const path = relative(root, resolve(file)).replaceAll("\\", "/");
   if (!/^(apps|packages)\//.test(path) || generatedContracts.test(path)) return [];
-  const names = new Set(replaced);
+  const layers = [
+    ["core", "Core_", new Set(replaced)],
+    ["billing", "Billing_", new Set(replacedBilling)],
+  ];
   const found = new Set();
   const literal = (node) =>
     node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
@@ -331,10 +344,17 @@ export function inspectSupersededUse(file, code, replaced) {
       : null;
   const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, scriptKind(file));
   const visit = (node) => {
-    if (ts.isIdentifier(node) && node.text.startsWith("Core_") && names.has(node.text.slice(5)))
-      found.add(node.text.slice(5));
     const text = literal(node);
-    if (text?.startsWith("core:") && names.has(text.slice(5))) found.add(text.slice(5));
+    for (const [schema, prefix, names] of layers) {
+      if (
+        ts.isIdentifier(node) &&
+        node.text.startsWith(prefix) &&
+        names.has(node.text.slice(prefix.length))
+      )
+        found.add(node.text.slice(prefix.length));
+      if (text?.startsWith(schema + ":") && names.has(text.slice(schema.length + 1)))
+        found.add(text.slice(schema.length + 1));
+    }
     if (ts.isCallExpression(node)) {
       const callee = ts.isIdentifier(node.expression)
         ? node.expression.text
@@ -342,16 +362,191 @@ export function inspectSupersededUse(file, code, replaced) {
           ? node.expression.name.text
           : null;
       const name = literal(node.arguments[1]);
-      if (
-        callee === "validateDefinition" &&
-        literal(node.arguments[0]) === "core" &&
-        name !== null &&
-        names.has(name)
-      )
+      const layer = layers.find(([schema]) => schema === literal(node.arguments[0]));
+      if (callee === "validateDefinition" && layer && name !== null && layer[2].has(name))
         found.add(name);
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
   return [...found].sort().map((name) => `SUPERSEDED_CONTRACT_USE:${path}:${name}`);
+}
+
+// P01.T04a §2: `entitlementAllowed` is set only by the billing constraints reader
+// and the two forwarders that copy a CurrentConstraintsReader result. Every other
+// product builder under apps/ and packages/ passes a literal `false`, which the
+// evaluators read only for paid work. A P05.T04b agent reader adds its function
+// here in its own reviewed PR. A write is an object property, shorthand, getter
+// or method; a class field or constructor parameter property; an assignment
+// through `.`, `[]` or a logical-assignment operator; a `defineProperty`/`set`
+// call; or an entries pair such as `Object.fromEntries([[key, value]])`. The key
+// may be written directly, as a string, or through a variable bound to the
+// field's name, and a computed key that is not a literal is a write when its
+// object or class also declares `providerAllowed`. Type declarations are not
+// writes; tests/ and scripts/ are out of scope, as are `*.test.*` files. Not
+// hermetic: a spread, or a value copied through an untyped helper or an opaque
+// key, needs review; createWorkspacePermissionBoundary also accepts only a plain
+// closed boolean pair from a CurrentConstraintsReader.
+export const entitlementWriterAllowlist = Object.freeze({
+  "packages/policy/src/billing-state.ts": Object.freeze(["createBillingConstraintsReader"]),
+  "packages/policy/src/index.ts": Object.freeze([
+    "createHumanPolicyService",
+    "createWorkspacePermissionBoundary",
+  ]),
+});
+const entitlementField = "entitlementAllowed";
+export function inspectEntitlementWriters(file, code) {
+  const path = relative(root, resolve(file)).replaceAll("\\", "/");
+  if (
+    !/^(apps|packages)\//.test(path) ||
+    generatedContracts.test(path) ||
+    /\.test\.[cm]?[jt]sx?$/.test(path)
+  )
+    return [];
+  const allowed = entitlementWriterAllowlist[path] ?? [];
+  const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, scriptKind(file));
+  const errors = [];
+  const strip = (node) => {
+    while (
+      node &&
+      (ts.isParenthesizedExpression(node) ||
+        ts.isAsExpression(node) ||
+        ts.isSatisfiesExpression(node) ||
+        ts.isTypeAssertionExpression(node) ||
+        ts.isNonNullExpression(node))
+    )
+      node = node.expression;
+    return node;
+  };
+  const stringText = (node) =>
+    node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+      ? node.text
+      : null;
+  const nameText = (name) =>
+    ts.isIdentifier(name)
+      ? name.text
+      : ts.isComputedPropertyName(name)
+        ? stringText(name.expression)
+        : stringText(name);
+  const literalFalse = (node) => strip(node)?.kind === ts.SyntaxKind.FalseKeyword;
+  // Names bound to the field's string anywhere in the file, so that
+  // `const k = "entitlementAllowed"; f[k] = true` is a write too.
+  const aliases = new Set();
+  const collect = (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      stringText(strip(node.initializer)) === entitlementField
+    )
+      aliases.add(node.name.text);
+    ts.forEachChild(node, collect);
+  };
+  collect(source);
+  const isKey = (node) => {
+    const key = strip(node);
+    return (
+      stringText(key) === entitlementField ||
+      (!!key && ts.isIdentifier(key) && aliases.has(key.text))
+    );
+  };
+  const nameIs = (name) =>
+    ts.isComputedPropertyName(name) ? isKey(name.expression) : nameText(name) === entitlementField;
+  // A computed key that is not a literal, in an object or class that also
+  // declares `providerAllowed`, may name the field and counts as a write.
+  const opaqueBesideProvider = (node) => {
+    if (!ts.isComputedPropertyName(node.name)) return false;
+    const key = strip(node.name.expression);
+    if (stringText(key) !== null || ts.isNumericLiteral(key)) return false;
+    const container = node.parent;
+    const members = ts.isObjectLiteralExpression(container)
+      ? container.properties
+      : ts.isClassLike(container)
+        ? container.members
+        : [];
+    return members.some(
+      (member) =>
+        member.name &&
+        !ts.isComputedPropertyName(member.name) &&
+        nameText(member.name) === "providerAllowed",
+    );
+  };
+  const functionName = (node) => {
+    if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && node.name)
+      return nameText(node.name);
+    if (
+      (ts.isFunctionExpression(node) || ts.isArrowFunction(node)) &&
+      ts.isVariableDeclaration(node.parent) &&
+      ts.isIdentifier(node.parent.name)
+    )
+      return node.parent.name.text;
+    return null;
+  };
+  const insideAllowed = (node) => {
+    for (let n = node.parent; n; n = n.parent) if (allowed.includes(functionName(n))) return true;
+    return false;
+  };
+  const write = (node, value) => {
+    if ((value === null || !literalFalse(value)) && !insideAllowed(node))
+      errors.push(
+        `ENTITLEMENT_WRITER_UNAPPROVED:${path}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`,
+      );
+  };
+  const assignment = new Set([
+    ts.SyntaxKind.EqualsToken,
+    ts.SyntaxKind.BarBarEqualsToken,
+    ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+    ts.SyntaxKind.QuestionQuestionEqualsToken,
+  ]);
+  const calleeName = (expression) =>
+    ts.isIdentifier(expression)
+      ? expression.text
+      : ts.isPropertyAccessExpression(expression)
+        ? expression.name.text
+        : null;
+  const visit = (node) => {
+    if (
+      (ts.isPropertyAssignment(node) || ts.isPropertyDeclaration(node)) &&
+      (nameIs(node.name) || opaqueBesideProvider(node))
+    )
+      // A class field with no initializer is flagged too.
+      write(node, node.initializer ?? null);
+    else if (
+      (ts.isShorthandPropertyAssignment(node) ||
+        ts.isGetAccessorDeclaration(node) ||
+        ts.isMethodDeclaration(node)) &&
+      (nameIs(node.name) || opaqueBesideProvider(node))
+    )
+      write(node, null);
+    else if (
+      ts.isParameter(node) &&
+      ts.isParameterPropertyDeclaration(node, node.parent) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === entitlementField
+    )
+      write(node, null);
+    else if (
+      ts.isBinaryExpression(node) &&
+      assignment.has(node.operatorToken.kind) &&
+      ((ts.isPropertyAccessExpression(node.left) && node.left.name.text === entitlementField) ||
+        (ts.isElementAccessExpression(node.left) && isKey(node.left.argumentExpression)))
+    )
+      write(node, node.operatorToken.kind === ts.SyntaxKind.EqualsToken ? node.right : null);
+    else if (
+      ts.isCallExpression(node) &&
+      ["defineProperty", "set"].includes(calleeName(node.expression)) &&
+      node.arguments.some(isKey)
+    )
+      write(node, null);
+    else if (
+      ts.isArrayLiteralExpression(node) &&
+      ts.isArrayLiteralExpression(node.parent) &&
+      node.elements.length > 0 &&
+      isKey(node.elements[0])
+    )
+      // An entries pair: Object.fromEntries([[key, value]]), new Map([[key, value]]).
+      write(node, node.elements[1] ?? null);
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return errors;
 }

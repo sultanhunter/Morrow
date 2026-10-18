@@ -4,7 +4,6 @@ import {
 } from "../../packages/identity/src/controlled-neon-login-pool.js";
 import { loginFlowCustodySql } from "../../packages/identity/src/login-flow-custody.js";
 import { authenticationExchangeAdmissionSql } from "../../packages/identity/src/authentication-exchange-admission.js";
-import { workspaceSelectionSql } from "../../packages/identity/src/workos-workspace-selection.js";
 import { browserSessionAdmissionSql } from "../../packages/identity/src/workos-browser-session-admission.js";
 const binding = {
   schemaVersion: 1,
@@ -28,17 +27,11 @@ const profileDefinitions = {
     domain: authenticationExchangeAdmissionSql.admit,
     arity: 13,
   },
-  selectionPool: {
-    role: "morrow_identity_resolution",
-    sql: workspaceSelectionSql,
-    domain: workspaceSelectionSql.resolve,
-    arity: 9,
-  },
   sessionPool: {
     role: "morrow_identity_sessions",
     sql: browserSessionAdmissionSql,
-    domain: browserSessionAdmissionSql.admit,
-    arity: 27,
+    domain: browserSessionAdmissionSql.admitAccount,
+    arity: 21,
   },
 };
 type PoolName = keyof typeof profileDefinitions;
