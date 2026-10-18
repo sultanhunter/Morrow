@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-18
 - Supersedes: ADR-0006 (billing state before any Shopify store is installed)
-- Affects: P01.T04a, P05.T01x (pre-payment wording), P09.T01 and the P09 billing webhook topics, P11.T04, P14.T01, P18.T01, P18.T05, Security invariant 11 and the new plan invariant 24 (server-held billing route), `docs/decisions/billing-ownership.md`, `docs/decisions/providers.json`, `docs/contracts/billing-entitlements.md` (through P01.T04a)
+- Affects: P01.T04a, P05.T01x (pre-payment wording), P09.T01 and the P09 billing webhook topics, P11.T04, P14.T01, P18.T01, P18.T05, Security invariant 11 and the new plan invariant 24 (server-held billing route), `docs/decisions/billing-ownership.md`, `docs/decisions/providers.json`, `docs/contracts/billing-entitlements.md` and the contract v1.1 composition of ADR-0011 Q0, which gains `docs/contracts/schemas/v1.1/billing.schema.json` (both through P01.T04a)
 
 ## Context
 
@@ -130,6 +130,6 @@ Owner approval, 2026-10-18, in chat.
 Scope of the approval:
 
 - **Decided by the answers:** items 1 and 4 (the two routes and the same tiers) and the seller and tax part of item 7 (Stripe Billing with Stripe Tax, Morrow registering and filing with a tax advisor). The credential and idempotency parts of item 7 apply Security invariants 10 and 11 and ADR-0007.
-- **Following from them:** item 2 makes "pay on Morrow, then connect their store" exact, taking the conservative reading of the staff guidance (a completed payment before any store link). Item 3 implements "never see Morrow's checkout". Items 5 and 6 carry the ADR-0006 rules and the billing-ownership rules over to two routes. Item 8 restates the existing provider rules.
+- **Following from them:** item 2 makes "pay on Morrow, then connect their store" exact, taking the conservative reading of the staff guidance (a completed payment before any store link). Item 3 implements "never see Morrow's checkout". Items 5 and 6 carry the ADR-0006 rules and the billing-ownership rules over to two routes. Billing contract v1 can describe only a shop-owned billing account, so items 2 and 6 also need a billing layer in contract v1.1 (the route record, verified payments and a storeless Morrow-direct account). That changes ADR-0011 Q0's composition of v1.1 and the rule that billing stays at v1; P01.T04a applies it while v1.1 is a candidate, or opens v1.2 if v1.1 is frozen first. Item 8 restates the existing provider rules.
 - **Not established by the answers:** "Fully compliant" in the option text is the recommendation's claim, not a Shopify determination; App Review decides (Risk 1).
 - **Pending:** the Stripe account, test mode, live activation, tax registrations, business entity and bank account are owner actions and launch gates. Nothing is created now.

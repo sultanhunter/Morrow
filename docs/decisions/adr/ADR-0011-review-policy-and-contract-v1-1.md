@@ -126,3 +126,4 @@ This accepts the recommended answers to P01.T02a Q0–Q9. The question's summary
 
 - 2026-10-18: ADR-0015 supersedes ADR-0006. Q8's "never paid work under ADR-0006" now reads as ADR-0015's pre-payment state; the rule is unchanged.
 - 2026-10-18: ADR-0018 refines Q1. A human-made governance proposal may have no task, and its `requestedBy` is then the proposer. Agents always need a task.
+- 2026-10-18: ADR-0015 (items 2 and 6) adds a billing layer to Q0's composition of v1.1: `schemas/v1.1/billing.schema.json`, applied by P01.T04a while v1.1 is a candidate, or in v1.2 if v1.1 is frozen first. Billing no longer stays at v1.

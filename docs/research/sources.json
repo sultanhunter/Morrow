@@ -1098,5 +1098,21 @@
     "observed_at": "2026-10-18",
     "finding": "stripe-node 23.0.0 (published 2026-10-01) exports workerd and worker entry points. No dependency is added before an approved payments packet pins a version.",
     "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S147",
+    "url": "https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Since 2026-04-28 Shopify App Pricing sends no webhooks for subscription changes and appends no charge_id to the redirect URL; it no longer creates test subscriptions for development stores. The redirect carries plan_handle, plus the shop domain for external redirects; the app confirms status through the Partner API activeSubscription(appId, shopId) query and the events query (SUBSCRIPTION_CREATED, SUBSCRIPTION_UPDATED, SUBSCRIPTION_CANCELLATION_SCHEDULED, SUBSCRIPTION_CANCELED, SUBSCRIPTION_FROZEN, SUBSCRIPTION_UNFROZEN; 30-day default window, 365-day maximum range). Development stores test at no charge with $0 effective prices; the page describes no test flag. One section dates the change to April 2026 enrollment, inconsistently.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S148",
+    "url": "https://shopify.dev/docs/api/partner/latest/queries/activeSubscription",
+    "status": "verified",
+    "observed_at": "2026-10-18",
+    "finding": "Partner API activeSubscription(appId: ID!, shopId: ID!) returns ActiveSubscription: app, billingPeriod, cancelAtEndOfCycle, currentBillingCycle (null while in trial), items, legacySubscriptionId (nullable, the legacy Admin API AppSubscription), pendingUpdate (applied at the next billing cycle), shop and trialEndsAt. There is no subscription id, status field or test flag. Arguments are GIDs such as gid://shopify/Shop/1234; the query returns null when the shop has no active subscription and works only for public apps.",
+    "evidence_kind": "primary_documentation"
   }
 ]
