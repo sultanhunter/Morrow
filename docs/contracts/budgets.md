@@ -14,8 +14,12 @@ Credit exhaustion pauses paid work while preserving ordinary granted reads, revi
 
 ## Contract v1.1: kill switches (P01.T02a PR-A)
 
-Kill switches (ADR-0005) are `external_write` or `control` capabilities, never `spend` or `billable_job` (catalogue rule R7), so the policy evaluators never attach `budget_reservation` to them, and a stop reserves no credits. Since PR-B (ADR-0011 Q8) the human evaluator also skips the entitlement check for a kill switch, so neither credit balance nor entitlement blocks a stop; provider limits still apply (`provider_denied`). Because a stop reserves no credits, it is never paid work under ADR-0006.
+Kill switches (ADR-0005) are `external_write` or `control` capabilities, never `spend` or `billable_job` (catalogue rule R7), so the policy evaluators never attach `budget_reservation` to them, and a stop reserves no credits. Neither credit balance nor entitlement blocks a stop (ADR-0011 Q8); provider limits still apply (`provider_denied`). P01.T04a's `isPaidWork` delivers Q8: a kill switch is never paid work for any verb (rule PW2 in `billing-entitlements.md`), so the human evaluator never reads entitlement for it (ADR-0015 item 5).
 
 ## Contract v1.1: proposal ceilings (P01.T02a PR-B)
 
 Proposal@2 carries a credit ceiling (`maximumCredits`, an integer `CreditUnits` string) and a cash ceiling (`maximumCost`, non-negative money or null) on every target and in total, inside the proposal digest (ADR-0011 Q6). The totals are exact: credits are summed with BigInt, cash in one currency as an exact decimal sum (micro-units in BigInt), and a mixed-currency or mismatched total fails review (`CREDITS_SUM_MISMATCH`, `COST_SUM_MISMATCH`). A partial approval re-sums the selected targets, so a derived ceiling never exceeds its parent. These ceilings bound what an approval authorizes; the reservation before dispatch (P11.T04) still enforces the budget. Vendor-cost ceilings stay in `VendorCostReservation`.
+
+## Contract v1.1: paid work and payers (P01.T04a, ADR-0015)
+
+Entitlement and reservations apply only to paid work: `execute` or `administer` on a `billable_job`, `spend`, `external_write` or `communication` capability that is not a kill switch (`docs/contracts/paid-work.json`). Only `spend` and `billable_job` executions carry `budget_reservation` today; `external_write` and `communication` are entitlement-gated before P11.T04a prices them. Allocation shares follow the payer's route: a storeless share pays from the workspace's Morrow-direct account, a store-bound share from that store's Shopify account (`AllocationShare@2`). Shopify-route extra credits are post-paid usage reserved against a Morrow `UsageCap` for the cycle, never a credit grant.

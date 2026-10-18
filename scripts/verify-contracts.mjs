@@ -5,8 +5,8 @@ import {core,bodies,validators,bodyValidators,checkFixture,sources,selectorValid
 import {contractVersion} from './contract-sources.mjs';
 import {writeArtifact} from './artifacts.mjs';
 
-// P01.A02 holds the frozen v1 cases; P01.T02a adds the v1.1 cases by exact selector.
-const fixtures=[...read('docs/contracts/fixtures/P01.A02.json'),...read('docs/contracts/fixtures/P01.T02a.json')];
+// P01.A02 holds the frozen v1 cases; P01.T02a and P01.T04a (billing) add the v1.1 cases by exact selector.
+const fixtures=[...read('docs/contracts/fixtures/P01.A02.json'),...read('docs/contracts/fixtures/P01.T02a.json'),...read('docs/contracts/fixtures/P01.T04a.json').cases];
 const errors=[];
 const results=fixtures.map(f=>{const passed=checkFixture(f);if (!passed) errors.push(f.id);return {id:f.id,kind:f.kind,passed};});
 const transitions=read('docs/contracts/state-transitions.json');

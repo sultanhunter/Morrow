@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "adr": [
+    "ADR-0015",
+    "ADR-0011"
+  ],
+  "paidEffects": [
+    "billable_job",
+    "spend",
+    "external_write",
+    "communication"
+  ],
+  "neverGatedVerbs": [
+    "view",
+    "propose",
+    "approve",
+    "delegate"
+  ]
+}

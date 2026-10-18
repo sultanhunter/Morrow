@@ -11,8 +11,10 @@ import type { WorkAuthority } from "./context.js";
 
 // Grant decisions are made only by the packages/policy kernel (ADR-0010 item 2),
 // with the database clock of the request's own enter_context() snapshot. Work
-// writes are internal and unbilled, so provider and entitlement are allowed
-// (ADR-0006 limits only paid dispatch).
+// writes are internal and never paid work (P01.T04a §1, ADR-0015 item 5), so the
+// evaluator never reads entitlement for them; `entitlementAllowed` is the literal
+// `false` that every builder other than the billing reader passes
+// (`inspectEntitlementWriters`, P01.T04a §2).
 export async function decideWork(
   a: WorkAuthority,
   capabilityId: WorkCapabilityId,
@@ -31,7 +33,7 @@ export async function decideWork(
     resource: a.resource,
     accountId: null,
     providerAllowed: true,
-    entitlementAllowed: true,
+    entitlementAllowed: false,
     grants: a.grants,
   };
   const service = createHumanPolicyService(

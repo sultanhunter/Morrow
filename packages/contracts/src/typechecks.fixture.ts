@@ -1,6 +1,9 @@
 import type {
   CapabilityInput,
   CapabilityOutput,
+  CurrentBilling_BillingAccount,
+  CurrentBilling_TestEntitlementSeed,
+  CurrentBillingDefinitionName,
   Current_Approval,
   Current_KillSwitchControl,
   Current_Proposal,
@@ -117,3 +120,35 @@ void agentReviewer;
 void decide;
 void v1Decide;
 void preview;
+// P01.T04a: billing v1.1 (ADR-0015). A Morrow-direct account is storeless.
+const morrowAccount: CurrentBilling_BillingAccount = {
+  schemaVersion: 2,
+  id: "account",
+  organizationId: "org",
+  workspaceId: "workspace",
+  route: "morrow_direct",
+  mode: "test",
+  installationId: null,
+  storeId: null,
+  currency: "USD",
+  status: "active",
+  revision: 1,
+};
+// @ts-expect-error a Morrow-direct account never names an installation
+const morrowWithStore: CurrentBilling_BillingAccount = {
+  ...morrowAccount,
+  installationId: "installation",
+  storeId: "store",
+};
+const seedMode: CurrentBilling_TestEntitlementSeed["mode"] = "test";
+// @ts-expect-error a test entitlement seed is never live
+const liveSeed: CurrentBilling_TestEntitlementSeed["mode"] = "live";
+const billingName: CurrentBillingDefinitionName = "WorkspaceBillingRoute";
+// @ts-expect-error core names are not billing definitions
+const coreAsBilling: CurrentBillingDefinitionName = "Proposal";
+void morrowAccount;
+void morrowWithStore;
+void seedMode;
+void liveSeed;
+void billingName;
+void coreAsBilling;

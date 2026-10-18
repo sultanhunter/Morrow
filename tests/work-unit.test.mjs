@@ -32,6 +32,7 @@ import {
   workText,
 } from "../packages/work/src/http-bodies.ts";
 import { authorizeWork, decideWork } from "../packages/work/src/permissions.ts";
+import { isPaidWork } from "../packages/policy/src/paid-work.ts";
 import {
   WorkOutcomeUnknown,
   WorkReject,
@@ -261,6 +262,21 @@ test("permissions: the policy kernel decides, ownership selects the verb, fields
     "scope_denied",
   );
   await assert.rejects(authorizeWork(owner, "task.ready", "none"), /BASIS/);
+});
+
+test("permissions: work operations are never paid work, so entitlement false never denies them (P01.T04a §1)", async () => {
+  // decideWork passes the literal entitlementAllowed:false (P01.T04a §2); every
+  // operation is still allowed because the evaluator reads entitlement only for paid work.
+  const verbs = ["view", "execute", "administer"];
+  for (const [op, rule] of Object.entries(workPermissions)) {
+    for (const basis of ["own", "other"]) {
+      const verb = workVerb(op, basis);
+      assert.equal(isPaidWork(rule.capabilityId, verb), false, `${op} ${basis}`);
+      const holder = authority([grant(rule.capabilityId, verbs, [...rule.fields])]);
+      const decision = await authorizeWork(holder, op, basis);
+      assert.equal(decision.allowed, true, `${op} ${basis}: ${decision.reason}`);
+    }
+  }
 });
 
 test("errors: each outcome maps to one fixed, valid ErrorEnvelope", async () => {

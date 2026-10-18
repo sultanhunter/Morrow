@@ -33,6 +33,7 @@ import {
   typescriptOnlyInvalidNames,
   whitespaceCodePoints,
 } from "./fixtures/account-display-names.mjs";
+import { isPaidWork } from "../packages/policy/src/paid-work.ts";
 
 // P05.T01x Part B unit cases: names, the closed body, the guard header matrix, the
 // outcome table, the grant template against the merged catalogue, the runner latch,
@@ -395,6 +396,26 @@ test("grant template v1 follows the section 3.4 rule against the merged catalogu
     assert.deepEqual([...row.fields].sort(), [...names].sort(), row.capabilityId);
     for (const field of row.fields) assert.ok(validateDefinition("core", "FieldPath", field));
   }
+});
+test("grant template v1 is never paid work and matches the P01.T04a template list (P01.T04a PW5, section 9)", () => {
+  // Part B merged before P01.T04a PR-A, so PR-A adds this check (P01.T04a section 9):
+  // no row of owner-bootstrap-v1 is paid with its template verbs, so an unpaid
+  // workspace keeps every governance power, and the migration's rows equal the
+  // fixture list that inspectPaidWork (PW5) checks.
+  const normalize = (rows) =>
+    rows
+      .map((r) => ({
+        capabilityId: r.capabilityId,
+        verbs: [...r.verbs].sort(),
+        fields: [...r.fields].sort(),
+      }))
+      .sort((a, b) => a.capabilityId.localeCompare(b.capabilityId));
+  const rows = templateRows();
+  for (const row of rows)
+    for (const verb of row.verbs)
+      assert.equal(isPaidWork(row.capabilityId, verb), false, `${row.capabilityId} ${verb}`);
+  const fixture = JSON.parse(readFileSync("docs/contracts/fixtures/P01.T04a.json", "utf8"));
+  assert.deepEqual(normalize(rows), normalize(fixture.templates["owner-bootstrap-v1"]));
 });
 test("every template payload passes Grant and the 0002 CHECK", () => {
   const O = "0f1d5a5e-7d0c-4b6a-9bb6-6f3d2c3e1a10",

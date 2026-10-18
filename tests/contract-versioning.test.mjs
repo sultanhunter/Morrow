@@ -1,4 +1,5 @@
-// P01.T02a: contract versioning (AC01-AC05, AC10, AC11). docs/contracts/contract-versions.md.
+// P01.T02a: contract versioning (AC01-AC05, AC10, AC11), and the P01.T04a billing
+// v1.1 layer (AC11, AC29, AC30). docs/contracts/contract-versions.md.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
@@ -9,13 +10,19 @@ import {
   inspectBaselineCoverage,
   inspectDeclaredReplacements,
   inspectSupersededUse,
+  inspectEntitlementWriters,
+  entitlementWriterAllowlist,
   replacedDefinitionNames,
+  replacedBillingDefinitionNames,
 } from "../scripts/boundary-checks.mjs";
 import {
   contractVersion as sourceVersion,
   changesPath,
   readSchemaSources,
+  schemaSources,
   schemasByKind,
+  billingLayers,
+  currentBillingDefinitionSelectors,
 } from "../scripts/contract-sources.mjs";
 import { checkFixture, inspectTransition } from "../scripts/contract-checks.mjs";
 import { generateContracts } from "../scripts/generate-contracts.mjs";
@@ -23,6 +30,7 @@ import { generateRuntimeValidators } from "../scripts/generate-runtime-validator
 import { contractVersion } from "../packages/contracts/src/index.ts";
 import {
   validateCapabilityInput,
+  validateCurrentBillingDefinition,
   validateCurrentDefinition,
   validateDefinition,
 } from "../packages/contracts/src/validation.ts";
@@ -117,13 +125,20 @@ test("AC03: replacements are declared, and undeclared ones are reported", () => 
       ["definition", "Proposal", "ADR-0011"],
       ["definition", "Approval", "ADR-0011"],
       ["capability_body", "governance.approval.decide.input", "ADR-0011"],
+      ["billing_definition", "BillingAccount", "ADR-0015"],
+      ["billing_definition", "EntitlementSnapshot", "ADR-0015"],
+      ["billing_definition", "CreditGrant", "ADR-0015"],
+      ["billing_definition", "AllocationShare", "ADR-0015"],
+      ["billing_definition", "CostAllocation", "ADR-0015"],
     ],
   );
+  const prefixes = {
+    definition: "core:",
+    capability_body: "capabilities:",
+    billing_definition: "billing:",
+  };
   for (const change of changes.changes)
-    assert.equal(
-      change.replaces,
-      (change.kind === "definition" ? "core:" : "capabilities:") + change.name,
-    );
+    assert.equal(change.replaces, prefixes[change.kind] + change.name);
   // Removing a PR-B declaration is reported too.
   assert.deepEqual(
     inspectDeclaredReplacements(
@@ -342,4 +357,421 @@ test("AC11: product code cannot validate or type a replaced v1 definition", () =
     files.flatMap((path) => check(path, read(path))),
     [],
   );
+});
+
+// --- P01.T04a PR-A: billing routes by origin (ADR-0015) --------------------------
+const t04a = json("docs/contracts/fixtures/P01.T04a.json");
+const t04aCase = (id) => t04a.cases.find((c) => c.id === `P01.T04a.${id}`);
+const billingReplacements = [
+  "BillingAccount",
+  "EntitlementSnapshot",
+  "CreditGrant",
+  "AllocationShare",
+  "CostAllocation",
+];
+const productFiles = () => {
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (!["node_modules", "dist", "build", ".react-router"].includes(entry.name)) walk(path);
+      } else if (/\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry.name)) files.push(path);
+    }
+  };
+  walk("apps");
+  walk("packages");
+  return files;
+};
+
+test("P01.T04a AC30: billing v1.1 is appended after the five existing sources", () => {
+  assert.deepEqual(
+    schemaSources.map((s) => [s.kind, s.path, s.prefix]),
+    [
+      ["core", "docs/contracts/schemas/v1/core.schema.json", "Core"],
+      ["capabilities", "docs/contracts/schemas/v1/capabilities.schema.json", "Capability"],
+      ["billing", "docs/contracts/schemas/v1/billing.schema.json", "Billing"],
+      ["core-v1.1", "docs/contracts/schemas/v1.1/core.schema.json", "CoreV1_1"],
+      [
+        "capabilities-v1.1",
+        "docs/contracts/schemas/v1.1/capabilities.schema.json",
+        "CapabilityV1_1",
+      ],
+      ["billing-v1.1", "docs/contracts/schemas/v1.1/billing.schema.json", "BillingV1_1"],
+    ],
+  );
+  assert.deepEqual([...billingLayers], ["billing-v1.1", "billing"]);
+  assert.equal(layered["billing-v1.1"].$id, "urn:morrow:contracts:billing:v1.1");
+  const v1Billing = "docs/contracts/schemas/v1/billing.schema.json";
+  assert.equal(
+    createHash("sha256").update(texts[v1Billing]).digest("hex"),
+    baseline.schemas[v1Billing],
+  );
+  assert.equal(baseline.versions["morrow.contracts.v1.1"].status, "candidate_owner_signoff");
+  assert.deepEqual(replacedBillingDefinitionNames(changes), billingReplacements);
+  const selectors = currentBillingDefinitionSelectors(layered);
+  for (const name of billingReplacements) assert.equal(selectors[name], `billing-v1.1:${name}`);
+  for (const name of [
+    "CreditUnits",
+    "BillingMoney",
+    "CreditWallet",
+    "CreditReservation",
+    "UsageLiability",
+    "MeterEvent",
+    "VendorCostReservation",
+  ])
+    assert.equal(selectors[name], `billing:${name}`);
+  for (const name of ["WorkspaceBillingRoute", "VerifiedPaymentEvent", "TestEntitlementSeed"])
+    assert.equal(selectors[name], `billing-v1.1:${name}`);
+});
+
+test("P01.T04a AC30: the billing v1.1 schema accepts the fixture and rejects the listed shapes", () => {
+  assert.ok(t04a.cases.length > 90);
+  for (const c of t04a.cases) {
+    assert.equal(c.kind, "schema", c.id);
+    assert.equal(checkFixture(c), true, c.id);
+    // The generated (ahead-of-time) validators agree with the reference compiler.
+    const name = c.selector.slice("billing-v1.1:".length);
+    assert.equal(validateDefinition("billing-v1.1", name, c.value), c.valid, c.id);
+  }
+  for (const id of [
+    "account.unknown_field",
+    "account.morrow_direct_with_installation",
+    "account.shopify_without_installation",
+    "event.shopify_top_up",
+    "route.partly_fixed_no_time",
+    "route.partly_fixed_no_route",
+    "event.plan_change_without_from_price",
+    "event.negative_amount",
+    "event.credit_units_field",
+    "event.shopify_period_non_usd",
+    "event.shopify_plan_change_non_usd",
+    "reversal.shopify_non_usd",
+    "terms.exact_duplicate_entry",
+    "terms.shopify_non_usd",
+    "account.shopify_non_usd",
+    "usage_cap.non_usd",
+    "usage_cap.morrow_direct_account",
+    "seed.live_mode",
+    "seed.route_field",
+  ])
+    assert.equal(t04aCase(id).valid, false, id);
+  // Shapes the schema accepts on purpose: a Morrow-direct account in another
+  // currency, and two semantic errors the billing library refuses in PR-B (a
+  // repeated price key with other credits; an allocation mixing both routes).
+  for (const id of [
+    "account.morrow_direct_eur",
+    "reversal.shopify_refund",
+    "terms.repeated_price_key_other_credits",
+    "allocation.two_routes",
+  ])
+    assert.equal(t04aCase(id).valid, true, id);
+  // Every Shopify-route amount is UsdBillingMoney and every Shopify currency is USD.
+  const billingV11 = layered["billing-v1.1"];
+  const shopifyMoney = [];
+  const visitShopify = (node, path) => {
+    if (Array.isArray(node)) return node.forEach((child, i) => visitShopify(child, `${path}/${i}`));
+    if (!node || typeof node !== "object") return;
+    if (node.properties?.route?.const === "shopify_app_pricing")
+      for (const [key, value] of Object.entries(node.properties)) {
+        const text = JSON.stringify(value);
+        if (key === "currency") shopifyMoney.push([`${path}.${key}`, value.const === "USD"]);
+        else if (/BillingMoney/.test(text))
+          shopifyMoney.push([`${path}.${key}`, value.$ref === "#/$defs/UsdBillingMoney"]);
+      }
+    for (const [key, value] of Object.entries(node)) visitShopify(value, `${path}/${key}`);
+  };
+  visitShopify(billingV11.$defs, "");
+  assert.deepEqual(
+    shopifyMoney.map(([path]) => path),
+    [
+      "/VerifiedPaymentEvent/oneOf/3.amountPaid",
+      "/VerifiedPaymentEvent/oneOf/4.amountPaid",
+      "/PaymentReversal/oneOf/1.amount",
+      "/BillingTerms/properties/entries/items/oneOf/1.currency",
+      "/BillingAccount/oneOf/1.currency",
+    ],
+  );
+  for (const [path, usd] of shopifyMoney) assert.equal(usd, true, path);
+  assert.equal(
+    billingV11.$defs.UsageCap.properties.maximumLiability.$ref,
+    "#/$defs/UsdBillingMoney",
+  );
+  // Replacements are not compatible with the v1 shape in either direction,
+  // except AllocationShare@2, a declared superset of v1 that is stored only
+  // inside CostAllocation@2 (changes.json policy).
+  const v1 = (name, value) => validateDefinition("billing", name, value);
+  const current = (name, value) => validateCurrentBillingDefinition(name, value);
+  const v1Account = t04aCase("account.v1_shape").value;
+  assert.equal(v1("BillingAccount", v1Account), true);
+  assert.equal(current("BillingAccount", v1Account), false);
+  for (const id of ["account.morrow_direct", "account.shopify"]) {
+    const account = t04aCase(id).value;
+    assert.equal(v1("BillingAccount", account), false, id);
+    assert.equal(current("BillingAccount", account), true, id);
+  }
+  const strip = (value, ...keys) =>
+    Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
+  const v1Snapshot = {
+    ...strip(t04aCase("entitlement.shopify").value, "route", "mode"),
+    schemaVersion: 1,
+    subscriptionId: "subscription_1",
+  };
+  assert.equal(v1("EntitlementSnapshot", v1Snapshot), true);
+  assert.equal(current("EntitlementSnapshot", v1Snapshot), false);
+  for (const id of ["entitlement.morrow_direct", "entitlement.shopify"]) {
+    assert.equal(v1("EntitlementSnapshot", t04aCase(id).value), false, id);
+    assert.equal(current("EntitlementSnapshot", t04aCase(id).value), true, id);
+  }
+  const v1Grant = t04aCase("grant.v1_shape").value;
+  assert.equal(v1("CreditGrant", v1Grant), true);
+  assert.equal(current("CreditGrant", v1Grant), false);
+  for (const id of ["grant.morrow_direct_purchased", "grant.shopify_included"]) {
+    assert.equal(v1("CreditGrant", t04aCase(id).value), false, id);
+    assert.equal(current("CreditGrant", t04aCase(id).value), true, id);
+  }
+  const storeShare = t04aCase("share.store").value;
+  const v1Allocation = {
+    ...t04aCase("allocation.v1_schema_version").value,
+    shares: [structuredClone(storeShare)],
+  };
+  assert.equal(v1("CostAllocation", v1Allocation), true);
+  assert.equal(current("CostAllocation", v1Allocation), false);
+  const allocation = t04aCase("allocation.valid").value;
+  assert.equal(v1("CostAllocation", allocation), false);
+  assert.equal(current("CostAllocation", allocation), true);
+  // The superset: a v1 share is a valid store-bound share; a storeless share is not v1.
+  assert.equal(v1("AllocationShare", storeShare), true);
+  assert.equal(current("AllocationShare", storeShare), true);
+  const storeless = t04aCase("share.storeless").value;
+  assert.equal(v1("AllocationShare", storeless), false);
+  assert.equal(current("AllocationShare", storeless), true);
+  assert.deepEqual(
+    changes.changes
+      .filter((c) => c.kind === "billing_definition" && /superset of v1/.test(c.reason))
+      .map((c) => c.name),
+    ["AllocationShare"],
+  );
+  // Every key fits a core Id, so it fits the v1 subscriptionId and meter fields.
+  for (const c of t04a.cases.filter((c) => c.id.startsWith("P01.T04a.key.") && c.valid))
+    assert.equal(validateDefinition("core", "Id", c.value), true, c.id);
+  assert.equal(validateCurrentBillingDefinition("CreditUnits", "10"), true);
+  for (const name of ["constructor", "__proto__", "Proposal", "billing:CreditUnits"])
+    assert.equal(validateCurrentBillingDefinition(name, "10"), false, name);
+});
+
+test("P01.T04a AC30: product code cannot validate or type a replaced v1 billing definition", () => {
+  const billing = replacedBillingDefinitionNames(changes);
+  const check = (path, code) =>
+    inspectSupersededUse(path, code, replacedDefinitionNames(changes), billing);
+  assert.deepEqual(check("packages/policy/src/x.ts", "type A = Billing_BillingAccount;"), [
+    "SUPERSEDED_CONTRACT_USE:packages/policy/src/x.ts:BillingAccount",
+  ]);
+  assert.deepEqual(check("apps/api/src/x.ts", 'validateDefinition("billing", "CreditGrant", v);'), [
+    "SUPERSEDED_CONTRACT_USE:apps/api/src/x.ts:CreditGrant",
+  ]);
+  assert.deepEqual(check("apps/api/src/x.ts", 'const v = validators["billing:CostAllocation"];'), [
+    "SUPERSEDED_CONTRACT_USE:apps/api/src/x.ts:CostAllocation",
+  ]);
+  for (const code of [
+    'validateCurrentBillingDefinition("BillingAccount", v);',
+    'validateDefinition("billing-v1.1", "BillingAccount", v);',
+    'validateDefinition("billing", "CreditWallet", v);',
+    "type A = BillingV1_1_BillingAccount | Billing_CreditWallet | CurrentBilling_CreditGrant;",
+  ])
+    assert.deepEqual(check("packages/policy/src/x.ts", code), [], code);
+  assert.deepEqual(
+    productFiles().flatMap((path) => check(path, read(path))),
+    [],
+  );
+});
+
+// A request schema "carries a route" when it references a route-bearing billing
+// definition at any depth, or has a property with a route field name.
+const routeDefinitions = new Set([
+  "BillingRoute",
+  "WorkspaceBillingRoute",
+  "PaymentMode",
+  "PaymentKey",
+  "StripePaymentKey",
+  "ShopifyPeriodKey",
+  "ShopifyPlanChangeKey",
+  "SubscriptionKey",
+  "StripeSubscriptionKey",
+  "ShopifySubscriptionKey",
+  "PriceKey",
+  "StripePriceKey",
+  "ShopifyPriceKey",
+]);
+const routeProperties = new Set([
+  "billingRoute",
+  "route",
+  "origin",
+  "shopifyBoundAt",
+  "routeFixedAt",
+  "fixingPaymentKey",
+  "paymentMode",
+]);
+function routeFields(schema, base, byId) {
+  const found = new Set(),
+    seen = new Set();
+  const visit = (node, base) => {
+    if (Array.isArray(node)) return node.forEach((child) => visit(child, base));
+    if (!node || typeof node !== "object") return;
+    if (typeof node.$ref === "string") {
+      const [id, pointer] = node.$ref.startsWith("#")
+        ? [base, node.$ref.slice(1)]
+        : node.$ref.split("#");
+      const name = pointer.replace(/^\/\$defs\//, "");
+      if (id === "urn:morrow:contracts:billing:v1.1" && routeDefinitions.has(name))
+        found.add("ref:" + name);
+      if (!seen.has(id + "#" + name)) {
+        seen.add(id + "#" + name);
+        assert.ok(byId[id]?.$defs?.[name], node.$ref);
+        visit(byId[id].$defs[name], id);
+      }
+    }
+    if (node.properties && typeof node.properties === "object")
+      for (const key of Object.keys(node.properties))
+        if (routeProperties.has(key)) found.add("property:" + key);
+    for (const [key, value] of Object.entries(node)) if (key !== "$ref") visit(value, base);
+  };
+  visit(schema, base);
+  return [...found].sort();
+}
+
+test("P01.T04a AC11: no request or capability input can carry a billing route", () => {
+  const byId = Object.fromEntries(sources.map((s) => [s.schema.$id, s.schema]));
+  const catalogue = json("docs/contracts/capabilities.json");
+  const inputs = catalogue.capabilities.map((c) => {
+    const kind = Object.hasOwn(layered["capabilities-v1.1"].$defs, `${c.id}.input`)
+      ? "capabilities-v1.1"
+      : "capabilities";
+    return [`${kind}:${c.id}.input`, layered[kind].$defs[`${c.id}.input`], layered[kind].$id];
+  });
+  assert.equal(inputs.length, 105);
+  const requests = [];
+  for (const kind of ["core-v1.1", "core"])
+    for (const name of Object.keys(layered[kind].$defs))
+      if (/(?:Request|Input)$/.test(name) && !requests.some(([n]) => n.endsWith(":" + name)))
+        requests.push([`${kind}:${name}`, layered[kind].$defs[name], layered[kind].$id]);
+  assert.ok(requests.some(([name]) => name === "core-v1.1:ReviewDecisionInput"));
+  // P05.T01x Part B account requests are walked too (P01.T04a AC11).
+  assert.ok(requests.some(([name]) => name === "core-v1.1:OrganizationSignupRequest"));
+  for (const [name, schema, base] of [...inputs, ...requests])
+    assert.deepEqual(routeFields(schema, base, byId), [], name);
+  // Planted negatives: a route property, or a reference to a route definition.
+  const [, goal, goalBase] = inputs.find(([name]) => name.endsWith(":workspace.goal.create.input"));
+  const planted = structuredClone(goal);
+  planted.properties.origin = { type: "string" };
+  assert.deepEqual(routeFields(planted, goalBase, byId), ["property:origin"]);
+  const referenced = structuredClone(goal);
+  referenced.properties.plan = { $ref: "urn:morrow:contracts:billing:v1.1#/$defs/PriceKey" };
+  assert.deepEqual(routeFields(referenced, goalBase, byId), [
+    "ref:PriceKey",
+    "ref:ShopifyPriceKey",
+    "ref:StripePriceKey",
+  ]);
+});
+
+test("P01.T04a AC29: only the billing reader and its two forwarders set entitlementAllowed", () => {
+  assert.deepEqual(
+    productFiles().flatMap((path) => inspectEntitlementWriters(path, read(path))),
+    [],
+  );
+  const outside = "packages/work/src/permissions.ts";
+  const flagged = (code, path = outside, line = 1) =>
+    assert.deepEqual(
+      inspectEntitlementWriters(path, code),
+      [`ENTITLEMENT_WRITER_UNAPPROVED:${path}:${line}`],
+      code,
+    );
+  for (const code of [
+    "const facts = { entitlementAllowed: true };",
+    "const facts = { entitlementAllowed: allowed };",
+    "const facts = { entitlementAllowed: !denied };",
+    "facts.entitlementAllowed = true;",
+    'facts["entitlementAllowed"] = true;',
+    "facts.entitlementAllowed ||= false;",
+    "const facts = { entitlementAllowed };",
+    'const facts = { ["entitlementAllowed"]: true };',
+    "const facts = { get entitlementAllowed() { return true; } };",
+    'Object.defineProperty(facts, "entitlementAllowed", { value: true });',
+    // Class fields (with or without an initializer) and parameter properties.
+    "class Facts { readonly entitlementAllowed = true; }",
+    "class Facts { readonly providerAllowed = true; readonly entitlementAllowed = true; }",
+    "class Facts { entitlementAllowed: boolean = allowed; }",
+    "class Facts { declare entitlementAllowed: boolean; }",
+    "class Facts { constructor(readonly entitlementAllowed: boolean) {} }",
+    "class Facts { constructor(private entitlementAllowed: boolean) {} }",
+    "const facts = { entitlementAllowed() { return true; } };",
+    // A key bound to the field's name, an entries pair, and an opaque computed
+    // key beside providerAllowed.
+    'const k = "entitlementAllowed"; const facts = { [k]: true };',
+    'const k = "entitlementAllowed" as const; facts[k] = true;',
+    'const k = "entitlementAllowed"; Reflect.set(facts, k, true);',
+    'Object.fromEntries([["entitlementAllowed", true]]);',
+    'new Map([["entitlementAllowed", allowed]]);',
+    "const facts = { providerAllowed: true, [key()]: true };",
+    "class Facts { providerAllowed = true; [Keys.entitlement] = true; }",
+  ])
+    flagged(code);
+  flagged(
+    "const x = 1;\nconst facts = { providerAllowed: true, entitlementAllowed: true };",
+    outside,
+    2,
+  );
+  // A literal false is inert anywhere; type declarations are not writes.
+  for (const code of [
+    "const facts = { providerAllowed: true, entitlementAllowed: false };",
+    "facts.entitlementAllowed = false;",
+    "const facts = { entitlementAllowed: (false as boolean) };",
+    "interface Facts { readonly entitlementAllowed: boolean }",
+    "type Facts = { entitlementAllowed: boolean };",
+    'closed(v, ["providerAllowed", "entitlementAllowed"]);',
+    'closed(v, ["entitlementAllowed", "providerAllowed"]);',
+    "if (!facts.entitlementAllowed) deny();",
+    "class Facts { readonly entitlementAllowed = false; }",
+    "class Facts { constructor(entitlementAllowed: boolean) {} }",
+    'Object.fromEntries([["entitlementAllowed", false]]);',
+    'const facts = { providerAllowed: true, ["entitlementAllowed"]: false };',
+    "const byKey = { [key]: value };",
+  ])
+    assert.deepEqual(inspectEntitlementWriters(outside, code), [], code);
+  // Labs, fixtures, tests and *.test.* files are out of scope.
+  for (const path of [
+    "scripts/permission-database-lab.mjs",
+    "scripts/fixtures/neon-authority.ts",
+    "tests/policy.test.mjs",
+    "packages/policy/src/billing-state.test.ts",
+    "apps/api/src/worker.test.mjs",
+  ])
+    assert.deepEqual(
+      inspectEntitlementWriters(path, "const f = { entitlementAllowed: true };"),
+      [],
+      path,
+    );
+  // The three allowlisted functions pass in their own files only.
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(entitlementWriterAllowlist).map(([k, v]) => [k, [...v]])),
+    {
+      "packages/policy/src/billing-state.ts": ["createBillingConstraintsReader"],
+      "packages/policy/src/index.ts": [
+        "createHumanPolicyService",
+        "createWorkspacePermissionBoundary",
+      ],
+    },
+  );
+  const reader =
+    "export function createBillingConstraintsReader(provider, billing) {\n  return { async readCurrent(r, a) { return { providerAllowed: true, entitlementAllowed: entitled(r) }; } };\n}";
+  assert.deepEqual(inspectEntitlementWriters("packages/policy/src/billing-state.ts", reader), []);
+  flagged(reader, "packages/policy/src/other.ts", 2);
+  const service =
+    "export function createHumanPolicyService(reader) {\n  const facts = { entitlementAllowed: copied };\n}";
+  assert.deepEqual(inspectEntitlementWriters("packages/policy/src/index.ts", service), []);
+  flagged(service, "packages/policy/src/billing-state.ts", 2);
+  // The real forwarder in index.ts writes a non-literal value and is allowlisted.
+  const index = read("packages/policy/src/index.ts");
+  assert.deepEqual(inspectEntitlementWriters("packages/policy/src/index.ts", index), []);
+  assert.ok(inspectEntitlementWriters("packages/policy/src/copied.ts", index).length > 0);
 });
