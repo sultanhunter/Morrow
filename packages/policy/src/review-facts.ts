@@ -1,7 +1,17 @@
-// Trusted facts for kill switches (and, later, review decisions). Only trusted
-// server readers fill them, from current SQL state (P05.T01z, P11). Never decode
-// them from HTTP, client or model input: a fact here is authority.
-import type { Core_ProposalRef } from "@morrow/contracts";
+// Trusted facts for kill switches and review decisions. Only trusted server
+// readers fill them, from current SQL state (P05.T01z, P11). Never decode them
+// from HTTP, client or model input: a fact here is authority.
+import type {
+  CapabilityInput,
+  Core_ProposalRef,
+  Current_ActorRef,
+  Current_Approval,
+  Current_HumanActorRef,
+  Current_Proposal,
+  Current_ReviewPolicy,
+} from "@morrow/contracts";
+import { validateCurrentDefinition } from "@morrow/contracts/validation";
+import { closed } from "./json-boundary";
 
 /**
  * The designated owner of a workspace and its membership activity. P05.T01z
@@ -14,6 +24,23 @@ export interface WorkspaceOwnershipFacts {
   readonly activeHumanMembershipCount: number;
   /** UtcTime of the latest membership change, or null when there has been none. */
   readonly lastMembershipChangeAt: string | null;
+}
+
+/** Closed-shape guard for WorkspaceOwnershipFacts, shared by the policy checks. */
+export function isWorkspaceOwnershipFacts(value: unknown): value is WorkspaceOwnershipFacts {
+  return (
+    closed(value, [
+      "ownerPrincipalId",
+      "ownerMembershipId",
+      "activeHumanMembershipCount",
+      "lastMembershipChangeAt",
+    ]) &&
+    validateCurrentDefinition("Id", value.ownerPrincipalId) &&
+    validateCurrentDefinition("Id", value.ownerMembershipId) &&
+    validateCurrentDefinition("Count", value.activeHumanMembershipCount) &&
+    (value.lastMembershipChangeAt === null ||
+      validateCurrentDefinition("UtcTime", value.lastMembershipChangeAt))
+  );
 }
 
 /**
@@ -84,4 +111,121 @@ export interface KillSwitchTargetFacts {
   /** Resolved only when the input names a source proposal; otherwise null. */
   readonly sourceProposal: KillSwitchSourceProposal | null;
   readonly ownership: WorkspaceOwnershipFacts;
+}
+
+/**
+ * Trusted facts `checkProposal` compares a server-built proposal against
+ * (P01.T02a §7 items 1-3). The catalogue effect and irreversible flag are not
+ * facts: the review library reads them from the compiled catalogue.
+ */
+export interface ProposalFacts {
+  /** The trusted organization, workspace and store of the request. */
+  readonly organizationId: string;
+  readonly workspaceId: string;
+  readonly storeId: string | null;
+  /** The authenticated actor that built the proposal. */
+  readonly proposedBy: Current_ActorRef;
+  /** The task initiator, or the mandate owner for background work. */
+  readonly requestedBy: Current_HumanActorRef;
+  /**
+   * Principals who benefit from the change. For access_change: those receiving
+   * the grant, membership or ownership, plus the requester of any originating
+   * access request (ADR-0011 Q1).
+   */
+  readonly beneficiaryPrincipalIds: readonly string[];
+  /** Derived from the evidence the proposing run consumed (P13, P01.T02b). */
+  readonly contextTaint: "none" | "untrusted_external";
+  /** The workspace's single current ReviewPolicy. */
+  readonly reviewPolicy: Current_ReviewPolicy;
+  /**
+   * Principals currently eligible to review this proposal (each passed
+   * `reviewerEligible`). The library removes the conflicted ones itself.
+   */
+  readonly eligibleReviewerPrincipalIds: readonly string[];
+  readonly ownership: WorkspaceOwnershipFacts;
+  /** UtcTime the facts were read; solo status is evaluated at it. */
+  readonly at: string;
+}
+
+/** One member of a review family: the root proposal or a derivation, with its approval. */
+export interface ReviewMember {
+  readonly proposal: Current_Proposal;
+  readonly approval: Current_Approval;
+}
+
+/** The P11.T01 durable state of one review family, locked at its root. */
+export interface ReviewState {
+  /** The family revision. A decision's `expectedRevision` must equal it; it advances with every recorded decision. */
+  readonly revision: number;
+  /** The root proposal first, then each derived proposal that has an approval, in creation order. */
+  readonly members: readonly ReviewMember[];
+  /** Recorded decisions, for idempotent replay and read-back by commandId. */
+  readonly commands: readonly ReviewCommandRecord[];
+}
+
+export interface ReviewCommandRecord {
+  readonly commandId: string;
+  readonly requestDigest: string;
+  /** The reviewer who issued the command; only they can replay it. */
+  readonly reviewer: Current_HumanActorRef;
+  readonly result: ReviewAttemptSuccess;
+}
+
+/** One `governance.approval.decide` command, with the trusted facts current when it runs. */
+export interface DecisionAttempt {
+  readonly commandId: string;
+  /**
+   * The CommandEnvelope digest, covering the actor and the whole decide input.
+   * A replay must also come from the recorded reviewer, or it is a COMMAND_CONFLICT.
+   */
+  readonly requestDigest: string;
+  /** The authenticated reviewer. */
+  readonly reviewer: Current_HumanActorRef;
+  readonly input: CapabilityInput<"governance.approval.decide">;
+  /** UtcTime of the decision. */
+  readonly at: string;
+  /** `reviewerEligible` for the decided targets, from current grants. */
+  readonly reviewerEligible: boolean;
+  /**
+   * Principals currently eligible to review the decided proposal (each passes
+   * `reviewerEligible` for its targets now). An earlier approval counts toward
+   * the quorum only while its reviewer is listed: no recorded decision confers authority.
+   */
+  readonly eligibleReviewerPrincipalIds: readonly string[];
+  readonly ownership: WorkspaceOwnershipFacts;
+  /** The workspace's single current ReviewPolicy. */
+  readonly currentPolicy: Current_ReviewPolicy;
+}
+
+export interface DispatchFacts {
+  /** UtcTime of the check: at `effectiveAt` (the P11 scheduler) and again at dispatch. */
+  readonly now: string;
+  readonly currentPolicy: Current_ReviewPolicy;
+  readonly ownership: WorkspaceOwnershipFacts;
+  /**
+   * Principals currently eligible to review the approved proposal (each passes
+   * `reviewerEligible` for its targets at `now`). The approval dispatches only
+   * while `requiredApprovals` of its approving reviewers (or its solo owner) are listed.
+   */
+  readonly eligibleReviewerPrincipalIds: readonly string[];
+}
+
+/** A state-machine edge the fold applied; each exists in the v1.1 transition table. */
+export interface ReviewTransition {
+  readonly aggregate: "approval";
+  readonly approvalId: string;
+  readonly from: "pending" | "approved";
+  readonly to: "approved" | "rejected" | "cancelled" | "invalidated";
+  readonly actor: "eligible_human_reviewer" | "solo_owner" | "work_service";
+  readonly guard: string;
+}
+
+export interface ReviewAttemptSuccess {
+  readonly ok: true;
+  readonly commandId: string;
+  readonly requestDigest: string;
+  /** The `governance.approval.decide` output: the decided approval, derived for a selection. */
+  readonly output: { readonly approvalId: string; readonly proposalDigest: string };
+  readonly status: Current_Approval["status"];
+  readonly transitions: readonly ReviewTransition[];
 }

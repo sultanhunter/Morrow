@@ -83,6 +83,46 @@ test("the client sends the effective v1.1 kill-switch body and refuses the repla
   );
   assert.deepEqual(sent, [["ads.campaign.pause", pause]]);
 });
+test("the client sends the v1.1 review decision and refuses the replaced DecisionRef body", async () => {
+  const proposalRef = {
+    organizationId: "org_a",
+    workspaceId: "workspace_a",
+    storeId: "store_a",
+    kind: "proposal",
+    id: "proposal_a",
+    revision: 1,
+    digest: "a".repeat(64),
+  };
+  const sent = [];
+  const client = createCapabilityClient(async (id, body) => {
+    sent.push([id, body]);
+    return { approvalId: "approval_a", proposalDigest: "b".repeat(64) };
+  });
+  const decide = {
+    proposalRef,
+    decision: {
+      decision: "approve",
+      selectedTargetIndexes: [0, 1],
+      expectedDecisionDigest: "b".repeat(64),
+      soloOwnerConfirmation: null,
+      comment: null,
+    },
+    expectedRevision: 1,
+  };
+  assert.equal(
+    (await client.invoke("governance.approval.decide", decide)).approvalId,
+    "approval_a",
+  );
+  await assert.rejects(
+    client.invoke("governance.approval.decide", {
+      proposalRef,
+      decision: { ...proposalRef, kind: "decision" },
+      expectedRevision: 1,
+    }),
+    /Invalid capability input/,
+  );
+  assert.deepEqual(sent, [["governance.approval.decide", decide]]);
+});
 test("closed input validation does not coerce", () =>
   assert.equal(
     validateCapabilityInput("workspace.goal.create", { ...input, objective: 42 }),

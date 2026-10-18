@@ -6,6 +6,8 @@ import {
   inspectCompatibility,
   inspectBaselineCoverage,
   inspectDeclaredReplacements,
+  inspectSupersededUse,
+  replacedDefinitionNames,
   isBoundarySource,
 } from "./boundary-checks.mjs";
 import { changesPath, readSchemaSources, schemasByKind } from "./contract-sources.mjs";
@@ -41,6 +43,9 @@ errors.push(...inspectBaselineCoverage(baseline, schemaFiles));
 const changes = JSON.parse(readFileSync(changesPath, "utf8"));
 const layered = schemasByKind(readSchemaSources());
 errors.push(...inspectDeclaredReplacements(changes, layered));
+// Product code never validates or types a replaced v1 definition (P01.T02a AC11).
+const replaced = replacedDefinitionNames(changes);
+for (const p of files) errors.push(...inspectSupersededUse(p, readFileSync(p, "utf8"), replaced));
 const negatives = [
   ["host_sdk", "import {x} from '@shopify/shopify-app-react-router/server';", "UI_SERVER_IMPORT"],
   ["relative_api", "import {x} from '../../api/src/index';", "UI_RELATIVE_ESCAPE"],
@@ -207,11 +212,32 @@ negatives.push({
   ).includes("UNDECLARED_REPLACEMENT:ads.campaign.pause.input"),
 });
 const reused = structuredClone(layered);
-reused["core-v1.1"].$defs.Proposal = reused.core.$defs.Proposal;
+reused["core-v1.1"].$defs.Task = reused.core.$defs.Task;
 negatives.push({
   name: "undeclared_definition_reuse",
-  passed: inspectDeclaredReplacements(changes, reused).includes("UNDECLARED_REPLACEMENT:Proposal"),
+  passed: inspectDeclaredReplacements(changes, reused).includes("UNDECLARED_REPLACEMENT:Task"),
 });
+for (const [name, path, code, expected] of [
+  [
+    "superseded_validate_definition",
+    "packages/policy/src/review.ts",
+    'validateDefinition("core", "Proposal", value);',
+    "SUPERSEDED_CONTRACT_USE:packages/policy/src/review.ts:Proposal",
+  ],
+  [
+    "superseded_type_reference",
+    "apps/api/src/index.ts",
+    'import type { Core_Approval } from "@morrow/contracts";',
+    "SUPERSEDED_CONTRACT_USE:apps/api/src/index.ts:Approval",
+  ],
+  [
+    "superseded_selector",
+    "packages/policy/src/review.ts",
+    'const check = validators["core:Approval"];',
+    "SUPERSEDED_CONTRACT_USE:packages/policy/src/review.ts:Approval",
+  ],
+])
+  negatives.push({ name, passed: inspectSupersededUse(path, code, replaced).includes(expected) });
 negatives.push({
   name: "phantom_replacement_declaration",
   passed: inspectDeclaredReplacements(

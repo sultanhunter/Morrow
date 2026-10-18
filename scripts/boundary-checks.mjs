@@ -252,3 +252,49 @@ export function inspectDeclaredReplacements(changes, schemas) {
         errors.push("UNDECLARED_REPLACEMENT:" + name);
   return [...new Set(errors)];
 }
+// Names of the core definitions changes.json declares replaced (Proposal,
+// Approval, and later T02b/T02c replacements such as Evidence@2).
+export const replacedDefinitionNames = (changes) =>
+  (Array.isArray(changes?.changes) ? changes.changes : [])
+    .filter((entry) => entry?.kind === "definition" && typeof entry.name === "string")
+    .map((entry) => entry.name);
+// Generated files define every exact selector and type, replaced ones included.
+const generatedContracts = /^packages\/contracts\/src\/generated\//;
+// Product code under apps/ and packages/ must not validate or type a replaced v1
+// definition: `validateDefinition("core", <replaced>)`, a `"core:<replaced>"`
+// selector or a `Core_<replaced>` type. It uses the effective (current) selectors.
+export function inspectSupersededUse(file, code, replaced) {
+  const path = relative(root, resolve(file)).replaceAll("\\", "/");
+  if (!/^(apps|packages)\//.test(path) || generatedContracts.test(path)) return [];
+  const names = new Set(replaced);
+  const found = new Set();
+  const literal = (node) =>
+    node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+      ? node.text
+      : null;
+  const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, scriptKind(file));
+  const visit = (node) => {
+    if (ts.isIdentifier(node) && node.text.startsWith("Core_") && names.has(node.text.slice(5)))
+      found.add(node.text.slice(5));
+    const text = literal(node);
+    if (text?.startsWith("core:") && names.has(text.slice(5))) found.add(text.slice(5));
+    if (ts.isCallExpression(node)) {
+      const callee = ts.isIdentifier(node.expression)
+        ? node.expression.text
+        : ts.isPropertyAccessExpression(node.expression)
+          ? node.expression.name.text
+          : null;
+      const name = literal(node.arguments[1]);
+      if (
+        callee === "validateDefinition" &&
+        literal(node.arguments[0]) === "core" &&
+        name !== null &&
+        names.has(name)
+      )
+        found.add(name);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return [...found].sort().map((name) => `SUPERSEDED_CONTRACT_USE:${path}:${name}`);
+}

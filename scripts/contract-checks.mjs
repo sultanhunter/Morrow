@@ -2,7 +2,7 @@ import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import canonicalize from 'canonicalize';
 import {read,sha} from './foundation.mjs';
-import {readSchemaSources} from './contract-sources.mjs';
+import {readSchemaSources,contractVersion} from './contract-sources.mjs';
 
 if (Number(process.versions.node.split('.')[0])!==24) throw new Error('Contract checks require the pinned Node 24 runtime');
 export const core=read('docs/contracts/schemas/v1/core.schema.json');
@@ -60,9 +60,19 @@ export function inspectBinding(context) {
   if (!c.reviewerEligible || a.reviewer?.kind!=='human') errors.push('REVIEWER_DENIED');
   return errors;
 }
-export function inspectTransition(fixture) {
+// Contract versions that transition rows name in `since` and `superseded_in` (P01.T02a §8).
+export const transitionVersions=Object.freeze(['1','1.1']);
+export const currentTransitionVersion=contractVersion.replace(/^morrow\.contracts\.v/,'');
+if (!transitionVersions.includes(currentTransitionVersion)) throw new Error('Unknown current transition version');
+const versionOrder=v=>{const i=transitionVersions.indexOf(v);if (i<0) throw new Error('Unknown transition version '+v);return i;};
+// The rows in force at `version`: a row added later (`since`) or already superseded (`superseded_in`) is ignored.
+export function transitionRowsAt(table,aggregate,version=currentTransitionVersion) {
+  const at=versionOrder(version);
+  return (table.transitions[aggregate]??[]).filter(t=>(t.since===undefined||versionOrder(t.since)<=at)&&(t.superseded_in===undefined||versionOrder(t.superseded_in)>at));
+}
+export function inspectTransition(fixture,version=fixture.version??currentTransitionVersion) {
   const table=read('docs/contracts/state-transitions.json');
-  return fixture.guardPassed && !!table.transitions[fixture.aggregate]?.some(t=>t.from===fixture.from&&t.to===fixture.to&&t.actor===fixture.actor&&t.guard===fixture.guard);
+  return fixture.guardPassed && transitionRowsAt(table,fixture.aggregate,version).some(t=>t.from===fixture.from&&t.to===fixture.to&&t.actor===fixture.actor&&t.guard===fixture.guard&&(t.capability===undefined||t.capability===fixture.capability));
 }
 export function inspectHandoff(v) {
   return !v.consumed && Date.parse(v.expiresAt)>Date.parse(v.now) && v.boundPrincipalId===v.requestingPrincipalId && v.boundWorkspaceId===v.requestedWorkspaceId && v.boundInstallationId===v.requestedInstallationId && v.expectedOwnershipRevision===v.currentOwnershipRevision && !v.ownershipConflict && v.currentGrant;

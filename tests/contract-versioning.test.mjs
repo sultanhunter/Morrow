@@ -1,4 +1,4 @@
-// P01.T02a PR-A: contract versioning (AC01-AC05, AC10). docs/contracts/contract-versions.md.
+// P01.T02a: contract versioning (AC01-AC05, AC10, AC11). docs/contracts/contract-versions.md.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
@@ -8,6 +8,8 @@ import {
   inspectCompatibility,
   inspectBaselineCoverage,
   inspectDeclaredReplacements,
+  inspectSupersededUse,
+  replacedDefinitionNames,
 } from "../scripts/boundary-checks.mjs";
 import {
   contractVersion as sourceVersion,
@@ -15,12 +17,13 @@ import {
   readSchemaSources,
   schemasByKind,
 } from "../scripts/contract-sources.mjs";
-import { checkFixture } from "../scripts/contract-checks.mjs";
+import { checkFixture, inspectTransition } from "../scripts/contract-checks.mjs";
 import { generateContracts } from "../scripts/generate-contracts.mjs";
 import { generateRuntimeValidators } from "../scripts/generate-runtime-validators.mjs";
 import { contractVersion } from "../packages/contracts/src/index.ts";
 import {
   validateCapabilityInput,
+  validateCurrentDefinition,
   validateDefinition,
 } from "../packages/contracts/src/validation.ts";
 
@@ -83,6 +86,11 @@ test("AC01: every P01.A02 case passes under the v1 selectors, reference and gene
         fixture.valid,
         fixture.id,
       );
+    // The v1 transition cases hold at v1 and are unaffected by the v1.1 rows.
+    if (fixture.kind === "transition") {
+      assert.equal(inspectTransition(fixture, "1"), fixture.allowed, fixture.id);
+      assert.equal(inspectTransition(fixture, "1.1"), fixture.allowed, fixture.id);
+    }
   }
 });
 
@@ -99,20 +107,31 @@ test("AC02: every schema file is baselined; an unbaselined one is reported", () 
 test("AC03: replacements are declared, and undeclared ones are reported", () => {
   assert.deepEqual(inspectDeclaredReplacements(changes, layered), []);
   assert.deepEqual(
-    changes.changes.map((c) => c.name),
+    changes.changes.map((c) => [c.kind, c.name, c.adr]),
     [
-      "ads.campaign.pause.input",
-      "agents.installation.disable.input",
-      "governance.membership.revoke.input",
-      "governance.connection.disconnect.input",
-      "agents.release.revoke.input",
+      ["capability_body", "ads.campaign.pause.input", "ADR-0005"],
+      ["capability_body", "agents.installation.disable.input", "ADR-0005"],
+      ["capability_body", "governance.membership.revoke.input", "ADR-0005"],
+      ["capability_body", "governance.connection.disconnect.input", "ADR-0005"],
+      ["capability_body", "agents.release.revoke.input", "ADR-0005"],
+      ["definition", "Proposal", "ADR-0011"],
+      ["definition", "Approval", "ADR-0011"],
+      ["capability_body", "governance.approval.decide.input", "ADR-0011"],
     ],
   );
-  for (const change of changes.changes) {
-    assert.equal(change.kind, "capability_body");
-    assert.equal(change.adr, "ADR-0005");
-    assert.equal(change.replaces, "capabilities:" + change.name);
-  }
+  for (const change of changes.changes)
+    assert.equal(
+      change.replaces,
+      (change.kind === "definition" ? "core:" : "capabilities:") + change.name,
+    );
+  // Removing a PR-B declaration is reported too.
+  assert.deepEqual(
+    inspectDeclaredReplacements(
+      { ...changes, changes: changes.changes.filter((c) => c.name !== "Approval") },
+      layered,
+    ),
+    ["UNDECLARED_REPLACEMENT:Approval"],
+  );
   const removed = {
     ...changes,
     changes: changes.changes.filter((c) => c.name !== "ads.campaign.pause.input"),
@@ -121,10 +140,8 @@ test("AC03: replacements are declared, and undeclared ones are reported", () => 
     "UNDECLARED_REPLACEMENT:ads.campaign.pause.input",
   ]);
   const reused = structuredClone(layered);
-  reused["core-v1.1"].$defs.Proposal = reused.core.$defs.Proposal;
-  assert.deepEqual(inspectDeclaredReplacements(changes, reused), [
-    "UNDECLARED_REPLACEMENT:Proposal",
-  ]);
+  reused["core-v1.1"].$defs.Task = reused.core.$defs.Task;
+  assert.deepEqual(inspectDeclaredReplacements(changes, reused), ["UNDECLARED_REPLACEMENT:Task"]);
   for (const entry of [
     { ...changes.changes[0], name: "Invented" },
     { ...changes.changes[0], replaces: "capabilities:ads.campaign.activate.input" },
@@ -141,8 +158,12 @@ test("AC03: replacements are declared, and undeclared ones are reported", () => 
       JSON.stringify(entry),
     );
   // A new body in v1.1 for a capability v1 never had is an addition, not a replacement.
+  assert.ok(
+    Object.hasOwn(layered["capabilities-v1.1"].$defs, "governance.review_policy.revise.input"),
+  );
+  assert.ok(!Object.hasOwn(layered.capabilities.$defs, "governance.review_policy.revise.input"));
   const added = structuredClone(layered);
-  added["capabilities-v1.1"].$defs["governance.review_policy.revise.input"] = {
+  added["capabilities-v1.1"].$defs["governance.invented.capability.input"] = {
     type: "object",
     properties: {},
     required: [],
@@ -253,5 +274,72 @@ test("AC10: contractVersion has exactly one source", () => {
   assert.match(
     read("packages/contracts/src/generated/domain.ts"),
     /^export const contractVersion = "morrow\.contracts\.v1\.1" as const;$/m,
+  );
+});
+
+test("AC11: product code cannot validate or type a replaced v1 definition", () => {
+  const replaced = replacedDefinitionNames(changes);
+  assert.deepEqual(replaced, ["Proposal", "Approval"]);
+  const check = (path, code) => inspectSupersededUse(path, code, replaced);
+  assert.deepEqual(
+    check("packages/policy/src/x.ts", 'validateDefinition("core","Proposal", value);'),
+    ["SUPERSEDED_CONTRACT_USE:packages/policy/src/x.ts:Proposal"],
+  );
+  assert.deepEqual(
+    check("packages/policy/src/x.ts", 'import type { Core_Approval } from "@morrow/contracts";'),
+    ["SUPERSEDED_CONTRACT_USE:packages/policy/src/x.ts:Approval"],
+  );
+  assert.deepEqual(check("apps/api/src/x.ts", "type A = Contracts.Core_Approval;"), [
+    "SUPERSEDED_CONTRACT_USE:apps/api/src/x.ts:Approval",
+  ]);
+  assert.deepEqual(check("apps/api/src/x.ts", 'const v = validators["core:Proposal"];'), [
+    "SUPERSEDED_CONTRACT_USE:apps/api/src/x.ts:Proposal",
+  ]);
+  assert.deepEqual(check("apps/api/src/x.ts", 'x.validateDefinition("core", "Approval", v);'), [
+    "SUPERSEDED_CONTRACT_USE:apps/api/src/x.ts:Approval",
+  ]);
+  // The current selectors, the exact v1.1 selector and other v1 names are fine.
+  for (const code of [
+    'validateCurrentDefinition("Proposal", value);',
+    'validateDefinition("core-v1.1", "Approval", value);',
+    'validateDefinition("core", "ProposalRef", value);',
+    'import type { Current_Proposal, Core_ProposalRef, CoreV1_1_Approval } from "@morrow/contracts";',
+  ])
+    assert.deepEqual(check("packages/policy/src/x.ts", code), [], code);
+  // Generated contracts and non-product files are out of scope.
+  assert.deepEqual(
+    check("packages/contracts/src/generated/domain.ts", "export type Core_Proposal = {};"),
+    [],
+  );
+  assert.deepEqual(check("scripts/contract-checks.mjs", 'validators["core:Proposal"]'), []);
+  // Replaced names come from changes.json, so later replacements are covered.
+  assert.deepEqual(
+    inspectSupersededUse("packages/x/src/y.ts", "type E = Core_Evidence;", [
+      ...replaced,
+      "Evidence",
+    ]),
+    ["SUPERSEDED_CONTRACT_USE:packages/x/src/y.ts:Evidence"],
+  );
+  // The effective definition rejects a v1-shaped proposal or approval.
+  const binding = json("docs/contracts/fixtures/P01.A02.json").find((f) => f.kind === "binding");
+  assert.equal(validateDefinition("core", "Proposal", binding.context.proposal), true);
+  assert.equal(validateCurrentDefinition("Proposal", binding.context.proposal), false);
+  assert.equal(validateDefinition("core", "Approval", binding.context.approval), true);
+  assert.equal(validateCurrentDefinition("Approval", binding.context.approval), false);
+  // Nothing under apps/ or packages/ uses a replaced definition today.
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (!["node_modules", "dist", "build", ".react-router"].includes(entry.name)) walk(path);
+      } else if (/\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(entry.name)) files.push(path);
+    }
+  };
+  walk("apps");
+  walk("packages");
+  assert.deepEqual(
+    files.flatMap((path) => check(path, read(path))),
+    [],
   );
 });

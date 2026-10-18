@@ -895,5 +895,3011 @@
         "sourceProposalRef": null
       }
     }
+  },
+  {
+    "id": "P01.T02a.credits.integer",
+    "kind": "schema",
+    "selector": "billing:CreditUnits",
+    "valid": true,
+    "value": "20"
+  },
+  {
+    "id": "P01.T02a.credits.decimal",
+    "kind": "schema",
+    "selector": "billing:CreditUnits",
+    "valid": false,
+    "value": "1.5"
+  },
+  {
+    "id": "P01.T02a.credits.negative",
+    "kind": "schema",
+    "selector": "billing:CreditUnits",
+    "valid": false,
+    "value": "-1"
+  },
+  {
+    "id": "P01.T02a.credits.leading_zero",
+    "kind": "schema",
+    "selector": "billing:CreditUnits",
+    "valid": false,
+    "value": "01"
+  },
+  {
+    "id": "P01.T02a.credits.number",
+    "kind": "schema",
+    "selector": "billing:CreditUnits",
+    "valid": false,
+    "value": 20
+  },
+  {
+    "id": "P01.T02a.money.valid",
+    "kind": "schema",
+    "selector": "core-v1.1:NonNegativeMoney",
+    "valid": true,
+    "value": {
+      "amount": "12.50",
+      "currency": "USD"
+    }
+  },
+  {
+    "id": "P01.T02a.money.negative",
+    "kind": "schema",
+    "selector": "core-v1.1:NonNegativeMoney",
+    "valid": false,
+    "value": {
+      "amount": "-90.00",
+      "currency": "USD"
+    }
+  },
+  {
+    "id": "P01.T02a.target.valid",
+    "kind": "schema",
+    "selector": "core-v1.1:ProposalTarget",
+    "valid": true,
+    "value": {
+      "resource": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "connectionId": null,
+        "kind": "product",
+        "id": "product_0"
+      },
+      "expectedSourceRevision": "source_revision_0",
+      "fields": [
+        "title"
+      ],
+      "maximumCredits": "10",
+      "maximumCost": null
+    }
+  },
+  {
+    "id": "P01.T02a.target.negative_cost",
+    "kind": "schema",
+    "selector": "core-v1.1:ProposalTarget",
+    "valid": false,
+    "value": {
+      "resource": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "connectionId": null,
+        "kind": "product",
+        "id": "product_0"
+      },
+      "expectedSourceRevision": "source_revision_0",
+      "fields": [
+        "title"
+      ],
+      "maximumCredits": "10",
+      "maximumCost": {
+        "amount": "-90.00",
+        "currency": "USD"
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.target.numeric_credits",
+    "kind": "schema",
+    "selector": "core-v1.1:ProposalTarget",
+    "valid": false,
+    "value": {
+      "resource": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "connectionId": null,
+        "kind": "product",
+        "id": "product_0"
+      },
+      "expectedSourceRevision": "source_revision_0",
+      "fields": [
+        "title"
+      ],
+      "maximumCredits": 10,
+      "maximumCost": null
+    }
+  },
+  {
+    "id": "P01.T02a.selection.valid",
+    "kind": "schema",
+    "selector": "core-v1.1:SelectionIndexes",
+    "valid": true,
+    "value": [
+      0,
+      1
+    ]
+  },
+  {
+    "id": "P01.T02a.selection.empty",
+    "kind": "schema",
+    "selector": "core-v1.1:SelectionIndexes",
+    "valid": false,
+    "value": []
+  },
+  {
+    "id": "P01.T02a.selection.duplicate",
+    "kind": "schema",
+    "selector": "core-v1.1:SelectionIndexes",
+    "valid": false,
+    "value": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "P01.T02a.selection.negative",
+    "kind": "schema",
+    "selector": "core-v1.1:SelectionIndexes",
+    "valid": false,
+    "value": [
+      -1
+    ]
+  },
+  {
+    "id": "P01.T02a.selection.whole",
+    "kind": "schema",
+    "selector": "core-v1.1:TargetSelection",
+    "valid": true,
+    "value": null
+  },
+  {
+    "id": "P01.T02a.proposal.valid",
+    "kind": "schema",
+    "selector": "core-v1.1:Proposal",
+    "valid": true,
+    "value": {
+      "schemaVersion": 2,
+      "id": "proposal_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "taskId": "task_a",
+      "capabilityId": "catalog.content.publish",
+      "scope": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeIds": [
+          "store_a"
+        ],
+        "accountIds": [],
+        "resources": [
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_2"
+          }
+        ],
+        "fields": [
+          "title"
+        ]
+      },
+      "targets": [
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          "expectedSourceRevision": "source_revision_0",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          "expectedSourceRevision": "source_revision_1",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_2"
+          },
+          "expectedSourceRevision": "source_revision_2",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "5",
+          "maximumCost": null
+        }
+      ],
+      "parametersRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "artifact",
+        "id": "parameters_proposal_a",
+        "revision": 1,
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "parametersDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "maximumCredits": "25",
+      "maximumCost": null,
+      "risk": "external",
+      "irreversible": false,
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "proposedBy": {
+        "kind": "agent",
+        "principalId": "agent_coordinator",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": null,
+        "installationId": "installation_a",
+        "mandateId": null
+      },
+      "requestedBy": {
+        "kind": "human",
+        "principalId": "human_maya",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_maya",
+        "installationId": null,
+        "mandateId": null
+      },
+      "beneficiaryPrincipalIds": [],
+      "contextTaint": "none",
+      "partialApproval": "allowed",
+      "derivedFrom": null,
+      "proposalDigest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c",
+      "expiresAt": "2026-10-25T09:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.proposal.derived",
+    "kind": "schema",
+    "selector": "core-v1.1:Proposal",
+    "valid": true,
+    "value": {
+      "schemaVersion": 2,
+      "id": "derived_29a33ef2152eb5051ae9b7d9128227ff3edf3baa723a8bd6380ad8822185063f",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "taskId": "task_a",
+      "capabilityId": "catalog.content.publish",
+      "scope": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeIds": [
+          "store_a"
+        ],
+        "accountIds": [],
+        "resources": [
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          }
+        ],
+        "fields": [
+          "title"
+        ]
+      },
+      "targets": [
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          "expectedSourceRevision": "source_revision_0",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          "expectedSourceRevision": "source_revision_1",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        }
+      ],
+      "parametersRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "artifact",
+        "id": "parameters_proposal_a",
+        "revision": 1,
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "parametersDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "maximumCredits": "20",
+      "maximumCost": null,
+      "risk": "external",
+      "irreversible": false,
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "proposedBy": {
+        "kind": "agent",
+        "principalId": "agent_coordinator",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": null,
+        "installationId": "installation_a",
+        "mandateId": null
+      },
+      "requestedBy": {
+        "kind": "human",
+        "principalId": "human_maya",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_maya",
+        "installationId": null,
+        "mandateId": null
+      },
+      "beneficiaryPrincipalIds": [],
+      "contextTaint": "none",
+      "partialApproval": "all_or_nothing",
+      "derivedFrom": {
+        "parentRef": {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "kind": "proposal",
+          "id": "proposal_a",
+          "revision": 1,
+          "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+        },
+        "selectedTargetIndexes": [
+          0,
+          1
+        ]
+      },
+      "proposalDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "expiresAt": "2026-10-25T09:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.proposal.derived_partial_allowed",
+    "kind": "schema",
+    "selector": "core-v1.1:Proposal",
+    "valid": false,
+    "value": {
+      "schemaVersion": 2,
+      "id": "derived_29a33ef2152eb5051ae9b7d9128227ff3edf3baa723a8bd6380ad8822185063f",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "taskId": "task_a",
+      "capabilityId": "catalog.content.publish",
+      "scope": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeIds": [
+          "store_a"
+        ],
+        "accountIds": [],
+        "resources": [
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          }
+        ],
+        "fields": [
+          "title"
+        ]
+      },
+      "targets": [
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          "expectedSourceRevision": "source_revision_0",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          "expectedSourceRevision": "source_revision_1",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        }
+      ],
+      "parametersRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "artifact",
+        "id": "parameters_proposal_a",
+        "revision": 1,
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "parametersDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "maximumCredits": "20",
+      "maximumCost": null,
+      "risk": "external",
+      "irreversible": false,
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "proposedBy": {
+        "kind": "agent",
+        "principalId": "agent_coordinator",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": null,
+        "installationId": "installation_a",
+        "mandateId": null
+      },
+      "requestedBy": {
+        "kind": "human",
+        "principalId": "human_maya",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_maya",
+        "installationId": null,
+        "mandateId": null
+      },
+      "beneficiaryPrincipalIds": [],
+      "contextTaint": "none",
+      "partialApproval": "allowed",
+      "derivedFrom": {
+        "parentRef": {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "kind": "proposal",
+          "id": "proposal_a",
+          "revision": 1,
+          "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+        },
+        "selectedTargetIndexes": [
+          0,
+          1
+        ]
+      },
+      "proposalDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "expiresAt": "2026-10-25T09:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.proposal.agent_requester",
+    "kind": "schema",
+    "selector": "core-v1.1:Proposal",
+    "valid": false,
+    "value": {
+      "schemaVersion": 2,
+      "id": "proposal_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "taskId": "task_a",
+      "capabilityId": "catalog.content.publish",
+      "scope": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeIds": [
+          "store_a"
+        ],
+        "accountIds": [],
+        "resources": [
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_2"
+          }
+        ],
+        "fields": [
+          "title"
+        ]
+      },
+      "targets": [
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          "expectedSourceRevision": "source_revision_0",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          "expectedSourceRevision": "source_revision_1",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_2"
+          },
+          "expectedSourceRevision": "source_revision_2",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "5",
+          "maximumCost": null
+        }
+      ],
+      "parametersRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "artifact",
+        "id": "parameters_proposal_a",
+        "revision": 1,
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "parametersDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "maximumCredits": "25",
+      "maximumCost": null,
+      "risk": "external",
+      "irreversible": false,
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "proposedBy": {
+        "kind": "agent",
+        "principalId": "agent_coordinator",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": null,
+        "installationId": "installation_a",
+        "mandateId": null
+      },
+      "requestedBy": {
+        "kind": "agent",
+        "principalId": "agent_coordinator",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": null,
+        "installationId": "installation_a",
+        "mandateId": null
+      },
+      "beneficiaryPrincipalIds": [],
+      "contextTaint": "none",
+      "partialApproval": "allowed",
+      "derivedFrom": null,
+      "proposalDigest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c",
+      "expiresAt": "2026-10-25T09:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.proposal.negative_total",
+    "kind": "schema",
+    "selector": "core-v1.1:Proposal",
+    "valid": false,
+    "value": {
+      "schemaVersion": 2,
+      "id": "proposal_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "taskId": "task_a",
+      "capabilityId": "catalog.content.publish",
+      "scope": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeIds": [
+          "store_a"
+        ],
+        "accountIds": [],
+        "resources": [
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_2"
+          }
+        ],
+        "fields": [
+          "title"
+        ]
+      },
+      "targets": [
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          "expectedSourceRevision": "source_revision_0",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          "expectedSourceRevision": "source_revision_1",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_2"
+          },
+          "expectedSourceRevision": "source_revision_2",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "5",
+          "maximumCost": null
+        }
+      ],
+      "parametersRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "artifact",
+        "id": "parameters_proposal_a",
+        "revision": 1,
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "parametersDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "maximumCredits": "25",
+      "maximumCost": {
+        "amount": "-1",
+        "currency": "USD"
+      },
+      "risk": "external",
+      "irreversible": false,
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "proposedBy": {
+        "kind": "agent",
+        "principalId": "agent_coordinator",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": null,
+        "installationId": "installation_a",
+        "mandateId": null
+      },
+      "requestedBy": {
+        "kind": "human",
+        "principalId": "human_maya",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_maya",
+        "installationId": null,
+        "mandateId": null
+      },
+      "beneficiaryPrincipalIds": [],
+      "contextTaint": "none",
+      "partialApproval": "allowed",
+      "derivedFrom": null,
+      "proposalDigest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c",
+      "expiresAt": "2026-10-25T09:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.proposal.unknown_taint",
+    "kind": "schema",
+    "selector": "core-v1.1:Proposal",
+    "valid": false,
+    "value": {
+      "schemaVersion": 2,
+      "id": "proposal_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "taskId": "task_a",
+      "capabilityId": "catalog.content.publish",
+      "scope": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeIds": [
+          "store_a"
+        ],
+        "accountIds": [],
+        "resources": [
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_2"
+          }
+        ],
+        "fields": [
+          "title"
+        ]
+      },
+      "targets": [
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          "expectedSourceRevision": "source_revision_0",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          "expectedSourceRevision": "source_revision_1",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_2"
+          },
+          "expectedSourceRevision": "source_revision_2",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "5",
+          "maximumCost": null
+        }
+      ],
+      "parametersRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "artifact",
+        "id": "parameters_proposal_a",
+        "revision": 1,
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "parametersDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "maximumCredits": "25",
+      "maximumCost": null,
+      "risk": "external",
+      "irreversible": false,
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "proposedBy": {
+        "kind": "agent",
+        "principalId": "agent_coordinator",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": null,
+        "installationId": "installation_a",
+        "mandateId": null
+      },
+      "requestedBy": {
+        "kind": "human",
+        "principalId": "human_maya",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_maya",
+        "installationId": null,
+        "mandateId": null
+      },
+      "beneficiaryPrincipalIds": [],
+      "contextTaint": "trusted",
+      "partialApproval": "allowed",
+      "derivedFrom": null,
+      "proposalDigest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c",
+      "expiresAt": "2026-10-25T09:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.proposal.v1_shape",
+    "kind": "schema",
+    "selector": "core-v1.1:Proposal",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "proposal-a",
+      "organizationId": "org-a",
+      "workspaceId": "workspace-a",
+      "storeId": "store-a",
+      "revision": 1,
+      "createdAt": "2026-10-06T10:00:00Z",
+      "updatedAt": "2026-10-06T10:00:00Z",
+      "taskId": "task-a",
+      "capabilityId": "catalog.content.publish",
+      "scope": {
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "storeIds": [
+          "store-a"
+        ],
+        "accountIds": [
+          "account-a"
+        ],
+        "resources": [
+          {
+            "organizationId": "org-a",
+            "workspaceId": "workspace-a",
+            "storeId": "store-a",
+            "connectionId": "connection-a",
+            "kind": "product",
+            "id": "product-a"
+          }
+        ],
+        "fields": [
+          "title"
+        ]
+      },
+      "targets": [
+        {
+          "resource": {
+            "organizationId": "org-a",
+            "workspaceId": "workspace-a",
+            "storeId": "store-a",
+            "connectionId": "connection-a",
+            "kind": "product",
+            "id": "product-a"
+          },
+          "expectedSourceRevision": "source-v1",
+          "fields": [
+            "title"
+          ]
+        }
+      ],
+      "parametersRef": {
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "storeId": "store-a",
+        "kind": "artifact",
+        "id": "parameters-a",
+        "revision": 1,
+        "digest": "7ebe31cc2be7162f407c85855a2dda0378165e6b4301a91c021f287f784f834f"
+      },
+      "parametersDigest": "7ebe31cc2be7162f407c85855a2dda0378165e6b4301a91c021f287f784f834f",
+      "maximumCost": null,
+      "risk": "external",
+      "reviewPolicyRef": {
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "storeId": "store-a",
+        "kind": "policy",
+        "id": "policy-a",
+        "revision": 1,
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "proposalDigest": "8b08dba0eb98efe96b5905a62ed5e72015e415aed213884014481278585e4f59",
+      "proposedBy": {
+        "kind": "human",
+        "principalId": "human-a",
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "membershipId": "member-a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "expiresAt": "2026-10-07T10:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.proposal.v1_history",
+    "kind": "schema",
+    "selector": "core:Proposal",
+    "valid": true,
+    "value": {
+      "schemaVersion": 1,
+      "id": "proposal-a",
+      "organizationId": "org-a",
+      "workspaceId": "workspace-a",
+      "storeId": "store-a",
+      "revision": 1,
+      "createdAt": "2026-10-06T10:00:00Z",
+      "updatedAt": "2026-10-06T10:00:00Z",
+      "taskId": "task-a",
+      "capabilityId": "catalog.content.publish",
+      "scope": {
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "storeIds": [
+          "store-a"
+        ],
+        "accountIds": [
+          "account-a"
+        ],
+        "resources": [
+          {
+            "organizationId": "org-a",
+            "workspaceId": "workspace-a",
+            "storeId": "store-a",
+            "connectionId": "connection-a",
+            "kind": "product",
+            "id": "product-a"
+          }
+        ],
+        "fields": [
+          "title"
+        ]
+      },
+      "targets": [
+        {
+          "resource": {
+            "organizationId": "org-a",
+            "workspaceId": "workspace-a",
+            "storeId": "store-a",
+            "connectionId": "connection-a",
+            "kind": "product",
+            "id": "product-a"
+          },
+          "expectedSourceRevision": "source-v1",
+          "fields": [
+            "title"
+          ]
+        }
+      ],
+      "parametersRef": {
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "storeId": "store-a",
+        "kind": "artifact",
+        "id": "parameters-a",
+        "revision": 1,
+        "digest": "7ebe31cc2be7162f407c85855a2dda0378165e6b4301a91c021f287f784f834f"
+      },
+      "parametersDigest": "7ebe31cc2be7162f407c85855a2dda0378165e6b4301a91c021f287f784f834f",
+      "maximumCost": null,
+      "risk": "external",
+      "reviewPolicyRef": {
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "storeId": "store-a",
+        "kind": "policy",
+        "id": "policy-a",
+        "revision": 1,
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "proposalDigest": "8b08dba0eb98efe96b5905a62ed5e72015e415aed213884014481278585e4f59",
+      "proposedBy": {
+        "kind": "human",
+        "principalId": "human-a",
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "membershipId": "member-a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "expiresAt": "2026-10-07T10:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.proposal.v1_rejects_v2",
+    "kind": "schema",
+    "selector": "core:Proposal",
+    "valid": false,
+    "value": {
+      "schemaVersion": 2,
+      "id": "proposal_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "taskId": "task_a",
+      "capabilityId": "catalog.content.publish",
+      "scope": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeIds": [
+          "store_a"
+        ],
+        "accountIds": [],
+        "resources": [
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_2"
+          }
+        ],
+        "fields": [
+          "title"
+        ]
+      },
+      "targets": [
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_0"
+          },
+          "expectedSourceRevision": "source_revision_0",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_1"
+          },
+          "expectedSourceRevision": "source_revision_1",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "10",
+          "maximumCost": null
+        },
+        {
+          "resource": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "connectionId": null,
+            "kind": "product",
+            "id": "product_2"
+          },
+          "expectedSourceRevision": "source_revision_2",
+          "fields": [
+            "title"
+          ],
+          "maximumCredits": "5",
+          "maximumCost": null
+        }
+      ],
+      "parametersRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "artifact",
+        "id": "parameters_proposal_a",
+        "revision": 1,
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "parametersDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "maximumCredits": "25",
+      "maximumCost": null,
+      "risk": "external",
+      "irreversible": false,
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "proposedBy": {
+        "kind": "agent",
+        "principalId": "agent_coordinator",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": null,
+        "installationId": "installation_a",
+        "mandateId": null
+      },
+      "requestedBy": {
+        "kind": "human",
+        "principalId": "human_maya",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_maya",
+        "installationId": null,
+        "mandateId": null
+      },
+      "beneficiaryPrincipalIds": [],
+      "contextTaint": "none",
+      "partialApproval": "allowed",
+      "derivedFrom": null,
+      "proposalDigest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c",
+      "expiresAt": "2026-10-25T09:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.policy.defaults",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewPolicyRules",
+    "valid": true,
+    "value": {
+      "internal": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 604800,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "external": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 259200,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "communication": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "financial": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "access_change": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "irreversible": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "soloOwner": {
+        "coolDownSeconds": 300,
+        "quietPeriodSeconds": 86400
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.policy.quorum_zero",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewPolicyRules",
+    "valid": false,
+    "value": {
+      "internal": {
+        "requiredApprovals": 0,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 604800,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "external": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 259200,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "communication": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "financial": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "access_change": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "irreversible": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "soloOwner": {
+        "coolDownSeconds": 300,
+        "quietPeriodSeconds": 86400
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.policy.quorum_six",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewPolicyRules",
+    "valid": false,
+    "value": {
+      "internal": {
+        "requiredApprovals": 6,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 604800,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "external": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 259200,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "communication": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "financial": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "access_change": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "irreversible": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "soloOwner": {
+        "coolDownSeconds": 300,
+        "quietPeriodSeconds": 86400
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.policy.pending_299",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewPolicyRules",
+    "valid": false,
+    "value": {
+      "internal": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 604800,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "external": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 299,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "communication": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "financial": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "access_change": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "irreversible": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "soloOwner": {
+        "coolDownSeconds": 300,
+        "quietPeriodSeconds": 86400
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.policy.missing_financial",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewPolicyRules",
+    "valid": false,
+    "value": {
+      "internal": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 604800,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "external": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 259200,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "communication": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "access_change": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "irreversible": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "soloOwner": {
+        "coolDownSeconds": 300,
+        "quietPeriodSeconds": 86400
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.policy.extra_spend",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewPolicyRules",
+    "valid": false,
+    "value": {
+      "internal": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 604800,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "external": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 259200,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "communication": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "financial": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "access_change": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "irreversible": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "soloOwner": {
+        "coolDownSeconds": 300,
+        "quietPeriodSeconds": 86400
+      },
+      "spend": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.policy.financial_allowed",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewPolicyRules",
+    "valid": false,
+    "value": {
+      "internal": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 604800,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "external": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 259200,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "communication": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "financial": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "access_change": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "irreversible": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "soloOwner": {
+        "coolDownSeconds": 300,
+        "quietPeriodSeconds": 86400
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.policy.empty_reviewers",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewPolicyRules",
+    "valid": false,
+    "value": {
+      "internal": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 604800,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": []
+      },
+      "external": {
+        "requiredApprovals": 1,
+        "selfApproval": "allowed",
+        "pendingExpirySeconds": 259200,
+        "approvedValiditySeconds": 86400,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "communication": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "financial": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "access_change": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "irreversible": {
+        "requiredApprovals": 1,
+        "selfApproval": "solo_owner_typed_confirmation",
+        "pendingExpirySeconds": 86400,
+        "approvedValiditySeconds": 3600,
+        "eligibleReviewerPrincipalIds": null
+      },
+      "soloOwner": {
+        "coolDownSeconds": 300,
+        "quietPeriodSeconds": 86400
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.policy.record",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewPolicy",
+    "valid": true,
+    "value": {
+      "schemaVersion": 1,
+      "id": "policy_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": null,
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "rules": {
+        "internal": {
+          "requiredApprovals": 1,
+          "selfApproval": "allowed",
+          "pendingExpirySeconds": 604800,
+          "approvedValiditySeconds": 86400,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "external": {
+          "requiredApprovals": 1,
+          "selfApproval": "allowed",
+          "pendingExpirySeconds": 259200,
+          "approvedValiditySeconds": 86400,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "communication": {
+          "requiredApprovals": 1,
+          "selfApproval": "solo_owner_typed_confirmation",
+          "pendingExpirySeconds": 86400,
+          "approvedValiditySeconds": 3600,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "financial": {
+          "requiredApprovals": 1,
+          "selfApproval": "solo_owner_typed_confirmation",
+          "pendingExpirySeconds": 86400,
+          "approvedValiditySeconds": 3600,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "access_change": {
+          "requiredApprovals": 1,
+          "selfApproval": "solo_owner_typed_confirmation",
+          "pendingExpirySeconds": 86400,
+          "approvedValiditySeconds": 3600,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "irreversible": {
+          "requiredApprovals": 1,
+          "selfApproval": "solo_owner_typed_confirmation",
+          "pendingExpirySeconds": 86400,
+          "approvedValiditySeconds": 3600,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "soloOwner": {
+          "coolDownSeconds": 300,
+          "quietPeriodSeconds": 86400
+        }
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.policy.store_scoped",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewPolicy",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "policy_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "rules": {
+        "internal": {
+          "requiredApprovals": 1,
+          "selfApproval": "allowed",
+          "pendingExpirySeconds": 604800,
+          "approvedValiditySeconds": 86400,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "external": {
+          "requiredApprovals": 1,
+          "selfApproval": "allowed",
+          "pendingExpirySeconds": 259200,
+          "approvedValiditySeconds": 86400,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "communication": {
+          "requiredApprovals": 1,
+          "selfApproval": "solo_owner_typed_confirmation",
+          "pendingExpirySeconds": 86400,
+          "approvedValiditySeconds": 3600,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "financial": {
+          "requiredApprovals": 1,
+          "selfApproval": "solo_owner_typed_confirmation",
+          "pendingExpirySeconds": 86400,
+          "approvedValiditySeconds": 3600,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "access_change": {
+          "requiredApprovals": 1,
+          "selfApproval": "solo_owner_typed_confirmation",
+          "pendingExpirySeconds": 86400,
+          "approvedValiditySeconds": 3600,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "irreversible": {
+          "requiredApprovals": 1,
+          "selfApproval": "solo_owner_typed_confirmation",
+          "pendingExpirySeconds": 86400,
+          "approvedValiditySeconds": 3600,
+          "eligibleReviewerPrincipalIds": null
+        },
+        "soloOwner": {
+          "coolDownSeconds": 300,
+          "quietPeriodSeconds": 86400
+        }
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.approval.pending",
+    "kind": "schema",
+    "selector": "core-v1.1:Approval",
+    "valid": true,
+    "value": {
+      "schemaVersion": 2,
+      "id": "approval_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "proposalDigest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c",
+      "status": "pending",
+      "reviewer": null,
+      "decision": null,
+      "decidedAt": null,
+      "expiresAt": "2026-10-21T09:00:00.000Z",
+      "policyRevision": 1,
+      "scopeDigest": "7857f28feccdcce23e6cce4619d6104af0b2d06400f5f3b7e3a4bec967b0dd45",
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "requiredApprovals": 1,
+      "decisions": [],
+      "effectiveAt": null
+    }
+  },
+  {
+    "id": "P01.T02a.approval.approved",
+    "kind": "schema",
+    "selector": "core-v1.1:Approval",
+    "valid": true,
+    "value": {
+      "schemaVersion": 2,
+      "id": "approval_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 2,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T10:00:00Z",
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "proposalDigest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c",
+      "status": "approved",
+      "reviewer": {
+        "kind": "human",
+        "principalId": "human_leo",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_leo",
+        "installationId": null,
+        "mandateId": null
+      },
+      "decision": "approve",
+      "decidedAt": "2026-10-18T10:00:00Z",
+      "expiresAt": "2026-10-19T10:00:00.000Z",
+      "policyRevision": 1,
+      "scopeDigest": "7857f28feccdcce23e6cce4619d6104af0b2d06400f5f3b7e3a4bec967b0dd45",
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "requiredApprovals": 1,
+      "decisions": [
+        {
+          "reviewer": {
+            "kind": "human",
+            "principalId": "human_leo",
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "membershipId": "membership_leo",
+            "installationId": null,
+            "mandateId": null
+          },
+          "decision": "approve",
+          "decidedAt": "2026-10-18T10:00:00Z",
+          "commandId": "command_leo",
+          "requestDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "comment": "Looks right",
+          "soloOwnerConfirmation": null
+        }
+      ],
+      "effectiveAt": "2026-10-18T10:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.approval.agent_reviewer",
+    "kind": "schema",
+    "selector": "core-v1.1:Approval",
+    "valid": false,
+    "value": {
+      "schemaVersion": 2,
+      "id": "approval_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 2,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T10:00:00Z",
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "proposalDigest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c",
+      "status": "approved",
+      "reviewer": {
+        "kind": "agent",
+        "principalId": "agent_coordinator",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": null,
+        "installationId": "installation_a",
+        "mandateId": null
+      },
+      "decision": "approve",
+      "decidedAt": "2026-10-18T10:00:00Z",
+      "expiresAt": "2026-10-19T10:00:00.000Z",
+      "policyRevision": 1,
+      "scopeDigest": "7857f28feccdcce23e6cce4619d6104af0b2d06400f5f3b7e3a4bec967b0dd45",
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "requiredApprovals": 1,
+      "decisions": [
+        {
+          "reviewer": {
+            "kind": "human",
+            "principalId": "human_leo",
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "membershipId": "membership_leo",
+            "installationId": null,
+            "mandateId": null
+          },
+          "decision": "approve",
+          "decidedAt": "2026-10-18T10:00:00Z",
+          "commandId": "command_leo",
+          "requestDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "comment": "Looks right",
+          "soloOwnerConfirmation": null
+        }
+      ],
+      "effectiveAt": "2026-10-18T10:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.approval.approved_without_decisions",
+    "kind": "schema",
+    "selector": "core-v1.1:Approval",
+    "valid": false,
+    "value": {
+      "schemaVersion": 2,
+      "id": "approval_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 2,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T10:00:00Z",
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "proposalDigest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c",
+      "status": "approved",
+      "reviewer": {
+        "kind": "human",
+        "principalId": "human_leo",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_leo",
+        "installationId": null,
+        "mandateId": null
+      },
+      "decision": "approve",
+      "decidedAt": "2026-10-18T10:00:00Z",
+      "expiresAt": "2026-10-19T10:00:00.000Z",
+      "policyRevision": 1,
+      "scopeDigest": "7857f28feccdcce23e6cce4619d6104af0b2d06400f5f3b7e3a4bec967b0dd45",
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "requiredApprovals": 1,
+      "decisions": [],
+      "effectiveAt": "2026-10-18T10:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.approval.approved_without_effect",
+    "kind": "schema",
+    "selector": "core-v1.1:Approval",
+    "valid": false,
+    "value": {
+      "schemaVersion": 2,
+      "id": "approval_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 2,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T10:00:00Z",
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "proposalDigest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c",
+      "status": "approved",
+      "reviewer": {
+        "kind": "human",
+        "principalId": "human_leo",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "membershipId": "membership_leo",
+        "installationId": null,
+        "mandateId": null
+      },
+      "decision": "approve",
+      "decidedAt": "2026-10-18T10:00:00Z",
+      "expiresAt": "2026-10-19T10:00:00.000Z",
+      "policyRevision": 1,
+      "scopeDigest": "7857f28feccdcce23e6cce4619d6104af0b2d06400f5f3b7e3a4bec967b0dd45",
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "requiredApprovals": 1,
+      "decisions": [
+        {
+          "reviewer": {
+            "kind": "human",
+            "principalId": "human_leo",
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "membershipId": "membership_leo",
+            "installationId": null,
+            "mandateId": null
+          },
+          "decision": "approve",
+          "decidedAt": "2026-10-18T10:00:00Z",
+          "commandId": "command_leo",
+          "requestDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "comment": "Looks right",
+          "soloOwnerConfirmation": null
+        }
+      ],
+      "effectiveAt": null
+    }
+  },
+  {
+    "id": "P01.T02a.approval.pending_with_effect",
+    "kind": "schema",
+    "selector": "core-v1.1:Approval",
+    "valid": false,
+    "value": {
+      "schemaVersion": 2,
+      "id": "approval_a",
+      "organizationId": "org_a",
+      "workspaceId": "workspace_a",
+      "storeId": "store_a",
+      "revision": 1,
+      "createdAt": "2026-10-18T09:00:00Z",
+      "updatedAt": "2026-10-18T09:00:00Z",
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "proposalDigest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c",
+      "status": "pending",
+      "reviewer": null,
+      "decision": null,
+      "decidedAt": null,
+      "expiresAt": "2026-10-21T09:00:00.000Z",
+      "policyRevision": 1,
+      "scopeDigest": "7857f28feccdcce23e6cce4619d6104af0b2d06400f5f3b7e3a4bec967b0dd45",
+      "reviewPolicyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      },
+      "requiredApprovals": 1,
+      "decisions": [],
+      "effectiveAt": "2026-10-18T10:00:00Z"
+    }
+  },
+  {
+    "id": "P01.T02a.approval.v1_shape",
+    "kind": "schema",
+    "selector": "core-v1.1:Approval",
+    "valid": false,
+    "value": {
+      "schemaVersion": 1,
+      "id": "approval-a",
+      "organizationId": "org-a",
+      "workspaceId": "workspace-a",
+      "storeId": "store-a",
+      "revision": 1,
+      "createdAt": "2026-10-06T10:00:00Z",
+      "updatedAt": "2026-10-06T10:00:00Z",
+      "proposalRef": {
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "storeId": "store-a",
+        "kind": "proposal",
+        "id": "proposal-a",
+        "revision": 1,
+        "digest": "8b08dba0eb98efe96b5905a62ed5e72015e415aed213884014481278585e4f59"
+      },
+      "proposalDigest": "8b08dba0eb98efe96b5905a62ed5e72015e415aed213884014481278585e4f59",
+      "status": "approved",
+      "reviewer": {
+        "kind": "human",
+        "principalId": "human-a",
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "membershipId": "member-a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "decision": "approve",
+      "decidedAt": "2026-10-06T11:00:00Z",
+      "expiresAt": "2026-10-07T10:00:00Z",
+      "policyRevision": 1,
+      "scopeDigest": "516ca92e391758e1417215146f71d8a66c5d12490a3fa1403915eef917bd8065"
+    }
+  },
+  {
+    "id": "P01.T02a.approval.v1_history",
+    "kind": "schema",
+    "selector": "core:Approval",
+    "valid": true,
+    "value": {
+      "schemaVersion": 1,
+      "id": "approval-a",
+      "organizationId": "org-a",
+      "workspaceId": "workspace-a",
+      "storeId": "store-a",
+      "revision": 1,
+      "createdAt": "2026-10-06T10:00:00Z",
+      "updatedAt": "2026-10-06T10:00:00Z",
+      "proposalRef": {
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "storeId": "store-a",
+        "kind": "proposal",
+        "id": "proposal-a",
+        "revision": 1,
+        "digest": "8b08dba0eb98efe96b5905a62ed5e72015e415aed213884014481278585e4f59"
+      },
+      "proposalDigest": "8b08dba0eb98efe96b5905a62ed5e72015e415aed213884014481278585e4f59",
+      "status": "approved",
+      "reviewer": {
+        "kind": "human",
+        "principalId": "human-a",
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "membershipId": "member-a",
+        "installationId": null,
+        "mandateId": null
+      },
+      "decision": "approve",
+      "decidedAt": "2026-10-06T11:00:00Z",
+      "expiresAt": "2026-10-07T10:00:00Z",
+      "policyRevision": 1,
+      "scopeDigest": "516ca92e391758e1417215146f71d8a66c5d12490a3fa1403915eef917bd8065"
+    }
+  },
+  {
+    "id": "P01.T02a.decision.partial",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewDecisionInput",
+    "valid": true,
+    "value": {
+      "decision": "approve",
+      "selectedTargetIndexes": [
+        0,
+        1
+      ],
+      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "soloOwnerConfirmation": null,
+      "comment": null
+    }
+  },
+  {
+    "id": "P01.T02a.decision.cancel",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewDecisionInput",
+    "valid": true,
+    "value": {
+      "decision": "cancel_before_effective",
+      "selectedTargetIndexes": null,
+      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "soloOwnerConfirmation": null,
+      "comment": null
+    }
+  },
+  {
+    "id": "P01.T02a.decision.cancel_with_selection",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewDecisionInput",
+    "valid": false,
+    "value": {
+      "decision": "cancel_before_effective",
+      "selectedTargetIndexes": [
+        0,
+        1
+      ],
+      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "soloOwnerConfirmation": null,
+      "comment": null
+    }
+  },
+  {
+    "id": "P01.T02a.decision.cancel_with_phrase",
+    "kind": "schema",
+    "selector": "core-v1.1:ReviewDecisionInput",
+    "valid": false,
+    "value": {
+      "decision": "cancel_before_effective",
+      "selectedTargetIndexes": null,
+      "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+      "soloOwnerConfirmation": "approve 2 changes for 20 credits",
+      "comment": null
+    }
+  },
+  {
+    "id": "P01.T02a.decide.valid",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.approval.decide.input",
+    "valid": true,
+    "value": {
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "decision": {
+        "decision": "approve",
+        "selectedTargetIndexes": [
+          0,
+          1
+        ],
+        "expectedDecisionDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+        "soloOwnerConfirmation": null,
+        "comment": null
+      },
+      "expectedRevision": 1
+    }
+  },
+  {
+    "id": "P01.T02a.decide.v1_shape",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.approval.decide.input",
+    "valid": false,
+    "value": {
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "decision": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "decision",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "expectedRevision": 1
+    }
+  },
+  {
+    "id": "P01.T02a.decide.v1_history",
+    "kind": "schema",
+    "selector": "capabilities:governance.approval.decide.input",
+    "valid": true,
+    "value": {
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "decision": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "decision",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "expectedRevision": 1
+    }
+  },
+  {
+    "id": "P01.T02a.preview.whole",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.approval.preview.input",
+    "valid": true,
+    "value": {
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "selectedTargetIndexes": null
+    }
+  },
+  {
+    "id": "P01.T02a.preview.partial",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.approval.preview.input",
+    "valid": true,
+    "value": {
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "selectedTargetIndexes": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "id": "P01.T02a.preview.output",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.approval.preview.output",
+    "valid": true,
+    "value": {
+      "proposal": {
+        "schemaVersion": 2,
+        "id": "derived_29a33ef2152eb5051ae9b7d9128227ff3edf3baa723a8bd6380ad8822185063f",
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "revision": 1,
+        "createdAt": "2026-10-18T09:00:00Z",
+        "updatedAt": "2026-10-18T09:00:00Z",
+        "taskId": "task_a",
+        "capabilityId": "catalog.content.publish",
+        "scope": {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeIds": [
+            "store_a"
+          ],
+          "accountIds": [],
+          "resources": [
+            {
+              "organizationId": "org_a",
+              "workspaceId": "workspace_a",
+              "storeId": "store_a",
+              "connectionId": null,
+              "kind": "product",
+              "id": "product_0"
+            },
+            {
+              "organizationId": "org_a",
+              "workspaceId": "workspace_a",
+              "storeId": "store_a",
+              "connectionId": null,
+              "kind": "product",
+              "id": "product_1"
+            }
+          ],
+          "fields": [
+            "title"
+          ]
+        },
+        "targets": [
+          {
+            "resource": {
+              "organizationId": "org_a",
+              "workspaceId": "workspace_a",
+              "storeId": "store_a",
+              "connectionId": null,
+              "kind": "product",
+              "id": "product_0"
+            },
+            "expectedSourceRevision": "source_revision_0",
+            "fields": [
+              "title"
+            ],
+            "maximumCredits": "10",
+            "maximumCost": null
+          },
+          {
+            "resource": {
+              "organizationId": "org_a",
+              "workspaceId": "workspace_a",
+              "storeId": "store_a",
+              "connectionId": null,
+              "kind": "product",
+              "id": "product_1"
+            },
+            "expectedSourceRevision": "source_revision_1",
+            "fields": [
+              "title"
+            ],
+            "maximumCredits": "10",
+            "maximumCost": null
+          }
+        ],
+        "parametersRef": {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": "store_a",
+          "kind": "artifact",
+          "id": "parameters_proposal_a",
+          "revision": 1,
+          "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        "parametersDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "maximumCredits": "20",
+        "maximumCost": null,
+        "risk": "external",
+        "irreversible": false,
+        "reviewPolicyRef": {
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "storeId": null,
+          "kind": "policy",
+          "id": "policy_a",
+          "revision": 1,
+          "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+        },
+        "proposedBy": {
+          "kind": "agent",
+          "principalId": "agent_coordinator",
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "membershipId": null,
+          "installationId": "installation_a",
+          "mandateId": null
+        },
+        "requestedBy": {
+          "kind": "human",
+          "principalId": "human_maya",
+          "organizationId": "org_a",
+          "workspaceId": "workspace_a",
+          "membershipId": "membership_maya",
+          "installationId": null,
+          "mandateId": null
+        },
+        "beneficiaryPrincipalIds": [],
+        "contextTaint": "none",
+        "partialApproval": "all_or_nothing",
+        "derivedFrom": {
+          "parentRef": {
+            "organizationId": "org_a",
+            "workspaceId": "workspace_a",
+            "storeId": "store_a",
+            "kind": "proposal",
+            "id": "proposal_a",
+            "revision": 1,
+            "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+          },
+          "selectedTargetIndexes": [
+            0,
+            1
+          ]
+        },
+        "proposalDigest": "bb235a6ccfe4a8ee2d3bef8a2d56766e34aa6c1f27a6afdfe016a4b916eebf55",
+        "expiresAt": "2026-10-25T09:00:00Z"
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.preview.v1_output",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.approval.preview.output",
+    "valid": false,
+    "value": {
+      "proposal": {
+        "schemaVersion": 1,
+        "id": "proposal-a",
+        "organizationId": "org-a",
+        "workspaceId": "workspace-a",
+        "storeId": "store-a",
+        "revision": 1,
+        "createdAt": "2026-10-06T10:00:00Z",
+        "updatedAt": "2026-10-06T10:00:00Z",
+        "taskId": "task-a",
+        "capabilityId": "catalog.content.publish",
+        "scope": {
+          "organizationId": "org-a",
+          "workspaceId": "workspace-a",
+          "storeIds": [
+            "store-a"
+          ],
+          "accountIds": [
+            "account-a"
+          ],
+          "resources": [
+            {
+              "organizationId": "org-a",
+              "workspaceId": "workspace-a",
+              "storeId": "store-a",
+              "connectionId": "connection-a",
+              "kind": "product",
+              "id": "product-a"
+            }
+          ],
+          "fields": [
+            "title"
+          ]
+        },
+        "targets": [
+          {
+            "resource": {
+              "organizationId": "org-a",
+              "workspaceId": "workspace-a",
+              "storeId": "store-a",
+              "connectionId": "connection-a",
+              "kind": "product",
+              "id": "product-a"
+            },
+            "expectedSourceRevision": "source-v1",
+            "fields": [
+              "title"
+            ]
+          }
+        ],
+        "parametersRef": {
+          "organizationId": "org-a",
+          "workspaceId": "workspace-a",
+          "storeId": "store-a",
+          "kind": "artifact",
+          "id": "parameters-a",
+          "revision": 1,
+          "digest": "7ebe31cc2be7162f407c85855a2dda0378165e6b4301a91c021f287f784f834f"
+        },
+        "parametersDigest": "7ebe31cc2be7162f407c85855a2dda0378165e6b4301a91c021f287f784f834f",
+        "maximumCost": null,
+        "risk": "external",
+        "reviewPolicyRef": {
+          "organizationId": "org-a",
+          "workspaceId": "workspace-a",
+          "storeId": "store-a",
+          "kind": "policy",
+          "id": "policy-a",
+          "revision": 1,
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "proposalDigest": "8b08dba0eb98efe96b5905a62ed5e72015e415aed213884014481278585e4f59",
+        "proposedBy": {
+          "kind": "human",
+          "principalId": "human-a",
+          "organizationId": "org-a",
+          "workspaceId": "workspace-a",
+          "membershipId": "member-a",
+          "installationId": null,
+          "mandateId": null
+        },
+        "expiresAt": "2026-10-07T10:00:00Z"
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.revise.input",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.review_policy.revise.input",
+    "valid": true,
+    "value": {
+      "proposalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "proposal",
+        "id": "proposal_a",
+        "revision": 1,
+        "digest": "ed9ed8037a891525aef0d5e5be7e2675fa82183c5704e1fd90210aba67a6007c"
+      },
+      "approvalRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": "store_a",
+        "kind": "approval",
+        "id": "approval_a",
+        "revision": 2,
+        "digest": "f2727ae896d3a86c23bf5a7d4166fa5013c9cd812dc68a6802ddd662d2ebf052"
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.revise.output",
+    "kind": "schema",
+    "selector": "capabilities-v1.1:governance.review_policy.revise.output",
+    "valid": true,
+    "value": {
+      "policyRef": {
+        "organizationId": "org_a",
+        "workspaceId": "workspace_a",
+        "storeId": null,
+        "kind": "policy",
+        "id": "policy_a",
+        "revision": 1,
+        "digest": "3233a79a31d988ed9b757ecb9d56cf0b8aeb06603a834fa445e0831a421bd0b6"
+      }
+    }
+  },
+  {
+    "id": "P01.T02a.state.approval_v1_row_superseded",
+    "kind": "transition",
+    "aggregate": "approval",
+    "from": "pending",
+    "to": "approved",
+    "actor": "eligible_human_reviewer",
+    "guard": "exact_digest_scope_and_current_policy",
+    "version": "1.1",
+    "guardPassed": true,
+    "allowed": false
+  },
+  {
+    "id": "P01.T02a.state.approval_v1_row_history",
+    "kind": "transition",
+    "aggregate": "approval",
+    "from": "pending",
+    "to": "approved",
+    "actor": "eligible_human_reviewer",
+    "guard": "exact_digest_scope_and_current_policy",
+    "version": "1",
+    "guardPassed": true,
+    "allowed": true
+  },
+  {
+    "id": "P01.T02a.state.approval_quorum",
+    "kind": "transition",
+    "aggregate": "approval",
+    "from": "pending",
+    "to": "approved",
+    "actor": "eligible_human_reviewer",
+    "guard": "quorum_met_exact_digest_scope_and_current_policy",
+    "version": "1.1",
+    "guardPassed": true,
+    "allowed": true
+  },
+  {
+    "id": "P01.T02a.state.approval_quorum_not_v1",
+    "kind": "transition",
+    "aggregate": "approval",
+    "from": "pending",
+    "to": "approved",
+    "actor": "eligible_human_reviewer",
+    "guard": "quorum_met_exact_digest_scope_and_current_policy",
+    "version": "1",
+    "guardPassed": true,
+    "allowed": false
+  },
+  {
+    "id": "P01.T02a.state.approval_solo",
+    "kind": "transition",
+    "aggregate": "approval",
+    "from": "pending",
+    "to": "approved",
+    "actor": "solo_owner",
+    "guard": "typed_confirmation_recorded_cool_down_scheduled",
+    "version": "1.1",
+    "guardPassed": true,
+    "allowed": true
+  },
+  {
+    "id": "P01.T02a.state.approval_reject",
+    "kind": "transition",
+    "aggregate": "approval",
+    "from": "pending",
+    "to": "rejected",
+    "actor": "eligible_human_reviewer",
+    "guard": "eligible_rejection_exact_digest_and_current_policy",
+    "version": "1.1",
+    "guardPassed": true,
+    "allowed": true
+  },
+  {
+    "id": "P01.T02a.state.approval_solo_cancel",
+    "kind": "transition",
+    "aggregate": "approval",
+    "from": "approved",
+    "to": "cancelled",
+    "actor": "solo_owner",
+    "guard": "before_effective_at",
+    "version": "1.1",
+    "guardPassed": true,
+    "allowed": true
+  },
+  {
+    "id": "P01.T02a.state.approval_superseded",
+    "kind": "transition",
+    "aggregate": "approval",
+    "from": "pending",
+    "to": "invalidated",
+    "actor": "work_service",
+    "guard": "superseded_by_partial_approval",
+    "version": "1.1",
+    "guardPassed": true,
+    "allowed": true
+  },
+  {
+    "id": "P01.T02a.state.approval_family_rejected",
+    "kind": "transition",
+    "aggregate": "approval",
+    "from": "pending",
+    "to": "invalidated",
+    "actor": "work_service",
+    "guard": "family_rejected",
+    "version": "1.1",
+    "guardPassed": true,
+    "allowed": true
+  },
+  {
+    "id": "P01.T02a.state.approval_reviewer_cannot_cancel",
+    "kind": "transition",
+    "aggregate": "approval",
+    "from": "approved",
+    "to": "cancelled",
+    "actor": "eligible_human_reviewer",
+    "guard": "before_effective_at",
+    "version": "1.1",
+    "guardPassed": true,
+    "allowed": false
+  },
+  {
+    "id": "P01.T02a.state.task_draft_cancel",
+    "kind": "transition",
+    "aggregate": "task",
+    "from": "draft",
+    "to": "cancelled",
+    "actor": "owner",
+    "guard": "no_dispatch",
+    "capability": "workspace.task.cancel",
+    "version": "1.1",
+    "guardPassed": true,
+    "allowed": true
+  },
+  {
+    "id": "P01.T02a.state.task_draft_cancel_not_v1",
+    "kind": "transition",
+    "aggregate": "task",
+    "from": "draft",
+    "to": "cancelled",
+    "actor": "owner",
+    "guard": "no_dispatch",
+    "capability": "workspace.task.cancel",
+    "version": "1",
+    "guardPassed": true,
+    "allowed": false
+  },
+  {
+    "id": "P01.T02a.state.task_ready_cancel",
+    "kind": "transition",
+    "aggregate": "task",
+    "from": "ready",
+    "to": "cancelled",
+    "actor": "owner",
+    "guard": "no_dispatch",
+    "capability": "workspace.task.cancel",
+    "version": "1.1",
+    "guardPassed": true,
+    "allowed": true
   }
 ]

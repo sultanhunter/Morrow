@@ -8,6 +8,7 @@ import type { CapabilityInput, Core_ProposalRef } from "@morrow/contracts";
 import { validateCapabilityInput, validateDefinition } from "@morrow/contracts/validation";
 import catalogue from "../../../docs/contracts/capabilities.json";
 import { plainJson, closed, freezeJson } from "./json-boundary";
+import { isWorkspaceOwnershipFacts } from "./review-facts";
 import type {
   KillSwitchTargetFacts,
   KillSwitchTargetKey,
@@ -110,18 +111,6 @@ const sourceProposal = (value: unknown) =>
     value.targets.length >= 1 &&
     value.targets.length <= 1000 &&
     value.targets.every(targetKey));
-const ownership = (value: unknown) =>
-  closed(value, [
-    "ownerPrincipalId",
-    "ownerMembershipId",
-    "activeHumanMembershipCount",
-    "lastMembershipChangeAt",
-  ]) &&
-  id(value.ownerPrincipalId) &&
-  id(value.ownerMembershipId) &&
-  validateDefinition("core", "Count", value.activeHumanMembershipCount) &&
-  (value.lastMembershipChangeAt === null ||
-    validateDefinition("core", "UtcTime", value.lastMembershipChangeAt));
 
 function parseRequest(value: unknown): KillSwitchTargetRequest {
   if (
@@ -157,7 +146,7 @@ function parseFacts(value: unknown): KillSwitchTargetFacts {
     value.grants.length > 1000 ||
     !value.grants.every(coverage) ||
     !sourceProposal(value.sourceProposal) ||
-    !ownership(value.ownership)
+    !isWorkspaceOwnershipFacts(value.ownership)
   )
     throw new KillSwitchBoundaryError("KILL_SWITCH_FACTS_INVALID");
   return freezeJson(JSON.parse(JSON.stringify(value))) as KillSwitchTargetFacts;

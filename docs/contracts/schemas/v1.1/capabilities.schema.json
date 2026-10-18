@@ -83,6 +83,82 @@
         "control"
       ],
       "additionalProperties": false
+    },
+    "governance.approval.decide.input": {
+      "type": "object",
+      "properties": {
+        "proposalRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+        },
+        "decision": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ReviewDecisionInput"
+        },
+        "expectedRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "proposalRef",
+        "decision",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "governance.review_policy.revise.input": {
+      "type": "object",
+      "properties": {
+        "proposalRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+        },
+        "approvalRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ApprovalRef"
+        }
+      },
+      "required": [
+        "proposalRef",
+        "approvalRef"
+      ],
+      "additionalProperties": false
+    },
+    "governance.review_policy.revise.output": {
+      "type": "object",
+      "properties": {
+        "policyRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/PolicyRef"
+        }
+      },
+      "required": [
+        "policyRef"
+      ],
+      "additionalProperties": false
+    },
+    "governance.approval.preview.input": {
+      "type": "object",
+      "properties": {
+        "proposalRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+        },
+        "selectedTargetIndexes": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/TargetSelection"
+        }
+      },
+      "required": [
+        "proposalRef",
+        "selectedTargetIndexes"
+      ],
+      "additionalProperties": false
+    },
+    "governance.approval.preview.output": {
+      "type": "object",
+      "properties": {
+        "proposal": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/Proposal"
+        }
+      },
+      "required": [
+        "proposal"
+      ],
+      "additionalProperties": false
     }
   }
 }

@@ -6,6 +6,7 @@ import { Miniflare, Log, LogLevel } from "miniflare";
 import { validators } from "../packages/contracts/src/generated/runtime-validators.mjs";
 import { writeArtifact } from "./artifacts.mjs";
 import { contractVersion, readSchemaSources } from "./contract-sources.mjs";
+import { proposal, oracle } from "../tests/fixtures/review-policy.mjs";
 
 // Every exact selector of every contract source runs in workerd; the expected
 // count comes from the sources, never from a hard-coded number.
@@ -18,6 +19,7 @@ const bundle = await build({
   format: "esm",
   platform: "browser",
   target: "es2022",
+  external: ["node:crypto"],
   write: false,
   metafile: true,
 });
@@ -106,12 +108,53 @@ try {
     { organizationId: "org_a", closed: true },
     { organizationId: "org_b", closed: true },
   ]);
+  // The review library derives the same proposal and digest in workerd and Node
+  // (P01.T02a AC04, AC14), and both equal an independent RFC 8785 oracle.
+  const nodeReview = await build({
+    entryPoints: ["packages/policy/src/review.ts"],
+    bundle: true,
+    format: "esm",
+    platform: "node",
+    target: "es2022",
+    write: false,
+  });
+  const { previewSelection } = await import(
+    "data:text/javascript;base64," + Buffer.from(nodeReview.outputFiles[0].text).toString("base64")
+  );
+  const parent = proposal({
+    credits: ["10", "10", "5", "9007199254740993"],
+    costs: ["10.00", null, "2.5", "0.125"],
+  });
+  const selections = [[0, 1], [2], [0, 2, 3], [3], null, [1, 0], [0, 1, 2, 3]];
+  const preview = await runtime.dispatchFetch("http://morrow.local/review-preview", {
+    method: "POST",
+    body: JSON.stringify({ parent, selections }),
+    headers: { "content-type": "application/json" },
+  });
+  assert.equal(preview.status, 200);
+  const workerd = await preview.json();
+  const node = selections.map((selection) => previewSelection(parent, selection));
+  assert.deepEqual(workerd, JSON.parse(JSON.stringify(node)));
+  const derived = node.filter((result) => "proposal" in result && result.proposal.derivedFrom);
+  assert.equal(derived.length, 4);
+  for (const { proposal: p } of derived) {
+    const { proposalDigest, ...content } = p;
+    assert.equal(proposalDigest, oracle(content));
+    assert.equal(p.id, "derived_" + oracle(p.derivedFrom));
+  }
+  assert.deepEqual(workerd.slice(5), [
+    { code: "SELECTION_INVALID" },
+    { code: "SELECTION_INVALID" },
+  ]);
   assert.equal(outboundRequests, 0);
   const inputPaths = [
     "packages/identity/src/neon.ts",
     "packages/identity/src/neon-request.ts",
     "packages/contracts/src/validation.ts",
     "packages/contracts/src/generated/runtime-validators.mjs",
+    "packages/policy/src/review.ts",
+    "packages/policy/src/review-facts.ts",
+    "tests/fixtures/review-policy.mjs",
     ...sources.map((source) => source.path),
     "scripts/fixtures/neon-worker.ts",
     "scripts/workers-identity-lab.mjs",
@@ -133,6 +176,8 @@ try {
           sources.map((source) => [source.kind, Object.keys(source.schema.$defs).length]),
         ),
         validator_cases: definitions * corpus.length,
+        review_preview_cases: selections.length,
+        review_preview_digests_equal: true,
         dynamic_code_generation_denied: true,
         sdk_configuration_passed: true,
         concurrent_synthetic_tenant_reads: 2,
@@ -149,7 +194,7 @@ try {
     ) + "\n",
   );
   console.log(
-    `PASS: local Workers runtime; ${(definitions * corpus.length).toLocaleString("en-US")} validator cases over ${definitions} selectors, SDK settings, dynamic-code denial, two concurrent fixture reads; zero provider calls.`,
+    `PASS: local Workers runtime; ${(definitions * corpus.length).toLocaleString("en-US")} validator cases over ${definitions} selectors, ${selections.length} review previews equal to Node, SDK settings, dynamic-code denial, two concurrent fixture reads; zero provider calls.`,
   );
 } finally {
   await runtime.dispose();

@@ -507,11 +507,29 @@ test("AC08: reversals still require exact approval", async () => {
     ]);
   }
 });
-test("AC08: entitlement and provider limits still apply to a stop in PR-A", async () => {
-  const f = retarget(fixture(), "ads.campaign.pause", "execute", "campaign", ["delivery_status"]);
-  f.authority.providerAllowed = false;
-  assert.equal(await reason(f), "provider_denied");
-  f.authority.providerAllowed = true;
-  f.authority.entitlementAllowed = false;
-  assert.equal(await reason(f), "entitlement_denied");
+// P01.T02a PR-B (AC26): stops are never billing-gated, but stay provider-limited (ADR-0011 Q8).
+test("AC26: entitlement never blocks a kill switch; provider limits still apply", async () => {
+  for (const [capabilityId, kind, fields, verification] of [
+    ["governance.connection.disconnect", "workspace", ["connection_state"], []],
+    ["ads.campaign.pause", "campaign", ["delivery_status"], ["provider_effect_verification"]],
+  ]) {
+    const f = retarget(fixture(), capabilityId, "execute", kind, fields);
+    f.authority.entitlementAllowed = false;
+    const r = await service(f.authority).decide(f.request);
+    assert.equal(r.decision.allowed, true, capabilityId);
+    assert.deepEqual(r.obligations, ["recheck_at_dispatch", "kill_switch_record", ...verification]);
+    assert.ok(!r.obligations.includes("budget_reservation"));
+  }
+  const activate = retarget(fixture(), "ads.campaign.activate", "execute", "campaign", [
+    "delivery_status",
+  ]);
+  activate.authority.entitlementAllowed = false;
+  assert.equal(await reason(activate), "entitlement_denied");
+  const pause = retarget(fixture(), "ads.campaign.pause", "execute", "campaign", [
+    "delivery_status",
+  ]);
+  pause.authority.providerAllowed = false;
+  assert.equal(await reason(pause), "provider_denied");
+  pause.authority.entitlementAllowed = false;
+  assert.equal(await reason(pause), "provider_denied");
 });

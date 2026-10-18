@@ -207,7 +207,9 @@ function evaluate(request: PermissionRequest, a: HumanAuthority, at: string): Pe
     else if (!scoped.some((g) => request.fields.every((f) => g.scope.fields.includes(f))))
       reason = "field_denied";
     else if (!a.providerAllowed) reason = "provider_denied";
-    else if (!a.entitlementAllowed) reason = "entitlement_denied";
+    // A kill switch reserves no credits and is never blocked by credit balance
+    // or entitlement (ADR-0011 Q8); provider limits still apply above.
+    else if (!a.entitlementAllowed && !capability.kill_switch) reason = "entitlement_denied";
   }
   const obligations: ExecutionObligation[] = [];
   if (reason === "allowed") {

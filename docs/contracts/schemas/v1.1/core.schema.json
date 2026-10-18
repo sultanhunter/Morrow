@@ -208,6 +208,916 @@
         "priorStateObserved"
       ],
       "additionalProperties": false
+    },
+    "NonNegativeDecimal": {
+      "description": "A non-negative decimal with at most 18 integer and 6 fractional digits.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,17})(\\.[0-9]{1,6})?$"
+    },
+    "NonNegativeMoney": {
+      "description": "A non-negative cash amount in one currency.",
+      "type": "object",
+      "properties": {
+        "amount": {
+          "$ref": "#/$defs/NonNegativeDecimal"
+        },
+        "currency": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Currency"
+        }
+      },
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "additionalProperties": false
+    },
+    "RiskClass": {
+      "description": "Review risk class. Derived by the server from the capability effect through the fixed table in docs/contracts/review-policy-defaults.json (ADR-0011 Q9).",
+      "type": "string",
+      "enum": [
+        "internal",
+        "external",
+        "communication",
+        "financial",
+        "access_change"
+      ]
+    },
+    "SelectionIndexes": {
+      "description": "Zero-based target indexes of a partial approval. The review library also requires them strictly increasing, in range and a strict subset.",
+      "type": "array",
+      "items": {
+        "$ref": "urn:morrow:contracts:core:v1#/$defs/Count"
+      },
+      "minItems": 1,
+      "maxItems": 999,
+      "uniqueItems": true
+    },
+    "TargetSelection": {
+      "description": "Selected target indexes, or null for every target of the proposal.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SelectionIndexes"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ProposalTarget": {
+      "description": "One exact change target with its own credit and cash ceilings.",
+      "type": "object",
+      "properties": {
+        "resource": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ResourceRef"
+        },
+        "expectedSourceRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "fields": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/FieldList"
+        },
+        "maximumCredits": {
+          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+        },
+        "maximumCost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonNegativeMoney"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "resource",
+        "expectedSourceRevision",
+        "fields",
+        "maximumCredits",
+        "maximumCost"
+      ],
+      "additionalProperties": false
+    },
+    "ProposalDerivation": {
+      "description": "Marks a proposal derived by partial approval from a root proposal; its id and digest are deterministic.",
+      "type": "object",
+      "properties": {
+        "parentRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+        },
+        "selectedTargetIndexes": {
+          "$ref": "#/$defs/SelectionIndexes"
+        }
+      },
+      "required": [
+        "parentRef",
+        "selectedTargetIndexes"
+      ],
+      "additionalProperties": false
+    },
+    "Proposal": {
+      "description": "Proposal@2. Replaces core v1 Proposal (changes.json); not compatible with it in either direction.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "taskId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "capabilityId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+        },
+        "scope": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Scope"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProposalTarget"
+          },
+          "minItems": 1,
+          "maxItems": 1000
+        },
+        "parametersRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ArtifactRef"
+        },
+        "parametersDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "maximumCredits": {
+          "description": "The sum of the target credit ceilings (BigInt).",
+          "$ref": "https://morrow.local/contracts/v1/billing.schema.json#/$defs/CreditUnits"
+        },
+        "maximumCost": {
+          "description": "The exact sum of the target cash ceilings in one currency, or null when every target cost is null.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonNegativeMoney"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "risk": {
+          "$ref": "#/$defs/RiskClass"
+        },
+        "irreversible": {
+          "description": "Equals the catalogue value for the capability; server-derived.",
+          "type": "boolean"
+        },
+        "reviewPolicyRef": {
+          "description": "The workspace's single current ReviewPolicy (storeId null).",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/PolicyRef"
+        },
+        "proposedBy": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ActorRef"
+        },
+        "requestedBy": {
+          "description": "The task initiator or mandate owner; server-derived.",
+          "$ref": "#/$defs/HumanActorRef"
+        },
+        "beneficiaryPrincipalIds": {
+          "description": "Principals who benefit from the change, such as those receiving a grant, membership or ownership; server-derived.",
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+          },
+          "minItems": 0,
+          "maxItems": 100,
+          "uniqueItems": true
+        },
+        "contextTaint": {
+          "description": "Derived from the evidence the proposing run consumed.",
+          "type": "string",
+          "enum": [
+            "none",
+            "untrusted_external"
+          ]
+        },
+        "partialApproval": {
+          "type": "string",
+          "enum": [
+            "allowed",
+            "all_or_nothing"
+          ]
+        },
+        "derivedFrom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProposalDerivation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "proposalDigest": {
+          "description": "sha256 of the RFC 8785 canonical JSON of the proposal without this field.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "expiresAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "revision",
+        "createdAt",
+        "updatedAt",
+        "taskId",
+        "capabilityId",
+        "scope",
+        "targets",
+        "parametersRef",
+        "parametersDigest",
+        "maximumCredits",
+        "maximumCost",
+        "risk",
+        "irreversible",
+        "reviewPolicyRef",
+        "proposedBy",
+        "requestedBy",
+        "beneficiaryPrincipalIds",
+        "contextTaint",
+        "partialApproval",
+        "derivedFrom",
+        "proposalDigest",
+        "expiresAt"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "derivedFrom": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "derivedFrom"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "partialApproval": {
+                "const": "all_or_nothing"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReviewRule": {
+      "description": "The review rule for one risk class.",
+      "type": "object",
+      "properties": {
+        "requiredApprovals": {
+          "description": "Distinct eligible approvals that make a pending approval approved.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "selfApproval": {
+          "description": "Whether a conflicted reviewer (proposer, requester or beneficiary) may approve: allowed; only a solo owner with the typed confirmation; or never.",
+          "type": "string",
+          "enum": [
+            "denied",
+            "solo_owner_typed_confirmation",
+            "allowed"
+          ]
+        },
+        "pendingExpirySeconds": {
+          "description": "A pending approval expires this long after it is created.",
+          "type": "integer",
+          "minimum": 300,
+          "maximum": 2592000
+        },
+        "approvedValiditySeconds": {
+          "description": "An approval may be dispatched for this long after it takes effect.",
+          "type": "integer",
+          "minimum": 300,
+          "maximum": 604800
+        },
+        "eligibleReviewerPrincipalIds": {
+          "description": "Principal IDs that may review this class, intersected with current grants; null applies no narrowing.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "minItems": 1,
+              "maxItems": 100,
+              "uniqueItems": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "requiredApprovals",
+        "selfApproval",
+        "pendingExpirySeconds",
+        "approvedValiditySeconds",
+        "eligibleReviewerPrincipalIds"
+      ],
+      "additionalProperties": false
+    },
+    "RestrictedReviewRule": {
+      "description": "A review rule for a class where self-approval is restricted (ADR-0005): never allowed.",
+      "type": "object",
+      "properties": {
+        "requiredApprovals": {
+          "description": "Distinct eligible approvals that make a pending approval approved.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "selfApproval": {
+          "description": "Whether a conflicted reviewer (proposer, requester or beneficiary) may approve: allowed; only a solo owner with the typed confirmation; or never.",
+          "type": "string",
+          "enum": [
+            "denied",
+            "solo_owner_typed_confirmation"
+          ]
+        },
+        "pendingExpirySeconds": {
+          "description": "A pending approval expires this long after it is created.",
+          "type": "integer",
+          "minimum": 300,
+          "maximum": 2592000
+        },
+        "approvedValiditySeconds": {
+          "description": "An approval may be dispatched for this long after it takes effect.",
+          "type": "integer",
+          "minimum": 300,
+          "maximum": 604800
+        },
+        "eligibleReviewerPrincipalIds": {
+          "description": "Principal IDs that may review this class, intersected with current grants; null applies no narrowing.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "minItems": 1,
+              "maxItems": 100,
+              "uniqueItems": true
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "requiredApprovals",
+        "selfApproval",
+        "pendingExpirySeconds",
+        "approvedValiditySeconds",
+        "eligibleReviewerPrincipalIds"
+      ],
+      "additionalProperties": false
+    },
+    "SoloOwnerRule": {
+      "description": "Solo-owner timing (ADR-0011 Q2, Q3).",
+      "type": "object",
+      "properties": {
+        "coolDownSeconds": {
+          "description": "A solo-owner approval takes effect this long after its decision.",
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 86400
+        },
+        "quietPeriodSeconds": {
+          "description": "Solo status needs no membership change within this period.",
+          "type": "integer",
+          "minimum": 3600,
+          "maximum": 604800
+        }
+      },
+      "required": [
+        "coolDownSeconds",
+        "quietPeriodSeconds"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewPolicyRules": {
+      "description": "Rules per risk class plus the irreversible overlay, merged field by field taking the stricter value.",
+      "type": "object",
+      "properties": {
+        "internal": {
+          "$ref": "#/$defs/ReviewRule"
+        },
+        "external": {
+          "$ref": "#/$defs/ReviewRule"
+        },
+        "communication": {
+          "$ref": "#/$defs/RestrictedReviewRule"
+        },
+        "financial": {
+          "$ref": "#/$defs/RestrictedReviewRule"
+        },
+        "access_change": {
+          "$ref": "#/$defs/RestrictedReviewRule"
+        },
+        "irreversible": {
+          "$ref": "#/$defs/RestrictedReviewRule"
+        },
+        "soloOwner": {
+          "$ref": "#/$defs/SoloOwnerRule"
+        }
+      },
+      "required": [
+        "internal",
+        "external",
+        "communication",
+        "financial",
+        "access_change",
+        "irreversible",
+        "soloOwner"
+      ],
+      "additionalProperties": false
+    },
+    "ReviewPolicy": {
+      "description": "The workspace review policy. A new revision makes approvals bound to the old one stale.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "description": "One review policy per workspace.",
+          "type": "null"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "rules": {
+          "$ref": "#/$defs/ReviewPolicyRules"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "revision",
+        "createdAt",
+        "updatedAt",
+        "rules"
+      ],
+      "additionalProperties": false
+    },
+    "ApprovalDecision": {
+      "description": "One reviewer's recorded decision, idempotent per commandId.",
+      "type": "object",
+      "properties": {
+        "reviewer": {
+          "$ref": "#/$defs/HumanActorRef"
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approve",
+            "reject"
+          ]
+        },
+        "decidedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "commandId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "requestDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "soloOwnerConfirmation": {
+          "description": "Present only for a solo-owner approval: the digest of the typed phrase and the cool-down applied.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "phraseDigest": {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+                },
+                "coolDownSeconds": {
+                  "type": "integer",
+                  "minimum": 60,
+                  "maximum": 86400
+                }
+              },
+              "required": [
+                "phraseDigest",
+                "coolDownSeconds"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "reviewer",
+        "decision",
+        "decidedAt",
+        "commandId",
+        "requestDigest",
+        "comment",
+        "soloOwnerConfirmation"
+      ],
+      "additionalProperties": false
+    },
+    "Approval": {
+      "description": "Approval@2. Replaces core v1 Approval (changes.json); not compatible with it in either direction.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "proposalRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+        },
+        "proposalDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "status": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ApprovalStatus"
+        },
+        "reviewer": {
+          "description": "The reviewer whose decision closed the approval.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HumanActorRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "decision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "approve",
+                "reject"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "decidedAt": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expiresAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "policyRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "scopeDigest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "reviewPolicyRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/PolicyRef"
+        },
+        "requiredApprovals": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ApprovalDecision"
+          },
+          "minItems": 0,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "effectiveAt": {
+          "description": "When an approved approval may first dispatch; later than decidedAt only under a solo-owner cool-down.",
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "revision",
+        "createdAt",
+        "updatedAt",
+        "proposalRef",
+        "proposalDigest",
+        "status",
+        "reviewer",
+        "decision",
+        "decidedAt",
+        "expiresAt",
+        "policyRevision",
+        "scopeDigest",
+        "reviewPolicyRef",
+        "requiredApprovals",
+        "decisions",
+        "effectiveAt"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "approved"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "reviewer": {
+                "$ref": "#/$defs/HumanActorRef"
+              },
+              "decision": {
+                "const": "approve"
+              },
+              "decidedAt": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+              },
+              "decisions": {
+                "type": "array",
+                "minItems": 1
+              },
+              "effectiveAt": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "rejected"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "reviewer": {
+                "$ref": "#/$defs/HumanActorRef"
+              },
+              "decision": {
+                "const": "reject"
+              },
+              "decidedAt": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+              },
+              "decisions": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "pending"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "reviewer": {
+                "type": "null"
+              },
+              "decision": {
+                "type": "null"
+              },
+              "decidedAt": {
+                "type": "null"
+              },
+              "effectiveAt": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReviewDecisionInput": {
+      "description": "A reviewer's decision on one exact proposal digest.",
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approve",
+            "reject",
+            "cancel_before_effective"
+          ]
+        },
+        "selectedTargetIndexes": {
+          "$ref": "#/$defs/TargetSelection"
+        },
+        "expectedDecisionDigest": {
+          "description": "The digest of the proposal being decided: the parent, or the derived proposal for a selection.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        },
+        "soloOwnerConfirmation": {
+          "description": "The typed solo-owner confirmation phrase, compared exactly after NFC.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "decision",
+        "selectedTargetIndexes",
+        "expectedDecisionDigest",
+        "soloOwnerConfirmation",
+        "comment"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "decision": {
+                "const": "cancel_before_effective"
+              }
+            },
+            "required": [
+              "decision"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "selectedTargetIndexes": {
+                "type": "null"
+              },
+              "soloOwnerConfirmation": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

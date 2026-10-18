@@ -3,6 +3,7 @@ import { validators } from "../../packages/contracts/src/generated/runtime-valid
 import { createNeonIdentityClient, withNeonIdentityRead } from "../../packages/identity/src/neon";
 import { withDriverIdentityRead } from "../../packages/identity/src/neon-request";
 import { identitySql } from "../../packages/identity/src/index";
+import { previewSelection } from "../../packages/policy/src/review";
 
 export default {
   async fetch(request: Request) {
@@ -17,6 +18,14 @@ export default {
           ]),
         ),
       );
+    }
+    // P01.T02a: the deterministic derived proposal, compared with Node by the lab.
+    if (path === "/review-preview") {
+      const { parent, selections } = (await request.json()) as {
+        parent: Parameters<typeof previewSelection>[0];
+        selections: Parameters<typeof previewSelection>[1][];
+      };
+      return Response.json(selections.map((selection) => previewSelection(parent, selection)));
     }
     if (path === "/sdk") {
       const binding = {

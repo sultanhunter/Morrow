@@ -104,6 +104,8 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | governance.connection.connect | human_or_bounded_installation_with_explicit_capability_grant | provider account, scope, vault reference | Required | human_only | No |
 | governance.connection.disconnect | human_or_bounded_installation_with_explicit_capability_grant | connection state, credential revocation | Grant checks | human_only | Yes |
 | governance.approval.decide | eligible_human_reviewer_with_explicit_decision_grant | exact resources, fields, parameters, cost, expiry | Grant checks | human_only | No |
+| governance.approval.preview | eligible_human_reviewer_with_explicit_decision_grant | exact resources, fields, parameters, cost, expiry | Grant checks | human_only | No |
+| governance.review_policy.revise | human_or_bounded_installation_with_explicit_capability_grant | review rules, quorum, expiry, self-approval | Required | human_only | No |
 | governance.usage.read | human_or_bounded_installation_with_explicit_capability_grant | authorized usage and costs | Grant checks | agent_direct_read | No |
 | governance.budget.revise | eligible_human_reviewer_with_explicit_decision_grant | task or cost-center budget | Required | human_only | No |
 | governance.audit.export | human_or_bounded_installation_with_explicit_capability_grant | authorized audit records | Grant checks | human_only | No |

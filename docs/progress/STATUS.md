@@ -14,7 +14,7 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 
 In progress:
 - **ADR-0008 acceptance** (PR #7): the Shopify connector is a Cloudflare Worker on `@shopify/shopify-api`, and secret-dependent calls stay in the broker.
-- **P01.T02a PR-B** (`claude/p01-t02a-b-review-policy`): review policy, Proposal@2, Approval@2 (ADR-0011).
+- **P01.T02a PR-B** (`claude/p01-t02a-b-review-policy`): review policy, Proposal@2, Approval@2 (ADR-0011). Implemented and reviewed: AC11-AC26, the pure review library `@morrow/policy/review` and contract v1.1 replacements; full local pipeline passed; awaiting PR CI and merge.
 - **Packet designs:** P01.T04a, P01.T02c, P06.T01b, P03.T04e (shared PostgreSQL harness), P14.T01a (provisional UI), P05.T01y and P05.T01z.
 
 Delivered in P03.T04c/d:

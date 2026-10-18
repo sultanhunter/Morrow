@@ -14,4 +14,8 @@ Credit exhaustion pauses paid work while preserving ordinary granted reads, revi
 
 ## Contract v1.1: kill switches (P01.T02a PR-A)
 
-Kill switches (ADR-0005) are `external_write` or `control` capabilities, never `spend` or `billable_job` (catalogue rule R7), so the policy evaluators never attach `budget_reservation` to them, and a stop reserves no credits. In PR-A the existing entitlement and provider checks still apply to a stop, as before. PR-B (ADR-0011 Q8) exempts kill switches from entitlement and credit balance checks while keeping provider limits (`provider_denied`).
+Kill switches (ADR-0005) are `external_write` or `control` capabilities, never `spend` or `billable_job` (catalogue rule R7), so the policy evaluators never attach `budget_reservation` to them, and a stop reserves no credits. Since PR-B (ADR-0011 Q8) the human evaluator also skips the entitlement check for a kill switch, so neither credit balance nor entitlement blocks a stop; provider limits still apply (`provider_denied`). Because a stop reserves no credits, it is never paid work under ADR-0006.
+
+## Contract v1.1: proposal ceilings (P01.T02a PR-B)
+
+Proposal@2 carries a credit ceiling (`maximumCredits`, an integer `CreditUnits` string) and a cash ceiling (`maximumCost`, non-negative money or null) on every target and in total, inside the proposal digest (ADR-0011 Q6). The totals are exact: credits are summed with BigInt, cash in one currency as an exact decimal sum (micro-units in BigInt), and a mixed-currency or mismatched total fails review (`CREDITS_SUM_MISMATCH`, `COST_SUM_MISMATCH`). A partial approval re-sums the selected targets, so a derived ceiling never exceeds its parent. These ceilings bound what an approval authorizes; the reservation before dispatch (P11.T04) still enforces the budget. Vendor-cost ceilings stay in `VendorCostReservation`.

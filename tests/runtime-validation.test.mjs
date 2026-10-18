@@ -130,6 +130,22 @@ test("effective selectors resolve to the newest layer and are frozen", () => {
     capabilityBodySelectors["ads.campaign.pause.output"],
     "capabilities:ads.campaign.pause.output",
   );
+  // PR-B replacements and additions (ADR-0011).
+  assert.equal(currentDefinitionSelectors.Proposal, "core-v1.1:Proposal");
+  assert.equal(currentDefinitionSelectors.Approval, "core-v1.1:Approval");
+  assert.equal(currentDefinitionSelectors.ProposalRef, "core:ProposalRef");
+  assert.equal(currentDefinitionSelectors.ReviewPolicy, "core-v1.1:ReviewPolicy");
+  assert.equal(
+    capabilityBodySelectors["governance.approval.decide.input"],
+    "capabilities-v1.1:governance.approval.decide.input",
+  );
+  assert.equal(
+    capabilityBodySelectors["governance.approval.decide.output"],
+    "capabilities:governance.approval.decide.output",
+  );
+  for (const io of ["input", "output"])
+    for (const id of ["governance.approval.preview", "governance.review_policy.revise"])
+      assert.equal(capabilityBodySelectors[`${id}.${io}`], `capabilities-v1.1:${id}.${io}`);
   const control = { reason: "Overspend", sourceProposalRef: null };
   assert.equal(validateCurrentDefinition("KillSwitchControl", control), true);
   assert.equal(validateDefinition("core-v1.1", "KillSwitchControl", control), true);

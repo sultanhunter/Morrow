@@ -171,6 +171,22 @@
         "to": "cancelled",
         "actor": "work_service",
         "guard": "submitted_effects_and_liabilities_reconciled"
+      },
+      {
+        "from": "draft",
+        "to": "cancelled",
+        "actor": "owner",
+        "guard": "no_dispatch",
+        "capability": "workspace.task.cancel",
+        "since": "1.1"
+      },
+      {
+        "from": "ready",
+        "to": "cancelled",
+        "actor": "owner",
+        "guard": "no_dispatch",
+        "capability": "workspace.task.cancel",
+        "since": "1.1"
       }
     ],
     "run": [
@@ -266,13 +282,15 @@
         "from": "pending",
         "to": "approved",
         "actor": "eligible_human_reviewer",
-        "guard": "exact_digest_scope_and_current_policy"
+        "guard": "exact_digest_scope_and_current_policy",
+        "superseded_in": "1.1"
       },
       {
         "from": "pending",
         "to": "rejected",
         "actor": "eligible_human_reviewer",
-        "guard": "exact_digest_scope_and_current_policy"
+        "guard": "exact_digest_scope_and_current_policy",
+        "superseded_in": "1.1"
       },
       {
         "from": "pending",
@@ -303,6 +321,48 @@
         "to": "cancelled",
         "actor": "owner",
         "guard": "current_revision"
+      },
+      {
+        "from": "pending",
+        "to": "approved",
+        "actor": "eligible_human_reviewer",
+        "guard": "quorum_met_exact_digest_scope_and_current_policy",
+        "since": "1.1"
+      },
+      {
+        "from": "pending",
+        "to": "approved",
+        "actor": "solo_owner",
+        "guard": "typed_confirmation_recorded_cool_down_scheduled",
+        "since": "1.1"
+      },
+      {
+        "from": "pending",
+        "to": "rejected",
+        "actor": "eligible_human_reviewer",
+        "guard": "eligible_rejection_exact_digest_and_current_policy",
+        "since": "1.1"
+      },
+      {
+        "from": "approved",
+        "to": "cancelled",
+        "actor": "solo_owner",
+        "guard": "before_effective_at",
+        "since": "1.1"
+      },
+      {
+        "from": "pending",
+        "to": "invalidated",
+        "actor": "work_service",
+        "guard": "superseded_by_partial_approval",
+        "since": "1.1"
+      },
+      {
+        "from": "pending",
+        "to": "invalidated",
+        "actor": "work_service",
+        "guard": "family_rejected",
+        "since": "1.1"
       }
     ],
     "operation": [
