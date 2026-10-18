@@ -125,8 +125,19 @@ export interface ProposalFacts {
   readonly storeId: string | null;
   /** The authenticated actor that built the proposal. */
   readonly proposedBy: Current_ActorRef;
-  /** The task initiator, or the mandate owner for background work. */
-  readonly requestedBy: Current_HumanActorRef;
+  /**
+   * The work task the producer attached the proposal to, after its task-attach
+   * check, or null when it attached none. Null is valid only for a human
+   * proposer of a Governance-domain capability; agents always need a task
+   * (ADR-0018). `checkProposal` reports anything else as `TASK_REQUIRED`.
+   */
+  readonly taskId: string | null;
+  /**
+   * The task initiator, or the mandate owner for background work. Null exactly
+   * when `taskId` is null: the library then derives `requestedBy` as the
+   * proposer, who stays in the conflict set in both roles (ADR-0018 item 3).
+   */
+  readonly requestedBy: Current_HumanActorRef | null;
   /**
    * Principals who benefit from the change. For access_change: those receiving
    * the grant, membership or ownership, plus the requester of any originating

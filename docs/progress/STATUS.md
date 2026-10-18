@@ -16,6 +16,7 @@ In progress:
 - **Owner decisions of 2026-10-18** (branch `claude/decisions-billing-collab`): ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
 - **P01.T04a** has landed on that branch. Its owner questions OQ-1 to OQ-3 were resolved on 2026-10-18 (ADR-0015 follow-up decisions). Its PR-A and PR-B are the next billing step.
 - **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
+- **ADR-0018 Proposal@2 edit** (branch `claude/p01-t02a-c-proposal-task-optional`): nullable `taskId` for human governance proposals, `TASK_REQUIRED`/`TASK_MISMATCH` and the `requestedBy` derivation in `checkProposal` (P01.T02a-AC27). Needs its PR, Tier 2 and security reviews, and hosted CI; it must merge before P06.T01b PR-1.
 
 ## Decisions recorded 2026-10-18
 

@@ -73,6 +73,8 @@ const credits: Current_Proposal["maximumCredits"] = "20";
 const numericCredits: Current_Proposal["maximumCredits"] = 20;
 // @ts-expect-error Proposal@2 replaces the v1 shape; schemaVersion 1 is not current
 const v1Proposal: Current_Proposal["schemaVersion"] = 1;
+// ADR-0018: the task is null only for a human-made governance proposal (checked at runtime).
+const tasklessProposal: Current_Proposal["taskId"] = null;
 // Approval@2 reviewers are human members only.
 const agentReviewer: Current_Approval["reviewer"] = {
   // @ts-expect-error an agent cannot be an Approval@2 reviewer
@@ -110,6 +112,7 @@ void bodyName;
 void credits;
 void numericCredits;
 void v1Proposal;
+void tasklessProposal;
 void agentReviewer;
 void decide;
 void v1Decide;
