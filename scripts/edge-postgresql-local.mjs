@@ -42,7 +42,7 @@ function docker(args, { input, allowFailure = false, timeout = 60000 } = {}) {
   return { code: result.status, stdout: (result.stdout ?? "").trim() };
 }
 
-async function localEngine(use) {
+export async function localEngine(use) {
   const config = JSON.parse(readFileSync("infra/local-engine.json", "utf8"));
   require(/^postgres@sha256:[a-f0-9]{64}$/.test(config.image) && config.major === 17, "IMAGE_PIN");
   require(docker(["image", "inspect", config.image], { allowFailure: true }).code ===

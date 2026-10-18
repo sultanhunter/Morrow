@@ -1,0 +1,127 @@
+// P14.T01a §4.7: the one port screens depend on. The HTTP adapter and the scripted
+// fixture adapter (apps/workspace-web) both implement it. No screen sees a transport.
+import type {
+  AccountOverviewView,
+  AnswerView,
+  GoalView,
+  Id,
+  Page,
+  PersonRef,
+  QuestionView,
+  TaskView,
+  WorkspaceView,
+} from "./model";
+
+export type Outcome<T> =
+  | { readonly kind: "ok"; readonly value: T; readonly replayed: boolean }
+  | { readonly kind: "unauthenticated" } // 401 (§4.6)
+  | { readonly kind: "denied"; readonly message: string; readonly reference: string | null } // 403
+  | { readonly kind: "not_found" } // 404: absent, foreign or not viewable
+  | { readonly kind: "conflict"; readonly recheck: boolean; readonly message: string } // 409
+  | { readonly kind: "invalid"; readonly field: string | null } // 400
+  | { readonly kind: "rate_limited"; readonly retryAfterSeconds: number } // 429 (signup only)
+  | { readonly kind: "unavailable"; readonly offline: boolean } // reads; commands never yet uncertain
+  | { readonly kind: "uncertain" } // §4.9: only a decoded terminal reply ends it
+  | { readonly kind: "not_in_build" };
+
+/** A command keeps one lowercase UUID v4 key, reused verbatim until a terminal reply. */
+export interface Command<B> {
+  readonly key: string;
+  readonly body: Readonly<B>;
+}
+
+export interface WorkspacePort {
+  readonly session: {
+    startSignIn(workspaceId: Id | null): Promise<Outcome<{ readonly navigateTo: string }>>;
+    signOut(): Promise<Outcome<"ended">>;
+    keepAlive(): Promise<Outcome<null>>; // not_in_build until the P05.T01y keeper (§4.14)
+  };
+  readonly workspace: { bootstrap(ws: Id): Promise<Outcome<WorkspaceView>> };
+  readonly account: {
+    overview(): Promise<Outcome<AccountOverviewView>>;
+    createOrganization(
+      c: Command<{ organizationName: string; workspaceName: string }>,
+    ): Promise<Outcome<{ readonly workspaceId: Id }>>;
+  };
+  readonly work: {
+    listGoals(ws: Id, after: string | null): Promise<Outcome<Page<GoalView>>>;
+    getGoal(ws: Id, id: Id): Promise<Outcome<GoalView>>;
+    createGoal(
+      ws: Id,
+      c: Command<{ objective: string; criteria: readonly string[] }>,
+    ): Promise<Outcome<{ readonly goalId: Id }>>;
+    listTasks(ws: Id, goalId: Id, after: string | null): Promise<Outcome<Page<TaskView>>>;
+    getTask(ws: Id, id: Id): Promise<Outcome<TaskView>>;
+    createTask(
+      ws: Id,
+      c: Command<{ goalId: Id; objective: string }>,
+    ): Promise<Outcome<{ readonly taskId: Id }>>;
+    markReady(
+      ws: Id,
+      id: Id,
+      c: Command<{ expectedRevision: number }>,
+    ): Promise<Outcome<{ readonly revision: number }>>;
+    assign(
+      ws: Id,
+      id: Id,
+      c: Command<{ assigneeId: Id; expectedRevision: number }>,
+    ): Promise<Outcome<{ readonly revision: number }>>;
+    listTaskQuestions(
+      ws: Id,
+      taskId: Id,
+      after: string | null,
+    ): Promise<Outcome<Page<QuestionView>>>;
+    ask(
+      ws: Id,
+      taskId: Id,
+      c: Command<{ question: string; respondentId: Id }>,
+    ): Promise<Outcome<{ readonly questionId: Id }>>;
+    listMyOpenQuestions(ws: Id, after: string | null): Promise<Outcome<Page<QuestionView>>>;
+    getQuestion(ws: Id, id: Id): Promise<Outcome<QuestionView>>;
+    answer(
+      ws: Id,
+      id: Id,
+      c: Command<{ text: string; expectedRevision: number }>,
+    ): Promise<Outcome<{ readonly answerRevision: number }>>;
+    cancelQuestion(
+      ws: Id,
+      id: Id,
+      c: Command<{ expectedRevision: number }>,
+    ): Promise<Outcome<{ readonly revision: number }>>;
+    getAnswer(ws: Id, id: Id): Promise<Outcome<AnswerView>>;
+  };
+  readonly people: { list(ws: Id): Promise<Outcome<readonly PersonRef[]>> }; // not_in_build (§4.14)
+}
+
+export const portMethods = [
+  "session.startSignIn",
+  "session.signOut",
+  "session.keepAlive",
+  "workspace.bootstrap",
+  "account.overview",
+  "account.createOrganization",
+  "work.listGoals",
+  "work.getGoal",
+  "work.createGoal",
+  "work.listTasks",
+  "work.getTask",
+  "work.createTask",
+  "work.markReady",
+  "work.assign",
+  "work.listTaskQuestions",
+  "work.ask",
+  "work.listMyOpenQuestions",
+  "work.getQuestion",
+  "work.answer",
+  "work.cancelQuestion",
+  "work.getAnswer",
+  "people.list",
+] as const;
+export type PortMethod = (typeof portMethods)[number];
+/** Which port methods this build composes (§4.2). An uncomposed method sends nothing. */
+export type Composed = Readonly<Record<PortMethod, boolean>>;
+
+/** A decoded reply that ends an unknown outcome (§4.9). */
+export function isTerminal(outcome: Outcome<unknown>): boolean {
+  return ["ok", "invalid", "denied", "not_found", "conflict"].includes(outcome.kind);
+}

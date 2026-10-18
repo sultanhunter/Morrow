@@ -12,6 +12,7 @@
 | `workers` | The SPA build, then `edge:dry-run` and `smoke:edge-dev` inside a `--network none` container (read-only checkout, the runner's Node mounted into the digest-pinned engine image), then the other 19 Miniflare/workerd labs including `lab:edge-workers` and `lab:account-workers` | `npm run edge:dry-run && npm run smoke:edge-dev && npm run lab:group:workers` | 15 min |
 | `postgres` (`pg-core`, `pg-linking`, `pg-http`, `pg-work`) | The network-none PostgreSQL, HTTP and HTTPS labs. `pg-core` also records the pinned engine build first. `pg-work` runs the P06 work labs: tenant conformance, the work PostgreSQL acceptance lab and the workerd work lab (Miniflare over a SQL service binding) | `npm run lab:group:pg-core` (and `pg-linking`, `pg-http`, `pg-work`) | 12 min |
 | `pgwire` | The four PG-wire labs: controlled Neon, managed login, workspace API and the deployable api/broker journey (`lab:edge-postgresql`) | `npm run lab:group:pgwire` (Linux CI only) | 12 min |
+| `ui` | The P14.T01a provisional UI: pulls the pinned PostgreSQL image and installs the pinned Playwright Chromium, builds, then `ui:check` (112 fixture state cases at 1440/768/390/320 and 32 keyboard walks, under the exact `_headers` CSP), `ui:edge` (12 cases on the production dist under the unbound dev pair) and `lab:group:ui` (the real-browser sign-in journey against the P04.T02a harness and PostgreSQL 17; Linux only) | `npm run build && npm run ui:check && npm run ui:edge` | 20 min |
 | `foundation` | Aggregator: succeeds only when every job above succeeded | none | 5 min |
 
 The matrix jobs use `fail-fast: false`, so one failing shard or group does not hide the others' results.
@@ -43,11 +44,12 @@ Each job, and each matrix leg, uploads one artifact named `morrow-<job>[-<shard 
 
 - Keep `--test-concurrency=1` inside each test shard. Two timing suites failed when test files ran in parallel. To go faster, add shards instead. The `# tests` totals of all shards must add up to the total of a plain `npm test`.
 - Run labs one at a time within a job. The PostgreSQL labs use real lock waits and expiry windows, so a busy host can fail them. If one fails locally on a loaded machine, rerun it on an idle one before suspecting the code.
-- `tests/ci-workflow.test.mjs` (part of `npm test`) checks the workflows: actions pinned by commit SHA, checkouts of the exact head without persisted credentials, no `continue-on-error`, every upload gated on a passing secret scan, the shared step order and clean-tree gate in every job, and `foundation` needing every other job. It also requires CI to run every `lab:*` script exactly once, except `lab:engine`, the `lab:e2b-*` operator commands and the local-only `lab:edge-postgresql-local`, and each `lab:group:*` script to be a plain `&&` chain.
+- `tests/ci-workflow.test.mjs` (part of `npm test`) checks the workflows: actions pinned by commit SHA, checkouts of the exact head without persisted credentials, no `continue-on-error`, every upload gated on a passing secret scan, the shared step order and clean-tree gate in every job, and `foundation` needing every other job. It also requires CI to run every `lab:*` script exactly once, except `lab:engine`, the `lab:e2b-*` operator commands and the local-only `lab:edge-postgresql-local` and `lab:workspace-ui-journey-local`, and each `lab:group:*` script to be a plain `&&` chain.
 - A new lab gets its own `lab:*` npm script and joins the matching group script in `package.json` (the test above fails until it does):
   - Workers labs join `lab:group:workers`;
   - network-none PostgreSQL labs join one of the `pg-*` groups;
-  - PG-wire labs join `lab:group:pgwire`.
+  - PG-wire labs join `lab:group:pgwire`;
+  - browser labs join `lab:group:ui` (the `ui` job, which alone installs Chromium).
 - The `pgwire` labs need Linux, `GITHUB_ACTIONS=true`, a rootful Docker daemon at `/var/run/docker.sock` and a bridge gateway in 172.16.0.0/12. That is why the job pins `ubuntu-24.04`. Elsewhere, including Docker Desktop on macOS, they refuse to run; they never pass by accident. Do not try to make them run on macOS. The one exception is deliberate and separate: `npm run lab:edge-postgresql-local` runs the `lab:edge-postgresql` journeys on a developer machine (pinned image already pulled, port published on 127.0.0.1 only, the synthetic loopback bridge). It refuses to run in GitHub Actions, never runs in CI, and is supporting evidence only; the `pgwire` job stays the authority.
 - `npm run ci` stays as the full serial local pipeline (static checks and all tests, without the scaffold smoke and the Docker/Workers labs). It also runs `typecheck:edge`, `edge:check` and `edge:dry-run` after `build`; CI runs the dry-run in the `workers` job's network-none container instead, and `tests/ci-workflow.test.mjs` follows the npm scripts that container step runs through `sh -c`.
 - Wrangler always runs through `scripts/edge.mjs`, with a scrubbed environment, a throwaway `HOME`, `--env-file=<an empty file>` (so no `.env` or `.dev.vars` is loaded), metrics, `cf.json` and the npm update check off, and never with an account or token. It refuses to run with a `.env*` or `.dev.vars*` at the repository root, under `apps/` or in its working directory.
@@ -63,6 +65,8 @@ npm run ci:static
 TEST_SHARD=1/2 npm run test:shard && TEST_SHARD=2/2 npm run test:shard
 npm run lab:workspace-api-workers && npm run lab:group:workers
 npm run lab:group:pg-core && npm run lab:group:pg-linking && npm run lab:group:pg-http && npm run lab:group:pg-work
+npx playwright install chromium && npm run ui:check && npm run ui:edge   # the ui job, without the journey
+npm run lab:workspace-ui-journey-local                                   # supporting evidence only
 git status --porcelain --untracked-files=all   # should print nothing
 ```
 

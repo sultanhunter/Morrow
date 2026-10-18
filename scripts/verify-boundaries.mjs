@@ -181,6 +181,47 @@ for (const [name, path, code, expected] of [
     "import {composeApiDependencies} from '../../api/src/deployed-worker';",
     "BROKER_APP_IMPORT",
   ],
+  // P14.T01a §4.11 (a) and §5: fixture isolation and UI sinks.
+  [
+    "fixture_from_app",
+    "apps/workspace-web/src/app.tsx",
+    "import {createFixtureAdapter} from './fixtures/adapter';",
+    "UI_FIXTURE_IMPORT",
+  ],
+  [
+    "fixture_from_ui_package",
+    "packages/workspace-ui/src/index.ts",
+    "export * from '../../../apps/workspace-web/src/fixtures/seed';",
+    "UI_FIXTURE_IMPORT",
+  ],
+  [
+    "html_sink_jsx",
+    "packages/workspace-ui/src/screens/x.tsx",
+    "const a = <div dangerouslySetInnerHTML={{ __html: text }} />;",
+    "UI_HTML_SINK",
+  ],
+  ["html_sink_property", "apps/workspace-web/src/x.ts", "node.innerHTML = text;", "UI_HTML_SINK"],
+  ["html_sink_write", "apps/workspace-web/src/x.ts", "document.write(text);", "UI_HTML_SINK"],
+  [
+    "cookie_access",
+    "apps/workspace-web/src/x.ts",
+    "const c = document.cookie;",
+    "UI_COOKIE_ACCESS",
+  ],
+  ["eval", "apps/workspace-web/src/x.ts", "eval(text);", "UI_DYNAMIC_CODE"],
+  ["function_constructor", "apps/workspace-web/src/x.ts", "new Function(text);", "UI_DYNAMIC_CODE"],
+  [
+    "local_storage",
+    "packages/workspace-ui/src/x.ts",
+    "localStorage.setItem('a', 'b');",
+    "UI_LOCAL_STORAGE",
+  ],
+  [
+    "session_storage_outside_owner",
+    "apps/workspace-web/src/app.tsx",
+    "sessionStorage.getItem('morrow.intended.v1');",
+    "UI_SESSION_STORAGE_OUTSIDE_OWNER",
+  ],
   [
     "runtime_adapter_absolute_import",
     "apps/api/src/index.ts",
