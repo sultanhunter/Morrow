@@ -15,7 +15,8 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 In progress:
 - **ADR-0008 acceptance** (PR #7): the Shopify connector is a Cloudflare Worker on `@shopify/shopify-api`, and secret-dependent calls stay in the broker.
 - **P01.T02a PR-B** (`claude/p01-t02a-b-review-policy`): review policy, Proposal@2, Approval@2 (ADR-0011). Implemented and reviewed: AC11-AC26, the pure review library `@morrow/policy/review` and contract v1.1 replacements; full local pipeline passed; awaiting PR CI and merge.
-- **Packet designs:** P01.T04a, P01.T02c, P06.T01b, P03.T04e (shared PostgreSQL harness), P14.T01a (provisional UI), P05.T01y and P05.T01z.
+- **P03.T04e PR-A** (`claude/p03-t04e-a-format-concurrency`): `prettier --check .` with one reviewed `.prettierignore`, unit test files run concurrently through `scripts/run-tests.mjs` with a measured serial list (`broker-client`, `standalone-login-http`), required `executeAs` and pinned prerequisites in `migrations/manifest.json`, and `heavy-faults.yml` (manual plus weekly `unit-stress`). Implemented locally (AC01-AC08 in `docs/acceptance/P03.md`); awaiting Tier 2 review and hosted CI. After merge: one `workflow_dispatch` run of `heavy-faults.yml` on `main` (AC22), its run ID recorded here.
+- **Packet designs:** P01.T04a, P01.T02c, P06.T01b, P03.T04e PR-B (shared PostgreSQL template harness), P14.T01a (provisional UI), P05.T01y and P05.T01z.
 
 Delivered in P03.T04c/d:
 - Outputs go to `.artifacts/` and CI artifacts (ADR-0012).
@@ -38,7 +39,7 @@ Delivered in P03.T04c/d:
 
 Open plan follow-ups:
 - Superseded banners on `docs/references/*`.
-- The rest of P03.T04e: a formatting ignore file, unit-test concurrency, a shared PostgreSQL 17 template-database harness and a heavy-fault job.
+- The rest of P03.T04e: PR-B, the shared PostgreSQL 17 template-database harness and its `pg-suites` and `pg-stress` legs.
 - The P05.T01x Part B PR splits the plan's P05.T01x bullet into sub-bullets, to respect the 2,000-character line limit.
 
 ## Blockers
@@ -49,6 +50,7 @@ None for local work. Hosted staging (M1) waits on the owner actions below.
 
 - **Sign-offs:**
   - Plan R1 (Tier 3).
+  - P03.T04e OQ-1, heavy-fault cadence (non-blocking): implemented with the recommended default, manual plus weekly behind an 8-day change gate (about 18 billed minutes a run). Nightly only after the GitHub plan and quota decision below.
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check (not an approving review) before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
 - **M1 prerequisites (P04.T01i):**
