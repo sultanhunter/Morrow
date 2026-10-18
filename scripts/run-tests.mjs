@@ -1,7 +1,8 @@
 // The repository test runner behind `npm test`, `npm run test:shard` and the heavy
 // unit-stress leg (P03.T04e §2). It lists the top-level tests/*.test.mjs files, runs
 // the parallel-safe ones with --test-concurrency=<k>, then the timing-sensitive files
-// named in tests/serial-tests.json one at a time, and exits 1 if either run failed.
+// named in tests/serial-tests.json one at a time, and exits 1 if either run failed. A
+// rejected argument or serial list exits 2 before anything is spawned.
 //
 // Sharding is computed here, not with --test-shard: file j (0-based, sorted) of each set
 // goes to shard (j mod n) + 1. Every spawn passes an explicit, non-empty file list, and a
