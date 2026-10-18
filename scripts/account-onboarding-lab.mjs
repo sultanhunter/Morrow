@@ -110,8 +110,7 @@ function sqlConnection(id, role = "postgres") {
   );
   let buffer = "",
     pending = null,
-    closed = false,
-    errors = "";
+    closed = false;
   const ended = new Promise((resolve) =>
     child.on("close", () => {
       closed = true;
@@ -125,9 +124,9 @@ function sqlConnection(id, role = "postgres") {
   );
   child.on("error", () => {});
   child.stdin.on("error", () => {});
-  child.stderr.on("data", (c) => {
-    if (errors.length < 65536) errors += c;
-  });
+  // Drained, never read: stderr is a separate pipe with no ordering against the stdout
+  // marker. Outcomes are read in-band on stdout (see underLockTimeout below).
+  child.stderr.resume();
   child.stdout.on("data", (c) => {
     buffer += c;
     while (buffer.includes("\n")) {
@@ -144,7 +143,6 @@ function sqlConnection(id, role = "postgres") {
     }
   });
   return {
-    errors: () => errors,
     async query(text) {
       if (closed || pending) throw Error("ACCOUNT_LAB_CONNECTION_PROTOCOL");
       const marker = "ACCOUNT_LAB_" + randomUUID();
@@ -2180,6 +2178,19 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
     {
       // Raw executor calls: the wait is observed in pg_blocking_pids, never by a sleep, and
       // no request budget can expire while a loaded host is slow.
+      // A lock_timeout probe reads psql's SQLSTATE in-band on stdout, after the statement:
+      // 55P03 (lock_not_available) when the statement gave up waiting for a lock, 00000 when
+      // it completed. psql's stderr is a separate pipe whose bytes can arrive after the
+      // stdout marker, so it never decides an outcome.
+      const underLockTimeout = async (connection, statement) => {
+        const lines = (
+          await connection.query(
+            `SET lock_timeout='300ms';\n${statement}\n\\echo :SQLSTATE\nRESET lock_timeout;`,
+          )
+        ).split("\n");
+        return { sqlstate: lines.at(-1), rows: lines.slice(0, -1) };
+      };
+      const lockNotAvailable = "55P03";
       const waiting = await person();
       const holder = sqlConnection(context.id),
         signer0 = sqlConnection(context.id, "morrow_identity_onboarding"),
@@ -2232,9 +2243,8 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
           subject: signer.who.subject,
           sid: wid("session", 777801),
         });
-        await sessions.query(`SET lock_timeout='300ms';${directAdmit(t)}`);
-        const timedOut = sessions.errors().includes("lock timeout");
-        await sessions.query("RESET lock_timeout;");
+        const probe = await underLockTimeout(sessions, directAdmit(t));
+        const timedOut = probe.sqlstate === lockNotAvailable && probe.rows.length === 0;
         await onboardingRaw.query("COMMIT;");
         const fresh = await accountTuple(signer.profile, {
           subject: signer.who.subject,
@@ -2289,20 +2299,26 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
         const applied = await revoker.query(
           `BEGIN;SELECT outcome FROM morrow_identity.revoke_workspace_access(${[receipt, command, request, actor.digest, Oa, Wa, Ma, "1"].map(lit).join(",")});`,
         );
-        const t = await accountTuple(rv, freshSubject());
-        await admitter.query(`SET lock_timeout='300ms';${directAdmit(t)}`);
-        const admissionWaited = admitter.errors().includes("lock timeout");
-        await admitter.query("RESET lock_timeout;");
+        const newcomer = freshSubject();
+        const t = await accountTuple(rv, newcomer);
+        const admission = await underLockTimeout(admitter, directAdmit(t));
+        const admissionWaited =
+          admission.sqlstate === lockNotAvailable && admission.rows.length === 0;
         const otherKey = randomUUID();
         const createSql = `SELECT COALESCE(json_agg(row_to_json(r)),'[]')::text FROM morrow_identity.create_first_organization(${lit(other.digest)},${lit(otherKey)},${lit(rv.f.profile)},'Waiting Org','Main') r;`;
-        await creator.query(`SET lock_timeout='300ms';${createSql}`);
-        const signupWaited = creator.errors().includes("lock timeout");
-        await creator.query("RESET lock_timeout;");
+        const creation = await underLockTimeout(creator, createSql);
+        const signupWaited = creation.sqlstate === lockNotAvailable && creation.rows.length === 0;
         const nothingWritten =
           rows("account_session_commands", `command_id=${lit(t[0])}`) === 0 &&
+          rows("browser_session_audits", `command_id=${lit(t[0])}`) === 0 &&
+          rows("provider_subject_mappings", `subject_id=${lit(newcomer.subject)}`) === 0 &&
           rows("organization_signups", `principal_id=${lit(other.principal)}`) === 0;
         await revoker.query("COMMIT;");
-        const retried = JSON.parse(await admitter.query(directAdmit(t)))[0];
+        // The same subject and provider session with fresh evidence: admit_account_family
+        // bounds evidence to five seconds, and the cancelled attempt left no mapping, so the
+        // admission after the commit enrols.
+        const fresh = await accountTuple(rv, newcomer);
+        const retried = JSON.parse(await admitter.query(directAdmit(fresh)))[0];
         const created = JSON.parse(await creator.query(createSql))[0];
         const actorList = await overview(actor.digest, rv.f.profile);
         check(
@@ -2312,6 +2328,7 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
             signupWaited &&
             nothingWritten &&
             retried.outcome === "newly_admitted" &&
+            commandRow(fresh[0]) === "admitted|enrolled" &&
             created.outcome === "created" &&
             actorList.status === 200 &&
             actorList.body.workspaces.length === 0,
