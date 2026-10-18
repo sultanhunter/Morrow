@@ -73,3 +73,7 @@ Owner approval, 2026-10-17, in chat (second batch). The owner selected **"Accept
 This accepts the recommended answers to P06.T01a OQ-1 through OQ-5.
 
 The question's summary did not mention four parts of those answers: the ownership rule in item 1 (own → `execute`, other → `administer`); the fixed `SET LOCAL ROLE` prologue in item 2, which refines the plan's "no caller SQL or SET ROLE" wording; the accepted residual risk in item 2 (§4.3); and the published limits in item 3. They are the recommended OQ-1 to OQ-3 answers as written in the packet.
+
+## Notes
+
+- 2026-10-18: ADR-0016 refines item 1 for the collaboration records: projects are read with goal view, an Ask with ownership (or, for a workspace admin, an audited read under `administer` on `workspace.conversation.create`), and access-request deciders follow the ADR-0011 reviewer rule.

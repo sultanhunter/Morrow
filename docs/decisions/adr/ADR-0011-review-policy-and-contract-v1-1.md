@@ -121,3 +121,8 @@ This accepts the recommended answers to P01.T02a Q0–Q9. The question's summary
 - Q3 keeps self-approval `allowed` for internal and external proposals. This is consistent with ADR-0005, which restricts self-approval only for spend, communication, access change and irreversible risk. The summary's first sentence therefore applies to the restricted classes.
 - Q8 also exempts kill switches from entitlement checks, not only from credit balance.
 - Q0 (versioning), Q4 (the irreversible list), Q5 (the two new capabilities and reviewer verbs), Q7 (the delegation reading) and Q9 (the risk table) are not mentioned.
+
+## Notes
+
+- 2026-10-18: ADR-0015 supersedes ADR-0006. Q8's "never paid work under ADR-0006" now reads as ADR-0015's pre-payment state; the rule is unchanged.
+- 2026-10-18: ADR-0018 refines Q1. A human-made governance proposal may have no task, and its `requestedBy` is then the proposer. Agents always need a task.
