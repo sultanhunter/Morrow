@@ -376,7 +376,7 @@
         "P18"
       ],
       "test_account_plan": "No Stripe account exists. The owner creates one in test mode when the payments packet starts; test-mode objects only, no live keys. Live activation needs a legal business entity, a bank account, a tax advisor and tax registrations where required, plus an approved packet and per-action owner approvals.",
-      "restrictions": "Morrow-direct billing route only (ADR-0015): website-created workspaces that pay before linking a store. Never reachable for a Shopify-route workspace or a workspace with a linked store and no route; the API refuses those sessions. API keys and webhook signing secrets are broker-only (Security invariant 11) and wait for the P08.T02 trust model (ADR-0007 item 4). Morrow is the seller of record and files and remits sales tax and VAT. Stripe billing credits are not the Morrow work-credit ledger. Revenue-share treatment under the Shopify Partner Program Agreement is unresolved.",
+      "restrictions": "Morrow-direct billing route only (ADR-0015): website-created workspaces that pay before linking a store. Never reachable for a Shopify-route workspace or a workspace with no route that has ever had a store linked (shopifyBoundAt set, never cleared); the API refuses those sessions. API keys and webhook signing secrets are broker-only (Security invariant 11) and wait for the P08.T02 trust model (ADR-0007 item 4). Morrow is the seller of record and files and remits sales tax and VAT. Stripe billing credits are not the Morrow work-credit ledger. Revenue-share treatment under the Shopify Partner Program Agreement is unresolved.",
       "qualification_evidence": []
     }
   ]

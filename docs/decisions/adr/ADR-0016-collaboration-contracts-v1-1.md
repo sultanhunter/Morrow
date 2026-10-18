@@ -53,8 +53,11 @@ The recommended answers to P01.T02c Q1-Q6 are adopted, except that workspace adm
      - Message visibility stays all-of. The admin also needs `view` on `workspace.conversation.post` for the message fields and `view` on every restricted source of each message. A message citing a source the admin cannot view is omitted, exactly as for any other viewer.
      - Admins get no stream subscription, no Ask events, no inbox items and no post or mention in another member's Ask. Ask events and live streams stay owner-only.
      - A member who is neither the owner nor an admin gets the same `REFERENCE_NOT_FOUND` as for an unknown ID. An admin may learn that an Ask exists; that is the accepted disclosure of this rule.
-   - **Audit.** Every admin read is audited, and an owner reading their own Ask writes no record.
-     - Each admin read (one Ask-list page, one conversation fetch or one message page) appends one content-free `ask_admin_read` audit record. It holds the reader principal, the Ask conversation ID, the Ask owner principal, the workspace, the read kind, the number of messages returned, the correlation ID and database time.
+   - **Audit.** Every admin read is audited, and an owner reading their own Ask, or listing only their own Asks, writes no record.
+     - Each admin read (one page of the workspace's Ask list, one conversation fetch or one message page) appends one content-free `ask_admin_read` audit record. Every record holds the reader principal, the workspace, the read kind, the correlation ID and database time.
+       - A conversation fetch or a message page also records that Ask's conversation ID, its owner principal and the number of messages returned.
+       - A list page also records every other member's Ask that the page returned, as (conversation ID, owner principal) pairs in page order, at most 50. The reader's own Asks on the page are left out, because an owner's read of their own Ask is never audited.
+       - A list page that returns no other member's Ask, an empty page included, still appends one record with no pairs, because it tells the admin that there are none.
      - The record is written in the same transaction as the read. Content leaves only after that transaction commits. If the insert or commit fails, or its outcome is unknown, no content is returned (fail closed); a retry is a new read with its own record.
      - Records are append-only and never contain message text. They follow the content-free audit metadata retention (365 days) and are exported through `governance.audit.export`.
    - **Disclosure to Ask owners.** The Ask screen tells its creator that workspace admins can read Asks and that each admin read is audited (P14).

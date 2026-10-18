@@ -13,8 +13,9 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #8: P01.T02a PR-B, review policy, Proposal@2, Approval@2 and `@morrow/policy/review` (ADR-0011).
 
 In progress:
-- **Owner decisions of 2026-10-18** (branch `claude/decisions-billing-collab`): ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments and the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z.
-- **Packet redesigns:** P01.T04a (pre-payment state and billing routes, ADR-0015) is being redesigned in another session; P03.T04e (shared PostgreSQL harness) ships in its own PR.
+- **Owner decisions of 2026-10-18** (branch `claude/decisions-billing-collab`): ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
+- **P01.T04a** has landed on that branch. Its owner questions OQ-1 to OQ-3 are open (see Pending owner actions); its PR-A and PR-B are the next billing step.
+- **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
 
 ## Decisions recorded 2026-10-18
 
@@ -33,7 +34,7 @@ In progress:
 1. Review and merge the decisions branch (documents only; Tier 2 AI review).
 2. P05.T01x Part B, signup and workspace list (ADR-0009); P01.T02a PR-B is merged.
 3. P06.T01a, work commands on the tenant data pattern (ADR-0010). Then the ADR-0018 Proposal@2 edit, P06.T01b, P01.T02c (ADR-0016) and P01.T02b.
-4. P01.T04a acceptance cases for ADR-0015, once its redesigned packet lands.
+4. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library), after the decisions branch merges. OQ-1 must be answered before the P05.T01x Part B merge.
 5. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
 
 Open plan follow-ups:
@@ -53,6 +54,7 @@ None for local work. Hosted staging (M1) waits on the owner actions below. Billi
 - **M1 prerequisites (P04.T01i):** register the domain; create a dedicated Cloudflare account and share its account ID (an identifier, not a secret); authenticate the Neon CLI and reset the operator password; once the domain exists, configure the WorkOS staging callback and rotate the API key; decide on spending (Workers Paid, the domain, Neon Launch for staging); approve each M1 effect individually or approve standing staging cards. No card may rely on the OperationLedger before P06.T01c lands.
 - **Credential rotation:** rotate the E2B personal key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.
 - **Billing (ADR-0015):**
+  - P01.T04a questions: OQ-1 purchase authority (before the P05.T01x Part B merge), OQ-2 how M4 runs paid work (before the step 15 packets), OQ-3 App Review installs on development stores (before P18.T01b's evidence plan).
   - When payments work starts: create a Stripe account in test mode.
   - Before live billing: a legal business entity, a bank account, a tax advisor, and tax registrations where required; then Stripe live activation.
   - For the Shopify route: the Shopify Partner payout and tax profile.

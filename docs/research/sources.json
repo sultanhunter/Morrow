@@ -968,7 +968,7 @@
     "url": "https://shopify.dev/docs/apps/launch/shopify-app-store/app-store-requirements",
     "status": "verified",
     "observed_at": "2026-10-18",
-    "finding": "Requirement 1.2: apps that use off-platform billing cannot be distributed through the Shopify App Store unless Shopify has notified otherwise; all app charges must use Shopify App Pricing or the Billing API. Listed and unlisted public apps alike. Requirements 2.3.1-2.3.3: install only on Shopify services, no manual shop-domain entry, OAuth first. No last-updated date shown.",
+    "finding": "Requirement 1.2: apps that use off-platform billing cannot be distributed through the Shopify App Store unless Shopify has notified otherwise; all app charges must use Shopify App Pricing or the Billing API, and the app must be free of billing related errors. Requirements 2.3.1-2.3.3: install only on Shopify services, no manual shop-domain entry, OAuth first. No last-updated date shown.",
     "evidence_kind": "primary_documentation"
   },
   {
@@ -976,7 +976,7 @@
     "url": "https://shopify.dev/changelog/posts/shopify-app-pricing-charge-for-usage-recurring-subscriptions-or-both",
     "status": "verified",
     "observed_at": "2026-10-18",
-    "finding": "2026-05-12: Shopify App Pricing replaces Managed Pricing as the default billing solution; the Billing API continues but is legacy. App Pricing has no one-time purchases, at most five usage meters per plan billed monthly, no usage caps and USD prices only.",
+    "finding": "2026-05-12: Shopify App Pricing replaces Managed Pricing as the default billing solution configured during app submission; it adds usage charges through the App Events API with meters defined in the Partner Dashboard; the Billing API continues but is legacy. The changelog states no plan or meter limits; those come from the App Pricing documentation (S147).",
     "evidence_kind": "primary_documentation"
   },
   {
@@ -984,7 +984,7 @@
     "url": "https://community.shopify.dev/t/unlisted-public-app-is-shopify-billing-api-mandatory-or-can-we-use-stripe/32021",
     "status": "verified",
     "observed_at": "2026-10-18",
-    "finding": "Shopify staff, 2026-04-02 (reaffirmed 2026-06-26 and 2026-07-16): limited-visibility billing exemptions are no longer granted; unlisted public apps must use Shopify billing for any charges. Forum guidance, not a contract.",
+    "finding": "Shopify staff, 2026-04-02 (reaffirmed 2026-06-26 and 2026-07-16): limited-visibility billing exemptions are no longer granted; all public apps, including unlisted ones distributed by direct install link, must use Shopify billing for any charges, and an unlisted public app is held to the same App Store requirements as a listed one (2026-06-26). Forum guidance, not a contract.",
     "evidence_kind": "official_support_guidance"
   },
   {
@@ -1016,7 +1016,7 @@
     "url": "https://community.shopify.dev/t/off-platform-billing-shown-to-shopify-merchants-during-onboarding/34000",
     "status": "verified",
     "observed_at": "2026-10-18",
-    "finding": "Shopify staff, 2026-05-08: a merchant who installs through Shopify should never be sent to an off-platform checkout; keep origin server-side and detect existing direct customers to avoid double billing.",
+    "finding": "Shopify staff, 2026-05-08: a merchant who installs through Shopify should never be sent to an off-platform checkout; preserve the Shopify origin through registration with server-side durability or a signed continuation token, not browser storage alone; detect existing direct customers who later install to avoid double billing.",
     "evidence_kind": "official_support_guidance"
   },
   {
@@ -1104,7 +1104,7 @@
     "url": "https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing",
     "status": "verified",
     "observed_at": "2026-10-18",
-    "finding": "Since 2026-04-28 Shopify App Pricing sends no webhooks for subscription changes and appends no charge_id to the redirect URL; it no longer creates test subscriptions for development stores. The redirect carries plan_handle, plus the shop domain for external redirects; the app confirms status through the Partner API activeSubscription(appId, shopId) query and the events query (SUBSCRIPTION_CREATED, SUBSCRIPTION_UPDATED, SUBSCRIPTION_CANCELLATION_SCHEDULED, SUBSCRIPTION_CANCELED, SUBSCRIPTION_FROZEN, SUBSCRIPTION_UNFROZEN; 30-day default window, 365-day maximum range). Development stores test at no charge with $0 effective prices; the page describes no test flag. One section dates the change to April 2026 enrollment, inconsistently.",
+    "finding": "Since 2026-04-28 Shopify App Pricing sends no webhooks for subscription changes and appends no charge_id to the redirect URL; it no longer creates test subscriptions for development stores. The redirect carries plan_handle, plus the shop domain for external redirects; the app confirms status through the Partner API activeSubscription(appId, shopId) query and the events query (SUBSCRIPTION_CREATED, SUBSCRIPTION_UPDATED, SUBSCRIPTION_CANCELLATION_SCHEDULED, SUBSCRIPTION_CANCELED, SUBSCRIPTION_FROZEN, SUBSCRIPTION_UNFROZEN; 30-day default window, 365-day maximum range). Development stores test at no charge with $0 effective prices; the page describes no test flag. One section dates the change to April 2026 enrollment, inconsistently. Limits on the same page: no one-time purchases, at most five active usage meters per plan, usage billed monthly, no usage caps, plan prices in USD only, up to eight public plans and unlimited private plans.",
     "evidence_kind": "primary_documentation"
   },
   {

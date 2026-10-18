@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-18
 - Supersedes: ADR-0006 (billing state before any Shopify store is installed)
-- Affects: P01.T04a, P05.T01x (pre-payment wording), P09.T01 and the P09 billing webhook topics, P11.T04, P14.T01, P18.T01, P18.T05, Security invariant 11 and the new plan invariant 24 (server-held billing route), `docs/decisions/billing-ownership.md`, `docs/decisions/providers.json`, `docs/contracts/billing-entitlements.md` and the contract v1.1 composition of ADR-0011 Q0, which gains `docs/contracts/schemas/v1.1/billing.schema.json` (both through P01.T04a)
+- Affects: P01.T04a, P05.T01x (pre-payment wording), P09.T01 and the P09/P18 App Pricing status reads (App Pricing sends no subscription webhooks), P11.T04, P14.T01, P18.T01, P18.T05, Security invariant 11 and the new plan invariant 24 (server-held billing route), `docs/decisions/billing-ownership.md`, `docs/decisions/providers.json`, `docs/contracts/billing-entitlements.md` and the contract v1.1 composition of ADR-0011 Q0, which gains `docs/contracts/schemas/v1.1/billing.schema.json` (both through P01.T04a)
 
 ## Context
 
@@ -14,13 +14,13 @@
 
   > Apps that use off-platform billing cannot be distributed through the Shopify App store, unless you've been notified otherwise by Shopify. Your app must use Shopify App Pricing or the Shopify Billing API for all app charges and be free of billing related errors.
 
-  - The rule binds listed and unlisted public apps alike. Custom distribution serves one merchant (or one Plus organization) and cannot use Shopify billing, so it does not fit a product sold to many brands ([distribution](https://shopify.dev/docs/apps/launch/distribution)).
-  - Shopify staff wrote on 2026-04-02 that "limited visibility exemptions are no longer being granted", reaffirmed it on 2026-06-26 and 2026-07-16 ([thread 32021](https://community.shopify.dev/t/unlisted-public-app-is-shopify-billing-api-mandatory-or-can-we-use-stripe/32021)), and wrote on 2026-09-02 that "A multi-platform SaaS that owns its own billing isn't typically one of those cases" ([thread 37159](https://community.shopify.dev/t/paused-under-1-2-1-although-the-shopify-connector-is-already-on-app-pricing/37159)).
+  - The rule binds listed and unlisted public apps alike: a limited-visibility (unlisted) app is still distributed through the App Store ([visibility](https://shopify.dev/docs/apps/launch/distribution/visibility)), and staff hold it to the same requirements as a listed one (thread 32021, below). Custom distribution serves one merchant (or one Plus organization) and cannot use Shopify billing, so it does not fit a product sold to many brands ([distribution](https://shopify.dev/docs/apps/launch/distribution)).
+  - Shopify staff wrote on 2026-04-02 that "limited visibility exemptions are no longer being granted", reaffirmed it on 2026-06-26 and 2026-07-16 ([thread 32021](https://community.shopify.dev/t/unlisted-public-app-is-shopify-billing-api-mandatory-or-can-we-use-stripe/32021)), wrote on 2026-07-03 that other "exemptions are rare" ([thread 35770](https://community.shopify.dev/t/how-to-get-approval-to-charge-merchants-outside-of-the-shopify-billing-api/35770)), and wrote on 2026-09-02 that "A multi-platform SaaS that owns its own billing isn't typically one of those cases" ([thread 37159](https://community.shopify.dev/t/paused-under-1-2-1-although-the-shopify-connector-is-already-on-app-pricing/37159)).
 - **Staff guidance on a split by origin** (forum guidance, not a contract):
   - 2026-07-03: "you do not need to request permission in this case, however your app can fail review if it's possible for a shopify merchant to install your app in the app store and reach your stripe billing flow" ([thread 35728](https://community.shopify.dev/t/billing-requirement-1-2-separating-app-store-installs-shopify-pricing-from-preexisting-saas-customers-stripe/35728)).
   - 2026-04-22: a merchant who signs up and pays on the developer's website, then installs the public app, "would be an existing client and they can keep their billing with you" ([thread 32868](https://community.shopify.dev/t/clarification-on-billing-requirements-app-using-stripe-for-subscription-one-time-charges/32868)).
   - 2026-08-20: tie the carve-out "to an existing paid subscription/billing relationship, rather than simply an account that was created for free"; the path "should be fixed and fully separated"; "App Review would make the final decision". On 2026-09-07 staff added that no published test says whether a completed payment is required ([thread 36909](https://community.shopify.dev/t/does-a-split-billing-model-satisfy-1-2-1-shopify-origin-installs-billing-api-pre-existing-platform-customers-direct-billing/36909)).
-  - 2026-05-08: keep the origin server-side and detect existing direct customers "to avoid double billing" ([thread 34000](https://community.shopify.dev/t/off-platform-billing-shown-to-shopify-merchants-during-onboarding/34000)).
+  - 2026-05-08: preserve the Shopify origin through registration with "server-side durability or a signed continuation token" rather than browser storage alone, and for existing direct customers who later install, "make sure you have logic to detect that and avoid double billing" ([thread 34000](https://community.shopify.dev/t/off-platform-billing-shown-to-shopify-merchants-during-onboarding/34000)). Morrow takes the stricter option and holds the route server-side (item 2).
 - **App Pricing limits** ([Shopify App Pricing](https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing)): no one-time purchases; at most five usage meters per plan, billed monthly; no usage caps; USD prices only; eight public plans and unlimited private plans. The Billing API is legacy since 2026-05-12.
 
 ## Decision
@@ -34,7 +34,7 @@
    - The route is **Shopify** for every other paying workspace: a workspace created through an install, and a website workspace that links a store before it has paid. A free account is not an existing paid relationship (staff guidance, 2026-08-20).
    - Moving a paying workspace to the other route needs a new owner decision. Nothing moves it automatically.
 3. **Separation.**
-   - A workspace whose route is Shopify, or that has a linked store and no route, never reaches Morrow checkout, plan selection, upgrade, credit purchase or the billing portal. The API refuses to create those sessions for it, and the UI does not render them.
+   - A workspace whose route is Shopify, or that has no route and has ever had a store linked (`shopifyBoundAt` set; a later disconnect does not clear it), never reaches Morrow checkout, plan selection, upgrade, credit purchase or the billing portal. The API refuses to create those sessions for it, and the UI does not render them.
    - Morrow's checkout and pricing pages are not linked from the Shopify app, its listing or the connector screens.
    - A Morrow-direct workspace's stores are never charged through App Pricing for Morrow work, so no merchant pays twice. How such a store's installation passes Shopify's plan step without a charge is a P18 design item, checked against current App Store guidance before submission.
 4. **The same tiers on both routes.** Both routes offer the same plans and credit packages. Prices and credit quantities remain open for P18, as under ADR-0006. On the Shopify route, plans and extra credits must fit App Pricing: extra credits use usage meters, because App Pricing has no one-time purchases, and Morrow enforces its own spending caps, because App Pricing enforces none. If a tier cannot be expressed in App Pricing, P18 records the difference for an owner decision.
@@ -84,7 +84,7 @@
 - **Economics.**
   - Morrow-direct: Stripe Billing costs 0.7% of billing volume ([Stripe Billing pricing](https://stripe.com/us/billing/pricing)), and Stripe Tax US$0.50 per transaction where Morrow is registered ([Stripe Tax pricing](https://stripe.com/us/tax/pricing)), plus card processing fees. The research could not confirm the US card rate.
   - Shopify route: a 2.9% processing fee, and 15% of App Revenues above the first USD 1 million (the 0% tier has eligibility conditions).
-  - The plan's conservative 17.9% billing-fee assumption stays for both routes until Risk 2 is resolved.
+  - Until Risk 2 is resolved, the plan assumes the 15% share on both routes. On the Shopify route that is a conservative 17.9% (2.9% processing plus 15%). On the Morrow-direct route it is about 19.4% of a US$100 payment: 15% plus Stripe Billing's 0.7%, Stripe Tax's US$0.50 and card fees, assumed at 2.9% plus US$0.30 until the card rate is confirmed.
 - **Documents.** `billing-ownership.md` describes both routes, and the plan's billing sections, P18 tasks, launch gates and Next work follow this ADR.
 
 ## Risks
@@ -106,7 +106,7 @@
 ## Alternatives considered
 
 - **App Pricing for everyone (ADR-0006 unchanged).** Compliant, but every customer pays through Shopify and Morrow cannot bill customers on its own.
-- **Morrow checkout for everyone, with a free connector app** (the owner's first request). It contradicts requirement 1.2 for a public app. Exemptions are no longer granted, and on 2026-06-18 staff said that an external paid credit wallet behind a free connector would need an exemption they could not guarantee ([thread 35277](https://community.shopify.dev/t/billing-requirement-1-2-free-connector-app-for-a-standalone-non-shopify-exclusive-saas-with-external-subscription/35277)).
+- **Morrow checkout for everyone, with a free connector app** (the owner's first request). It contradicts requirement 1.2 for a public app. Limited-visibility exemptions are no longer granted; other exemptions are rare and, per staff, not typical for a multi-platform SaaS that owns its billing (Context). On 2026-06-18 staff said that an external paid credit wallet behind a free connector would need an exemption they could not guarantee ([thread 35277](https://community.shopify.dev/t/billing-requirement-1-2-free-connector-app-for-a-standalone-non-shopify-exclusive-saas-with-external-subscription/35277)).
 - **Custom distribution.** One merchant per app; not viable.
 - **Other payment providers.**
   - Paddle as merchant of record: 5% plus 50¢, no client idempotency keys, and usage billing in beta.
