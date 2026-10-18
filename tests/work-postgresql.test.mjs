@@ -23,7 +23,7 @@ const state = read("migrations/0015.work-state.sql");
 const roles = read("infra/work-role-prerequisites.sql");
 const pkg = JSON.parse(read("package.json"));
 
-test("manifest: the work migrations follow 0012 with executeAs and reviewRef", () => {
+test("manifest: the work migrations follow 0013 with executeAs and reviewRef", () => {
   const work = manifest.migrations.filter((m) => /work-(identity-bridge|state)/.test(m.file));
   assert.deepEqual(
     work.map((m) => [m.file, m.executeAs, m.reviewRef]),
@@ -34,7 +34,7 @@ test("manifest: the work migrations follow 0012 with executeAs and reviewRef", (
   );
   for (const m of work) assert.equal(sha(read("migrations/" + m.file)), m.sha256);
   // Only entries after the identity chain carry executeAs; its default is the identity owner.
-  for (const m of manifest.migrations.filter((x) => x.sequence <= 12))
+  for (const m of manifest.migrations.filter((x) => x.sequence <= 13))
     assert.equal(m.executeAs, undefined, m.file);
   const files = Object.fromEntries(
     manifest.migrations.map((m) => [m.file, read("migrations/" + m.file)]),

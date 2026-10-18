@@ -26,9 +26,8 @@ export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Role prerequisites in the order the identity fixtures use them, then the work
 // roles before the first work migration. Every other manifest entry is applied
 // generically with its own `executeAs`. Keyed by the migration name without its
-// sequence, so an entry keeps its prerequisite if a parallel branch renumbers it:
-// account-onboarding is P05.T01x Part B (PR #10), absent from this manifest until
-// it merges, and its 0013 refuses to apply without morrow_identity_onboarding.
+// sequence, so an entry keeps its prerequisite under any sequence: account-onboarding
+// is P05.T01x Part B (0013), which refuses to apply without morrow_identity_onboarding.
 const prerequisites = new Map([
   ["identity-foundation.sql", "infra/identity-role-prerequisites.sql"],
   ["login-flow-custody.sql", "infra/identity-login-role-prerequisites.sql"],

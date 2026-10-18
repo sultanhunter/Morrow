@@ -9,10 +9,12 @@ const hash = (v) => createHash("sha256").update(v).digest("hex");
 // 0001-0009 through the session harness, then this chain; each entry is checked by
 // sequence, file and sha256. Later manifest entries are not applied here: the shared
 // harness planned in P03.T04e applies the whole manifest and honours `executeAs`.
+// 0013 (account onboarding) is applied only when a laboratory opts in.
 const loginMigrationChain = Object.freeze([
   [10, "0010.login-flow-custody.sql"],
   [11, "0011.self-browser-family-logout.sql"],
   [12, "0012.login-protocol-v1.sql"],
+  [13, "0013.account-onboarding.sql"],
 ]);
 export const loginControllerProtocol = "morrow-login-v1";
 function qualifiedMigration(sequence) {
@@ -38,9 +40,11 @@ export function appliedLegacyLoginControllerProtocol() {
 }
 // Only fresh isolated laboratory databases. No real account/user material. By default
 // 0001-0012 are applied. `deferProtocolV1` stops after 0011, so an upgrade laboratory
-// can seed legacy rows before it calls `applyProtocolV1()`.
+// can seed legacy rows before it calls `applyProtocolV1()`. `accountOnboarding` also
+// applies the onboarding role prerequisite and 0013, then enables that executor's
+// local LOGIN; account login, enrollment and signup need it.
 export function createStandaloneLoginFixtureHarness(context, options = {}) {
-  const sources = loginMigrationChain.map(([sequence]) => qualifiedMigration(sequence));
+  const sources = [10, 11, 12].map((sequence) => qualifiedMigration(sequence));
   const legacyProtocol = appliedLegacyLoginControllerProtocol();
   const h = createStandaloneFixtureHarness(context, 9);
   context.sql(readFileSync("infra/identity-login-role-prerequisites.sql", "utf8"), "morrow");
@@ -54,6 +58,16 @@ export function createStandaloneLoginFixtureHarness(context, options = {}) {
     protocol = loginControllerProtocol;
   }
   if (options.deferProtocolV1 !== true) applyProtocolV1();
+  let accountOnboarding = false;
+  function applyAccountOnboarding() {
+    if (accountOnboarding || protocol !== loginControllerProtocol)
+      throw Error("LOGIN_FIXTURE_ACCOUNT_ONBOARDING_ORDER");
+    context.sql(readFileSync("infra/identity-onboarding-role-prerequisites.sql", "utf8"), "morrow");
+    h.admin(qualifiedMigration(13));
+    context.sql("ALTER ROLE morrow_identity_onboarding LOGIN;", "morrow");
+    accountOnboarding = true;
+  }
+  if (options.accountOnboarding === true) applyAccountOnboarding();
   context.sql(
     "ALTER ROLE morrow_identity_login LOGIN;ALTER ROLE morrow_identity_login_maintenance LOGIN;ALTER ROLE morrow_identity_preauth LOGIN;ALTER ROLE morrow_identity_resolution LOGIN;",
     "morrow",
@@ -126,6 +140,7 @@ export function createStandaloneLoginFixtureHarness(context, options = {}) {
   return Object.freeze({
     ...h,
     applyProtocolV1,
+    applyAccountOnboarding,
     legacyProtocol,
     configured,
     pool,

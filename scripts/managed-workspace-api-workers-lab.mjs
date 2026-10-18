@@ -65,7 +65,6 @@ const paths = [
     "workos-authentication-evidence",
     "workos-session-token",
     "workos-session-status",
-    "workos-workspace-selection",
     "workos-browser-session-admission",
   ].map((name) => "packages/identity/src/" + name + ".ts"),
 ];
@@ -561,11 +560,11 @@ for (const definition of nativeDefinitions) {
                   [
                     "morrow_identity_login",
                     "morrow_identity_preauth",
-                    "morrow_identity_resolution",
                     "morrow_identity_sessions",
                     "morrow_api",
                     "morrow_identity_linking",
                     "morrow_identity_logout",
+                    "morrow_identity_onboarding",
                   ].map((role) => [role, passwordMarker]),
                 ),
                 releaseMode: definition.releaseMode,
@@ -790,7 +789,7 @@ for (const definition of nativeDefinitions) {
               m.ownership.ownerMismatches === 0 &&
               m.ownership.namespaceMismatches === 0 &&
               /^[a-f0-9]{64}$/.test(m.configurationDigest ?? "") &&
-              Object.values(m.pools ?? {}).length === 3 &&
+              Object.values(m.pools ?? {}).length === 4 &&
               Object.values(m.pools).every((p) => p.normalReleases === 0),
           );
           if (definition.kind === "pending")

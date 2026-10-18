@@ -1,6 +1,6 @@
 # Morrow status
 
-Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
+Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
 
 ## Active packets
 
@@ -11,13 +11,14 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #6: P01.T02a PR-A, executor classes and human-only kill switches (ADR-0005, §2 confirmed 2026-10-18).
 - PR #7: ADR-0008 accepted (connector on Cloudflare Workers with `@shopify/shopify-api`; secret-dependent calls in the broker).
 - PR #8: P01.T02a PR-B, review policy, Proposal@2, Approval@2 and `@morrow/policy/review` (ADR-0011).
+- PR #9: the owner decisions of 2026-10-18: ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
+- PR #10: P05.T01x Part B (ADR-0009), squash-merged as `e51e5b7`: migration 0013 (account login, enrollment, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers).
 
 In progress:
-- **Owner decisions of 2026-10-18** (branch `claude/decisions-billing-collab`): ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
-- **P01.T04a** has landed on that branch. Its owner questions OQ-1 to OQ-3 were resolved on 2026-10-18 (ADR-0015 follow-up decisions). Its PR-A and PR-B are the next billing step.
+- **P01.T04a** PR-A and PR-B are the next billing step (OQ-1 to OQ-3 resolved 2026-10-18).
 - **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
-- **P06.T01a** (`claude/p06-t01a-work-commands`): work commands and reads on the ADR-0010 tenant data pattern. Migrations 0014 (identity bridge) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the new `pg-work` CI group. Local labs passed before the 2026-10-18 review round; its fixes (a fair organization interlock that the revocation, store linking and browser admission take exclusively, the locked assignee/respondent recheck, the answer tenant check, stricter lab assertions) passed typecheck and the static and unit tests, and hosted CI on the PR head is their first lab run. Awaiting PR CI, the Tier 2 security review and merge.
-  - **Merge with P05.T01x Part B (PR #10).** Sequence 13 is reserved for Part B; the manifest stays append-only (`tests/migration-history.test.mjs`). If Part B merges first: keep the manifest in order 1..15, delete the 13 reservation, union the broker role tables (8 roles: Part B drops `morrow_identity_resolution` and adds `morrow_identity_onboarding`; this branch adds `morrow_api_worker`), regenerate `apps/broker/worker-configuration.d.ts` with `npm run edge:types`, update the role counts and lists in the tests, `scripts/edge-workers-lab.mjs`, `package.json` and `docs/development/ci.md`, then run `npm run ci`, `lab:group:pg-work` and the Part B labs on the merged head. If this PR merges first, Part B renumbers 0013 to 0016 and its `slice(0, 13)` labs follow. The conformance harness already maps Part B's role prerequisite by migration name.
+- **P06.T01a** (`claude/p06-t01a-work-commands`, PR #12): work commands and reads on the ADR-0010 tenant data pattern. Migrations 0014 (identity bridge) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the new `pg-work` CI group. Local labs passed before the 2026-10-18 review round; its fixes passed typecheck and the static and unit tests. Awaiting PR CI, the Tier 2 security review and merge.
+  - **Merged with `main` after PR #10 (2026-10-19).** The manifest is 0001..0015 in order and append-only; the sequence-13 reservation is gone from `tests/migration-history.test.mjs`. The broker role table holds eight roles (Part B's `morrow_identity_onboarding` then this branch's `morrow_api_worker`); `apps/broker/worker-configuration.d.ts` is regenerated. The conformance harness applies `infra/identity-onboarding-role-prerequisites.sql` before 0013 and checks that the onboarding role cannot execute the bridge functions. 0013 revokes `admit_browser_family` from `morrow_identity_sessions`; 0014's interlocked replacement keeps that ACL (CREATE OR REPLACE). The merged head's first hosted run is the evidence for `pg-work`, `pg-linking` and `pgwire` together.
 
 ## Decisions recorded 2026-10-18
 
@@ -30,22 +31,22 @@ In progress:
 
 ## Last green commit
 
-`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7 and #8 merged after it (`main` is at `80b6897`); record their runs here once confirmed.
+`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7 to #10 merged after it (`main` is at `e51e5b7`); record their runs here once confirmed.
+
+PR #10 (P05.T01x Part B, branch `claude/p05-t01x-b-signup`): hosted run 39150345721 (`pull_request`) on `0aff09f` passed all 10 jobs (`pgwire`, `postgres (pg-linking)` and `foundation` included). It was the last green run recorded before the PR merged as `e51e5b7`.
 
 ## Next actions
 
-1. Review and merge the decisions branch (documents only; Tier 2 AI review).
-2. P05.T01x Part B, signup and workspace list (ADR-0009); P01.T02a PR-B is merged.
-3. P06.T01a: Tier 2 security review, PR CI and merge. Then the ADR-0018 Proposal@2 edit, P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
-4. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library), after the decisions branch merges.
-5. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
+1. P06.T01a (PR #12): hosted CI on the merged head (`foundation`, including `pg-work` and `pgwire`), Tier 2 review (`/code-review`, `/security-review`), then merge. Then the ADR-0018 Proposal@2 edit, P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
+2. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library).
+3. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Open plan follow-ups:
 - P06.T01a AC08 soak: set `MORROW_WORK_SOAK=1` for `lab:work-postgresql` in the P03.T04e heavy job (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
 - Work routes in production: production cannot map today (ADR-0007 item 9), so the deployed api serves them 401 with no SQL. Whoever enables production mapping must also gate the work routes on P09.T05 (packet hard ordering b).
 - Superseded banners on `docs/references/*`; `docs/contracts/billing-entitlements.md` still names App Pricing as the only route (P01.T04a updates it).
+- A forward migration after 0013 that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
 - The rest of P03.T04e: formatting ignore file, unit-test concurrency, shared PostgreSQL 17 template-database harness, heavy-fault job.
-- The P05.T01x Part B PR splits the plan's P05.T01x bullet into sub-bullets, to respect the 2,000-character line limit.
 
 ## Blockers
 
@@ -53,7 +54,9 @@ None for local work. Hosted staging (M1) waits on the owner actions below. Billi
 
 ## Pending owner actions
 
-- **Sign-offs:** plan R1 (Tier 3).
+- **Sign-offs:**
+  - Plan R1 (Tier 3).
+  - P05.T01x Part B, before hosted login (M1): account login start is anonymous, so its per-profile windows (10 per 10 s, 100 open) let anyone block every sign-in on a profile (packet §11). Decide whether Turnstile or the edge per-IP limiter gates hosted login activation in every environment, not only sign-up beyond the allowlist (ADR-0009 item 8).
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
 - **M1 prerequisites (P04.T01i):** register the domain; create a dedicated Cloudflare account and share its account ID (an identifier, not a secret); authenticate the Neon CLI and reset the operator password; once the domain exists, configure the WorkOS staging callback and rotate the API key; decide on spending (Workers Paid, the domain, Neon Launch for staging); approve each M1 effect individually or approve standing staging cards. No card may rely on the OperationLedger before P06.T01c lands. For the work API (P06.T01a): create the `morrow_api_worker` login and place its password as the broker secret `MORROW_DB_PASSWORD_MORROW_API_WORKER`; the broker requires it, so broker health stays false until it is set.

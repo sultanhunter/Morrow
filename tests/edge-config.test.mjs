@@ -160,9 +160,20 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
 });
 
 test("AC22 (static): run_worker_first is the shared list and no SPA route is shadowed", async () => {
+  // P05.T01x adds the exact account routes; `/` stays the SPA's account route.
   assert.deepEqual(
     [...reservedWorkerPaths],
-    ["/auth", "/auth/*", "/workspace", "/workspace/*", "/api", "/api/*", "/healthz"],
+    [
+      "/auth",
+      "/auth/*",
+      "/workspace",
+      "/workspace/*",
+      "/workspaces",
+      "/organizations",
+      "/api",
+      "/api/*",
+      "/healthz",
+    ],
   );
   const routes = JSON.parse(readFileSync("docs/contracts/workspace-routes.json", "utf8"));
   const shadowing = join(scratch, "routes.json");

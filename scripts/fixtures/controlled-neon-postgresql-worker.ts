@@ -9,7 +9,7 @@ import {
   controlledNeonTuple,
 } from "../../packages/identity/src/controlled-neon-login-profiles.js";
 import { createWorkersFixedWorkosLoginPort } from "../../packages/identity/src/fixed-workos-login-port.js";
-import { createWorkosBrowserSessionAdmission } from "../../packages/identity/src/workos-browser-session-admission.js";
+import { createWorkosAccountAdmission } from "../../packages/identity/src/workos-browser-session-admission.js";
 import { createLoginFlowCustody } from "../../packages/identity/src/login-flow-custody.js";
 import { createStandaloneLoginBridge } from "../../packages/identity/src/standalone-login.js";
 
@@ -17,7 +17,7 @@ type Setup = {
   bindingJson: string;
   expectedHostSource: string;
   passwordByRole: Record<string, string>;
-  cases: { configurationJson: string; workspaceId: string }[];
+  cases: { configurationJson: string }[];
 };
 type Control = { deadlineMs: number; signal: AbortSignal };
 type PoolName = keyof typeof controlledNeonLoginProfiles;
@@ -273,7 +273,7 @@ export default {
         expect(current);
         const state = await initialized(setup, current!.index),
           input = (await request.json()) as { commandId: string; requestDigest: string };
-        const service = createWorkosBrowserSessionAdmission({
+        const service = createWorkosAccountAdmission({
           pool: state.pools.sessionPool,
           now: Date.now,
           readEvidence: () => {

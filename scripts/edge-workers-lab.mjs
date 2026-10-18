@@ -121,11 +121,11 @@ const databaseBinding = {
 const roles = [
   "morrow_identity_login",
   "morrow_identity_preauth",
-  "morrow_identity_resolution",
   "morrow_identity_sessions",
   "morrow_api",
   "morrow_identity_linking",
   "morrow_identity_logout",
+  "morrow_identity_onboarding",
   "morrow_api_worker",
 ];
 const passwords = Object.fromEntries(
@@ -199,7 +199,12 @@ const neonNamespace = (role, binding = databaseBinding) =>
     purpose:
       role === "morrow_api_worker"
         ? "work_request_transaction"
-        : ["morrow_api", "morrow_identity_linking", "morrow_identity_logout"].includes(role)
+        : [
+              "morrow_api",
+              "morrow_identity_linking",
+              "morrow_identity_logout",
+              "morrow_identity_onboarding",
+            ].includes(role)
           ? "workspace_primary_and_one_same_role_observer"
           : "primary_and_one_same_role_observer",
   });
@@ -379,7 +384,7 @@ const loginStart = (fetchApi) =>
       "X-Morrow-Request": "1",
       "Sec-Fetch-Site": "same-origin",
     },
-    body: JSON.stringify({ schemaVersion: 1, workspaceId: "workspace_a" }),
+    body: JSON.stringify({ schemaVersion: 2 }),
   });
 const cookie = "__Host-morrow_session=" + randomBytes(32).toString("base64url").slice(0, 42) + "A";
 const unavailable = '{"schemaVersion":1,"outcome":"login_unavailable"}';
@@ -552,6 +557,8 @@ await instance("AC10_AC11_AC13_AC15_broker_surface", {}, async ({ probe, observe
       "morrow_identity_owner",
       "morrow_identity_lifecycle",
       "morrow_identity_login_maintenance",
+      // Retired from the login wiring by P05.T01x (ADR-0009 item 4).
+      "morrow_identity_resolution",
     ].map((role) => neonNamespace(role)),
     neonNamespace("morrow_api").replace("workspace_primary", "primary"),
     neonNamespace("morrow_api", { ...databaseBinding, environment: "staging" }),

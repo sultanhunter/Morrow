@@ -220,6 +220,7 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
     "morrow_identity_login",
     "morrow_identity_login_maintenance",
     "morrow_identity_logout",
+    "morrow_identity_onboarding",
   ];
   for (const signature of bridgeFunctions)
     for (const role of roles) {

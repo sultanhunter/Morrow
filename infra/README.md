@@ -24,6 +24,8 @@ The selected E2B merchant runtime requires a qualified hardware-isolated Linux m
 
 Deployable composition root (P04.T02a, ADR-0007): the four Workers are configured by `apps/{api,broker,workers,shopify-connector}/wrangler.jsonc` and checked with `npm run edge:check`, `npm run typecheck:edge` and `npm run edge:dry-run`, none of which needs an account, credential or network; `npm run dev:edge` serves the unbound api and broker on `https://127.0.0.1:8787`. Secret placement and the login keyring are in `rotation-runbook.md` ("Workers secrets and login keyring").
 
+Account onboarding (P05.T01x Part B, ADR-0009): `infra/identity-onboarding-role-prerequisites.sql` creates `morrow_identity_onboarding` NOLOGIN NOINHERIT with no memberships; run it through an owned database administrator before migration 0013, which refuses to apply if that role has LOGIN or any membership, or if the database is not UTF8. The role executes one definer, `create_first_organization`, and its password reaches the api Worker only through a broker lease (ADR-0007). The broker role table therefore holds eight roles: login, preauth, sessions, `morrow_api`, linking, logout, onboarding and the work login `morrow_api_worker` (P06.T01a); `morrow_identity_resolution` left the login wiring.
+
 ## Regions and recovery
 
 US is the default primary-storage preference; approved global processing is permitted. Do not impose an end-to-end US-only promise or enterprise localization add-on by default. Actual storage/provider identifiers remain a preflight input.

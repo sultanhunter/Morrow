@@ -5,16 +5,18 @@ import { loginJson } from "./standalone-login-protocol.js";
 // validators, so the broker bundle stays free of them. Only strings, booleans
 // and integer budgets cross the binding.
 
-// THE single role/purpose table. P05.T01x edits only this table; the broker's
-// `secrets.required` and the pools' borrowed namespaces must follow it.
+// THE single role/purpose table. The broker's `secrets.required` and the pools'
+// borrowed namespaces must follow it. P05.T01x (ADR-0009 item 4) dropped the login
+// selection role and added the first-owner signup executor; P06.T01a (ADR-0010
+// item 2) added the api Worker's work login, so it holds eight.
 export const brokerNeonRoles = Object.freeze({
   morrow_identity_login: "primary_and_one_same_role_observer",
   morrow_identity_preauth: "primary_and_one_same_role_observer",
-  morrow_identity_resolution: "primary_and_one_same_role_observer",
   morrow_identity_sessions: "primary_and_one_same_role_observer",
   morrow_api: "workspace_primary_and_one_same_role_observer",
   morrow_identity_linking: "workspace_primary_and_one_same_role_observer",
   morrow_identity_logout: "workspace_primary_and_one_same_role_observer",
+  morrow_identity_onboarding: "workspace_primary_and_one_same_role_observer",
   // P06.T01a (ADR-0010 item 2): the api Worker's work login, one connection per request.
   morrow_api_worker: "work_request_transaction",
 } as const);

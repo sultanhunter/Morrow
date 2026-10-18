@@ -68,6 +68,11 @@ const published = [
     "52e9f699956ec8932056b22b2dc5294e540225562730666e0a87d00dfe857579",
   ],
   [
+    13,
+    "0013.account-onboarding.sql",
+    "df215e288e6dda31fb62cb70b86354507d054a6e9f1df481891a4a5552e5d763",
+  ],
+  [
     14,
     "0014.work-identity-bridge.sql",
     "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
@@ -76,17 +81,6 @@ const published = [
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-
-// Sequence 13 is reserved for P05.T01x Part B (enrolment, PR #10), which lands on
-// a parallel branch; 0014-0015 depend on nothing in it. The manifest stays
-// append-only: published rows are an unchanged, index-aligned prefix, so 0013 can
-// never be inserted ahead of a published 0014. If P06.T01a merges first, Part B
-// renumbers to the next free sequence and 13 stays skipped. If Part B merges first,
-// the merge into this branch brings 0013 in and must delete this reservation (the
-// last test fails until it does). Merging Part B also needs its role prerequisite
-// in the conformance harness, which tests/tenant-conformance/harness.mjs maps by
-// migration name.
-const reservedSequences = new Set([13]);
 
 test("the manifest keeps every published migration as an unchanged prefix", () => {
   assert.ok(manifest.migrations.length >= published.length);
@@ -101,17 +95,12 @@ test("every published migration file still hashes to its pinned digest", () => {
     assert.equal(sha(readFileSync("migrations/" + row.file)), row.sha256, row.file);
 });
 
-test("migrations continue the sequence, skipping only a reserved sequence", () => {
-  let expected = 1;
-  for (const row of manifest.migrations) {
-    while (reservedSequences.has(expected) && row.sequence !== expected) expected++;
-    assert.equal(row.sequence, expected);
-    assert.equal(row.file.startsWith(String(expected).padStart(4, "0") + "."), true);
-    expected++;
+// The manifest is append-only: published rows are an unchanged, index-aligned
+// prefix (above) and every row continues the sequence with no gap, so a new
+// migration can never be inserted ahead of a published one.
+test("migrations after the published prefix continue the sequence", () => {
+  for (const [index, row] of manifest.migrations.entries()) {
+    assert.equal(row.sequence, index + 1);
+    assert.equal(row.file.startsWith(String(index + 1).padStart(4, "0") + "."), true);
   }
-});
-
-test("a reservation is deleted once its sequence lands", () => {
-  for (const row of manifest.migrations)
-    assert.equal(reservedSequences.has(row.sequence), false, row.file);
 });

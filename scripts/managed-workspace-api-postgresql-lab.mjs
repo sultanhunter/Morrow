@@ -74,6 +74,7 @@ const paths = [
   "infra/identity-role-prerequisites.sql",
   "infra/identity-login-role-prerequisites.sql",
   "infra/identity-logout-role-prerequisites.sql",
+  "infra/identity-onboarding-role-prerequisites.sql",
   "migrations/manifest.json",
   "package.json",
   "package-lock.json",
@@ -101,7 +102,6 @@ const paths = [
     "workos-authentication-evidence",
     "workos-session-token",
     "workos-session-status",
-    "workos-workspace-selection",
     "workos-browser-session-admission",
     "workspace-store-linking-control",
     "workspace-store-linking",
@@ -109,10 +109,10 @@ const paths = [
   ].map((name) => "packages/identity/src/" + name + ".ts"),
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json"));
-// The login fixture applies 0001-0012; those entries must be present in order and
+// The login fixture applies 0001-0013 (account login, P05.T01x); they must be present in order and
 // checksum-verified. Later manifest entries are not applied by this lab.
-require(manifest.migrations.length >= 12);
-for (const [i, row] of manifest.migrations.slice(0, 12).entries()) {
+require(manifest.migrations.length >= 13);
+for (const [i, row] of manifest.migrations.slice(0, 13).entries()) {
   require(row.sequence === i + 1 && hash(readFileSync("migrations/" + row.file)) === row.sha256);
   paths.push("migrations/" + row.file);
 }
@@ -144,10 +144,11 @@ const check = (name, passed) => {
   checks.push({ name, passed });
   require(passed);
 };
+// The six roles this journey uses. The engine also authenticates the seventh,
+// morrow_identity_onboarding, whose signup path is covered by lab:account-onboarding.
 const roles = [
   "morrow_identity_login",
   "morrow_identity_preauth",
-  "morrow_identity_resolution",
   "morrow_identity_sessions",
   "morrow_api",
   "morrow_identity_linking",
@@ -194,16 +195,19 @@ try {
           row.sequence,
         ]),
       );
-      harness = createSelfLogoutFixtureHarness({
-        id: engine.id,
-        sql(text, database) {
-          const sequence = migrationSql.get(text);
-          if (sequence !== undefined) require(sequence === appliedMigrations + 1);
-          const result = engine.sql(text, database);
-          if (sequence !== undefined) appliedMigrations = sequence;
-          return result;
+      harness = createSelfLogoutFixtureHarness(
+        {
+          id: engine.id,
+          sql(text, database) {
+            const sequence = migrationSql.get(text);
+            if (sequence !== undefined) require(sequence === appliedMigrations + 1);
+            const result = engine.sql(text, database);
+            if (sequence !== undefined) appliedMigrations = sequence;
+            return result;
+          },
         },
-      });
+        { accountOnboarding: true },
+      );
       const origin = "https://127.0.0.1",
         configuration = harness.configured({ origin }),
         f = configuration.f;
@@ -234,13 +238,14 @@ try {
         ...Object.values(engine.passwordByRole),
         JSON.parse(ring).versions[0].material,
       );
-      // These count/resource fixtures are separately admitted through the old
-      // actual SQL owner before seal; they are not the main native login cookie.
+      // These count/resource fixtures are separately admitted through the actual account
+      // SQL owner (admit_account_family; 0013 revoked the workspace-selector entry point)
+      // before seal; they are not the main native login cookie.
       const secondaryLinks = [];
       privateReferenceArrays.push(secondaryLinks);
       for (const scenario of ["concurrent_replay", "unknown_commit"]) {
         const configured = harness.configured({ origin });
-        const admitted = await harness.admitted(configured.f);
+        const admitted = await harness.admitted(configured.f, { account: true });
         const link = await seedStandaloneLinkingFixture(harness, admitted);
         secondaryLinks.push({ scenario, link });
       }
@@ -252,7 +257,7 @@ try {
         [1000, true],
       ]) {
         const configured = harness.configured({ origin }),
-          admitted = await harness.admitted(configured.f);
+          admitted = await harness.admitted(configured.f, { account: true });
         const link = await seedStandaloneLinkingFixture(harness, admitted);
         const clones = [];
         for (let i = 1; i < count; i++) {
@@ -280,7 +285,7 @@ try {
         authorityFixtures.push({ configured, admitted, link, count, oversized });
       }
       const auth = await engine.sealSetup();
-      check("all_twelve_unchanged_migrations", appliedMigrations === 12);
+      check("all_thirteen_unchanged_migrations", appliedMigrations === 13);
       check(
         "seven_scram_offers_and_nine_closed_probes",
         auth.scramOfferedRoles === 7 &&
@@ -554,7 +559,7 @@ try {
       const started = await a.fetch("/auth/login", {
         method: "POST",
         headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
-        body: JSON.stringify({ schemaVersion: 1, workspaceId: f.workspace }),
+        body: JSON.stringify({ schemaVersion: 2 }),
       });
       check(
         "finite_begin_cookie_only",
@@ -860,7 +865,7 @@ try {
       );
       cases.push({ name: "current_family_logout_and_future_denial", passed: true });
       check(
-        "seven_actual_authenticated_native_roles",
+        "six_journey_roles_actually_authenticated",
         roles.every((role) =>
           service.observations.some(
             (o) => o.startup?.user === role && o.authenticationSasl && o.authenticationCompleted,

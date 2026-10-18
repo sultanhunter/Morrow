@@ -45,9 +45,11 @@ const cases = [
   },
 ];
 for (const [name, body] of Object.entries({
-  extra: '{"schemaVersion":1,"workspaceId":"workspace_a","role":"admin"}',
-  duplicate: '{"schemaVersion":1,"workspaceId":"workspace_a","workspaceId":"workspace_b"}',
-  bad_id: '{"schemaVersion":1,"workspaceId":"../admin"}',
+  // Account login (P05.T01x): only {"schemaVersion":2}; the v1 workspace body is refused.
+  v1_workspace: '{"schemaVersion":1,"workspaceId":"workspace_a"}',
+  extra: '{"schemaVersion":2,"role":"admin"}',
+  duplicate: '{"schemaVersion":2,"schemaVersion":2}',
+  version: '{"schemaVersion":3}',
   malformed: "{",
   large: " ".repeat(513),
   bad_UTF8: [255],
@@ -130,8 +132,8 @@ for (const stage of [
   "provider:exchange",
   "provider:keyset",
   "provider:page",
-  "selection:resolve",
-  "sessions:admit",
+  "sessions:connect",
+  "sessions:admitAccount",
   "sessions:commit",
   "sessions:release",
 ])
@@ -147,7 +149,7 @@ for (const stage of [
   "provider:exchange",
   "provider:keyset",
   "provider:page",
-  "selection:resolve",
+  "sessions:connect",
   "sessions:release",
 ])
   cases.push({
@@ -233,7 +235,6 @@ const paths = [
   "packages/identity/src/workos-session-status-json.ts",
   "packages/identity/src/workos-session-status.ts",
   "packages/identity/src/workos-authentication-evidence.ts",
-  "packages/identity/src/workos-workspace-selection.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
   "packages/identity/src/index.ts",
   "packages/contracts/src/validation.ts",
