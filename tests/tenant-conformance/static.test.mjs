@@ -234,6 +234,37 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
       );
       assert.ok(p.prosecdef && p.owner === "morrow_identity_owner");
     }
+  // 0014 replaces the three organization-interlocked identity functions with
+  // CREATE OR REPLACE, which keeps each ACL. Over the whole chain each keeps exactly
+  // its pre-0014 EXECUTE grantees, so 0013's revocation of admit_browser_family from
+  // morrow_identity_sessions survives; a later DROP and CREATE plus GRANT would fail here.
+  const admitBrowserFamily = `admit_browser_family(${Array(27).fill("text").join(",")})`;
+  for (const [signature, grantees] of [
+    [
+      "revoke_workspace_access(text,text,text,text,text,text,text,text)",
+      ["morrow_identity_lifecycle"],
+    ],
+    [
+      "link_workspace_store(text,text,text,text,text,text,text,text,text,text,text)",
+      ["morrow_identity_linking"],
+    ],
+    [admitBrowserFamily, []],
+  ]) {
+    const [f] = rows(
+      `SELECT p.proowner::regrole::text AS owner, p.proacl IS NOT NULL AS acl, (SELECT COALESCE(array_agg(a.grantee::regrole::text ORDER BY 1),'{}') FROM aclexplode(p.proacl) a WHERE a.grantee<>0 AND a.grantee<>p.proowner AND a.privilege_type='EXECUTE') AS grantees, (SELECT count(*) FROM aclexplode(p.proacl) a WHERE a.grantee=0)::int AS public FROM pg_proc p WHERE p.oid='morrow_identity.${signature}'::regprocedure`,
+    );
+    assert.equal(f.owner, "morrow_identity_owner", signature);
+    assert.ok(f.acl && f.public === 0, "no PUBLIC EXECUTE " + signature);
+    assert.deepEqual(f.grantees, grantees, signature);
+  }
+  const [sessions] = rows(
+    `SELECT has_function_privilege('morrow_identity_sessions','morrow_identity.${admitBrowserFamily}','EXECUTE') AS x`,
+  );
+  assert.equal(
+    sessions.x,
+    false,
+    "0013 revoked admit_browser_family from morrow_identity_sessions",
+  );
   const identityFunctions = rows(
     "SELECT p.oid::regprocedure::text AS signature, has_function_privilege('morrow_work_command',p.oid,'EXECUTE') AS c, has_function_privilege('morrow_work_api',p.oid,'EXECUTE') AS a, has_function_privilege('morrow_work_owner',p.oid,'EXECUTE') AS o, has_function_privilege('morrow_api_worker',p.oid,'EXECUTE') AS l FROM pg_proc p WHERE p.pronamespace='morrow_identity'::regnamespace",
   );

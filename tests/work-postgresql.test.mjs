@@ -176,6 +176,33 @@ test("bridge: the organization interlock is shared in commands and exclusive in 
   );
 });
 
+test("bridge: from 0014 on, every organization FOR UPDATE follows the exclusive interlock", () => {
+  // The 0014 rule: any later identity function that locks an organization FOR
+  // UPDATE takes the same exclusive interlock first, in the same body.
+  const exclusive =
+    "pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.identity.organization',";
+  const found = [];
+  for (const m of manifest.migrations.filter((x) => x.sequence >= 14)) {
+    const sql = read("migrations/" + m.file).replace(/--.*$/gm, "");
+    // The body search below relies on plain $$ quoting.
+    assert.doesNotMatch(sql, /\$[A-Za-z_]\w*\$/, m.file);
+    for (const lock of sql.matchAll(
+      /FROM morrow_identity\.organizations\b[^;]*\bFOR (?:NO KEY )?UPDATE\b/g,
+    )) {
+      const before = sql.slice(0, lock.index);
+      // Every body in these migrations is $$-quoted, so the last $$ (or BEGIN ATOMIC)
+      // opens the body holding the lock; outside a body it closes the previous one.
+      const body = before.slice(
+        Math.max(0, before.lastIndexOf("$$"), before.lastIndexOf("BEGIN ATOMIC")),
+      );
+      assert.ok(body.includes(exclusive), m.file + ": " + lock[0].slice(0, 80));
+      found.push(m.file);
+    }
+  }
+  // Not vacuous: the three 0014 replacements are found.
+  assert.equal(found.filter((f) => f === "0014.work-identity-bridge.sql").length, 3);
+});
+
 test("harness: role prerequisites are keyed by migration name and exist for every manifest entry", () => {
   assert.equal(
     migrationPrerequisite("0001.identity-foundation.sql"),

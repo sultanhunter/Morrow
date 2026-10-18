@@ -17,8 +17,8 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 In progress:
 - **P01.T04a** PR-A and PR-B are the next billing step (OQ-1 to OQ-3 resolved 2026-10-18).
 - **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
-- **P06.T01a** (`claude/p06-t01a-work-commands`, PR #12): work commands and reads on the ADR-0010 tenant data pattern. Migrations 0014 (identity bridge) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the new `pg-work` CI group. Local labs passed before the 2026-10-18 review round; its fixes passed typecheck and the static and unit tests. Awaiting PR CI, the Tier 2 security review and merge.
-  - **Merged with `main` after PR #10 (2026-10-19).** The manifest is 0001..0015 in order and append-only; the sequence-13 reservation is gone from `tests/migration-history.test.mjs`. The broker role table holds eight roles (Part B's `morrow_identity_onboarding` then this branch's `morrow_api_worker`); `apps/broker/worker-configuration.d.ts` is regenerated. The conformance harness applies `infra/identity-onboarding-role-prerequisites.sql` before 0013 and checks that the onboarding role cannot execute the bridge functions. 0013 revokes `admit_browser_family` from `morrow_identity_sessions`; 0014's interlocked replacement keeps that ACL (CREATE OR REPLACE). The merged head's first hosted run is the evidence for `pg-work`, `pg-linking` and `pgwire` together.
+- **P06.T01a** (`claude/p06-t01a-work-commands`, PR #12): work commands and reads on the ADR-0010 tenant data pattern. Migrations 0014 (identity bridge) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the new `pg-work` CI group. Hosted run 39162655617 on the merged head `7b2434c` passed all 11 jobs. Awaiting the Tier 2 security review and merge; the owner's answers to the AC09 and AC14 wording notes stay open.
+  - **Merged with `main` after PR #10 (2026-10-19).** The manifest is 0001..0015 in order and append-only; the sequence-13 reservation is gone from `tests/migration-history.test.mjs`. The broker role table holds eight roles (Part B's `morrow_identity_onboarding` then this branch's `morrow_api_worker`); `apps/broker/worker-configuration.d.ts` is regenerated. The conformance harness applies `infra/identity-onboarding-role-prerequisites.sql` before 0013 and checks that the onboarding role cannot execute the bridge functions. 0013 revokes `admit_browser_family` from `morrow_identity_sessions`; 0014's interlocked replacement keeps that ACL (CREATE OR REPLACE), which the conformance S5 check asserts over 0001..0015. Run 39162655617 is the evidence for `pg-work`, `pg-linking` and `pgwire` together.
 
 ## Decisions recorded 2026-10-18
 
@@ -35,9 +35,11 @@ In progress:
 
 PR #10 (P05.T01x Part B, branch `claude/p05-t01x-b-signup`): hosted run 39150345721 (`pull_request`) on `0aff09f` passed all 10 jobs (`pgwire`, `postgres (pg-linking)` and `foundation` included). It was the last green run recorded before the PR merged as `e51e5b7`.
 
+PR #12 (P06.T01a, branch `claude/p06-t01a-work-commands`): hosted run 39162655617 (`pull_request`) on `7b2434c`, the merge of `main` at `e51e5b7`, passed all 11 jobs (`postgres (pg-work)`, `postgres (pg-linking)`, `pgwire` and `foundation` included).
+
 ## Next actions
 
-1. P06.T01a (PR #12): hosted CI on the merged head (`foundation`, including `pg-work` and `pgwire`), Tier 2 review (`/code-review`, `/security-review`), then merge. Then the ADR-0018 Proposal@2 edit, P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
+1. P06.T01a (PR #12): Tier 2 review (`/code-review`, `/security-review`), then merge once `foundation` is green on the exact head. Then the ADR-0018 Proposal@2 edit, P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
 2. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library).
 3. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
