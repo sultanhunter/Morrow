@@ -74,6 +74,8 @@ interface Extra {
   readonly basis: "own" | "other" | "none";
   readonly answerId: string;
   readonly answerDigest: string;
+  /** The assignee or respondent grants digest from step 6, rechecked under lock. */
+  readonly targetGrantsDigest: string | null;
 }
 export interface PreparedWorkCommand {
   readonly spec: Spec<unknown>;
@@ -262,6 +264,7 @@ export const workCommandSpecs: Readonly<Record<WorkCommandType, Spec<unknown>>> 
         p.assigneeId,
         String(p.expectedRevision),
         x.basis,
+        x.targetGrantsDigest,
       ],
     }),
     created: false,
@@ -290,6 +293,7 @@ export const workCommandSpecs: Readonly<Record<WorkCommandType, Spec<unknown>>> 
         g.params.taskId!,
         p.question,
         p.respondentId,
+        x.targetGrantsDigest,
       ],
     }),
     created: true,
@@ -481,12 +485,15 @@ export async function runWorkCommand(
   )
     throw new WorkReject("denied");
   if (s.storeIds && s.storeIds(prepared.parsed).length > 0) throw new WorkReject("store_denied");
-  // 6. Eligibility of the assignee or respondent (OQ-4).
+  // 6. Eligibility of the assignee or respondent (OQ-4). The digest of the grants
+  // it was judged on goes to the command function, which rechecks it under lock.
+  let targetGrantsDigest: string | null = null;
   if (s.eligibility) {
     const e = s.eligibility(prepared.parsed);
     const eligible = await targetEligible(tx, a, e.principal, e.role);
-    if (eligible === "not_member") throw new WorkReject("not_found");
-    if (eligible === "ineligible") throw new WorkReject("target_ineligible");
+    if (eligible.outcome !== "eligible")
+      throw new WorkReject(eligible.outcome === "not_member" ? "not_found" : "target_ineligible");
+    targetGrantsDigest = eligible.grantsDigest;
   }
   // 7. The server-built v1 capability input.
   const extra: Extra = {
@@ -496,6 +503,7 @@ export async function runWorkCommand(
     basis,
     answerId: prepared.answerId,
     answerDigest: prepared.answerDigest,
+    targetGrantsDigest,
   };
   const input = s.input(g, prepared.parsed, a, extra);
   const capability = workPermissions[s.permission].capabilityId;

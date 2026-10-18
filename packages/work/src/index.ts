@@ -13,7 +13,7 @@ export {
 } from "./connection.js";
 export { enterWorkContext, type WorkAuthority } from "./context.js";
 export { authorizeWork, decideWork } from "./permissions.js";
-export { targetEligible } from "./eligibility.js";
+export { targetEligible, type TargetEligibility } from "./eligibility.js";
 export { canonicalJson, workRequestDigest, type WorkCommandType } from "./digest.js";
 export { createNeonWorkConnector, type WorkCredentialBroker } from "./neon-connector.js";
 export { workStatements, type WorkStatementName } from "./sql.js";

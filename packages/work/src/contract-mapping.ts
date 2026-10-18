@@ -171,6 +171,9 @@ export interface WorkAnswer {
   readonly createdAt: string;
 }
 export function mapAnswer(row: Row, a: WorkAuthority): WorkAnswer {
+  // The same second check as every other mapper: the answer body is free text, so
+  // a row of another tenant is a server fault, never relabelled as this tenant's.
+  tenant(row, a);
   const answer = {
     id: text(row, "id"),
     questionId: text(row, "question_id"),

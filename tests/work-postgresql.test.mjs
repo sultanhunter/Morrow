@@ -7,11 +7,18 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { inspectMigrations } from "../scripts/delivery-checks.mjs";
 import { workStatements } from "../packages/work/src/sql.ts";
+import {
+  migrationPrerequisite,
+  organizationInterlockSql,
+  revocationSql,
+  restoreSql,
+} from "./tenant-conformance/harness.mjs";
 
 const read = (path) => readFileSync(path, "utf8");
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 const manifest = JSON.parse(read("migrations/manifest.json"));
 const bridge = read("migrations/0014.work-identity-bridge.sql");
+const admission = read("migrations/0008.browser-session-admission.sql");
 const state = read("migrations/0015.work-state.sql");
 const roles = read("infra/work-role-prerequisites.sql");
 const pkg = JSON.parse(read("package.json"));
@@ -83,9 +90,10 @@ test("bridge: four definers with fixed search paths, EXECUTE for the command rol
       ),
     );
   }
+  // Four bridge definers plus the three interlock replacements (below).
   assert.equal(
     bridge.match(/SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp/g).length,
-    4,
+    7,
   );
   assert.doesNotMatch(
     bridge,
@@ -96,9 +104,91 @@ test("bridge: four definers with fixed search paths, EXECUTE for the command rol
     bridge,
     /work_session_context[\s\S]*?BEGIN ATOMIC[\s\S]*?morrow_identity\.session_eligibility\(p_digest,p_workspace\)/,
   );
-  // No identity table, function or grant is changed.
-  assert.doesNotMatch(bridge, /\b(ALTER|DROP)\s+(TABLE|FUNCTION)\b|CREATE OR REPLACE/);
+  // No identity table or grant is changed, and no function is dropped or altered.
+  assert.doesNotMatch(bridge, /\b(ALTER|DROP)\s+(TABLE|FUNCTION)\b/);
   assert.doesNotMatch(bridge, /\bEXECUTE\s+format\b/);
+  assert.equal(bridge.match(/^(GRANT|REVOKE) /gm).length, 12);
+});
+
+// One key for the organization interlock: work_lock_and_recheck takes it shared;
+// every identity function that locks an organization FOR UPDATE takes it
+// exclusively first (a row FOR SHARE alone would let overlapping commands
+// starve a waiting revocation).
+const interlock = (mode, key) =>
+  `PERFORM pg_catalog.pg_advisory_xact_lock${mode}(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.identity.organization',${key})::text,0));`;
+const definition = (sql, name) => {
+  const match = sql.match(
+    new RegExp(
+      `CREATE (?:OR REPLACE )?FUNCTION morrow_identity\\.${name}\\([\\s\\S]*?\\nEND \\$\\$;`,
+    ),
+  );
+  assert.ok(match, name);
+  return match[0];
+};
+test("bridge: the organization interlock is shared in commands and exclusive in identity writers", () => {
+  const recheck = definition(bridge, "work_lock_and_recheck");
+  const shared = recheck.indexOf(interlock("_shared", "v_org"));
+  assert.ok(shared > 0 && shared < recheck.indexOf("FOR SHARE;"));
+  for (const [name, key] of [
+    ["revoke_workspace_access", "p_organization_id"],
+    ["link_workspace_store", "p_org"],
+    ["admit_browser_family", "org_key"],
+  ]) {
+    // The 0008 definition, unchanged but for the one interlock statement, which
+    // precedes the organization FOR UPDATE.
+    const replaced = definition(
+      bridge.slice(bridge.indexOf("-- The organization interlock")),
+      name,
+    );
+    const line = replaced.split("\n").find((l) => l.trim() === interlock("", key));
+    assert.ok(line, name);
+    const lock = replaced.indexOf(line);
+    assert.ok(
+      lock <
+        replaced.indexOf(
+          "FROM morrow_identity.organizations WHERE id::text=" + key + " FOR UPDATE",
+        ),
+      name,
+    );
+    assert.equal(
+      replaced.replace(line + "\n", ""),
+      definition(admission, name).replace(/^CREATE FUNCTION /, "CREATE OR REPLACE FUNCTION "),
+      name,
+    );
+  }
+  // No later migration redefines them without the interlock.
+  for (const m of manifest.migrations.filter((x) => x.sequence > 14))
+    assert.doesNotMatch(
+      read("migrations/" + m.file),
+      /FUNCTION morrow_identity\.(revoke_workspace_access|link_workspace_store|admit_browser_family)\(/,
+      m.file,
+    );
+  // The laboratory's owner-maintenance revocation reproduces the same lock order.
+  for (const sql of [revocationSql, restoreSql].map((f) =>
+    f({ org: "org_o", workspace: "ws_w", membership: "m" }),
+  )) {
+    const at = sql.indexOf(organizationInterlockSql("org_o"));
+    assert.ok(at > 0 && at < sql.indexOf("FOR UPDATE"));
+  }
+  assert.match(
+    organizationInterlockSql("org_o"),
+    /jsonb_build_array\('morrow\.identity\.organization','org_o'::text\)/,
+  );
+});
+
+test("harness: role prerequisites are keyed by migration name and exist for every manifest entry", () => {
+  assert.equal(
+    migrationPrerequisite("0001.identity-foundation.sql"),
+    "infra/identity-role-prerequisites.sql",
+  );
+  // P05.T01x Part B keeps its prerequisite under any sequence it merges with.
+  for (const file of ["0013.account-onboarding.sql", "0016.account-onboarding.sql"])
+    assert.equal(migrationPrerequisite(file), "infra/identity-onboarding-role-prerequisites.sql");
+  assert.equal(migrationPrerequisite("0015.work-state.sql"), null);
+  for (const m of manifest.migrations) {
+    const file = migrationPrerequisite(m.file);
+    if (file) assert.ok(read(file).length > 0, m.file);
+  }
 });
 
 test("work state: definers have fixed search paths and no dynamic SQL; tasks stop at ready", () => {
@@ -108,7 +198,7 @@ test("work state: definers have fixed search paths and no dynamic SQL; tasks sto
   const bodies = [
     ...state.matchAll(/CREATE FUNCTION morrow_work\.(\w+)\([\s\S]*?(?:\$\$;|END \$\$;)/g),
   ];
-  assert.equal(bodies.length, 20);
+  assert.equal(bodies.length, 21);
   for (const [body, name] of bodies) {
     assert.match(body, /SET search_path=pg_catalog,(morrow_work,)?pg_temp/, name);
     assert.doesNotMatch(body, /\bEXECUTE\b(?!\s+FUNCTION)/, name);

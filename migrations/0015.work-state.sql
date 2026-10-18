@@ -545,9 +545,11 @@ BEGIN
  IF c.request_digest<>p_request_digest THEN RETURN QUERY SELECT 'conflict'::text,NULL::text,NULL::text,NULL::text; RETURN; END IF;
  RETURN QUERY SELECT 'replay'::text,c.aggregate_type,c.aggregate_id,c.result;
 END $$;
--- Eligibility facts of an assignee or respondent in the caller's own workspace.
+-- Eligibility facts of an assignee or respondent in the caller's own workspace,
+-- with the digest of those grants (the actor's grants_digest rule), which the
+-- command passes back so the target is rechecked under the organization lock.
 CREATE FUNCTION morrow_work.target_member(p_target_principal_id text)
-RETURNS TABLE(membership_id text,grants text,grant_count text)
+RETURNS TABLE(membership_id text,grants text,grant_count text,grants_digest text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE t record;
@@ -555,8 +557,40 @@ BEGIN
  IF p_target_principal_id IS NULL OR p_target_principal_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' THEN RETURN; END IF;
  SELECT x.organization_id,x.workspace_id INTO t FROM morrow_work.current_tenant() x;
  IF NOT FOUND THEN RETURN; END IF;
- RETURN QUERY SELECT m.membership_id,m.grants::text,m.grant_count::text
+ RETURN QUERY SELECT m.membership_id,m.grants::text,m.grant_count::text,encode(sha256(convert_to(m.grants::text,'UTF8')),'hex')
   FROM morrow_identity.work_member_authority(t.organization_id,t.workspace_id,p_target_principal_id) m;
+END $$;
+-- The locked recheck of an assignee or respondent (ADR-0010 item 4: the target
+-- currently holds the grants it was judged on). Called after command_prelude, so
+-- under the organization interlock: 'not_found' when the target is no longer an
+-- eligible member; 'stale_authority' when its grants digest changed or one of its
+-- grants expired after the snapshot instant (work_lock_and_recheck's rule).
+CREATE FUNCTION morrow_work.target_recheck(p_org text,p_ws text,p_principal text,p_grants_digest text)
+RETURNS TABLE(outcome text,membership_id text)
+LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+#variable_conflict use_column
+DECLARE
+ m record; v_us text; v_evaluated timestamptz; v_now timestamptz; v_expired boolean;
+BEGIN
+ SELECT x.membership_id,x.grants INTO m FROM morrow_identity.work_member_authority(p_org,p_ws,p_principal) x;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
+ v_us:=pg_catalog.current_setting('morrow.work_evaluated_at_us',true);
+ IF p_grants_digest IS NULL OR encode(sha256(convert_to(m.grants::text,'UTF8')),'hex')<>p_grants_digest
+  OR v_us IS NULL OR v_us !~ '^[1-9][0-9]{0,17}$' THEN
+  RETURN QUERY SELECT 'stale_authority'::text,NULL::text; RETURN;
+ END IF;
+ v_evaluated:=timestamptz 'epoch'+(v_us||' microseconds')::interval;
+ v_now:=clock_timestamp();
+ IF v_evaluated>v_now THEN RETURN QUERY SELECT 'stale_authority'::text,NULL::text; RETURN; END IF;
+ BEGIN
+  SELECT EXISTS(SELECT 1 FROM jsonb_array_elements(m.grants) g
+   WHERE g->'expiresAt'<>'null'::jsonb
+     AND (g->>'expiresAt')::timestamptz>v_evaluated AND (g->>'expiresAt')::timestamptz<=v_now)
+  INTO v_expired;
+ EXCEPTION WHEN OTHERS THEN v_expired:=NULL;
+ END;
+ IF v_expired IS NOT FALSE THEN RETURN QUERY SELECT 'stale_authority'::text,NULL::text; RETURN; END IF;
+ RETURN QUERY SELECT 'current'::text,m.membership_id;
 END $$;
 
 CREATE FUNCTION morrow_work.cmd_goal_create(p_command_id text,p_request_digest text,p_correlation_id text,p_objective text,p_success_criteria text)
@@ -728,18 +762,19 @@ BEGIN
  RETURN QUERY SELECT 'applied'::text,v_result::text;
 END $$;
 
-CREATE FUNCTION morrow_work.cmd_task_assign(p_command_id text,p_request_digest text,p_correlation_id text,p_task_id text,p_assignee_principal_id text,p_expected_revision text,p_basis text)
+CREATE FUNCTION morrow_work.cmd_task_assign(p_command_id text,p_request_digest text,p_correlation_id text,p_task_id text,p_assignee_principal_id text,p_expected_revision text,p_basis text,p_assignee_grants_digest text)
 RETURNS TABLE(outcome text,result text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE
- p record; v_goal text; k record; v_member text; v_id text; v_at timestamptz; v_result jsonb; v_revision bigint;
+ p record; v_goal text; k record; v_target record; v_id text; v_at timestamptz; v_result jsonb; v_revision bigint;
 BEGIN
  IF p_correlation_id IS NULL OR p_correlation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_task_id IS NULL OR p_task_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_assignee_principal_id IS NULL OR p_assignee_principal_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_expected_revision IS NULL OR p_expected_revision !~ '^[1-9][0-9]{0,15}$'
-  OR p_basis IS NULL OR p_basis NOT IN ('own','other') THEN
+  OR p_basis IS NULL OR p_basis NOT IN ('own','other')
+  OR p_assignee_grants_digest IS NULL OR p_assignee_grants_digest !~ '^[a-f0-9]{64}$' THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END IF;
  IF p_expected_revision::numeric>9007199254740991 THEN RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN; END IF;
@@ -756,14 +791,14 @@ BEGIN
  IF p_basis='own' AND (k.owner_principal_id<>p.principal_id OR k.owner_membership_id<>p.membership_id) THEN
   RETURN QUERY SELECT 'stale_authority'::text,NULL::text; RETURN;
  END IF;
- SELECT m.membership_id INTO v_member FROM morrow_identity.work_member_authority(p.organization_id,p.workspace_id,p_assignee_principal_id) m;
- IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
+ SELECT r.outcome,r.membership_id INTO v_target FROM morrow_work.target_recheck(p.organization_id,p.workspace_id,p_assignee_principal_id,p_assignee_grants_digest) r;
+ IF v_target.outcome IS DISTINCT FROM 'current' THEN RETURN QUERY SELECT COALESCE(v_target.outcome,'not_found'),NULL::text; RETURN; END IF;
  v_id:=gen_random_uuid()::text; v_at:=clock_timestamp(); v_revision:=k.revision+1;
- UPDATE morrow_work.tasks x SET owner_principal_id=p_assignee_principal_id,owner_membership_id=v_member,revision=v_revision,updated_at=greatest(v_at,x.updated_at)
+ UPDATE morrow_work.tasks x SET owner_principal_id=p_assignee_principal_id,owner_membership_id=v_target.membership_id,revision=v_revision,updated_at=greatest(v_at,x.updated_at)
   WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.id=p_task_id;
  INSERT INTO morrow_work.task_assignments(organization_id,workspace_id,id,task_id,assignee_principal_id,assignee_membership_id,
   assigned_by_principal_id,assigned_by_membership_id,task_revision,created_at)
- VALUES (p.organization_id,p.workspace_id,v_id,p_task_id,p_assignee_principal_id,v_member,p.principal_id,p.membership_id,v_revision,v_at);
+ VALUES (p.organization_id,p.workspace_id,v_id,p_task_id,p_assignee_principal_id,v_target.membership_id,p.principal_id,p.membership_id,v_revision,v_at);
  PERFORM morrow_work.append_event(p.organization_id,p.workspace_id,p.principal_id,p.membership_id,'task.assigned','task',p_task_id,v_revision,p_task_id,
   jsonb_build_object('assignmentId',v_id,'ownerPrincipalId',p_assignee_principal_id),p_correlation_id,v_at);
  v_result:=jsonb_build_object('assignmentId',v_id,'revision',v_revision);
@@ -772,17 +807,18 @@ BEGIN
  RETURN QUERY SELECT 'applied'::text,v_result::text;
 END $$;
 
-CREATE FUNCTION morrow_work.cmd_question_request(p_command_id text,p_request_digest text,p_correlation_id text,p_task_id text,p_prompt text,p_respondent_principal_id text)
+CREATE FUNCTION morrow_work.cmd_question_request(p_command_id text,p_request_digest text,p_correlation_id text,p_task_id text,p_prompt text,p_respondent_principal_id text,p_respondent_grants_digest text)
 RETURNS TABLE(outcome text,result text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE
- p record; v_member text; v_id text; v_at timestamptz; v_result jsonb;
+ p record; v_target record; v_id text; v_at timestamptz; v_result jsonb;
 BEGIN
  IF p_correlation_id IS NULL OR p_correlation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_task_id IS NULL OR p_task_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_prompt IS NULL OR char_length(p_prompt) NOT BETWEEN 1 AND 8192
-  OR p_respondent_principal_id IS NULL OR p_respondent_principal_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' THEN
+  OR p_respondent_principal_id IS NULL OR p_respondent_principal_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_respondent_grants_digest IS NULL OR p_respondent_grants_digest !~ '^[a-f0-9]{64}$' THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END IF;
  SELECT * INTO p FROM morrow_work.command_prelude(p_command_id,p_request_digest);
@@ -793,12 +829,12 @@ BEGIN
    AND q.task_id=p_task_id AND q.status='open')>=50 THEN
   RETURN QUERY SELECT 'limit_reached'::text,NULL::text; RETURN;
  END IF;
- SELECT m.membership_id INTO v_member FROM morrow_identity.work_member_authority(p.organization_id,p.workspace_id,p_respondent_principal_id) m;
- IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
+ SELECT r.outcome,r.membership_id INTO v_target FROM morrow_work.target_recheck(p.organization_id,p.workspace_id,p_respondent_principal_id,p_respondent_grants_digest) r;
+ IF v_target.outcome IS DISTINCT FROM 'current' THEN RETURN QUERY SELECT COALESCE(v_target.outcome,'not_found'),NULL::text; RETURN; END IF;
  v_id:=gen_random_uuid()::text; v_at:=clock_timestamp();
  INSERT INTO morrow_work.questions(organization_id,workspace_id,id,revision,task_id,status,prompt,requester_principal_id,
   requester_membership_id,respondent_principal_id,respondent_membership_id,created_at,updated_at)
- VALUES (p.organization_id,p.workspace_id,v_id,1,p_task_id,'open',p_prompt,p.principal_id,p.membership_id,p_respondent_principal_id,v_member,v_at,v_at);
+ VALUES (p.organization_id,p.workspace_id,v_id,1,p_task_id,'open',p_prompt,p.principal_id,p.membership_id,p_respondent_principal_id,v_target.membership_id,v_at,v_at);
  PERFORM morrow_work.append_event(p.organization_id,p.workspace_id,p.principal_id,p.membership_id,'question.requested','question',v_id,1,p_task_id,
   jsonb_build_object('respondentPrincipalId',p_respondent_principal_id),p_correlation_id,v_at);
  v_result:=jsonb_build_object('questionId',v_id,'status','open');
@@ -896,6 +932,7 @@ END $$;
 
 -- Explicit ACLs per function (S5 reads proacl), then the ownership transfer.
 REVOKE ALL ON FUNCTION morrow_work.command_prelude(text,text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION morrow_work.target_recheck(text,text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.append_event(text,text,text,text,text,text,text,bigint,text,jsonb,text,timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.record_command(text,text,text,text,text,text,text,text,bigint,jsonb,text,timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.enter_context(text,text) FROM PUBLIC;
@@ -905,19 +942,20 @@ REVOKE ALL ON FUNCTION morrow_work.cmd_goal_create(text,text,text,text,text) FRO
 REVOKE ALL ON FUNCTION morrow_work.cmd_goal_transition(text,text,text,text,text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.cmd_task_create(text,text,text,text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.cmd_task_ready(text,text,text,text,text,text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION morrow_work.cmd_task_assign(text,text,text,text,text,text,text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION morrow_work.cmd_question_request(text,text,text,text,text,text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION morrow_work.cmd_task_assign(text,text,text,text,text,text,text,text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION morrow_work.cmd_question_request(text,text,text,text,text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.cmd_question_answer(text,text,text,text,text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_work.cmd_question_cancel(text,text,text,text,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_work.enter_context(text,text),morrow_work.begin_command(text,text,text),
  morrow_work.target_member(text),morrow_work.cmd_goal_create(text,text,text,text,text),
  morrow_work.cmd_goal_transition(text,text,text,text,text,text,text),morrow_work.cmd_task_create(text,text,text,text,text,text),
- morrow_work.cmd_task_ready(text,text,text,text,text,text),morrow_work.cmd_task_assign(text,text,text,text,text,text,text),
- morrow_work.cmd_question_request(text,text,text,text,text,text),morrow_work.cmd_question_answer(text,text,text,text,text,text,text),
+ morrow_work.cmd_task_ready(text,text,text,text,text,text),morrow_work.cmd_task_assign(text,text,text,text,text,text,text,text),
+ morrow_work.cmd_question_request(text,text,text,text,text,text,text),morrow_work.cmd_question_answer(text,text,text,text,text,text,text),
  morrow_work.cmd_question_cancel(text,text,text,text,text,text) TO morrow_work_api;
 GRANT CREATE ON SCHEMA morrow_work TO morrow_work_command;
 ALTER FUNCTION morrow_work.current_tenant() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.command_prelude(text,text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.target_recheck(text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.append_event(text,text,text,text,text,text,text,bigint,text,jsonb,text,timestamptz) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.record_command(text,text,text,text,text,text,text,text,bigint,jsonb,text,timestamptz) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.enter_context(text,text) OWNER TO morrow_work_command;
@@ -927,8 +965,8 @@ ALTER FUNCTION morrow_work.cmd_goal_create(text,text,text,text,text) OWNER TO mo
 ALTER FUNCTION morrow_work.cmd_goal_transition(text,text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.cmd_task_create(text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.cmd_task_ready(text,text,text,text,text,text) OWNER TO morrow_work_command;
-ALTER FUNCTION morrow_work.cmd_task_assign(text,text,text,text,text,text,text) OWNER TO morrow_work_command;
-ALTER FUNCTION morrow_work.cmd_question_request(text,text,text,text,text,text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.cmd_task_assign(text,text,text,text,text,text,text,text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.cmd_question_request(text,text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.cmd_question_answer(text,text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.cmd_question_cancel(text,text,text,text,text,text) OWNER TO morrow_work_command;
 REVOKE CREATE ON SCHEMA morrow_work FROM morrow_work_command;

@@ -63,7 +63,7 @@ Errors are v1 `ErrorEnvelope`s with a fixed `safeMessage`; a not-found body is b
 | Guard failure; verb, field or scope denied; more than 1000 grants | 403 | denied / never |
 | Absent, foreign or not viewable | 404 | denied / never |
 | Wrong method (with `Allow`) | 405 | denied / never |
-| Revision, state or guard conflict; authority changed during the command | 409 | conflict / recheck_before_retry |
+| Revision, state or guard conflict; authority changed during the command, the actor's or the assignee's or respondent's grants included | 409 | conflict / recheck_before_retry |
 | Key reused with another request; ineligible assignee or respondent; published limit | 409 | conflict / never |
 | Database unavailable before the command was sent | 503 | unavailable / recheck_before_retry (reads: safe_read_retry) |
 | Command or COMMIT sent, reply lost | 503 | uncertain / reconcile_before_retry |

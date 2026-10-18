@@ -78,14 +78,14 @@
     {
       "sequence": 14,
       "file": "0014.work-identity-bridge.sql",
-      "sha256": "3237a70212d51dad05d3d056e4b3e760ad5869a9b38d8d1aa9616a48251e765b",
+      "sha256": "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/packets/P06.T01a.md"
     },
     {
       "sequence": 15,
       "file": "0015.work-state.sql",
-      "sha256": "f4be403ef30a6fa42b86eaf6229d68dc192d838043512a92e82f72dcc4aa6e60",
+      "sha256": "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/packets/P06.T01a.md"
     }

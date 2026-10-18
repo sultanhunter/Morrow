@@ -25,12 +25,18 @@ export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Role prerequisites in the order the identity fixtures use them, then the work
 // roles before the first work migration. Every other manifest entry is applied
-// generically with its own `executeAs`.
+// generically with its own `executeAs`. Keyed by the migration name without its
+// sequence, so an entry keeps its prerequisite if a parallel branch renumbers it:
+// account-onboarding is P05.T01x Part B (PR #10), absent from this manifest until
+// it merges, and its 0013 refuses to apply without morrow_identity_onboarding.
 const prerequisites = new Map([
-  [1, "infra/identity-role-prerequisites.sql"],
-  [10, "infra/identity-login-role-prerequisites.sql"],
-  [11, "infra/identity-logout-role-prerequisites.sql"],
+  ["identity-foundation.sql", "infra/identity-role-prerequisites.sql"],
+  ["login-flow-custody.sql", "infra/identity-login-role-prerequisites.sql"],
+  ["self-browser-family-logout.sql", "infra/identity-logout-role-prerequisites.sql"],
+  ["account-onboarding.sql", "infra/identity-onboarding-role-prerequisites.sql"],
 ]);
+export const migrationPrerequisite = (file) =>
+  prerequisites.get(file.replace(/^[0-9]{4}\./, "")) ?? null;
 export const workMigrationFiles = Object.freeze([
   "0014.work-identity-bridge.sql",
   "0015.work-state.sql",
@@ -134,7 +140,7 @@ export function applyMigrationChain(id, { stopBefore = Infinity } = {}) {
   const applied = [];
   for (const entry of manifestChain()) {
     if (entry.sequence >= stopBefore) break;
-    const prerequisite = prerequisites.get(entry.sequence);
+    const prerequisite = migrationPrerequisite(entry.file);
     if (prerequisite) psql(id, readFileSync(prerequisite, "utf8"));
     if (!workRolesApplied && workMigrationFiles.includes(entry.file)) {
       psql(id, readFileSync("infra/work-role-prerequisites.sql", "utf8"));
@@ -501,11 +507,15 @@ export function seedWorkFixtures(context) {
 }
 
 // The 0004 revocation's effect and lock order, as owner maintenance: the
-// organization FOR UPDATE, the workspace membership deactivated, the member's
-// grants marked revoked and the policy revision bumped. `restore` undoes it with
-// a further revision bump, so a fixture can be reused.
+// organization interlock (0014) and the organization FOR UPDATE, the workspace
+// membership deactivated, the member's grants marked revoked and the policy
+// revision bumped. `restore` undoes it with a further revision bump, so a
+// fixture can be reused.
+export const organizationInterlockSql = (org) =>
+  `SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.identity.organization',${literal(org)}::text)::text,0));`;
 export function revocationSql(p) {
   return `BEGIN; SET LOCAL ROLE morrow_identity_owner;
+${organizationInterlockSql(p.org)}
 SELECT 1 FROM morrow_identity.organizations WHERE id=${literal(p.org)} FOR UPDATE;
 UPDATE morrow_identity.workspace_memberships SET active=false WHERE workspace_id=${literal(p.workspace)} AND membership_id=${literal(p.membership)};
 UPDATE morrow_identity.grants SET payload=jsonb_set(payload,'{revokedAt}',to_jsonb(to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))) WHERE membership_id=${literal(p.membership)} AND payload->'revokedAt'='null'::jsonb;
@@ -514,6 +524,7 @@ COMMIT;`;
 }
 export function restoreSql(p) {
   return `BEGIN; SET LOCAL ROLE morrow_identity_owner;
+${organizationInterlockSql(p.org)}
 SELECT 1 FROM morrow_identity.organizations WHERE id=${literal(p.org)} FOR UPDATE;
 UPDATE morrow_identity.workspace_memberships SET active=true WHERE workspace_id=${literal(p.workspace)} AND membership_id=${literal(p.membership)};
 UPDATE morrow_identity.grants SET payload=jsonb_set(payload,'{revokedAt}','null'::jsonb) WHERE membership_id=${literal(p.membership)};

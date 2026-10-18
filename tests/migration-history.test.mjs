@@ -70,29 +70,30 @@ const published = [
   [
     14,
     "0014.work-identity-bridge.sql",
-    "3237a70212d51dad05d3d056e4b3e760ad5869a9b38d8d1aa9616a48251e765b",
+    "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
   ],
-  [15, "0015.work-state.sql", "f4be403ef30a6fa42b86eaf6229d68dc192d838043512a92e82f72dcc4aa6e60"],
+  [15, "0015.work-state.sql", "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9"],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 
-// Sequence 13 is reserved for P05.T01x Part B (enrolment), which lands on a parallel
-// branch. P06.T01a's 0014-0015 depend on nothing in it, so either merge order works:
-// published rows are matched by sequence, and once 0013 is published no gap remains.
+// Sequence 13 is reserved for P05.T01x Part B (enrolment, PR #10), which lands on
+// a parallel branch; 0014-0015 depend on nothing in it. The manifest stays
+// append-only: published rows are an unchanged, index-aligned prefix, so 0013 can
+// never be inserted ahead of a published 0014. If P06.T01a merges first, Part B
+// renumbers to the next free sequence and 13 stays skipped. If Part B merges first,
+// the merge into this branch brings 0013 in and must delete this reservation (the
+// last test fails until it does). Merging Part B also needs its role prerequisite
+// in the conformance harness, which tests/tenant-conformance/harness.mjs maps by
+// migration name.
 const reservedSequences = new Set([13]);
 
-test("the manifest keeps every published migration unchanged, in sequence order", () => {
-  const bySequence = new Map(manifest.migrations.map((m) => [m.sequence, m]));
-  for (const row of published) {
-    const { sequence, file, sha256 } = bySequence.get(row.sequence) ?? {};
+test("the manifest keeps every published migration as an unchanged prefix", () => {
+  assert.ok(manifest.migrations.length >= published.length);
+  for (const [index, row] of published.entries()) {
+    const { sequence, file, sha256 } = manifest.migrations[index];
     assert.deepEqual({ sequence, file, sha256 }, row);
   }
-  const order = manifest.migrations.map((m) => m.sequence);
-  assert.deepEqual(
-    order,
-    [...order].sort((a, b) => a - b),
-  );
 });
 
 test("every published migration file still hashes to its pinned digest", () => {
@@ -108,4 +109,9 @@ test("migrations continue the sequence, skipping only a reserved sequence", () =
     assert.equal(row.file.startsWith(String(expected).padStart(4, "0") + "."), true);
     expected++;
   }
+});
+
+test("a reservation is deleted once its sequence lands", () => {
+  for (const row of manifest.migrations)
+    assert.equal(reservedSequences.has(row.sequence), false, row.file);
 });

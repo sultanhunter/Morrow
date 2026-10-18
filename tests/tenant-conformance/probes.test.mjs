@@ -115,8 +115,8 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "cmd_goal_transition(text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_goal_transition('${uuid}','${digest}','corr','${records.A.goal}','active','1','own')`,
     "cmd_task_create(text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_task_create('${uuid}','${digest}','corr','${records.A.goal}','x','[]')`,
     "cmd_task_ready(text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_task_ready('${uuid}','${digest}','corr','${records.A.task}','1','own')`,
-    "cmd_task_assign(text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_task_assign('${uuid}','${digest}','corr','${records.A.task}','${P.B.principal}','1','own')`,
-    "cmd_question_request(text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_question_request('${uuid}','${digest}','corr','${records.A.task}','x','${P.B.principal}')`,
+    "cmd_task_assign(text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_task_assign('${uuid}','${digest}','corr','${records.A.task}','${P.B.principal}','1','own','${digest}')`,
+    "cmd_question_request(text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_question_request('${uuid}','${digest}','corr','${records.A.task}','x','${P.B.principal}','${digest}')`,
     "cmd_question_answer(text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_question_answer('${uuid}','${digest}','corr','${records.A.question}','${randomUUID()}','x','1')`,
     "cmd_question_cancel(text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_question_cancel('${uuid}','${digest}','corr','${records.A.question}','1','own')`,
   };
@@ -257,8 +257,8 @@ test("P3: foreign IDs are byte-identical not-found everywhere and writes cannot 
       `SELECT outcome FROM morrow_work.cmd_goal_transition('${k()}','${d}','corr','${foreign.goal}','active','1','other')`,
       `SELECT outcome FROM morrow_work.cmd_task_create('${k()}','${d}','corr','${foreign.goal}','x','[]')`,
       `SELECT outcome FROM morrow_work.cmd_task_ready('${k()}','${d}','corr','${foreign.task}','1','other')`,
-      `SELECT outcome FROM morrow_work.cmd_task_assign('${k()}','${d}','corr','${foreign.task}','${P.B.principal}','1','other')`,
-      `SELECT outcome FROM morrow_work.cmd_question_request('${k()}','${d}','corr','${foreign.task}','x','${P.B.principal}')`,
+      `SELECT outcome FROM morrow_work.cmd_task_assign('${k()}','${d}','corr','${foreign.task}','${P.B.principal}','1','other','${d}')`,
+      `SELECT outcome FROM morrow_work.cmd_question_request('${k()}','${d}','corr','${foreign.task}','x','${P.B.principal}','${d}')`,
       `SELECT outcome FROM morrow_work.cmd_question_answer('${k()}','${d}','corr','${foreign.question}','${k()}','x','1')`,
       `SELECT outcome FROM morrow_work.cmd_question_cancel('${k()}','${d}','corr','${foreign.question}','1','other')`,
     ];
@@ -276,7 +276,7 @@ test("P3: foreign IDs are byte-identical not-found everywhere and writes cannot 
     assert.equal(
       apiSql(
         P.A,
-        `SELECT outcome FROM morrow_work.cmd_task_assign('${randomUUID()}','${"e".repeat(64)}','corr','${records.A.task}','${target}','1','own');`,
+        `SELECT outcome FROM morrow_work.cmd_task_assign('${randomUUID()}','${"e".repeat(64)}','corr','${records.A.task}','${target}','1','own','${"e".repeat(64)}');`,
       )
         .split("\n")
         .at(-1),

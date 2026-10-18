@@ -4,11 +4,12 @@
 // per migration). AC12, AC21-AC23 and the AC16 lease signal are in
 // lab:work-workers; AC18-AC19 (S1-S6, P1-P6) in lab:tenant-conformance.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data.
-// MORROW_WORK_SOAK=1 adds the nightly 4x500 soak and the full race matrix.
+// MORROW_WORK_SOAK=1 adds the 4x500 soak and the full race matrix (no CI job sets
+// it yet; the P03.T04e heavy job is to, see STATUS).
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
-import { createWorkApiHandler } from "../packages/work/src/http.ts";
+import { createWorkApiHandler, workErrorResponse } from "../packages/work/src/http.ts";
 import { workStatements } from "../packages/work/src/sql.ts";
 import { validateDefinition } from "../packages/contracts/src/validation.ts";
 import {
@@ -58,6 +59,22 @@ const goalBody = (objective = "Grow repeat purchases", description) => ({
   successCriteria: criteria(description),
 });
 const statement = (name) => workStatements[name];
+// The exact error envelope of one outcome (status, code, retry class and fixed
+// message), so a case cannot pass on a neighbouring 409.
+const envelopes = new Map();
+for (const kind of ["guard_failed", "stale_authority"]) {
+  const response = workErrorResponse(kind, "lab");
+  envelopes.set(kind, { status: response.status, body: await response.json() });
+}
+const is = (reply, kind) => {
+  const e = envelopes.get(kind);
+  return (
+    reply.status === e.status &&
+    reply.body.code === e.body.code &&
+    reply.body.retryClass === e.body.retryClass &&
+    reply.body.safeMessage === e.body.safeMessage
+  );
+};
 const isCommand = (record) => /FROM morrow_work\.cmd_/.test(record.text);
 
 // A request that ends without reaching its hook fails the case instead of hanging.
@@ -479,16 +496,13 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
       to: "ready",
       expectedRevision: 1,
     });
-    check(
-      "AC07:ready_under_cancelled_goal",
-      ready.status === 409 && ready.body.retryClass === "recheck_before_retry",
-    );
+    check("AC07:ready_under_cancelled_goal", is(ready, "guard_failed"));
     const create = await send(P.A, "POST", "/tasks", {
       goalId: g1,
       objective: "Late",
       allowedResources: [],
     });
-    check("AC07:create_under_cancelled_goal", create.status === 409);
+    check("AC07:create_under_cancelled_goal", is(create, "guard_failed"));
     // active→cancelled with a draft or a ready child.
     for (const childReady of [false, true]) {
       const g = await goal(P.A, "Guard cancel");
@@ -502,7 +516,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
       });
       check(
         "AC07:cancel_with_" + (childReady ? "ready" : "draft") + "_child",
-        cancel.status === 409,
+        is(cancel, "guard_failed"),
       );
     }
     const g2 = await goal(P.A, "Guard achieved");
@@ -511,10 +525,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
       to: "achieved",
       expectedRevision: 2,
     });
-    check(
-      "AC07:achieved_guard_failed",
-      achieved.status === 409 && achieved.body.safeMessage.includes("precondition"),
-    );
+    check("AC07:achieved_guard_failed", is(achieved, "guard_failed"));
     // The 201st task and the 51st open question.
     const g3 = await goal(P.A, "Caps");
     const scope = JSON.stringify({
@@ -931,6 +942,41 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
       "AC13:X_target_ineligible",
       ineligible.status === 409 && ineligible.body.retryClass === "never",
     );
+    // The assignee's grants change after its eligibility was judged and before
+    // the command function takes the organization lock: 409 stale_authority,
+    // nothing written; the same-key retry is judged afresh and applies.
+    const tw = await task(await goal(P.A, "Assignment window"));
+    const bGrant = P.B.grants.find((x) => x.capabilityId === "workspace.task.create");
+    const bEdited = {
+      ...bGrant,
+      scope: { ...bGrant.scope, fields: [...bGrant.scope.fields].reverse() },
+    };
+    const hold = gate();
+    const held = handlerWith({
+      async beforeQuery(record, connection) {
+        if (isCommand(record)) await hold.wait(connection);
+      },
+    });
+    const key = randomUUID();
+    const body = { assigneeId: P.B.principal, expectedRevision: 1 };
+    const before = totals();
+    const pending = send(P.A, "POST", "/tasks/" + tw + "/assignment", body, {
+      handler: held,
+      key,
+      noRetry: true,
+    });
+    await reached(hold, pending);
+    db.admin(
+      `UPDATE morrow_identity.grants SET payload=${literal(JSON.stringify(bEdited))}::jsonb WHERE id=${literal(bGrant.id)};`,
+    );
+    hold.open();
+    const stale = await pending;
+    db.admin(
+      `UPDATE morrow_identity.grants SET payload=${literal(JSON.stringify(bGrant))}::jsonb WHERE id=${literal(bGrant.id)};`,
+    );
+    check("AC13:target_grant_edit_stale", is(stale, "stale_authority") && same(totals(), before));
+    const retried = await send(P.A, "POST", "/tasks/" + tw + "/assignment", body, { key });
+    check("AC13:target_retry_applies", retried.status === 200 && retried.body.revision === 2);
   });
 
   await section("AC14", async () => {
@@ -1052,10 +1098,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
     const body = goalBody("Retry after stale " + key);
     const beforeC = totals();
     const [c] = await windowed(P.R, async () => db.runAsync(revocationSql(P.S)), { key, body });
-    check(
-      "AC15:c_stale_authority",
-      c.status === 409 && c.body.retryClass === "recheck_before_retry" && same(totals(), beforeC),
-    );
+    check("AC15:c_stale_authority", is(c, "stale_authority") && same(totals(), beforeC));
     db.sql(restoreSql(P.S));
     const retry = await send(P.R, "POST", "/goals", body, { key });
     check("AC15:c_retry_applies", retry.status === 201);
@@ -1071,7 +1114,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
         `SET ROLE morrow_identity_owner; UPDATE morrow_identity.grants SET payload=${literal(JSON.stringify(edited))}::jsonb WHERE id=${literal(grant.id)};`,
       ),
     );
-    check("AC15:d_grant_edit_stale", d.status === 409 && same(totals(), beforeD));
+    check("AC15:d_grant_edit_stale", is(d, "stale_authority") && same(totals(), beforeD));
     // (d) The grant's expiresAt passes inside the window.
     const expiresAt = new Date(Date.now() + 2500).toISOString();
     const expiring = { ...grant, expiresAt };
@@ -1081,7 +1124,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
     const [e] = await windowed(P.R, async () => {
       await sleep(Math.max(0, Date.parse(expiresAt) - Date.now() + 200));
     });
-    check("AC15:d_grant_expiry_stale", e.status === 409 && same(totals(), beforeD));
+    check("AC15:d_grant_expiry_stale", is(e, "stale_authority") && same(totals(), beforeD));
     db.admin(
       `UPDATE morrow_identity.grants SET payload=${literal(JSON.stringify(grant))}::jsonb WHERE id=${literal(grant.id)};`,
     );
@@ -1148,7 +1191,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
     const forced = {
       oversize_objective: `SELECT outcome FROM morrow_work.cmd_goal_create('${k()}','${d}','corr',${literal(marker.repeat(300))},'[]')`,
       nul_criteria: `SELECT outcome FROM morrow_work.cmd_goal_create('${k()}','${d}','corr','ok',${literal('[{"description":"' + marker + '\\u0000","verificationCapabilityId":null,"evidenceRequired":false}]')})`,
-      oversize_prompt: `SELECT outcome FROM morrow_work.cmd_question_request('${k()}','${d}','corr',${literal(t17)},${literal(marker.repeat(300))},${literal(P.B.principal)})`,
+      oversize_prompt: `SELECT outcome FROM morrow_work.cmd_question_request('${k()}','${d}','corr',${literal(t17)},${literal(marker.repeat(300))},${literal(P.B.principal)},'${d}')`,
       wrong_tenant_scope: `SELECT outcome FROM morrow_work.cmd_task_create('${k()}','${d}','corr',${literal(g17)},${literal(marker)},${literal(JSON.stringify([{ ...workspaceResource(P.Y.org, P.A.workspace) }]))})`,
       oversize_answer: `SELECT outcome FROM morrow_work.cmd_question_answer('${k()}','${d}','corr',${literal(qc)},'${k()}',${literal(marker.repeat(300))},'2')`,
     };
@@ -1277,6 +1320,75 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
       "AC20:payload_allowlist",
       keys.every((k) => same(k.keys, allow[k.event_type])),
     );
+  });
+
+  // AC15 (e)-(f), the organization interlock, after AC20: they write goals in W2,
+  // whose outbox AC20 counts exactly.
+  await section("AC15-interlock", async () => {
+    const revokerApp = "morrow_work_revoker";
+    // (e) The interlock is fair. R's command in W is held before COMMIT, so it
+    // holds the organization interlock shared, and a revocation waits for it. A2's
+    // command in W2 of the same organization must queue behind the waiting
+    // revocation instead of joining the holder (a row FOR SHARE alone lets it in):
+    // it times out on lock_timeout and writes nothing. Released, the held command
+    // commits, the revocation applies, and A2's same-key retry applies.
+    {
+      const hold = gate();
+      const handler = handlerWith({
+        async beforeQuery(record, connection) {
+          if (record.text === statement("commit")) await hold.wait(connection);
+        },
+      });
+      const held = send(P.R, "POST", "/goals", goalBody("Fair " + randomUUID()), { handler });
+      await reached(hold, held);
+      const revoking = db.runAsync(revocationSql(P.S), { applicationName: revokerApp });
+      const waiting = await db.waitForLockWait(`application_name='${revokerApp}'`);
+      const queuedKey = randomUUID();
+      const queuedBody = goalBody("Queued " + queuedKey);
+      const beforeE = totals();
+      const queued = await send(P.A2, "POST", "/goals", queuedBody, {
+        key: queuedKey,
+        noRetry: true,
+      });
+      const stillWaiting = await db.waitForLockWait(`application_name='${revokerApp}'`, 2000);
+      check(
+        "AC15:e_new_command_queues_behind_revocation",
+        waiting && queued.status === 503 && stillWaiting && same(totals(), beforeE),
+      );
+      hold.open();
+      const [heldReply, revokedE] = await Promise.all([held, revoking]);
+      check("AC15:e_holder_then_revocation", heldReply.status === 201 && revokedE.ok);
+      const queuedRetry = await send(P.A2, "POST", "/goals", queuedBody, { key: queuedKey });
+      check("AC15:e_queued_retry_applies", queuedRetry.status === 201);
+      db.sql(restoreSql(P.S));
+    }
+    // (f) Overlapping commands in both workspaces of the organization cannot starve
+    // a revocation: issued while three command loops run, it commits within the
+    // 0004 revocation's 5 s statement timeout.
+    {
+      let stop = false;
+      const statuses = [];
+      const loop = async (p) => {
+        while (!stop) {
+          const reply = await send(p, "POST", "/goals", goalBody("Load " + randomUUID()), {
+            noRetry: true,
+          });
+          statuses.push(reply.status);
+        }
+      };
+      const loops = [P.A, P.R, P.A2].map(loop);
+      await sleep(1000);
+      const revokedF = await db.runAsync("SET statement_timeout='5s';\n" + revocationSql(P.S), {
+        applicationName: revokerApp,
+      });
+      stop = true;
+      await Promise.all(loops);
+      db.sql(restoreSql(P.S));
+      check(
+        "AC15:f_revocation_not_starved",
+        revokedF.ok && statuses.some((status) => status === 201),
+      );
+    }
   });
 
   await section("prologue", async () => {

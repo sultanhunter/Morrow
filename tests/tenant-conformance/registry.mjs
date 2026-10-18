@@ -60,12 +60,12 @@ export const workFunctions = Object.freeze({
     grantees: ["morrow_work_api"],
     command: "task.ready",
   },
-  "cmd_task_assign(text,text,text,text,text,text,text)": {
+  "cmd_task_assign(text,text,text,text,text,text,text,text)": {
     kind: "api",
     grantees: ["morrow_work_api"],
     command: "task.assign",
   },
-  "cmd_question_request(text,text,text,text,text,text)": {
+  "cmd_question_request(text,text,text,text,text,text,text)": {
     kind: "api",
     grantees: ["morrow_work_api"],
     command: "question.request",
@@ -82,6 +82,7 @@ export const workFunctions = Object.freeze({
   },
   // INVOKER helpers, owned by the command role and granted to nobody.
   "command_prelude(text,text)": { kind: "helper", grantees: [] },
+  "target_recheck(text,text,text,text)": { kind: "helper", grantees: [] },
   "append_event(text,text,text,text,text,text,text,bigint,text,jsonb,text,timestamp with time zone)":
     { kind: "helper", grantees: [] },
   "record_command(text,text,text,text,text,text,text,text,bigint,jsonb,text,timestamp with time zone)":

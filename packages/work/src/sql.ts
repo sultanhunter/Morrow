@@ -28,15 +28,16 @@ export const workStatements = Object.freeze({
     "SELECT principal_id,organization_id,workspace_id,membership_id,policy_revision,grants,grant_count,grants_digest,database_now_us FROM morrow_work.enter_context($1,$2)",
   beginCommand:
     "SELECT outcome,aggregate_type,aggregate_id,result FROM morrow_work.begin_command($1,$2,$3)",
-  targetMember: "SELECT membership_id,grants,grant_count FROM morrow_work.target_member($1)",
+  targetMember:
+    "SELECT membership_id,grants,grant_count,grants_digest FROM morrow_work.target_member($1)",
   cmdGoalCreate: "SELECT outcome,result FROM morrow_work.cmd_goal_create($1,$2,$3,$4,$5)",
   cmdGoalTransition:
     "SELECT outcome,result FROM morrow_work.cmd_goal_transition($1,$2,$3,$4,$5,$6,$7)",
   cmdTaskCreate: "SELECT outcome,result FROM morrow_work.cmd_task_create($1,$2,$3,$4,$5,$6)",
   cmdTaskReady: "SELECT outcome,result FROM morrow_work.cmd_task_ready($1,$2,$3,$4,$5,$6)",
-  cmdTaskAssign: "SELECT outcome,result FROM morrow_work.cmd_task_assign($1,$2,$3,$4,$5,$6,$7)",
+  cmdTaskAssign: "SELECT outcome,result FROM morrow_work.cmd_task_assign($1,$2,$3,$4,$5,$6,$7,$8)",
   cmdQuestionRequest:
-    "SELECT outcome,result FROM morrow_work.cmd_question_request($1,$2,$3,$4,$5,$6)",
+    "SELECT outcome,result FROM morrow_work.cmd_question_request($1,$2,$3,$4,$5,$6,$7)",
   cmdQuestionAnswer:
     "SELECT outcome,result FROM morrow_work.cmd_question_answer($1,$2,$3,$4,$5,$6,$7)",
   cmdQuestionCancel:
@@ -56,6 +57,6 @@ export const workStatements = Object.freeze({
   questionById: `SELECT ${questionColumns} FROM ${questionFrom} WHERE q.id=$1::text`,
   questionPageOfTask: `SELECT ${questionColumns} FROM ${questionFrom} WHERE q.task_id=$1::text AND ${after("q", 2, 3)} ORDER BY q.created_at,q.id::text COLLATE "C" LIMIT $4::integer`,
   questionPageForRespondent: `SELECT ${questionColumns} FROM ${questionFrom} WHERE q.respondent_principal_id=$1::text AND ($2::text IS NULL OR q.status=$2::text) AND ${after("q", 3, 4)} ORDER BY q.created_at,q.id::text COLLATE "C" LIMIT $5::integer`,
-  answerOfQuestion: `SELECT a.id::text AS id,a.question_id::text AS question_id,a.body,a.body_digest::text AS body_digest,a.answered_by_principal_id::text AS answered_by_principal_id,a.answered_by_membership_id::text AS answered_by_membership_id,${utc("a.created_at")} AS created_at FROM morrow_work.question_answers a WHERE a.question_id=$1::text`,
+  answerOfQuestion: `SELECT a.id::text AS id,a.organization_id::text AS organization_id,a.workspace_id::text AS workspace_id,a.question_id::text AS question_id,a.body,a.body_digest::text AS body_digest,a.answered_by_principal_id::text AS answered_by_principal_id,a.answered_by_membership_id::text AS answered_by_membership_id,${utc("a.created_at")} AS created_at FROM morrow_work.question_answers a WHERE a.question_id=$1::text`,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

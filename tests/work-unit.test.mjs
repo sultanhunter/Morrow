@@ -40,10 +40,16 @@ import {
 } from "../packages/work/src/connection.ts";
 import { workStatements } from "../packages/work/src/sql.ts";
 import { workErrorResponse, workRoutes } from "../packages/work/src/http.ts";
-import { decodeCursor, encodeCursor } from "../packages/work/src/contract-mapping.ts";
+import {
+  WorkMappingError,
+  decodeCursor,
+  encodeCursor,
+  mapAnswer,
+} from "../packages/work/src/contract-mapping.ts";
+import { targetEligible } from "../packages/work/src/eligibility.ts";
 import { neonWorkConnectorWithDriver } from "../packages/work/src/neon-connector.ts";
 import { neonLeaseNamespace } from "../packages/identity/src/broker-protocol.ts";
-import { enterWorkContext } from "../packages/work/src/context.ts";
+import { WorkContextUnavailable, enterWorkContext } from "../packages/work/src/context.ts";
 
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 const catalogue = JSON.parse(readFileSync("docs/contracts/capabilities.json", "utf8"));
@@ -459,6 +465,73 @@ test("context: enter_context rows decode strictly; 1001 grants overflow", async 
     ),
   );
   await assert.rejects(enterWorkContext(tx([row(), row()]), "b".repeat(64), "ws_w"));
+});
+
+test("answers: mapAnswer refuses a row of another tenant or without tenant columns", () => {
+  const a = authority([]);
+  const row = (overrides = {}) => ({
+    id: "answer_1",
+    organization_id: "org_o",
+    workspace_id: "ws_w",
+    question_id: "question_1",
+    body: "Repeat buyers first",
+    body_digest: sha("Repeat buyers first"),
+    answered_by_principal_id: "person_b",
+    answered_by_membership_id: "membership_b",
+    created_at: "2026-10-18T12:00:00.000Z",
+    ...overrides,
+  });
+  const answer = mapAnswer(row(), a);
+  assert.equal(answer.body, "Repeat buyers first");
+  assert.equal(answer.answeredBy.organizationId, "org_o");
+  for (const foreign of [
+    { organization_id: "org_p" },
+    { workspace_id: "ws_w2" },
+    { organization_id: undefined },
+    { workspace_id: null },
+  ])
+    assert.throws(() => mapAnswer(row(foreign), a), WorkMappingError);
+  assert.match(workStatements.answerOfQuestion, /a\.organization_id::text AS organization_id/);
+  assert.match(workStatements.answerOfQuestion, /a\.workspace_id::text AS workspace_id/);
+});
+
+test("eligibility: an eligible target carries its grants digest to the locked recheck", async () => {
+  const target = actor("person_b", "membership_b");
+  const taskRead = grant("workspace.task.create", ["view"], workPermissions["task.read"].fields, {
+    principal: target,
+  });
+  const digest = sha(JSON.stringify([taskRead]));
+  const row = (overrides = {}) => ({
+    membership_id: "membership_b",
+    grants: JSON.stringify([taskRead]),
+    grant_count: "1",
+    grants_digest: digest,
+    ...overrides,
+  });
+  const tx = (rows) => ({ run: async () => rows, markSubmitted() {}, rollbackOnly() {} });
+  const a = authority([]);
+  assert.deepEqual(await targetEligible(tx([row()]), a, "person_b", "assignee"), {
+    outcome: "eligible",
+    grantsDigest: digest,
+  });
+  assert.deepEqual(await targetEligible(tx([]), a, "person_b", "assignee"), {
+    outcome: "not_member",
+  });
+  assert.deepEqual(await targetEligible(tx([row()]), a, "person_b", "respondent"), {
+    outcome: "ineligible",
+  });
+  for (const bad of [{ grants_digest: undefined }, { grants_digest: "A".repeat(64) }])
+    await assert.rejects(
+      targetEligible(tx([row(bad)]), a, "person_b", "assignee"),
+      WorkContextUnavailable,
+    );
+  // The command functions take the digest as their last parameter.
+  assert.match(workStatements.targetMember, /grants_digest FROM morrow_work\.target_member\(\$1\)/);
+  assert.match(workStatements.cmdTaskAssign, /cmd_task_assign\(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8\)/);
+  assert.match(
+    workStatements.cmdQuestionRequest,
+    /cmd_question_request\(\$1,\$2,\$3,\$4,\$5,\$6,\$7\)/,
+  );
 });
 
 test("cursors are opaque, round-trip and reject anything else", () => {
