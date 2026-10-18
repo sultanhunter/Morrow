@@ -1,0 +1,322 @@
+/* Components: buttons, fields, tags, notices, state views, dialogs, tabs and lists. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: var(--space-2) 14px;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color var(--motion-duration);
+}
+.button:hover:not(:disabled) {
+  background: var(--color-canvas);
+}
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.button-primary {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: var(--color-surface);
+  font-weight: 600;
+}
+.button-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 88%, var(--color-surface));
+}
+.button-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-accent);
+}
+.icon-button {
+  min-width: 40px;
+  padding: var(--space-2);
+  color: var(--color-text);
+}
+.icon {
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.field {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.field label {
+  font-weight: 500;
+}
+.field input,
+.field textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+.field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+.field small {
+  color: var(--color-subdued);
+  font-size: var(--type-caption-size);
+}
+.field input:disabled,
+.field textarea:disabled {
+  background: var(--color-canvas);
+}
+.field-error {
+  color: var(--color-danger);
+  font-size: var(--type-caption-size);
+}
+.criteria {
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.criteria legend {
+  padding: 0;
+  font-weight: 600;
+}
+.criterion {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+}
+.criterion .field {
+  width: 100%;
+}
+.form-actions,
+.dialog-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: var(--type-caption-size);
+  white-space: nowrap;
+}
+.tag-neutral {
+  background: var(--color-canvas);
+  color: var(--color-subdued);
+}
+.tag-accent {
+  background: var(--color-accent-surface);
+  color: var(--color-accent);
+}
+.tag-success {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+.tag-warning {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+.tag-danger {
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+.person-label {
+  color: var(--color-subdued);
+  font-size: var(--type-caption-size);
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--type-caption-size);
+}
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+  padding: var(--space-3) 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.notice p {
+  flex: 1 1 240px;
+}
+.notice-title {
+  flex-basis: 100%;
+  font-size: var(--type-reading-size);
+}
+.notice-info {
+  background: var(--color-accent-surface);
+  color: var(--color-accent);
+}
+.notice-warning {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+.notice-danger {
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+.status-region {
+  margin: var(--space-3) 0;
+  color: var(--color-success);
+  font-weight: 500;
+}
+.status-region.is-empty {
+  margin: 0;
+}
+.state-view {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: var(--space-5) 0;
+  color: var(--color-subdued);
+}
+.state-view.is-compact {
+  padding: var(--space-3) 0;
+}
+.state-title {
+  color: var(--color-text);
+  font-size: var(--type-reading-size);
+}
+.dialog {
+  width: calc(100% - 32px);
+  max-width: 640px;
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 20px 65px color-mix(in srgb, var(--color-text) 15%, transparent);
+  overflow: auto;
+}
+.dialog::backdrop {
+  background: color-mix(in srgb, var(--color-text) 38%, transparent);
+}
+.dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+.dialog-body {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+.tabs {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+}
+.tabs [role="tab"] {
+  min-height: 44px;
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 4px 4px 0 0;
+  background: none;
+  color: var(--color-subdued);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tabs [role="tab"][aria-selected="true"] {
+  border-bottom-color: var(--color-accent);
+  background: var(--color-accent-surface);
+  color: var(--color-text);
+  font-weight: 600;
+}
+.tab-panel {
+  padding-top: var(--space-4);
+}
+.pane-switch {
+  display: none;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.pane-switch .button {
+  flex: 1 1 0;
+}
+.pane-switch .button[aria-pressed="true"] {
+  background: var(--color-accent-surface);
+  font-weight: 600;
+}
+.item-list {
+  display: grid;
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  min-height: 48px;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.item-stacked {
+  display: grid;
+  justify-content: stretch;
+}
+.item-link {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  font-weight: 500;
+  min-width: 0;
+}
+.item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.item-actions .text-link {
+  margin-top: 0;
+}
+.load-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.breadcrumb {
+  margin-bottom: var(--space-3);
+  font-size: var(--type-caption-size);
+}
+.breadcrumb a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  color: var(--color-subdued);
+}
+/* controlBorder meets 3:1 against the white surface only. On the canvas and on tinted
+   notices, control boundaries use the subdued token, which meets 3:1 there too. */
+.sidebar .button,
+.switcher-button,
+.notice .button,
+.fixture-controls select {
+  border-color: var(--color-subdued);
+}

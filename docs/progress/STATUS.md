@@ -15,12 +15,12 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #10: P05.T01x Part B (ADR-0009), squash-merged as `e51e5b7`: migration 0013 (account login, enrollment, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers).
 - PR #12: P06.T01a (ADR-0010), merged as `06e4dfe`: migrations 0014 (identity bridge and organization interlock) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the `pg-work` CI group. Verified waits for the P05 exit gate.
 - PR #13: the ADR-0018 Proposal@2 edit (P01.T02a-AC27), merged as `08e5ebf`: nullable `taskId` only for human governance proposals, `TASK_REQUIRED`/`TASK_MISMATCH` and the `requestedBy` derivation in `checkProposal`. It unblocks P06.T01b PR-1.
-- PR #14: P01.T04a PR-A (ADR-0015), merged as `bba3cec`: the paid-work gate (`isPaidWork`, 27 capabilities), `inspectEntitlementWriters`, the contract v1.1 billing layer and the OQ-2 test entitlement seed branch. PR-B (billing route library) follows.
+- PR #14: P01.T04a PR-A, merged as `bba3cec`: entitlement gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities), `inspectEntitlementWriters`, the contract v1.1 billing layer and the OQ-2 test entitlement seed branch. PR-B (billing route library) follows.
+- PR #15: P14.T01a PR-1, merged as `5ad6cc7` (provisional under ADR-0003): the option 1 shell, sign-in, workspace entry and sign-out over HTTP, the dev-only fixture mode, the a11y matrix and the CI `ui` job (`docs/acceptance/P14.md`). PR-2 (account and work wiring) follows.
+- PR #11: P03.T04e PR-A, merged as `f8314e8`: `prettier --check .` under one reviewed `.prettierignore`, concurrent unit tests through `scripts/run-tests.mjs`, required `executeAs` on every `migrations/manifest.json` row and `heavy-faults.yml`. After merge: one `workflow_dispatch` run of `heavy-faults.yml` on `main` (AC22). The rest of P03.T04e ships in later PRs.
 
 In progress:
-- **P01.T02c PR-A** (branch `claude/p01-t02c-a-collab-contracts`, pushed, no PR yet because GitHub Actions minutes are nearly exhausted): collaboration contracts v1.1 (ADR-0016): 94 core-v1.1 definitions with EventEnvelope@2 as the one declared replacement, the additive event registry (22 rows) and `validateEventPayload`, eight capabilities (six `human_only`), `collaborationPermissions` with the audited Ask admin row, two v1.1 machines, four routes and the sidebar model. Local format, typecheck, verify, 1,456 targeted tests and `lab:workers` pass; full `npm test`/`ci`/`smoke:scaffold`, hosted CI, the Tier 2 AI review (separate context, same model family) and `/security-review` are open. PR-B (`@morrow/policy/collaboration`) follows.
-- **P03.T04e PR-A** (PR #11): one formatting config, concurrent unit tests, manifest `executeAs`, heavy-faults workflow. The rest of P03.T04e ships in later PRs.
-- **P14.T01a PR-1** (PR #15, provisional under ADR-0003): workspace UI shell, sign-in and navigation.
+- **P01.T02c PR-A** (branch `claude/p01-t02c-a-collab-contracts`, pushed, no PR yet because GitHub Actions minutes are nearly exhausted; merged with `main` at `f8314e8`): collaboration contracts v1.1 (ADR-0016): EventEnvelope@2 as the one declared replacement, the additive event registry (22 rows, pinned in `release-baseline.json`) and `validateEventPayload`, eight capabilities (six `human_only`), `collaborationPermissions` with the audited Ask admin row, two v1.1 machines, four routes and the sidebar model. Review findings applied on 2026-10-19 (see `docs/acceptance/P01.md`). Hosted CI, the Tier 2 AI review (separate context, same model family) and `/security-review` are open. PR-B (`@morrow/policy/collaboration`) follows.
 
 ## Decisions recorded 2026-10-18
 
@@ -33,20 +33,22 @@ In progress:
 
 ## Last green commit
 
-`06e4dfe` on `main`, the merge of PR #12: push run 39166650248 passed. Earlier: `e51e5b7` (PR #10) push run 39160961579 passed all 10 jobs; `400aa44` (PR #9) push run 39131819189 passed. The push run 39168226191 on `08e5ebf` (PR #13) was still running when this file was written; record its result.
+`bba3cec` on `main`, the merge of PR #14: push run 39169685269 passed. Earlier: `08e5ebf` (PR #13) push run 39168226191; `06e4dfe` (PR #12) push run 39166650248; `e51e5b7` (PR #10) push run 39160961579, all 10 jobs. The push runs on `5ad6cc7` (PR #15, run 39171677853) and `f8314e8` (PR #11) were not checked when this file was written; record their results.
 
 ## Next actions
 
-1. P01.T04a PR-B (billing route library), on the merged PR-A (`bba3cec`).
-2. P01.T02c PR-A: open the PR when Actions minutes allow, then hosted CI, the Tier 2 AI review and `/security-review`; then PR-B. P06.T01b, P06.T02a (event transport on the P01.T02c envelope and registry), P06.T01c (OperationLedger) and P01.T02b.
-3. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
+1. P01.T02c PR-A: open the PR when Actions minutes allow, then hosted CI, the Tier 2 AI review and `/security-review`; then PR-B.
+2. P03.T04e: dispatch `heavy-faults.yml` on `main` (AC22). P14.T01a PR-2 (account and work wiring). P01.T04a PR-B (billing route library).
+3. P06.T01b, P06.T02a (event transport on the P01.T02c envelope and registry), P06.T01c (OperationLedger) and P01.T02b.
+4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11). Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.
 
 Open plan follow-ups:
-- P06.T01a AC08 soak: set `MORROW_WORK_SOAK=1` for `lab:work-postgresql` in the P03.T04e heavy job (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
+- P06.T01a AC08 soak: a `heavy:*` script that runs `lab:work-postgresql` with `MORROW_WORK_SOAK=1` in `heavy-faults.yml` (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
 - Work routes in production: production cannot map today (ADR-0007 item 9), so the deployed api serves them 401 with no SQL. Whoever enables production mapping must also gate the work routes on P09.T05 (packet hard ordering b).
 - Superseded banners on `docs/references/*`.
 - A forward migration (0016 or later) that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
-- The rest of P03.T04e: formatting ignore file, unit-test concurrency, shared PostgreSQL 17 template-database harness, heavy-fault job.
+- The rest of P03.T04e: PR-B, the shared PostgreSQL 17 template-database harness and its `pg-suites` and `pg-stress` legs.
+- Timing fixes (routine, ADR-0002) if hosted `unit-stress` confirms them: `tests/broker-client.test.mjs` AC30 and the `tests/standalone-login-http.test.mjs` 5,000 ms entry-timeout case each flaked once under loaded-host local stress.
 
 ## Blockers
 
