@@ -103,6 +103,7 @@ export function proposal({
   partialApproval = "allowed",
   reviewPolicy = policy(),
   expiresAt = "2026-10-25T09:00:00Z",
+  taskId = "task_a",
 } = {}) {
   const capability = catalogue.capabilities.find((c) => c.id === capabilityId);
   const kind = kinds[capabilityId];
@@ -122,7 +123,7 @@ export function proposal({
     revision: 1,
     createdAt: T0,
     updatedAt: T0,
-    taskId: "task_a",
+    taskId,
     capabilityId,
     scope: {
       ...tenant,
@@ -171,12 +172,13 @@ export const solo = (overrides = {}) => ({
   lastMembershipChangeAt: "2026-10-01T00:00:00Z",
   ...overrides,
 });
-/** ProposalFacts matching a proposal built above. */
+/** ProposalFacts matching a proposal built above; no task has no requester (ADR-0018). */
 export const facts = (p, overrides = {}) => ({
   ...tenant,
   storeId: "store_a",
   proposedBy: structuredClone(p.proposedBy),
-  requestedBy: structuredClone(p.requestedBy),
+  taskId: p.taskId,
+  requestedBy: p.taskId === null ? null : structuredClone(p.requestedBy),
   beneficiaryPrincipalIds: [...p.beneficiaryPrincipalIds],
   contextTaint: p.contextTaint,
   reviewPolicy: policy(),

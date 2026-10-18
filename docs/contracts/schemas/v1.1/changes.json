@@ -41,7 +41,7 @@
       "kind": "definition",
       "name": "Proposal",
       "replaces": "core:Proposal",
-      "reason": "Proposal@2: schemaVersion 2; per-target and total credit and cash ceilings inside the digest; server-derived irreversible, requestedBy, beneficiaries and contextTaint; partial approval and derivation. A v1 proposal is not a valid Proposal@2.",
+      "reason": "Proposal@2: schemaVersion 2; per-target and total credit and cash ceilings inside the digest; server-derived irreversible, requestedBy, beneficiaries and contextTaint; partial approval and derivation. taskId is null only for a human-made Governance-domain proposal, whose requestedBy is the proposer (ADR-0018 candidate edit). A v1 proposal is not a valid Proposal@2.",
       "adr": "ADR-0011"
     },
     {

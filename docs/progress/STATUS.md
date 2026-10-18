@@ -13,12 +13,13 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #8: P01.T02a PR-B, review policy, Proposal@2, Approval@2 and `@morrow/policy/review` (ADR-0011).
 - PR #9: the owner decisions of 2026-10-18: ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
 - PR #10: P05.T01x Part B (ADR-0009), squash-merged as `e51e5b7`: migration 0013 (account login, enrollment, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers).
+- PR #12: P06.T01a (ADR-0010), merged as `06e4dfe`: migrations 0014 (identity bridge and organization interlock) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the `pg-work` CI group. Its AC09 and AC14 wording items were resolved on 2026-10-18 as a routine packet-wording correction (`docs/acceptance/P06.md`). Verified waits for the P05 exit gate.
 
 In progress:
-- **P01.T04a** PR-A and PR-B are the next billing step (OQ-1 to OQ-3 resolved 2026-10-18).
-- **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
-- **P06.T01a** (`claude/p06-t01a-work-commands`, PR #12): work commands and reads on the ADR-0010 tenant data pattern. Migrations 0014 (identity bridge) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the new `pg-work` CI group. Hosted run 39162655617 on the merged head `7b2434c` passed all 11 jobs. Awaiting the Tier 2 security review and merge; the owner's answers to the AC09 and AC14 wording notes stay open.
-  - **Merged with `main` after PR #10 (2026-10-19).** The manifest is 0001..0015 in order and append-only; the sequence-13 reservation is gone from `tests/migration-history.test.mjs`. The broker role table holds eight roles (Part B's `morrow_identity_onboarding` then this branch's `morrow_api_worker`); `apps/broker/worker-configuration.d.ts` is regenerated. The conformance harness applies `infra/identity-onboarding-role-prerequisites.sql` before 0013 and checks that the onboarding role cannot execute the bridge functions. 0013 revokes `admit_browser_family` from `morrow_identity_sessions`; 0014's interlocked replacement keeps that ACL (CREATE OR REPLACE), which the conformance S5 check asserts over 0001..0015. Run 39162655617 is the evidence for `pg-work`, `pg-linking` and `pgwire` together.
+- **ADR-0018 Proposal@2 edit** (PR #13, branch `claude/p01-t02a-c-proposal-task-optional`, P01.T02a-AC27): nullable `taskId` only for human governance proposals (schema rule: a `governance.*` capability and a `HumanActorRef` proposer), `TASK_REQUIRED`/`TASK_MISMATCH` and the `requestedBy` derivation in `checkProposal`, and the `ProposalTaskFacts` union. Merged with `main` at `06e4dfe` on 2026-10-19 (v1.1 core schema carries both this edit and the Part B account definitions; contracts regenerated; baseline hash updated). It blocks P06.T01b PR-1.
+- **P01.T04a PR-A** (PR #14): paid-work gate, billing v1.1 contracts and the test entitlement seed. PR-B (billing route library) follows.
+- **P03.T04e PR-A** (PR #11): one formatting config, concurrent unit tests, manifest `executeAs`, heavy-faults workflow. The rest of P03.T04e ships in later PRs.
+- **P14.T01a PR-1** (PR #15, provisional under ADR-0003): workspace UI shell, sign-in and navigation.
 
 ## Decisions recorded 2026-10-18
 
@@ -31,23 +32,22 @@ In progress:
 
 ## Last green commit
 
-`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7 to #10 merged after it (`main` is at `e51e5b7`); record their runs here once confirmed.
+`e51e5b7` on `main`, the merge of PR #10: push run 39160961579 passed all 10 jobs. Earlier: `400aa44` (PR #9) push run 39131819189 passed; `d797b1a` (PR #5) push run 39070711182 passed. The push run 39120797236 on `80b6897` (PR #8) failed in `pgwire`; the later green runs supersede it.
 
-PR #10 (P05.T01x Part B, branch `claude/p05-t01x-b-signup`): hosted run 39150345721 (`pull_request`) on `0aff09f` passed all 10 jobs (`pgwire`, `postgres (pg-linking)` and `foundation` included). It was the last green run recorded before the PR merged as `e51e5b7`.
-
-PR #12 (P06.T01a, branch `claude/p06-t01a-work-commands`): hosted run 39162655617 (`pull_request`) on `7b2434c`, the merge of `main` at `e51e5b7`, passed all 11 jobs (`postgres (pg-work)`, `postgres (pg-linking)`, `pgwire` and `foundation` included).
+PR #12 (P06.T01a): hosted run 39165441837 on its head `dd4dca9` passed all 11 jobs (`postgres (pg-work)`, `postgres (pg-linking)`, `pgwire` and `foundation` included) before it merged as `06e4dfe`. The push run 39166650248 on `06e4dfe` was still running when this file was written; record its result.
 
 ## Next actions
 
-1. P06.T01a (PR #12): Tier 2 review (`/code-review`, `/security-review`), then merge once `foundation` is green on the exact head. Then the ADR-0018 Proposal@2 edit, P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
-2. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library).
-3. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
+1. PR #13 (the ADR-0018 Proposal@2 edit): hosted CI green on the merged head, the `/security-review` result recorded on the PR (its Tier 2 AI review, separate context, same model family, is addressed), then merge. It must merge before P06.T01b PR-1.
+2. Then P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
+3. P01.T04a PR-A (PR #14), then PR-B (billing route library).
+4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Open plan follow-ups:
 - P06.T01a AC08 soak: set `MORROW_WORK_SOAK=1` for `lab:work-postgresql` in the P03.T04e heavy job (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
 - Work routes in production: production cannot map today (ADR-0007 item 9), so the deployed api serves them 401 with no SQL. Whoever enables production mapping must also gate the work routes on P09.T05 (packet hard ordering b).
 - Superseded banners on `docs/references/*`; `docs/contracts/billing-entitlements.md` still names App Pricing as the only route (P01.T04a updates it).
-- A forward migration after 0013 that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
+- A forward migration (0016 or later) that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
 - The rest of P03.T04e: formatting ignore file, unit-test concurrency, shared PostgreSQL 17 template-database harness, heavy-fault job.
 
 ## Blockers

@@ -1,6 +1,6 @@
 // P01.T02a PR-B: review policy, exact proposals and the review library
-// (AC12-AC25) in packages/policy/src/review.ts, through the typed library and
-// docs/contracts/fixtures/P01.T02a.json. ADR-0011.
+// (AC12-AC25, and AC27 for ADR-0018) in packages/policy/src/review.ts, through
+// the typed library and docs/contracts/fixtures/P01.T02a.json. ADR-0011.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -455,6 +455,111 @@ test("AC18: proposer, requester and beneficiary of an access change cannot appro
     beneficiaryPrincipalIds: ["human_ana"],
   });
   assert.equal(code(one(family(forAna), human("ana"))), "SELF_APPROVAL_DENIED");
+});
+
+test("AC27: only a human-made governance proposal may have no task, and its requester is the proposer (ADR-0018)", () => {
+  const leo = human("leo");
+  const governance = {
+    capabilityId: "governance.grants.revise",
+    credits: ["0"],
+    fields: ["status"],
+    beneficiaryPrincipalIds: ["human_ana"],
+  };
+  const taskless = (overrides = {}) =>
+    proposal({ ...governance, proposedBy: leo, requestedBy: leo, taskId: null, ...overrides });
+  // Accepted: a human proposer of a Governance-domain capability, with no task
+  // and no task requester in the facts; requestedBy is derived as the proposer.
+  const grant = taskless();
+  assert.deepEqual(grant, fixture("P01.T02a.proposal.taskless_human_governance"));
+  assert.equal(validateCurrentDefinition("Proposal", grant), true);
+  assert.equal(facts(grant).requestedBy, null);
+  assert.deepEqual(checkProposal(grant, facts(grant)), []);
+  assert.deepEqual(checkProposal(taskless({ requestedBy: human("ben") }), facts(grant)), [
+    "REQUESTED_BY_MISMATCH",
+  ]);
+  // The facts carry a requester exactly when they carry a task.
+  for (const forged of [{ requestedBy: leo }, { taskId: "task_a" }])
+    assert.throws(() => checkProposal(grant, { ...facts(grant), ...forged }), ReviewBoundaryError);
+  // Agents always need a task. Without one the schema requires a governance.*
+  // capability and a HumanActorRef proposer, so it refuses a task-less agent,
+  // service, mandate-bearing or non-governance proposal, and the library
+  // refuses each at its boundary.
+  for (const id of [
+    "P01.T02a.proposal.taskless_agent",
+    "P01.T02a.proposal.taskless_service",
+    "P01.T02a.proposal.taskless_human_mandate",
+    "P01.T02a.proposal.taskless_human_not_governance",
+  ]) {
+    const refused = fixture(id);
+    assert.equal(validateCurrentDefinition("Proposal", refused), false, id);
+    assert.equal(
+      validateCurrentDefinition("Proposal", seal({ ...refused, taskId: "task_a" })),
+      true,
+    );
+    assert.throws(() => checkProposal(refused, facts(refused)), ReviewBoundaryError);
+  }
+  for (const shape of [
+    { installationId: "installation_a" },
+    { workspaceId: null },
+    { membershipId: null },
+  ]) {
+    const proposedBy = human("leo", shape);
+    assert.equal(validateCurrentDefinition("Proposal", taskless({ proposedBy })), false);
+    assert.equal(
+      validateCurrentDefinition("Proposal", taskless({ proposedBy, taskId: "task_a" })),
+      true,
+    );
+  }
+  // A producer that attaches no task to an agent proposal gets TASK_REQUIRED.
+  const agentWork = proposal({ ...governance, proposedBy: agent, requestedBy: human("maya") });
+  assert.deepEqual(checkProposal(agentWork, facts(agentWork)), []);
+  assert.deepEqual(
+    checkProposal(agentWork, facts(agentWork, { taskId: null, requestedBy: null })),
+    ["TASK_MISMATCH", "TASK_REQUIRED", "REQUESTED_BY_MISMATCH"],
+  );
+  // A human proposal outside the Governance domain needs a task: the library
+  // checks the catalogue domain when the producer attached none.
+  const publish = proposal({ proposedBy: leo, requestedBy: leo });
+  assert.deepEqual(checkProposal(publish, facts(publish)), []);
+  assert.deepEqual(checkProposal(publish, facts(publish, { taskId: null, requestedBy: null })), [
+    "TASK_MISMATCH",
+    "TASK_REQUIRED",
+  ]);
+  // The proposal names exactly the task the producer attached, so the stored
+  // proposal and its conflict set follow the producer's record. Whether a human
+  // governance proposal has a task is the producer's choice (ADR-0018).
+  const onTask = taskless({ taskId: "task_a", requestedBy: human("ben") });
+  assert.deepEqual(checkProposal(onTask, facts(onTask)), []);
+  for (const taskId of [null, "task_b"])
+    assert.deepEqual(checkProposal(seal({ ...onTask, taskId }), facts(onTask)), ["TASK_MISMATCH"]);
+  // The Governance domain is exactly the governance.* capabilities (the schema
+  // pattern and the P06.T01b SQL CHECK).
+  for (const c of catalogue.capabilities)
+    assert.equal(c.domain === "Governance", c.id.startsWith("governance."), c.id);
+  // Derived proposals inherit the null task with the conflict set.
+  const pair = taskless({ credits: ["0", "0"] });
+  const derived = previewSelection(pair, [1]).proposal;
+  assert.equal(derived.taskId, null);
+  assert.deepEqual(derived.requestedBy, leo);
+  assert.deepEqual(checkProposal(derived, facts(pair)), []);
+  // The proposer stays conflicted as the requester: neither they nor the
+  // beneficiary may approve in a team; another member may.
+  const state = family(grant);
+  assert.equal(code(one(state, leo)), "SELF_APPROVAL_DENIED");
+  assert.equal(code(one(state, human("ana"))), "SELF_APPROVAL_DENIED");
+  assert.equal(code(one(state, human("maya"))), "approved");
+  // A solo owner's own task-less change still needs the typed phrase.
+  const olivia = human("olivia");
+  const own = taskless({ proposedBy: olivia, requestedBy: olivia, beneficiaryPrincipalIds: [] });
+  const soloFacts = { eligibleReviewerPrincipalIds: ["human_olivia"], ownership: solo() };
+  assert.deepEqual(checkProposal(own, facts(own, soloFacts)), []);
+  const ownership = solo();
+  assert.equal(code(one(family(own), olivia, {}, { ownership })), "CONFIRMATION_MISMATCH");
+  const phrase = { soloOwnerConfirmation: confirmationPhrase(own) };
+  assert.equal(code(one(family(own), olivia, phrase, { ownership })), "approved");
+  // Both task codes are existence-free denials.
+  for (const taskCode of ["TASK_MISMATCH", "TASK_REQUIRED"])
+    assert.deepEqual(reviewError(taskCode), reviewError("REQUESTED_BY_MISMATCH"));
 });
 
 test("AC19: the solo owner approves with the exact phrase after a cool-down, and may cancel before it", () => {

@@ -34,13 +34,15 @@ PR-B declares three more replacements, all under ADR-0011:
 
 | Replacement | v1 | v1.1 |
 | --- | --- | --- |
-| `Proposal` (definition) | `schemaVersion` 1, one optional `maximumCost`, any `risk` | Proposal@2: `schemaVersion` 2; per-target and total `maximumCredits` and `maximumCost`; server-derived `irreversible`, `requestedBy` (a `HumanActorRef`), `beneficiaryPrincipalIds` and `contextTaint`; `partialApproval` and `derivedFrom` |
+| `Proposal` (definition) | `schemaVersion` 1, one optional `maximumCost`, any `risk` | Proposal@2: `schemaVersion` 2; per-target and total `maximumCredits` and `maximumCost`; server-derived `irreversible`, `requestedBy` (a `HumanActorRef`), `beneficiaryPrincipalIds` and `contextTaint`; `partialApproval` and `derivedFrom`; `taskId` null only for a human-made Governance-domain proposal, whose `requestedBy` is the proposer (ADR-0018) |
 | `Approval` (definition) | `schemaVersion` 1, any `ActorRef` reviewer | Approval@2: `schemaVersion` 2; human reviewers only; `reviewPolicyRef`, `requiredApprovals`, `decisions` and `effectiveAt` |
 | `governance.approval.decide.input` | `{proposalRef, decision: DecisionRef, expectedRevision}` | `{proposalRef, decision: ReviewDecisionInput, expectedRevision}` |
 
 PR-B also adds the bodies of two new capabilities, `governance.review_policy.revise` and `governance.approval.preview`. They have no v1 body, so they are additions, not replacements.
 
 P05.T01x Part B (ADR-0009 item 5) adds three v1.1 definitions for the account routes, all additions and none a replacement, so `changes.json` is unchanged: `AccountOverview` (`GET /workspaces`), `OrganizationSignupRequest` and `OrganizationSignupResult` (`POST /organizations`). The baseline hash of `schemas/v1.1/core.schema.json` was updated deliberately; the bundle grew to 1,857,713 bytes.
+
+The ADR-0018 follow-up edits Proposal@2 while v1.1 is a candidate: `taskId` becomes `Id | null`, and a null `taskId` requires a `governance.*` `capabilityId` and a `HumanActorRef` `proposedBy` (an `allOf` rule). The review library adds the catalogue Governance-domain check, the task binding and the `requestedBy` derivation, which JSON Schema cannot express. It is a deliberate edit of the candidate: the `Proposal` entry in `changes.json` keeps its place and records the edit in its reason, and the baseline hash of `schemas/v1.1/core.schema.json` is updated; with the Part B definitions the bundle is 1,860,473 bytes. If v1.1 had been frozen, the edit would have opened `schemas/v1.2/` instead.
 
 New v1.1 definitions in PR-A: `HumanActorRef`, `KillSwitchControl`, `CampaignRef`, `CampaignRefs` and `KillSwitchRecord`. In PR-B: `NonNegativeDecimal`, `NonNegativeMoney`, `RiskClass`, `SelectionIndexes`, `TargetSelection`, `ProposalTarget`, `ProposalDerivation`, `ReviewRule`, `RestrictedReviewRule`, `SoloOwnerRule`, `ReviewPolicyRules`, `ReviewPolicy`, `ApprovalDecision` and `ReviewDecisionInput`. Credit ceilings reuse billing v1 `CreditUnits` by absolute URI. `KillSwitchRecord.capabilityId` is limited to the five kill switches, and its `targets` are v1 `ResourceRef`s: a campaign uses kind `campaign`, an installation `installation`, a membership `member` and a release `release`; `KillSwitchTargetKind` (`packages/policy/src/review-facts.ts`) uses the same kinds. v1 `ResourceRef` has no kind for a store connection, so how a disconnect names its target is open; P05.T01z settles it with a deliberate v1.1 edit before sign-off.
 
@@ -57,7 +59,7 @@ The generated bundle `packages/contracts/src/generated/runtime-validators.mjs` e
 
 The generated types follow the same rule: `CapabilityInput<K>` is the effective body, and `Current_<Name>` aliases (with `CurrentDefinitions` and `CurrentDefinitionName`) name the effective definitions. The v1 types stay exported for history.
 
-Validators are generated ahead of time with one Ajv 2020 instance (`npm run contracts:generate`). No schema is compiled at runtime, and the workerd lab runs every selector with code generation denied. Contract v1.1 grew the bundle from 1,594,826 to 1,658,971 bytes in PR-A (about 4 percent), and to 1,837,054 bytes in PR-B (about 11 percent more, 15 percent over v1).
+Validators are generated ahead of time with one Ajv 2020 instance (`npm run contracts:generate`). No schema is compiled at runtime, and the workerd lab runs every selector with code generation denied. Contract v1.1 grew the bundle from 1,594,826 to 1,658,971 bytes in PR-A (about 4 percent), and to 1,837,054 bytes in PR-B (about 11 percent more, 15 percent over v1). The ADR-0018 edit of Proposal@2 brought it to 1,839,814 bytes.
 
 ## Checks
 

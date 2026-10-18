@@ -319,7 +319,7 @@
       "additionalProperties": false
     },
     "Proposal": {
-      "description": "Proposal@2. Replaces core v1 Proposal (changes.json); not compatible with it in either direction.",
+      "description": "Proposal@2. Replaces core v1 Proposal (changes.json); not compatible with it in either direction. taskId is null only for a human-made Governance-domain proposal (ADR-0018).",
       "type": "object",
       "properties": {
         "schemaVersion": {
@@ -354,7 +354,15 @@
           "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
         },
         "taskId": {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+          "description": "The work task the proposal belongs to. Null only for a human-made Governance-domain proposal (ADR-0018): when it is null this schema requires a governance.* capability and a HumanActorRef proposer, and checkProposal also checks the catalogue domain and that requestedBy is the proposer. Agents always name a task.",
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "capabilityId": {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
@@ -406,7 +414,7 @@
           "$ref": "urn:morrow:contracts:core:v1#/$defs/ActorRef"
         },
         "requestedBy": {
-          "description": "The task initiator or mandate owner; server-derived.",
+          "description": "The task initiator or mandate owner; the proposer when taskId is null (ADR-0018); server-derived.",
           "$ref": "#/$defs/HumanActorRef"
         },
         "beneficiaryPrincipalIds": {
@@ -500,6 +508,31 @@
             "properties": {
               "partialApproval": {
                 "const": "all_or_nothing"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "taskId": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "taskId"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "capabilityId": {
+                "type": "string",
+                "pattern": "^governance\\."
+              },
+              "proposedBy": {
+                "$ref": "#/$defs/HumanActorRef"
               }
             }
           }
