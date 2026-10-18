@@ -108,7 +108,7 @@ const request = (path = "/auth/login", signal) =>
     ...(path.startsWith("/auth/workos/callback")
       ? {}
       : {
-          body: JSON.stringify({ schemaVersion: 1, workspaceId: "workspace_a" }),
+          body: JSON.stringify({ schemaVersion: 2 }),
         }),
     ...(signal ? { signal } : {}),
   });

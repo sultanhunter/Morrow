@@ -67,6 +67,11 @@ const published = [
     "0012.login-protocol-v1.sql",
     "52e9f699956ec8932056b22b2dc5294e540225562730666e0a87d00dfe857579",
   ],
+  [
+    13,
+    "0013.account-onboarding.sql",
+    "4a7c49b5a4bf3b0d45cb4d8ee73f8a9f40dbffe8d5fef2dad021e3684bc9d758",
+  ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));

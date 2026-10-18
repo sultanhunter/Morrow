@@ -319,18 +319,6 @@ FROM pg_catalog.pg_stat_activity a WHERE a.pid=pg_catalog.pg_backend_pid()`,
       "SELECT outcome,admission_id FROM morrow_identity.admit_authentication_exchange($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
     arity: 13,
   }),
-  selectionPool: Object.freeze({
-    role: "morrow_identity_resolution",
-    statementTimeout: "1000",
-    idleTimeout: "5000",
-    begin: "BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY",
-    roleQuery: commonRole,
-    timeout: "SET LOCAL statement_timeout = '1s'",
-    idleTimeoutQuery: "SET LOCAL idle_in_transaction_session_timeout = '5s'",
-    domain:
-      "SELECT profile_id,profile_record_revision,mapping_id,mapping_revision,binding_revision,principal_id,organization_id,workspace_id,membership_id,policy_revision FROM morrow_identity.resolve_provider_subject_selection($1,$2,$3,$4,$5,$6,$7,$8,$9)",
-    arity: 9,
-  }),
   sessionPool: Object.freeze({
     role: "morrow_identity_sessions",
     statementTimeout: "1000",
@@ -340,8 +328,8 @@ FROM pg_catalog.pg_stat_activity a WHERE a.pid=pg_catalog.pg_backend_pid()`,
     timeout: "SET LOCAL statement_timeout = '1s'",
     idleTimeoutQuery: "SET LOCAL idle_in_transaction_session_timeout = '5s'",
     domain:
-      "SELECT outcome,family_id,generation_id,provider_binding_id,expires_at_ms,audit_id FROM morrow_identity.admit_browser_family($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)",
-    arity: 27,
+      "SELECT outcome,family_id,generation_id,provider_binding_id,expires_at_ms,audit_id FROM morrow_identity.admit_account_family($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)",
+    arity: 21,
   }),
 });
 export function controlledNeonExpectedScript(poolName, parameters) {

@@ -40,6 +40,8 @@ PR-B declares three more replacements, all under ADR-0011:
 
 PR-B also adds the bodies of two new capabilities, `governance.review_policy.revise` and `governance.approval.preview`. They have no v1 body, so they are additions, not replacements.
 
+P05.T01x Part B (ADR-0009 item 5) adds three v1.1 definitions for the account routes, all additions and none a replacement, so `changes.json` is unchanged: `AccountOverview` (`GET /workspaces`), `OrganizationSignupRequest` and `OrganizationSignupResult` (`POST /organizations`). The baseline hash of `schemas/v1.1/core.schema.json` was updated deliberately; the bundle grew to 1,857,713 bytes.
+
 New v1.1 definitions in PR-A: `HumanActorRef`, `KillSwitchControl`, `CampaignRef`, `CampaignRefs` and `KillSwitchRecord`. In PR-B: `NonNegativeDecimal`, `NonNegativeMoney`, `RiskClass`, `SelectionIndexes`, `TargetSelection`, `ProposalTarget`, `ProposalDerivation`, `ReviewRule`, `RestrictedReviewRule`, `SoloOwnerRule`, `ReviewPolicyRules`, `ReviewPolicy`, `ApprovalDecision` and `ReviewDecisionInput`. Credit ceilings reuse billing v1 `CreditUnits` by absolute URI. `KillSwitchRecord.capabilityId` is limited to the five kill switches, and its `targets` are v1 `ResourceRef`s: a campaign uses kind `campaign`, an installation `installation`, a membership `member` and a release `release`; `KillSwitchTargetKind` (`packages/policy/src/review-facts.ts`) uses the same kinds. v1 `ResourceRef` has no kind for a store connection, so how a disconnect names its target is open; P05.T01z settles it with a deliberate v1.1 edit before sign-off.
 
 ## Effective selection

@@ -7,7 +7,6 @@ import { createStandaloneLogout } from "../packages/identity/src/standalone-logo
 import { selfLogoutSql } from "../packages/identity/src/self-logout-control.ts";
 import { loginFlowCustodySql } from "../packages/identity/src/login-flow-custody.ts";
 import { authenticationExchangeAdmissionSql } from "../packages/identity/src/authentication-exchange-admission.ts";
-import { workspaceSelectionSql } from "../packages/identity/src/workos-workspace-selection.ts";
 import { browserSessionAdmissionSql } from "../packages/identity/src/workos-browser-session-admission.ts";
 import { identitySql } from "../packages/identity/src/index.ts";
 import { createStandaloneWorkspaceBootstrap } from "../packages/identity/src/standalone-workspace-bootstrap.ts";
@@ -69,7 +68,6 @@ const paths = [
   "packages/identity/src/login-preauth-control.ts",
   "packages/identity/src/login-flow-custody.ts",
   "packages/identity/src/authentication-exchange-admission.ts",
-  "packages/identity/src/workos-workspace-selection.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
   "packages/identity/src/workos-authentication-evidence.ts",
   "packages/identity/src/workos-session-token.ts",
@@ -100,10 +98,10 @@ const paths = [
 ];
 if (process.version !== "v24.13.0") throw Error("LOGOUT_HTTPS_SOURCE_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-// The login fixture applies 0001-0012; those entries must be present in order and
+// The login fixture applies 0001-0013 (account login, P05.T01x); they must be present in order and
 // checksum-verified. Later manifest entries are not applied by this lab.
-if (manifest.migrations.length < 12) throw Error("LOGOUT_HTTPS_TWELVE_MIGRATIONS_REQUIRED");
-for (const [i, m] of manifest.migrations.slice(0, 12).entries()) {
+if (manifest.migrations.length < 13) throw Error("LOGOUT_HTTPS_THIRTEEN_MIGRATIONS_REQUIRED");
+for (const [i, m] of manifest.migrations.slice(0, 13).entries()) {
   if (m.sequence !== i + 1 || hash(readFileSync("migrations/" + m.file)) !== m.sha256)
     throw Error("LOGOUT_HTTPS_MIGRATION_HASH");
   paths.push("migrations/" + m.file);
@@ -126,7 +124,7 @@ const phase = (s) => {
 try {
   measured = await localPostgresLab("P05.T01q-https", async (engine) => {
     ownedContainer = engine.id;
-    const h = createSelfLogoutFixtureHarness(engine);
+    const h = createSelfLogoutFixtureHarness(engine, { accountOnboarding: true });
     let listener = createWorkspaceApiHttpListener();
     const server = createServer({ ...tls.serverOptions, maxHeaderSize: 8192 }, (q, s) =>
       listener(q, s),
@@ -242,7 +240,6 @@ try {
       const roleSpec = {
         login: ["morrow_identity_login", loginFlowCustodySql],
         preauth: ["morrow_identity_preauth", authenticationExchangeAdmissionSql],
-        selection: ["morrow_identity_resolution", workspaceSelectionSql],
         session: ["morrow_identity_sessions", browserSessionAdmissionSql],
       };
       const pools = {};
@@ -347,7 +344,7 @@ try {
       const start = await request("/auth/login", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ schemaVersion: 1, workspaceId: c.f.workspace }),
+        body: JSON.stringify({ schemaVersion: 2 }),
       });
       check(
         "login_start_cookie_" + c.f.n + "_" + c.provider.metrics.exchange,

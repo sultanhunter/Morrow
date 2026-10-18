@@ -101,7 +101,6 @@ const paths = [
     "workos-authentication-evidence",
     "workos-session-token",
     "workos-session-status",
-    "workos-workspace-selection",
     "workos-browser-session-admission",
     "workspace-store-linking-control",
     "workspace-store-linking",
@@ -109,10 +108,10 @@ const paths = [
   ].map((name) => "packages/identity/src/" + name + ".ts"),
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json"));
-// The login fixture applies 0001-0012; those entries must be present in order and
+// The login fixture applies 0001-0013 (account login, P05.T01x); they must be present in order and
 // checksum-verified. Later manifest entries are not applied by this lab.
-require(manifest.migrations.length >= 12);
-for (const [i, row] of manifest.migrations.slice(0, 12).entries()) {
+require(manifest.migrations.length >= 13);
+for (const [i, row] of manifest.migrations.slice(0, 13).entries()) {
   require(row.sequence === i + 1 && hash(readFileSync("migrations/" + row.file)) === row.sha256);
   paths.push("migrations/" + row.file);
 }
@@ -144,10 +143,11 @@ const check = (name, passed) => {
   checks.push({ name, passed });
   require(passed);
 };
+// The six roles this journey uses. The engine also authenticates the seventh,
+// morrow_identity_onboarding, whose signup path is covered by lab:account-onboarding.
 const roles = [
   "morrow_identity_login",
   "morrow_identity_preauth",
-  "morrow_identity_resolution",
   "morrow_identity_sessions",
   "morrow_api",
   "morrow_identity_linking",
@@ -194,16 +194,19 @@ try {
           row.sequence,
         ]),
       );
-      harness = createSelfLogoutFixtureHarness({
-        id: engine.id,
-        sql(text, database) {
-          const sequence = migrationSql.get(text);
-          if (sequence !== undefined) require(sequence === appliedMigrations + 1);
-          const result = engine.sql(text, database);
-          if (sequence !== undefined) appliedMigrations = sequence;
-          return result;
+      harness = createSelfLogoutFixtureHarness(
+        {
+          id: engine.id,
+          sql(text, database) {
+            const sequence = migrationSql.get(text);
+            if (sequence !== undefined) require(sequence === appliedMigrations + 1);
+            const result = engine.sql(text, database);
+            if (sequence !== undefined) appliedMigrations = sequence;
+            return result;
+          },
         },
-      });
+        { accountOnboarding: true },
+      );
       const origin = "https://127.0.0.1",
         configuration = harness.configured({ origin }),
         f = configuration.f;
@@ -554,7 +557,7 @@ try {
       const started = await a.fetch("/auth/login", {
         method: "POST",
         headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
-        body: JSON.stringify({ schemaVersion: 1, workspaceId: f.workspace }),
+        body: JSON.stringify({ schemaVersion: 2 }),
       });
       check(
         "finite_begin_cookie_only",
@@ -860,7 +863,7 @@ try {
       );
       cases.push({ name: "current_family_logout_and_future_denial", passed: true });
       check(
-        "seven_actual_authenticated_native_roles",
+        "six_journey_roles_actually_authenticated",
         roles.every((role) =>
           service.observations.some(
             (o) => o.startup?.user === role && o.authenticationSasl && o.authenticationCompleted,

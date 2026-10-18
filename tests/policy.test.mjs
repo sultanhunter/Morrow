@@ -213,6 +213,23 @@ test("connection setup requires explicit connection capability/administer grant"
   assert.equal(result.decision.reason, "allowed");
   assert.deepEqual(result.obligations, ["recheck_at_dispatch", "exact_approval"]);
 });
+test("a connect reviewer needs an explicit approve grant; approve never performs the connect", async () => {
+  const f = fixture();
+  f.request.capabilityId = "governance.connection.connect";
+  f.grant.capabilityId = f.request.capabilityId;
+  f.request.verb = "approve";
+  f.grant.verbs = ["administer"];
+  assert.equal(await reason(f), "capability_denied");
+  f.grant.verbs = ["administer", "approve"];
+  const result = await service(f.authority).decide(f.request);
+  assert.equal(result.decision.reason, "allowed");
+  assert.deepEqual(result.obligations, ["recheck_at_dispatch"]);
+  for (const verb of ["view", "propose", "execute", "delegate"]) {
+    f.request.verb = verb;
+    f.grant.verbs = ["view", "propose", "approve", "execute", "delegate", "administer"];
+    assert.equal(await reason(f), "capability_denied", verb);
+  }
+});
 test("workspace linking needs one grant covering the actual connection input fields before review", async () => {
   const f = fixture();
   const target = {

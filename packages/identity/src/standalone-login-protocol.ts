@@ -360,7 +360,9 @@ export function loginCallbackInput(
     throw loginFailure();
   return Object.freeze({ code, state, cookie: loginCookie(request) });
 }
-export async function loginStartInput(request: Request, attempt: LoginAttempt): Promise<string> {
+// Account-mode start (P05.T01x, ADR-0009): the body is exactly {"schemaVersion":2}. A
+// workspace never selects anything before sign-in; the v1 {workspaceId} body is a 400.
+export async function loginStartInput(request: Request, attempt: LoginAttempt): Promise<void> {
   if (
     request.headers.get("origin") !== new URL(request.url).origin ||
     request.headers.get("content-type") !== "application/json" ||
@@ -398,13 +400,11 @@ export async function loginStartInput(request: Request, attempt: LoginAttempt): 
     try {
       input = loginJson(new TextDecoder("utf-8", { fatal: true }).decode(body), 512, [
         "schemaVersion",
-        "workspaceId",
       ]);
     } catch {
       throw new LoginInputError(400);
     }
-    if (input.schemaVersion !== 1 || !loginId(input.workspaceId)) throw new LoginInputError(400);
-    return input.workspaceId;
+    if (input.schemaVersion !== 2) throw new LoginInputError(400);
   } finally {
     void reader.cancel().catch(() => {});
     reader.releaseLock();

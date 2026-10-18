@@ -68,15 +68,14 @@ const paths = [
     "workos-authentication-evidence",
     "workos-session-token",
     "workos-session-status",
-    "workos-workspace-selection",
     "workos-browser-session-admission",
   ].map((n) => "packages/identity/src/" + n + ".ts"),
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json"));
-// The login fixture applies 0001-0012; those entries must be present in order and
+// The login fixture applies 0001-0013 (account login, P05.T01x); they must be present in order and
 // checksum-verified. Later manifest entries are not applied by this lab.
-if (manifest.migrations.length < 12) throw held();
-for (const [i, row] of manifest.migrations.slice(0, 12).entries()) {
+if (manifest.migrations.length < 13) throw held();
+for (const [i, row] of manifest.migrations.slice(0, 13).entries()) {
   if (row.sequence !== i + 1 || hash(readFileSync("migrations/" + row.file)) !== row.sha256)
     throw held();
   paths.push("migrations/" + row.file);
@@ -109,12 +108,7 @@ const check = (name, passed) => {
   checks.push({ name, passed });
   if (!passed) throw held();
 };
-const roles = [
-  "morrow_identity_login",
-  "morrow_identity_preauth",
-  "morrow_identity_resolution",
-  "morrow_identity_sessions",
-];
+const roles = ["morrow_identity_login", "morrow_identity_preauth", "morrow_identity_sessions"];
 let stage = "owned_engine",
   failure = null,
   measured = null,
@@ -161,7 +155,10 @@ try {
         if (seq !== undefined) appliedMigrations = seq;
         return result;
       };
-      const harness = createSelfLogoutFixtureHarness({ id: engine.id, sql: setupSql });
+      const harness = createSelfLogoutFixtureHarness(
+        { id: engine.id, sql: setupSql },
+        { accountOnboarding: true },
+      );
       const origin = "https://127.0.0.1",
         configuration = harness.configured({ origin });
       const oracle = createPlatformWorkosProviderOracle({
@@ -248,7 +245,7 @@ try {
           admissionCommandId = randomUUID(),
           issuerCommandId = randomUUID();
         const control = { deadlineMs: Date.now() + 5000, signal: new AbortController().signal };
-        const intent = await seedCustody.createIntent(
+        const intent = await seedCustody.createAccountIntent(
           JSON.stringify({
             schemaVersion: 1,
             configurationDigest: preseedConfiguration.configurationDigest,
@@ -256,7 +253,6 @@ try {
             beginCommandId,
             admissionCommandId,
             issuerCommandId,
-            workspaceId: preseedConfiguration.f.workspace,
           }),
           control,
         );
@@ -294,7 +290,7 @@ try {
             beginCommandId,
             admissionCommandId,
             issuerCommandId,
-            preseedConfiguration.f.workspace,
+            null,
             intent.expires_at_ms,
             stateDigest,
             cookieDigest,
@@ -412,11 +408,11 @@ try {
           engine.topology.singleOwnedNetworkEndpoint,
       );
       check(
-        "four_role_scram_and_tcp_administrator_denial",
-        auth.scramOfferedRoles === 4 &&
+        "three_role_scram_and_tcp_administrator_denial",
+        auth.scramOfferedRoles === 3 &&
           auth.tcpAdministratorRejected &&
           auth.tcpOwnerRejected &&
-          auth.probeConnectionsClosed === 6,
+          auth.probeConnectionsClosed === 5,
       );
       check(
         "exact_live_endpoint_capability",
@@ -619,7 +615,7 @@ try {
         const { response, metric } = await owner.fetch("/auth/login", {
           method: "POST",
           headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
-          body: JSON.stringify({ schemaVersion: 1, workspaceId: configuration.f.workspace }),
+          body: JSON.stringify({ schemaVersion: 2 }),
         });
         const body = await response.json();
         check(
@@ -630,14 +626,14 @@ try {
         );
         const callback = oracle.arm(body.authorizationUrl),
           bound = calls("bind_login_flow_begin").at(-1),
-          intent = calls("create_login_flow_intent").at(-1);
+          intent = calls("create_account_login_flow_intent").at(-1);
         privateMarkers.push(callback.code, callback.token, body.authorizationUrl);
         check(
           "persisted_begin_selected_key_" + serial,
           calls("bind_login_flow_begin").length === before + 1 &&
             bound.values[10] === expectedKey &&
             bound.values.length === 12 &&
-            intent.values.length === 6,
+            intent.values.length === 5,
         );
         return { jar, callback, intent, bound, serial, metric };
       }
@@ -703,7 +699,7 @@ try {
           calls("claim_login_callback").length === submissionsBeforeReplay + 1,
       );
       check(
-        "actual_owning_chain_all_four_timely_disposals",
+        "actual_owning_chain_all_three_timely_disposals",
         Object.values(firstOutcome.metric.response.pools).every(
           (pool) =>
             pool.normalReleases > 0 &&
@@ -821,17 +817,17 @@ try {
       stage = "stale_isolate_cutoff_and_invalid_ring";
       await disposeInstance(a.runtime);
       a = await isolate(k1Ring, { clockOffsetMs: 600001 });
-      const intentBefore = calls("create_login_flow_intent").length;
+      const intentBefore = calls("create_account_login_flow_intent").length;
       const stale = await a.fetch("/auth/login", {
         method: "POST",
         headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
-        body: JSON.stringify({ schemaVersion: 1, workspaceId: configuration.f.workspace }),
+        body: JSON.stringify({ schemaVersion: 2 }),
       });
       check(
         "stale_K1_stops_sealing_before_SQL",
         stale.response.status === 503 &&
           stale.response.headers.getSetCookie().length === 0 &&
-          calls("create_login_flow_intent").length === intentBefore,
+          calls("create_account_login_flow_intent").length === intentBefore,
       );
       await stale.response.body?.cancel();
       await disposeInstance(a.runtime);
@@ -839,13 +835,13 @@ try {
       const invalid = await a.fetch("/auth/login", {
         method: "POST",
         headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
-        body: JSON.stringify({ schemaVersion: 1, workspaceId: configuration.f.workspace }),
+        body: JSON.stringify({ schemaVersion: 2 }),
       });
       check(
         "invalid_whole_ring_pre_SQL_provider",
         invalid.response.status === 503 &&
           invalid.response.headers.getSetCookie().length === 0 &&
-          calls("create_login_flow_intent").length === intentBefore &&
+          calls("create_account_login_flow_intent").length === intentBefore &&
           invalid.metric.leases.borrows === 0,
       );
       await invalid.response.body?.cancel();
@@ -871,11 +867,11 @@ try {
       const cutoffDelivery = await a.fetch("/auth/login", {
         method: "POST",
         headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
-        body: JSON.stringify({ schemaVersion: 1, workspaceId: configuration.f.workspace }),
+        body: JSON.stringify({ schemaVersion: 2 }),
       });
       const cutoffBody = await cutoffDelivery.response.text(),
         cutoffMetric = cutoffDelivery.metric;
-      const cutoffIntent = calls("create_login_flow_intent").at(-1),
+      const cutoffIntent = calls("create_account_login_flow_intent").at(-1),
         cutoffBound = calls("bind_login_flow_begin").at(-1);
       check(
         "actual_bind_newly_ready_before_cutoff_handoff",
@@ -949,9 +945,9 @@ try {
       );
       // Exact wire ids remain in memory. Reconciliation is a separate read-only
       // restricted-role owner path, not another issuer or callback retry.
-      const admission = calls("admit_browser_family").at(-1);
-      check("actual_issuer_submission_observed", admission?.values.length === 27);
-      const { createWorkosBrowserSessionAdmission, browserSessionAdmissionSql } = await tsImport(
+      const admission = calls("admit_account_family").at(-1);
+      check("actual_issuer_submission_observed", admission?.values.length === 21);
+      const { createWorkosAccountAdmission, browserSessionAdmissionSql } = await tsImport(
         "../packages/identity/src/workos-browser-session-admission.ts",
         import.meta.url,
       );
@@ -963,7 +959,7 @@ try {
         "morrow_identity_sessions",
         Object.values(browserSessionAdmissionSql),
       );
-      const owner = createWorkosBrowserSessionAdmission({
+      const owner = createWorkosAccountAdmission({
         pool: reconcilePool,
         now: Date.now,
         readEvidence: () => {
@@ -1019,7 +1015,7 @@ try {
       );
       stage = "pre_admin_request_observation";
       check(
-        "all_four_restricted_roles_actually_used",
+        "all_three_restricted_roles_actually_used",
         roles.every((role) =>
           service.observations.some(
             (o) => o.startup?.user === role && o.authenticationSasl === true,

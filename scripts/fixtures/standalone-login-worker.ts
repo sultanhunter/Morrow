@@ -50,7 +50,7 @@ export default {
         ...(c.mode === "tamper" ? { claimChange: { [c.field!]: c.value } } : {}),
         stage: async (name, state) => {
           if (armed && c.fault === "slow_lease") {
-            if (name === "selection:resolve") state.setTime(input.at + 11000);
+            if (name === "sessions:connect") state.setTime(input.at + 11000);
             return;
           }
           if (!armed || name !== c.stage) return;
@@ -82,8 +82,8 @@ export default {
             c.mode === "start"
               ? Array.isArray(c.body)
                 ? new Uint8Array(c.body)
-                : (c.body ?? JSON.stringify({ schemaVersion: 1, workspaceId: "workspace_a" }))
-              : JSON.stringify({ schemaVersion: 1, workspaceId: "workspace_a" }),
+                : (c.body ?? JSON.stringify({ schemaVersion: 2 }))
+              : JSON.stringify({ schemaVersion: 2 }),
         });
       let result: Response,
         expectedCookie = false,
@@ -179,8 +179,8 @@ export default {
         ]
           .map((v) => v.toString(16).padStart(2, "0"))
           .join("");
-        const row = fixture.calls.find((v) => v.role === "sessions" && v.stage === "admit");
-        check(c.name + ":cookie_from_M", row?.values[17] === digest);
+        const row = fixture.calls.find((v) => v.role === "sessions" && v.stage === "admitAccount");
+        check(c.name + ":cookie_from_M", row?.values[16] === digest);
       }
       if (c.zeroSql) check(c.name + ":zero_SQL", fixture.calls.length === before);
       if (c.expectedPorts)
@@ -201,7 +201,8 @@ export default {
       );
       check(
         c.name + ":at_most_one_issuer",
-        fixture.calls.filter((v) => v.role === "sessions" && v.stage === "admit").length <= 1,
+        fixture.calls.filter((v) => v.role === "sessions" && v.stage === "admitAccount").length <=
+          1,
       );
       check(
         c.name + ":at_most_one_exchange",
@@ -219,8 +220,11 @@ export default {
         );
       if (c.stage === "preauth:admit" && c.fault === "throw")
         check(c.name + ":no_SQL_after_uncertainty", fixture.calls.at(-1)?.stage === "admit");
-      if (c.stage === "sessions:admit" && c.fault === "throw")
-        check(c.name + ":no_rollback_after_uncertainty", fixture.calls.at(-1)?.stage === "admit");
+      if (c.stage === "sessions:admitAccount" && c.fault === "throw")
+        check(
+          c.name + ":no_rollback_after_uncertainty",
+          fixture.calls.at(-1)?.stage === "admitAccount",
+        );
       const exchange = fixture.external.find((v) => v.kind === "exchange");
       if (exchange?.input) {
         const verifier = JSON.parse(exchange.input).verifier as string;

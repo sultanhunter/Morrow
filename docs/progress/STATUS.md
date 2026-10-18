@@ -11,10 +11,11 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #4: P05.T01x Part A. Migration 0012 retires plan-number identifiers: `morrow-login-v1`, `morrow-self-logout-v1`, `morrow_id_`.
 - PR #5: P04.T02a, the deployable composition root. It adds the api, broker, orchestrator and connector-placeholder Workers, `scripts/edge.mjs`, and the `lab:edge-workers` and `lab:edge-postgresql` labs (ADR-0007).
 - PR #6: P01.T02a PR-A, executor classes and human-only kill switches (ADR-0005, §2 confirmed 2026-10-18).
+- PR #7: ADR-0008, the Shopify connector as a Cloudflare Worker.
+- PR #8: P01.T02a PR-B, review policy, Proposal@2 and Approval@2 (ADR-0011).
 
 In progress:
-- **ADR-0008 acceptance** (PR #7): the Shopify connector is a Cloudflare Worker on `@shopify/shopify-api`, and secret-dependent calls stay in the broker.
-- **P01.T02a PR-B** (`claude/p01-t02a-b-review-policy`): review policy, Proposal@2, Approval@2 (ADR-0011). Implemented and reviewed: AC11-AC26, the pure review library `@morrow/policy/review` and contract v1.1 replacements; full local pipeline passed; awaiting PR CI and merge.
+- **P05.T01x Part B** (`claude/p05-t01x-b-signup`, ADR-0009): migration 0013 (account login, enrollment at the first verified sign-in, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, contract v1.1 additions and route `account`, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers). Awaiting its PR, hosted CI (the PG-wire labs run only there) and Tier 2 review including `/security-review`. Deviations needing confirmation are in the packet's "Implementation notes (Part B)".
 - **Packet designs:** P01.T04a, P01.T02c, P06.T01b, P03.T04e (shared PostgreSQL harness), P14.T01a (provisional UI), P05.T01y and P05.T01z.
 
 Delivered in P03.T04c/d:
@@ -31,15 +32,14 @@ Delivered in P03.T04c/d:
 
 ## Next actions
 
-1. Merge P01.T02a PR-B once reviewed and green.
-2. P05.T01x Part B, signup and workspace list (ADR-0009). It needs P01.T02a PR-B (ADR-0011) first.
-3. P06.T01a, work commands on the tenant data pattern (ADR-0010). P01.T02b and T02c contracts.
-4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
+1. Open the P05.T01x Part B PR; run Tier 2 review (`/code-review`, `/security-review`); merge once the hosted `foundation` check is green.
+2. P06.T01a, work commands on the tenant data pattern (ADR-0010), with migrations numbered after 0013. P01.T02b and T02c contracts.
+3. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Open plan follow-ups:
 - Superseded banners on `docs/references/*`.
 - The rest of P03.T04e: a formatting ignore file, unit-test concurrency, a shared PostgreSQL 17 template-database harness and a heavy-fault job.
-- The P05.T01x Part B PR splits the plan's P05.T01x bullet into sub-bullets, to respect the 2,000-character line limit.
+- The plan's P05.T01x bullet still carries the ADR-0006 Shopify App Pricing sentence; update it when ADR-0006 is superseded by Morrow-website billing.
 
 ## Blockers
 
@@ -49,6 +49,8 @@ None for local work. Hosted staging (M1) waits on the owner actions below.
 
 - **Sign-offs:**
   - Plan R1 (Tier 3).
+  - P05.T01x Part B deviations: `GET /workspaces` accepts an absent `Origin` (browsers omit it on same-origin GET); the kernel now evaluates `approve` on `governance.connection.connect` (ADR-0009 item 7, ADR-0011 Q5).
+  - ADR to supersede ADR-0006 with Morrow-website billing (signup itself creates no billing coupling).
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check (not an approving review) before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
 - **M1 prerequisites (P04.T01i):**

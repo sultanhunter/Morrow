@@ -8,7 +8,6 @@ import { createWorkspaceApiHttpListener } from "../apps/api/src/workspace-router
 import { createStandaloneLoginBridge } from "../packages/identity/src/standalone-login.ts";
 import { loginFlowCustodySql } from "../packages/identity/src/login-flow-custody.ts";
 import { authenticationExchangeAdmissionSql } from "../packages/identity/src/authentication-exchange-admission.ts";
-import { workspaceSelectionSql } from "../packages/identity/src/workos-workspace-selection.ts";
 import { browserSessionAdmissionSql } from "../packages/identity/src/workos-browser-session-admission.ts";
 import { identitySql } from "../packages/identity/src/index.ts";
 import { createStandaloneWorkspaceBootstrap } from "../packages/identity/src/standalone-workspace-bootstrap.ts";
@@ -86,7 +85,6 @@ const paths = [
   "packages/identity/src/login-preauth-control.ts",
   "packages/identity/src/login-flow-custody.ts",
   "packages/identity/src/authentication-exchange-admission.ts",
-  "packages/identity/src/workos-workspace-selection.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
   "packages/identity/src/workos-authentication-evidence.ts",
   "packages/identity/src/workos-session-token.ts",
@@ -117,9 +115,9 @@ const paths = [
 ];
 if (process.version !== "v24.13.0") throw Error("LOGIN_HTTPS_LAB_SOURCE_REQUIRED");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-// The login fixture applies 0001-0012; later manifest entries are not applied here.
-if (manifest.migrations.length < 12) throw Error("LOGIN_HTTPS_LAB_TWELVE_MIGRATIONS_REQUIRED");
-for (const [i, entry] of manifest.migrations.slice(0, 12).entries()) {
+// The login fixture applies 0001-0013 (account login, P05.T01x); later entries are not applied.
+if (manifest.migrations.length < 13) throw Error("LOGIN_HTTPS_LAB_THIRTEEN_MIGRATIONS_REQUIRED");
+for (const [i, entry] of manifest.migrations.slice(0, 13).entries()) {
   if (entry.sequence !== i + 1 || hash(readFileSync("migrations/" + entry.file)) !== entry.sha256)
     throw Error("LOGIN_HTTPS_LAB_MIGRATION_HASH");
   paths.push("migrations/" + entry.file);
@@ -139,7 +137,7 @@ let measured;
 try {
   measured = await localPostgresLab("P05.T01p-https", async (engine) => {
     ownedContainer = engine.id;
-    const h = createStandaloneLoginFixtureHarness(engine);
+    const h = createStandaloneLoginFixtureHarness(engine, { accountOnboarding: true });
     const openHolder = async () => {
       const applicationName = "morrow_login_https_holder_" + randomUUID().replaceAll("-", "");
       const child = spawn(
@@ -340,7 +338,6 @@ try {
     const roleSpec = {
       login: ["morrow_identity_login", loginFlowCustodySql],
       preauth: ["morrow_identity_preauth", authenticationExchangeAdmissionSql],
-      selection: ["morrow_identity_resolution", workspaceSelectionSql],
       session: ["morrow_identity_sessions", browserSessionAdmissionSql],
     };
     async function fresh(options = {}) {
@@ -493,7 +490,7 @@ try {
       Number(
         h.admin(
           what === "family"
-            ? `SELECT count(*) FROM morrow_identity.browser_session_commands m JOIN morrow_identity.login_flows f ON m.command_id=f.issuer_command_id::text WHERE f.configuration_digest=${lit(c.configurationDigest)} AND m.outcome='admitted';`
+            ? `SELECT count(*) FROM morrow_identity.account_session_commands m JOIN morrow_identity.login_flows f ON m.command_id=f.issuer_command_id::text WHERE f.configuration_digest=${lit(c.configurationDigest)} AND m.outcome='admitted';`
             : `SELECT count(*) FROM morrow_identity.login_flows WHERE configuration_digest=${lit(c.configurationDigest)};`,
         ),
       );
@@ -506,14 +503,14 @@ try {
     const receipt = (c) =>
       JSON.parse(
         h.admin(
-          `SELECT row_to_json(x)::text FROM (SELECT m.family_id::text,m.generation_id::text,m.provider_binding_id::text,(extract(epoch FROM m.expires_at)*1000)::bigint::text AS expires_at_ms FROM morrow_identity.browser_session_commands m JOIN morrow_identity.login_flows f ON m.command_id=f.issuer_command_id::text WHERE f.configuration_digest=${lit(c.configurationDigest)} AND m.outcome='admitted' ORDER BY m.recorded_at DESC LIMIT 1) x;`,
+          `SELECT row_to_json(x)::text FROM (SELECT m.family_id::text,m.generation_id::text,m.provider_binding_id::text,(extract(epoch FROM m.expires_at)*1000)::bigint::text AS expires_at_ms FROM morrow_identity.account_session_commands m JOIN morrow_identity.login_flows f ON m.command_id=f.issuer_command_id::text WHERE f.configuration_digest=${lit(c.configurationDigest)} AND m.outcome='admitted' ORDER BY m.recorded_at DESC LIMIT 1) x;`,
         ),
       );
     const start = async (c) => {
       const r = await request("/auth/login", {
         method: "POST",
         headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
-        body: JSON.stringify({ schemaVersion: 1, workspaceId: c.f.workspace }),
+        body: JSON.stringify({ schemaVersion: 2 }),
       });
       if (r.status === 200) {
         const body = JSON.parse(r.text);
@@ -573,12 +570,18 @@ try {
       const before = () => h.rolePools.reduce((n, p) => n + p.metrics.connections, 0);
       const invalidStart = [
         ["missing_json", {}, "", 400],
-        ["duplicate_json_key", {}, '{"schemaVersion":1,"workspaceId":"a","workspaceId":"b"}', 400],
+        ["duplicate_json_key", {}, '{"schemaVersion":2,"schemaVersion":2}', 400],
+        [
+          "workspace_bound_v1_body",
+          {},
+          JSON.stringify({ schemaVersion: 1, workspaceId: good.f.workspace }),
+          400,
+        ],
         [
           "extra_authority",
           {},
           JSON.stringify({
-            schemaVersion: 1,
+            schemaVersion: 2,
             workspaceId: good.f.workspace,
             principalId: "foreign",
           }),
@@ -973,8 +976,8 @@ try {
           "commit",
           false,
         ],
-        ["issuer_commit", "session", browserSessionAdmissionSql.admit, "commit", false],
-        ["issuer_release", "session", browserSessionAdmissionSql.admit, "release", false],
+        ["issuer_commit", "session", browserSessionAdmissionSql.admitAccount, "commit", false],
+        ["issuer_release", "session", browserSessionAdmissionSql.admitAccount, "release", false],
       ]) {
         const [name, role, statement, phase, startFault] = fault,
           c = await fresh({ fault: { role, statement, phase } });
@@ -1059,7 +1062,7 @@ try {
       await h.close();
       await Promise.all(readPools.map((p) => p.close()));
       check(
-        "all_four_role_pools_physically_closed",
+        "all_login_role_pools_physically_closed",
         h.rolePools.every(
           (p) =>
             p.metrics.connections === p.metrics.released &&

@@ -1,6 +1,6 @@
 // P04.T02a PostgreSQL 17 lab: the configured journey through the real wrangler
 // dry-run bundles of the api and broker, over the WSS->TCP bridge into an
-// isolated PostgreSQL 17 engine (migrations 0001-0012, restricted roles, test-only
+// isolated PostgreSQL 17 engine (migrations 0001-0013, restricted roles, test-only
 // LOGIN with random passwords held only by the broker). Synthetic WorkOS; no
 // account, credential or network. Linux CI only (the `pgwire` job), like the
 // other PG-wire labs; `edge-postgresql-local.mjs` runs the same journeys on a
@@ -38,14 +38,15 @@ const held = (code = "HELD") => Error("EDGE_POSTGRESQL_LAB_" + code);
 const require = (condition, code) => {
   if (!condition) throw held(code);
 };
+// Account login and signup (P05.T01x): the selection role left; the onboarding executor joined.
 export const edgePostgresqlRoles = Object.freeze([
   "morrow_identity_login",
   "morrow_identity_preauth",
-  "morrow_identity_resolution",
   "morrow_identity_sessions",
   "morrow_api",
   "morrow_identity_linking",
   "morrow_identity_logout",
+  "morrow_identity_onboarding",
 ]);
 const roles = edgePostgresqlRoles;
 const literal = (value) => {
@@ -105,11 +106,10 @@ export async function edgePostgresqlJourneys(engine, createService) {
     import.meta.url,
   );
   const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-  // The login fixture applies 0001-0012 (0012 is the morrow-login-v1 protocol); those
-  // entries must be present in order and checksum-verified. Later manifest entries are
-  // not applied by this lab.
-  require(manifest.migrations.length >= 12, "MIGRATION_COUNT");
-  const appliedManifest = manifest.migrations.slice(0, 12);
+  // The login fixture applies 0001-0013 (0013 is account onboarding); those entries must
+  // be present in order and checksum-verified. Later manifest entries are not applied.
+  require(manifest.migrations.length >= 13, "MIGRATION_COUNT");
+  const appliedManifest = manifest.migrations.slice(0, 13);
   for (const [i, row] of appliedManifest.entries())
     require(row.sequence === i + 1 &&
       hash(readFileSync("migrations/" + row.file)) === row.sha256, "MIGRATION_DRIFT");
@@ -120,16 +120,19 @@ export async function edgePostgresqlJourneys(engine, createService) {
     ]),
   );
   let appliedMigrations = 0;
-  const harness = createSelfLogoutFixtureHarness({
-    id: engine.id,
-    sql(text, database) {
-      const sequence = migrationSql.get(text);
-      if (sequence !== undefined) require(sequence === appliedMigrations + 1, "MIGRATION_ORDER");
-      const result = engine.sql(text, database);
-      if (sequence !== undefined) appliedMigrations = sequence;
-      return result;
+  const harness = createSelfLogoutFixtureHarness(
+    {
+      id: engine.id,
+      sql(text, database) {
+        const sequence = migrationSql.get(text);
+        if (sequence !== undefined) require(sequence === appliedMigrations + 1, "MIGRATION_ORDER");
+        const result = engine.sql(text, database);
+        if (sequence !== undefined) appliedMigrations = sequence;
+        return result;
+      },
     },
-  });
+    { accountOnboarding: true },
+  );
   const origin = "https://127.0.0.1";
   const configuration = harness.configured({ origin });
   const f = configuration.f;
@@ -368,7 +371,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
   // 0010 admits at most 10 new login flows per 10 seconds per environment and
   // profile (`rate_limited`); every start, from any instance, stays below that.
   const loginStarts = [];
-  async function startLogin(owner, workspaceId = f.workspace) {
+  async function startLogin(owner) {
     for (;;) {
       const recent = loginStarts.filter((at) => at > Date.now() - 10500);
       if (recent.length < 8) break;
@@ -378,7 +381,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
     return owner.fetch("/auth/login", {
       method: "POST",
       headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
-      body: JSON.stringify({ schemaVersion: 1, workspaceId }),
+      body: JSON.stringify({ schemaVersion: 2 }),
     });
   }
   const callback = (owner, url, cookie) =>
@@ -443,6 +446,22 @@ export async function edgePostgresqlJourneys(engine, createService) {
       body: JSON.stringify({
         handoffToken: randomBytes(32).toString("base64url").slice(0, 42) + "A",
       }),
+    });
+  // The account routes (P05.T01x): the owner-seeded person lists its workspace and is
+  // not eligible to sign up, so a healthy signup answers 403 through the onboarding role.
+  const workspaces = (owner, cookie) =>
+    owner.fetch("/workspaces", { headers: { Cookie: cookie, "X-Morrow-Request": "1" } });
+  const signup = (owner, cookie) =>
+    owner.fetch("/organizations", {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        Origin: origin,
+        "Content-Type": "application/json",
+        "X-Morrow-Request": "1",
+        "Idempotency-Key": randomUUID(),
+      },
+      body: JSON.stringify({ schemaVersion: 1, organizationName: "Edge", workspaceName: "Main" }),
     });
   const logout = (owner, cookie) =>
     owner.fetch("/auth/logout", {
@@ -532,6 +551,28 @@ export async function edgePostgresqlJourneys(engine, createService) {
         body.workspace.id === f.workspace &&
         !boot.headers.has("set-cookie") &&
         jsonHeaders(boot),
+    );
+    // P05.T01x account routes over the deployable bundle and real PostgreSQL 17.
+    const listed = await workspaces(owner, cookie);
+    const overview = json(listed.body);
+    check(
+      name("3a_account_list"),
+      listed.status === 200 &&
+        overview?.schemaVersion === 1 &&
+        overview.onboarding === "unavailable" &&
+        overview.truncated === false &&
+        overview.workspaces.length === 1 &&
+        overview.workspaces[0].workspaceId === f.workspace &&
+        !listed.headers.has("set-cookie") &&
+        jsonHeaders(listed),
+    );
+    const refused = await signup(owner, cookie);
+    check(
+      name("3b_owner_seeded_signup_unavailable"),
+      refused.status === 403 &&
+        refused.body === '{"schemaVersion":1,"outcome":"signup_unavailable"}' &&
+        !refused.headers.has("set-cookie") &&
+        jsonHeaders(refused),
     );
     // The status route is POST with Idempotency-Key and a handoffToken body.
     const status = await linkStatus(owner, cookie);
@@ -624,21 +665,44 @@ export async function edgePostgresqlJourneys(engine, createService) {
         : r.status === 503 && r.body === '{"schemaVersion":1,"outcome":"logout_unavailable"}'
           ? "unavailable"
           : null,
+    workspaces: (r) =>
+      r.status === 200 &&
+      json(r.body)?.onboarding === "unavailable" &&
+      json(r.body)?.workspaces?.[0]?.workspaceId === f.workspace &&
+      r.headers.getSetCookie().length === 0
+        ? "ok"
+        : r.status === 503 && r.body === '{"code":"unavailable"}'
+          ? "unavailable"
+          : null,
+    signup: (r) =>
+      r.status === 403 && r.body === '{"schemaVersion":1,"outcome":"signup_unavailable"}'
+        ? "ok"
+        : r.status === 503 && r.body === '{"code":"unavailable"}'
+          ? "unavailable"
+          : null,
   };
   const classify = (route, response) =>
     routeOutcome[route](response) ??
     "unexpected_" +
       response.status +
       (response.status >= 400 ? "_" + response.body.slice(0, 80) : "");
-  const healthy = { login: "ok", callback: "ok", bootstrap: "ok", linkStatus: "ok", logout: "ok" };
+  const healthy = {
+    login: "ok",
+    callback: "ok",
+    bootstrap: "ok",
+    linkStatus: "ok",
+    logout: "ok",
+    workspaces: "ok",
+    signup: "ok",
+  };
   const expectedWrongSecret = Object.freeze({
     morrow_identity_login: { ...healthy, login: "unavailable", callback: "result_page" },
     morrow_identity_preauth: { ...healthy, login: "unavailable", callback: "result_page" },
-    morrow_identity_resolution: { ...healthy, callback: "result_page" },
     morrow_identity_sessions: { ...healthy, callback: "result_page" },
-    morrow_api: { ...healthy, bootstrap: "unavailable" },
+    morrow_api: { ...healthy, bootstrap: "unavailable", workspaces: "unavailable" },
     morrow_identity_linking: { ...healthy, linkStatus: "unavailable" },
     morrow_identity_logout: { ...healthy, logout: "unavailable" },
+    morrow_identity_onboarding: { ...healthy, signup: "unavailable" },
   });
   const wrongSecretMatrix = {};
   await scenario("AC19_one_wrong_role_secret_fails_only_its_routes", async () => {
@@ -675,6 +739,8 @@ export async function edgePostgresqlJourneys(engine, createService) {
             bootstrap: classify("bootstrap", await bootstrap(wrong, session)),
             linkStatus: classify("linkStatus", await linkStatus(wrong, session)),
             logout: classify("logout", await logout(wrong, logoutSession)),
+            workspaces: classify("workspaces", await workspaces(wrong, session)),
+            signup: classify("signup", await signup(wrong, session)),
           };
           wrongSecretMatrix[role] = outcome;
           check(

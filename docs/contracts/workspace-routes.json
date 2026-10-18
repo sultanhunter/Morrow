@@ -996,6 +996,36 @@
           "stores"
         ]
       }
+    },
+    {
+      "id": "account",
+      "pattern": "/",
+      "title": "Account",
+      "data": [
+        "workspaces",
+        "onboarding"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P14.T01a must qualify interactions",
+      "parent": null,
+      "components": [
+        "AccountHeader",
+        "WorkspacePicker",
+        "OrganizationSignupForm"
+      ]
     }
   ],
   "plan_sequence": 43

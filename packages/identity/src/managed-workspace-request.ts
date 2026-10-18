@@ -2,9 +2,11 @@ import {
   createManagedStandaloneRequestGuard,
   standaloneJson,
   StandaloneRequestError,
+  type StandaloneAccountRoute,
   type StandaloneRequestRoute,
 } from "./standalone-request-guard.js";
 import { executeStandaloneWorkspaceBootstrap } from "./standalone-workspace-bootstrap.js";
+import { executeAccountOverview, executeFirstOrganization } from "./account-onboarding.js";
 import { createStandaloneStoreLinkingExecution } from "./standalone-store-linking.js";
 import { dispatchStandaloneLogoutWithAttempt } from "./standalone-logout.js";
 import {
@@ -38,6 +40,23 @@ type ResponseMetrics = Readonly<{
 // cleanup remain owned by the original entry, never this observation map.
 const observations = new WeakMap<Response, ResponseMetrics>();
 const held = () => Error("MANAGED_WORKSPACE_REQUEST_HELD");
+type Route = StandaloneRequestRoute | StandaloneAccountRoute | "logout";
+// The explicit route table: exact account and logout paths, then the workspace suffixes.
+const exactRoutes: Readonly<Record<string, Route>> = Object.freeze({
+  "/auth/logout": "logout",
+  "/workspaces": "workspaces",
+  "/organizations": "organizations",
+});
+const workspaceSuffixes: readonly (readonly [string, StandaloneRequestRoute])[] = Object.freeze([
+  ["/bootstrap", "bootstrap"],
+  ["/preview", "preview"],
+  ["/status", "status"],
+]);
+function selectRoute(path: string): Route {
+  if (Object.hasOwn(exactRoutes, path)) return exactRoutes[path]!;
+  for (const [suffix, route] of workspaceSuffixes) if (path.endsWith(suffix)) return route;
+  return "apply";
+}
 
 export function createWorkersManagedWorkspaceHandler(
   dependencies: Readonly<{
@@ -54,8 +73,9 @@ export function createWorkersManagedWorkspaceHandler(
     let enteredAtMs = 0,
       initialDeadlineMs = 0,
       configurationDigest: string | null = null;
-    let route: StandaloneRequestRoute | "logout" = "bootstrap";
+    let route: Route = "bootstrap";
     let invoked = false;
+    let submitted: (() => boolean) | undefined;
     try {
       // This is the sole business attempt, using the guard's shared sticky
       // clock, before asynchronous configuration, crypto or pool construction.
@@ -64,17 +84,8 @@ export function createWorkersManagedWorkspaceHandler(
       initialDeadlineMs = attempt.control().deadlineMs;
       enteredAtMs = initialDeadlineMs - 5000;
       owner = createManagedLoginRequestOwner(actualCtx, attempt);
-      const path = new URL(request.url).pathname;
-      route =
-        path === "/auth/logout"
-          ? "logout"
-          : path.endsWith("/bootstrap")
-            ? "bootstrap"
-            : path.endsWith("/preview")
-              ? "preview"
-              : path.endsWith("/status")
-                ? "status"
-                : "apply";
+      route = selectRoute(new URL(request.url).pathname);
+      submitted = entry.accountSubmitted;
       attempt.check();
       const resolved = await resolveManagedWorkspaceBinding(binding, attempt);
       attempt.check();
@@ -104,6 +115,17 @@ export function createWorkersManagedWorkspaceHandler(
           resolved.logout,
           pools.logoutPool,
         );
+      } else if (route === "workspaces" || route === "organizations") {
+        const selected = route;
+        // The configured login profile is the only profile a family may belong to.
+        const profileId = resolved.login.profileId;
+        const { identityPool, onboardingPool } = pools;
+        response = await entry.handleAccount(selected, (context) => {
+          invoked = true;
+          return selected === "workspaces"
+            ? executeAccountOverview(identityPool, profileId, context)
+            : executeFirstOrganization(onboardingPool, profileId, context);
+        });
       } else {
         const selected = route;
         const linking = createStandaloneStoreLinkingExecution({
@@ -124,8 +146,13 @@ export function createWorkersManagedWorkspaceHandler(
     } catch (error) {
       // Never manufacture a replacement delivery after transport cancellation.
       if (request instanceof Request && request.signal.aborted) throw held();
+      // Signup is unknown only once its create statement may have been sent; broker
+      // lease, connect, role row or BEGIN failures before that stay plain unavailable.
       response =
-        invoked && (route === "apply" || route === "logout")
+        invoked &&
+        (route === "apply" ||
+          route === "logout" ||
+          (route === "organizations" && submitted?.() === true))
           ? standaloneJson(503, {
               schemaVersion: 1,
               outcome: route === "logout" ? "logout_outcome_unknown" : "outcome_unknown",
