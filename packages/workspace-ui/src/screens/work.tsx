@@ -78,13 +78,22 @@ function LoadMore({
   );
 }
 
-function TaskList({ ws, goal }: { readonly ws: Id; readonly goal: GoalView }) {
+function TaskList({
+  ws,
+  goal,
+  version,
+}: {
+  readonly ws: Id;
+  readonly goal: GoalView;
+  readonly version: number;
+}) {
   const services = useServices();
   const loadPage = useCallback(
     (after: string | null) => services.port.work.listTasks(ws, goal.id, after),
     [services, ws, goal.id],
   );
-  const paged = usePaged<TaskView>(`${ws}|tasks|${goal.id}`, loadPage);
+  // A confirmed new task bumps `version`, so the list is read again.
+  const paged = usePaged<TaskView>(`${ws}|tasks|${goal.id}|${version}`, loadPage);
   if (paged.first.kind !== "ok")
     return <>{outcomeState(paged.first, paged.reload, { compact: true })}</>;
   if (!paged.items.length) return <StateView kind="empty" compact message={copy.work.noTasks} />;
@@ -112,13 +121,18 @@ function TaskList({ ws, goal }: { readonly ws: Id; readonly goal: GoalView }) {
 function GoalRow({
   ws,
   goal,
+  open,
+  onToggle,
+  tasksVersion,
   onCreateTask,
 }: {
   readonly ws: Id;
   readonly goal: GoalView;
+  readonly open: boolean;
+  readonly onToggle: () => void;
+  readonly tasksVersion: number;
   readonly onCreateTask: (goal: GoalView) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const panel = useId();
   return (
     <li className="goal">
@@ -131,7 +145,7 @@ function GoalRow({
           </p>
         </div>
         <div className="goal-actions">
-          <Button aria-expanded={open} aria-controls={panel} onClick={() => setOpen((v) => !v)}>
+          <Button aria-expanded={open} aria-controls={panel} onClick={onToggle}>
             <Icon name="chevron" size={16} />
             {open ? copy.work.hideTasks : copy.work.showTasks}
           </Button>
@@ -139,7 +153,7 @@ function GoalRow({
         </div>
       </div>
       <div id={panel} className="goal-tasks" hidden={!open}>
-        {open ? <TaskList ws={ws} goal={goal} /> : null}
+        {open ? <TaskList ws={ws} goal={goal} version={tasksVersion} /> : null}
       </div>
     </li>
   );
@@ -275,7 +289,7 @@ function CreateTaskDialog({
   readonly ws: Id;
   readonly goal: GoalView | null;
   readonly onClose: () => void;
-  readonly onCreated: () => void;
+  readonly onCreated: (goal: GoalView) => void;
 }) {
   const services = useServices();
   const [objective, setObjective] = useState("");
@@ -284,10 +298,10 @@ function CreateTaskDialog({
     marker: { workspaceId: ws, kind: "task" },
     send: (c) => services.port.work.createTask(ws, c),
     onOutcome: (outcome) => {
-      if (outcome.kind === "ok") {
+      if (outcome.kind === "ok" && goal) {
         setObjective("");
         setChecked(false);
-        onCreated();
+        onCreated(goal);
       }
     },
   });
@@ -353,6 +367,16 @@ export function WorkScreen({ workspace }: { readonly workspace: WorkspaceView })
   const [creatingGoal, setCreatingGoal] = useState(false);
   const [taskGoal, setTaskGoal] = useState<GoalView | null>(null);
   const [confirmation, setConfirmation] = useState<string | null>(null);
+  // Which goals show their tasks, and a per-goal reload count bumped by a new task.
+  const [openGoals, setOpenGoals] = useState<ReadonlySet<Id>>(() => new Set());
+  const [taskVersions, setTaskVersions] = useState<Readonly<Record<Id, number>>>({});
+  const toggle = (goalId: Id) =>
+    setOpenGoals((current) => {
+      const next = new Set(current);
+      if (next.has(goalId)) next.delete(goalId);
+      else next.add(goalId);
+      return next;
+    });
   const canCreate = services.composed["work.createGoal"];
   return (
     <div className="page">
@@ -373,7 +397,15 @@ export function WorkScreen({ workspace }: { readonly workspace: WorkspaceView })
         <>
           <ul className="goal-list">
             {paged.items.map((goal) => (
-              <GoalRow key={goal.id} ws={ws} goal={goal} onCreateTask={setTaskGoal} />
+              <GoalRow
+                key={goal.id}
+                ws={ws}
+                goal={goal}
+                open={openGoals.has(goal.id)}
+                onToggle={() => toggle(goal.id)}
+                tasksVersion={taskVersions[goal.id] ?? 0}
+                onCreateTask={setTaskGoal}
+              />
             ))}
           </ul>
           <LoadMore paged={paged} />
@@ -393,9 +425,12 @@ export function WorkScreen({ workspace }: { readonly workspace: WorkspaceView })
         ws={ws}
         goal={taskGoal}
         onClose={() => setTaskGoal(null)}
-        onCreated={() => {
+        onCreated={(goal) => {
           setTaskGoal(null);
           setConfirmation(copy.work.taskCreated);
+          // Show the goal's tasks, read again so the confirmed task is listed.
+          setOpenGoals((current) => new Set(current).add(goal.id));
+          setTaskVersions((current) => ({ ...current, [goal.id]: (current[goal.id] ?? 0) + 1 }));
         }}
       />
     </div>

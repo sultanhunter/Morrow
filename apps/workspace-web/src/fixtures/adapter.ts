@@ -15,7 +15,7 @@ import {
   type TaskView,
   type WorkspacePort,
 } from "@morrow/workspace-ui";
-import { createSeed, fixtureWorkspace, people } from "./seed";
+import { createSeed, fixtureOrganizationName, fixtureWorkspace, people } from "./seed";
 import { scenarios, uncomposedIn, type ScenarioName } from "./scenarios";
 
 /** Present in every fixture bundle; `verify:workspace-web` fails a dist that holds it. */
@@ -104,7 +104,11 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         reply("account.overview", () =>
           ok({
             workspaces: [
-              { workspaceId: fixtureWorkspace.id, displayName: fixtureWorkspace.displayName },
+              {
+                workspaceId: fixtureWorkspace.id,
+                displayName: fixtureWorkspace.displayName,
+                organizationName: fixtureOrganizationName,
+              },
             ],
             truncated: false,
             onboarding: "unavailable" as const,

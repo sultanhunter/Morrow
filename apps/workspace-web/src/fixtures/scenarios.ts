@@ -21,6 +21,11 @@ export const scenarioNames = [
   "account_form",
   "account_chooser",
   "account_invite",
+  "account_rate_limited",
+  "account_rate_limited_brief",
+  "account_uncertain",
+  "ready_denied",
+  "question_expired",
   "restore_unavailable",
   "bootstrap_unavailable",
   "sign_out_unavailable",
@@ -63,7 +68,13 @@ const denied: Outcome<never> = {
 const sample = (n: number) => ({
   workspaceId: `ws-sample-${n}`,
   displayName: `Sample workspace ${n}`,
+  organizationName: n === 3 ? "Sample organization B" : "Sample organization A",
 });
+const accountForm: Outcome<unknown> = {
+  kind: "ok",
+  value: { workspaces: [], truncated: false, onboarding: "available" },
+  replayed: false,
+};
 
 export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   ready: {},
@@ -113,13 +124,7 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
     "account.overview": () => ({ kind: "not_in_build" }),
     "account.createOrganization": () => ({ kind: "not_in_build" }),
   },
-  account_form: {
-    "account.overview": () => ({
-      kind: "ok",
-      value: { workspaces: [], truncated: false, onboarding: "available" },
-      replayed: false,
-    }),
-  },
+  account_form: { "account.overview": () => accountForm },
   account_chooser: {
     "account.overview": () => ({
       kind: "ok",
@@ -135,6 +140,47 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
     "account.overview": () => ({
       kind: "ok",
       value: { workspaces: [], truncated: false, onboarding: "unavailable" },
+      replayed: false,
+    }),
+  },
+  // Signup 429: the action stays off for Retry-After (90 s here, 2 s in the brief one,
+  // whose second submit is created).
+  account_rate_limited: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": () => ({ kind: "rate_limited", retryAfterSeconds: 90 }),
+  },
+  account_rate_limited_brief: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": (call) =>
+      call === 0 ? { kind: "rate_limited", retryAfterSeconds: 2 } : null,
+  },
+  // Signup 503 outcome_unknown: Check again resends the same key and gets `replayed`.
+  account_uncertain: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
+  // Mark ready by someone who may view the task but not change it: the server's 403.
+  ready_denied: {
+    "work.markReady": () => ({
+      kind: "denied",
+      message: "This operation is not permitted.",
+      reference: "corr-fixture-0403",
+    }),
+  },
+  // An open question that has since expired: no answer form.
+  question_expired: {
+    "work.getQuestion": () => ({
+      kind: "ok",
+      value: {
+        id: "q-source",
+        taskId: "task-source",
+        prompt: "Which supplier certificate should product pages cite?",
+        status: "expired",
+        respondent: { principalId: "prn-sample-7f3a", kind: "human", label: null, isSelf: null },
+        revision: 2,
+        updatedAt: "2026-10-15T16:00:00.000Z",
+        expiresAt: "2026-10-15T16:00:00.000Z",
+      },
       replayed: false,
     }),
   },

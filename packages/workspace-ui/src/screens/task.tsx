@@ -10,6 +10,7 @@ import { PersonLabel, RecordText, StatusTag } from "../components/display";
 import { StateView, outcomeState } from "../components/feedback";
 import { PaneSwitch, Tabs } from "../components/shell";
 import { CommandFeedback } from "./entry";
+import { Answer } from "./inbox";
 import { usePaged } from "./work";
 
 function MarkReady({
@@ -77,6 +78,7 @@ function QuestionRow({
         <StatusTag family="question" status={question.status} />
         {question.respondent ? <PersonLabel person={question.respondent} /> : null}
       </p>
+      {question.status === "answered" ? <Answer ws={ws} questionId={question.id} compact /> : null}
       <div className="item-actions">
         <RouteLink
           route="question"

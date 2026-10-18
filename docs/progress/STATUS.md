@@ -16,10 +16,11 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #12: P06.T01a (ADR-0010), merged as `06e4dfe`: migrations 0014 (identity bridge and organization interlock) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the `pg-work` CI group. Verified waits for the P05 exit gate.
 - PR #13: the ADR-0018 Proposal@2 edit (P01.T02a-AC27), merged as `08e5ebf`: nullable `taskId` only for human governance proposals, `TASK_REQUIRED`/`TASK_MISMATCH` and the `requestedBy` derivation in `checkProposal`. It unblocks P06.T01b PR-1.
 - PR #14: P01.T04a PR-A, merged as `bba3cec`: entitlement gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities), `inspectEntitlementWriters`, the contract v1.1 billing layer and the OQ-2 test entitlement seed branch. It applied the "Part B and P06.T01a merge first" coordination (P01.T04a §8.1, §9).
-- PR #15: P14.T01a PR-1, merged as `5ad6cc7` (provisional under ADR-0003): the option 1 shell, sign-in, workspace entry and sign-out over HTTP, the dev-only fixture mode, the a11y matrix and the CI `ui` job (`docs/acceptance/P14.md`). PR-2 (account and work wiring) follows.
+- PR #15: P14.T01a PR-1, merged as `5ad6cc7` (provisional under ADR-0003): the option 1 shell, sign-in, workspace entry and sign-out over HTTP, the dev-only fixture mode, the a11y matrix and the CI `ui` job (`docs/acceptance/P14.md`).
+- PR #11: P03.T04e PR-A, merged as `f8314e8`: `prettier --check .` under one `.prettierignore`, concurrent unit tests through `scripts/run-tests.mjs`, required `executeAs` and pinned prerequisites on every manifest row, and `heavy-faults.yml`. Still open: one `workflow_dispatch` run of `heavy-faults.yml` on `main` (AC22).
 
 In progress:
-- **P03.T04e PR-A** (PR #11, branch `claude/p03-t04e-a-format-concurrency`): `prettier --check .` under one reviewed `.prettierignore`, unit test files run concurrently through `scripts/run-tests.mjs` with an empty serial list, required `executeAs` and pinned prerequisites on every `migrations/manifest.json` row, and `heavy-faults.yml` (manual plus weekly `unit-stress`). Merged with `main` at `5ad6cc7` on 2026-10-19: rows 12-15 now carry `executeAs`; row 13 pins `infra/identity-onboarding-role-prerequisites.sql` and row 14 `infra/work-role-prerequisites.sql` (the first migration that names the work roles); the files from PRs #9-#15 are re-formatted in one mechanical commit listed in `.git-blame-ignore-revs`. Local format, typecheck, verify and unit tests pass on the merged head; hosted CI and the Tier 2 AI review on it are open. After merge: one `workflow_dispatch` run of `heavy-faults.yml` on `main` (AC22).
+- **P14.T01a PR-2** (branch `claude/p14-t01a-pr2-account-and-work`, from `f8314e8`; pushed, **no pull request yet** while GitHub Actions minutes are short): `composed.ts` turns on `account.*` and `work.*` (keep-alive and people stay off); AccountOverview, signup, Goal, Task, Question and answer decoders with validator parity; the signed-out entry at `/`, account rows and Sign out, the signup 429 hold, task-list refresh and inline answers, following `docs/design/mobbin-references.md` (committed here); 36 more `ui:check` state cases and 4 walks; the journey lab's PR-2 journeys (`scripts/workspace-ui-journey-work.mjs`, AC22-AC32) on the edge harness, which now applies 0014-0015 and logs in `morrow_api_worker` (`work` hook). Packet §12 and `docs/acceptance/P14.md` record what ran locally; the hosted `ui` job is the authority.
 
 ## Decisions recorded 2026-10-18
 
@@ -32,11 +33,11 @@ In progress:
 
 ## Last green commit
 
-`bba3cec` on `main`, the merge of PR #14: push run 39169685269 passed. Earlier: `08e5ebf` (PR #13) push run 39168226191; `06e4dfe` (PR #12) push run 39166650248; `e51e5b7` (PR #10) push run 39160961579, all 10 jobs. The push run 39171677853 on `5ad6cc7` (PR #15) was still running when this file was written; record its result.
+`bba3cec` on `main`, the merge of PR #14: push run 39169685269 passed. Earlier: `08e5ebf` (PR #13) push run 39168226191; `06e4dfe` (PR #12) push run 39166650248; `e51e5b7` (PR #10) push run 39160961579, all 10 jobs. The push runs on `5ad6cc7` (PR #15, run 39171677853) and `f8314e8` (PR #11) were not checked in the PR-2 session (no GitHub calls); record their results.
 
 ## Next actions
 
-1. P03.T04e PR-A (PR #11): hosted `foundation` green on the merged head and the Tier 2 AI review, then merge and dispatch `heavy-faults.yml` on `main` (AC22). Then P14.T01a PR-2 (account and work wiring).
+1. P14.T01a PR-2: open the pull request when Actions minutes allow; hosted `foundation` and `ui` green on its head (the first hosted run of the PR-2 journeys), the Tier 2 AI review plus `/security-review` (request client, decoders, fixture isolation, lab artifacts), then merge. Dispatch `heavy-faults.yml` on `main` (P03.T04e AC22).
 2. P01.T04a PR-B (billing route library).
 3. P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
 4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11). Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.

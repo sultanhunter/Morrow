@@ -167,3 +167,35 @@ test("scenarios are scripted: denied, partial denial, offline and account varian
   assert.equal(readScenario("?scenario=<script>"), "ready");
   assert.equal(readScenario(""), "ready");
 });
+test("PR-2 scenarios: signup 429 and unknown outcome, a denied mark ready and an expired question", async () => {
+  const limited = createFixtureAdapter("account_rate_limited");
+  assert.equal((await limited.account.overview()).value.onboarding, "available");
+  const signup = { key: key(20), body: { organizationName: "Linen", workspaceName: "Main" } };
+  assert.deepEqual(await limited.account.createOrganization(signup), {
+    kind: "rate_limited",
+    retryAfterSeconds: 90,
+  });
+  const brief = createFixtureAdapter("account_rate_limited_brief");
+  assert.equal((await brief.account.createOrganization(signup)).retryAfterSeconds, 2);
+  assert.equal((await brief.account.createOrganization(signup)).kind, "ok");
+  // The unknown outcome was applied; Check again (same key) replays it.
+  const unknown = createFixtureAdapter("account_uncertain");
+  assert.equal((await unknown.account.createOrganization(signup)).kind, "uncertain");
+  const replay = await unknown.account.createOrganization(signup);
+  assert.equal(replay.kind, "ok");
+  assert.equal(replay.replayed, true);
+  const denied = createFixtureAdapter("ready_denied");
+  assert.equal(
+    (
+      await denied.work.markReady(ws, "task-titles", {
+        key: key(21),
+        body: { expectedRevision: 2 },
+      })
+    ).kind,
+    "denied",
+  );
+  const expired = await createFixtureAdapter("question_expired").work.getQuestion(ws, "q-source");
+  assert.equal(expired.value.status, "expired");
+  const chooser = await createFixtureAdapter("account_chooser").account.overview();
+  assert.ok(chooser.value.workspaces.every((w) => typeof w.organizationName === "string"));
+});

@@ -1,6 +1,6 @@
 // Inbox and question detail (P14.T01a §4.10). The answer form appears for anyone who
 // can view an open question; the server decides, and its 403 or 409 is rendered.
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useId, useState, type FormEvent } from "react";
 import { copy } from "../copy";
 import type { Id, QuestionView, WorkspaceView } from "../model";
 import { useCommand, useDirty, useRead, useServices } from "../services";
@@ -122,15 +122,29 @@ function AnswerForm({
   );
 }
 
-function Answer({ ws, questionId }: { readonly ws: Id; readonly questionId: Id }) {
+/** The answer to an answered question; `compact` inside a task's question list. */
+export function Answer({
+  ws,
+  questionId,
+  compact = false,
+}: {
+  readonly ws: Id;
+  readonly questionId: Id;
+  readonly compact?: boolean;
+}) {
   const services = useServices();
+  const titleId = useId();
   const [answer, reload] = useRead(`${ws}|answer|${questionId}`, () =>
     services.port.work.getAnswer(ws, questionId),
   );
   if (answer.kind !== "ok") return <>{outcomeState(answer, reload, { compact: true })}</>;
+  // The answer's author is an opaque label, never "you" (§4.10).
+  const Heading = compact ? "h3" : "h2";
   return (
-    <section className="answer" aria-labelledby="answer-title">
-      <h2 id="answer-title">{copy.question.answerLabel}</h2>
+    <section className={compact ? "answer is-compact" : "answer"} aria-labelledby={titleId}>
+      <Heading id={titleId} className={compact ? "answer-title" : undefined}>
+        {copy.question.answerTitle}
+      </Heading>
       <RecordText as="p" className="reading">
         {answer.value.text}
       </RecordText>

@@ -33,11 +33,17 @@ export function createPlatformWorkosProviderOracle(options = {}) {
     return issued;
   };
   const issueAuthorization = (input) => register(crypto.issueCode(input), input.challenge);
-  const arm = (url) => {
+  // `input` may name another synthetic subject and provider session (P14.T01a PR-2: a
+  // second person and a fresh signup sign in through the same oracle).
+  const arm = (url, input = {}) => {
     const authorization = new URL(url);
     assert.equal(authorization.username + authorization.password + authorization.hash, "");
+    assert.deepEqual(
+      Object.keys(input).filter((key) => !["subjectId", "sessionId"].includes(key)),
+      [],
+    );
     // arm independently validates the seven authorization fields and client/callback.
-    return register(crypto.arm(url), authorization.searchParams.get("code_challenge"));
+    return register(crypto.arm(url, input), authorization.searchParams.get("code_challenge"));
   };
   const activate = (issued) => {
     sessions.set(issued.claims.sid, { claims: issued.claims, at: crypto.now() });
