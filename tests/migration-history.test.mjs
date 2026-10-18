@@ -70,7 +70,7 @@ const published = [
   [
     13,
     "0013.account-onboarding.sql",
-    "4a7c49b5a4bf3b0d45cb4d8ee73f8a9f40dbffe8d5fef2dad021e3684bc9d758",
+    "df215e288e6dda31fb62cb70b86354507d054a6e9f1df481891a4a5552e5d763",
   ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");

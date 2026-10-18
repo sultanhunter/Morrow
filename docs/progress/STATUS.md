@@ -14,7 +14,7 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #9: the owner decisions of 2026-10-18: ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
 
 In progress:
-- **P05.T01x Part B** (`claude/p05-t01x-b-signup`, ADR-0009): migration 0013 (account login, enrollment at the first verified sign-in, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, contract v1.1 additions and route `account`, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers). Awaiting its PR, hosted CI (the PG-wire labs run only there) and Tier 2 review including `/security-review`. Deviations needing confirmation are in the packet's "Implementation notes (Part B)".
+- **P05.T01x Part B** (`claude/p05-t01x-b-signup`, ADR-0009): migration 0013 (account login, enrollment at the first verified sign-in, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, contract v1.1 additions and route `account`, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers). Review findings addressed (merged with `main`; 0013 checks all ten executors; AC38 journey to bootstrap and logout in workerd). Awaiting its PR, hosted CI (the `pgwire` job is a merge gate for the bundle-level AC27/AC38 evidence) and Tier 2 review, where `/security-review` must sign off the kernel change. Deviations are in the packet's "Implementation notes (Part B)".
 - **P01.T04a** PR-A and PR-B are the next billing step (OQ-1 to OQ-3 resolved 2026-10-18).
 - **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
 
@@ -50,7 +50,8 @@ None for local work. Hosted staging (M1) waits on the owner actions below. Billi
 
 - **Sign-offs:**
   - Plan R1 (Tier 3).
-  - P05.T01x Part B deviations: `GET /workspaces` accepts an absent `Origin` (browsers omit it on same-origin GET); the kernel now evaluates `approve` on `governance.connection.connect` (ADR-0009 item 7, ADR-0011 Q5).
+  - P05.T01x Part B, before merge: approve the packet §14 amendment to §9 and AC28 (`GET /workspaces` accepts an absent `Origin`, as the bootstrap GET does; POST still requires it), or have both routes revert to exact Origin. The kernel change (connect also evaluates `approve`; ADR-0009 item 7, ADR-0011 Q5) needs Tier 2 `/security-review` sign-off.
+  - P05.T01x Part B, before hosted login (M1): account login start is anonymous, so its per-profile windows (10 per 10 s, 100 open) let anyone block every sign-in on a profile (packet §11). Decide whether Turnstile or the edge per-IP limiter gates hosted login activation in every environment, not only sign-up beyond the allowlist (ADR-0009 item 8).
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
 - **M1 prerequisites (P04.T01i):** register the domain; create a dedicated Cloudflare account and share its account ID (an identifier, not a secret); authenticate the Neon CLI and reset the operator password; once the domain exists, configure the WorkOS staging callback and rotate the API key; decide on spending (Workers Paid, the domain, Neon Launch for staging); approve each M1 effect individually or approve standing staging cards. No card may rely on the OperationLedger before P06.T01c lands.

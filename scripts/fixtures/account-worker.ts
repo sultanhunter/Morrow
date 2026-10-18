@@ -9,13 +9,20 @@ import {
   normalizeDisplayName,
 } from "../../packages/identity/src/account-onboarding.js";
 import { identitySql } from "../../packages/identity/src/index.js";
+import { executeStandaloneWorkspaceBootstrap } from "../../packages/identity/src/standalone-workspace-bootstrap.js";
+import {
+  dispatchStandaloneLogoutWithAttempt,
+  parseStandaloneLogoutConfigurationWithAttempt,
+} from "../../packages/identity/src/standalone-logout.js";
+import { createStandaloneLogoutFixture } from "./standalone-logout-fixture.js";
 import defaultWorker from "../../apps/api/src/worker.js";
 
 // P05.T01x Part B in workerd: account login (start and callback with the account
 // admission), the account route guard, the list and signup executors over a synthetic
-// stateful SQL port with injected faults, display names under workerd ICU, and the
-// unconfigured default export. The synthetic port is not PostgreSQL; the PostgreSQL 17
-// laboratory owns the SQL semantics.
+// stateful SQL port with injected faults, the journey on to bootstrap and logout through
+// the managed guard entries the composed handler uses, display names under workerd ICU,
+// and the unconfigured default export. The synthetic port is not PostgreSQL; the
+// PostgreSQL 17 laboratory owns the SQL semantics.
 type Input = {
   at: number;
   profile: Record<string, unknown>;
@@ -75,6 +82,7 @@ function createStore() {
       request: string;
       organizationId: string;
       workspaceId: string;
+      membershipId: string;
       organizationName: string;
       workspaceName: string;
       active: boolean;
@@ -147,11 +155,19 @@ function createStore() {
           request,
           organizationId,
           workspaceId,
+          membershipId: crypto.randomUUID(),
           organizationName: org,
           workspaceName: ws,
           active: true,
         }),
     };
+  }
+  // Bootstrap's identity read: the bound digest's active signup workspace, if requested.
+  function resolved(bound: readonly string[] | undefined) {
+    const person = bound ? people.get(bound[0]!) : undefined;
+    const signup = person ? signups.get(person.principal) : undefined;
+    if (!person || !signup || !signup.active || signup.workspaceId !== bound![1]) return null;
+    return { person, signup };
   }
   function pool(fault: Fault = {}) {
     return {
@@ -159,12 +175,42 @@ function createStore() {
         counts.connects++;
         if (fault.connect) throw Error("SYNTHETIC_LEASE_DENIED");
         let staged: (() => void) | undefined;
+        let bound: readonly string[] | undefined;
         return {
           async query(text: string, values: readonly string[]) {
             if (fault.before === text) throw Error("SYNTHETIC_LOSS_BEFORE_REPLY");
             let rows: Row[] = [];
+            const current = () => resolved(bound);
+            const context = (r: NonNullable<ReturnType<typeof current>>) => ({
+              principal_id: r.person.principal,
+              organization_id: r.signup.organizationId,
+              workspace_id: r.signup.workspaceId,
+              membership_id: r.signup.membershipId,
+              policy_revision: "1",
+            });
             if (text === identitySql.role) rows = [apiRole];
-            else if (text === accountOnboardingSql.role) rows = [fault.roleRow ?? onboardingRole];
+            else if (text === identitySql.bind) {
+              bound = Object.freeze([...values]);
+              rows = [{ configured: true }];
+            } else if (text === identitySql.resolve) {
+              const r = current();
+              rows = r ? [context(r)] : [];
+            } else if (text === identitySql.workspace) {
+              const r = current();
+              rows =
+                r && values[0] === r.signup.workspaceId
+                  ? [
+                      {
+                        id: r.signup.workspaceId,
+                        organization_id: r.signup.organizationId,
+                        display_name: r.signup.workspaceName,
+                      },
+                    ]
+                  : [];
+            } else if (text === identitySql.workspaceAuthority) {
+              const r = current();
+              rows = r ? [{ ...context(r), grants: [] }] : [];
+            } else if (text === accountOnboardingSql.role) rows = [fault.roleRow ?? onboardingRole];
             else if (text === accountOverviewSql) rows = overview(values);
             else if (text === accountOnboardingSql.create) {
               counts.creates++;
@@ -290,6 +336,7 @@ export default {
         fault?: Fault;
         profile?: string;
         method?: string;
+        noOrigin?: boolean;
       } = {},
     ) {
       const post = route === "organizations";
@@ -301,7 +348,7 @@ export default {
           "X-Morrow-Request": "1",
           ...(post
             ? {
-                Origin: origin,
+                ...(options.noOrigin ? {} : { Origin: origin }),
                 "Content-Type": "application/json",
                 "Idempotency-Key": options.key ?? crypto.randomUUID(),
               }
@@ -344,6 +391,66 @@ export default {
       }
     }
     const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    // Bootstrap and logout through the same managed guard entries the composed workspace
+    // handler uses (handle("bootstrap") and the managed logout dispatch), on synthetic ports.
+    async function bootstrap(workspaceId: string, cookieSecret: string = secret) {
+      const owner = guard.begin(
+        new Request(origin + `/workspace/${workspaceId}/bootstrap`, {
+          headers: { Cookie: "__Host-morrow_session=" + cookieSecret },
+        }),
+      );
+      try {
+        const response = await owner.handle("bootstrap", (c) =>
+          executeStandaloneWorkspaceBootstrap(store.pool(), c),
+        );
+        accountResponses.push(response);
+        const text = await response.text();
+        return { status: response.status, text, body: JSON.parse(text) as Record<string, unknown> };
+      } finally {
+        owner.attempt.end();
+      }
+    }
+    const logoutPort = createStandaloneLogoutFixture();
+    await logoutPort.register(secret);
+    async function logout() {
+      const request = new Request(origin + "/auth/logout", {
+        method: "POST",
+        headers: {
+          Origin: origin,
+          "Content-Type": "application/json",
+          "X-Morrow-Request": "1",
+          Cookie: "__Host-morrow_session=" + secret,
+        },
+        body: '{"schemaVersion":1}',
+      });
+      const owner = guard.begin(request);
+      let delivered: Response | undefined,
+        cookies = -1;
+      try {
+        const configuration = await parseStandaloneLogoutConfigurationWithAttempt(
+          logoutPort.configurationJson,
+          owner.attempt,
+        );
+        await dispatchStandaloneLogoutWithAttempt(
+          request,
+          (output) => {
+            cookies = output.cookies.length;
+            delivered = new Response(output.bodyText, {
+              status: output.status,
+              headers: output.headers.map(([name, value]) => [name, value] as [string, string]),
+            });
+          },
+          owner.attempt,
+          configuration,
+          logoutPort.pool,
+        );
+      } finally {
+        owner.attempt.end();
+      }
+      const response = delivered!;
+      accountResponses.push(response);
+      return { status: response.status, cookies, body: (await response.json()) as unknown };
+    }
     const empty = await call("workspaces");
     check(
       "ac17_fresh_list_empty_onboarding_available",
@@ -386,6 +493,21 @@ export default {
           truncated: false,
           onboarding: "unavailable",
         }),
+    );
+    const booted = await bootstrap(created.body.workspaceId as string);
+    check(
+      "ac38_journey_bootstrap_of_created_workspace_200",
+      booted.status === 200 &&
+        same(booted.body, {
+          schemaVersion: 1,
+          workspace: { id: created.body.workspaceId, displayName: "Main" },
+          policyRevision: 1,
+        }),
+    );
+    const foreignBoot = await bootstrap("w_foreign_workspace");
+    check(
+      "ac38_journey_bootstrap_of_unlisted_workspace_401",
+      foreignBoot.status === 401 && same(foreignBoot.body, { code: "authentication_required" }),
     );
     const replay = await call("organizations", { key, body: decomposedBody });
     check(
@@ -491,8 +613,14 @@ export default {
     check("ac30_workerd_invalid_name_400", invalidAnswers);
 
     // AC28/AC29/AC31: envelope and session states, before any SQL.
+    const listWithoutOrigin = await call("workspaces");
+    check(
+      "ac28_same_origin_get_without_origin_reaches_list",
+      listWithoutOrigin.status === 200 && listWithoutOrigin.invoked === 1,
+    );
     const connectsBefore = store.counts.connects;
     const envelope: [string, Awaited<ReturnType<typeof call>>, number][] = [
+      ["post_without_origin", await call("organizations", { noOrigin: true }), 403],
       [
         "foreign_origin",
         await call("workspaces", { headers: { Origin: "https://evil.example" } }),
@@ -545,6 +673,24 @@ export default {
         same(unknownPost.body, { code: "authentication_required" }),
     );
 
+    // AC38: the journey ends with logout of the same family. The two synthetic ports share
+    // no state, so the logout port's committed end is applied to the account port before
+    // the list and bootstrap are read again.
+    const ended = await logout();
+    const endedCommitted = await logoutPort.ended(secret);
+    if (endedCommitted) store.people.delete(digest);
+    const afterLogoutList = await call("workspaces");
+    const afterLogoutBoot = await bootstrap(created.body.workspaceId as string);
+    check(
+      "ac38_journey_logout_ends_family_then_401",
+      ended.status === 200 &&
+        ended.cookies === 0 &&
+        same(ended.body, { schemaVersion: 1, outcome: "session_ended" }) &&
+        endedCommitted &&
+        afterLogoutList.status === 401 &&
+        afterLogoutBoot.status === 401 &&
+        afterLogoutBoot.text === foreignBoot.text,
+    );
     // AC38: no account response sets a cookie; the unconfigured default denies with 401.
     check(
       "ac38_account_routes_never_set_cookie",

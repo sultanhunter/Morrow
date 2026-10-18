@@ -14,8 +14,10 @@ import { writeArtifact } from "./artifacts.mjs";
 // P05.T01x Part B in actual local workerd: account login start and callback (AC06),
 // impersonation (AC15), the account route envelope (AC28/AC29), list and signup with a
 // synthetic stateful SQL port and injected faults (AC17, AC19, AC22, AC23, AC25), display
-// names under workerd ICU (AC30), session states (AC31) and the unconfigured default
-// (AC38). Zero outbound requests; the PostgreSQL 17 laboratory owns the SQL semantics.
+// names under workerd ICU (AC30), session states (AC31), and the AC38 journey of one person
+// from start and callback through the empty list, signup and list to bootstrap and logout,
+// plus the unconfigured default. Zero outbound requests; the PostgreSQL 17 laboratory owns
+// the SQL semantics.
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const fixture = buildWorkosAuthenticationEvidenceFixture();
 const impersonatedPage = fixture.page([
@@ -27,6 +29,9 @@ const paths = [
   "packages/identity/src/standalone-request-guard.ts",
   "packages/identity/src/standalone-login.ts",
   "packages/identity/src/standalone-login-protocol.ts",
+  "packages/identity/src/standalone-logout.ts",
+  "packages/identity/src/standalone-workspace-bootstrap.ts",
+  "packages/identity/src/self-logout-control.ts",
   "packages/identity/src/login-flow-custody.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
   "packages/identity/src/workos-session-status.ts",
@@ -36,6 +41,7 @@ const paths = [
   "apps/api/src/worker.ts",
   "scripts/fixtures/account-worker.ts",
   "scripts/fixtures/standalone-login-fixture.ts",
+  "scripts/fixtures/standalone-logout-fixture.ts",
   "scripts/account-workers-lab.mjs",
   "tests/fixtures/account-display-names.mjs",
   "tests/fixtures/workos-authentication-evidence.mjs",
@@ -113,6 +119,7 @@ try {
     source_inventory_digest: hash(JSON.stringify(Object.entries(sourceDigests))),
     limitations: [
       "The account SQL port here is a synthetic state machine; PostgreSQL 17 semantics, locks and privileges are in lab:account-onboarding.",
+      "The journey drives the managed guard entries the composed workspace handler uses (handleAccount, handle('bootstrap') and the managed logout dispatch) over synthetic ports; the account and logout ports share no state, so the logout port's committed end is applied to the account port. The composed api Worker over real pools runs only in the Linux pgwire job.",
       "The managed entry's broker-lease failure and routing are unit cases (tests/managed-workspace-api.test.mjs); the PG-wire journey runs in the Linux pgwire job.",
       "No native provider, hosted key, deployment or real user.",
     ],

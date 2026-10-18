@@ -141,12 +141,29 @@ LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
   ('governance.approval.preview','["view"]','["proposalRef","selectedTargetIndexes"]'),
   ('governance.usage.read','["view"]','["scope","period"]')) t(c,v,f)
 $$;
-CREATE FUNCTION morrow_identity.onboarding_role_safe() RETURNS boolean
+-- One executor check over all ten executors: the session user is the named executor, the
+-- owner and executor flags are safe, and no executor is a member of the owner or has it as
+-- a member. The 0008 and 0010 helpers listed six and eight executors; they are replaced so
+-- that admission, account login and every login-flow definer refuse exactly as signup does.
+-- OR REPLACE keeps their owner and ACLs.
+CREATE FUNCTION morrow_identity.executor_role_safe(p_executor text) RETURNS boolean
 LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
- SELECT current_user='morrow_identity_owner' AND session_user='morrow_identity_onboarding'
+ SELECT current_user='morrow_identity_owner' AND session_user=p_executor
  AND EXISTS(SELECT 1 FROM pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
  AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
  AND NOT EXISTS(SELECT 1 FROM pg_roles r,pg_roles o WHERE o.rolname='morrow_identity_owner' AND r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance','morrow_identity_logout','morrow_identity_onboarding') AND (pg_has_role(r.oid,o.oid,'MEMBER') OR pg_has_role(o.oid,r.oid,'MEMBER')))
+$$;
+CREATE OR REPLACE FUNCTION morrow_identity.browser_sessions_role_safe() RETURNS boolean
+LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT morrow_identity.executor_role_safe('morrow_identity_sessions')
+$$;
+CREATE OR REPLACE FUNCTION morrow_identity.login_role_safe(maintenance boolean DEFAULT false) RETURNS boolean
+LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT morrow_identity.executor_role_safe(CASE WHEN maintenance THEN 'morrow_identity_login_maintenance' ELSE 'morrow_identity_login' END)
+$$;
+CREATE FUNCTION morrow_identity.onboarding_role_safe() RETURNS boolean
+LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT morrow_identity.executor_role_safe('morrow_identity_onboarding')
 $$;
 -- The family half of session_eligibility without membership joins. Only a digest held by
 -- exactly one representation resolves; a legacy sessions digest never does.
@@ -498,7 +515,7 @@ BEGIN
 END $$;
 
 -- Privileges. Retired entry points are no longer executable by their former roles.
-DO $$ DECLARE r record; BEGIN FOR r IN SELECT p.oid::regprocedure AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='morrow_identity' AND p.proname IN ('account_preserve_record','self_service_revision_sequence','display_name_valid','self_service_current','owner_bootstrap_grants_v1','onboarding_role_safe','account_session_principal','create_account_login_flow_intent','reconcile_login_flow','admit_account_family','reconcile_account_admission','account_overview','create_first_organization') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,morrow_api,morrow_identity_lifecycle,morrow_identity_linking,morrow_identity_preauth,morrow_identity_resolution,morrow_identity_sessions,morrow_identity_login,morrow_identity_login_maintenance,morrow_identity_logout,morrow_identity_onboarding',r.signature); END LOOP;END $$;
+DO $$ DECLARE r record; BEGIN FOR r IN SELECT p.oid::regprocedure AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='morrow_identity' AND p.proname IN ('account_preserve_record','self_service_revision_sequence','display_name_valid','self_service_current','owner_bootstrap_grants_v1','executor_role_safe','onboarding_role_safe','account_session_principal','create_account_login_flow_intent','reconcile_login_flow','admit_account_family','reconcile_account_admission','account_overview','create_first_organization') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,morrow_api,morrow_identity_lifecycle,morrow_identity_linking,morrow_identity_preauth,morrow_identity_resolution,morrow_identity_sessions,morrow_identity_login,morrow_identity_login_maintenance,morrow_identity_logout,morrow_identity_onboarding',r.signature); END LOOP;END $$;
 REVOKE EXECUTE ON FUNCTION morrow_identity.create_login_flow_intent(text,text,text,text,text,text) FROM morrow_identity_login;
 REVOKE EXECUTE ON FUNCTION morrow_identity.admit_browser_family(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text) FROM morrow_identity_sessions;
 REVOKE EXECUTE ON FUNCTION morrow_identity.resolve_provider_subject_selection(text,text,text,text,text,text,text,text,text) FROM morrow_identity_resolution;

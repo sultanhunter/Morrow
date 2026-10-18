@@ -282,6 +282,29 @@ test("AC28 envelope: accepted requests reach the callback with derived values on
   );
   assert.ok(Object.isFrozen(seen));
 });
+test("AC28 Origin: a missing Origin is accepted only on the same-origin GET, never on POST", async () => {
+  // Browsers omit Origin on a same-origin GET (packet §14, pending the §9/AC28 amendment);
+  // the existing workspace bootstrap GET has the same rule. POST always needs the exact one.
+  const get = request("workspaces");
+  assert.equal(get.headers.has("Origin"), false);
+  let calls = 0;
+  const list = await guarded("workspaces", get, async () => {
+    calls++;
+    return new Response("{}");
+  });
+  assert.equal(list.response.status, 200);
+  assert.equal(calls, 1);
+  const post = without("organizations", "Origin");
+  assert.equal(post.headers.has("Origin"), false);
+  const refused = await guarded("organizations", post, async () => {
+    calls++;
+    return new Response("{}");
+  });
+  assert.equal(refused.response.status, 403);
+  assert.deepEqual(refused.body, { code: "request_denied" });
+  assert.equal(calls, 1);
+  assert.equal(refused.submitted, false);
+});
 test("the guard latch: a loss after markSubmitted is outcome_unknown, before it unavailable", async () => {
   const unknown = await guarded("organizations", request("organizations"), async (c) => {
     c.markSubmitted();

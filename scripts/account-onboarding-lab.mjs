@@ -1055,7 +1055,8 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
           headers: { Cookie: "__Host-morrow_session=" + secret },
         }),
       );
-      return { status: response.status, body: await response.json() };
+      const text = await response.text();
+      return { status: response.status, text, body: JSON.parse(text) };
     }
     // A fresh self-enrolled person. Each gets its own signup-enabled profile, so the
     // per-profile enrollment and signup windows are reached only where a case seeds them.
@@ -1893,23 +1894,38 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
 
     // ---------------------------------------------------------------- AC33/AC34
     {
+      // A second eligible workspace W2 in the founder's organization (owner SQL), so one tab
+      // can select W2 while a W1 tab keeps working.
+      const W2 = "zz33_w2_" + randomUUID().slice(0, 8);
+      admin(
+        `INSERT INTO morrow_identity.workspaces VALUES(${lit(W2)},${lit(O)},'Second',true);
+         INSERT INTO morrow_identity.workspace_memberships VALUES(${lit(O)},${lit(W2)},${lit(membershipId)},true);`,
+      );
       const foreign = await bootstrap(otherOrgWorkspace, founder.secret);
       const missing = await bootstrap("no_such_workspace", founder.secret);
-      const before = admin(
-        "SELECT md5(string_agg(t,',')) FROM (SELECT to_jsonb(x)::text t FROM morrow_identity.workspace_memberships x UNION ALL SELECT to_jsonb(y)::text FROM morrow_identity.browser_session_families y) z;",
-      );
-      const tabA = await bootstrap(W, founder.secret);
-      const tabB = await bootstrap(W, founder.secret);
+      const selectionState = () =>
+        admin(
+          "SELECT md5(string_agg(t,',' ORDER BY t)) FROM (SELECT to_jsonb(x)::text t FROM morrow_identity.workspace_memberships x UNION ALL SELECT to_jsonb(y)::text FROM morrow_identity.browser_session_families y UNION ALL SELECT to_jsonb(g)::text FROM morrow_identity.browser_session_generations g) z;",
+        );
+      const before = selectionState();
+      const tabW1 = await bootstrap(W, founder.secret);
+      const [tabW2, tabW1Again] = await Promise.all([
+        bootstrap(W2, founder.secret),
+        bootstrap(W, founder.secret),
+      ]);
       check(
-        "ac33_foreign_and_unknown_same_401_selection_writes_nothing",
-        foreign.status === 401 &&
-          missing.status === 401 &&
-          JSON.stringify(foreign.body) === JSON.stringify(missing.body) &&
-          tabA.status === 200 &&
-          tabB.status === 200 &&
-          admin(
-            "SELECT md5(string_agg(t,',')) FROM (SELECT to_jsonb(x)::text t FROM morrow_identity.workspace_memberships x UNION ALL SELECT to_jsonb(y)::text FROM morrow_identity.browser_session_families y) z;",
-          ) === before,
+        "ac33_two_tabs_select_w1_and_w2_and_selection_writes_nothing",
+        tabW1.status === 200 &&
+          tabW1.body.workspace.id === W &&
+          tabW2.status === 200 &&
+          tabW2.body.workspace.id === W2 &&
+          tabW1Again.status === 200 &&
+          tabW1Again.body.workspace.id === W &&
+          selectionState() === before,
+      );
+      check(
+        "ac33_foreign_and_unknown_same_401_bytes",
+        foreign.status === 401 && missing.status === 401 && foreign.text === missing.text,
       );
       // AC34: the founder revokes its own workspace membership with its template grant.
       const revokeGrant = grants.find((g) => g.capabilityId === "governance.membership.revoke");
@@ -1939,14 +1955,26 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
         founderKey,
         names("Noor Labs", "Main"),
       );
+      const afterW2 = await bootstrap(W2, founder.secret);
       check(
         "ac34_revocation_removes_list_bootstrap_and_replay",
         revoked.outcome === "applied" &&
           afterList.status === 200 &&
-          afterList.body.workspaces.length === 0 &&
+          JSON.stringify(afterList.body.workspaces.map((w) => w.workspaceId)) ===
+            JSON.stringify([W2]) &&
           afterBoot.status === 401 &&
           afterReplay.status === 409 &&
           afterReplay.body.outcome === "already_onboarded",
+      );
+      check(
+        "ac34_other_workspace_of_the_organization_unaffected",
+        afterW2.status === 200 && afterW2.body.workspace.id === W2,
+      );
+      check(
+        "ac33_revoked_foreign_and_unknown_same_401_bytes",
+        afterBoot.status === 401 &&
+          afterBoot.text === foreign.text &&
+          afterBoot.text === missing.text,
       );
     }
 
@@ -1956,6 +1984,7 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
         "display_name_valid(text)",
         "self_service_current(text)",
         "owner_bootstrap_grants_v1()",
+        "executor_role_safe(text)",
         "onboarding_role_safe()",
         "account_session_principal(text)",
         "account_preserve_record()",
@@ -2060,8 +2089,94 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
       );
     }
 
+    // Role safety (AC23/AC35): an owner membership on any of the ten executors makes account
+    // admission, account login intents and signup refuse before any write. 0013 replaces
+    // the 0008 and 0010 helpers, whose lists covered six and eight executors.
+    {
+      const rx = enabledProfile();
+      const signer = await person(rx);
+      const flowsOf = () =>
+        rows("login_flows", `configuration_digest=${lit(rx.configurationDigest)}`);
+      const flowsBefore = flowsOf();
+      const intent = (flow = randomUUID()) =>
+        psql(
+          `SELECT outcome FROM morrow_identity.create_account_login_flow_intent(${[rx.configurationDigest, flow, randomUUID(), randomUUID(), randomUUID()].map(lit).join(",")});`,
+          "morrow_identity_login",
+        ).stdout.trim();
+      const admission = (t) =>
+        JSON.parse(psql(directAdmit(t), "morrow_identity_sessions").stdout.trim() || "[{}]")[0]
+          .outcome;
+      const create = (command = randomUUID()) =>
+        JSON.parse(
+          psql(
+            `SELECT COALESCE(json_agg(row_to_json(r)),'[]')::text FROM morrow_identity.create_first_organization(${lit(signer.digest)},${lit(command)},${lit(rx.f.profile)},'Role Org','Main') r;`,
+            "morrow_identity_onboarding",
+          ).stdout.trim() || "[{}]",
+        )[0].outcome;
+      const tuple = await accountTuple(rx, freshSubject());
+      const executors = [
+        "morrow_api",
+        "morrow_identity_lifecycle",
+        "morrow_identity_linking",
+        "morrow_identity_preauth",
+        "morrow_identity_resolution",
+        "morrow_identity_sessions",
+        "morrow_identity_login",
+        "morrow_identity_login_maintenance",
+        "morrow_identity_logout",
+        "morrow_identity_onboarding",
+      ];
+      const refusals = [];
+      for (const executor of executors) {
+        context.sql(`GRANT morrow_identity_owner TO ${executor};`, "morrow");
+        try {
+          refusals.push([executor, intent(), admission(tuple), create()]);
+        } finally {
+          context.sql(`REVOKE morrow_identity_owner FROM ${executor};`, "morrow");
+        }
+      }
+      check(
+        "role_safety_owner_membership_on_any_executor_denies_intent_admission_and_signup",
+        refusals.length === 10 &&
+          refusals.every(([, i, a, c]) => i === "denied" && a === "denied" && c === "denied") &&
+          flowsOf() === flowsBefore &&
+          rows("account_session_commands", `command_id=${lit(tuple[0])}`) === 0 &&
+          rows("browser_session_audits", `command_id=${lit(tuple[0])}`) === 0 &&
+          rows("organization_signups", `principal_id=${lit(signer.principal)}`) === 0,
+      );
+      // Reverse membership (the owner a member of an executor) is refused the same way.
+      context.sql("GRANT morrow_identity_logout TO morrow_identity_owner;", "morrow");
+      let reverse;
+      try {
+        reverse = [intent(), admission(tuple), create()];
+      } finally {
+        context.sql("REVOKE morrow_identity_logout FROM morrow_identity_owner;", "morrow");
+      }
+      check(
+        "role_safety_owner_member_of_an_executor_denies",
+        reverse.every((outcome) => outcome === "denied"),
+      );
+      const fresh = await accountTuple(rx, freshSubject());
+      check(
+        "role_safety_restored_roles_admit_intend_and_sign_up",
+        intent() === "newly_created" &&
+          admission(fresh) === "newly_admitted" &&
+          create() === "created",
+      );
+      check(
+        "role_safety_replaced_helpers_keep_acls",
+        count(
+          `SELECT count(*) FROM unnest(ARRAY[${executors.map(lit).join(",")}]) r,unnest(ARRAY['morrow_identity.browser_sessions_role_safe()','morrow_identity.login_role_safe(boolean)','morrow_identity.executor_role_safe(text)','morrow_identity.onboarding_role_safe()']) f WHERE has_function_privilege(r,f::regprocedure,'EXECUTE')`,
+        ) === 0 &&
+          admin(
+            "SELECT string_agg(DISTINCT pg_get_userbyid(p.proowner),',') FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='morrow_identity' AND p.proname IN ('browser_sessions_role_safe','login_role_safe','executor_role_safe','onboarding_role_safe');",
+          ) === "morrow_identity_owner",
+      );
+    }
+
     // Interleavings: signup against a family revoked while it waits; an admission against
-    // an in-flight signup, with lock_timeout to expose the shared profile wait.
+    // an in-flight signup, with lock_timeout to expose the shared profile wait; admission
+    // and signup against an in-flight revoke_workspace_access on the same profile.
     {
       // Raw executor calls: the wait is observed in pg_blocking_pids, never by a sleep, and
       // no request budget can expire while a loaded host is slow.
@@ -2133,6 +2248,78 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
       } finally {
         await onboardingRaw.close();
         await sessions.close();
+      }
+      // revoke_workspace_access (organization first, then the actor's session locks,
+      // including its profile) holds the profile; an admission and a signup on that profile
+      // wait behind it, write nothing, and both succeed once it commits.
+      const rv = enabledProfile();
+      const actor = await person(rv);
+      const actorSignup = await signup(
+        actor.digest,
+        rv.f.profile,
+        randomUUID(),
+        names("Revoking Org", "Main"),
+      );
+      const Oa = actorSignup.body.organizationId,
+        Wa = actorSignup.body.workspaceId;
+      const Ma = admin(
+        `SELECT id FROM morrow_identity.memberships WHERE organization_id=${lit(Oa)} AND principal_id=${lit(actor.principal)};`,
+      );
+      const revokeGrant = JSON.parse(
+        admin(
+          `SELECT payload::text FROM morrow_identity.grants WHERE workspace_id=${lit(Wa)} AND payload->>'capabilityId'='governance.membership.revoke';`,
+        ),
+      );
+      const other = await person(rv);
+      const receipt = randomUUID(),
+        command = randomUUID(),
+        request = hash(randomUUID());
+      admin(
+        `INSERT INTO morrow_identity.workspace_revocation_receipts(id,organization_id,workspace_id,actor_principal_id,actor_membership_id,actor_session_digest,target_membership_id,command_id,request_digest,expected_policy_revision,authorizing_grant_id,authorizing_grant_snapshot,approval_evidence_id,expires_at) VALUES(${[receipt, Oa, Wa, actor.principal, Ma, actor.digest, Ma, command, request].map(lit).join(",")},1,${lit(revokeGrant.id)},${lit(JSON.stringify(revokeGrant))}::jsonb,'synthetic_approval',clock_timestamp()+interval '1 hour');`,
+      );
+      const revoker = sqlConnection(context.id, "morrow_identity_lifecycle"),
+        admitter = sqlConnection(context.id, "morrow_identity_sessions"),
+        creator = sqlConnection(context.id, "morrow_identity_onboarding");
+      try {
+        await Promise.all([
+          admitter.query("SELECT 1;"),
+          creator.query("SELECT 1;"),
+          revoker.query("SELECT 1;"),
+        ]);
+        const applied = await revoker.query(
+          `BEGIN;SELECT outcome FROM morrow_identity.revoke_workspace_access(${[receipt, command, request, actor.digest, Oa, Wa, Ma, "1"].map(lit).join(",")});`,
+        );
+        const t = await accountTuple(rv, freshSubject());
+        await admitter.query(`SET lock_timeout='300ms';${directAdmit(t)}`);
+        const admissionWaited = admitter.errors().includes("lock timeout");
+        await admitter.query("RESET lock_timeout;");
+        const otherKey = randomUUID();
+        const createSql = `SELECT COALESCE(json_agg(row_to_json(r)),'[]')::text FROM morrow_identity.create_first_organization(${lit(other.digest)},${lit(otherKey)},${lit(rv.f.profile)},'Waiting Org','Main') r;`;
+        await creator.query(`SET lock_timeout='300ms';${createSql}`);
+        const signupWaited = creator.errors().includes("lock timeout");
+        await creator.query("RESET lock_timeout;");
+        const nothingWritten =
+          rows("account_session_commands", `command_id=${lit(t[0])}`) === 0 &&
+          rows("organization_signups", `principal_id=${lit(other.principal)}`) === 0;
+        await revoker.query("COMMIT;");
+        const retried = JSON.parse(await admitter.query(directAdmit(t)))[0];
+        const created = JSON.parse(await creator.query(createSql))[0];
+        const actorList = await overview(actor.digest, rv.f.profile);
+        check(
+          "interleave_admission_and_signup_wait_behind_revoke_workspace_access",
+          applied === "applied" &&
+            admissionWaited &&
+            signupWaited &&
+            nothingWritten &&
+            retried.outcome === "newly_admitted" &&
+            created.outcome === "created" &&
+            actorList.status === 200 &&
+            actorList.body.workspaces.length === 0,
+        );
+      } finally {
+        await revoker.close();
+        await admitter.close();
+        await creator.close();
       }
     }
 
