@@ -98,9 +98,10 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
   const responses = [];
   async function send(p, method, path, body, options = {}) {
     const handler = options.handler ?? plain;
+    const keyed = method === "POST" ? { ...options, key: options.key ?? randomUUID() } : options;
     for (let attempt = 1; ; attempt++) {
       const response = await handler.fetch(
-        workRequest(p, method, path, body, options),
+        workRequest(p, method, path, body, keyed),
         undefined,
         ctx,
       );
@@ -120,6 +121,14 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
         reply.body.retryClass === "safe_read_retry" &&
         attempt < 4
       ) {
+        unavailableRetries++;
+        await sleep(250);
+        continue;
+      }
+      // A command that is unavailable or uncertain is reconciled the only way the
+      // contract allows: the same key and body again. Cases that assert the 503
+      // itself opt out.
+      if (method === "POST" && reply.status === 503 && !options.noRetry && attempt < 6) {
         unavailableRetries++;
         await sleep(250);
         continue;
@@ -356,6 +365,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
           expectedRevision: revision,
         });
         if (reply.status === 409 && reply.body.code === "conflict") refusedApi++;
+        else print("AC06 goal " + from + ">" + to + " answered " + reply.status);
         const owner = db.tryRun(
           `SET ROLE morrow_work_owner; UPDATE morrow_work.goals SET status=${literal(to)},revision=revision+1,updated_at=clock_timestamp() WHERE id=${literal(g)};`,
         );
@@ -1089,7 +1099,11 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
           if (lose(record)) await connection.loseReply();
         },
       });
-      const first = await send(P.A, "POST", "/goals", goalBody(objective), { key, handler });
+      const first = await send(P.A, "POST", "/goals", goalBody(objective), {
+        key,
+        handler,
+        noRetry: true,
+      });
       const retry = await send(P.A, "POST", "/goals", goalBody(objective), { key });
       check(
         "AC16:" + name + "_uncertain",
@@ -1258,6 +1272,29 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
     check(
       "AC20:payload_allowlist",
       keys.every((k) => same(k.keys, allow[k.event_type])),
+    );
+  });
+
+  await section("prologue", async () => {
+    // §4.1: the fixed prologue bounds every transaction; PG17 transaction_timeout
+    // ends one whose statements each stay under statement_timeout.
+    const slow = db.tryRun(
+      workStatements.prologueReadOnly + ";\n" + "SELECT pg_sleep(1.5);\n".repeat(5) + "COMMIT;",
+      { user: "morrow_api_worker" },
+    );
+    check(
+      "prologue:transaction_timeout_fires",
+      !slow.ok && /transaction timeout/.test(slow.stderr),
+    );
+    const statement = db.tryRun(
+      workStatements.prologueReadOnly + ";\nSELECT pg_sleep(3);\nCOMMIT;",
+      {
+        user: "morrow_api_worker",
+      },
+    );
+    check(
+      "prologue:statement_timeout_fires",
+      !statement.ok && /statement timeout/.test(statement.stderr),
     );
   });
 
