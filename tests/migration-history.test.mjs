@@ -70,7 +70,7 @@ const published = [
   [
     14,
     "0014.work-identity-bridge.sql",
-    "3dd8358f02dfaf2778ac4e61ba2f2fee6124eb753f63d15d3238c01293002b69",
+    "3237a70212d51dad05d3d056e4b3e760ad5869a9b38d8d1aa9616a48251e765b",
   ],
   [15, "0015.work-state.sql", "f4be403ef30a6fa42b86eaf6229d68dc192d838043512a92e82f72dcc4aa6e60"],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));

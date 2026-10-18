@@ -27,9 +27,14 @@ GRANT REFERENCES (workspace_id,membership_id) ON morrow_identity.workspace_membe
 -- The one resolver of a work request's tenant and actor. LANGUAGE sql BEGIN ATOMIC
 -- records the dependency on session_eligibility, so a later migration cannot drop
 -- or re-type it without replacing this bridge in the same migration (AC24).
+-- Every policy evaluation calls it, and PostgreSQL 17 plans a SQL function body on
+-- each call, so the collapse limits keep the written join order (each branch starts
+-- from its unique digest index) and make that planning cheap. They change plans,
+-- never results.
 CREATE FUNCTION morrow_identity.work_session_context(p_digest text,p_workspace text)
 RETURNS TABLE(principal_id text,organization_id text,workspace_id text,membership_id text,policy_revision bigint)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp
+SET join_collapse_limit=1 SET from_collapse_limit=1
 BEGIN ATOMIC
  SELECT e.principal_id,e.organization_id,e.workspace_id,e.membership_id,e.policy_revision
  FROM morrow_identity.session_eligibility(p_digest,p_workspace) e
@@ -116,6 +121,7 @@ GRANT EXECUTE ON FUNCTION morrow_identity.work_lock_and_recheck(text,text,text,t
 CREATE FUNCTION morrow_identity.work_member_authority(p_org text,p_ws text,p_principal text)
 RETURNS TABLE(membership_id text,grants jsonb,grant_count integer)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp
+SET join_collapse_limit=1 SET from_collapse_limit=1
 BEGIN ATOMIC
  WITH m AS MATERIALIZED (
   SELECT mem.id::text AS membership_id

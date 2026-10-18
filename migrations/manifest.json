@@ -78,7 +78,7 @@
     {
       "sequence": 14,
       "file": "0014.work-identity-bridge.sql",
-      "sha256": "3dd8358f02dfaf2778ac4e61ba2f2fee6124eb753f63d15d3238c01293002b69",
+      "sha256": "3237a70212d51dad05d3d056e4b3e760ad5869a9b38d8d1aa9616a48251e765b",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/packets/P06.T01a.md"
     },

@@ -1203,12 +1203,13 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
     // unavailable outcome is reconciled by the same key, never by a new effect.
     async function decided(path, body) {
       const key = randomUUID();
+      let last;
       for (let attempt = 0; attempt < 20; attempt++) {
-        const reply = await send(owner, "POST", path, body, { key });
-        if (reply.status !== 503) return reply;
+        last = await send(owner, "POST", path, body, { key });
+        if (last.status !== 503) return last;
         await sleep(100);
       }
-      throw Error("AC20_UNDECIDED");
+      throw Error("AC20_UNDECIDED_" + last.body.code);
     }
     const sequence = ["active", "paused", "active", "paused"];
     const worker = async () => {
@@ -1225,9 +1226,12 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
         }
       }
     };
-    await Promise.all([worker(), worker(), worker(), worker()]);
-    running = false;
-    await observer;
+    try {
+      await Promise.all([worker(), worker(), worker(), worker()]);
+    } finally {
+      running = false;
+      await observer;
+    }
     const ws = literal(owner.workspace);
     const positions = db
       .rows(
