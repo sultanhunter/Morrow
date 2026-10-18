@@ -129,7 +129,7 @@ Owner approval, 2026-10-18, in chat.
 
 Scope of the approval:
 
-- **Decided by the answers:** items 1, 4 and 7 (the two routes, the same tiers, Stripe Billing with Stripe Tax and Morrow as seller).
+- **Decided by the answers:** items 1 and 4 (the two routes and the same tiers) and the seller and tax part of item 7 (Stripe Billing with Stripe Tax, Morrow registering and filing with a tax advisor). The credential and idempotency parts of item 7 apply Security invariants 10 and 11 and ADR-0007.
 - **Following from them:** item 2 makes "pay on Morrow, then connect their store" exact, taking the conservative reading of the staff guidance (a completed payment before any store link). Item 3 implements "never see Morrow's checkout". Items 5 and 6 carry the ADR-0006 rules and the billing-ownership rules over to two routes. Item 8 restates the existing provider rules.
 - **Not established by the answers:** "Fully compliant" in the option text is the recommendation's claim, not a Shopify determination; App Review decides (Risk 1).
 - **Pending:** the Stripe account, test mode, live activation, tax registrations, business entity and bank account are owner actions and launch gates. Nothing is created now.
