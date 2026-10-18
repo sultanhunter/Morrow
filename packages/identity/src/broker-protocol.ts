@@ -15,6 +15,8 @@ export const brokerNeonRoles = Object.freeze({
   morrow_api: "workspace_primary_and_one_same_role_observer",
   morrow_identity_linking: "workspace_primary_and_one_same_role_observer",
   morrow_identity_logout: "workspace_primary_and_one_same_role_observer",
+  // P06.T01a (ADR-0010 item 2): the api Worker's work login, one connection per request.
+  morrow_api_worker: "work_request_transaction",
 } as const);
 export type BrokerNeonRole = keyof typeof brokerNeonRoles;
 export const brokerNeonRoleNames = Object.freeze(Object.keys(brokerNeonRoles) as BrokerNeonRole[]);

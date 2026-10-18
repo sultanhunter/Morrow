@@ -25,6 +25,7 @@ import {
   createManagedLoginRequestOwner,
 } from "../packages/identity/src/managed-login-request-scope.ts";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
+import { createNeonWorkConnector } from "../packages/work/src/neon-connector.ts";
 
 // P04.T02a D4: the single role table, byte-equal namespaces and the closed grant.
 const binding = Object.freeze({
@@ -39,7 +40,7 @@ const provider = createPlatformWorkosProviderOracle({ origin: "https://workspace
 const control = () =>
   Object.freeze({ deadlineMs: Date.now() + 5000, signal: new AbortController().signal });
 
-test("one role table drives the seven role secrets and the broker's required secrets", () => {
+test("one role table drives the eight role secrets and the broker's required secrets", () => {
   assert.ok(Object.isFrozen(brokerNeonRoles) && Object.isFrozen(brokerRequiredSecrets));
   assert.deepEqual(brokerNeonRoleNames, [
     "morrow_identity_login",
@@ -49,7 +50,10 @@ test("one role table drives the seven role secrets and the broker's required sec
     "morrow_api",
     "morrow_identity_linking",
     "morrow_identity_logout",
+    "morrow_api_worker",
   ]);
+  assert.equal(brokerNeonRoles.morrow_api_worker, "work_request_transaction");
+  assert.equal(brokerPasswordSecret("morrow_api_worker"), "MORROW_DB_PASSWORD_MORROW_API_WORKER");
   assert.equal(brokerPasswordSecret("morrow_api"), "MORROW_DB_PASSWORD_MORROW_API");
   assert.deepEqual(brokerRequiredSecrets, [
     "WORKOS_API_KEY",
@@ -65,7 +69,7 @@ test("one role table drives the seven role secrets and the broker's required sec
   });
 });
 
-test("neonLeaseNamespace is byte-equal to the namespace every pool borrows", async (t) => {
+test("neonLeaseNamespace is byte-equal to the namespace every pool and the work connector borrow", async (t) => {
   const borrowed = [];
   const recorder = {
     borrow(namespaceJson) {
@@ -92,12 +96,16 @@ test("neonLeaseNamespace is byte-equal to the namespace every pool borrows", asy
     "a".repeat(64),
   );
   for (const pool of Object.values(workspace)) await assert.rejects(pool.connect(control()));
+  // P06.T01a: the api Worker's work login borrows its own namespace per request.
+  await assert.rejects(
+    createNeonWorkConnector(binding, recorder).open({ ...control(), waitUntil() {} }),
+  );
   const parsed = parseBrokerDatabaseBinding(JSON.stringify(binding));
   assert.deepEqual(
     [...borrowed].sort(),
     brokerNeonRoleNames.map((role) => neonLeaseNamespace(parsed, role)).sort(),
   );
-  assert.equal(borrowed.length, 7);
+  assert.equal(borrowed.length, 8);
 });
 
 test("workosSessionNamespace equals the login port's session-catalogue borrow", async () => {

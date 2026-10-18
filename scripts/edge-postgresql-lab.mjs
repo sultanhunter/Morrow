@@ -164,8 +164,11 @@ export async function edgePostgresqlJourneys(engine, createService) {
       ],
     });
   };
+  // The engine logs in the seven identity roles. The P06.T01a work login has no role
+  // in this engine and no journey here borrows it; the broker still requires its secret.
+  const workLoginPassword = "Edge-work-" + randomBytes(18).toString("base64url");
   const passwords = { ...engine.passwordByRole };
-  secret(keyMarker, ...Object.values(passwords));
+  secret(keyMarker, workLoginPassword, ...Object.values(passwords));
   const databaseBinding = { ...controlledNeonWireBinding, environment: "development" };
   const apiBindings = (change = {}) => ({
     MORROW_ENVIRONMENT: "development",
@@ -184,6 +187,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
     ...Object.fromEntries(
       roles.map((role) => ["MORROW_DB_PASSWORD_" + role.toUpperCase(), passwords[role]]),
     ),
+    MORROW_DB_PASSWORD_MORROW_API_WORKER: workLoginPassword,
     ...change,
   });
 

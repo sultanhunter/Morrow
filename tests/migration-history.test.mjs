@@ -67,16 +67,32 @@ const published = [
     "0012.login-protocol-v1.sql",
     "52e9f699956ec8932056b22b2dc5294e540225562730666e0a87d00dfe857579",
   ],
+  [
+    14,
+    "0014.work-identity-bridge.sql",
+    "3dd8358f02dfaf2778ac4e61ba2f2fee6124eb753f63d15d3238c01293002b69",
+  ],
+  [15, "0015.work-state.sql", "f4be403ef30a6fa42b86eaf6229d68dc192d838043512a92e82f72dcc4aa6e60"],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 
-test("the manifest keeps every published migration as an unchanged prefix", () => {
-  assert.ok(manifest.migrations.length >= published.length);
-  for (const [index, row] of published.entries()) {
-    const { sequence, file, sha256 } = manifest.migrations[index];
+// Sequence 13 is reserved for P05.T01x Part B (enrolment), which lands on a parallel
+// branch. P06.T01a's 0014-0015 depend on nothing in it, so either merge order works:
+// published rows are matched by sequence, and once 0013 is published no gap remains.
+const reservedSequences = new Set([13]);
+
+test("the manifest keeps every published migration unchanged, in sequence order", () => {
+  const bySequence = new Map(manifest.migrations.map((m) => [m.sequence, m]));
+  for (const row of published) {
+    const { sequence, file, sha256 } = bySequence.get(row.sequence) ?? {};
     assert.deepEqual({ sequence, file, sha256 }, row);
   }
+  const order = manifest.migrations.map((m) => m.sequence);
+  assert.deepEqual(
+    order,
+    [...order].sort((a, b) => a - b),
+  );
 });
 
 test("every published migration file still hashes to its pinned digest", () => {
@@ -84,9 +100,12 @@ test("every published migration file still hashes to its pinned digest", () => {
     assert.equal(sha(readFileSync("migrations/" + row.file)), row.sha256, row.file);
 });
 
-test("migrations after the published prefix continue the sequence", () => {
-  for (const [index, row] of manifest.migrations.entries()) {
-    assert.equal(row.sequence, index + 1);
-    assert.equal(row.file.startsWith(String(index + 1).padStart(4, "0") + "."), true);
+test("migrations continue the sequence, skipping only a reserved sequence", () => {
+  let expected = 1;
+  for (const row of manifest.migrations) {
+    while (reservedSequences.has(expected) && row.sequence !== expected) expected++;
+    assert.equal(row.sequence, expected);
+    assert.equal(row.file.startsWith(String(expected).padStart(4, "0") + "."), true);
+    expected++;
   }
 });
