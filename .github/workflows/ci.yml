@@ -72,7 +72,7 @@ jobs:
         run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Run one shard of the repository tests, one file at a time
+      - name: Run one shard of the repository tests, parallel-safe files concurrently, then the serial list
         env:
           TEST_SHARD: "${{ matrix.shard }}/2"
         run: npm run test:shard
