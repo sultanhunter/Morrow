@@ -5,11 +5,13 @@ import {
   createFixtureAdapter,
   fixtureCanary,
   fixtureComposed,
+  fixtureComposedFor,
 } from "../apps/workspace-web/src/fixtures/adapter.ts";
 import {
   fixtureBootAllowed,
   readScenario,
   scenarioNames,
+  scenarioRoot,
 } from "../apps/workspace-web/src/fixtures/scenarios.ts";
 import { createSeed, fixtureWorkspace } from "../apps/workspace-web/src/fixtures/seed.ts";
 import { createPending } from "../apps/workspace-web/src/pending.ts";
@@ -139,6 +141,28 @@ test("scenarios are scripted: denied, partial denial, offline and account varian
     (await createFixtureAdapter("ready").workspace.bootstrap("ws-other")).kind,
     "unauthenticated",
   );
+  // Session scenarios (AC06, AC07, AC12).
+  const restore = createFixtureAdapter("restore_unavailable");
+  assert.equal(fixtureComposedFor("restore_unavailable")["account.overview"], false);
+  assert.equal(fixtureComposed["account.overview"], true);
+  assert.equal((await restore.account.overview()).kind, "not_in_build", "uncomposed sends nothing");
+  assert.equal((await restore.workspace.bootstrap(ws)).kind, "unauthenticated");
+  assert.equal(scenarioRoot("restore_unavailable"), "/?scenario=restore_unavailable");
+  assert.equal(scenarioRoot("session_expired"), "/");
+  const bootstrap = createFixtureAdapter("bootstrap_unavailable");
+  assert.equal((await bootstrap.workspace.bootstrap(ws)).kind, "unavailable");
+  assert.equal((await bootstrap.workspace.bootstrap(ws)).kind, "ok");
+  for (const [scenario, first] of [
+    ["sign_out_unavailable", "unavailable"],
+    ["sign_out_unknown", "uncertain"],
+  ]) {
+    const port = createFixtureAdapter(scenario);
+    assert.equal((await port.session.signOut()).kind, first, scenario);
+    assert.equal((await port.session.signOut()).kind, "ok", scenario);
+  }
+  const leave = createFixtureAdapter("expire_during_leave");
+  assert.equal((await leave.account.overview()).kind, "ok", "the switcher read");
+  assert.equal((await leave.account.overview()).kind, "unauthenticated", "the probe");
   assert.equal(readScenario("?scenario=offline"), "offline");
   assert.equal(readScenario("?scenario=<script>"), "ready");
   assert.equal(readScenario(""), "ready");

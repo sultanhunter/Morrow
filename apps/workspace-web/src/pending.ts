@@ -102,7 +102,7 @@ export interface Pending {
   liveMarkers(): readonly Marker[];
   addMarker(workspaceId: string, kind: MarkerKind): Marker;
   dismiss(marker: Marker): void;
-  /** Sign-out and ended sessions: forget uncertain keys and clear every marker. */
+  /** Sign-out: forget uncertain keys and every marker, and disown commands still in flight. */
   clear(): void;
   subscribe(listener: () => void): () => void;
   version(): number;
@@ -112,7 +112,14 @@ export function createPending({
   storage = browserSessionStorage(),
   now = Date.now,
 }: { readonly storage?: StorageLike | null; readonly now?: () => number } = {}): Pending {
-  const inflight = new Map<string, Promise<Outcome<unknown>>>();
+  // Each flight remembers the generation it started in. `clear()` (sign-out) starts a new
+  // one, so a flight still in the air then neither blocks leaving nor, when it settles,
+  // writes a marker or an uncertain key back for the next person on this tab.
+  let generation = 0;
+  const inflight = new Map<
+    string,
+    { readonly generation: number; readonly flight: Promise<Outcome<unknown>> }
+  >();
   const uncertain = new Map<string, Marker | null>();
   const listeners = new Set<() => void>();
   let version = 0;
@@ -141,14 +148,17 @@ export function createPending({
       send: () => Promise<Outcome<T>>,
     ): Promise<Outcome<T>> {
       const existing = inflight.get(command.key);
-      if (existing) return existing as Promise<Outcome<T>>;
-      const flight = (async (): Promise<Outcome<T>> => {
+      if (existing && existing.generation === generation)
+        return existing.flight as Promise<Outcome<T>>;
+      const started = generation;
+      const flight: Promise<Outcome<T>> = (async (): Promise<Outcome<T>> => {
         let outcome: Outcome<T>;
         try {
           outcome = await send();
         } catch {
           outcome = { kind: "uncertain" };
         }
+        if (started !== generation) return outcome; // it outlived a sign-out
         const wasUncertain = uncertain.has(command.key);
         if (wasUncertain && (outcome.kind === "unavailable" || outcome.kind === "rate_limited"))
           outcome = { kind: "uncertain" };
@@ -163,17 +173,18 @@ export function createPending({
         // `unauthenticated` keeps the marker: the change may still have been saved.
         return outcome;
       })().finally(() => {
-        inflight.delete(command.key);
+        if (inflight.get(command.key)?.flight === flight) inflight.delete(command.key);
         notify();
       });
-      inflight.set(command.key, flight);
+      inflight.set(command.key, { generation: started, flight });
       notify();
       return flight;
     },
     release(key) {
       if (uncertain.delete(key)) notify();
     },
-    blocking: () => inflight.size > 0 || uncertain.size > 0,
+    blocking: () =>
+      uncertain.size > 0 || [...inflight.values()].some((f) => f.generation === generation),
     markers: () => readMarkers(storage),
     liveMarkers: () => [...uncertain.values()].filter((m): m is Marker => m !== null),
     addMarker,
@@ -182,6 +193,7 @@ export function createPending({
       notify();
     },
     clear() {
+      generation++;
       uncertain.clear();
       writeMarkers(storage, []);
       notify();

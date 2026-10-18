@@ -4,19 +4,22 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active packets
 
-`main` is the trunk (ADR-0014). Merged into it:
+`main` is the trunk (ADR-0014), at `400aa44`. Merged into it:
 - PR #1 the foundation; PR #2 the P03.T04c/d overhaul; PR #3 ADR-0014.
 - PR #4: P05.T01x Part A. Migration 0012 retires plan-number identifiers: `morrow-login-v1`, `morrow-self-logout-v1`, `morrow_id_`.
 - PR #5: P04.T02a, the deployable composition root: api, broker, orchestrator and connector-placeholder Workers, `scripts/edge.mjs`, `lab:edge-workers` and `lab:edge-postgresql` (ADR-0007).
 - PR #6: P01.T02a PR-A, executor classes and human-only kill switches (ADR-0005, §2 confirmed 2026-10-18).
 - PR #7: ADR-0008 accepted (connector on Cloudflare Workers with `@shopify/shopify-api`; secret-dependent calls in the broker).
 - PR #8: P01.T02a PR-B, review policy, Proposal@2, Approval@2 and `@morrow/policy/review` (ADR-0011).
+- PR #9: the owner decisions of 2026-10-18. ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet with its OQ-1 to OQ-3 decisions.
 
-In progress:
-- **Owner decisions of 2026-10-18** (branch `claude/decisions-billing-collab`): ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
-- **P01.T04a** has landed on that branch. Its owner questions OQ-1 to OQ-3 were resolved on 2026-10-18 (ADR-0015 follow-up decisions). Its PR-A and PR-B are the next billing step.
-- **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
-- **P14.T01a PR-1** (branch `claude/p14-t01a-provisional-ui`): the option 1 shell, sign-in, workspace entry and sign-out over HTTP, the dev-only fixture mode, the 130-case a11y matrix and the CI `ui` job (`docs/acceptance/P14.md`). Local: `ui:check` 96 + 22, `ui:edge` 12 and the local browser journey passed. Merge order with P05.T01x Part B: whichever lands second sets `composed.loginBodyVersion` to match the server (a unit test fails until it does), and both carry the same `account` route entry.
+In progress (pushed branches; PR numbers where known):
+- **P05.T01x Part B**, signup and workspace list (`claude/p05-t01x-b-signup`, PR #10): migration 0013 and three contracts v1.1 definitions.
+- **P06.T01a**, work commands (`claude/p06-t01a-work-commands`, PR #12): migrations 0014 and 0015.
+- **P01.T04a PR-A**, paid-work gate, billing contracts v1.1 and the test entitlement seed (`claude/p01-t04a-a-paid-work-gate`); unblocked since PR #9 merged.
+- **ADR-0018 Proposal@2 edit**, proposals without a task (`claude/p01-t02a-c-proposal-task-optional`).
+- **P03.T04e PR-A**, formatting and unit-test concurrency (`claude/p03-t04e-a-format-concurrency`, based on `80b6897`).
+- **P14.T01a PR-1** (`claude/p14-t01a-provisional-ui`): the option 1 shell, sign-in, workspace entry and sign-out over HTTP, the dev-only fixture mode, the 156-case a11y matrix and the CI `ui` job (`docs/acceptance/P14.md`). The Tier 2 review findings of 2026-10-19 are applied; the new and changed browser checks passed locally, and the full matrix waits on the hosted `ui` job. Merge order with Part B: whichever lands second sets `composed.loginBodyVersion` to match the server (a unit test fails until it does), and both carry the same `account` route entry.
 
 ## Decisions recorded 2026-10-18
 
@@ -29,20 +32,18 @@ In progress:
 
 ## Last green commit
 
-`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7 and #8 merged after it (`main` is at `80b6897`); record their runs here once confirmed.
+`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7, #8 and #9 merged after it, and `main` is at `400aa44`. Their hosted runs are not confirmed in this file; record them here once confirmed.
 
 ## Next actions
 
-1. Review and merge the decisions branch (documents only; Tier 2 AI review).
-2. P05.T01x Part B, signup and workspace list (ADR-0009); P01.T02a PR-B is merged.
-3. P06.T01a, work commands on the tenant data pattern (ADR-0010). Then the ADR-0018 Proposal@2 edit, P06.T01b, P01.T02c (ADR-0016) and P01.T02b.
-   - P14.T01a: merge PR-1 once its hosted `ui` job is green; PR-2 (account and work wiring) follows Part B and P06.T01a.
-4. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library), after the decisions branch merges.
-5. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
+1. Review and merge P05.T01x Part B (PR #10) and P06.T01a (PR #12). Then the ADR-0018 Proposal@2 edit, P06.T01b, P01.T02c (ADR-0016) and P01.T02b.
+   - P14.T01a: merge PR-1 once its hosted `foundation` and `ui` jobs are green; PR-2 (account and work wiring) follows Part B and P06.T01a.
+2. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library).
+3. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
 
 Open plan follow-ups:
 - Superseded banners on `docs/references/*`; `docs/contracts/billing-entitlements.md` still names App Pricing as the only route (P01.T04a updates it).
-- The rest of P03.T04e: formatting ignore file, unit-test concurrency, shared PostgreSQL 17 template-database harness, heavy-fault job.
+- P03.T04e beyond PR-A: the shared PostgreSQL 17 template-database harness and the heavy-fault job.
 - The P05.T01x Part B PR splits the plan's P05.T01x bullet into sub-bullets, to respect the 2,000-character line limit.
 
 ## Blockers

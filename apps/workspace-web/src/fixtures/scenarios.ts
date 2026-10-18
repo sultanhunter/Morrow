@@ -21,9 +21,19 @@ export const scenarioNames = [
   "account_form",
   "account_chooser",
   "account_invite",
+  "restore_unavailable",
+  "bootstrap_unavailable",
+  "sign_out_unavailable",
+  "sign_out_unknown",
+  "expire_during_leave",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
-export type Reply = Outcome<unknown> | "pending" | "empty_page" | null;
+export type Reply =
+  | Outcome<unknown>
+  | "pending"
+  | "empty_page"
+  | { readonly delayMs: number; readonly outcome: Outcome<unknown> }
+  | null;
 export type Script = Partial<Record<PortMethod, (call: number) => Reply>>;
 
 const reads: readonly PortMethod[] = [
@@ -128,7 +138,40 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
       replayed: false,
     }),
   },
+  // The PR-1 HTTP composition (no account routes, so no probe): every bootstrap is 401.
+  // The first asks for sign-in and stores the path; the one after the restore shows
+  // WorkspaceUnavailable with Sign in and drops the path, so a second sign-in lands on `/`.
+  restore_unavailable: { "workspace.bootstrap": () => ({ kind: "unauthenticated" }) },
+  // A bootstrap 503, then the workspace on Retry.
+  bootstrap_unavailable: {
+    "workspace.bootstrap": (call) => (call === 0 ? { kind: "unavailable", offline: false } : null),
+  },
+  // Sign-out 503 `logout_unavailable`, then 200 on Try again.
+  sign_out_unavailable: {
+    "session.signOut": (call) => (call === 0 ? { kind: "unavailable", offline: false } : null),
+  },
+  // Sign-out 503 `logout_outcome_unknown`, then 200 on Try again.
+  sign_out_unknown: { "session.signOut": (call) => (call === 0 ? { kind: "uncertain" } : null) },
+  // An answer whose reply is a 401 that arrives 2.5 s later, time enough to open the
+  // leave dialog; the probe after it is 401 too (the first overview read is the switcher).
+  expire_during_leave: {
+    "work.answer": () => ({ delayMs: 2500, outcome: { kind: "unauthenticated" } }),
+    "account.overview": (call) => (call === 0 ? null : { kind: "unauthenticated" }),
+  },
 };
+
+/**
+ * Scenarios that model a build's composition rather than one reply: these methods are
+ * uncomposed, as in the PR-1 HTTP build. Signing in doesn't change a build, so the
+ * fixture sign-in and a return to `/` keep such a scenario (see `scenarioRoot`).
+ */
+export const uncomposedIn: Readonly<Partial<Record<ScenarioName, readonly PortMethod[]>>> = {
+  restore_unavailable: ["account.overview", "account.createOrganization"],
+};
+/** The fixture's `/`: it keeps a composition scenario, and drops any other. */
+export function scenarioRoot(name: ScenarioName): string {
+  return uncomposedIn[name] ? `/?scenario=${name}` : "/";
+}
 
 /** `?scenario=` is read once at boot; unknown values fall back to `ready`. */
 export function readScenario(search: string): ScenarioName {

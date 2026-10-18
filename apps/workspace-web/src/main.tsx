@@ -30,6 +30,7 @@ createRoot(root).render(
       composed={composed}
       loginBodyVersion={loginBodyVersion}
       assignLocation={assignLocation}
+      loadRoot={() => window.location.assign("/")}
     />
   </StrictMode>,
 );

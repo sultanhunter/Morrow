@@ -3,12 +3,13 @@
 //                                          `vite preview` with the exact _headers CSP)
 //   node scripts/ui-checks.mjs edge      (`npm run ui:edge`: the production dist under
 //                                          the unbound dev pair)
-// Optional: --only=<substring> runs the matching cases only (local iteration).
-// Each state case checks axe (WCAG 2.0/2.1 A and AA, 2.2 AA) with zero violations, one
-// visible provisional note, non-text contrast of control borders and focus indicators,
-// reflow, 24 px targets, reduced motion, CSP and console errors. Keyboard walks run at
-// 1440 and 390. Tracing, HAR and video stay off; screenshots exist only for failed
-// fixture cases. Reports are verdict-only JSON under ui/ in the artifacts directory.
+// Optional: --only=<a>,<b> runs the cases whose group/name contains any of them.
+// Each state case checks axe (WCAG 2.0/2.1 A and AA, 2.2 AA, plus the ARIA-in-HTML
+// `aria-allowed-role` rule) with zero violations, one visible provisional note, non-text
+// contrast of control borders and focus indicators, reflow, 24 px targets, reduced
+// motion, CSP and console errors; an entry screen's title matches its heading. Keyboard
+// walks run at 1440 and 390. Tracing, HAR and video stay off; screenshots exist only for
+// failed fixture cases. Reports are verdict-only JSON under ui/ in the artifacts directory.
 import { createServer } from "node:net";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -20,6 +21,9 @@ import { artifactPath, repositoryRoot, writeArtifact } from "./artifacts.mjs";
 const require = createRequire(import.meta.url);
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const axeTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+// Tagged best-practice in axe, so the WCAG tags alone skip it: a role an element may not
+// take (ARIA in HTML), such as `dialog` on <aside>.
+const axeRules = { "aria-allowed-role": { enabled: true } };
 const allWidths = [1440, 768, 390, 320];
 const heights = { 1440: 900, 768: 1024, 390: 844, 320: 640 };
 const ws = "ws-linen";
@@ -175,11 +179,15 @@ async function axeViolations(page) {
   const defined = await page.evaluate("typeof window.axe");
   if (defined !== "object") await page.evaluate(axeSource);
   const result = await page.evaluate(
-    (tags) =>
+    ({ tags, rules }) =>
       window.axe
-        .run(document, { runOnly: { type: "tag", values: tags }, resultTypes: ["violations"] })
+        .run(document, {
+          runOnly: { type: "tag", values: tags },
+          rules,
+          resultTypes: ["violations"],
+        })
         .then((r) => r.violations.map((v) => `${v.id}:${v.nodes.length}`)),
-    axeTags,
+    { tags: axeTags, rules: axeRules },
   );
   return result;
 }
@@ -195,6 +203,19 @@ async function openDrawerIfNarrow(page) {
   const menu = page.getByRole("button", { name: "Open navigation" });
   if (await menu.isVisible()) await menu.click();
 }
+async function signOut(page) {
+  await openDrawerIfNarrow(page);
+  await page.getByRole("button", { name: "Sign out" }).click();
+}
+const morrowKeys = (page) =>
+  page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith("morrow.")));
+const intendedRoute = (page) => page.evaluate(() => sessionStorage.getItem("morrow.intended.v1"));
+// One text-free marker, as an earlier uncertain command would have left (§4.9).
+const plantMarker = (page) =>
+  page.evaluate((workspaceId) => {
+    const marker = [{ workspaceId, kind: "goal", at: 1 }];
+    sessionStorage.setItem("morrow.unconfirmed.v1", JSON.stringify(marker));
+  }, ws);
 
 // ---- the matrix
 const fixtureCase = (
@@ -221,13 +242,38 @@ export const fixtureCases = [
   fixtureCase("entry", "sign_in", `/w/${ws}`, { scenario: "session_expired" }),
   fixtureCase("entry", "signed_out", `/w/${ws}`, {
     setup: async (page) => {
-      await openDrawerIfNarrow(page);
-      await page.getByRole("button", { name: "Sign out" }).click();
+      await signOut(page);
       await page.getByRole("heading", { name: "You're signed out" }).waitFor();
     },
   }),
   fixtureCase("entry", "not_found", "/nope"),
   fixtureCase("entry", "workspace_unavailable", `/w/${ws}`, { scenario: "workspace_unavailable" }),
+  // PR-1 rule: the 401 after a restore offers Sign in (§4.6).
+  fixtureCase("entry", "workspace_unavailable_restored", `/w/${ws}`, {
+    scenario: "restore_unavailable",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await page.getByRole("heading", { name: "This workspace isn't available to you" }).waitFor();
+    },
+  }),
+  fixtureCase("entry", "workspace_load_failed", `/w/${ws}`, { scenario: "bootstrap_unavailable" }),
+  fixtureCase("entry", "sign_out_incomplete", `/w/${ws}`, {
+    scenario: "sign_out_unavailable",
+    setup: async (page, width) => {
+      await signOut(page);
+      await page.getByText("Sign-out didn't complete. You're still signed in.").waitFor();
+      if (width < 760) await page.getByRole("button", { name: "Close navigation" }).click();
+    },
+  }),
+  fixtureCase("entry", "sign_out_unconfirmed", `/w/${ws}`, {
+    scenario: "sign_out_unknown",
+    setup: async (page) => {
+      await signOut(page);
+      await page
+        .getByRole("heading", { name: "We couldn't confirm you were signed out" })
+        .waitFor();
+    },
+  }),
   fixtureCase("entry", "unavailable_destination", `/w/${ws}/agents`),
   fixtureCase("account", "form", "/", { scenario: "account_form" }),
   fixtureCase("account", "chooser", "/", { scenario: "account_chooser" }),
@@ -497,6 +543,129 @@ export const keyboardWalks = [
       );
     },
   },
+  {
+    // From WorkspaceUnavailable, then from SignedOut: "Go to your workspaces" is a full
+    // document load of `/` (nothing private stays in memory), whose account landing opens
+    // the fixture's only workspace (§4.6, §4.10).
+    name: "account_link",
+    path: `/w/${ws}`,
+    scenario: "workspace_unavailable",
+    run: async (page) => {
+      await page.getByRole("heading", { name: "This workspace isn't available to you" }).waitFor();
+      for (const from of ["workspace_unavailable", "signed_out"]) {
+        if (from === "signed_out") {
+          await signOut(page);
+          await page.getByRole("heading", { name: "You're signed out" }).waitFor();
+        }
+        await page.evaluate(() => (window.__sameDocument = true));
+        const loaded = page.waitForEvent("load");
+        await tabTo(page, (a) => a.tag === "A" && a.text === "Go to your workspaces");
+        await page.keyboard.press("Enter");
+        await loaded;
+        await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+        expect(await page.evaluate(() => window.__sameDocument !== true), "document_load:" + from);
+      }
+    },
+  },
+  {
+    // PR-1 composition (no probe): the 401 stores the task path; sign-in restores it once;
+    // the 401 after the restore shows WorkspaceUnavailable with Sign in and drops the path;
+    // a second sign-in lands on `/` with no restore, so there is no loop (AC04, AC06).
+    name: "restore_unavailable",
+    path: `/w/${ws}/work/task-titles`,
+    scenario: "restore_unavailable",
+    run: async (page) => {
+      await page.getByRole("heading", { name: "Sign in to continue" }).waitFor();
+      expect((await intendedRoute(page)) === `/w/${ws}/work/task-titles`, "intended_stored");
+      let loaded = page.waitForEvent("load");
+      await tabTo(page, (a) => a.text === "Sign in");
+      await page.keyboard.press("Enter");
+      await loaded;
+      await page.getByRole("heading", { name: "This workspace isn't available to you" }).waitFor();
+      expect(new URL(page.url()).pathname === `/w/${ws}/work/task-titles`, "restored");
+      expect((await intendedRoute(page)) === null, "intended_dropped");
+      expect(
+        (await page.title()) === "This workspace isn't available to you · Morrow",
+        "unavailable_title",
+      );
+      loaded = page.waitForEvent("load");
+      await tabTo(page, (a) => a.text === "Sign in");
+      await page.keyboard.press("Enter");
+      await loaded;
+      await page.getByRole("heading", { name: "Sign in to Morrow" }).waitFor();
+      expect(new URL(page.url()).pathname === "/", "landed_at_root");
+      expect((await intendedRoute(page)) === null, "no_loop");
+    },
+  },
+  {
+    // A bootstrap 503 shows Retry, and Retry enters the workspace (AC06).
+    name: "bootstrap_retry",
+    path: `/w/${ws}`,
+    scenario: "bootstrap_unavailable",
+    run: async (page) => {
+      await page.getByRole("heading", { name: "This workspace couldn't load" }).waitFor();
+      await tabTo(page, (a) => a.text === "Retry");
+      await page.keyboard.press("Enter");
+      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+    },
+  },
+  {
+    // AC07: a 503 `logout_unavailable` keeps the session, storage and workspace, with Try
+    // again; a 503 `logout_outcome_unknown` clears private DOM and storage at once, and
+    // Try again confirms. Each Try again that gets 200 ends in SignedOut.
+    name: "sign_out_retry",
+    path: `/w/${ws}`,
+    scenario: "sign_out_unavailable",
+    run: async (page, width) => {
+      await plantMarker(page);
+      await signOut(page);
+      await page.getByText("Sign-out didn't complete. You're still signed in.").waitFor();
+      if (width < 760) await page.getByRole("button", { name: "Close navigation" }).click();
+      expect(await page.getByRole("heading", { name: "Linen & Form" }).isVisible(), "kept_dom");
+      expect((await morrowKeys(page)).length === 1, "kept_storage");
+      await tabTo(page, (a) => a.text === "Try again");
+      await page.keyboard.press("Enter");
+      await page.getByRole("heading", { name: "You're signed out" }).waitFor();
+      expect((await morrowKeys(page)).length === 0, "cleared_storage");
+
+      await page.goto(new URL(`/w/${ws}?scenario=sign_out_unknown`, page.url()).href);
+      await settle(page);
+      await plantMarker(page);
+      await signOut(page);
+      await page
+        .getByRole("heading", { name: "We couldn't confirm you were signed out" })
+        .waitFor();
+      expect((await morrowKeys(page)).length === 0, "unknown_cleared_storage");
+      expect((await page.locator(".sidebar, .workspace-main").count()) === 0, "unknown_dom");
+      await tabTo(page, (a) => a.text === "Try again");
+      await page.keyboard.press("Enter");
+      await page.getByRole("heading", { name: "You're signed out" }).waitFor();
+    },
+  },
+  {
+    // AC12: a 401 that arrives while "Leave this page?" is open ends the session view;
+    // the dialog closes and no beforeunload handler stays registered (§4.6, §4.9).
+    name: "expire_during_leave",
+    path: `/w/${ws}/inbox/questions/q-source`,
+    scenario: "expire_during_leave",
+    run: async (page) => {
+      await tabTo(page, (a) => a.tag === "TEXTAREA");
+      await page.keyboard.type("Unsent words");
+      await tabTo(page, (a) => a.text === "Send answer");
+      await page.keyboard.press("Enter");
+      await page.getByRole("link", { name: "Back to Inbox" }).focus();
+      await page.keyboard.press("Enter");
+      await page.getByRole("dialog", { name: "Leave this page?" }).waitFor();
+      expect((await page.evaluate(() => window.__beforeunload.size)) === 1, "guard_registered");
+      await page.getByRole("heading", { name: "Sign in to continue" }).waitFor({ timeout: 15000 });
+      expect((await page.getByRole("dialog").count()) === 0, "dialog_closed");
+      expect((await page.evaluate(() => window.__beforeunload.size)) === 0, "guard_released");
+      expect(
+        (await intendedRoute(page)) === `/w/${ws}/inbox/questions/q-source`,
+        "intended_stored",
+      );
+    },
+  },
 ];
 
 async function runCase(browser, origin, item, width, { fixture, failures: allFailures }) {
@@ -513,6 +682,19 @@ async function runCase(browser, origin, item, width, { fixture, failures: allFai
       document.addEventListener("securitypolicyviolation", (event) =>
         window.__csp.push(event.violatedDirective),
       );
+      // The beforeunload handlers currently registered (the leave guard, AC12).
+      const registered = new Set();
+      window.__beforeunload = registered;
+      const add = window.addEventListener;
+      const remove = window.removeEventListener;
+      window.addEventListener = function (type, listener, options) {
+        if (type === "beforeunload") registered.add(listener);
+        return add.call(this, type, listener, options);
+      };
+      window.removeEventListener = function (type, listener, options) {
+        if (type === "beforeunload") registered.delete(listener);
+        return remove.call(this, type, listener, options);
+      };
     },
     { note: provisional },
   );
@@ -552,6 +734,14 @@ async function runCase(browser, origin, item, width, { fixture, failures: allFai
       }
       const fixtureBanner = await page.locator(".fixture-controls").count();
       if (fixture !== fixtureBanner > 0) failures.push("fixture_banner:" + fixtureBanner);
+      // WCAG 2.4.2: an entry screen's title is its own heading.
+      if (item.group === "entry") {
+        const titled = await page.evaluate(() => {
+          const heading = document.querySelector(".entry-card h1");
+          return !heading || document.title === `${heading.textContent.trim()} · Morrow`;
+        });
+        if (!titled) failures.push("title_mismatch");
+      }
     }
     const csp = await page.evaluate(() => window.__csp.length);
     if (csp) failures.push("csp_violation:" + csp);
@@ -586,8 +776,13 @@ async function runCase(browser, origin, item, width, { fixture, failures: allFai
 async function main() {
   const mode = process.argv[2];
   if (!["fixture", "edge"].includes(mode)) throw Error("UI_CHECK_USAGE: fixture | edge");
-  const only = process.argv.find((a) => a.startsWith("--only="))?.slice(7) ?? null;
-  const matches = (item) => only === null || `${item.group}/${item.name}`.includes(only);
+  const only =
+    process.argv
+      .find((a) => a.startsWith("--only="))
+      ?.slice(7)
+      .split(",") ?? null;
+  const selected = (key) => only === null || only.some((part) => key.includes(part));
+  const matches = (item) => selected(`${item.group}/${item.name}`);
   let server = null;
   let origin;
   if (mode === "fixture") {
@@ -620,9 +815,7 @@ async function main() {
           await runCase(browser, origin, item, width, { fixture: mode === "fixture", failures }),
         );
     if (mode === "fixture")
-      for (const walk of keyboardWalks.filter(
-        (w) => only === null || `walk/${w.name}`.includes(only),
-      ))
+      for (const walk of keyboardWalks.filter((w) => selected(`walk/${w.name}`)))
         for (const width of [1440, 390])
           walks.push(
             await runCase(
@@ -650,11 +843,12 @@ async function main() {
     mode,
     scope:
       mode === "fixture"
-        ? "Fixture build under vite preview with the _headers CSP: axe (WCAG 2.0/2.1 A, AA; 2.2 AA), non-text contrast, reflow, targets, reduced motion, CSP and console, plus keyboard walks at 1440 and 390. Automated checks only; not a screen-reader or participant study (P02.T04)."
+        ? "Fixture build under vite preview with the _headers CSP: axe (WCAG 2.0/2.1 A, AA; 2.2 AA; aria-allowed-role), non-text contrast, reflow, targets, reduced motion, CSP and console, plus keyboard walks at 1440 and 390. Automated checks only; not a screen-reader or participant study (P02.T04)."
         : "Production dist under the unbound dev pair: the same state checks on the landing, sign-in and not-found screens.",
     axe: {
       version: JSON.parse(readFileSync(require.resolve("axe-core/package.json"), "utf8")).version,
       tags: axeTags,
+      rules: Object.keys(axeRules),
     },
     filter: only,
     totals: {

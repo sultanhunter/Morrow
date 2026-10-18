@@ -32,6 +32,8 @@ export interface UiServices {
   readonly loginBodyVersion: 1 | 2;
   readonly fixture: boolean;
   navigate(path: string, options?: { readonly replace?: boolean }): void;
+  /** Opens `/`: in the app while the session view is active, otherwise by a full load. */
+  openAccount(): void;
   setDirty(token: object, dirty: boolean): void;
   read<T>(key: string, load: () => Promise<Outcome<T>>): Promise<Outcome<T>>;
   newCommand<B>(body: B): Command<B>;

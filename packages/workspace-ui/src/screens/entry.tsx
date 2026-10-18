@@ -90,7 +90,7 @@ function AccountLink({
       href="/"
       onClick={(event) => {
         event.preventDefault();
-        services.navigate("/");
+        services.openAccount();
       }}
     >
       {children}

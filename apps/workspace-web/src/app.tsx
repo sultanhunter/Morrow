@@ -63,6 +63,11 @@ export interface AppProps {
   readonly loginBodyVersion: 1 | 2;
   /** Leaves the page for sign-in; each entry validates its own target. */
   readonly assignLocation: (url: string) => void;
+  /**
+   * A full document load of `/`. An ended session view (signed out, unavailable, sign-in)
+   * leaves this way, so nothing private stays in memory (§4.6).
+   */
+  readonly loadRoot: () => void;
   /** Created once per page load by the entry, outside React (StrictMode-safe). */
   readonly runtime: AppRuntime;
   readonly fixture?: ReactNode;
@@ -116,12 +121,38 @@ export function workspace401Decision(state: {
   if (state.restored && !state.restored.consumed) return "workspace_unavailable";
   return "expire";
 }
-/** The path to keep as the intended route when a session ends, unless it was just restored. */
+/**
+ * The path to keep as the intended route when a session ends, unless it was just
+ * restored: a restore whose bootstrap never succeeded is dropped, so sign-in cannot
+ * loop. Once the restored path was entered, it is an ordinary path to resume.
+ */
 export function intendedOnExpiry(
   path: string,
-  restored: { readonly path: string } | null,
+  restored: { readonly path: string; readonly consumed: boolean } | null,
 ): string | null {
-  return restored && restored.path === path ? null : path;
+  return restored && !restored.consumed && restored.path === path ? null : path;
+}
+
+const sessionTitles = {
+  expired: copy.signIn.sessionEndedTitle,
+  workspace_unavailable: copy.workspace.unavailableTitle,
+  probe_failed: copy.workspace.loadFailedTitle,
+  signed_out: copy.signOut.doneTitle,
+  sign_out_unconfirmed: copy.signOut.unconfirmedTitle,
+} as const satisfies Record<Exclude<SessionView["kind"], "active">, string>;
+/**
+ * document.title: each screen's own fixed heading (WCAG 2.4.2) or its route title,
+ * never record text (AC03).
+ */
+export function screenTitle(view: {
+  readonly session: SessionView["kind"];
+  readonly match: RouteMatch | null;
+  readonly entryFailed: boolean;
+}): string {
+  if (view.session !== "active") return sessionTitles[view.session];
+  if (!view.match) return copy.notFound.title;
+  if (view.entryFailed) return copy.workspace.loadFailedTitle;
+  return routeTitle(workspaceRoutes, view.match.id) ?? copy.notFound.title;
 }
 
 const workspaceScoped = (match: RouteMatch | null): Id | null =>
@@ -132,6 +163,7 @@ export function App({
   composed,
   loginBodyVersion,
   assignLocation,
+  loadRoot,
   runtime,
   fixture,
 }: AppProps) {
@@ -146,9 +178,12 @@ export function App({
   const reads = useRef(new Map<string, Promise<Outcome<unknown>>>());
   runtime.requestLeave = setLeave;
 
+  // A 401 or a sign-out ends the private view and bypasses the leave guard, including a
+  // "Leave this page?" dialog that was already open.
   const ended = () => {
     reads.current = new Map();
     setEntry(null);
+    setLeave(null);
     guard.bypass();
   };
   const expire = (workspaceId: Id | null) => {
@@ -212,6 +247,12 @@ export function App({
       fixture: fixture !== undefined,
       navigate: (path, options) => {
         router.navigate(path, options?.replace ? { replace: true } : {});
+      },
+      // The session view is chosen before the route, so an ended view is left by a full
+      // document load; an active one navigates in the app.
+      openAccount: () => {
+        if (sessionRef.current.kind === "active") router.navigate("/");
+        else loadRoot();
       },
       setDirty: (token, dirty) => guard.setDirty(token, dirty),
       read: <T,>(key: string, load: () => Promise<Outcome<T>>) => {
@@ -302,15 +343,11 @@ export function App({
     // `entry` is read, not watched: a new workspace or a retry starts a bootstrap.
   }, [ws, attempt, port]);
 
-  // document.title comes only from route titles and fixed copy, never record text.
-  const title =
-    session.kind === "signed_out"
-      ? copy.signOut.doneTitle
-      : session.kind !== "active"
-        ? copy.signIn.sessionEndedTitle
-        : route.match
-          ? (routeTitle(workspaceRoutes, route.match.id) ?? copy.notFound.title)
-          : copy.notFound.title;
+  const title = screenTitle({
+    session: session.kind,
+    match: route.match,
+    entryFailed: ws !== null && entry?.ws === ws && entry.state === "failed",
+  });
   useEffect(() => {
     document.title = `${title} · ${copy.brand}`;
   }, [title]);

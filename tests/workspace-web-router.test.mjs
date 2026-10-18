@@ -9,7 +9,11 @@ import {
   storeIntended,
   takeIntended,
 } from "../apps/workspace-web/src/intended-route.ts";
-import { intendedOnExpiry, workspace401Decision } from "../apps/workspace-web/src/app.tsx";
+import {
+  intendedOnExpiry,
+  screenTitle,
+  workspace401Decision,
+} from "../apps/workspace-web/src/app.tsx";
 import { MemoryStorage, ThrowingStorage, fakeWindow } from "./fixtures/workspace-web.mjs";
 
 // P14.T01a AC03 (routing) and AC04 (intended route), on a fake History window.
@@ -125,8 +129,29 @@ test("AC06: one failed restore shows WorkspaceUnavailable; later 401s ask for si
     workspace401Decision({ overviewComposed: true, restored: { consumed: false } }),
     "probe",
   );
-  // The current path becomes the intended route unless it was just restored.
-  assert.equal(intendedOnExpiry("/w/ws-1/work/t-1", null), "/w/ws-1/work/t-1");
-  assert.equal(intendedOnExpiry("/w/ws-1/work/t-1", { path: "/w/ws-1/work/t-1" }), null);
-  assert.equal(intendedOnExpiry("/w/ws-1/inbox", { path: "/w/ws-1/work/t-1" }), "/w/ws-1/inbox");
+  // The current path becomes the intended route unless it was just restored and never
+  // entered: a restore whose bootstrap failed is dropped (no loop).
+  const task = "/w/ws-1/work/t-1";
+  assert.equal(intendedOnExpiry(task, null), task);
+  assert.equal(intendedOnExpiry(task, { path: task, consumed: false }), null);
+  assert.equal(intendedOnExpiry("/w/ws-1/inbox", { path: task, consumed: false }), "/w/ws-1/inbox");
+  // AC30 resume: once the restored task was entered, a later expiry on it stores it again.
+  assert.equal(intendedOnExpiry(task, { path: task, consumed: true }), task);
+});
+test("AC03: document.title is each screen's own heading or its route title", () => {
+  const home = { id: "home", params: { workspaceId: "ws-1" } };
+  const view = (session, match = home, entryFailed = false) =>
+    screenTitle({ session, match, entryFailed });
+  assert.equal(view("expired"), "Sign in to continue");
+  assert.equal(view("workspace_unavailable"), "This workspace isn't available to you");
+  assert.equal(view("probe_failed"), "This workspace couldn't load");
+  assert.equal(view("signed_out"), "You're signed out");
+  assert.equal(view("sign_out_unconfirmed"), "We couldn't confirm you were signed out");
+  assert.equal(view("active"), "Home");
+  assert.equal(view("active", home, true), "This workspace couldn't load");
+  assert.equal(view("active", null), "Page not found");
+  assert.equal(
+    view("active", { id: "account", params: {} }),
+    routeTitle(workspaceRoutes, "account"),
+  );
 });

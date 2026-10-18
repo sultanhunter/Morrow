@@ -16,18 +16,23 @@ import {
   type WorkspacePort,
 } from "@morrow/workspace-ui";
 import { createSeed, fixtureWorkspace, people } from "./seed";
-import { scenarios, type ScenarioName } from "./scenarios";
+import { scenarios, uncomposedIn, type ScenarioName } from "./scenarios";
 
 /** Present in every fixture bundle; `verify:workspace-web` fails a dist that holds it. */
 export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
 
 const unbuilt: readonly PortMethod[] = ["session.keepAlive", "people.list"];
-export const fixtureComposed: Composed = Object.freeze(
-  Object.fromEntries(portMethods.map((m) => [m, !unbuilt.includes(m)])) as Record<
-    PortMethod,
-    boolean
-  >,
-);
+/** What a scenario's build composes; an uncomposed method answers `not_in_build`. */
+export function fixtureComposedFor(scenario: ScenarioName): Composed {
+  const off = [...unbuilt, ...(uncomposedIn[scenario] ?? [])];
+  return Object.freeze(
+    Object.fromEntries(portMethods.map((m) => [m, !off.includes(m)])) as Record<
+      PortMethod,
+      boolean
+    >,
+  );
+}
+export const fixtureComposed: Composed = fixtureComposedFor("ready");
 
 const ok = <T>(value: T, replayed = false): Outcome<T> => ({ kind: "ok", value, replayed });
 const notFound = { kind: "not_found" } as const;
@@ -41,17 +46,24 @@ function page<T>(items: readonly T[], after: string | null, size: number): Page<
 export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   const seed = createSeed();
   const script = scenarios[scenario];
+  const composed = fixtureComposedFor(scenario);
   const calls = new Map<PortMethod, number>();
   const applied = new Map<string, Outcome<unknown>>();
   let created = 0;
   // Scripted reply first; `null` falls through to the seed behaviour.
   function reply<T>(method: PortMethod, fallback: () => Outcome<T>): Promise<Outcome<T>> {
+    // As over HTTP, an uncomposed method sends nothing.
+    if (!composed[method]) return Promise.resolve({ kind: "not_in_build" });
     const call = calls.get(method) ?? 0;
     calls.set(method, call + 1);
     const scripted = script[method]?.(call) ?? null;
     if (scripted === "pending") return new Promise(() => {});
     if (scripted === "empty_page")
       return Promise.resolve(ok({ items: [], next: null }) as Outcome<T>);
+    if (scripted !== null && "delayMs" in scripted) {
+      const { delayMs, outcome } = scripted;
+      return new Promise((resolve) => setTimeout(() => resolve(outcome as Outcome<T>), delayMs));
+    }
     if (scripted !== null && scripted.kind !== "uncertain")
       return Promise.resolve(scripted as Outcome<T>);
     const outcome = fallback();

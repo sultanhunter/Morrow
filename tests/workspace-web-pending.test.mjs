@@ -144,4 +144,38 @@ test("AC12: beforeunload is registered only while dirty or pending; a 401 bypass
   guard.bypass();
   assert.equal(guard.blocking(), false);
   assert.equal(win.listenerCount("beforeunload"), 0);
+  // An uncertain command: the 401 unmounts its form, which releases the key (the marker
+  // stays for re-entry), so nothing keeps the guard.
+  const lost = pending.run(command, marker, () => Promise.resolve({ kind: "uncertain" }));
+  await lost;
+  guard.setDirty(form, true);
+  assert.equal(win.listenerCount("beforeunload"), 1);
+  guard.bypass();
+  assert.equal(win.listenerCount("beforeunload"), 1, "still uncertain");
+  pending.release(key);
+  assert.equal(win.listenerCount("beforeunload"), 0);
+  assert.equal(pending.markers().length, 1, "the marker survives a 401");
+});
+test("AC07, AC12: a command in flight at sign-out leaves no marker, key or guard behind", async () => {
+  const storage = new MemoryStorage();
+  const win = fakeWindow("/w/ws-1");
+  const pending = createPending({ storage });
+  const guard = createLeaveGuard(win, () => pending.blocking());
+  pending.subscribe(() => guard.sync());
+  let settle;
+  const flight = pending.run(command, marker, () => new Promise((resolve) => (settle = resolve)));
+  assert.equal(win.listenerCount("beforeunload"), 1);
+  pending.clear();
+  assert.equal(pending.blocking(), false, "sign-out disowns the flight");
+  assert.equal(win.listenerCount("beforeunload"), 0);
+  settle({ kind: "uncertain" });
+  assert.equal((await flight).kind, "uncertain");
+  assert.equal(storage.length, 0, "no marker is written back");
+  assert.deepEqual(pending.liveMarkers(), []);
+  assert.equal(pending.blocking(), false);
+  assert.equal(win.listenerCount("beforeunload"), 0);
+  // The next person's command with any key starts its own flight.
+  const next = scripted({ kind: "ok", value: {}, replayed: false });
+  assert.equal((await pending.run(command, marker, next.send)).kind, "ok");
+  assert.equal(next.calls.length, 1);
 });

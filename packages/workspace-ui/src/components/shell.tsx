@@ -273,7 +273,7 @@ export function AppShell({
 }) {
   const narrow = useNarrow();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const drawer = useRef<HTMLElement>(null);
+  const drawer = useRef<HTMLDivElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const modal = narrow && drawerOpen;
   useEffect(() => {
@@ -305,12 +305,15 @@ export function AppShell({
         {modal ? (
           <div className="drawer-backdrop" aria-hidden="true" onClick={() => closeDrawer(true)} />
         ) : null}
-        <aside
+        {/* One element, so opening the drawer keeps its state: a complementary landmark
+            (as an <aside> would be), and below 760 px, while open, a labelled modal
+            dialog (a role <aside> may not take). */}
+        <div
           ref={drawer}
           id="workspace-navigation"
           className={modal ? "sidebar is-open" : "sidebar"}
           aria-label={copy.navigationLabel}
-          {...(modal ? { role: "dialog", "aria-modal": true } : {})}
+          {...(modal ? { role: "dialog", "aria-modal": true } : { role: "complementary" })}
           onKeyDown={(event) => {
             if (!modal) return;
             if (event.key === "Escape") {
@@ -352,7 +355,7 @@ export function AppShell({
               {signOutBusy ? copy.signOut.working : copy.signOut.button}
             </Button>
           </div>
-        </aside>
+        </div>
         <div className="main-column" {...inertWhen(modal)}>
           <header className="topbar">
             <button
