@@ -15,7 +15,6 @@ const paths = [
   "packages/identity/src/workos-session-status.ts",
   "packages/identity/src/workos-session-status-json.ts",
   "packages/identity/src/workos-authentication-evidence.ts",
-  "packages/identity/src/workos-workspace-selection.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
   "packages/identity/src/login-preauth-control.ts",
   "packages/identity/src/login-flow-custody.ts",

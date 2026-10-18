@@ -12,7 +12,7 @@ Deep links require server authentication/current membership/resource authority b
 
 Store selection is a navigation filter. Task and proposal targets come from authoritative records and stay visibly pinned. Opening the same record in another authorized browser/session preserves target, persisted revision and current grants. Unsaved local text does not magically transfer; save/checkpoint must complete before a cross-session promise. Browser back/forward and reload preserve logical path and guard unsaved input.
 
-The api Worker serves the SPA through Static Assets and reserves `/auth`, `/workspace`, `/api` and `/healthz` (and everything below them) for itself (`apps/api/src/reserved-paths.ts`); no route pattern may fall under a reserved prefix, which `npm run edge:check` enforces. Static destinations such as agents/new precede dynamic agent IDs. Opaque IDs may not use reserved route slugs. Decode once, validate IDs and re-encode; encoded slashes, traversal, foreign origins, unexpected parameters and token-bearing URLs deny. navigation-examples.mjs demonstrates mapping only; later app adapters implement router/auth/session behavior.
+The api Worker serves the SPA through Static Assets and reserves `/auth`, `/workspace`, `/api` and `/healthz` (and everything below them), plus the exact account paths `/workspaces` and `/organizations` (P05.T01x), for itself (`apps/api/src/reserved-paths.ts`); no route pattern may fall under a reserved prefix, which `npm run edge:check` enforces. Static destinations such as agents/new precede dynamic agent IDs. Opaque IDs may not use reserved route slugs. Decode once, validate IDs and re-encode; encoded slashes, traversal, foreign origins, unexpected parameters and token-bearing URLs deny. navigation-examples.mjs demonstrates mapping only; later app adapters implement router/auth/session behavior.
 
 ## Connector boundary
 
@@ -23,3 +23,8 @@ No full embedded workspace, parity obligation or Admin feature tree exists in th
 ## Evidence and compatibility
 
 P02.A01 fixtures cover canonical route round-trips, static/detail precedence, parameter/credential injection and connector/operator separation; existing P01 binding fixtures cover immutable target/store authority. All screen components/data contracts are named in the catalogue. A path or component inventory does not implement a journey. P02.T03 prototypes and P02.T04 participant tests are required before feature UI qualification. Future route/version migrations retain old authorized links through explicit reviewed redirects, never by silently retargeting records.
+
+## Account route (P05.T01x)
+
+Route `account` (`/`) is the signed-in person's account view: `GET /workspaces` lists the workspaces they may enter now and whether first-owner signup is available (`AccountOverview`), and `POST /organizations` creates the first organization (`OrganizationSignupRequest`, `OrganizationSignupResult`). Selection is the URL `/w/{workspaceId}`; the server stores no active workspace, and every bootstrap rechecks eligibility. P14.T01a builds the screens.
+

@@ -1,11 +1,11 @@
 import { authenticationExchangeAdmissionSql as preauthSql } from "../../packages/identity/src/authentication-exchange-admission.js";
 import { browserSessionAdmissionSql as sessionSql } from "../../packages/identity/src/workos-browser-session-admission.js";
-import { workspaceSelectionSql as selectionSql } from "../../packages/identity/src/workos-workspace-selection.js";
 import { loginFlowCustodySql as loginSql } from "../../packages/identity/src/login-flow-custody.js";
 import type { LoginControlledSqlPool } from "../../packages/identity/src/login-preauth-control.js";
 
 // Synthetic SQL port only. The independent PostgreSQL/HTTPS lab uses the real
-// migration and four real sessions. These counters do not claim database proof.
+// migration and three real sessions (account login, P05.T01x). These counters do
+// not claim database proof.
 export function createStandaloneLoginFixture(input: {
   at: number;
   profile: Record<string, unknown>;
@@ -63,14 +63,7 @@ export function createStandaloneLoginFixture(input: {
         async query(text, values, queryControl) {
           if (control.signal.aborted || queryControl.signal.aborted)
             throw Error("SYNTHETIC_ABORTED");
-          const source =
-            role === "login"
-              ? loginSql
-              : role === "preauth"
-                ? preauthSql
-                : role === "selection"
-                  ? selectionSql
-                  : sessionSql;
+          const source = role === "login" ? loginSql : role === "preauth" ? preauthSql : sessionSql;
           const name = Object.entries(source).find(([, sql]) => sql === text)?.[0] ?? "unexpected";
           calls.push({ role, stage: name, text, values });
           await stage(role + ":" + name);
@@ -78,7 +71,6 @@ export function createStandaloneLoginFixture(input: {
             const nameByRole = {
               login: "morrow_identity_login",
               preauth: "morrow_identity_preauth",
-              selection: "morrow_identity_resolution",
               sessions: "morrow_identity_sessions",
             };
             const principal = nameByRole[role as keyof typeof nameByRole];
@@ -101,14 +93,13 @@ export function createStandaloneLoginFixture(input: {
             };
           }
           if (role === "login") {
-            if (name === "createIntent") {
+            if (name === "createAccountIntent") {
               const [
                 configurationDigest,
                 flowId,
                 beginCommandId,
                 admissionCommandId,
                 issuerCommandId,
-                workspaceId,
               ] = values as string[];
               flow = {
                 configurationDigest: configurationDigest!,
@@ -116,7 +107,6 @@ export function createStandaloneLoginFixture(input: {
                 beginCommandId: beginCommandId!,
                 admissionCommandId: admissionCommandId!,
                 issuerCommandId: issuerCommandId!,
-                workspaceId: workspaceId!,
                 expiresAtMs: String(at + 300000),
                 revision: "1",
                 phase: "intent",
@@ -214,7 +204,7 @@ export function createStandaloneLoginFixture(input: {
                 begin_command_id: flow.beginCommandId,
                 admission_command_id: flow.admissionCommandId,
                 issuer_command_id: flow.issuerCommandId,
-                workspace_id: flow.workspaceId,
+                workspace_id: null,
                 state_digest: flow.stateDigest,
                 cookie_digest: flow.cookieDigest,
                 browser_proof_digest: flow.browserProofDigest,
@@ -249,30 +239,13 @@ export function createStandaloneLoginFixture(input: {
               ],
             };
           }
-          if (role === "selection" && name === "resolve")
-            return {
-              rows: [
-                {
-                  profile_id: "profile_a",
-                  profile_record_revision: "1",
-                  mapping_id: "mapping_a",
-                  mapping_revision: "1",
-                  binding_revision: "1",
-                  principal_id: "human_a",
-                  organization_id: "org_a",
-                  workspace_id: flow?.workspaceId ?? "workspace_a",
-                  membership_id: "membership_a",
-                  policy_revision: "1",
-                },
-              ],
-            };
-          if (role === "sessions" && name === "admit")
+          if (role === "sessions" && name === "admitAccount")
             return {
               rows: [
                 {
                   outcome: "newly_admitted",
-                  family_id: values[25],
-                  generation_id: values[26],
+                  family_id: values[19],
+                  generation_id: values[20],
                   provider_binding_id: "9bcc50b3-047a-49c4-89e6-0a425121fd20",
                   expires_at_ms: String(at + 900000),
                   audit_id: "45c901f7-5792-4b47-8ea8-5fab2331e91c",
@@ -336,7 +309,6 @@ export function createStandaloneLoginFixture(input: {
     configurationJson,
     loginPool: pool("login"),
     preauthPool: pool("preauth"),
-    selectionPool: pool("selection"),
     sessionPool: pool("sessions"),
     providerPort,
   };

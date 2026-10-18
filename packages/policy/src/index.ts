@@ -174,7 +174,11 @@ function evaluate(request: PermissionRequest, a: HumanAuthority, at: string): Pe
   else if (
     !capability ||
     capability.eligible_principal.startsWith("operator_") ||
-    (request.capabilityId === "governance.connection.connect" && request.verb !== "administer")
+    // Performing a connect needs administer, never execute. approve is the reviewer
+    // verb a connect proposal's reviewer needs (ADR-0011 Q5, ADR-0009 item 7).
+    (request.capabilityId === "governance.connection.connect" &&
+      request.verb !== "administer" &&
+      request.verb !== "approve")
   )
     reason = "capability_denied";
   else {

@@ -41,14 +41,15 @@ const control = () =>
 
 test("one role table drives the seven role secrets and the broker's required secrets", () => {
   assert.ok(Object.isFrozen(brokerNeonRoles) && Object.isFrozen(brokerRequiredSecrets));
+  // P05.T01x (ADR-0009 item 4): the login selection role left; the signup executor joined.
   assert.deepEqual(brokerNeonRoleNames, [
     "morrow_identity_login",
     "morrow_identity_preauth",
-    "morrow_identity_resolution",
     "morrow_identity_sessions",
     "morrow_api",
     "morrow_identity_linking",
     "morrow_identity_logout",
+    "morrow_identity_onboarding",
   ]);
   assert.equal(brokerPasswordSecret("morrow_api"), "MORROW_DB_PASSWORD_MORROW_API");
   assert.deepEqual(brokerRequiredSecrets, [

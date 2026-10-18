@@ -11,10 +11,11 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #6: P01.T02a PR-A, executor classes and human-only kill switches (ADR-0005, §2 confirmed 2026-10-18).
 - PR #7: ADR-0008 accepted (connector on Cloudflare Workers with `@shopify/shopify-api`; secret-dependent calls in the broker).
 - PR #8: P01.T02a PR-B, review policy, Proposal@2, Approval@2 and `@morrow/policy/review` (ADR-0011).
+- PR #9: the owner decisions of 2026-10-18: ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
 
 In progress:
-- **Owner decisions of 2026-10-18** (branch `claude/decisions-billing-collab`): ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
-- **P01.T04a** has landed on that branch. Its owner questions OQ-1 to OQ-3 were resolved on 2026-10-18 (ADR-0015 follow-up decisions). Its PR-A and PR-B are the next billing step.
+- **P05.T01x Part B** (`claude/p05-t01x-b-signup`, ADR-0009): migration 0013 (account login, enrollment at the first verified sign-in, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, contract v1.1 additions and route `account`, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers). Review findings addressed (merged with `main`; 0013 checks all ten executors; AC38 journey to bootstrap and logout in workerd). PR #10 is open. Hosted run 39150345721 on `0aff09f` passed all 10 jobs, including `pgwire`, the merge gate for the bundle-level AC27/AC38 evidence. Later heads need their own green run, and Tier 2 review is still open. The AI security review (separate context, same model family) of the kernel change found no merge blocker; its test gap is closed. Deviations are in the packet's "Implementation notes (Part B)".
+- **P01.T04a** PR-A and PR-B are the next billing step (OQ-1 to OQ-3 resolved 2026-10-18).
 - **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
 
 ## Decisions recorded 2026-10-18
@@ -28,20 +29,21 @@ In progress:
 
 ## Last green commit
 
-`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7 and #8 merged after it (`main` is at `80b6897`); record their runs here once confirmed.
+`d797b1a` on `main`, the merge of PR #5. Its push run 39070711182 passed, as did hosted run 39070332528 on its PR head `fedb4e6`, on all 10 jobs. PRs #7 to #9 merged after it (`main` is at `400aa44`); record their runs here once confirmed.
+
+PR #10 (P05.T01x Part B, branch `claude/p05-t01x-b-signup`): hosted run 39150345721 (`pull_request`) on `0aff09f` passed all 10 jobs (`pgwire`, `postgres (pg-linking)` and `foundation` included). It is the last green run on that branch. A later head needs its own green run before merge.
 
 ## Next actions
 
-1. Review and merge the decisions branch (documents only; Tier 2 AI review).
-2. P05.T01x Part B, signup and workspace list (ADR-0009); P01.T02a PR-B is merged.
-3. P06.T01a, work commands on the tenant data pattern (ADR-0010). Then the ADR-0018 Proposal@2 edit, P06.T01b, P01.T02c (ADR-0016) and P01.T02b.
-4. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library), after the decisions branch merges.
-5. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
+1. P05.T01x Part B (PR #10): confirm hosted CI on the latest head; Tier 2 review (`/code-review`, `/security-review`); merge once the hosted `foundation` check is green on that exact head.
+2. P06.T01a, work commands on the tenant data pattern (ADR-0010), with migrations numbered after 0013. Then the ADR-0018 Proposal@2 edit, P06.T01b, P01.T02c (ADR-0016) and P01.T02b.
+3. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library).
+4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Open plan follow-ups:
 - Superseded banners on `docs/references/*`; `docs/contracts/billing-entitlements.md` still names App Pricing as the only route (P01.T04a updates it).
+- A forward migration after 0013 that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
 - The rest of P03.T04e: formatting ignore file, unit-test concurrency, shared PostgreSQL 17 template-database harness, heavy-fault job.
-- The P05.T01x Part B PR splits the plan's P05.T01x bullet into sub-bullets, to respect the 2,000-character line limit.
 
 ## Blockers
 
@@ -49,7 +51,9 @@ None for local work. Hosted staging (M1) waits on the owner actions below. Billi
 
 ## Pending owner actions
 
-- **Sign-offs:** plan R1 (Tier 3).
+- **Sign-offs:**
+  - Plan R1 (Tier 3).
+  - P05.T01x Part B, before hosted login (M1): account login start is anonymous, so its per-profile windows (10 per 10 s, 100 open) let anyone block every sign-in on a profile (packet §11). Decide whether Turnstile or the edge per-IP limiter gates hosted login activation in every environment, not only sign-up beyond the allowlist (ADR-0009 item 8).
 - **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check before the first hosted deploy (ADR-0014).
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
 - **M1 prerequisites (P04.T01i):** register the domain; create a dedicated Cloudflare account and share its account ID (an identifier, not a secret); authenticate the Neon CLI and reset the operator password; once the domain exists, configure the WorkOS staging callback and rotate the API key; decide on spending (Workers Paid, the domain, Neon Launch for staging); approve each M1 effect individually or approve standing staging cards. No card may rely on the OperationLedger before P06.T01c lands.

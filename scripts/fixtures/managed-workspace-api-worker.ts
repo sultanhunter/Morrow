@@ -48,13 +48,18 @@ expect(
 const roles = [
   "morrow_identity_login",
   "morrow_identity_preauth",
-  "morrow_identity_resolution",
   "morrow_identity_sessions",
   "morrow_api",
   "morrow_identity_linking",
   "morrow_identity_logout",
+  "morrow_identity_onboarding",
 ];
-const workspaceRoles = ["morrow_api", "morrow_identity_linking", "morrow_identity_logout"];
+const workspaceRoles = [
+  "morrow_api",
+  "morrow_identity_linking",
+  "morrow_identity_logout",
+  "morrow_identity_onboarding",
+];
 const leases = { borrows: 0, releaseAttempts: 0, releaseAcknowledgements: 0, activeLeases: 0 };
 const workos = { borrows: 0, releaseAttempts: 0, releaseAcknowledgements: 0, activeLeases: 0 };
 const workosNamespace = JSON.stringify({

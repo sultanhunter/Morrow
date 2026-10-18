@@ -1,9 +1,9 @@
 import { loginFlowCustodySql } from "./login-flow-custody.js";
 import { authenticationExchangeAdmissionSql } from "./authentication-exchange-admission.js";
-import { workspaceSelectionSql } from "./workos-workspace-selection.js";
 import { browserSessionAdmissionSql } from "./workos-browser-session-admission.js";
 
-// Private source profiles, never an application SQL/role selection API.
+// Private source profiles, never an application SQL/role selection API. Account login
+// (P05.T01x) uses three pools: no workspace is selected before sign-in.
 export const controlledNeonMetadataSql = Object.freeze({
   primary: `SELECT pg_catalog.pg_backend_pid()::text AS backend_pid,
 current_user::text AS current_role,session_user::text AS session_role,
@@ -61,7 +61,7 @@ export const controlledNeonLoginProfiles = Object.freeze({
       role: 0,
       timeout: 0,
       idleTimeout: 0,
-      createIntent: 6,
+      createAccountIntent: 5,
       bindBegin: 12,
       claimCallback: 4,
       observeEligibility: 2,
@@ -92,14 +92,6 @@ export const controlledNeonLoginProfiles = Object.freeze({
     10000,
     2048,
   ),
-  selectionPool: profile(
-    "morrow_identity_resolution",
-    workspaceSelectionSql,
-    { begin: 0, role: 0, timeout: 0, idleTimeout: 0, resolve: 9, commit: 0, rollback: 0 },
-    1000,
-    5000,
-    2048,
-  ),
   sessionPool: profile(
     "morrow_identity_sessions",
     browserSessionAdmissionSql,
@@ -109,8 +101,8 @@ export const controlledNeonLoginProfiles = Object.freeze({
       role: 0,
       timeout: 0,
       idleTimeout: 0,
-      admit: 27,
-      reconcile: 2,
+      admitAccount: 21,
+      reconcileAccount: 2,
       commit: 0,
       rollback: 0,
     },

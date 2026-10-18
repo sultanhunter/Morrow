@@ -110,7 +110,10 @@ export const loginFlowCustodySql = Object.freeze({
   role: "SELECT current_user AS role,session_user AS login,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolinherit,pg_catalog.pg_has_role(current_user,'morrow_identity_owner','MEMBER') AS owner_member,EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid) AS role_member FROM pg_catalog.pg_roles r WHERE r.rolname=current_user",
   timeout: "SET LOCAL statement_timeout = '1s'",
   idleTimeout: "SET LOCAL idle_in_transaction_session_timeout = '5s'",
+  // The 0010 workspace intent. Kept only to qualify the applied 0010-0012 chain: after
+  // 0013 no executor may run it and no pool profile carries this statement.
   createIntent: select(transition.join(","), "create_login_flow_intent", 6),
+  createAccountIntent: select(transition.join(","), "create_account_login_flow_intent", 5),
   bindBegin: select(transition.join(","), "bind_login_flow_begin", 12),
   claimCallback: select(claim.join(","), "claim_login_callback", 4),
   observeEligibility: select("matches,database_now_ms", "observe_login_flow_eligibility", 2),
@@ -195,6 +198,13 @@ const inputs = {
     "issuerCommandId",
     "workspaceId",
   ],
+  createAccountIntent: [
+    "configurationDigest",
+    "flowId",
+    "beginCommandId",
+    "admissionCommandId",
+    "issuerCommandId",
+  ],
   bindBegin: [
     "configurationDigest",
     "flowId",
@@ -240,7 +250,7 @@ function textInput(text: unknown, kind: Kind): readonly string[] {
                 : uuid(x);
       if (!valid) throw invalid();
     }
-    if (kind === "createIntent" || kind === "reconcile") {
+    if (kind === "createIntent" || kind === "createAccountIntent" || kind === "reconcile") {
       const a = [v.flowId, v.beginCommandId, v.admissionCommandId, v.issuerCommandId];
       if (new Set(a).size !== 4) throw invalid();
     }
@@ -266,7 +276,7 @@ function decode(value: unknown, kind: Kind, values: readonly string[], at: numbe
     return r;
   }
   const success =
-    kind === "createIntent"
+    kind === "createIntent" || kind === "createAccountIntent"
       ? "newly_created"
       : kind === "bindBegin"
         ? "newly_ready"
@@ -277,7 +287,7 @@ function decode(value: unknown, kind: Kind, values: readonly string[], at: numbe
             : "completed";
   if (r.outcome !== success) {
     const allowed =
-      kind === "createIntent"
+      kind === "createIntent" || kind === "createAccountIntent"
         ? ["held", "denied", "conflict", "rate_limited", "quota_limited"]
         : kind === "reconcile" || kind === "maintain"
           ? ["held"]
@@ -329,7 +339,7 @@ function decode(value: unknown, kind: Kind, values: readonly string[], at: numbe
     throw unknown();
   if (kind !== "claimCallback" && r.flow_id !== values[1]) throw unknown();
   if (
-    (kind === "createIntent" && r.flow_revision !== "1") ||
+    ((kind === "createIntent" || kind === "createAccountIntent") && r.flow_revision !== "1") ||
     (kind === "bindBegin" && Number(r.flow_revision) !== Number(values[2]) + 1)
   )
     throw unknown();
@@ -342,7 +352,8 @@ function decode(value: unknown, kind: Kind, values: readonly string[], at: numbe
         r.issuer_command_id,
         r.key_id,
       ].every(uuid) ||
-      !id(r.workspace_id) ||
+      // An account flow carries no workspace (0013); a 0010 workspace flow carries its id.
+      !(r.workspace_id === null || id(r.workspace_id)) ||
       ![
         r.state_digest,
         r.cookie_digest,
@@ -495,7 +506,10 @@ function factory(
       await race(closing);
       check();
       if (
-        (kind === "createIntent" || kind === "bindBegin" || kind === "claimCallback") &&
+        (kind === "createIntent" ||
+          kind === "createAccountIntent" ||
+          kind === "bindBegin" ||
+          kind === "claimCallback") &&
         result.expires_at_ms !== null &&
         Number(result.expires_at_ms) <= clock()
       )
@@ -522,6 +536,8 @@ export function createLoginFlowCustody(options: { pool: LoginFlowSqlPool; now: (
   return Object.freeze({
     createIntent: (text: unknown, c: LoginControl) =>
       run("createIntent", text, c) as Promise<TransitionRow>,
+    createAccountIntent: (text: unknown, c: LoginControl) =>
+      run("createAccountIntent", text, c) as Promise<TransitionRow>,
     bindBegin: (text: unknown, c: LoginControl) =>
       run("bindBegin", text, c) as Promise<TransitionRow>,
     claimCallback: (text: unknown, c: LoginControl) =>

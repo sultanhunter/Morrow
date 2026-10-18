@@ -58,10 +58,10 @@ export function controlledNeonFixtureIpv4Matches({
   if (base < privateStart || base + size > privateStart + 16 * 2 ** 16) return false;
   return host >= base && host < base + size && gw >= base && gw < base + size;
 }
+// Account login (P05.T01x): three login roles; the selection role left the login wiring.
 const roles = Object.freeze([
   "morrow_identity_login",
   "morrow_identity_preauth",
-  "morrow_identity_resolution",
   "morrow_identity_sessions",
 ]);
 const loginProfile = Object.freeze({ roles });
@@ -71,6 +71,7 @@ const workspaceProfile = Object.freeze({
     "morrow_api",
     "morrow_identity_linking",
     "morrow_identity_logout",
+    "morrow_identity_onboarding",
   ]),
 });
 const held = () => Error("CONTROLLED_NEON_POSTGRESQL_HELD");
