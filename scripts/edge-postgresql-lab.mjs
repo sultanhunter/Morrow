@@ -591,7 +591,9 @@ export async function edgePostgresqlJourneys(engine, createService) {
       name("5_logout"),
       ended.status === 200 &&
         ended.body === '{"schemaVersion":1,"outcome":"session_ended"}' &&
-        !ended.headers.has("set-cookie") &&
+        // P05.T01y-AC26: exactly the session clear.
+        ended.headers.getSetCookie().join() ===
+          "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0" &&
         jsonHeaders(ended),
     );
     check(name("5_bootstrap_after_logout_401"), (await bootstrap(owner, cookie)).status === 401);

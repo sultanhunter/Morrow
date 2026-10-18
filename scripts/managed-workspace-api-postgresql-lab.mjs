@@ -855,8 +855,10 @@ try {
         body: JSON.stringify({ schemaVersion: 1 }),
       });
       check(
-        "self_logout_without_cookie_mutation",
-        logout.response.status === 200 && !logout.response.headers.has("set-cookie"),
+        "self_logout_clears_only_the_session_cookie",
+        logout.response.status === 200 &&
+          logout.response.headers.getSetCookie().join() ===
+            "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
       );
       check("retired_cookie_bootstrap_denied", (await bootstrap(a)).response.status === 401);
       check(

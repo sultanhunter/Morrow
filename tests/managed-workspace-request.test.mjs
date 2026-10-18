@@ -439,3 +439,41 @@ test("unchanged bootstrap SQL owner consumes the one original managed control", 
   assert.deepEqual(releases, [true]);
   assert.equal(response.headers.has("set-cookie"), false);
 });
+
+// P05.T01y-AC29: the managed sinks confine Set-Cookie per route; anything else is held.
+test("managed logout and rotate sinks pass only their one reviewed cookie", async () => {
+  const { confinedCookies } = await import("../packages/identity/src/managed-workspace-request.ts");
+  const clear = "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
+  const session = (age) =>
+    "__Host-morrow_session=" +
+    "A".repeat(43) +
+    "; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=" +
+    age;
+  const rotated =
+    '{"schemaVersion":1,"outcome":"rotated","idleRemainingMs":1800000,"absoluteRemainingMs":43000000}';
+  for (const status of [200, 403, 503])
+    assert.deepEqual(confinedCookies("logout", status, "{}", [clear]), [clear]);
+  assert.deepEqual(confinedCookies("logout", 400, "{}", []), []);
+  assert.deepEqual(confinedCookies("rotate", 200, rotated, [session(1800)]), [session(1800)]);
+  assert.deepEqual(confinedCookies("rotate", 401, '{"code":"authentication_required"}', []), []);
+  for (const [route, status, body, cookies] of [
+    ["logout", 400, "{}", [clear]],
+    ["logout", 200, "{}", [session(60)]],
+    ["logout", 200, "{}", [clear, clear]],
+    ["rotate", 200, rotated, [session(1801)]],
+    ["rotate", 200, rotated, [clear]],
+    ["rotate", 200, rotated.replace("43000000", "43200001"), [session(60)]],
+    ["rotate", 401, '{"code":"authentication_required"}', [session(60)]],
+    [
+      "rotate",
+      200,
+      '{"schemaVersion":1,"outcome":"current","idleRemainingMs":1,"absoluteRemainingMs":1}',
+      [session(60)],
+    ],
+  ])
+    assert.throws(
+      () => confinedCookies(route, status, body, cookies),
+      /MANAGED_WORKSPACE_REQUEST_HELD/,
+      route + " " + status,
+    );
+});

@@ -104,7 +104,9 @@ export function createWorkersManagedWorkspaceApi(dependencies?: ManagedWorkspace
         }),
       );
     // No await or second budget precedes the selected source owner.
-    if (path === "/auth/logout") return configured.workspace.fetch(request, env, actualCtx);
+    // Logout and rotate (P05.T01y) share the workspace handler's attempt, pool and binding.
+    if (path === "/auth/logout" || path === "/auth/rotate")
+      return configured.workspace.fetch(request, env, actualCtx);
     if (auth) return configured.login.fetch(request, env, actualCtx);
     if (workspace) return configured.workspace.fetch(request, env, actualCtx);
     return Promise.resolve(standaloneJson(404, { code: "not_found" }));

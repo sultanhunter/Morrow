@@ -192,8 +192,13 @@ try {
       !r.headers.has("access-control-allow-origin");
     const noCookie = (r) =>
       r.headers.getSetCookie().length === 0 && !r.headers.has("location") && safe(r);
+    // P05.T01y-AC26: plans produced after the SQL call carry exactly the session clear.
+    const sessionClear =
+      "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
+    const cleared = (r) =>
+      r.headers.getSetCookie().join() === sessionClear && !r.headers.has("location") && safe(r);
     const ended = (r) =>
-      r.status === 200 && r.text === '{"schemaVersion":1,"outcome":"session_ended"}' && noCookie(r);
+      r.status === 200 && r.text === '{"schemaVersion":1,"outcome":"session_ended"}' && cleared(r);
     const allPools = () => [...h.rolePools, ...h.logoutRolePools, ...readPools];
     const sqlCount = () => allPools().reduce((n, p) => n + p.metrics.connections, 0);
     const identityCount = () =>
@@ -419,7 +424,7 @@ try {
       check(
         "foreign_trusted_namespace_cannot_retire_captured_credential",
         foreignReply.status === 403 &&
-          noCookie(foreignReply) &&
+          cleared(foreignReply) &&
           auditCount(original.family_id) === 0,
       );
       c.activate();
@@ -436,9 +441,10 @@ try {
       const result = await logout(original.header);
       check("real_https_captured_cookie_ends_derived_family", ended(result));
       check(
-        "logout_keeps_cookie_jar_exactly_unchanged",
-        c.jar.ingest(origin + "/auth/logout", result.headers).accepted === 0 &&
-          c.jar.header(origin + "/") === original.header,
+        "logout_clear_removes_the_session_cookie_from_the_jar",
+        c.jar.header(origin + "/") === original.header &&
+          c.jar.ingest(origin + "/auth/logout", result.headers).accepted === 1 &&
+          c.jar.header(origin + "/") === undefined,
       );
       check(
         "logout_exactly_one_revocation_audit_revision",
@@ -677,10 +683,10 @@ try {
           issued = await issue(x);
         const r = await logout(issued.header);
         check(
-          "actual_" + fault + "_ack_loss_unknown_no_cookie",
+          "actual_" + fault + "_ack_loss_unknown_clears_cookie",
           r.status === 503 &&
             r.text === '{"schemaVersion":1,"outcome":"logout_outcome_unknown"}' &&
-            noCookie(r),
+            cleared(r),
         );
         check(
           "actual_" + fault + "_ack_loss_one_effect_no_followup_sql",
