@@ -68,6 +68,39 @@ const published = [
     "52e9f699956ec8932056b22b2dc5294e540225562730666e0a87d00dfe857579",
   ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
+// Administrator prerequisites are immutable like migrations (P03.T04e §3.1): each published
+// row keeps exactly these pinned files, and a later role goes in a new file on its new row.
+const publishedPrerequisites = new Map([
+  [
+    1,
+    [
+      {
+        file: "infra/identity-role-prerequisites.sql",
+        sha256: "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581",
+      },
+    ],
+  ],
+  [
+    10,
+    [
+      {
+        file: "infra/identity-login-role-prerequisites.sql",
+        sha256: "17c25b456d85d6b0a70fe312be885f4543339da9ebaf04122b585ccc2d4c541b",
+      },
+    ],
+  ],
+  [
+    11,
+    [
+      {
+        file: "infra/identity-logout-role-prerequisites.sql",
+        sha256: "1eb98c94b51d4d2b1c2580fc402234110536ae6a84c185116676766460a0193d",
+      },
+    ],
+  ],
+]);
+// Every published migration was applied under this role.
+const publishedExecuteAs = "morrow_identity_owner";
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 
@@ -82,6 +115,20 @@ test("the manifest keeps every published migration as an unchanged prefix", () =
 test("every published migration file still hashes to its pinned digest", () => {
   for (const row of published)
     assert.equal(sha(readFileSync("migrations/" + row.file)), row.sha256, row.file);
+});
+
+test("published rows keep their executeAs role and pinned prerequisites", () => {
+  for (const [index, row] of published.entries()) {
+    const { executeAs, prerequisites } = manifest.migrations[index];
+    assert.equal(executeAs, publishedExecuteAs, row.file);
+    assert.deepEqual(prerequisites, publishedPrerequisites.get(row.sequence), row.file);
+  }
+});
+
+test("every published prerequisite file still hashes to its pinned digest", () => {
+  const pinned = [...publishedPrerequisites.values()].flat();
+  assert.equal(pinned.length, 3);
+  for (const { file, sha256 } of pinned) assert.equal(sha(readFileSync(file)), sha256, file);
 });
 
 test("migrations after the published prefix continue the sequence", () => {
