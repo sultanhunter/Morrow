@@ -10,7 +10,7 @@
 | `unit` (shards 1 and 2) | `tests/*.test.mjs`, split by file with `--test-shard`. Each shard runs its files one at a time. | `TEST_SHARD=1/2 npm run test:shard` | 15 min |
 | `workers-api` | `lab:workspace-api-workers`, the longest single lab | `npm run lab:workspace-api-workers` | 10 min |
 | `workers` | The SPA build, then `edge:dry-run` and `smoke:edge-dev` inside a `--network none` container (read-only checkout, the runner's Node mounted into the digest-pinned engine image), then the other 18 Miniflare/workerd labs including `lab:edge-workers` | `npm run edge:dry-run && npm run smoke:edge-dev && npm run lab:group:workers` | 15 min |
-| `postgres` (`pg-core`, `pg-linking`, `pg-http`) | The network-none PostgreSQL, HTTP and HTTPS labs. `pg-core` also records the pinned engine build first. | `npm run lab:group:pg-core` (and `pg-linking`, `pg-http`) | 12 min |
+| `postgres` (`pg-core`, `pg-linking`, `pg-http`, `pg-work`) | The network-none PostgreSQL, HTTP and HTTPS labs. `pg-core` also records the pinned engine build first. `pg-work` runs the P06 work labs: tenant conformance, the work PostgreSQL acceptance lab and the workerd work lab (Miniflare over a SQL service binding) | `npm run lab:group:pg-core` (and `pg-linking`, `pg-http`, `pg-work`) | 12 min |
 | `pgwire` | The four PG-wire labs: controlled Neon, managed login, workspace API and the deployable api/broker journey (`lab:edge-postgresql`) | `npm run lab:group:pgwire` (Linux CI only) | 12 min |
 | `foundation` | Aggregator: succeeds only when every job above succeeded | none | 5 min |
 
@@ -62,7 +62,7 @@ npm ci --ignore-scripts
 npm run ci:static
 TEST_SHARD=1/2 npm run test:shard && TEST_SHARD=2/2 npm run test:shard
 npm run lab:workspace-api-workers && npm run lab:group:workers
-npm run lab:group:pg-core && npm run lab:group:pg-linking && npm run lab:group:pg-http
+npm run lab:group:pg-core && npm run lab:group:pg-linking && npm run lab:group:pg-http && npm run lab:group:pg-work
 git status --porcelain --untracked-files=all   # should print nothing
 ```
 

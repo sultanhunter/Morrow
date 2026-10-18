@@ -11,7 +11,6 @@
     "build:worker": "esbuild src/worker.ts --bundle --platform=browser --format=esm --target=es2022 --external:node:* --outfile=dist/worker.mjs --metafile=dist/worker.meta.json"
   },
   "dependencies": {
-    "@morrow/contracts": "0.0.0",
-    "@morrow/work": "0.0.0"
+    "@morrow/contracts": "0.0.0"
   }
 }

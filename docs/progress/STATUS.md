@@ -15,6 +15,7 @@ Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overh
 In progress:
 - **ADR-0008 acceptance** (PR #7): the Shopify connector is a Cloudflare Worker on `@shopify/shopify-api`, and secret-dependent calls stay in the broker.
 - **P01.T02a PR-B** (`claude/p01-t02a-b-review-policy`): review policy, Proposal@2, Approval@2 (ADR-0011). Implemented and reviewed: AC11-AC26, the pure review library `@morrow/policy/review` and contract v1.1 replacements; full local pipeline passed; awaiting PR CI and merge.
+- **P06.T01a** (`claude/p06-t01a-work-commands`): work commands and reads on the ADR-0010 tenant data pattern. Migrations 0014 (identity bridge) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs (`lab:tenant-conformance`, `lab:work-postgresql`, `lab:work-workers`). Sequence 13 stays reserved for P05.T01x Part B; whichever merges second keeps its own number. Acceptance in `docs/acceptance/P06.md`; awaiting the mandatory Tier 2 security review, PR CI and merge.
 - **Packet designs:** P01.T04a, P01.T02c, P06.T01b, P03.T04e (shared PostgreSQL harness), P14.T01a (provisional UI), P05.T01y and P05.T01z.
 
 Delivered in P03.T04c/d:
@@ -33,7 +34,7 @@ Delivered in P03.T04c/d:
 
 1. Merge P01.T02a PR-B once reviewed and green.
 2. P05.T01x Part B, signup and workspace list (ADR-0009). It needs P01.T02a PR-B (ADR-0011) first.
-3. P06.T01a, work commands on the tenant data pattern (ADR-0010). P01.T02b and T02c contracts.
+3. P06.T01a: Tier 2 security review, PR CI and merge; then P06.T02a (event transport) and P06.T01c (OperationLedger). P01.T02b and T02c contracts.
 4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
 
 Open plan follow-ups:
@@ -56,6 +57,7 @@ None for local work. Hosted staging (M1) waits on the owner actions below.
   - Create a dedicated Cloudflare account and share its account ID (an identifier, not a secret).
   - Authenticate the Neon CLI and reset the operator password.
   - Once the domain exists: configure the WorkOS staging callback and rotate the API key.
+  - For the work API (P06.T01a): create the `morrow_api_worker` login and place its password as the broker secret `MORROW_DB_PASSWORD_MORROW_API_WORKER`; the broker now requires it, so its health stays false until it is set.
   - Decide on spending: Cloudflare Workers Paid, the domain, and Neon Launch for staging.
   - Approve each M1 effect individually (deploys, hosted migrations, sign-in tests) or approve standing staging cards. No card may rely on the Morrow OperationLedger before P06.T01c lands.
 - **Credential rotation:** rotate the E2B personal key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.

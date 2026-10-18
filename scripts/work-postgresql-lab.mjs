@@ -32,6 +32,7 @@ import { writeArtifact } from "./artifacts.mjs";
 const soak = process.env.MORROW_WORK_SOAK === "1";
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const checks = [];
+let unavailableRetries = 0;
 const failures = [];
 function check(name, passed) {
   checks.push({ name, passed: passed === true });
@@ -59,6 +60,15 @@ const goalBody = (objective = "Grow repeat purchases", description) => ({
 const statement = (name) => workStatements[name];
 const isCommand = (record) => /FROM morrow_work\.cmd_/.test(record.text);
 
+// A request that ends without reaching its hook fails the case instead of hanging.
+async function reached(hold, request) {
+  await Promise.race([
+    hold.arrived,
+    request.then((reply) => {
+      throw Error("HOOK_NOT_REACHED_" + reply.status);
+    }),
+  ]);
+}
 function gate() {
   let open, arrive;
   const opened = new Promise((resolve) => (open = resolve));
@@ -88,20 +98,48 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
   const responses = [];
   async function send(p, method, path, body, options = {}) {
     const handler = options.handler ?? plain;
-    const response = await handler.fetch(
-      workRequest(p, method, path, body, options),
-      undefined,
-      ctx,
-    );
-    const text = await response.text();
-    const reply = {
-      status: response.status,
-      text,
-      body: JSON.parse(text),
-      headers: response.headers,
-    };
-    responses.push(text);
-    return reply;
+    for (let attempt = 1; ; attempt++) {
+      const response = await handler.fetch(
+        workRequest(p, method, path, body, options),
+        undefined,
+        ctx,
+      );
+      const text = await response.text();
+      const reply = {
+        status: response.status,
+        text,
+        body: JSON.parse(text),
+        headers: response.headers,
+      };
+      responses.push(text);
+      // Reads are safe_read_retry: a loaded host may time a read out, and the
+      // contract allows the client to retry it unchanged.
+      if (
+        method === "GET" &&
+        reply.status === 503 &&
+        reply.body.retryClass === "safe_read_retry" &&
+        attempt < 4
+      ) {
+        unavailableRetries++;
+        await sleep(250);
+        continue;
+      }
+      return reply;
+    }
+  }
+  // Fixture setup that must apply: retried with the same key (reconcile, never re-apply).
+  async function applied(p, path, body, expected) {
+    const key = randomUUID();
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      const reply = await send(p, "POST", path, body, { key });
+      if (reply.status === expected || (reply.status === 200 && reply.body.replayed === true))
+        return reply;
+      if (reply.status !== 503)
+        throw Error("FIXTURE_" + path.split("/")[1].toUpperCase() + "_" + reply.status);
+      unavailableRetries++;
+      await sleep(250);
+    }
+    throw Error("FIXTURE_UNDECIDED");
   }
   const count = (table, where = "true") =>
     Number(db.sql(`SELECT count(*) FROM morrow_work.${table} WHERE ${where};`));
@@ -116,7 +154,9 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
   });
   const same = (a, b) => isDeepStrictEqual(a, b);
   const strip = (text) => JSON.stringify({ ...JSON.parse(text), correlationId: null });
+  const only = process.env.MORROW_WORK_LAB_ONLY?.split(",") ?? null;
   async function section(name, body) {
+    if (only && !only.includes(name)) return;
     try {
       await body();
     } catch (error) {
@@ -139,27 +179,20 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
     return { status, body: { items } };
   }
   async function goal(p = P.A, objective) {
-    const reply = await send(p, "POST", "/goals", goalBody(objective));
-    if (reply.status !== 201) throw Error("FIXTURE_GOAL_" + reply.status);
-    return reply.body.goalId;
+    return (await applied(p, "/goals", goalBody(objective), 201)).body.goalId;
   }
   async function task(goalId, p = P.A) {
-    const reply = await send(p, "POST", "/tasks", {
-      goalId,
-      objective: "Draft the brief",
-      allowedResources: [],
-    });
-    if (reply.status !== 201) throw Error("FIXTURE_TASK_" + reply.status);
-    return reply.body.taskId;
+    const body = { goalId, objective: "Draft the brief", allowedResources: [] };
+    return (await applied(p, "/tasks", body, 201)).body.taskId;
   }
   async function question(taskId, respondent = P.B, p = P.A) {
-    const reply = await send(p, "POST", "/tasks/" + taskId + "/questions", {
-      question: "Which audience first?",
-      respondentId: respondent.principal,
-    });
-    if (reply.status !== 201) throw Error("FIXTURE_QUESTION_" + reply.status);
-    return reply.body.questionId;
+    const body = { question: "Which audience first?", respondentId: respondent.principal };
+    return (await applied(p, "/tasks/" + taskId + "/questions", body, 201)).body.questionId;
   }
+
+  // Warm-up: plans and caches, so the first measured request is not the first ever.
+  await send(P.A, "GET", "/goals");
+  await goal(P.A, "Warm-up");
 
   await section("AC01", async () => {
     const before = totals();
@@ -248,7 +281,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
       },
     });
     const one = send(P.A, "POST", "/goals", body, { key, handler: first });
-    await hold.arrived;
+    await reached(hold, one);
     const two = send(P.A, "POST", "/goals", body, { key });
     const waiting = await db.waitForLockWait("wait_event='advisory'");
     hold.open();
@@ -279,7 +312,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
       { to: "active", expectedRevision: 1 },
       { handler: first },
     );
-    await hold.arrived;
+    await reached(hold, one);
     const two = send(P.A, "POST", "/goals/" + g + "/status", { to: "active", expectedRevision: 1 });
     const waiting = await db.waitForLockWait("application_name LIKE 'morrow_work_lab_%'");
     hold.open();
@@ -517,7 +550,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
         },
       });
       const a = first(paused);
-      await hold.arrived;
+      await reached(hold, a);
       const b = await second(plain);
       hold.open();
       return [await a, b];
@@ -979,7 +1012,7 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
         },
       });
       const reply = send(p, "POST", "/goals", body, { handler, key });
-      await hold.arrived;
+      await reached(hold, reply);
       const result = await during(hold);
       hold.open();
       return [await reply, result];
@@ -1323,6 +1356,8 @@ const report = {
   durationMs: Date.now() - started,
   checks,
   workerLogLines: consoleLines.length,
+  // Load-induced 503s retried as the contract allows (reads, and same-key setup).
+  unavailableRetries,
   limitations: [
     "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
     "The 0004 revocation is reproduced by owner maintenance with the same lock order and effects, not through its lifecycle receipts.",

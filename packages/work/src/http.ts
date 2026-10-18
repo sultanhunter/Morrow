@@ -215,7 +215,7 @@ export function createWorkApiHandler(d?: WorkApiDependencies) {
     const timer = setTimeout(() => abort.abort(), 5000);
     const stop = () => abort.abort();
     request.signal?.addEventListener("abort", stop, { once: true });
-    let read = true;
+    let read = request.method === "GET";
     try {
       let g: GuardedWorkRequest;
       try {

@@ -1,6 +1,6 @@
 // Static tenant-isolation checks S1-S6 (P06.T01a §4.12) against the real catalog
 // of a PostgreSQL 17 database migrated through the whole manifest. Any miss fails.
-// Run by `npm run lab:tenant-conformance` (pg-linking group), not by `npm test`.
+// Run by `npm run lab:tenant-conformance` (pg-work group), not by `npm test`.
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { withWorkDatabase } from "./harness.mjs";

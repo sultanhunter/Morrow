@@ -1,6 +1,6 @@
 // P06.T01a migration and laboratory wiring checks that need no database. The
 // PostgreSQL 17 behaviour itself is qualified by lab:work-postgresql and
-// lab:tenant-conformance (pg-linking), and in workerd by lab:work-workers (pg-http).
+// lab:tenant-conformance, and in workerd by lab:work-workers (the pg-work group).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -164,7 +164,7 @@ test("statements: one fixed prologue and parameter-only statements", () => {
   for (const source of sources) assert.doesNotMatch(source, /SET (LOCAL )?ROLE/);
 });
 
-test("laboratories: each P06.T01a lab runs once, in a PostgreSQL group", () => {
+test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
   assert.equal(
     pkg.scripts["lab:work-postgresql"],
     "node --import tsx scripts/work-postgresql-lab.mjs",
@@ -174,9 +174,12 @@ test("laboratories: each P06.T01a lab runs once, in a PostgreSQL group", () => {
     pkg.scripts["lab:tenant-conformance"],
     "node --import tsx --test --test-concurrency=1 tests/tenant-conformance/static.test.mjs tests/tenant-conformance/probes.test.mjs",
   );
-  assert.match(
-    pkg.scripts["lab:group:pg-linking"],
-    /npm run lab:tenant-conformance && npm run lab:work-postgresql$/,
+  assert.equal(
+    pkg.scripts["lab:group:pg-work"],
+    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers",
   );
-  assert.match(pkg.scripts["lab:group:pg-http"], /npm run lab:work-workers$/);
+  assert.match(
+    read(".github/workflows/ci.yml"),
+    /group: \[pg-core, pg-linking, pg-http, pg-work\]/,
+  );
 });

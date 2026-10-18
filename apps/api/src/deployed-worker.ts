@@ -5,8 +5,8 @@ import {
 } from "../../../packages/identity/src/broker-protocol.js";
 import type { ManagedWorkspaceApiDependencies } from "../../../packages/identity/src/managed-workspace-api.js";
 import { captureManagedWorkspaceBinding } from "../../../packages/identity/src/managed-workspace-binding.js";
-import { createNeonWorkConnector } from "@morrow/work";
-import type { WorkApiDependencies } from "@morrow/work/http";
+import { createNeonWorkConnector } from "../../../packages/work/src/neon-connector.js";
+import type { WorkApiDependencies } from "../../../packages/work/src/http.js";
 import {
   createBrokerHealth,
   createBrokerNeonCredentialBroker,

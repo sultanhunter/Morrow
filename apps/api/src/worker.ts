@@ -2,7 +2,7 @@ import {
   createWorkersManagedWorkspaceApi,
   type ManagedWorkspaceApiDependencies,
 } from "../../../packages/identity/src/managed-workspace-api.js";
-import { createWorkApiHandler, type WorkApiDependencies } from "@morrow/work/http";
+import { createWorkApiHandler, type WorkApiDependencies } from "../../../packages/work/src/http.js";
 
 type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
 // P06.T01a: /workspace/<Id>/work(/|$) goes to the work API; every other path is
