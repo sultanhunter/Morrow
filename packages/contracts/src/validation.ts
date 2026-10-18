@@ -3,6 +3,8 @@ import {
   currentDefinitionSelectors,
   capabilityBodySelectors,
   currentBillingDefinitionSelectors,
+  eventPayloadSelectors,
+  validateEventPayload as registeredEventPayload,
 } from "./generated/runtime-validators.mjs";
 import type {
   CapabilityId,
@@ -10,6 +12,8 @@ import type {
   CapabilityOutput,
   CurrentBillingDefinitionName,
   CurrentDefinitionName,
+  EventPayloadOf,
+  EventType,
 } from "./generated/domain";
 /** Exact schema layers. Product code uses the effective (current) selectors below. */
 export type DefinitionSchema = "core" | "billing" | "core-v1.1" | "billing-v1.1";
@@ -43,9 +47,55 @@ export function validateDefinition(
 ): boolean {
   return definitionSchemas.includes(schema) && valid(`${schema}:${name}`, value);
 }
-/** Effective definition: the newest core layer that defines the name. */
+/**
+ * The additive event registry (ADR-0016 item 6; P01.T02c §8): true when
+ * `eventType` is registered, `aggregateType` is its row's and `payload` is valid
+ * against its row's payload definition. A null (redacted) payload is not a payload.
+ */
+export function validateEventPayload<K extends EventType>(
+  eventType: K,
+  aggregateType: unknown,
+  payload: unknown,
+): payload is EventPayloadOf<K> & object;
+export function validateEventPayload(
+  eventType: unknown,
+  aggregateType: unknown,
+  payload: unknown,
+): boolean;
+export function validateEventPayload(eventType: unknown, aggregateType: unknown, payload: unknown) {
+  return registeredEventPayload(eventType, aggregateType, payload);
+}
+/** True when `eventType` is registered with exactly this `aggregateType`. */
+export function eventRegistered(eventType: unknown, aggregateType: unknown): boolean {
+  return (
+    typeof eventType === "string" &&
+    Object.hasOwn(eventPayloadSelectors, eventType) &&
+    eventPayloadSelectors[eventType]!.aggregateType === aggregateType
+  );
+}
+// An EventEnvelope@2 that already passed its schema: a registered type and
+// aggregate, and a registered payload unless it was nulled for this viewer
+// (the schema nulls payload and payloadRef together).
+function registeredEnvelope(envelope: unknown): boolean {
+  const e = envelope as { eventType: unknown; aggregateType: unknown; payload: unknown };
+  return (
+    eventRegistered(e.eventType, e.aggregateType) &&
+    (e.payload === null || registeredEventPayload(e.eventType, e.aggregateType, e.payload))
+  );
+}
+/**
+ * Effective definition: the newest core layer that defines the name. For
+ * EventEnvelope (@2), and a StreamFrame carrying one, this is the schema plus
+ * the event registry selector.
+ */
 export function validateCurrentDefinition(name: CurrentDefinitionName, value: unknown): boolean {
-  return selected(currentDefinitionSelectors, name, value);
+  if (!selected(currentDefinitionSelectors, name, value)) return false;
+  if (name === "EventEnvelope") return registeredEnvelope(value);
+  if (name === "StreamFrame") {
+    const frame = value as { kind: string; envelope?: unknown };
+    return frame.kind !== "event" || registeredEnvelope(frame.envelope);
+  }
+  return true;
 }
 /** Effective billing definition: the newest billing layer that defines the name (ADR-0015). */
 export function validateCurrentBillingDefinition(

@@ -15,9 +15,10 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #10: P05.T01x Part B (ADR-0009), squash-merged as `e51e5b7`: migration 0013 (account login, enrollment, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers).
 - PR #12: P06.T01a (ADR-0010), merged as `06e4dfe`: migrations 0014 (identity bridge and organization interlock) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the `pg-work` CI group. Verified waits for the P05 exit gate.
 - PR #13: the ADR-0018 Proposal@2 edit (P01.T02a-AC27), merged as `08e5ebf`: nullable `taskId` only for human governance proposals, `TASK_REQUIRED`/`TASK_MISMATCH` and the `requestedBy` derivation in `checkProposal`. It unblocks P06.T01b PR-1.
+- PR #14: P01.T04a PR-A (ADR-0015), merged as `bba3cec`: the paid-work gate (`isPaidWork`, 27 capabilities), `inspectEntitlementWriters`, the contract v1.1 billing layer and the OQ-2 test entitlement seed branch. PR-B (billing route library) follows.
 
 In progress:
-- **P01.T04a PR-A** (PR #14, branch `claude/p01-t04a-a-paid-work-gate`): entitlement gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities), `inspectEntitlementWriters`, the contract v1.1 billing layer (five declared replacements) and the OQ-2 test entitlement seed branch. Merged with `main` at `08e5ebf` on 2026-10-19: `changes.json` entries appended after main's, baseline hashes recomputed, contracts regenerated (392 validators, 2,202,717 bytes). Part B and P06.T01a merged first, so this PR applies the "merges first" coordination (P01.T04a §8.1, §9): `!isPaidWork` for every template v1 row in `tests/account-onboarding.test.mjs`, `entitlementAllowed: false` in `packages/work/src/permissions.ts`, and the billing route row goes to the first billing child, not `create_first_organization`. AC05 now expects connect `approve` allowed under Part B's connect rule. Local format, typecheck, verify and unit tests pass on the merged head; hosted CI, the Tier 2 AI review (separate context, same model family) and `/security-review` on the merged head are open. PR-B (billing route library) follows.
+- **P01.T02c PR-A** (branch `claude/p01-t02c-a-collab-contracts`, pushed, no PR yet because GitHub Actions minutes are nearly exhausted): collaboration contracts v1.1 (ADR-0016): 94 core-v1.1 definitions with EventEnvelope@2 as the one declared replacement, the additive event registry (22 rows) and `validateEventPayload`, eight capabilities (six `human_only`), `collaborationPermissions` with the audited Ask admin row, two v1.1 machines, four routes and the sidebar model. Local format, typecheck, verify, 1,456 targeted tests and `lab:workers` pass; full `npm test`/`ci`/`smoke:scaffold`, hosted CI, the Tier 2 AI review (separate context, same model family) and `/security-review` are open. PR-B (`@morrow/policy/collaboration`) follows.
 - **P03.T04e PR-A** (PR #11): one formatting config, concurrent unit tests, manifest `executeAs`, heavy-faults workflow. The rest of P03.T04e ships in later PRs.
 - **P14.T01a PR-1** (PR #15, provisional under ADR-0003): workspace UI shell, sign-in and navigation.
 
@@ -36,8 +37,8 @@ In progress:
 
 ## Next actions
 
-1. P01.T04a PR-A (PR #14): hosted CI green on the merged head (including `lab:permissions` for AC31 and `lab:workers` for the billing selectors), the Tier 2 AI review and `/security-review` (authority and billing), then merge. Then PR-B (billing route library).
-2. P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
+1. P01.T04a PR-B (billing route library), on the merged PR-A (`bba3cec`).
+2. P01.T02c PR-A: open the PR when Actions minutes allow, then hosted CI, the Tier 2 AI review and `/security-review`; then PR-B. P06.T01b, P06.T02a (event transport on the P01.T02c envelope and registry), P06.T01c (OperationLedger) and P01.T02b.
 3. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Open plan follow-ups:

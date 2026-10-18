@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "adr": [
+    "ADR-0016"
+  ],
+  "trustRank": [
+    "untrusted_external",
+    "synthetic",
+    "hypothesis",
+    "work_record",
+    "reviewed_lesson",
+    "approved_business_fact",
+    "provider_fact"
+  ],
+  "kindMachines": {
+    "question": [
+      "question"
+    ],
+    "approval": [
+      "approval"
+    ],
+    "access_request": [
+      "access_request"
+    ],
+    "exception": [
+      "operation",
+      "approval"
+    ],
+    "assignment": [
+      "task"
+    ],
+    "mention": [
+      "none"
+    ],
+    "stop_notice": [
+      "none"
+    ],
+    "stop_proposal": [
+      "stop_proposal"
+    ]
+  },
+  "openStates": {
+    "question": [
+      "open"
+    ],
+    "approval": [
+      "pending"
+    ],
+    "access_request": [
+      "pending"
+    ],
+    "operation": [
+      "uncertain",
+      "conflict"
+    ],
+    "task": [
+      "draft",
+      "ready",
+      "waiting_input",
+      "waiting_approval",
+      "paused"
+    ],
+    "stop_proposal": [
+      "open"
+    ],
+    "none": []
+  },
+  "neverOpen": [
+    "failed_operation"
+  ],
+  "limits": {
+    "messageParts": {
+      "minimum": 1,
+      "maximum": 32
+    },
+    "messagePartsJsonBytes": 65536,
+    "textPartCharacters": 16384,
+    "evidenceSummaryCharacters": 4096,
+    "evidenceRefsPerSummary": 50,
+    "citedRefsPerMessage": 100,
+    "restrictedSourcesPerMessage": 100,
+    "fieldsPerSource": 100,
+    "restrictedSourcesJsonBytes": 65536,
+    "viewRequirementsPerMessage": 102,
+    "mentionPartsPerMessage": 10,
+    "mentionNotificationsPerAuthorPerWorkspace": {
+      "count": 60,
+      "windowSeconds": 600
+    },
+    "pageSize": {
+      "minimum": 1,
+      "maximum": 50
+    },
+    "inboxMarkBatch": {
+      "minimum": 1,
+      "maximum": 100
+    },
+    "askConversationsPerOwnerPerWorkspace": 1000,
+    "projectTitleCharacters": 120,
+    "projectTabs": 20,
+    "projectTabTitleCharacters": 60,
+    "pinnedProjectsPerWorkspace": 20,
+    "accessRequest": {
+      "resources": 100,
+      "stores": 10,
+      "accounts": 10,
+      "fields": {
+        "minimum": 1,
+        "maximum": 100
+      },
+      "reasonCharacters": 1024,
+      "pendingPerRequester": 20,
+      "expirySeconds": 604800
+    },
+    "cursorMaximumAgeSeconds": 86400,
+    "eventPayloadJcsBytes": 512,
+    "askAdminReadRecordAsks": 50,
+    "askAdminReadRetentionDays": 365
+  }
+}

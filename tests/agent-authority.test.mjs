@@ -8,6 +8,7 @@ import {
 } from "../packages/policy/src/agent-authority.ts";
 import { createHumanPolicyService } from "../packages/policy/src/index.ts";
 import { validateDefinition } from "../packages/contracts/src/validation.ts";
+import { collaborationPermissions } from "../packages/contracts/src/work-permissions.ts";
 import {
   delegationFixture,
   delegationChainFixture,
@@ -1083,4 +1084,54 @@ test("AC07: the pause an agent proposes is a stop only a human can execute", asy
   await allowed(
     retarget(delegationFixture(), "catalog.products.read", "view", "product", ["title"]),
   );
+});
+
+// P01.T02c AC08 (ADR-0016): agents reach every collaboration record they may read
+// through agent-eligible capabilities, and get no verb on the six human_only ones.
+const collaborationHumanOnly = [
+  "workspace.conversation.create",
+  "workspace.project.create",
+  "workspace.project.pin",
+  "workspace.inbox.read",
+  "workspace.inbox.mark",
+  "governance.access.request",
+];
+test("P01.T02c AC08: agents get capability_denied for view, propose and execute on the six human_only collaboration capabilities", async () => {
+  for (const id of collaborationHumanOnly) {
+    const c = catalogue.capabilities.find((x) => x.id === id);
+    assert.equal(c.executor, "human_only", id);
+    assert.equal(c.kill_switch || c.review_required, false, id);
+    for (const mode of ["delegation", "automation"])
+      for (const verb of ["view", "propose", "execute"]) {
+        const make = mode === "delegation" ? delegationFixture : automationFixture;
+        const f = retarget(make(), id, verb, "task", ["subject"]);
+        assert.equal(await reasonFor(f, mode), "capability_denied", `${mode} ${verb} ${id}`);
+        await denied(f, mode);
+      }
+  }
+});
+test("P01.T02c AC08: under a task envelope the kernel allows the planned project read, task-conversation subject view, message read and post", async () => {
+  for (const key of ["project.read", "task.subjectView", "message.read", "message.post"]) {
+    const rule = collaborationPermissions[key];
+    assert.equal(rule.agents, "kernel", key);
+    for (const r of rule.requires) {
+      const f = retarget(delegationFixture(), r.capabilityId, r.verb, "task", [...r.fields]);
+      const result = await allowed(f);
+      assert.ok(result.obligations.includes("recheck_at_dispatch"), key);
+    }
+  }
+  // An agent-reachable row never names a human_only or eligible_human_* capability.
+  for (const [key, rule] of Object.entries(collaborationPermissions))
+    if (rule.agents !== "never")
+      for (const r of rule.requires) {
+        const c = catalogue.capabilities.find((x) => x.id === r.capabilityId);
+        assert.notEqual(c.executor, "human_only", key);
+        assert.ok(!c.eligible_principal.startsWith("eligible_human_"), key);
+      }
+  // The Ask admin row is human-only: an agent acting for an admin gets nothing.
+  const admin = collaborationPermissions["ask.adminRead"].requires[0];
+  const f = retarget(delegationFixture(), admin.capabilityId, admin.verb, "task", [
+    ...admin.fields,
+  ]);
+  assert.equal(await reasonFor(f, "delegation"), "capability_denied");
 });

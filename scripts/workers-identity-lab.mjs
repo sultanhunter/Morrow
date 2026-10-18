@@ -3,9 +3,13 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { build } from "esbuild";
 import { Miniflare, Log, LogLevel } from "miniflare";
-import { validators } from "../packages/contracts/src/generated/runtime-validators.mjs";
+import {
+  validators,
+  validateEventPayload,
+  eventPayloadSelectors,
+} from "../packages/contracts/src/generated/runtime-validators.mjs";
 import { writeArtifact } from "./artifacts.mjs";
-import { contractVersion, readSchemaSources } from "./contract-sources.mjs";
+import { contractVersion, readSchemaSources, readEventRegistry } from "./contract-sources.mjs";
 import { proposal, oracle } from "../tests/fixtures/review-policy.mjs";
 
 // Every exact selector of every contract source runs in workerd; the expected
@@ -146,6 +150,50 @@ try {
     { code: "SELECTION_INVALID" },
     { code: "SELECTION_INVALID" },
   ]);
+  // P01.T02c (ADR-0016): every collaboration case and the registry selector in
+  // workerd equal their expected results; counts derive from the fixture and registry.
+  const collaboration = JSON.parse(
+    readFileSync("docs/contracts/fixtures/P01.T02c.json", "utf8"),
+  ).cases;
+  const schemaCases = collaboration.filter((c) => c.kind === "schema");
+  const eventCases = collaboration.filter((c) => c.kind === "event");
+  const registryRows = readEventRegistry().events;
+  assert.equal(Object.keys(eventPayloadSelectors).length, registryRows.length);
+  const payloadCases = eventCases
+    .filter((c) => c.value.payload !== null)
+    .map((c) => ({
+      eventType: c.value.eventType,
+      aggregateType: c.value.aggregateType,
+      payload: c.value.payload,
+    }));
+  const collaborationResponse = await runtime.dispatchFetch("http://morrow.local/collaboration", {
+    method: "POST",
+    body: JSON.stringify({
+      schema: schemaCases.map(({ selector, value }) => ({ selector, value })),
+      events: eventCases.map((c) => c.value),
+      payloads: payloadCases,
+    }),
+    headers: { "content-type": "application/json" },
+  });
+  assert.equal(collaborationResponse.status, 200);
+  const collaborationResults = await collaborationResponse.json();
+  assert.deepEqual(
+    collaborationResults.schema,
+    schemaCases.map((c) => c.valid),
+  );
+  assert.deepEqual(
+    collaborationResults.events,
+    eventCases.map((c) => c.valid),
+  );
+  assert.deepEqual(
+    collaborationResults.payloads,
+    payloadCases.map((c) => validateEventPayload(c.eventType, c.aggregateType, c.payload)),
+  );
+  assert.ok(
+    registryRows.every((row) =>
+      eventCases.some((c) => c.valid && c.value.eventType === row.eventType),
+    ),
+  );
   assert.equal(outboundRequests, 0);
   const inputPaths = [
     "packages/identity/src/neon.ts",
@@ -155,6 +203,8 @@ try {
     "packages/policy/src/review.ts",
     "packages/policy/src/review-facts.ts",
     "tests/fixtures/review-policy.mjs",
+    "docs/contracts/fixtures/P01.T02c.json",
+    "docs/contracts/event-registry.json",
     ...sources.map((source) => source.path),
     "scripts/fixtures/neon-worker.ts",
     "scripts/workers-identity-lab.mjs",
@@ -177,6 +227,9 @@ try {
         ),
         validator_cases: definitions * corpus.length,
         review_preview_cases: selections.length,
+        collaboration_schema_cases: schemaCases.length,
+        collaboration_event_cases: eventCases.length,
+        event_registry_rows: registryRows.length,
         review_preview_digests_equal: true,
         dynamic_code_generation_denied: true,
         sdk_configuration_passed: true,
@@ -194,7 +247,7 @@ try {
     ) + "\n",
   );
   console.log(
-    `PASS: local Workers runtime; ${(definitions * corpus.length).toLocaleString("en-US")} validator cases over ${definitions} selectors, ${selections.length} review previews equal to Node, SDK settings, dynamic-code denial, two concurrent fixture reads; zero provider calls.`,
+    `PASS: local Workers runtime; ${(definitions * corpus.length).toLocaleString("en-US")} validator cases over ${definitions} selectors, ${schemaCases.length + eventCases.length} collaboration cases and ${registryRows.length} registry rows, ${selections.length} review previews equal to Node, SDK settings, dynamic-code denial, two concurrent fixture reads; zero provider calls.`,
   );
 } finally {
   await runtime.dispose();

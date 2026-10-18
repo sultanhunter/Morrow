@@ -108,3 +108,54 @@ export function effectiveBodies(byKind, capabilityIds) {
 export function readEffectiveBodies(capabilityIds, root = repositoryRoot) {
   return effectiveBodies(schemasByKind(readSchemaSources(root)), capabilityIds);
 }
+
+// The additive event registry of EventEnvelope@2 (ADR-0016 item 6; P01.T02c §8).
+export const eventRegistryPath = "docs/contracts/event-registry.json";
+
+/** Reads the event registry as parsed JSON. */
+export const readEventRegistry = (root = repositoryRoot) =>
+  JSON.parse(readFileSync(resolve(root, eventRegistryPath), "utf8"));
+
+const eventTypePattern = /^[a-z][a-z_]*(\.[a-z][a-z_]*)+$/;
+const aggregateTypePattern = /^[a-z][a-z_]{0,63}$/;
+const registryRowKeys = "aggregateType,eventType,payloadDefinition,producer,since";
+
+/**
+ * Maps each registered event type to its aggregate type and the exact selector
+ * of its payload definition (the newest core layer that defines it). Throws on
+ * a malformed row: a closed row of five strings, a well-formed and unique event
+ * type, an aggregate type equal to its first segment, a payload definition that
+ * exists and ends in "Payload", and `since` "1.1".
+ */
+export function eventPayloadSelectors(byKind, registry) {
+  if (
+    registry === null ||
+    typeof registry !== "object" ||
+    registry.schema_version !== 1 ||
+    !Array.isArray(registry.events)
+  )
+    throw Error("EVENT_REGISTRY_INVALID");
+  const current = currentDefinitionSelectors(byKind);
+  const rows = {};
+  for (const row of registry.events) {
+    const valid =
+      row !== null &&
+      typeof row === "object" &&
+      Object.keys(row).sort().join() === registryRowKeys &&
+      Object.values(row).every((value) => typeof value === "string" && value.trim() !== "") &&
+      eventTypePattern.test(row.eventType) &&
+      row.eventType.length <= 128 &&
+      aggregateTypePattern.test(row.aggregateType) &&
+      row.aggregateType === row.eventType.split(".")[0] &&
+      /Payload$/.test(row.payloadDefinition) &&
+      Object.hasOwn(current, row.payloadDefinition) &&
+      row.since === "1.1" &&
+      !Object.hasOwn(rows, row.eventType);
+    if (!valid) throw Error("EVENT_REGISTRY_INVALID:" + JSON.stringify(row?.eventType ?? row));
+    rows[row.eventType] = {
+      aggregateType: row.aggregateType,
+      selector: current[row.payloadDefinition],
+    };
+  }
+  return rows;
+}
