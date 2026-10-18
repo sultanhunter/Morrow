@@ -355,6 +355,9 @@ export type CoreV1_1_ReviewPolicy = { "schemaVersion": 1; "id": Core_Id; "organi
 export type CoreV1_1_ApprovalDecision = { "reviewer": CoreV1_1_HumanActorRef; "decision": "approve" | "reject"; "decidedAt": Core_UtcTime; "commandId": Core_Id; "requestDigest": Core_Digest; "comment": (string | null); "soloOwnerConfirmation": ({ "phraseDigest": Core_Digest; "coolDownSeconds": number; } | null); };
 export type CoreV1_1_Approval = (unknown & unknown & unknown & { "schemaVersion": 2; "id": Core_Id; "organizationId": Core_Id; "workspaceId": Core_Id; "storeId": (Core_Id | null); "revision": Core_Revision; "createdAt": Core_UtcTime; "updatedAt": Core_UtcTime; "proposalRef": Core_ProposalRef; "proposalDigest": Core_Digest; "status": Core_ApprovalStatus; "reviewer": (CoreV1_1_HumanActorRef | null); "decision": ("approve" | "reject" | null); "decidedAt": (Core_UtcTime | null); "expiresAt": Core_UtcTime; "policyRevision": Core_Revision; "scopeDigest": Core_Digest; "reviewPolicyRef": Core_PolicyRef; "requiredApprovals": number; "decisions": Array<CoreV1_1_ApprovalDecision>; "effectiveAt": (Core_UtcTime | null); });
 export type CoreV1_1_ReviewDecisionInput = (unknown & { "decision": "approve" | "reject" | "cancel_before_effective"; "selectedTargetIndexes": CoreV1_1_TargetSelection; "expectedDecisionDigest": Core_Digest; "soloOwnerConfirmation": (string | null); "comment": (string | null); });
+export type CoreV1_1_AccountOverview = { "schemaVersion": 1; "workspaces": Array<{ "organizationId": Core_Id; "organizationName": string; "workspaceId": Core_Id; "workspaceName": string; }>; "truncated": boolean; "onboarding": "available" | "unavailable"; };
+export type CoreV1_1_OrganizationSignupRequest = { "schemaVersion": 1; "organizationName": string; "workspaceName": string; };
+export type CoreV1_1_OrganizationSignupResult = ({ "schemaVersion": 1; "outcome": "created" | "replayed"; "organizationId": Core_Id; "workspaceId": Core_Id; } | { "schemaVersion": 1; "outcome": "invalid_name" | "signup_unavailable" | "already_onboarded" | "idempotency_conflict" | "rate_limited" | "outcome_unknown"; });
 export type CapabilityV1_1_ads_campaign_pause_input = { "campaigns": CoreV1_1_CampaignRefs; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_agents_installation_disable_input = { "installationId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_governance_membership_revoke_input = { "membershipId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
@@ -367,6 +370,7 @@ export type CapabilityV1_1_governance_approval_preview_input = { "proposalRef": 
 export type CapabilityV1_1_governance_approval_preview_output = { "proposal": CoreV1_1_Proposal; };
 export interface CurrentDefinitions {
   "AccountList": Core_AccountList;
+  "AccountOverview": CoreV1_1_AccountOverview;
   "ActorRef": Core_ActorRef;
   "AdMetricList": Core_AdMetricList;
   "AgentInstallation": Core_AgentInstallation;
@@ -442,6 +446,8 @@ export interface CurrentDefinitions {
   "OperationStatus": Core_OperationStatus;
   "OptionList": Core_OptionList;
   "OrderList": Core_OrderList;
+  "OrganizationSignupRequest": CoreV1_1_OrganizationSignupRequest;
+  "OrganizationSignupResult": CoreV1_1_OrganizationSignupResult;
   "PatchRef": Core_PatchRef;
   "Period": Core_Period;
   "PeriodRef": Core_PeriodRef;
@@ -504,6 +510,7 @@ export interface CurrentDefinitions {
 }
 export type CurrentDefinitionName = keyof CurrentDefinitions;
 export type Current_AccountList = Core_AccountList;
+export type Current_AccountOverview = CoreV1_1_AccountOverview;
 export type Current_ActorRef = Core_ActorRef;
 export type Current_AdMetricList = Core_AdMetricList;
 export type Current_AgentInstallation = Core_AgentInstallation;
@@ -579,6 +586,8 @@ export type Current_Operation = Core_Operation;
 export type Current_OperationStatus = Core_OperationStatus;
 export type Current_OptionList = Core_OptionList;
 export type Current_OrderList = Core_OrderList;
+export type Current_OrganizationSignupRequest = CoreV1_1_OrganizationSignupRequest;
+export type Current_OrganizationSignupResult = CoreV1_1_OrganizationSignupResult;
 export type Current_PatchRef = Core_PatchRef;
 export type Current_Period = Core_Period;
 export type Current_PeriodRef = Core_PeriodRef;

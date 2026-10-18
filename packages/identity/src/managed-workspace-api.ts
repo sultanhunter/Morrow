@@ -91,7 +91,12 @@ export function createWorkersManagedWorkspaceApi(dependencies?: ManagedWorkspace
       return Promise.resolve(standaloneJson(400, { code: "request_denied" }));
     }
     const auth = path === "/auth" || path.startsWith("/auth/");
-    const workspace = path === "/workspace" || path.startsWith("/workspace/");
+    // The account routes (P05.T01x) are exact paths owned by the workspace handler.
+    const workspace =
+      path === "/workspace" ||
+      path.startsWith("/workspace/") ||
+      path === "/workspaces" ||
+      path === "/organizations";
     if (!configured)
       return Promise.resolve(
         standaloneJson(workspace ? 401 : auth ? 503 : 404, {

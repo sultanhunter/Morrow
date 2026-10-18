@@ -20,8 +20,7 @@ import {
 import { ownRecord, wellFormed } from "./controlled-neon-login-profiles.js";
 import { createLoginFlowCustody } from "./login-flow-custody.js";
 import { createWorkosAuthenticationEvidence } from "./workos-authentication-evidence.js";
-import { createWorkosWorkspaceSelection } from "./workos-workspace-selection.js";
-import { createWorkosBrowserSessionAdmission } from "./workos-browser-session-admission.js";
+import { createWorkosAccountAdmission } from "./workos-browser-session-admission.js";
 import type { WorkosSessionPageReader } from "./workos-session-status.js";
 import { runControlledPreauth, type LoginControlledSqlPool } from "./login-preauth-control.js";
 import {
@@ -60,7 +59,6 @@ export interface StandaloneLoginDependencies {
   readonly configurationJson: string;
   readonly loginPool: LoginControlledSqlPool;
   readonly preauthPool: LoginControlledSqlPool;
-  readonly selectionPool: LoginControlledSqlPool;
   readonly sessionPool: LoginControlledSqlPool;
   readonly providerPort: Readonly<FixedWorkosLoginPort>;
   readonly now: () => number;
@@ -321,15 +319,14 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
   let config: Awaited<ReturnType<typeof parseLoginConfiguration>>;
   let loginPool: LoginControlledSqlPool,
     preauthPool: LoginControlledSqlPool,
-    selectionPool: LoginControlledSqlPool,
     sessionPool: LoginControlledSqlPool;
   let provider: Readonly<FixedWorkosLoginPort>, now: () => number;
   try {
     config = await parseLoginConfiguration(dependencies.configurationJson);
-    ({ loginPool, preauthPool, selectionPool, sessionPool, now } = dependencies);
+    ({ loginPool, preauthPool, sessionPool, now } = dependencies);
     provider = dependencies.providerPort;
     if (
-      [loginPool, preauthPool, selectionPool, sessionPool].some(
+      [loginPool, preauthPool, sessionPool].some(
         (pool) => !pool || typeof pool.connect !== "function",
       ) ||
       typeof now !== "function" ||
@@ -337,7 +334,7 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
       typeof provider.exchange !== "function" ||
       typeof provider.readPublicKeyset !== "function" ||
       typeof provider.readSessionPage !== "function" ||
-      new Set([loginPool, preauthPool, selectionPool, sessionPool]).size !== 4
+      new Set([loginPool, preauthPool, sessionPool]).size !== 3
     )
       throw loginFailure();
   } catch {
@@ -352,7 +349,6 @@ export async function createStandaloneLoginBridge(dependencies: StandaloneLoginD
     config,
     loginPool,
     preauthPool,
-    selectionPool,
     sessionPool,
     providerPort: provider,
     now,
@@ -394,7 +390,6 @@ function createLoginCore(context: CoreContext) {
     config,
     loginPool,
     preauthPool,
-    selectionPool,
     sessionPool,
     now,
     providerPort: provider,
@@ -421,14 +416,16 @@ function createLoginCore(context: CoreContext) {
       );
   };
   const custody = createLoginFlowCustody({ pool: loginPool, now });
-  const aad = (fields: readonly string[]) =>
+  // An account flow has no workspace: its AAD element is JSON null, exactly as the
+  // 0010 bind check's array_to_json renders a NULL workspace_id (0013).
+  const aad = (fields: readonly (string | null)[]) =>
     encoder.encode(
       JSON.stringify(["morrow.login.capsule", "1", config.configurationDigest, ...fields]),
     );
   type Finalize = () => Readonly<AuthDeliveryPlan>;
   const start = async (request: Request, attempt: LoginAttempt): Promise<Finalize> => {
     if (capsule.kind === "managed") assertManagedLoginSealEligibility(capsule.keyring, attempt);
-    const workspaceId = await loginStartInput(request, attempt);
+    await loginStartInput(request, attempt);
     const freshId = () => {
       if (managed) attempt.check();
       const id = crypto.randomUUID();
@@ -445,7 +442,7 @@ function createLoginCore(context: CoreContext) {
     ];
     if (capsule.kind === "managed") assertManagedLoginSealEligibility(capsule.keyring, attempt);
     const intent = await attempt.wait(
-      custody.createIntent(
+      custody.createAccountIntent(
         JSON.stringify({
           schemaVersion: 1,
           configurationDigest: config.configurationDigest,
@@ -453,7 +450,6 @@ function createLoginCore(context: CoreContext) {
           beginCommandId,
           admissionCommandId,
           issuerCommandId,
-          workspaceId,
         }),
         attempt.control(),
       ),
@@ -516,7 +512,7 @@ function createLoginCore(context: CoreContext) {
       beginCommandId,
       admissionCommandId,
       issuerCommandId,
-      workspaceId,
+      null,
       intent.expires_at_ms,
       stateDigest,
       cookieDigest,
@@ -657,7 +653,7 @@ function createLoginCore(context: CoreContext) {
       !claimed.begin_command_id ||
       !claimed.admission_command_id ||
       !claimed.issuer_command_id ||
-      !claimed.workspace_id ||
+      claimed.workspace_id !== null ||
       !claimed.ciphertext ||
       !claimed.encryption_nonce ||
       !claimed.aad_digest ||
@@ -695,7 +691,7 @@ function createLoginCore(context: CoreContext) {
       claimed.begin_command_id,
       claimed.admission_command_id,
       claimed.issuer_command_id,
-      claimed.workspace_id,
+      null,
       claimed.expires_at_ms,
       stateDigest,
       cookieDigest,
@@ -898,27 +894,10 @@ function createLoginCore(context: CoreContext) {
       return owner.readEvidence(handle);
     };
     if (!readEvidence(verified.handle)) throw loginFailure();
-    const selectionService = createWorkosWorkspaceSelection({
-      pool: selectionPool,
-      now: attempt.check,
-      readEvidence,
-      signal: attempt.control().signal,
-    });
-    const selected = await attempt.wait(
-      selectionService.resolve(
-        verified.handle,
-        JSON.stringify({ schemaVersion: 1, workspaceId: claimed.workspace_id }),
-      ),
-    );
-    if (
-      selected.outcome !== "selected" ||
-      selected.selection.profileId !== config.profileId ||
-      selected.selection.profileRecordRevision !== config.profileRecordRevision ||
-      selected.selection.workspaceId !== claimed.workspace_id
-    )
-      throw loginFailure();
-    const s = selected.selection;
-    const admission = createWorkosBrowserSessionAdmission({
+    // Account admission (ADR-0009): no workspace is selected at sign-in. The configured
+    // profile is the only selector; an unmapped verified subject may enroll in the same
+    // definer transaction, which grants no tenant authority.
+    const admission = createWorkosAccountAdmission({
       pool: sessionPool,
       now: attempt.check,
       readEvidence,
@@ -932,14 +911,8 @@ function createLoginCore(context: CoreContext) {
         JSON.stringify({
           schemaVersion: 1,
           commandId: claimed.issuer_command_id,
-          workspaceId: s.workspaceId,
-          profileId: s.profileId,
-          profileRecordRevision: s.profileRecordRevision,
-          mappingId: s.mappingId,
-          mappingRevision: s.mappingRevision,
-          bindingRevision: s.bindingRevision,
-          membershipId: s.membershipId,
-          policyRevision: s.policyRevision,
+          profileId: config.profileId,
+          profileRecordRevision: config.profileRecordRevision,
         }),
       ),
     );

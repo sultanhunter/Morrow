@@ -1151,6 +1151,148 @@
           }
         }
       ]
+    },
+    "AccountOverview": {
+      "description": "GET /workspaces (P05.T01x, ADR-0009). The workspaces the signed-in person may enter now, filtered by current session eligibility in one snapshot, ordered by C collation of organization name and id, then workspace name and id; at most 100, with truncated set when more exist. onboarding is available only to a self-enrolled principal with no signup while signup is enabled for its profile. Selection is the URL /w/{workspaceId}; the server stores no active workspace.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "workspaces": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "properties": {
+              "organizationId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "organizationName": {
+                "description": "Display text only; render as text.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "workspaceId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "workspaceName": {
+                "description": "Display text only; render as text.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "organizationId",
+              "organizationName",
+              "workspaceId",
+              "workspaceName"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "onboarding": {
+          "type": "string",
+          "enum": [
+            "available",
+            "unavailable"
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "workspaces",
+        "truncated",
+        "onboarding"
+      ],
+      "additionalProperties": false
+    },
+    "OrganizationSignupRequest": {
+      "description": "POST /organizations body (P05.T01x, ADR-0009): at most 2048 UTF-8 bytes of closed, duplicate-free JSON with a lowercase-UUID Idempotency-Key header. No client tenant, principal, subject or email field exists. Each name is 1-100 code points after NFC and trimming of the section 5 whitespace set W, with no code point of the control and bidirectional set F; the server applies that rule, this schema only bounds the length.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "organizationName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "workspaceName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "organizationName",
+        "workspaceName"
+      ],
+      "additionalProperties": false
+    },
+    "OrganizationSignupResult": {
+      "description": "POST /organizations result bodies (P05.T01x section 9): 201 created, 200 replayed, 400 invalid_name, 403 signup_unavailable, 409 already_onboarded or idempotency_conflict, 429 rate_limited with Retry-After: 600, and 503 outcome_unknown only after the create statement was submitted. A same-key retry is the reconciliation. 401 and other 503 replies use the fixed {code} body.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "created",
+                "replayed"
+              ]
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "outcome",
+            "organizationId",
+            "workspaceId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "invalid_name",
+                "signup_unavailable",
+                "already_onboarded",
+                "idempotency_conflict",
+                "rate_limited",
+                "outcome_unknown"
+              ]
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "outcome"
+          ],
+          "additionalProperties": false
+        }
+      ]
     }
   }
 }

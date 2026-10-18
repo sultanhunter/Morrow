@@ -15,7 +15,7 @@ export function matchWorkspacePath(catalogue,path,host='standalone') {
   const segments=path.replace(/\/$/,'').split('/');
   const matches=[];
   for(const route of catalogue.routes.filter(r=>r.hosts.includes(host))) {
-    const pattern=route.pattern.split('/');if(pattern.length!==segments.length)continue;
+    const pattern=route.pattern.replace(/\/$/,'').split('/');if(pattern.length!==segments.length)continue;
     const params={};let valid=true,staticCount=0;
     for(let i=0;i<pattern.length;i++) {
       if(pattern[i].startsWith(':')) {

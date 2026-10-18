@@ -135,7 +135,7 @@ export function inspectImports(file, code) {
       errors.push("UI_SERVER_IMPORT");
     if (
       (ui || neutral) &&
-      /^@morrow\/(api|broker|workers|shopify-connector|policy|identity|infrastructure|connectors|runtime|runtime-adapters|secrets)(\/|$)/.test(
+      /^@morrow\/(api|broker|workers|shopify-connector|policy|identity|infrastructure|connectors|runtime|runtime-adapters|secrets|work)(\/|$)/.test(
         specifier,
       )
     )

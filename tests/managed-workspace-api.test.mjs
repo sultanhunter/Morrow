@@ -126,7 +126,7 @@ function request(route = "bootstrap", change = {}) {
     route === "logout"
       ? { schemaVersion: 1 }
       : route === "login"
-        ? { schemaVersion: 1, workspaceId: "workspace_a" }
+        ? { schemaVersion: 2 }
         : { handoffToken: token };
   const csrf = createHmac("sha256", Buffer.from(secret, "base64url"))
     .update(JSON.stringify(["morrow.store-links.csrf", 1, "workspace_a", command, token]))
@@ -144,6 +144,29 @@ function request(route = "bootstrap", change = {}) {
     },
     ...(mutation ? { body: JSON.stringify(body) } : {}),
     ...rest,
+  });
+}
+function accountRequest(route, headers = {}) {
+  const post = route === "organizations";
+  return new Request(origin + "/" + route, {
+    method: post ? "POST" : "GET",
+    headers: {
+      Cookie: `__Host-morrow_session=${secret}`,
+      "X-Morrow-Request": "1",
+      ...(post
+        ? { Origin: origin, "Content-Type": "application/json", "Idempotency-Key": command }
+        : {}),
+      ...headers,
+    },
+    ...(post
+      ? {
+          body: JSON.stringify({
+            schemaVersion: 1,
+            organizationName: "Noor",
+            workspaceName: "Main",
+          }),
+        }
+      : {}),
   });
 }
 async function run(f, worker, input) {
@@ -182,6 +205,13 @@ test("ordinary default entry is unbound and denies every exposed route without c
   ]) {
     const response = await defaultWorker.fetch(request(route), undefined, ctx);
     assert.equal(response.status, expected);
+    assert.equal(response.headers.has("set-cookie"), false);
+  }
+  // P05.T01x-AC38: the account routes deny with the workspace 401 when unconfigured.
+  for (const input of [accountRequest("workspaces"), accountRequest("organizations")]) {
+    const response = await defaultWorker.fetch(input, undefined, ctx);
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { code: "authentication_required" });
     assert.equal(response.headers.has("set-cookie"), false);
   }
   assert.equal(
@@ -280,7 +310,12 @@ for (const [route, role] of [
     assert.equal(m.ownership.namespaceMismatches, 0);
     assert.equal(m.ownership.publicationAttempts, 1);
     assert.ok(Object.isFrozen(m));
-    assert.deepEqual(Object.keys(m.pools).sort(), ["identityPool", "linkingPool", "logoutPool"]);
+    assert.deepEqual(Object.keys(m.pools).sort(), [
+      "identityPool",
+      "linkingPool",
+      "logoutPool",
+      "onboardingPool",
+    ]);
   });
 }
 test("unchanged login delegates directly to its own request owner and original purpose", async () => {
@@ -424,4 +459,45 @@ test("a backwards clock becomes sticky across workspace and logout requests", as
   f.setTime(epoch + 1);
   assert.equal((await run(f, worker, request("logout"))).status, 503);
   assert.equal(f.borrows.length, before);
+});
+for (const [route, role] of [
+  ["workspaces", "morrow_api"],
+  ["organizations", "morrow_identity_onboarding"],
+])
+  test(`account ${route} reaches the workspace handler; a broker lease failure is unavailable`, async () => {
+    const f = fixture(),
+      worker = createWorkspaceApiWorker(f.dependencies);
+    const response = await run(f, worker, accountRequest(route));
+    // P05.T01x-AC23: a failure before the create statement is never outcome_unknown.
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { code: "unavailable" });
+    assert.equal(f.borrows.length, 1);
+    assert.equal(f.borrows[0].namespace.role, role);
+    assert.equal(f.borrows[0].namespace.purpose, "workspace_primary_and_one_same_role_observer");
+    const m = snapshotManagedWorkspaceResponseMetrics(response);
+    assert.equal(m.attemptEnded, true);
+    assert.equal(m.initialDeadlineMs, epoch + 5000);
+  });
+test("account routes refuse their envelope before any lease (P05.T01x-AC28)", async () => {
+  for (const [input, status] of [
+    [accountRequest("workspaces", { "X-Morrow-Request": "0" }), 403],
+    [accountRequest("organizations", { Origin: "https://evil.example" }), 403],
+    [accountRequest("organizations", { "Idempotency-Key": "not-a-key" }), 400],
+    [accountRequest("workspaces", { Cookie: "" }), 401],
+    [new Request(origin + "/workspaces", { method: "DELETE" }), 405],
+    [
+      new Request(origin + "/workspaces/", {
+        headers: { Cookie: `__Host-morrow_session=${secret}` },
+      }),
+      404,
+    ],
+  ]) {
+    const f = fixture(),
+      worker = createWorkspaceApiWorker(f.dependencies);
+    const response = await worker.fetch(input, undefined, f.ctx);
+    await f.drain();
+    assert.equal(response.status, status, input.url + " " + input.method);
+    assert.equal(response.headers.has("set-cookie"), false);
+    assert.deepEqual(f.borrows, []);
+  }
 });

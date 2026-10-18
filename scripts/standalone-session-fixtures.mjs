@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { localBrowserSessionPool } from "./local-browser-session-sql.mjs";
 import {
+  createWorkosAccountAdmission,
   createWorkosBrowserSessionAdmission,
   browserSessionAdmissionSql,
 } from "../packages/identity/src/workos-browser-session-admission.ts";
@@ -119,26 +120,42 @@ export function createStandaloneFixtureHarness({ id, sql }, migrationCount = 8) 
     deadlineMs: Date.now() + 5000,
     signal: new AbortController().signal,
   });
+  // `account: true` admits through the account owner (admit_account_family, 0013): the
+  // only admission a database with 0013 still executes, since 0013 revokes
+  // admit_browser_family from the sessions executor. The seeded mapping, profile binding
+  // and memberships make the family eligible for the fixture workspace.
   async function admitted(f, options = {}) {
+    const { account = false, ...poolOptions } = options;
     const e = await evidenceFor(f),
-      capture = [];
+      capture = [],
+      admitText = account
+        ? browserSessionAdmissionSql.admitAccount
+        : browserSessionAdmissionSql.admit;
     secrets.push(e.token);
     const pool = localBrowserSessionPool(id, {
-      ...options,
+      ...poolOptions,
       beforeQuery: async (t, v) => {
-        if (t === browserSessionAdmissionSql.admit) capture.push([...v]);
+        if (t === admitText) capture.push([...v]);
         if (options.beforeQuery) await options.beforeQuery(t, v);
       },
     });
     pools.push(pool);
     metrics.push(pool.metrics);
-    const service = createWorkosBrowserSessionAdmission({
+    const service = (account ? createWorkosAccountAdmission : createWorkosBrowserSessionAdmission)({
       pool,
       readEvidence: e.owner.readEvidence,
       now: Date.now,
       signal: options.signal,
     });
-    const r = await service.admit(e.handle, JSON.stringify(f.selector));
+    const selector = account
+      ? {
+          schemaVersion: 1,
+          commandId: f.selector.commandId,
+          profileId: f.selector.profileId,
+          profileRecordRevision: f.selector.profileRecordRevision,
+        }
+      : f.selector;
+    const r = await service.admit(e.handle, JSON.stringify(selector));
     if (r.credential) secrets.push(r.credential.secret);
     return { f, e, pool, service, result: r, tuple: capture[0] };
   }

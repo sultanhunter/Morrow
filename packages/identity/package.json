@@ -19,7 +19,8 @@
     "./standalone-store-linking": "./src/standalone-store-linking.ts",
     "./workspace-store-linking-control": "./src/workspace-store-linking-control.ts",
     "./standalone-login": "./src/standalone-login.ts",
-    "./standalone-logout": "./src/standalone-logout.ts"
+    "./standalone-logout": "./src/standalone-logout.ts",
+    "./request-primitives": "./src/request-primitives.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
