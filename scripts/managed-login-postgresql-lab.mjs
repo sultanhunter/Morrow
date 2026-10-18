@@ -49,6 +49,7 @@ const paths = [
   "infra/identity-role-prerequisites.sql",
   "infra/identity-login-role-prerequisites.sql",
   "infra/identity-logout-role-prerequisites.sql",
+  "infra/identity-onboarding-role-prerequisites.sql",
   "migrations/manifest.json",
   "package.json",
   "package-lock.json",
@@ -396,7 +397,7 @@ try {
         });
       }
       const auth = await engine.sealSetup();
-      check("all_twelve_migrations_installed", appliedMigrations === 12);
+      check("all_thirteen_migrations_installed", appliedMigrations === 13);
       check(
         "attested_owned_internal_no_publication_topology",
         engine.topology.internalNetwork &&
@@ -1166,7 +1167,7 @@ const report = {
   task: "P05.T01u",
   status: failure || cleanupFailures.length ? "held" : "passed",
   scope:
-    "independent_managed_Workers_capsule_keys_real_PostgreSQL17_fixed_four_role_native_transport",
+    "independent_managed_Workers_capsule_keys_real_PostgreSQL17_fixed_three_role_native_transport",
   source_digests: sourceDigests,
   source_inventory_digest: hash(JSON.stringify(Object.entries(sourceDigests))),
   runtimeDependencyDigests,

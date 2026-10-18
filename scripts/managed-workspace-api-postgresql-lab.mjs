@@ -74,6 +74,7 @@ const paths = [
   "infra/identity-role-prerequisites.sql",
   "infra/identity-login-role-prerequisites.sql",
   "infra/identity-logout-role-prerequisites.sql",
+  "infra/identity-onboarding-role-prerequisites.sql",
   "migrations/manifest.json",
   "package.json",
   "package-lock.json",
@@ -237,13 +238,14 @@ try {
         ...Object.values(engine.passwordByRole),
         JSON.parse(ring).versions[0].material,
       );
-      // These count/resource fixtures are separately admitted through the old
-      // actual SQL owner before seal; they are not the main native login cookie.
+      // These count/resource fixtures are separately admitted through the actual account
+      // SQL owner (admit_account_family; 0013 revoked the workspace-selector entry point)
+      // before seal; they are not the main native login cookie.
       const secondaryLinks = [];
       privateReferenceArrays.push(secondaryLinks);
       for (const scenario of ["concurrent_replay", "unknown_commit"]) {
         const configured = harness.configured({ origin });
-        const admitted = await harness.admitted(configured.f);
+        const admitted = await harness.admitted(configured.f, { account: true });
         const link = await seedStandaloneLinkingFixture(harness, admitted);
         secondaryLinks.push({ scenario, link });
       }
@@ -255,7 +257,7 @@ try {
         [1000, true],
       ]) {
         const configured = harness.configured({ origin }),
-          admitted = await harness.admitted(configured.f);
+          admitted = await harness.admitted(configured.f, { account: true });
         const link = await seedStandaloneLinkingFixture(harness, admitted);
         const clones = [];
         for (let i = 1; i < count; i++) {
@@ -283,7 +285,7 @@ try {
         authorityFixtures.push({ configured, admitted, link, count, oversized });
       }
       const auth = await engine.sealSetup();
-      check("all_twelve_unchanged_migrations", appliedMigrations === 12);
+      check("all_thirteen_unchanged_migrations", appliedMigrations === 13);
       check(
         "seven_scram_offers_and_nine_closed_probes",
         auth.scramOfferedRoles === 7 &&

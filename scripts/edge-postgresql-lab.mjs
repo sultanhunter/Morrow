@@ -192,7 +192,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
 
   stage = "seal";
   const sealed = await engine.sealSetup();
-  check("all_twelve_unchanged_migrations", appliedMigrations === 12);
+  check("all_thirteen_unchanged_migrations", appliedMigrations === 13);
   check("seven_scram_roles", sealed.scramOfferedRoles === 7);
 
   // Passive PG-wire observation of every bridged connection: the startup role.
