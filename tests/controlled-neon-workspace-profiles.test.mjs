@@ -18,6 +18,10 @@ import { identitySql } from "../packages/identity/src/index.ts";
 import { workspaceStoreLinkingControlSql as readSql } from "../packages/identity/src/workspace-store-linking-control.ts";
 import { workspaceStoreLinkingSql as writeSql } from "../packages/identity/src/workspace-store-linking.ts";
 import { selfLogoutSql } from "../packages/identity/src/self-logout-control.ts";
+import {
+  accountOnboardingSql,
+  accountOverviewSql,
+} from "../packages/identity/src/account-onboarding.ts";
 import { createLoginAttempt } from "../packages/identity/src/standalone-login-protocol.ts";
 import {
   createManagedLoginRequestOwner,
@@ -63,11 +67,16 @@ function owner(t, selected = digest, now = Date.now) {
 const make = (a, deps = dependencies(), selected = digest) =>
   createWorkersRequestBoundNeonWorkspacePools(deps, a.scope, a.ownerToken, selected);
 
-test("three frozen workspace profiles retain the exact owner SQL sets and role startup bounds", () => {
-  assert.deepEqual(Object.keys(profiles), ["identityPool", "linkingPool", "logoutPool"]);
+test("four frozen workspace profiles retain the exact owner SQL sets and role startup bounds", () => {
+  assert.deepEqual(Object.keys(profiles), [
+    "identityPool",
+    "linkingPool",
+    "logoutPool",
+    "onboardingPool",
+  ]);
   assert.ok(Object.isFrozen(profiles));
   const expected = {
-    identityPool: ["morrow_api", identitySql, 5000, 10000],
+    identityPool: ["morrow_api", { ...identitySql, overview: accountOverviewSql }, 5000, 10000],
     linkingPool: [
       "morrow_identity_linking",
       { ...readSql, ...writeSql, readOnlyBegin: readSql.begin, readRole: readSql.role },
@@ -75,6 +84,7 @@ test("three frozen workspace profiles retain the exact owner SQL sets and role s
       10000,
     ],
     logoutPool: ["morrow_identity_logout", selfLogoutSql, 1000, 5000],
+    onboardingPool: ["morrow_identity_onboarding", accountOnboardingSql, 2000, 5000],
   };
   for (const [name, p] of Object.entries(profiles)) {
     const [role, sql, statementTimeout, idleTimeout] = expected[name];
@@ -103,7 +113,12 @@ test("every statement has its actual PostgreSQL placeholder arity and exact128 b
     for (const statement of Object.values(p.statements)) {
       const positions = [...statement.text.matchAll(/\$([1-9][0-9]*)/g)].map((m) => Number(m[1]));
       assert.equal(statement.arity, positions.length ? Math.max(...positions) : 0);
-      assert.equal(statement.maximum, 128);
+      // The signup create carries two display names (200 UTF-16 units, P05.T01x); the
+      // copier still holds its digest, command and profile at ASCII 128.
+      assert.equal(
+        statement.maximum,
+        statement === profiles.onboardingPool.statements.create ? 200 : 128,
+      );
       const values = Array(statement.arity).fill("a");
       assert.deepEqual(copy(p, statement.text, values), values);
       assert.throws(() => copy(p, statement.text, [...values, "extra"]), held);
@@ -131,6 +146,7 @@ test("owner schema maximum tuples fit without reducing the original aggregate ce
     [profiles.linkingPool, "status", [64, 128, 64, 36], 292],
     [profiles.linkingPool, "apply", [128, 36, 64, 64, 64, 128, 128, 128, 17, 16, 16], 789],
     [profiles.logoutPool, "end", [36, 64, 64, 38, 30, 33, 128, 64], 457],
+    [profiles.identityPool, "overview", [64, 128], 192],
   ];
   for (const [p, key, sizes, total] of examples) {
     const values = sizes.map((n) => "a".repeat(n));
@@ -155,8 +171,8 @@ test("owner schema maximum tuples fit without reducing the original aggregate ce
     () =>
       snapshotControlledNeonParameters(
         original,
-        original.statements.admit.text,
-        Array(27).fill("a".repeat(608)),
+        original.statements.admitAccount.text,
+        Array(21).fill("a".repeat(781)),
       ),
     held,
   );
@@ -182,23 +198,30 @@ test("data-only dense snapshots reject getters/holes/properties and a forged pro
   assert.throws(() => copy(profiles.linkingPool, selfLogoutSql.end, Array(8).fill("a")), held);
 });
 
-test("workspace ASCII policy preserves old four-profile Unicode behavior", () => {
+test("workspace ASCII policy preserves the login profiles' Unicode behavior", () => {
   const p = controlledNeonLoginProfiles.sessionPool;
-  const values = Array(p.statements.admit.arity).fill("é");
-  assert.deepEqual(snapshotControlledNeonParameters(p, p.statements.admit.text, values), values);
+  const values = Array(p.statements.admitAccount.arity).fill("\u00E9");
+  assert.deepEqual(
+    snapshotControlledNeonParameters(p, p.statements.admitAccount.text, values),
+    values,
+  );
   assert.deepEqual(Object.keys(controlledNeonLoginProfiles), [
     "loginPool",
     "preauthPool",
-    "selectionPool",
     "sessionPool",
   ]);
 });
 
-test("native workspace constructor is inert, frozen and cohort-separated from four login pools", async (t) => {
+test("native workspace constructor is inert, frozen and cohort-separated from three login pools", async (t) => {
   const a = owner(t),
     pools = await make(a),
     login = await createWorkersControlledNeonLoginPools(dependencies());
-  assert.deepEqual(Object.keys(pools), ["identityPool", "linkingPool", "logoutPool"]);
+  assert.deepEqual(Object.keys(pools), [
+    "identityPool",
+    "linkingPool",
+    "logoutPool",
+    "onboardingPool",
+  ]);
   assert.ok(Object.isFrozen(pools));
   for (const pool of Object.values(pools)) assert.ok(Object.isFrozen(pool));
   for (const metric of Object.values(snapshotControlledNeonWorkspacePoolMetrics(pools)))

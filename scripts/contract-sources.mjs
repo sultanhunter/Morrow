@@ -29,6 +29,12 @@ export const schemaSources = Object.freeze(
       path: "docs/contracts/schemas/v1.1/capabilities.schema.json",
       prefix: "CapabilityV1_1",
     },
+    // Billing routes by origin (ADR-0015; P01.T04a).
+    {
+      kind: "billing-v1.1",
+      path: "docs/contracts/schemas/v1.1/billing.schema.json",
+      prefix: "BillingV1_1",
+    },
   ].map((source) => Object.freeze(source)),
 );
 
@@ -37,9 +43,10 @@ export const changesPath = "docs/contracts/schemas/v1.1/changes.json";
 
 // Effective selection, highest precedence first: a definition resolves to the
 // newest core layer that defines it, a capability body to the newest
-// capabilities layer. Billing is not layered; it stays at v1.
+// capabilities layer, and a billing definition to the newest billing layer.
 export const definitionLayers = Object.freeze(["core-v1.1", "core"]);
 export const bodyLayers = Object.freeze(["capabilities-v1.1", "capabilities"]);
+export const billingLayers = Object.freeze(["billing-v1.1", "billing"]);
 
 export const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -55,13 +62,19 @@ export function readSchemaSources(root = repositoryRoot) {
 export const schemasByKind = (sources) =>
   Object.fromEntries(sources.map((source) => [source.kind, source.schema]));
 
-/** Maps schemas keyed by source kind to effective `Name -> "kind:Name"` selectors. */
-export function currentDefinitionSelectors(byKind) {
+function layeredSelectors(byKind, layers) {
   const selectors = {};
-  for (const kind of [...definitionLayers].reverse())
+  for (const kind of [...layers].reverse())
     for (const name of Object.keys(byKind[kind].$defs)) selectors[name] = `${kind}:${name}`;
   return Object.fromEntries(Object.entries(selectors).sort(([a], [b]) => (a < b ? -1 : 1)));
 }
+
+/** Maps schemas keyed by source kind to effective `Name -> "kind:Name"` selectors. */
+export const currentDefinitionSelectors = (byKind) => layeredSelectors(byKind, definitionLayers);
+
+/** Effective billing `Name -> "kind:Name"` selectors: the newest billing layer that defines it. */
+export const currentBillingDefinitionSelectors = (byKind) =>
+  layeredSelectors(byKind, billingLayers);
 
 /** Maps capability IDs to effective `"<id>.<io>" -> "kind:<id>.<io>"` body selectors. */
 export function capabilityBodySelectors(byKind, capabilityIds) {

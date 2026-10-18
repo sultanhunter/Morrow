@@ -59,6 +59,12 @@ FROM pg_catalog.pg_roles r WHERE r.rolname=current_user`,
     "SELECT outcome,family_id,generation_id,provider_binding_id,expires_at_ms,audit_id FROM morrow_identity.admit_browser_family($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)",
   reconcile:
     "SELECT outcome,family_id,generation_id,provider_binding_id,expires_at_ms,audit_id FROM morrow_identity.reconcile_browser_admission($1,$2)",
+  // Account admission (0013): no workspace, mapping or membership selector. An unmapped
+  // verified subject may enroll in the same transaction while enrollment is enabled.
+  admitAccount:
+    "SELECT outcome,family_id,generation_id,provider_binding_id,expires_at_ms,audit_id FROM morrow_identity.admit_account_family($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)",
+  reconcileAccount:
+    "SELECT outcome,family_id,generation_id,provider_binding_id,expires_at_ms,audit_id FROM morrow_identity.reconcile_account_admission($1,$2)",
   commit: "COMMIT",
   rollback: "ROLLBACK",
 });
@@ -158,6 +164,23 @@ const selectorKeys = [
   "membershipId",
   "policyRevision",
 ] as const;
+const accountSelectorKeys = [
+  "schemaVersion",
+  "commandId",
+  "profileId",
+  "profileRecordRevision",
+] as const;
+function accountSelector(text: unknown) {
+  const v = closed(parseWorkosSessionStatusJson(text, 2048), accountSelectorKeys);
+  if (
+    v.schemaVersion !== 1 ||
+    !uuid(v.commandId) ||
+    !recordId(v.profileId) ||
+    !revision(v.profileRecordRevision)
+  )
+    throw fail();
+  return v;
+}
 function selector(text: unknown) {
   const v = closed(parseWorkosSessionStatusJson(text, 2048), selectorKeys);
   if (
@@ -258,6 +281,17 @@ const held = (
 // This is a private local issuer boundary, not an HTTP/cookie/provider adapter.
 export function createWorkosBrowserSessionAdmission(
   dependencies: BrowserSessionAdmissionDependencies,
+) {
+  return createAdmission(dependencies, "workspace");
+}
+// The account sibling (P05.T01x): the same attempt, release and uncertainty machinery and
+// result types, with the 20-element account tuple and no workspace authority.
+export function createWorkosAccountAdmission(dependencies: BrowserSessionAdmissionDependencies) {
+  return createAdmission(dependencies, "account");
+}
+function createAdmission(
+  dependencies: BrowserSessionAdmissionDependencies,
+  mode: "workspace" | "account",
 ) {
   let readEvidence: BrowserSessionAdmissionDependencies["readEvidence"],
     pool: BrowserSessionAdmissionSqlPool,
@@ -425,7 +459,7 @@ export function createWorkosBrowserSessionAdmission(
         correlation: Readonly<BrowserSessionAdmissionCorrelation> | null = null;
       try {
         const started = clock(),
-          selected = selector(selectorJson),
+          selected = mode === "account" ? accountSelector(selectorJson) : selector(selectorJson),
           commandId = selected.commandId as string;
         if (commands.has(commandId)) return held(commands.get(commandId) ?? null);
         if (commands.size >= 1024) return held(null);
@@ -462,10 +496,16 @@ export function createWorkosBrowserSessionAdmission(
           deadline,
           false,
           async (query) =>
-            decode(await query(browserSessionAdmissionSql.admit, values), fresh(), [
-              familyId,
-              generationId,
-            ]),
+            decode(
+              await query(
+                mode === "account"
+                  ? browserSessionAdmissionSql.admitAccount
+                  : browserSessionAdmissionSql.admit,
+                values,
+              ),
+              fresh(),
+              [familyId, generationId],
+            ),
           async (check) => {
             const random = crypto.getRandomValues(new Uint8Array(32));
             try {
@@ -482,34 +522,59 @@ export function createWorkosBrowserSessionAdmission(
             const secretDigest = await sha(secret);
             check();
             const e = original!;
-            const tuple = Object.freeze([
-              commandId,
-              e.providerId,
-              e.environmentId,
-              e.applicationId,
-              e.clientId,
-              e.issuer,
-              String(e.tokenProfileRevision),
-              e.tokenProfileDigest,
-              e.subjectId,
-              e.providerSessionId,
-              selected.workspaceId as string,
-              String(e.issuedAtMs),
-              String(e.observedAtMs),
-              String(e.expiresAtMs),
-              e.keySetDigest,
-              e.observationProfileDigest,
-              secretDigest,
-              selected.profileId as string,
-              String(selected.profileRecordRevision),
-              selected.mappingId as string,
-              String(selected.mappingRevision),
-              String(selected.bindingRevision),
-              selected.membershipId as string,
-              String(selected.policyRevision),
-              familyId,
-              generationId,
-            ]);
+            const tuple = Object.freeze(
+              mode === "account"
+                ? [
+                    commandId,
+                    e.providerId,
+                    e.environmentId,
+                    e.applicationId,
+                    e.clientId,
+                    e.issuer,
+                    String(e.tokenProfileRevision),
+                    e.tokenProfileDigest,
+                    e.subjectId,
+                    e.providerSessionId,
+                    String(e.issuedAtMs),
+                    String(e.observedAtMs),
+                    String(e.expiresAtMs),
+                    e.keySetDigest,
+                    e.observationProfileDigest,
+                    secretDigest,
+                    selected.profileId as string,
+                    String(selected.profileRecordRevision),
+                    familyId,
+                    generationId,
+                  ]
+                : [
+                    commandId,
+                    e.providerId,
+                    e.environmentId,
+                    e.applicationId,
+                    e.clientId,
+                    e.issuer,
+                    String(e.tokenProfileRevision),
+                    e.tokenProfileDigest,
+                    e.subjectId,
+                    e.providerSessionId,
+                    selected.workspaceId as string,
+                    String(e.issuedAtMs),
+                    String(e.observedAtMs),
+                    String(e.expiresAtMs),
+                    e.keySetDigest,
+                    e.observationProfileDigest,
+                    secretDigest,
+                    selected.profileId as string,
+                    String(selected.profileRecordRevision),
+                    selected.mappingId as string,
+                    String(selected.mappingRevision),
+                    String(selected.bindingRevision),
+                    selected.membershipId as string,
+                    String(selected.policyRevision),
+                    familyId,
+                    generationId,
+                  ],
+            );
             const requestDigest = await sha(JSON.stringify(tuple));
             check();
             correlation = Object.freeze({ commandId, requestDigest });
@@ -556,7 +621,9 @@ export function createWorkosBrowserSessionAdmission(
         const decoded = await attempt(fresh, deadline, true, async (query) => {
           const row = decode(
             await query(
-              browserSessionAdmissionSql.reconcile,
+              mode === "account"
+                ? browserSessionAdmissionSql.reconcileAccount
+                : browserSessionAdmissionSql.reconcile,
               Object.freeze([s.commandId as string, s.requestDigest as string]),
             ),
             fresh(),

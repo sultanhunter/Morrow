@@ -11,6 +11,8 @@ import type {
 import { validateDefinition } from "@morrow/contracts/validation";
 import catalogue from "../../../docs/contracts/capabilities.json";
 import { plainJson, closed, freezeJson } from "./json-boundary";
+import { isPaidWork } from "./paid-work";
+export { isPaidWork } from "./paid-work";
 export type PermissionVerb = Core_Grant["verbs"][number];
 export interface PermissionRequest {
   readonly capabilityId: CapabilityId;
@@ -33,6 +35,11 @@ export interface HumanAuthority {
   readonly resource: Core_ResourceRef;
   readonly accountId: string | null;
   readonly providerAllowed: boolean;
+  /**
+   * Set only by `createBillingConstraintsReader` from `entitlementFor()`, and read
+   * only when `isPaidWork`. Every other builder passes `false`;
+   * `inspectEntitlementWriters` enforces this (P01.T04a §2).
+   */
   readonly entitlementAllowed: boolean;
   readonly grants: readonly Core_Grant[];
 }
@@ -147,6 +154,33 @@ const safeMessages: Record<Core_PolicyDecision["reason"], string> = {
   source_conflict: "Current source authority conflicts.",
   entitlement_denied: "Current service entitlement does not permit this request.",
 };
+/**
+ * A grant is current for `actor` when it names exactly that actor, the
+ * capability and the verb, is unrevoked and within its validity at `now`
+ * (epoch milliseconds), was issued under at most `policyRevision`, and was
+ * issued inside the actor's organization and workspace. Scope is checked
+ * separately.
+ */
+export function isCurrentGrant(
+  grant: Core_Grant,
+  actor: Core_ActorRef,
+  capabilityId: string,
+  verb: string,
+  policyRevision: number,
+  now: number,
+): boolean {
+  return (
+    sameActor(grant.principal, actor) &&
+    grant.capabilityId === capabilityId &&
+    (grant.verbs as readonly string[]).includes(verb) &&
+    grant.revokedAt === null &&
+    Date.parse(grant.validFrom) <= now &&
+    (grant.expiresAt === null || Date.parse(grant.expiresAt) > now) &&
+    grant.policyRevision <= policyRevision &&
+    grant.issuedBy.organizationId === actor.organizationId &&
+    (grant.issuedBy.workspaceId === null || grant.issuedBy.workspaceId === actor.workspaceId)
+  );
+}
 function evaluate(request: PermissionRequest, a: HumanAuthority, at: string): PermissionResult {
   const capability = capabilities.get(request.capabilityId);
   let reason: Core_PolicyDecision["reason"] = "allowed";
@@ -174,21 +208,16 @@ function evaluate(request: PermissionRequest, a: HumanAuthority, at: string): Pe
   else if (
     !capability ||
     capability.eligible_principal.startsWith("operator_") ||
-    (request.capabilityId === "governance.connection.connect" && request.verb !== "administer")
+    // Performing a connect needs administer, never execute. approve is the reviewer
+    // verb a connect proposal's reviewer needs (ADR-0011 Q5, ADR-0009 item 7).
+    (request.capabilityId === "governance.connection.connect" &&
+      request.verb !== "administer" &&
+      request.verb !== "approve")
   )
     reason = "capability_denied";
   else {
-    const eligible = a.grants.filter(
-      (g) =>
-        sameActor(g.principal, a.actor) &&
-        g.capabilityId === request.capabilityId &&
-        g.verbs.includes(request.verb) &&
-        g.revokedAt === null &&
-        Date.parse(g.validFrom) <= now &&
-        (g.expiresAt === null || Date.parse(g.expiresAt) > now) &&
-        g.policyRevision <= a.policyRevision &&
-        g.issuedBy.organizationId === a.actor.organizationId &&
-        (g.issuedBy.workspaceId === null || g.issuedBy.workspaceId === a.actor.workspaceId),
+    const eligible = a.grants.filter((g) =>
+      isCurrentGrant(g, a.actor, request.capabilityId, request.verb, a.policyRevision, now),
     );
     const scoped = eligible.filter(
       (g) =>
@@ -207,9 +236,11 @@ function evaluate(request: PermissionRequest, a: HumanAuthority, at: string): Pe
     else if (!scoped.some((g) => request.fields.every((f) => g.scope.fields.includes(f))))
       reason = "field_denied";
     else if (!a.providerAllowed) reason = "provider_denied";
-    // A kill switch reserves no credits and is never blocked by credit balance
-    // or entitlement (ADR-0011 Q8); provider limits still apply above.
-    else if (!a.entitlementAllowed && !capability.kill_switch) reason = "entitlement_denied";
+    // Entitlement gates only paid work (P01.T04a §1, ADR-0015 item 5): reads,
+    // setup, linking, invitations, approvals, exports and every kill switch
+    // (ADR-0011 Q8) never read it. Provider limits still apply above.
+    else if (!a.entitlementAllowed && isPaidWork(request.capabilityId, request.verb))
+      reason = "entitlement_denied";
   }
   const obligations: ExecutionObligation[] = [];
   if (reason === "allowed") {
@@ -340,7 +371,19 @@ export function createWorkspacePermissionBoundary(
               at,
             );
             if (!preliminary.decision.allowed) return facts(before, false, false);
-            const conditions = await constraints.readCurrent(currentRequest, before.identity.actor);
+            const conditions: unknown = await constraints.readCurrent(
+              currentRequest,
+              before.identity.actor,
+            );
+            // Copy only a plain, closed pair of booleans: a class instance, getter,
+            // extra field or non-boolean value fails closed before it is read.
+            if (
+              !plainJson(conditions) ||
+              !closed(conditions, ["providerAllowed", "entitlementAllowed"]) ||
+              typeof conditions.providerAllowed !== "boolean" ||
+              typeof conditions.entitlementAllowed !== "boolean"
+            )
+              throw new PolicyBoundaryError("POLICY_AUTHORITY_UNAVAILABLE");
             // Constraint lookup may wait: reload SQL authority and reject a changed
             // policy rather than returning a stale allow after revocation.
             const after = await scope.readWorkspaceAuthority();

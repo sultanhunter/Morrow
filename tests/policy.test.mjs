@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHumanPolicyService } from "../packages/policy/src/index.ts";
+import { readFileSync } from "node:fs";
+import {
+  createHumanPolicyService,
+  isCurrentGrant,
+  isPaidWork,
+} from "../packages/policy/src/index.ts";
+import { paidWorkCapabilityIds } from "../packages/policy/src/paid-work.ts";
 import { validateDefinition } from "../packages/contracts/src/validation.ts";
 const at = "2026-10-06T18:00:00.000Z";
 const actor = {
@@ -123,7 +129,15 @@ for (const [name, change, expected] of [
   ],
   ["stale grants snapshot", (f) => (f.authority.grantsRevision = 1), "precondition_conflict"],
   ["provider denied", (f) => (f.authority.providerAllowed = false), "provider_denied"],
-  ["entitlement denied", (f) => (f.authority.entitlementAllowed = false), "entitlement_denied"],
+  // P01.T04a: entitlement gates only paid work, so the denial row uses a billable job.
+  [
+    "entitlement denied on paid work",
+    (f) => {
+      retarget(f, "creative.image.generate", "execute", "artifact", ["briefRef"]);
+      f.authority.entitlementAllowed = false;
+    },
+    "entitlement_denied",
+  ],
   [
     "unknown capability",
     (f) => (f.request.capabilityId = "invented.capability.read"),
@@ -212,6 +226,41 @@ test("connection setup requires explicit connection capability/administer grant"
   const result = await service(f.authority).decide(f.request);
   assert.equal(result.decision.reason, "allowed");
   assert.deepEqual(result.obligations, ["recheck_at_dispatch", "exact_approval"]);
+});
+test("a connect reviewer needs an explicit approve grant; approve never performs the connect", async () => {
+  const f = fixture();
+  f.request.capabilityId = "governance.connection.connect";
+  f.grant.capabilityId = f.request.capabilityId;
+  f.request.verb = "approve";
+  f.grant.verbs = ["administer"];
+  assert.equal(await reason(f), "capability_denied");
+  f.grant.verbs = ["administer", "approve"];
+  const result = await service(f.authority).decide(f.request);
+  assert.equal(result.decision.reason, "allowed");
+  assert.deepEqual(result.obligations, ["recheck_at_dispatch"]);
+  for (const verb of ["view", "propose", "execute", "delegate"]) {
+    f.request.verb = verb;
+    f.grant.verbs = ["view", "propose", "approve", "execute", "delegate", "administer"];
+    assert.equal(await reason(f), "capability_denied", verb);
+  }
+  // An approve-only holder cannot perform the connect itself.
+  f.request.verb = "administer";
+  f.grant.verbs = ["approve"];
+  assert.equal(await reason(f), "capability_denied");
+  // Agents, installations and mandates never review a connect, even with the grant.
+  f.request.verb = "approve";
+  f.grant.verbs = ["administer", "approve"];
+  for (const change of [
+    (a) => (a.kind = "agent"),
+    (a) => (a.installationId = "installation_a"),
+    (a) => (a.mandateId = "mandate_a"),
+  ]) {
+    const g = structuredClone(f);
+    change(g.authority.actor);
+    change(g.grant.principal);
+    g.authority.grants = [g.grant];
+    assert.equal(await reason(g), "origin_denied");
+  }
 });
 test("workspace linking needs one grant covering the actual connection input fields before review", async () => {
   const f = fixture();
@@ -532,4 +581,210 @@ test("AC26: entitlement never blocks a kill switch; provider limits still apply"
   assert.equal(await reason(pause), "provider_denied");
   pause.authority.entitlementAllowed = false;
   assert.equal(await reason(pause), "provider_denied");
+});
+
+// P01.T04a PR-A: entitlement gates only paid work (ADR-0015 item 5, ADR-0011 Q8).
+const catalogue = JSON.parse(readFileSync("docs/contracts/capabilities.json", "utf8"));
+const templates = JSON.parse(
+  readFileSync("docs/contracts/fixtures/P01.T04a.json", "utf8"),
+).templates;
+const allVerbs = ["view", "propose", "approve", "execute", "delegate", "administer"];
+const without = ({ decisionId, ...decision }) => decision;
+test("P01.T04a: an unpaid read is allowed without entitlement", async () => {
+  const f = fixture();
+  f.authority.entitlementAllowed = false;
+  const r = await service(f.authority).decide(f.request);
+  assert.equal(r.decision.allowed, true);
+  assert.deepEqual(r.obligations, ["recheck_at_dispatch"]);
+});
+test("P01.T04a AC02: entitlement changes a decision only for paid work, across the catalogue", async () => {
+  const deniedForBilling = new Set();
+  let unpaid = 0;
+  for (const capability of catalogue.capabilities)
+    for (const verb of allVerbs) {
+      const decide = async (entitled) => {
+        const f = fixture();
+        f.request.capabilityId = capability.id;
+        f.request.verb = verb;
+        f.grant.capabilityId = capability.id;
+        f.grant.verbs = [...allVerbs];
+        f.authority.entitlementAllowed = entitled;
+        const r = await service(f.authority).decide(f.request);
+        return { decision: without(r.decision), obligations: [...r.obligations] };
+      };
+      const entitled = await decide(true),
+        unentitled = await decide(false);
+      const label = `${capability.id} ${verb}`;
+      if (!isPaidWork(capability.id, verb) || !entitled.decision.allowed) {
+        assert.deepEqual(unentitled, entitled, label);
+        if (entitled.decision.allowed) unpaid++;
+      } else {
+        assert.equal(unentitled.decision.reason, "entitlement_denied", label);
+        assert.equal(unentitled.decision.allowed, false, label);
+        assert.deepEqual(unentitled.obligations, [], label);
+        assert.ok(["execute", "administer"].includes(verb), label);
+        deniedForBilling.add(capability.id);
+      }
+    }
+  // Every paid capability a merchant can hold is billing-gated; operator
+  // capabilities are denied earlier under both. Reads, setup, linking,
+  // invitations, approvals, exports, privacy, propose and stops are not.
+  const merchantPaid = paidWorkCapabilityIds.filter(
+    (id) =>
+      !catalogue.capabilities.find((c) => c.id === id).eligible_principal.startsWith("operator_"),
+  );
+  assert.deepEqual([...deniedForBilling].sort(), merchantPaid);
+  assert.ok(unpaid > 300, String(unpaid));
+  for (const id of [
+    "governance.usage.read",
+    "governance.membership.invite",
+    "governance.connection.disconnect",
+    "governance.audit.export",
+    "governance.privacy.export",
+    "workspace.goal.create",
+    "ads.campaign.pause",
+  ])
+    assert.ok(!deniedForBilling.has(id), id);
+});
+test("P01.T04a AC03: administer is gated on paid work and allowed on linking", async () => {
+  const paid = retarget(fixture(), "creative.image.generate", "administer", "artifact", [
+    "briefRef",
+  ]);
+  paid.authority.entitlementAllowed = false;
+  assert.equal(await reason(paid), "entitlement_denied");
+  paid.authority.entitlementAllowed = true;
+  assert.equal(await reason(paid), "allowed");
+  const connect = retarget(fixture(), "governance.connection.connect", "administer", "workspace", [
+    "providerId",
+  ]);
+  connect.authority.entitlementAllowed = false;
+  assert.equal(await reason(connect), "allowed");
+});
+test("P01.T04a AC04: every kill switch executes without entitlement; provider limits still apply", async () => {
+  const stops = catalogue.capabilities.filter((c) => c.kill_switch);
+  assert.equal(stops.length, 5);
+  for (const stop of stops) {
+    const f = retarget(fixture(), stop.id, "execute", "member", ["control"]);
+    f.authority.entitlementAllowed = false;
+    const r = await service(f.authority).decide(f.request);
+    assert.equal(isPaidWork(stop.id, "execute"), false, stop.id);
+    // A release revocation is an operator capability, denied to merchants under both.
+    if (stop.eligible_principal.startsWith("operator_")) {
+      assert.equal(r.decision.reason, "capability_denied", stop.id);
+      continue;
+    }
+    assert.equal(r.decision.allowed, true, stop.id);
+    assert.ok(r.obligations.includes("kill_switch_record"), stop.id);
+    assert.ok(!r.obligations.includes("budget_reservation"), stop.id);
+  }
+  const pause = retarget(fixture(), "ads.campaign.pause", "execute", "campaign", [
+    "delivery_status",
+  ]);
+  pause.authority.providerAllowed = false;
+  pause.authority.entitlementAllowed = false;
+  assert.equal(await reason(pause), "provider_denied");
+  const activate = retarget(fixture(), "ads.campaign.activate", "execute", "campaign", [
+    "delivery_status",
+  ]);
+  activate.authority.entitlementAllowed = false;
+  assert.equal(await reason(activate), "entitlement_denied");
+});
+test("P01.T04a AC05: every ADR grant template row works without entitlement; paid execute does not", async () => {
+  const workspace = {
+    organizationId: "org_a",
+    workspaceId: "workspace_a",
+    storeId: null,
+    connectionId: null,
+    kind: "workspace",
+    id: "workspace_a",
+  };
+  let rows = 0,
+    connectApprove = 0;
+  for (const [template, list] of Object.entries(templates))
+    for (const row of list)
+      for (const verb of row.verbs) {
+        const decide = async (entitled) => {
+          const f = fixture();
+          f.request = {
+            capabilityId: row.capabilityId,
+            verb,
+            resource: structuredClone(workspace),
+            accountId: null,
+            fields: [...row.fields],
+          };
+          f.authority.resource = structuredClone(workspace);
+          f.authority.accountId = null;
+          f.grant.capabilityId = row.capabilityId;
+          f.grant.verbs = [...row.verbs];
+          f.grant.scope = {
+            ...f.grant.scope,
+            storeIds: [],
+            accountIds: [],
+            resources: [structuredClone(workspace)],
+            fields: [...row.fields],
+          };
+          f.authority.entitlementAllowed = entitled;
+          const r = await service(f.authority).decide(f.request);
+          return { decision: without(r.decision), obligations: [...r.obligations] };
+        };
+        const unentitled = await decide(false);
+        const label = `${template} ${row.capabilityId} ${verb}`;
+        assert.deepEqual(unentitled, await decide(true), label);
+        // Billing never decides a template row: every row is allowed without an
+        // entitlement, including connect `approve`, which the connection rule
+        // allows since P05.T01x Part B (ADR-0011 Q5, ADR-0009 item 7).
+        assert.notEqual(unentitled.decision.reason, "entitlement_denied", label);
+        assert.equal(unentitled.decision.allowed, true, label);
+        if (row.capabilityId === "governance.connection.connect" && verb === "approve")
+          connectApprove++;
+        rows++;
+      }
+  assert.ok(rows >= 40, String(rows));
+  // owner-bootstrap-v1 and workspace-admin-v1 each hold connect `approve`.
+  assert.equal(connectApprove, 2);
+  for (const capabilityId of [
+    "creative.image.generate",
+    "catalog.content.publish",
+    "support.reply.send",
+    "orders.refund.create",
+  ]) {
+    const f = retarget(fixture(), capabilityId, "execute", "product", ["title"]);
+    f.authority.entitlementAllowed = false;
+    assert.equal(await reason(f), "entitlement_denied", capabilityId);
+    const proposal = retarget(fixture(), capabilityId, "propose", "product", ["title"]);
+    proposal.authority.entitlementAllowed = false;
+    assert.equal(await reason(proposal), "allowed", capabilityId);
+  }
+});
+test("P01.T04a: isCurrentGrant is the evaluator's current-grant rule", () => {
+  const { grant } = fixture();
+  const now = Date.parse(at);
+  assert.equal(isCurrentGrant(grant, actor, "catalog.products.read", "view", 2, now), true);
+  for (const [name, args] of [
+    ["verb", [grant, actor, "catalog.products.read", "execute", 2, now]],
+    ["capability", [grant, actor, "catalog.products.write", "view", 2, now]],
+    ["policy revision", [grant, actor, "catalog.products.read", "view", 0, now]],
+    [
+      "before validity",
+      [grant, actor, "catalog.products.read", "view", 2, Date.parse("2026-09-01T00:00:00Z")],
+    ],
+    ["revoked", [{ ...grant, revokedAt: at }, actor, "catalog.products.read", "view", 2, now]],
+    ["expired", [{ ...grant, expiresAt: at }, actor, "catalog.products.read", "view", 2, now]],
+    [
+      "other actor",
+      [grant, { ...actor, principalId: "human_b" }, "catalog.products.read", "view", 2, now],
+    ],
+    [
+      "foreign issuer",
+      [
+        { ...grant, issuedBy: { ...actor, workspaceId: "workspace_b" } },
+        actor,
+        "catalog.products.read",
+        "view",
+        2,
+        now,
+      ],
+    ],
+  ])
+    assert.equal(isCurrentGrant(...args), false, name);
 });

@@ -143,7 +143,8 @@
     "Additional environments, email, monitoring, alerting and support",
     "Thirty-five-day daily recovery storage beyond included example; actual changed/snapshot bytes need measurement",
     "Extra database replicas/branches/private transfer; runtime snapshots/images and other provider meters not modeled",
-    "Enterprise SSO/DirectorySync/contracts, provider quota funding requirements, taxes and any enterprise commitments"
+    "Enterprise SSO/DirectorySync/contracts, provider quota funding requirements, taxes and any enterprise commitments",
+    "Payment and app-store fees, which scale with revenue rather than infrastructure usage (ADR-0015): Stripe Billing 0.7% of billing volume (S139), Stripe Tax US$0.50 per registered transaction (S140) and card processing fees on the Morrow-direct route; the 2.9% Shopify processing fee and any revenue share (S138) on the Shopify route"
   ],
   "billing_guard": "Known component subtotal omits unbound runtime subscription and unknown runtime meters. It cannot authorize provisioning or set merchant prices. Persistent storage and ordinary sync continue when inference stops.",
   "runtime_provider": "e2b",

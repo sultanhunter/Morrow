@@ -67,6 +67,17 @@ const published = [
     "0012.login-protocol-v1.sql",
     "52e9f699956ec8932056b22b2dc5294e540225562730666e0a87d00dfe857579",
   ],
+  [
+    13,
+    "0013.account-onboarding.sql",
+    "df215e288e6dda31fb62cb70b86354507d054a6e9f1df481891a4a5552e5d763",
+  ],
+  [
+    14,
+    "0014.work-identity-bridge.sql",
+    "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
+  ],
+  [15, "0015.work-state.sql", "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9"],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each
 // published row keeps exactly these pinned files, and a later role goes in a new file on its
@@ -103,9 +114,31 @@ const publishedPrerequisites = new Map([
       },
     ],
   ],
+  // P05.T01x Part B: the onboarding role, before 0013.
+  [
+    13,
+    [
+      {
+        file: "infra/identity-onboarding-role-prerequisites.sql",
+        sha256: "2baa597ab15f6c64957204071dccb96b2ca85bdc24eb2f482c5a9d8a7dd40e53",
+      },
+    ],
+  ],
+  // P06.T01a: the work roles, before 0014, the first migration that names them.
+  [
+    14,
+    [
+      {
+        file: "infra/work-role-prerequisites.sql",
+        sha256: "dbe05f09aa860e5e5e73de9358b5ca15e37c55cf74aec5a9d56571754e3f0b1c",
+      },
+    ],
+  ],
 ]);
-// Every published migration was applied under this role.
-const publishedExecuteAs = "morrow_identity_owner";
+// The role each published migration was applied under: the identity owner, except the
+// work-state tables, which the work owner creates (P06.T01a).
+const publishedExecuteAs = (sequence) =>
+  sequence === 15 ? "morrow_work_owner" : "morrow_identity_owner";
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 
@@ -125,17 +158,20 @@ test("every published migration file still hashes to its pinned digest", () => {
 test("published rows keep their executeAs role and pinned prerequisites", () => {
   for (const [index, row] of published.entries()) {
     const { executeAs, prerequisites } = manifest.migrations[index];
-    assert.equal(executeAs, publishedExecuteAs, row.file);
+    assert.equal(executeAs, publishedExecuteAs(row.sequence), row.file);
     assert.deepEqual(prerequisites, publishedPrerequisites.get(row.sequence), row.file);
   }
 });
 
 test("every published prerequisite file still hashes to its pinned digest", () => {
   const pinned = [...publishedPrerequisites.values()].flat();
-  assert.equal(pinned.length, 3);
+  assert.equal(pinned.length, 5);
   for (const { file, sha256 } of pinned) assert.equal(sha(readFileSync(file)), sha256, file);
 });
 
+// The manifest is append-only: published rows are an unchanged, index-aligned
+// prefix (above) and every row continues the sequence with no gap, so a new
+// migration can never be inserted ahead of a published one.
 test("migrations after the published prefix continue the sequence", () => {
   for (const [index, row] of manifest.migrations.entries()) {
     assert.equal(row.sequence, index + 1);

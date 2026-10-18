@@ -26,7 +26,6 @@ const paths = [
   "packages/identity/src/controlled-neon-transport.ts",
   "packages/identity/src/login-flow-custody.ts",
   "packages/identity/src/authentication-exchange-admission.ts",
-  "packages/identity/src/workos-workspace-selection.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
 ];
 const sourceDigests = Object.fromEntries(
@@ -364,7 +363,7 @@ try {
     );
   }
 
-  const poolNames = ["loginPool", "preauthPool", "selectionPool", "sessionPool"];
+  const poolNames = ["loginPool", "preauthPool", "sessionPool"];
   const sdkCases = poolNames.map((poolName) => ({
     name: "sdk_" + poolName + "_positive",
     mode: "good",
@@ -380,7 +379,12 @@ try {
       fragmentBytes: 7,
     })),
   );
-  sdkCases.push({ name: "sdk_all_four_roles_concurrent", mode: "good", poolNames, positive: true });
+  sdkCases.push({
+    name: "sdk_all_three_roles_concurrent",
+    mode: "good",
+    poolNames,
+    positive: true,
+  });
   for (const mode of ["post_release_query", "parameters_snapshot", "connect_only"])
     sdkCases.push({ name: "sdk_" + mode, mode, positive: true });
   for (const mode of [

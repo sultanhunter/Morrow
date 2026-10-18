@@ -273,3 +273,43 @@ test("constraint reader failure is redacted and read transaction rolls back", as
   );
   assert.equal(f.calls.at(-1).text, identitySql.rollback);
 });
+// P01.T04a AC29 (defence in depth): only a plain, closed pair of booleans from the
+// constraints reader is copied; anything else fails closed before it is read.
+class ConstraintFacts {
+  providerAllowed = true;
+  entitlementAllowed = true;
+}
+for (const [name, conditions] of [
+  ["a class instance", () => new ConstraintFacts()],
+  ["an extra field", () => ({ providerAllowed: true, entitlementAllowed: true, paid: true })],
+  ["a missing field", () => ({ providerAllowed: true })],
+  ["a non-boolean entitlement", () => ({ providerAllowed: true, entitlementAllowed: "yes" })],
+  ["a non-boolean provider flag", () => ({ providerAllowed: 1, entitlementAllowed: false })],
+  [
+    "a getter",
+    () => ({
+      providerAllowed: true,
+      get entitlementAllowed() {
+        return true;
+      },
+    }),
+  ],
+  ["null", () => null],
+])
+  test(`constraint reader returning ${name} fails closed and rolls back`, async () => {
+    const f = fixture();
+    const boundary = createWorkspacePermissionBoundary(
+      f.pool,
+      {
+        async readCurrent() {
+          return conditions();
+        },
+      },
+      clock,
+    );
+    await assert.rejects(
+      boundary.decide(proof, "workspace_a", f.request),
+      (e) => e.message === "IDENTITY_UNAVAILABLE" && e.cause === undefined,
+    );
+    assert.equal(f.calls.at(-1).text, identitySql.rollback);
+  });

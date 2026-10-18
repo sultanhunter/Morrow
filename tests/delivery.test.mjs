@@ -220,7 +220,7 @@ test("the repository manifest passes with its prerequisite files", () => {
   assert.deepEqual(
     inspectMigrations(repositoryManifest, migrationSql, {
       ...infra,
-      "infra/work-role-prerequisites.sql": prerequisiteSql,
+      "infra/unpinned-role-prerequisites.sql": prerequisiteSql,
     }),
     ["UNREVIEWED_PREREQUISITE_FILE"],
   );

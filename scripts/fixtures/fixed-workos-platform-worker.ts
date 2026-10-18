@@ -146,7 +146,7 @@ async function initialize(input: Scenario) {
             "Content-Type": "application/json",
             "X-Morrow-Request": "1",
           },
-          body: '{"schemaVersion":1,"workspaceId":"workspace_a"}',
+          body: '{"schemaVersion":2}',
         }),
       );
       expect(
@@ -304,7 +304,9 @@ export default {
             );
             expect(
               "unchanged_M_admission_" + i,
-              fixture.calls.some((call) => call.role === "sessions" && call.stage === "admit"),
+              fixture.calls.some(
+                (call) => call.role === "sessions" && call.stage === "admitAccount",
+              ),
             );
             metrics.admittedFamilies++;
             metrics.sqlCalls += fixture.calls.length;

@@ -33,7 +33,6 @@ const paths = [
   "packages/identity/src/workos-authentication-evidence.ts",
   "packages/identity/src/workos-session-token.ts",
   "packages/identity/src/workos-session-status.ts",
-  "packages/identity/src/workos-workspace-selection.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
   "scripts/fixtures/fixed-workos-platform-provider.mjs",
   "scripts/fixtures/fixed-workos-provider.mjs",
@@ -43,6 +42,7 @@ const paths = [
   "infra/identity-role-prerequisites.sql",
   "infra/identity-login-role-prerequisites.sql",
   "infra/identity-logout-role-prerequisites.sql",
+  "infra/identity-onboarding-role-prerequisites.sql",
   "infra/local-engine.json",
   "migrations/manifest.json",
   "package.json",
@@ -51,10 +51,10 @@ const paths = [
   "node_modules/@neondatabase/serverless/index.mjs",
 ];
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-// The login fixture applies 0001-0012; those entries must be present in order and
+// The login fixture applies 0001-0013 (account login, P05.T01x); they must be present in order and
 // checksum-verified. Later manifest entries are not applied by this lab.
-if (manifest.migrations.length < 12) throw Error("CONTROLLED_PG_CURRENT_MIGRATIONS_REQUIRED");
-for (const [i, row] of manifest.migrations.slice(0, 12).entries()) {
+if (manifest.migrations.length < 13) throw Error("CONTROLLED_PG_CURRENT_MIGRATIONS_REQUIRED");
+for (const [i, row] of manifest.migrations.slice(0, 13).entries()) {
   if (row.sequence !== i + 1 || hash(readFileSync("migrations/" + row.file)) !== row.sha256)
     throw Error("CONTROLLED_PG_MIGRATION_DRIFT");
   paths.push("migrations/" + row.file);
@@ -127,13 +127,8 @@ const phase = (value) => {
   stage = value;
   console.error("CONTROLLED_PG_PHASE:" + value);
 };
-const poolNames = ["loginPool", "preauthPool", "selectionPool", "sessionPool"];
-const roles = [
-  "morrow_identity_login",
-  "morrow_identity_preauth",
-  "morrow_identity_resolution",
-  "morrow_identity_sessions",
-];
+const poolNames = ["loginPool", "preauthPool", "sessionPool"];
+const roles = ["morrow_identity_login", "morrow_identity_preauth", "morrow_identity_sessions"];
 const binding = {
   schemaVersion: 1,
   environment: "staging",
@@ -161,7 +156,10 @@ try {
         if (sequence !== undefined) appliedMigrations = sequence;
         return result;
       };
-      const harness = createSelfLogoutFixtureHarness({ id: engine.id, sql: setupSql }),
+      const harness = createSelfLogoutFixtureHarness(
+          { id: engine.id, sql: setupSql },
+          { accountOnboarding: true },
+        ),
         origin = "https://127.0.0.1";
       const configurations = Array.from({ length: 2 }, () => harness.configured({ origin }));
       const oracles = configurations.map((c) =>
@@ -186,11 +184,11 @@ try {
           engine.topology.singleOwnedNetworkEndpoint,
       );
       check(
-        "actual_scram_four_roles_and_tcp_admin_denial",
-        auth.scramOfferedRoles === 4 &&
+        "actual_scram_three_roles_and_tcp_admin_denial",
+        auth.scramOfferedRoles === 3 &&
           auth.tcpAdministratorRejected &&
           auth.tcpOwnerRejected &&
-          auth.probeConnectionsClosed === 6,
+          auth.probeConnectionsClosed === 5,
       );
       check(
         "actual_owned_endpoint_capability_identity",
@@ -303,10 +301,7 @@ try {
             bindingJson: JSON.stringify(binding),
             expectedHostSource: engine.expectedHostSource,
             passwordByRole: engine.passwordByRole,
-            cases: configurations.map((c) => ({
-              configurationJson: c.configurationJson,
-              workspaceId: c.f.workspace,
-            })),
+            cases: configurations.map((c) => ({ configurationJson: c.configurationJson })),
           }),
         },
         outboundService(request) {
@@ -334,7 +329,7 @@ try {
         check("fixture_dispatch_" + checks.length, response.status === 200);
         return response.json();
       };
-      phase("four_role_connection_and_visibility");
+      phase("three_role_connection_and_visibility");
       const probes = [],
         visibility = [],
         authority = [];
@@ -381,10 +376,10 @@ try {
           (o.executions ?? []).map((e) => ({ ...e, role: o.startup?.user })),
         );
       const mAdmissions = () =>
-        allExecutions().filter((e) => e.text?.includes("morrow_identity.admit_browser_family("));
+        allExecutions().filter((e) => e.text?.includes("morrow_identity.admit_account_family("));
       const flowIntents = () =>
         allExecutions().filter((e) =>
-          e.text?.includes("morrow_identity.create_login_flow_intent("),
+          e.text?.includes("morrow_identity.create_account_login_flow_intent("),
         );
       const initialize = async (index, mode = "normal") => {
         activeOracle = oracles[index];
@@ -396,10 +391,7 @@ try {
         const response = await dispatch("/auth/login", {
           method: "POST",
           headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
-          body: JSON.stringify({
-            schemaVersion: 1,
-            workspaceId: configurations[index].f.workspace,
-          }),
+          body: JSON.stringify({ schemaVersion: 2 }),
         });
         const diagnostic =
           flowSerial === 0
@@ -478,7 +470,7 @@ try {
       await replay.body?.cancel();
       const normal = await json("/__fixture/metrics");
       check(
-        "all_four_owning_pools_used_and_timely",
+        "all_three_owning_pools_used_and_timely",
         poolNames.every(
           (name) =>
             normal.pool[name].normalReleases > 0 &&
@@ -507,7 +499,7 @@ try {
       const admission = mAdmissions().at(-1);
       check(
         "actual_issuer_wire_parameters_observed",
-        Array.isArray(admission?.values) && admission.values.length === 27,
+        Array.isArray(admission?.values) && admission.values.length === 21,
       );
       const reconciled = await json("/__fixture/reconcile", {
         commandId: admission.values[0],
@@ -522,7 +514,7 @@ try {
       const intent = flowIntents().at(-1);
       check(
         "actual_flow_custody_wire_parameters_observed",
-        Array.isArray(intent?.values) && intent.values.length === 6,
+        Array.isArray(intent?.values) && intent.values.length === 5,
       );
       const flowReconciled = await json("/__fixture/flow-reconcile", {
         schemaVersion: 1,

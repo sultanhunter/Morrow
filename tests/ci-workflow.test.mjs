@@ -23,9 +23,15 @@ const pinnedAction = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
 // Never run by CI: lab:engine is the standalone engine probe (pg-core records the engine
 // build inline), lab:e2b-* are offline-by-default provider operator commands, and
 // lab:edge-postgresql-local is the developer-machine runner of the lab:edge-postgresql
-// journeys (supporting evidence; the pgwire job runs lab:edge-postgresql itself).
+// journeys (supporting evidence; the pgwire job runs lab:edge-postgresql itself), and
+// lab:workspace-ui-journey-local is the same for the P14.T01a browser journey.
 const labsOutsideCi = (name) =>
-  name === "lab:engine" || name === "lab:edge-postgresql-local" || name.startsWith("lab:e2b-");
+  name === "lab:engine" ||
+  name === "lab:edge-postgresql-local" ||
+  name === "lab:workspace-ui-journey-local" ||
+  name.startsWith("lab:e2b-");
+// The P14.T01a `ui` job installs Chromium and runs 130 browser cases plus the journey lab.
+const timeoutLimit = (id) => (id === "ui" ? 20 : 15);
 
 // Parses the YAML subset these workflows use: block maps and sequences, plain, quoted and
 // flow-sequence scalars, `|`/`>-` block scalars and comments.
@@ -252,7 +258,10 @@ test("every ci.yml job shares the hardened step sequence and foundation needs ev
   assert.match(aggregate.run, /test -n "\$RESULTS"/);
   assert.match(aggregate.run, /\[ "\$r" = success \] \|\| \{ [^}]*exit 1; \}/);
   for (const [id, job] of Object.entries(jobs)) {
-    assert.ok(Number.isInteger(job["timeout-minutes"]) && job["timeout-minutes"] <= 15, id);
+    assert.ok(
+      Number.isInteger(job["timeout-minutes"]) && job["timeout-minutes"] <= timeoutLimit(id),
+      id,
+    );
     assertHardenedSteps(id, job, { emptyUploadAllowed: id === "unit" });
   }
 });
@@ -427,4 +436,32 @@ test("heavy-faults.yml runs by hand or weekly behind the change gate and is neve
   // checked above, and `needs` cannot reach another workflow; this names the intent.)
   for (const job of Object.keys(heavyFaults.jobs))
     assert.ok(!ci.jobs.foundation.needs.includes(job), `foundation must not need ${job}`);
+});
+
+test("the ui job builds, runs both UI matrices and the browser journey, after installing Chromium", () => {
+  const ui = ci.jobs.ui;
+  assert.ok(ui, "P14.T01a adds the ui job");
+  const commands = steps(ui)
+    .map((s) => s.run)
+    .filter((run) => typeof run === "string");
+  const order = [
+    "docker pull",
+    "npx playwright install --with-deps chromium",
+    "npm run build",
+    "npm run ui:check",
+    "npm run ui:edge",
+    "npm run lab:group:ui",
+  ].map((command) => commands.findIndex((run) => run.startsWith(command)));
+  assert.ok(
+    order.every((index) => index >= 0),
+    JSON.stringify(order),
+  );
+  assert.deepEqual(
+    [...order].sort((a, b) => a - b),
+    order,
+  );
+  assert.ok(ci.jobs.foundation.needs.includes("ui"));
+  assert.equal(scripts["lab:group:ui"], "npm run lab:workspace-ui-journey");
+  assert.match(scripts.ci, /npm run build && npm run verify:workspace-web/);
+  assert.match(scripts["ci:static"], /npm run build && npm run verify:workspace-web/);
 });

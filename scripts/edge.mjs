@@ -289,8 +289,8 @@ export function edgeTypes({ check = false, root = repositoryRoot } = {}) {
 }
 
 // Worker-owned sources are checked against the pinned runtime types. The DOM-typed
-// identity package (checked by `npm run typecheck`) is consumed through its emitted
-// declarations, so runtime and DOM libraries never meet in one program.
+// identity and work packages (checked by `npm run typecheck`) are consumed through
+// their emitted declarations, so runtime and DOM libraries never meet in one program.
 export function edgeTypecheck({ root = repositoryRoot } = {}) {
   refuseUnsafe(root);
   const staging = mkdtempSync(join(tmpdir(), "morrow-edge-typecheck-"));
@@ -328,6 +328,27 @@ export function edgeTypecheck({ root = repositoryRoot } = {}) {
       throw Error(
         "EDGE_IDENTITY_DECLARATIONS_FAILED\n" + declarations.stdout + declarations.stderr,
       );
+    // @morrow/work (P06.T01a) imports identity sources relatively, so its rootDir is
+    // packages/; its identity declarations are the same files emitted above.
+    const work = spawnSync(
+      process.execPath,
+      [
+        tscBin,
+        "-p",
+        "packages/work/tsconfig.json",
+        "--noEmit",
+        "false",
+        "--declaration",
+        "--emitDeclarationOnly",
+        "--rootDir",
+        "packages",
+        "--outDir",
+        join(staging, "packages"),
+      ],
+      { cwd: root, encoding: "utf8" },
+    );
+    if (work.status !== 0)
+      throw Error("EDGE_WORK_DECLARATIONS_FAILED\n" + work.stdout + work.stderr);
     cpSync(join(root, "tsconfig.base.json"), join(staging, "tsconfig.base.json"));
     symlinkSync(join(root, "node_modules"), join(staging, "node_modules"), "dir");
     const results = [];
@@ -834,6 +855,38 @@ async function smokeDevPhase(protocol, markers, check) {
     label("no_marker_in_dev_output"),
     markers.every(([, value]) => !output.includes(value)),
   );
+}
+
+// P14.T01a `ui:edge`: the unbound dev pair serving the production dist (the same
+// `dev` invocation), over http so the browser needs no certificate exception. Resolves
+// once /healthz answers; the caller stops it. Output is never written anywhere.
+export async function startEdgeDev({ protocol = "http", timeoutMs = 60000 } = {}) {
+  refuseUnsafe();
+  if (!existsSync(spaIndex)) throw Error("EDGE_SPA_DIST_MISSING: run `npm run build` first");
+  const { host, port } = edgeDevOrigin;
+  if (!(await portFree(host, port))) throw Error("EDGE_DEV_PORT_IN_USE:" + port);
+  const child = startDev(protocol === "http" ? "http" : undefined, ["ignore", "pipe", "pipe"]);
+  child.stdout.resume();
+  child.stderr.resume();
+  const exited = new Promise((done) =>
+    child.once("exit", (code, signal) => done({ code, signal })),
+  );
+  const stop = async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+    const killer = setTimeout(() => child.kill("SIGKILL"), 10000);
+    await exited;
+    clearTimeout(killer);
+  };
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    try {
+      if ((await localRequest(protocol, "/healthz")).status === 200)
+        return { origin: `${protocol}://${host}:${port}`, stop };
+    } catch {}
+    await new Promise((done) => setTimeout(done, 250));
+  }
+  await stop();
+  throw Error("EDGE_DEV_NOT_READY");
 }
 
 export async function edgeSmokeDev() {

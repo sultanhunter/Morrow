@@ -7,7 +7,9 @@ import {
   inspectBaselineCoverage,
   inspectDeclaredReplacements,
   inspectSupersededUse,
+  inspectEntitlementWriters,
   replacedDefinitionNames,
+  replacedBillingDefinitionNames,
   isBoundarySource,
 } from "./boundary-checks.mjs";
 import { changesPath, readSchemaSources, schemasByKind } from "./contract-sources.mjs";
@@ -43,9 +45,14 @@ errors.push(...inspectBaselineCoverage(baseline, schemaFiles));
 const changes = JSON.parse(readFileSync(changesPath, "utf8"));
 const layered = schemasByKind(readSchemaSources());
 errors.push(...inspectDeclaredReplacements(changes, layered));
-// Product code never validates or types a replaced v1 definition (P01.T02a AC11).
+// Product code never validates or types a replaced v1 definition (P01.T02a AC11;
+// billing replacements, P01.T04a AC30).
 const replaced = replacedDefinitionNames(changes);
-for (const p of files) errors.push(...inspectSupersededUse(p, readFileSync(p, "utf8"), replaced));
+const replacedBilling = replacedBillingDefinitionNames(changes);
+for (const p of files)
+  errors.push(...inspectSupersededUse(p, readFileSync(p, "utf8"), replaced, replacedBilling));
+// Only the billing reader and its two forwarders set entitlementAllowed (P01.T04a AC29).
+for (const p of files) errors.push(...inspectEntitlementWriters(p, readFileSync(p, "utf8")));
 const negatives = [
   ["host_sdk", "import {x} from '@shopify/shopify-app-react-router/server';", "UI_SERVER_IMPORT"],
   ["relative_api", "import {x} from '../../api/src/index';", "UI_RELATIVE_ESCAPE"],
@@ -174,6 +181,47 @@ for (const [name, path, code, expected] of [
     "import {composeApiDependencies} from '../../api/src/deployed-worker';",
     "BROKER_APP_IMPORT",
   ],
+  // P14.T01a §4.11 (a) and §5: fixture isolation and UI sinks.
+  [
+    "fixture_from_app",
+    "apps/workspace-web/src/app.tsx",
+    "import {createFixtureAdapter} from './fixtures/adapter';",
+    "UI_FIXTURE_IMPORT",
+  ],
+  [
+    "fixture_from_ui_package",
+    "packages/workspace-ui/src/index.ts",
+    "export * from '../../../apps/workspace-web/src/fixtures/seed';",
+    "UI_FIXTURE_IMPORT",
+  ],
+  [
+    "html_sink_jsx",
+    "packages/workspace-ui/src/screens/x.tsx",
+    "const a = <div dangerouslySetInnerHTML={{ __html: text }} />;",
+    "UI_HTML_SINK",
+  ],
+  ["html_sink_property", "apps/workspace-web/src/x.ts", "node.innerHTML = text;", "UI_HTML_SINK"],
+  ["html_sink_write", "apps/workspace-web/src/x.ts", "document.write(text);", "UI_HTML_SINK"],
+  [
+    "cookie_access",
+    "apps/workspace-web/src/x.ts",
+    "const c = document.cookie;",
+    "UI_COOKIE_ACCESS",
+  ],
+  ["eval", "apps/workspace-web/src/x.ts", "eval(text);", "UI_DYNAMIC_CODE"],
+  ["function_constructor", "apps/workspace-web/src/x.ts", "new Function(text);", "UI_DYNAMIC_CODE"],
+  [
+    "local_storage",
+    "packages/workspace-ui/src/x.ts",
+    "localStorage.setItem('a', 'b');",
+    "UI_LOCAL_STORAGE",
+  ],
+  [
+    "session_storage_outside_owner",
+    "apps/workspace-web/src/app.tsx",
+    "sessionStorage.getItem('morrow.intended.v1');",
+    "UI_SESSION_STORAGE_OUTSIDE_OWNER",
+  ],
   [
     "runtime_adapter_absolute_import",
     "apps/api/src/index.ts",
@@ -211,6 +259,13 @@ negatives.push({
     layered,
   ).includes("UNDECLARED_REPLACEMENT:ads.campaign.pause.input"),
 });
+negatives.push({
+  name: "undeclared_billing_replacement",
+  passed: inspectDeclaredReplacements(
+    { ...changes, changes: changes.changes.filter((c) => c.name !== "BillingAccount") },
+    layered,
+  ).includes("UNDECLARED_REPLACEMENT:BillingAccount"),
+});
 const reused = structuredClone(layered);
 reused["core-v1.1"].$defs.Task = reused.core.$defs.Task;
 negatives.push({
@@ -236,8 +291,44 @@ for (const [name, path, code, expected] of [
     'const check = validators["core:Approval"];',
     "SUPERSEDED_CONTRACT_USE:packages/policy/src/review.ts:Approval",
   ],
+  [
+    "superseded_billing_type_reference",
+    "packages/policy/src/billing-state.ts",
+    'import type { Billing_BillingAccount } from "@morrow/contracts";',
+    "SUPERSEDED_CONTRACT_USE:packages/policy/src/billing-state.ts:BillingAccount",
+  ],
+  [
+    "superseded_billing_validate_definition",
+    "apps/api/src/index.ts",
+    'validateDefinition("billing", "CreditGrant", value);',
+    "SUPERSEDED_CONTRACT_USE:apps/api/src/index.ts:CreditGrant",
+  ],
 ])
-  negatives.push({ name, passed: inspectSupersededUse(path, code, replaced).includes(expected) });
+  negatives.push({
+    name,
+    passed: inspectSupersededUse(path, code, replaced, replacedBilling).includes(expected),
+  });
+for (const [name, code] of [
+  ["entitlement_writer_literal_true", "const facts = { entitlementAllowed: true };"],
+  ["entitlement_writer_variable", "const facts = { entitlementAllowed: allowed };"],
+  ["entitlement_writer_assignment", "facts.entitlementAllowed = true;"],
+  ["entitlement_writer_class_field", "class Facts { readonly entitlementAllowed = true; }"],
+  [
+    "entitlement_writer_parameter_property",
+    "class Facts { constructor(readonly entitlementAllowed: boolean) {} }",
+  ],
+  [
+    "entitlement_writer_aliased_key",
+    'const key = "entitlementAllowed"; const facts = { [key]: true };',
+  ],
+  ["entitlement_writer_entries_pair", 'Object.fromEntries([["entitlementAllowed", true]]);'],
+])
+  negatives.push({
+    name,
+    passed: inspectEntitlementWriters("packages/work/src/permissions.ts", code).includes(
+      "ENTITLEMENT_WRITER_UNAPPROVED:packages/work/src/permissions.ts:1",
+    ),
+  });
 negatives.push({
   name: "phantom_replacement_declaration",
   passed: inspectDeclaredReplacements(

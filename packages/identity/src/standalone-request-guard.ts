@@ -1,6 +1,10 @@
 import { createLoginAttempt, type LoginAttempt } from "./standalone-login-protocol.js";
 import { validateDefinition } from "@morrow/contracts/validation";
 import { parseWorkosSessionStatusJson } from "./workos-session-status-json.js";
+import {
+  canonicalSessionSecret as canonicalSecret,
+  sessionCookieSecret,
+} from "./request-primitives.js";
 
 // Private server composition only. This module is deliberately not a package
 // entrypoint. Derived digests belong only to the immediately executing handler.
@@ -19,6 +23,19 @@ export interface GuardedStandaloneRequest {
   check(): number;
   wait<T>(pending: Promise<T>): Promise<T>;
 }
+// Account routes (P05.T01x §9): no workspace in the path; the principal derives only
+// from the session digest inside SQL. Siblings of the workspace routes on the managed entry.
+export type StandaloneAccountRoute = "workspaces" | "organizations";
+export interface GuardedAccountRequest {
+  readonly sessionDigest: string;
+  readonly commandId: string | null;
+  readonly bodyText: string | null;
+  readonly control: Readonly<StandaloneWorkspaceSqlControl>;
+  check(): number;
+  wait<T>(pending: Promise<T>): Promise<T>;
+  // Called immediately before the create statement is sent; afterwards a loss is unknown.
+  markSubmitted(): void;
+}
 export class StandaloneRequestError extends Error {
   constructor(readonly status: 400 | 401 | 403 | 404 | 405 | 503) {
     super("STANDALONE_REQUEST_DENIED");
@@ -36,8 +53,6 @@ export function standaloneJson(status: number, value: unknown): Response {
     },
   });
 }
-const canonicalSecret = (value: unknown): value is string =>
-  typeof value === "string" && /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/.test(value);
 const failure = (status: 400 | 401 | 403 | 404 | 405 | 503): never => {
   throw new StandaloneRequestError(status);
 };
@@ -85,23 +100,9 @@ function configuration(value: unknown): string {
     throw Error("STANDALONE_REQUEST_CONFIG_INVALID");
   }
 }
+// The shared parser (request-primitives.ts); any failure is the same 401.
 function cookieSecret(header: string | null): string {
-  if (!header || header.length > 4096 || /[^\x20-\x7e]/.test(header)) return failure(401);
-  const pairs = header.split(";");
-  if (pairs.length > 32) return failure(401);
-  let secret: string | undefined;
-  for (const pair of pairs) {
-    const match =
-      /^([!#$%&'*+\-.^_`|~0-9A-Za-z]+)=([\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]*)$/.exec(
-        pair.trim(),
-      );
-    if (!match) return failure(401);
-    if (match[1] === "__Host-morrow_session") {
-      if (secret !== undefined || !canonicalSecret(match[2])) return failure(401);
-      secret = match[2];
-    }
-  }
-  return secret ?? failure(401);
+  return sessionCookieSecret(header) ?? failure(401);
 }
 function routePath(route: StandaloneRequestRoute): string {
   if (route === "bootstrap") return "/bootstrap";
@@ -113,9 +114,10 @@ function routePath(route: StandaloneRequestRoute): string {
 async function bodyText(
   request: Request,
   wait: <T>(pending: Promise<T>) => Promise<T>,
+  limit = 256,
 ): Promise<string> {
   const declared = request.headers.get("Content-Length");
-  if (declared !== null && (!/^(0|[1-9][0-9]{0,2})$/.test(declared) || Number(declared) > 256))
+  if (declared !== null && (!/^(0|[1-9][0-9]{0,5})$/.test(declared) || Number(declared) > limit))
     return failure(400);
   if (!request.body || request.bodyUsed) return failure(400);
   const reader = request.body.getReader();
@@ -126,7 +128,7 @@ async function bodyText(
     for (;;) {
       const item = await wait(reader.read());
       if (item.done) break;
-      if (!(item.value instanceof Uint8Array) || (bytes += item.value.byteLength) > 256)
+      if (!(item.value instanceof Uint8Array) || (bytes += item.value.byteLength) > limit)
         return failure(400);
       chunks.push(item.value);
     }
@@ -151,6 +153,7 @@ async function bodyText(
 
 type GuardWait = <T>(pending: Promise<T>) => Promise<T>;
 type GuardExecute = (context: Readonly<GuardedStandaloneRequest>) => Promise<Response>;
+type AccountExecute = (context: Readonly<GuardedAccountRequest>) => Promise<Response>;
 
 // A managed result stays owned even when the wait postcheck rejects before the
 // caller receives it. This continuation only clears bytes; it grants no work.
@@ -382,6 +385,109 @@ async function runGuard(
   }
 }
 
+// GET /workspaces and POST /organizations. Every envelope failure answers before any SQL.
+// CSRF: exact Origin (POST requires it; a same-origin GET may omit it, as browsers do, but
+// a foreign one is refused), Fetch Metadata site/mode/dest, X-Morrow-Request, JSON and the
+// SameSite=Lax cookie. No CORS and no Set-Cookie. After markSubmitted() any loss is unknown.
+async function runAccountGuard(
+  origin: string,
+  request: Request,
+  route: StandaloneAccountRoute,
+  execute: AccountExecute,
+  control: Readonly<StandaloneWorkspaceSqlControl>,
+  check: () => number,
+  wait: GuardWait,
+  latch: { submitted: boolean },
+): Promise<Response> {
+  const method = route === "workspaces" ? "GET" : "POST";
+  try {
+    check();
+    if (request.url.length > 2048) return failure(400);
+    const url = new URL(request.url);
+    if (
+      url.origin !== origin ||
+      url.href !== `${origin}${url.pathname}` ||
+      url.username ||
+      url.password
+    )
+      return failure(403);
+    if (url.pathname !== (route === "workspaces" ? "/workspaces" : "/organizations"))
+      return failure(404);
+    if (request.method !== method) return failure(405);
+    const host = request.headers.get("Host"),
+      suppliedOrigin = request.headers.get("Origin"),
+      site = request.headers.get("Sec-Fetch-Site"),
+      mode = request.headers.get("Sec-Fetch-Mode"),
+      dest = request.headers.get("Sec-Fetch-Dest");
+    if (host !== null && host !== url.host) return failure(403);
+    if (suppliedOrigin === null ? route === "organizations" : suppliedOrigin !== origin)
+      return failure(403);
+    if (
+      (site !== null && site !== "same-origin") ||
+      (mode !== null && mode !== "cors" && mode !== "same-origin") ||
+      (dest !== null && dest !== "empty")
+    )
+      return failure(403);
+    if (request.headers.get("X-Morrow-Request") !== "1") return failure(403);
+    if (request.headers.has("Authorization") || request.headers.has("Proxy-Authorization"))
+      return failure(401);
+    if (request.headers.has("Transfer-Encoding") || request.headers.has("X-Morrow-CSRF"))
+      return failure(400);
+    let secret = cookieSecret(request.headers.get("Cookie"));
+    let commandId: string | null = null,
+      body: string | null = null;
+    if (route === "workspaces") {
+      const length = request.headers.get("Content-Length");
+      if (
+        request.body !== null ||
+        (length !== null && length !== "0") ||
+        request.headers.has("Content-Type") ||
+        request.headers.has("Idempotency-Key")
+      )
+        return failure(400);
+    } else {
+      if (request.headers.get("Content-Type") !== "application/json") return failure(403);
+      commandId = request.headers.get("Idempotency-Key");
+      if (!commandId || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(commandId))
+        return failure(400);
+      body = await bodyText(request, wait, 2048);
+    }
+    const sessionDigest = await guardDigest(secret, check, wait, true);
+    secret = "";
+    check();
+    const context: Readonly<GuardedAccountRequest> = Object.freeze({
+      sessionDigest,
+      commandId,
+      bodyText: body,
+      control,
+      check,
+      wait,
+      markSubmitted() {
+        latch.submitted = true;
+      },
+    });
+    const response = await wait(Promise.resolve(execute(context)));
+    check();
+    if (!(response instanceof Response)) return failure(503);
+    return response;
+  } catch (error) {
+    // Once the create statement may have been sent, an interrupted reply cannot prove
+    // whether it committed: never turn that loss into a retryable denial.
+    if (latch.submitted)
+      return standaloneJson(503, { schemaVersion: 1, outcome: "outcome_unknown" });
+    const status = error instanceof StandaloneRequestError ? error.status : 503;
+    const code =
+      status === 401
+        ? "authentication_required"
+        : status === 503
+          ? "unavailable"
+          : "request_denied";
+    const response = standaloneJson(status, { code });
+    if (status === 405) response.headers.set("Allow", method);
+    return response;
+  }
+}
+
 export function createStandaloneRequestGuard(configurationJson: unknown, now: () => number) {
   const { origin, clock } = captureGuard(configurationJson, now);
   return Object.freeze({
@@ -462,8 +568,28 @@ export function createManagedStandaloneRequestGuard(configurationJson: unknown, 
       if (!(request instanceof Request)) return failure(400);
       const attempt: LoginAttempt = createLoginAttempt(clock, request.signal, 5000);
       let invoked = false;
+      const latch = { submitted: false };
       return Object.freeze({
         attempt,
+        // The account sibling of handle(): same single attempt and one invocation.
+        async handleAccount(
+          route: StandaloneAccountRoute,
+          execute: AccountExecute,
+        ): Promise<Response> {
+          if (invoked) return standaloneJson(503, { code: "unavailable" });
+          invoked = true;
+          return runAccountGuard(
+            origin,
+            request,
+            route,
+            execute,
+            attempt.control(),
+            attempt.check,
+            attempt.wait,
+            latch,
+          );
+        },
+        accountSubmitted: () => latch.submitted,
         async handle(route: StandaloneRequestRoute, execute: GuardExecute): Promise<Response> {
           if (invoked) return standaloneJson(503, { code: "unavailable" });
           invoked = true;

@@ -54,7 +54,6 @@ const paths = [
     "workos-authentication-evidence",
     "workos-session-token",
     "workos-session-status",
-    "workos-workspace-selection",
     "workos-browser-session-admission",
   ].map((name) => "packages/identity/src/" + name + ".ts"),
 ];
@@ -478,7 +477,7 @@ for (const definition of nativeDefinitions) {
                 capsuleKeyringJson,
                 bindingJson: JSON.stringify(controlledNeonWireBinding),
                 passwordByRole: Object.fromEntries(
-                  ["login", "preauth", "resolution", "sessions"].map((r) => [
+                  ["login", "preauth", "sessions"].map((r) => [
                     "morrow_identity_" + r,
                     passwordMarker,
                   ]),
@@ -636,7 +635,7 @@ for (const definition of nativeDefinitions) {
                 "Content-Type": "application/json",
                 "X-Morrow-Request": "1",
               },
-              body: JSON.stringify({ schemaVersion: 1, workspaceId: "workspace_a" }),
+              body: JSON.stringify({ schemaVersion: 2 }),
             })
             .then(async (response) => ({
               status: response.status,
@@ -662,7 +661,7 @@ for (const definition of nativeDefinitions) {
               m.scope.publicationFailures === 0 &&
               m.scope.ownerMismatches === 0 &&
               m.scope.namespaceMismatches === 0 &&
-              Object.values(m.pools ?? {}).length === 4 &&
+              Object.values(m.pools ?? {}).length === 3 &&
               Object.values(m.pools).every((p) => p.normalReleases === 0),
           );
           if (definition.kind === "pending")
