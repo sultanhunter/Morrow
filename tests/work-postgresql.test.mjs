@@ -12,6 +12,7 @@ import {
   organizationInterlockSql,
   revocationSql,
   restoreSql,
+  workMigrationFiles,
 } from "./tenant-conformance/harness.mjs";
 
 const read = (path) => readFileSync(path, "utf8");
@@ -33,13 +34,21 @@ test("manifest: the work migrations follow 0013 with executeAs and reviewRef", (
     ],
   );
   for (const m of work) assert.equal(sha(read("migrations/" + m.file)), m.sha256);
-  // Only entries after the identity chain carry executeAs; its default is the identity owner.
+  // Every row carries executeAs (P03.T04e §3.1); the identity chain runs as the identity owner.
   for (const m of manifest.migrations.filter((x) => x.sequence <= 13))
-    assert.equal(m.executeAs, undefined, m.file);
+    assert.equal(m.executeAs, "morrow_identity_owner", m.file);
+  // The work roles are pinned on 0014, the first migration that names them.
+  assert.deepEqual(
+    work.map((m) => (m.prerequisites ?? []).map((p) => p.file)),
+    [["infra/work-role-prerequisites.sql"], []],
+  );
   const files = Object.fromEntries(
     manifest.migrations.map((m) => [m.file, read("migrations/" + m.file)]),
   );
-  assert.deepEqual(inspectMigrations(manifest, files), []);
+  const prerequisites = Object.fromEntries(
+    manifest.migrations.flatMap((m) => (m.prerequisites ?? []).map((p) => [p.file, read(p.file)])),
+  );
+  assert.deepEqual(inspectMigrations(manifest, files, prerequisites), []);
 });
 
 test("roles: four reviewed roles, two SET-only memberships, no PASSWORD and idempotent", () => {
@@ -215,6 +224,17 @@ test("harness: role prerequisites are keyed by migration name and exist for ever
   for (const m of manifest.migrations) {
     const file = migrationPrerequisite(m.file);
     if (file) assert.ok(read(file).length > 0, m.file);
+  }
+  // The harness applies exactly the prerequisites the manifest pins on each row: its keyed
+  // identity files, plus the work roles before the first work migration.
+  for (const m of manifest.migrations) {
+    const applied = [migrationPrerequisite(m.file)].filter(Boolean);
+    if (m.file === workMigrationFiles[0]) applied.push("infra/work-role-prerequisites.sql");
+    assert.deepEqual(
+      (m.prerequisites ?? []).map((p) => p.file),
+      applied,
+      m.file,
+    );
   }
 });
 

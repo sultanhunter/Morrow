@@ -7,86 +7,129 @@
       "sequence": 1,
       "file": "0001.identity-foundation.sql",
       "sha256": "09e047173c39bff3d4ce1d0e16efeff3f423848f40e2c2e012ae6aa620d52491",
-      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01/review.json"
+      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01/review.json",
+      "executeAs": "morrow_identity_owner",
+      "prerequisites": [
+        {
+          "file": "infra/identity-role-prerequisites.sql",
+          "sha256": "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581"
+        }
+      ]
     },
     {
       "sequence": 2,
       "file": "0002.identity-grants.sql",
       "sha256": "0d7561075037d354980a33ddd005688f5e73597011c5423f54c9ca9164f871a7",
-      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T02/database-review.json"
+      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T02/database-review.json",
+      "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 3,
       "file": "0003.authentication-challenges.sql",
       "sha256": "72acd69951b379bf1af2ac7731a6d00b3b8b674c00aa7ded49e49a3f1571c83f",
-      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01/challenge-review.json"
+      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01/challenge-review.json",
+      "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 4,
       "file": "0004.workspace-access-revocation.sql",
       "sha256": "19f0d6e09079540020992c054719fe7e5c461c6e4e4b07d431e29d8274e8e038",
-      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01/workspace-revocation-review.json"
+      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01/workspace-revocation-review.json",
+      "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 5,
       "file": "0005.workspace-store-linking.sql",
       "sha256": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
-      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T03/workspace-store-linking-review.json"
+      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T03/workspace-store-linking-review.json",
+      "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 6,
       "file": "0006.authentication-exchange-admission.sql",
       "sha256": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
-      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01d/review.json"
+      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01d/review.json",
+      "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 7,
       "file": "0007.provider-subject-resolution.sql",
       "sha256": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
-      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01j/review.json"
+      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01j/review.json",
+      "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 8,
       "file": "0008.browser-session-admission.sql",
       "sha256": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
-      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01m/review.json"
+      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01m/review.json",
+      "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 9,
       "file": "0009.workspace-linking-read-boundaries.sql",
       "sha256": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2",
-      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T03b/review.json"
+      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T03b/review.json",
+      "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 10,
       "file": "0010.login-flow-custody.sql",
       "sha256": "51c6d7ca9e31a897352c4a8b2e85824eb4a7b58506629246bce63c9d92070475",
-      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01p/review.json"
+      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01p/review.json",
+      "executeAs": "morrow_identity_owner",
+      "prerequisites": [
+        {
+          "file": "infra/identity-login-role-prerequisites.sql",
+          "sha256": "17c25b456d85d6b0a70fe312be885f4543339da9ebaf04122b585ccc2d4c541b"
+        }
+      ]
     },
     {
       "sequence": 11,
       "file": "0011.self-browser-family-logout.sql",
       "sha256": "089ff5487030df8f085045f37f523522540759752b7fde25abf91629396f28c4",
-      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01q/review.json"
+      "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01q/review.json",
+      "executeAs": "morrow_identity_owner",
+      "prerequisites": [
+        {
+          "file": "infra/identity-logout-role-prerequisites.sql",
+          "sha256": "1eb98c94b51d4d2b1c2580fc402234110536ae6a84c185116676766460a0193d"
+        }
+      ]
     },
     {
       "sequence": 12,
       "file": "0012.login-protocol-v1.sql",
       "sha256": "52e9f699956ec8932056b22b2dc5294e540225562730666e0a87d00dfe857579",
-      "reviewRef": "docs/packets/P05.T01x.md"
+      "reviewRef": "docs/packets/P05.T01x.md",
+      "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 13,
       "file": "0013.account-onboarding.sql",
       "sha256": "df215e288e6dda31fb62cb70b86354507d054a6e9f1df481891a4a5552e5d763",
-      "reviewRef": "docs/decisions/adr/ADR-0009-self-serve-signup.md"
+      "reviewRef": "docs/decisions/adr/ADR-0009-self-serve-signup.md",
+      "executeAs": "morrow_identity_owner",
+      "prerequisites": [
+        {
+          "file": "infra/identity-onboarding-role-prerequisites.sql",
+          "sha256": "2baa597ab15f6c64957204071dccb96b2ca85bdc24eb2f482c5a9d8a7dd40e53"
+        }
+      ]
     },
     {
       "sequence": 14,
       "file": "0014.work-identity-bridge.sql",
       "sha256": "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
       "executeAs": "morrow_identity_owner",
-      "reviewRef": "docs/packets/P06.T01a.md"
+      "reviewRef": "docs/packets/P06.T01a.md",
+      "prerequisites": [
+        {
+          "file": "infra/work-role-prerequisites.sql",
+          "sha256": "dbe05f09aa860e5e5e73de9358b5ca15e37c55cf74aec5a9d56571754e3f0b1c"
+        }
+      ]
     },
     {
       "sequence": 15,
