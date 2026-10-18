@@ -133,3 +133,12 @@ Scope of the approval:
 - **Following from them:** item 2 makes "pay on Morrow, then connect their store" exact, taking the conservative reading of the staff guidance (a completed payment before any store link). Item 3 implements "never see Morrow's checkout". Items 5 and 6 carry the ADR-0006 rules and the billing-ownership rules over to two routes. Billing contract v1 can describe only a shop-owned billing account, so items 2 and 6 also need a billing layer in contract v1.1 (the route record, verified payments and a storeless Morrow-direct account). That changes ADR-0011 Q0's composition of v1.1 and the rule that billing stays at v1; P01.T04a applies it while v1.1 is a candidate, or opens v1.2 if v1.1 is frozen first. Item 8 restates the existing provider rules.
 - **Not established by the answers:** "Fully compliant" in the option text is the recommendation's claim, not a Shopify determination; App Review decides (Risk 1).
 - **Pending:** the Stripe account, test mode, live activation, tax registrations, business entity and bank account are owner actions and launch gates. Nothing is created now.
+
+### Follow-up owner decisions (P01.T04a OQ-1 to OQ-3, 2026-10-18)
+
+The owner chose the recommended option for each:
+
+1. **Who may buy:** "Decide with checkout (Recommended)". Purchase permission is defined with the Stripe checkout in P18.T01a. Owners who signed up earlier receive it through a later grant template or audited issuance (P05.T02a). Signup template v1 is unchanged.
+2. **How M4 runs paid work:** "Test entitlement seed (Recommended)". An audited, owner-run tool gives one workspace and its named stores a capped, expiring test entitlement. It applies to development and staging only. On hosted staging, each use needs a per-action owner approval. Production readers refuse the entitlement, and the production composition binds no writer.
+3. **App Review:** "Review allowance (Recommended)". In production, the owner approves, per action, a capped and expiring credit allowance for one named development-store installation used as the review store. The allowance is listed in the App Review notes. It fixes no billing route and creates no free merchant tier.
+
