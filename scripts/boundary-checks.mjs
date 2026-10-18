@@ -124,8 +124,10 @@ export function inspectImports(file, code) {
         "react",
         "react-dom/client",
         "@morrow/workspace-ui",
+        "@morrow/workspace-ui/styles.css",
         "@morrow/contracts",
         "@morrow/contracts/client",
+        "@morrow/contracts/routes",
         "@morrow/contracts/validation",
         "@morrow/entry-ports",
       ].includes(specifier)
@@ -166,6 +168,14 @@ export function inspectImports(file, code) {
       if (runtimeCore && !/^packages\/(runtime|contracts|entry-ports)\/src\//.test(target))
         errors.push("RUNTIME_CORE_RELATIVE_ESCAPE");
       if (ui && /\.server(\.|$)/.test(target)) errors.push("UI_SERVER_IMPORT");
+      // P14.T01a §4.11 (a): fixture code is reachable only from the fixture entry.
+      if (
+        /^apps\/workspace-web\/src\/fixtures\//.test(target) &&
+        /^(apps|packages)\//.test(path) &&
+        path !== "apps/workspace-web/src/fixture-main.tsx" &&
+        !/^apps\/workspace-web\/src\/fixtures\//.test(path)
+      )
+        errors.push("UI_FIXTURE_IMPORT");
     }
   };
   const inspectLiteral = (node) => {
@@ -192,10 +202,57 @@ export function inspectImports(file, code) {
     }
     if (ui && ts.isIdentifier(node) && node.text === "process")
       errors.push("UI_SERVER_ENVIRONMENT");
+    if (ui) inspectUiSinks(node, path, errors);
     ts.forEachChild(node, visit);
   };
   visit(source);
   return [...new Set(errors)];
+}
+// P14.T01a §5: UI source renders text only and keeps browser state to the two
+// reviewed sessionStorage owners. No HTML sinks, cookies, dynamic code or localStorage.
+const htmlSinks = new Set([
+  "dangerouslySetInnerHTML",
+  "innerHTML",
+  "outerHTML",
+  "insertAdjacentHTML",
+]);
+const sessionStorageOwners = new Set([
+  "apps/workspace-web/src/intended-route.ts",
+  "apps/workspace-web/src/pending.ts",
+]);
+function inspectUiSinks(node, path, errors) {
+  const name = ts.isIdentifier(node)
+    ? node.text
+    : ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression)
+      ? node.argumentExpression.text
+      : null;
+  if (name !== null) {
+    if (htmlSinks.has(name)) errors.push("UI_HTML_SINK");
+    if (name === "eval") errors.push("UI_DYNAMIC_CODE");
+    if (name === "localStorage") errors.push("UI_LOCAL_STORAGE");
+    if (name === "sessionStorage" && !sessionStorageOwners.has(path))
+      errors.push("UI_SESSION_STORAGE_OUTSIDE_OWNER");
+  }
+  if (ts.isJsxAttribute(node) && htmlSinks.has(node.name.getText())) errors.push("UI_HTML_SINK");
+  if (
+    (ts.isCallExpression(node) || ts.isNewExpression(node)) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === "Function"
+  )
+    errors.push("UI_DYNAMIC_CODE");
+  if (
+    (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === "document"
+  ) {
+    const member = ts.isPropertyAccessExpression(node)
+      ? node.name.text
+      : ts.isStringLiteralLike(node.argumentExpression)
+        ? node.argumentExpression.text
+        : null;
+    if (member === "cookie") errors.push("UI_COOKIE_ACCESS");
+    if (member === "write" || member === "writeln") errors.push("UI_HTML_SINK");
+  }
 }
 export function inspectCompatibility(baseline, schemas) {
   return Object.entries(baseline.schemas)

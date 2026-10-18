@@ -836,6 +836,38 @@ async function smokeDevPhase(protocol, markers, check) {
   );
 }
 
+// P14.T01a `ui:edge`: the unbound dev pair serving the production dist (the same
+// `dev` invocation), over http so the browser needs no certificate exception. Resolves
+// once /healthz answers; the caller stops it. Output is never written anywhere.
+export async function startEdgeDev({ protocol = "http", timeoutMs = 60000 } = {}) {
+  refuseUnsafe();
+  if (!existsSync(spaIndex)) throw Error("EDGE_SPA_DIST_MISSING: run `npm run build` first");
+  const { host, port } = edgeDevOrigin;
+  if (!(await portFree(host, port))) throw Error("EDGE_DEV_PORT_IN_USE:" + port);
+  const child = startDev(protocol === "http" ? "http" : undefined, ["ignore", "pipe", "pipe"]);
+  child.stdout.resume();
+  child.stderr.resume();
+  const exited = new Promise((done) =>
+    child.once("exit", (code, signal) => done({ code, signal })),
+  );
+  const stop = async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+    const killer = setTimeout(() => child.kill("SIGKILL"), 10000);
+    await exited;
+    clearTimeout(killer);
+  };
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    try {
+      if ((await localRequest(protocol, "/healthz")).status === 200)
+        return { origin: `${protocol}://${host}:${port}`, stop };
+    } catch {}
+    await new Promise((done) => setTimeout(done, 250));
+  }
+  await stop();
+  throw Error("EDGE_DEV_NOT_READY");
+}
+
 export async function edgeSmokeDev() {
   refuseUnsafe();
   if (!existsSync(spaIndex)) throw Error("EDGE_SPA_DIST_MISSING: run `npm run build` first");

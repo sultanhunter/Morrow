@@ -1,0 +1,458 @@
+// The option 1 shell: skip link, the provisional label (every screen, every width),
+// seven destinations, the workspace switcher, and the labelled modal drawer below
+// 760 px (focus trapped, background `inert`, Escape restores focus).
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { buildWorkspacePath, routeAncestry, workspaceRoutes } from "@morrow/contracts/routes";
+import { copy } from "../copy";
+import type { WorkspaceSummary, WorkspaceView } from "../model";
+import { useServices } from "../services";
+import { breakpoints } from "../tokens";
+import { Button, RouteLink, trapTab } from "./controls";
+import { Icon, type IconName } from "./display";
+
+export function ProvisionalBar({ fixture }: { readonly fixture?: ReactNode }) {
+  return (
+    <div className="provisional-bar">
+      <p role="note" className="provisional-note">
+        {copy.provisional}
+      </p>
+      {fixture ?? null}
+    </div>
+  );
+}
+
+export function SkipLink() {
+  return (
+    <a
+      className="skip-link"
+      href="#main"
+      onClick={(event) => {
+        event.preventDefault();
+        document.getElementById("main")?.focus();
+      }}
+    >
+      {copy.skip}
+    </a>
+  );
+}
+
+/** Screens outside a workspace: sign-in, signed out, not found, unavailable, account. */
+export function EntryLayout({
+  fixture,
+  children,
+}: {
+  readonly fixture?: ReactNode;
+  readonly children: ReactNode;
+}) {
+  return (
+    <>
+      <SkipLink />
+      <ProvisionalBar fixture={fixture} />
+      <div className="entry">
+        <p className="brand entry-brand">
+          <span className="brand-mark" aria-hidden="true">
+            m
+          </span>
+          {copy.brand}
+        </p>
+        <main id="main" tabIndex={-1} className="entry-main">
+          {children}
+        </main>
+      </div>
+    </>
+  );
+}
+
+const destinations: readonly { readonly route: string; readonly icon: IconName }[] = [
+  { route: "home", icon: "home" },
+  { route: "work", icon: "work" },
+  { route: "inbox", icon: "inbox" },
+  { route: "agents", icon: "agents" },
+  { route: "assets", icon: "assets" },
+  { route: "knowledge", icon: "knowledge" },
+  { route: "settings", icon: "settings" },
+];
+const labels = copy.destinations as Readonly<Record<string, string>>;
+
+export function Navigation({
+  workspaceId,
+  currentRoute,
+  onNavigate,
+}: {
+  readonly workspaceId: string;
+  readonly currentRoute: string;
+  readonly onNavigate?: () => void;
+}) {
+  const ancestry = routeAncestry(workspaceRoutes, currentRoute);
+  const current = destinations.find((d) => ancestry.includes(d.route))?.route ?? null;
+  return (
+    <nav aria-label="Main" className="nav">
+      <ul>
+        {destinations.map((d) => (
+          <li key={d.route}>
+            <RouteLink
+              route={d.route}
+              params={{ workspaceId }}
+              current={d.route === current}
+              className="nav-link"
+              {...(onNavigate ? { onNavigate } : {})}
+            >
+              <Icon name={d.icon} />
+              {labels[d.route]}
+            </RouteLink>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/** Menu button pattern: arrows, Home/End, Escape and Tab close; focus returns to the button. */
+export function WorkspaceSwitcher({
+  current,
+  workspaces,
+  onNavigate,
+}: {
+  readonly current: WorkspaceView;
+  readonly workspaces: readonly WorkspaceSummary[] | null;
+  readonly onNavigate?: () => void;
+}) {
+  const services = useServices();
+  const [open, setOpen] = useState(false);
+  const [focusIndex, setFocusIndex] = useState(0);
+  const button = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLUListElement>(null);
+  const wrapper = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const items: readonly WorkspaceSummary[] = workspaces ?? [
+    { workspaceId: current.id, displayName: current.displayName },
+  ];
+  useEffect(() => {
+    if (!open) return;
+    menu.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]')[focusIndex]?.focus();
+  }, [open, focusIndex]);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => {
+      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [open]);
+  const openAt = (index: number) => {
+    setFocusIndex(index);
+    setOpen(true);
+  };
+  const close = (refocus: boolean) => {
+    setOpen(false);
+    if (refocus) button.current?.focus();
+  };
+  const select = (item: WorkspaceSummary) => {
+    close(true);
+    if (item.workspaceId === current.id) return;
+    onNavigate?.();
+    services.navigate(
+      buildWorkspacePath(workspaceRoutes, "home", { workspaceId: item.workspaceId }),
+    );
+  };
+  const onButtonKey = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      openAt(0);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      openAt(items.length - 1);
+    }
+  };
+  const onMenuKey = (event: KeyboardEvent<HTMLUListElement>) => {
+    const last = items.length - 1;
+    const moves: Readonly<Record<string, number>> = {
+      ArrowDown: focusIndex === last ? 0 : focusIndex + 1,
+      ArrowUp: focusIndex === 0 ? last : focusIndex - 1,
+      Home: 0,
+      End: last,
+    };
+    if (Object.hasOwn(moves, event.key)) {
+      event.preventDefault();
+      setFocusIndex(moves[event.key]!);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close(true);
+    } else if (event.key === "Tab") close(false);
+  };
+  return (
+    <div className="switcher" ref={wrapper}>
+      <button
+        ref={button}
+        type="button"
+        className="switcher-button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        aria-label={`${copy.workspace.switcherLabel}: ${current.displayName}`}
+        onClick={() => (open ? close(false) : openAt(0))}
+        onKeyDown={onButtonKey}
+      >
+        <span className="switcher-mark" aria-hidden="true">
+          {current.displayName.slice(0, 1).toUpperCase()}
+        </span>
+        <span className="switcher-name" dir="auto">
+          {current.displayName}
+        </span>
+        <Icon name="chevron" size={16} />
+      </button>
+      <div className="switcher-popover" hidden={!open}>
+        <ul
+          role="menu"
+          id={menuId}
+          ref={menu}
+          aria-label={copy.workspace.switcherLabel}
+          onKeyDown={onMenuKey}
+        >
+          {items.map((item) => (
+            <li
+              key={item.workspaceId}
+              role="menuitemradio"
+              aria-checked={item.workspaceId === current.id}
+              tabIndex={-1}
+              className="switcher-item"
+              onClick={() => select(item)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  select(item);
+                }
+              }}
+            >
+              <span dir="auto">{item.displayName}</span>
+              {item.workspaceId === current.id ? <Icon name="check" size={16} /> : null}
+            </li>
+          ))}
+        </ul>
+        {workspaces === null ? (
+          <p className="muted small switcher-note">{copy.workspace.switcherOnlyCurrent}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const narrowQuery = `(max-width: ${breakpoints.navigationCollapseBelow - 1}px)`;
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(narrowQuery).matches);
+  useEffect(() => {
+    const query = window.matchMedia(narrowQuery);
+    const change = () => setNarrow(query.matches);
+    query.addEventListener("change", change);
+    return () => query.removeEventListener("change", change);
+  }, []);
+  return narrow;
+}
+/** React 18.3.1 needs the string form of `inert`. */
+const inertWhen = (on: boolean): Readonly<Record<string, string>> => (on ? { inert: "" } : {});
+
+export function AppShell({
+  workspace,
+  currentRoute,
+  switcherWorkspaces,
+  onSignOut,
+  signOutBusy,
+  notices,
+  fixture,
+  children,
+}: {
+  readonly workspace: WorkspaceView;
+  readonly currentRoute: string;
+  readonly switcherWorkspaces: readonly WorkspaceSummary[] | null;
+  readonly onSignOut: () => void;
+  readonly signOutBusy: boolean;
+  readonly notices?: ReactNode;
+  readonly fixture?: ReactNode;
+  readonly children: ReactNode;
+}) {
+  const narrow = useNarrow();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawer = useRef<HTMLElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const modal = narrow && drawerOpen;
+  useEffect(() => {
+    if (!narrow) setDrawerOpen(false);
+  }, [narrow]);
+  useEffect(() => {
+    if (modal) drawer.current?.querySelector<HTMLElement>(".drawer-close")?.focus();
+  }, [modal]);
+  // Focus returns to the menu button once the background is no longer inert.
+  const restoreFocus = useRef(false);
+  useEffect(() => {
+    if (!modal && restoreFocus.current) {
+      restoreFocus.current = false;
+      menuButton.current?.focus();
+    }
+  }, [modal]);
+  const closeDrawer = (refocus: boolean) => {
+    restoreFocus.current = refocus;
+    setDrawerOpen(false);
+  };
+  const navigated = () => setDrawerOpen(false);
+  return (
+    <>
+      <div {...inertWhen(modal)}>
+        <SkipLink />
+        <ProvisionalBar fixture={fixture} />
+      </div>
+      <div className="shell">
+        {modal ? (
+          <div className="drawer-backdrop" aria-hidden="true" onClick={() => closeDrawer(true)} />
+        ) : null}
+        <aside
+          ref={drawer}
+          id="workspace-navigation"
+          className={modal ? "sidebar is-open" : "sidebar"}
+          aria-label={copy.navigationLabel}
+          {...(modal ? { role: "dialog", "aria-modal": true } : {})}
+          onKeyDown={(event) => {
+            if (!modal) return;
+            if (event.key === "Escape") {
+              event.preventDefault();
+              closeDrawer(true);
+            } else trapTab(event, drawer.current);
+          }}
+        >
+          <div className="sidebar-head">
+            <p className="brand">
+              <span className="brand-mark" aria-hidden="true">
+                m
+              </span>
+              {copy.brand}
+            </p>
+            {modal ? (
+              <button
+                type="button"
+                className="button button-quiet icon-button drawer-close"
+                aria-label={copy.closeNavigation}
+                onClick={() => closeDrawer(true)}
+              >
+                <Icon name="close" />
+              </button>
+            ) : null}
+          </div>
+          <WorkspaceSwitcher
+            current={workspace}
+            workspaces={switcherWorkspaces}
+            onNavigate={navigated}
+          />
+          <Navigation
+            workspaceId={workspace.id}
+            currentRoute={currentRoute}
+            onNavigate={navigated}
+          />
+          <div className="sidebar-foot">
+            <Button onClick={onSignOut} disabled={signOutBusy}>
+              {signOutBusy ? copy.signOut.working : copy.signOut.button}
+            </Button>
+          </div>
+        </aside>
+        <div className="main-column" {...inertWhen(modal)}>
+          <header className="topbar">
+            <button
+              ref={menuButton}
+              type="button"
+              className="button button-quiet icon-button"
+              aria-label={copy.openNavigation}
+              aria-expanded={modal}
+              aria-controls="workspace-navigation"
+              onClick={() => setDrawerOpen(true)}
+            >
+              <Icon name="menu" />
+            </button>
+            <span className="topbar-name" dir="auto">
+              {workspace.displayName}
+            </span>
+          </header>
+          <main id="main" tabIndex={-1} className="workspace-main">
+            {notices}
+            {children}
+          </main>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function Tabs({
+  label,
+  tabs,
+  selected,
+  onSelect,
+  idPrefix,
+}: {
+  readonly label: string;
+  readonly tabs: readonly { readonly id: string; readonly label: string }[];
+  readonly selected: string;
+  readonly onSelect: (id: string) => void;
+  readonly idPrefix: string;
+}) {
+  const list = useRef<HTMLDivElement>(null);
+  const move = (event: KeyboardEvent<HTMLDivElement>) => {
+    const index = tabs.findIndex((t) => t.id === selected);
+    const last = tabs.length - 1;
+    const next: Readonly<Record<string, number>> = {
+      ArrowRight: index === last ? 0 : index + 1,
+      ArrowLeft: index === 0 ? last : index - 1,
+      Home: 0,
+      End: last,
+    };
+    if (!Object.hasOwn(next, event.key)) return;
+    event.preventDefault();
+    const target = tabs[next[event.key]!]!;
+    onSelect(target.id);
+    list.current?.querySelector<HTMLElement>(`#${idPrefix}-tab-${target.id}`)?.focus();
+  };
+  return (
+    <div className="tabs" role="tablist" aria-label={label} ref={list} onKeyDown={move}>
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          id={`${idPrefix}-tab-${tab.id}`}
+          type="button"
+          role="tab"
+          aria-selected={tab.id === selected}
+          aria-controls={`${idPrefix}-panel-${tab.id}`}
+          tabIndex={tab.id === selected ? 0 : -1}
+          onClick={() => onSelect(tab.id)}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function PaneSwitch({
+  label,
+  panes,
+  selected,
+  onSelect,
+}: {
+  readonly label: string;
+  readonly panes: readonly { readonly id: string; readonly label: string }[];
+  readonly selected: string;
+  readonly onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="pane-switch" role="group" aria-label={label}>
+      {panes.map((pane) => (
+        <button
+          key={pane.id}
+          type="button"
+          className="button button-secondary"
+          aria-pressed={pane.id === selected}
+          onClick={() => onSelect(pane.id)}
+        >
+          {pane.label}
+        </button>
+      ))}
+    </div>
+  );
+}

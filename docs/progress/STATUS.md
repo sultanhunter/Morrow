@@ -1,6 +1,6 @@
 # Morrow status
 
-Updated 2026-10-18. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
+Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overhaul append-only checkpoint is `git show codex-archive-f89ad75:docs/progress/checkpoint.md`.
 
 ## Active packets
 
@@ -16,6 +16,7 @@ In progress:
 - **Owner decisions of 2026-10-18** (branch `claude/decisions-billing-collab`): ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
 - **P01.T04a** has landed on that branch. Its owner questions OQ-1 to OQ-3 were resolved on 2026-10-18 (ADR-0015 follow-up decisions). Its PR-A and PR-B are the next billing step.
 - **P03.T04e** (shared PostgreSQL harness) ships in its own PR.
+- **P14.T01a PR-1** (branch `claude/p14-t01a-provisional-ui`): the option 1 shell, sign-in, workspace entry and sign-out over HTTP, the dev-only fixture mode, the 130-case a11y matrix and the CI `ui` job (`docs/acceptance/P14.md`). Local: `ui:check` 96 + 22, `ui:edge` 12 and the local browser journey passed. Merge order with P05.T01x Part B: whichever lands second sets `composed.loginBodyVersion` to match the server (a unit test fails until it does), and both carry the same `account` route entry.
 
 ## Decisions recorded 2026-10-18
 
@@ -35,6 +36,7 @@ In progress:
 1. Review and merge the decisions branch (documents only; Tier 2 AI review).
 2. P05.T01x Part B, signup and workspace list (ADR-0009); P01.T02a PR-B is merged.
 3. P06.T01a, work commands on the tenant data pattern (ADR-0010). Then the ADR-0018 Proposal@2 edit, P06.T01b, P01.T02c (ADR-0016) and P01.T02b.
+   - P14.T01a: merge PR-1 once its hosted `ui` job is green; PR-2 (account and work wiring) follows Part B and P06.T01a.
 4. P01.T04a PR-A (paid-work gate and billing contracts), then PR-B (billing route library), after the decisions branch merges.
 5. M1 hosted staging (P04.T01i), once the owner sign-ins below are done.
 
