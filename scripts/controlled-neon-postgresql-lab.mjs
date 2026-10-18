@@ -138,6 +138,51 @@ const binding = {
   database: "morrow",
 };
 const privateMarkers = [];
+// P03.T04f: record what failed, not only where. A fixture response other than the expected
+// one is recorded with the failure the fixture Worker described, and an error that rejects
+// this lab's engine callback is recorded with its message: the engine itself reports only
+// that its callback was held, which is all two hosted concurrent-callback holds recorded
+// (no failed check, so the error was not a check). Every private marker is removed first,
+// and the report's private-marker check below still applies.
+const dispatchFailures = [];
+let callbackError = null;
+function redacted(text) {
+  let out = String(text);
+  for (const marker of privateMarkers)
+    if (typeof marker === "string" && marker.length >= 8) out = out.replaceAll(marker, "[private]");
+  return out.replace(/[^\x20-\x7e]/g, "?").slice(0, 300);
+}
+function describeError(error) {
+  try {
+    return {
+      name: typeof error?.name === "string" ? redacted(error.name).slice(0, 64) : null,
+      message: redacted(
+        typeof error?.message === "string" ? error.message : "non-error " + typeof error,
+      ),
+    };
+  } catch {
+    return { name: null, message: "undescribable failure" };
+  }
+}
+function recordDispatchFailure(label, status, bodyText) {
+  let failure = null;
+  try {
+    const body = JSON.parse(bodyText);
+    if (body?.held === true && typeof body.failure?.message === "string")
+      failure = {
+        name:
+          typeof body.failure.name === "string" ? redacted(body.failure.name).slice(0, 64) : null,
+        message: redacted(body.failure.message),
+        code:
+          typeof body.failure.code === "string" && /^[A-Za-z0-9_]{1,32}$/.test(body.failure.code)
+            ? body.failure.code
+            : null,
+      };
+  } catch {
+    // Not the fixture's held envelope; the status is still recorded.
+  }
+  if (dispatchFailures.length < 20) dispatchFailures.push({ stage, label, status, failure });
+}
 try {
   measured = await controlledNeonPostgresqlLab(async (engine) => {
     try {
@@ -326,6 +371,8 @@ try {
                 body: JSON.stringify(input),
               },
         );
+        if (response.status !== 200)
+          recordDispatchFailure(path, response.status, await response.text());
         check("fixture_dispatch_" + checks.length, response.status === 200);
         return response.json();
       };
@@ -393,6 +440,8 @@ try {
           headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
           body: JSON.stringify({ schemaVersion: 2 }),
         });
+        if (response.status !== 200)
+          recordDispatchFailure("/auth/login", response.status, await response.text());
         const diagnostic =
           flowSerial === 0
             ? (firstBeginDiagnostic = {
@@ -430,6 +479,8 @@ try {
         };
         const response = await dispatch(url.pathname + url.search, { headers });
         const body = await response.text();
+        if (response.status !== 303)
+          recordDispatchFailure("/auth/workos/callback " + prepared.serial, response.status, body);
         check(
           "actual_84_callback_delivery_" + prepared.serial,
           response.status === 303 &&
@@ -650,6 +701,9 @@ try {
         provider: oracles.map((o) => ({ metrics: o.metrics, calls: o.calls })),
         finalNamespace,
       };
+    } catch (error) {
+      callbackError = describeError(error);
+      throw error;
     } finally {
       // Publish each disposal promise before it can call back. Failure must
       // release request resources before this callback rejects to Docker cleanup.
@@ -668,6 +722,7 @@ try {
     stage,
     code: "CONTROLLED_NEON_POSTGRESQL_LAB_HELD",
     observation: error?.observation ?? null,
+    error: callbackError ?? describeError(error),
   };
 } finally {
   // Join the already-published attempts; never retry an unknown disposal.
@@ -718,6 +773,7 @@ const report = {
   },
   measured: measured ?? null,
   firstBeginDiagnostic,
+  dispatchFailures,
   limitations: [
     "Native WSS destination is fully locally intercepted; no remote DNS/TLS/Neon account/proxy qualification.",
     "Only this new fixture uses an attested owned internal IPv4 endpoint with no published ports; host access remains possible and old network-none laboratories are unchanged.",
@@ -733,7 +789,12 @@ if (
 )
   throw Error("CONTROLLED_PG_PRIVATE_REPORT_HELD");
 writeArtifact("labs/controlled-neon-postgresql.json", serialized);
-if (failure || cleanupFailure) throw Error("CONTROLLED_NEON_POSTGRESQL_LAB_HELD:" + stage);
+if (failure || cleanupFailure) {
+  console.error(
+    "CONTROLLED_PG_FAILURE:" + JSON.stringify({ error: failure?.error ?? null, dispatchFailures }),
+  );
+  throw Error("CONTROLLED_NEON_POSTGRESQL_LAB_HELD:" + stage);
+}
 console.log(
   "PASS: " +
     checks.length +
