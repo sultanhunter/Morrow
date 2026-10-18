@@ -64,7 +64,9 @@ test("AC01/AC04: the committed configuration resolves cleanly for 4 Workers x 3 
       { binding: "BROKER", service: `morrow-${environment}-broker`, entrypoint: "ApiBroker" },
     ]);
     assert.deepEqual(verdict.resolved["connector:" + environment].bindings, ["MORROW_ENVIRONMENT"]);
-    assert.equal(verdict.resolved["broker:" + environment].bindings.length, 9);
+    // MORROW_ENVIRONMENT, WORKOS_API_KEY and the eight role passwords (P06.T01a adds
+    // morrow_api_worker).
+    assert.equal(verdict.resolved["broker:" + environment].bindings.length, 10);
   }
   assert.deepEqual(verdict.reservedWorkerPaths, [...reservedWorkerPaths]);
   assert.deepEqual((await verify(tree())).problems, []);

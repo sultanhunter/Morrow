@@ -1,7 +1,7 @@
 // morrow-<env>-broker (ADR-0007): no public route, no workers.dev or preview
 // URL; reachable only through the ApiBroker service-binding entrypoint. It is
 // the only Worker that binds provider credentials: the WorkOS API key and the
-// seven Neon runtime-role passwords (`brokerRequiredSecrets`). No identifier is
+// eight Neon runtime-role passwords (`brokerRequiredSecrets`). No identifier is
 // committed; the first hosted deploy fails closed until P04.T01i supplies
 // `wrangler deploy --secrets-file`. Never add merchant or model credentials
 // under the v0 trust model.
@@ -29,6 +29,7 @@
       "MORROW_DB_PASSWORD_MORROW_IDENTITY_LINKING",
       "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGOUT",
       "MORROW_DB_PASSWORD_MORROW_IDENTITY_ONBOARDING",
+      "MORROW_DB_PASSWORD_MORROW_API_WORKER",
     ],
   },
   "env": {
@@ -45,6 +46,7 @@
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_LINKING",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGOUT",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_ONBOARDING",
+          "MORROW_DB_PASSWORD_MORROW_API_WORKER",
         ],
       },
     },
@@ -61,6 +63,7 @@
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_LINKING",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGOUT",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_ONBOARDING",
+          "MORROW_DB_PASSWORD_MORROW_API_WORKER",
         ],
       },
     },

@@ -72,6 +72,12 @@ const published = [
     "0013.account-onboarding.sql",
     "df215e288e6dda31fb62cb70b86354507d054a6e9f1df481891a4a5552e5d763",
   ],
+  [
+    14,
+    "0014.work-identity-bridge.sql",
+    "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
+  ],
+  [15, "0015.work-state.sql", "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9"],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
@@ -89,6 +95,9 @@ test("every published migration file still hashes to its pinned digest", () => {
     assert.equal(sha(readFileSync("migrations/" + row.file)), row.sha256, row.file);
 });
 
+// The manifest is append-only: published rows are an unchanged, index-aligned
+// prefix (above) and every row continues the sequence with no gap, so a new
+// migration can never be inserted ahead of a published one.
 test("migrations after the published prefix continue the sequence", () => {
   for (const [index, row] of manifest.migrations.entries()) {
     assert.equal(row.sequence, index + 1);

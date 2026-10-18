@@ -80,6 +80,20 @@
       "file": "0013.account-onboarding.sql",
       "sha256": "df215e288e6dda31fb62cb70b86354507d054a6e9f1df481891a4a5552e5d763",
       "reviewRef": "docs/decisions/adr/ADR-0009-self-serve-signup.md"
+    },
+    {
+      "sequence": 14,
+      "file": "0014.work-identity-bridge.sql",
+      "sha256": "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/packets/P06.T01a.md"
+    },
+    {
+      "sequence": 15,
+      "file": "0015.work-state.sql",
+      "sha256": "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/packets/P06.T01a.md"
     }
   ]
 }

@@ -126,6 +126,7 @@ const roles = [
   "morrow_identity_linking",
   "morrow_identity_logout",
   "morrow_identity_onboarding",
+  "morrow_api_worker",
 ];
 const passwords = Object.fromEntries(
   roles.map((role) => [role, "Edge-" + randomBytes(18).toString("base64url")]),
@@ -195,14 +196,17 @@ const neonNamespace = (role, binding = databaseBinding) =>
     hostname: binding.hostname,
     database: binding.database,
     role,
-    purpose: [
-      "morrow_api",
-      "morrow_identity_linking",
-      "morrow_identity_logout",
-      "morrow_identity_onboarding",
-    ].includes(role)
-      ? "workspace_primary_and_one_same_role_observer"
-      : "primary_and_one_same_role_observer",
+    purpose:
+      role === "morrow_api_worker"
+        ? "work_request_transaction"
+        : [
+              "morrow_api",
+              "morrow_identity_linking",
+              "morrow_identity_logout",
+              "morrow_identity_onboarding",
+            ].includes(role)
+          ? "workspace_primary_and_one_same_role_observer"
+          : "primary_and_one_same_role_observer",
   });
 const sessionNamespace = JSON.stringify({
   schemaVersion: 1,

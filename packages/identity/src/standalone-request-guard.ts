@@ -1,6 +1,10 @@
 import { createLoginAttempt, type LoginAttempt } from "./standalone-login-protocol.js";
 import { validateDefinition } from "@morrow/contracts/validation";
 import { parseWorkosSessionStatusJson } from "./workos-session-status-json.js";
+import {
+  canonicalSessionSecret as canonicalSecret,
+  sessionCookieSecret,
+} from "./request-primitives.js";
 
 // Private server composition only. This module is deliberately not a package
 // entrypoint. Derived digests belong only to the immediately executing handler.
@@ -49,8 +53,6 @@ export function standaloneJson(status: number, value: unknown): Response {
     },
   });
 }
-const canonicalSecret = (value: unknown): value is string =>
-  typeof value === "string" && /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/.test(value);
 const failure = (status: 400 | 401 | 403 | 404 | 405 | 503): never => {
   throw new StandaloneRequestError(status);
 };
@@ -98,23 +100,9 @@ function configuration(value: unknown): string {
     throw Error("STANDALONE_REQUEST_CONFIG_INVALID");
   }
 }
+// The shared parser (request-primitives.ts); any failure is the same 401.
 function cookieSecret(header: string | null): string {
-  if (!header || header.length > 4096 || /[^\x20-\x7e]/.test(header)) return failure(401);
-  const pairs = header.split(";");
-  if (pairs.length > 32) return failure(401);
-  let secret: string | undefined;
-  for (const pair of pairs) {
-    const match =
-      /^([!#$%&'*+\-.^_`|~0-9A-Za-z]+)=([\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]*)$/.exec(
-        pair.trim(),
-      );
-    if (!match) return failure(401);
-    if (match[1] === "__Host-morrow_session") {
-      if (secret !== undefined || !canonicalSecret(match[2])) return failure(401);
-      secret = match[2];
-    }
-  }
-  return secret ?? failure(401);
+  return sessionCookieSecret(header) ?? failure(401);
 }
 function routePath(route: StandaloneRequestRoute): string {
   if (route === "bootstrap") return "/bootstrap";
