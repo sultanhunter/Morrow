@@ -4,6 +4,11 @@
 // committed here (P04.T01i adds the domain and the reviewed staging values).
 // Its only secret is its own login keyring, placed with --secrets-file; with
 // `secrets.required: []` types and dev never infer or load api secrets.
+// P05.T01ab (ADR-0019 item 8): the per-address sign-in limits, one namespace per
+// route and environment (development 7001-7003, staging 7101-7103, production
+// 7201-7203). `ratelimits` is not inherited, so every environment names its own.
+// LOGIN_CHALLENGE_JSON (it names the Turnstile site key) is a reviewed staging
+// identifier and lands with them (P04.T01i PR-D).
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "morrow-development-api",
@@ -36,6 +41,19 @@
   "services": [
     { "binding": "BROKER", "service": "morrow-development-broker", "entrypoint": "ApiBroker" },
   ],
+  "ratelimits": [
+    {
+      "name": "LOGIN_START_LIMITER",
+      "namespace_id": "7001",
+      "simple": { "limit": 10, "period": 60 },
+    },
+    {
+      "name": "LOGIN_CALLBACK_LIMITER",
+      "namespace_id": "7002",
+      "simple": { "limit": 20, "period": 60 },
+    },
+    { "name": "SIGNUP_LIMITER", "namespace_id": "7003", "simple": { "limit": 5, "period": 60 } },
+  ],
   "secrets": { "required": [] },
   "dev": { "ip": "127.0.0.1", "port": 8787, "local_protocol": "https" },
   "env": {
@@ -45,6 +63,23 @@
       "services": [
         { "binding": "BROKER", "service": "morrow-staging-broker", "entrypoint": "ApiBroker" },
       ],
+      "ratelimits": [
+        {
+          "name": "LOGIN_START_LIMITER",
+          "namespace_id": "7101",
+          "simple": { "limit": 10, "period": 60 },
+        },
+        {
+          "name": "LOGIN_CALLBACK_LIMITER",
+          "namespace_id": "7102",
+          "simple": { "limit": 20, "period": 60 },
+        },
+        {
+          "name": "SIGNUP_LIMITER",
+          "namespace_id": "7103",
+          "simple": { "limit": 5, "period": 60 },
+        },
+      ],
       "secrets": { "required": [] },
     },
     "production": {
@@ -52,6 +87,23 @@
       "vars": { "MORROW_ENVIRONMENT": "production" },
       "services": [
         { "binding": "BROKER", "service": "morrow-production-broker", "entrypoint": "ApiBroker" },
+      ],
+      "ratelimits": [
+        {
+          "name": "LOGIN_START_LIMITER",
+          "namespace_id": "7201",
+          "simple": { "limit": 10, "period": 60 },
+        },
+        {
+          "name": "LOGIN_CALLBACK_LIMITER",
+          "namespace_id": "7202",
+          "simple": { "limit": 20, "period": 60 },
+        },
+        {
+          "name": "SIGNUP_LIMITER",
+          "namespace_id": "7203",
+          "simple": { "limit": 5, "period": 60 },
+        },
       ],
       "secrets": { "required": [] },
     },

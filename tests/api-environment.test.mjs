@@ -50,11 +50,35 @@ function values(environment = "development", change = {}) {
   };
 }
 const broker = () =>
-  Object.freeze({ fetch() {}, health() {}, neonLease() {}, workosSessionPage() {} });
+  Object.freeze({
+    fetch() {},
+    health() {},
+    neonLease() {},
+    workosSessionPage() {},
+    challengeVerify() {},
+  });
+// P05.T01ab: the abuse-guard bindings that staging and production require.
+const siteKey = "0x" + "4AAAAAAA" + randomBytes(12).toString("hex");
+const challengeJson = (change = {}) =>
+  JSON.stringify({
+    schemaVersion: 1,
+    provider: "turnstile",
+    siteKey,
+    actions: { login: "account_login", signup: "organization_signup" },
+    ...change,
+  });
+const limiter = () => Object.freeze({ limit: async () => ({ success: true }) });
+const guard = () => ({
+  LOGIN_CHALLENGE_JSON: challengeJson(),
+  LOGIN_START_LIMITER: limiter(),
+  LOGIN_CALLBACK_LIMITER: limiter(),
+  SIGNUP_LIMITER: limiter(),
+});
 const env = (environment = "development", change = {}) => ({
   MORROW_ENVIRONMENT: environment,
   BROKER: broker(),
   ...values(environment, change),
+  ...(environment === "development" ? {} : guard()),
 });
 // Workers with nodejs_compat_do_not_populate_process_env expose an empty process.env.
 function map(record, processEnv = {}) {
@@ -268,4 +292,107 @@ test("1,000 fuzzed records never throw and never map a non-development/staging r
     if (mapped.ok) assert.ok(["development", "staging"].includes(mapped.environment));
     else assert.match(mapped.code, /^API_ENV_[A-Z_]+$/);
   }
+});
+
+// P05.T01ab-AC07: mapper step 10. Staging and production need LOGIN_CHALLENGE_JSON and
+// all three limiters; development may run without either, but a present part must be
+// valid and the limiters come all three or none.
+const without = (record, ...names) => {
+  const copy = { ...record };
+  for (const name of names) delete copy[name];
+  return copy;
+};
+const limiterNames = ["LOGIN_START_LIMITER", "LOGIN_CALLBACK_LIMITER", "SIGNUP_LIMITER"];
+
+test("P05.T01ab-AC07: staging without the guard is API_ENV_ABUSE_GUARD_MISSING", () => {
+  const record = env("staging");
+  assert.equal(code(record), "OK");
+  for (const missing of [["LOGIN_CHALLENGE_JSON"], limiterNames, ...limiterNames.map((n) => [n])])
+    assert.equal(code(without(record, ...missing)), "API_ENV_ABUSE_GUARD_MISSING", missing.join());
+  assert.equal(
+    code(without(record, "LOGIN_CHALLENGE_JSON", ...limiterNames)),
+    "API_ENV_ABUSE_GUARD_MISSING",
+  );
+  const mapped = map(record);
+  assert.equal(mapped.ok, true);
+  assert.ok(Object.isFrozen(mapped.guard));
+  assert.deepEqual(mapped.guard.challenge, {
+    schemaVersion: 1,
+    provider: "turnstile",
+    siteKey,
+    actions: { login: "account_login", signup: "organization_signup" },
+  });
+  assert.deepEqual(Object.keys(mapped.guard.limiters), ["loginStart", "loginCallback", "signup"]);
+  assert.equal(mapped.guard.limiters.signup, record.SIGNUP_LIMITER);
+});
+
+test("P05.T01ab-AC07: invalid challenge configuration or limiter bindings fail closed", () => {
+  const record = env("staging");
+  for (const value of [
+    "",
+    "{}",
+    challengeJson({ provider: "recaptcha" }),
+    challengeJson({ schemaVersion: 2 }),
+    challengeJson({ siteKey: "1x00000000000000000000AA" }),
+    challengeJson({ siteKey: "0xshort" }),
+    challengeJson({ actions: { login: "same", signup: "same" } }),
+    challengeJson({ actions: { login: "account_login" } }),
+    challengeJson({ actions: { login: "a b", signup: "organization_signup" } }),
+    challengeJson({ extra: true }),
+    challengeJson().replace("{", '{"provider":"turnstile",'),
+    "x".repeat(2049),
+    { value: challengeJson() },
+  ])
+    assert.equal(
+      code({ ...record, LOGIN_CHALLENGE_JSON: value }),
+      "API_ENV_ABUSE_GUARD_MISSING",
+      String(value).slice(0, 60),
+    );
+  for (const value of [null, "LIMITER", {}, { limit: "x" }, 1])
+    assert.equal(code({ ...record, SIGNUP_LIMITER: value }), "API_ENV_ABUSE_GUARD_MISSING");
+  const getter = env("staging");
+  Object.defineProperty(getter, "LOGIN_START_LIMITER", { get: limiter, enumerable: true });
+  assert.equal(code(getter), "API_ENV_ABUSE_GUARD_MISSING");
+});
+
+test("P05.T01ab-AC07: production never maps; step 7 fails it with or without the guard", () => {
+  assert.equal(
+    code(without(env("production", { bindingEnvironment: "production" }), "SIGNUP_LIMITER")),
+    "API_ENV_CROSS_BINDING_MISMATCH",
+  );
+  // Production never maps (ADR-0007 item 9); its record still names the guard.
+  assert.equal(
+    code(env("production", { bindingEnvironment: "staging", retentionTier: "production" })),
+    "API_ENV_CROSS_BINDING_MISMATCH",
+  );
+});
+
+test("P05.T01ab-AC07: development maps with no guard, limiters only, or the full guard", () => {
+  const plain = map(env());
+  assert.equal(plain.ok, true);
+  assert.deepEqual(plain.guard, { challenge: null, limiters: null });
+  const limited = map({ ...env(), ...without(guard(), "LOGIN_CHALLENGE_JSON") });
+  assert.equal(limited.ok, true);
+  assert.equal(limited.guard.challenge, null);
+  assert.equal(typeof limited.guard.limiters.loginStart.limit, "function");
+  const full = map({ ...env(), ...guard() });
+  assert.equal(full.ok, true);
+  assert.equal(full.guard.challenge.siteKey, siteKey);
+  assert.equal(
+    code({ ...env(), LOGIN_START_LIMITER: limiter() }),
+    "API_ENV_ABUSE_GUARD_MISSING",
+    "the limiters come all three or none",
+  );
+  assert.equal(
+    code({ ...env(), LOGIN_CHALLENGE_JSON: challengeJson({ siteKey: "2x" + "0".repeat(22) }) }),
+    "API_ENV_ABUSE_GUARD_MISSING",
+  );
+});
+
+test("P05.T01ab: the Turnstile secret is a credential the api mapper refuses", () => {
+  for (const environment of ["development", "staging"])
+    assert.equal(
+      code({ ...env(environment), TURNSTILE_SECRET_KEY: "0x" + "A".repeat(30) }),
+      "API_ENV_FORBIDDEN_CREDENTIAL_BINDING",
+    );
 });
