@@ -1,6 +1,6 @@
 # ADR-0020 Non-superuser migration administrator: one recorded administrator, a closed membership set and a one-time rebaseline of migrations 0005–0015
 
-- Status: Proposed, awaiting owner approval
+- Status: Accepted 2026-10-19 (owner approval in chat; see Approval)
 - Date: 2026-10-19
 - Refines: plan invariant 18 (forward-only migrations), by one bounded exception that closes (item 7). The "no membership row" executor rule of migrations 0005–0015, P06.T01a S5, and P04.T01i D3 (the runner's SET row).
 - Affects: P04.T01j, which implements this ADR. P04.T01i (D3 runner, Phase 0 M-N1, PR-B). P06.T01a (S5 and the conformance harness). P05.T01y (its in-flight 0016). P06.T01b (its forward migrations). P04.T04 (restore). The `packages/identity` role preflights.
@@ -133,4 +133,6 @@
 
 ## Approval
 
-Pending. The owner is asked, in chat, to approve items 1–8 and to confirm that no database they know of has applied migration 0005 or later. The confirmation should name any personal or Codex-era database.
+Owner approval, 2026-10-19, in chat. Asked "Approve ADR-0020: rebaseline migrations 0005–0015 so Neon's non-superuser admin can run them? ..." (abbreviated here), the owner answered "Approve ADR-0020 (Recommended)". This approves items 1–8. It answers P04.T01i OQ-1 with option (B) and P04.T01j OQ-1.
+
+Item 7 confirmation, 2026-10-19, in chat. Asked "ADR-0020 also asks you to confirm one fact: do you know of ANY database (personal, Codex-era, or anywhere else) that ran Morrow's migrations 0005 or later? As far as I know, the old Neon project only ever got migrations 1–3.", the owner answered "None that I know of". The old Neon project `cool-butterfly-64820147` held migrations 1–3 only and is being deleted by the owner.
