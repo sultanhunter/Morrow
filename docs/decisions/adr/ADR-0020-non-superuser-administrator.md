@@ -135,4 +135,4 @@
 
 Owner approval, 2026-10-19, in chat. Asked "Approve ADR-0020: rebaseline migrations 0005–0015 so Neon's non-superuser admin can run them? ..." (abbreviated here), the owner answered "Approve ADR-0020 (Recommended)". This approves items 1–8. It answers P04.T01i OQ-1 with option (B) and P04.T01j OQ-1.
 
-Item 7 also asks the owner to confirm that no database they know of has applied migration 0005 or later, naming any personal or Codex-era database. That confirmation is not quoted in this record. It is to be recorded here before the P04.T01j PR-B rebaseline merges.
+Item 7 confirmation, 2026-10-19, in chat. Asked "ADR-0020 also asks you to confirm one fact: do you know of ANY database (personal, Codex-era, or anywhere else) that ran Morrow's migrations 0005 or later? As far as I know, the old Neon project only ever got migrations 1–3.", the owner answered "None that I know of". The old Neon project `cool-butterfly-64820147` held migrations 1–3 only and is being deleted by the owner.
