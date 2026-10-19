@@ -13,6 +13,7 @@ import { writeArtifact } from "./artifacts.mjs";
 import { checkDecisionTables } from "./billing-decision-tables.mjs";
 import {
   billingState,
+  directLink,
   library,
   link,
   live,
@@ -181,30 +182,35 @@ const actor = {
 const classify = (state, event, granted = []) =>
   classifyPayment({ kind: "workspace", state }, event, L.terms, new Set(granted));
 const event = (key, overrides = {}) => ({ ...structuredClone(L.events[key]), ...overrides });
+// Payers are selected at the state's evaluation time.
 const select = (state, work, spending, shares = null) =>
-  selectPayers(state, {
-    organizationId: L.organizationId,
-    workspaceId: W,
-    workStoreIds: work,
-    spending,
-    allocation:
-      shares === null
-        ? null
-        : {
-            schemaVersion: 2,
-            id: "allocation_1",
-            organizationId: L.organizationId,
-            workspaceId: W,
-            taskId: "task_1",
-            rootRunId: "run_1",
-            revision: 1,
-            rateRevision: 1,
-            meterKey: "agent-work",
-            maximumCredits: "50",
-            shares,
-            allocationDigest: "e".repeat(64),
-          },
-  });
+  selectPayers(
+    state,
+    {
+      organizationId: L.organizationId,
+      workspaceId: W,
+      workStoreIds: work,
+      spending,
+      allocation:
+        shares === null
+          ? null
+          : {
+              schemaVersion: 2,
+              id: "allocation_1",
+              organizationId: L.organizationId,
+              workspaceId: W,
+              taskId: "task_1",
+              rootRunId: "run_1",
+              revision: 1,
+              rateRevision: 1,
+              meterKey: "agent-work",
+              maximumCredits: "50",
+              shares,
+              allocationDigest: "e".repeat(64),
+            },
+    },
+    state.evaluatedAt,
+  );
 const morrowRefused = (state) =>
   morrowPurchaseActions.every(
     (action) => purchaseDecision(state, { action }).code === "PURCHASE_ROUTE_MISMATCH",
@@ -281,7 +287,7 @@ await walkthrough(
       after.state === "billable" &&
       after.purchaseSurface === "shopify" &&
       morrowRefused(after) &&
-      entitlementFor(after, workRequest("creative.image.generate", "execute", "store_a"))
+      entitlementFor(after, workRequest("creative.image.generate", "execute", "store_a"), L.now)
     );
   },
 );
@@ -321,12 +327,13 @@ await walkthrough(
     );
     const linked = billingState(
       rawFacts({
+        // Linked after the route was fixed: the only order R2 and R3 allow.
         route: L.routes.morrow_direct,
-        associations: [link("iA"), link("iB")],
+        associations: [directLink("iA"), directLink("iB")],
         payers: [payerFacts("morrow_w")],
       }),
     );
-    ledger.refresh({ links: [link("iA"), link("iB"), link("iC")] });
+    ledger.refresh({ links: [directLink("iA"), directLink("iB"), directLink("iC")] });
     const implicit = select(linked, ["store_a", "store_b"], { workspace: true, storeIds: [] });
     return (
       fixed.outcome === "fix_route_and_grant" &&

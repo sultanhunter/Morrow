@@ -118,17 +118,16 @@ function parseEnvironment(value: unknown): BillingEnvironment {
   return value as BillingEnvironment;
 }
 function parseScope(value: unknown): BillingScope {
+  if (!plainJson(value)) throw inputInvalid();
+  // Copy once, then check and return only the copy.
+  const scope = clone<Record<string, unknown>>(value);
   if (
-    !plainJson(value) ||
-    !closed(value, ["organizationId", "workspaceId"]) ||
-    !id(value.organizationId) ||
-    !id(value.workspaceId)
+    !closed(scope, ["organizationId", "workspaceId"]) ||
+    !id(scope.organizationId) ||
+    !id(scope.workspaceId)
   )
     throw inputInvalid();
-  return {
-    organizationId: value.organizationId as string,
-    workspaceId: value.workspaceId as string,
-  };
+  return { organizationId: scope.organizationId, workspaceId: scope.workspaceId };
 }
 function parseTime(value: unknown): string {
   if (!utcTime(value)) throw inputInvalid();
@@ -263,11 +262,12 @@ export type CreationFlow =
  */
 export function originForCreation(flow: unknown): BillingOrigin {
   try {
+    if (!plainJson(flow)) return "shopify_install";
+    const copy = clone<Record<string, unknown>>(flow);
     if (
-      plainJson(flow) &&
-      closed(flow, ["kind", "installHandoffPending"]) &&
-      flow.kind === "website_signup" &&
-      flow.installHandoffPending === false
+      closed(copy, ["kind", "installHandoffPending"]) &&
+      copy.kind === "website_signup" &&
+      copy.installHandoffPending === false
     )
       return "website";
   } catch {
@@ -399,6 +399,14 @@ export interface WorkspaceBillingState {
   readonly connectStoreOffered: boolean;
   readonly conflicts: readonly OpenConflict[];
   readonly testSeed: TestSeedState | null;
+  /**
+   * When the state stops being usable: the earliest `validUntil` of the accepted
+   * seed and of every billable payer's entitlement, or null when nothing in it
+   * entitles. `entitlementFor` and `selectPayers` refuse it before
+   * `evaluatedAt` and from `expiresAt`, so a retained state cannot outlive the
+   * seed or entitlement it was derived from.
+   */
+  readonly expiresAt: string | null;
 }
 
 const terminalStatuses: readonly string[] = ["cancelled", "uninstalled"];
@@ -478,7 +486,8 @@ function parseConflict(value: unknown): OpenConflict {
  * schema-invalid record, a record of another tenant, more than 100
  * associations, payers or conflicts, a duplicate installation, account or
  * conflict key, an entitlement without its account, a payer before the route
- * is fixed, anything but one storeless payer on morrow_direct, or a storeless
+ * is fixed, anything but one storeless payer on morrow_direct, an association
+ * older than a morrow_direct route's `routeFixedAt` (R2, R3), or a storeless
  * payer on the Shopify route. Production never reads `testSeed`.
  */
 export function parseWorkspaceBillingFacts(
@@ -563,6 +572,12 @@ export function parseWorkspaceBillingFacts(
       (fixed === null && payers.length > 0) ||
       (fixed === "morrow_direct" &&
         (payers.length !== 1 || payers[0]!.association !== null || payers[0]!.account === null)) ||
+      // R2, R3: morrow_direct fixes only before any association, so no
+      // association of a morrow_direct workspace predates its route.
+      (fixed === "morrow_direct" &&
+        associations.some(
+          (a) => Date.parse(a.associatedAt) < Date.parse(route!.routeFixedAt as string),
+        )) ||
       (fixed === "shopify_app_pricing" && payers.some((p) => p.association === null)) ||
       new Set(accountIds).size !== accountIds.length ||
       new Set(payerInstallations).size !== payerInstallations.length
@@ -756,6 +771,14 @@ export function workspaceBillingState(
           }
         : ({ status: evaluation.status, reason: evaluation.reason } as TestSeedState);
   }
+  const limits = facts.payers.flatMap((p, i) =>
+    payers[i]!.status === "billable" && p.entitlement ? [p.entitlement.validUntil] : [],
+  );
+  if (testSeed?.status === "accepted") limits.push(testSeed.payer.validUntil);
+  const expiresAt =
+    limits.length === 0
+      ? null
+      : limits.reduce((earliest, t) => (Date.parse(t) < Date.parse(earliest) ? t : earliest));
   const result = freezeJson({
     organizationId: facts.organizationId,
     workspaceId: facts.workspaceId,
@@ -773,6 +796,7 @@ export function workspaceBillingState(
     connectStoreOffered: !(phase === "open" && facts.checkoutIntentPending),
     conflicts: clone<OpenConflict[]>(facts.conflicts),
     testSeed: testSeed === null ? null : clone<TestSeedState>(testSeed),
+    expiresAt,
   }) as WorkspaceBillingState;
   issuedStates.add(result);
   return result;
@@ -782,17 +806,30 @@ function issuedState(value: unknown): WorkspaceBillingState {
   if (value === null || typeof value !== "object" || !issuedStates.has(value)) throw inputInvalid();
   return value as WorkspaceBillingState;
 }
+// A state is usable from its `evaluatedAt` until its `expiresAt`.
+const usableAt = (s: WorkspaceBillingState, at: number) =>
+  at >= Date.parse(s.evaluatedAt) && (s.expiresAt === null || at < Date.parse(s.expiresAt));
 
 /**
- * Whether paid work on `request` is entitled. False on a tenant mismatch or a
- * state this module did not issue. A storeless request (including a
- * connection-scoped `ad_account`) needs a billable workspace or an accepted
- * seed; a store-scoped request needs its store in `coveredStoreIds` of a
- * billable workspace, or in the accepted seed's linked stores.
+ * Whether paid work on `request` is entitled at `now`. False on a tenant
+ * mismatch, a malformed request, a state this module did not issue, or a state
+ * used before its `evaluatedAt` or from its `expiresAt` (so a retained state
+ * stops entitling when its seed or entitlement expires). A storeless request
+ * (including a connection-scoped `ad_account`) needs a billable workspace or
+ * an accepted seed; a store-scoped request needs its store in
+ * `coveredStoreIds` of a billable workspace, or in the accepted seed's linked
+ * stores. Throws `BILLING_INPUT_INVALID` for a bad time.
  */
-export function entitlementFor(state: WorkspaceBillingState, request: PermissionRequest): boolean {
+export function entitlementFor(
+  state: WorkspaceBillingState,
+  request: PermissionRequest,
+  now: string,
+): boolean {
+  const at = Date.parse(parseTime(now));
   if (state === null || typeof state !== "object" || !issuedStates.has(state)) return false;
-  const resource = request?.resource;
+  if (!usableAt(state, at) || !plainJson(request)) return false;
+  // Copy once, then read only the copy.
+  const resource = clone<PermissionRequest | null>(request)?.resource;
   if (
     !resource ||
     resource.organizationId !== state.organizationId ||
@@ -947,17 +984,16 @@ export type PurchaseDecision =
 
 function parsePurchaseAction(value: unknown): PurchaseAction {
   if (!plainJson(value)) throw inputInvalid();
+  // Copy once, then check and return only the copy.
+  const a = clone<Record<string, unknown>>(value);
+  if (closed(a, ["action"]) && (morrowPurchaseActions as readonly unknown[]).includes(a.action))
+    return { action: a.action as MorrowPurchaseAction };
   if (
-    closed(value, ["action"]) &&
-    (morrowPurchaseActions as readonly unknown[]).includes(value.action)
+    closed(a, ["action", "storeId"]) &&
+    (shopifyPurchaseActions as readonly unknown[]).includes(a.action) &&
+    id(a.storeId)
   )
-    return { action: value.action as MorrowPurchaseAction };
-  if (
-    closed(value, ["action", "storeId"]) &&
-    (shopifyPurchaseActions as readonly unknown[]).includes(value.action) &&
-    id(value.storeId)
-  )
-    return { action: value.action as ShopifyPurchaseAction, storeId: value.storeId };
+    return { action: a.action as ShopifyPurchaseAction, storeId: a.storeId };
   throw inputInvalid();
 }
 
@@ -1150,27 +1186,29 @@ const shopifyObservationKeys = [
  */
 export function mapProviderStatus(observation: unknown): EntitlementStatus {
   if (!plainJson(observation)) throw inputInvalid();
-  if (closed(observation, ["provider", "status", "cancelAtPeriodEnd"])) {
+  // Copy once, then check and map only the copy.
+  const o: unknown = clone(observation);
+  if (closed(o, ["provider", "status", "cancelAtPeriodEnd"])) {
     if (
-      observation.provider !== "stripe" ||
-      typeof observation.status !== "string" ||
-      !Object.hasOwn(stripeStatuses, observation.status) ||
-      typeof observation.cancelAtPeriodEnd !== "boolean"
+      o.provider !== "stripe" ||
+      typeof o.status !== "string" ||
+      !Object.hasOwn(stripeStatuses, o.status) ||
+      typeof o.cancelAtPeriodEnd !== "boolean"
     )
       throw inputInvalid();
-    return stripeStatuses[observation.status]!;
+    return stripeStatuses[o.status]!;
   }
   if (
-    !closed(observation, shopifyObservationKeys) ||
-    observation.provider !== "shopify_app_pricing" ||
-    shopifyObservationKeys.slice(1).some((k) => typeof observation[k] !== "boolean")
+    !closed(o, shopifyObservationKeys) ||
+    o.provider !== "shopify_app_pricing" ||
+    shopifyObservationKeys.slice(1).some((k) => typeof o[k] !== "boolean")
   )
     throw inputInvalid();
-  if (observation.uninstalled) return "uninstalled";
-  if (!observation.subscriptionPresent || observation.canceled) return "cancelled";
-  if (observation.frozen) return "suspended";
-  if (observation.inTrial || !observation.currentBillingCycle) return "pending";
-  if (observation.effectivePriceZero) return "pending";
+  if (o.uninstalled) return "uninstalled";
+  if (!o.subscriptionPresent || o.canceled) return "cancelled";
+  if (o.frozen) return "suspended";
+  if (o.inTrial || !o.currentBillingCycle) return "pending";
+  if (o.effectivePriceZero) return "pending";
   return "active";
 }
 /** Whether a v1 entitlement status is billable (§4.2). */
@@ -1286,17 +1324,20 @@ const unattributedReasons: readonly UnattributedReason[] = [
 ];
 function parseTarget(value: unknown): PaymentTarget {
   if (!plainJson(value)) throw inputInvalid();
-  if (closed(value, ["kind", "state"]) && value.kind === "workspace")
-    return { kind: "workspace", state: issuedState(value.state) };
+  // Read each field once into a fresh record, then check only that record. The
+  // state keeps its identity: only a state this module issued is accepted.
+  const t: unknown = Object.fromEntries(Object.entries(value as object));
+  if (closed(t, ["kind", "state"]) && t.kind === "workspace")
+    return { kind: "workspace", state: issuedState(t.state) };
   if (
-    closed(value, ["kind", "reason", "environment"]) &&
-    value.kind === "unattributed" &&
-    (unattributedReasons as readonly unknown[]).includes(value.reason)
+    closed(t, ["kind", "reason", "environment"]) &&
+    t.kind === "unattributed" &&
+    (unattributedReasons as readonly unknown[]).includes(t.reason)
   )
     return {
       kind: "unattributed",
-      reason: value.reason as UnattributedReason,
-      environment: parseEnvironment(value.environment),
+      reason: t.reason as UnattributedReason,
+      environment: parseEnvironment(t.environment),
     };
   throw inputInvalid();
 }
@@ -1346,8 +1387,9 @@ export function classifyPayment(
   // 1. R9.
   if (e.mode !== environmentMode(environment))
     return done({ outcome: "refused", code: "PAYMENT_MODE_REFUSED", paymentKey });
-  // 2. Replay: nothing changes.
-  if (grantedKeys.has(paymentKey)) return done({ outcome: "already_granted", paymentKey });
+  // 2. Replay: nothing changes. The Set's own `has`, never a shadowing property.
+  if (Set.prototype.has.call(grantedKeys, paymentKey))
+    return done({ outcome: "already_granted", paymentKey });
   // 3. R8: unattributed, or a Stripe object that traces to no Morrow operation.
   if (t.kind === "unattributed") return done({ outcome: "held", reason: t.reason, paymentKey });
   if (stripe && e.operationId === null)
@@ -1467,11 +1509,15 @@ export function classifyPayment(
   // An installation's first period creates its account, current link or not (R5).
   if (!payer)
     return done({ outcome: "grant", paymentKey, account: create(), grant: grant("included") });
-  if (rel === "current" || rel === "new_after_terminal")
+  if (rel === "current")
     return done({ outcome: "grant", paymentKey, account: existing(), grant: grant("included") });
   if (rel === "other_live") return conflict("DUPLICATE_SUBSCRIPTION");
   if (rel === "current_terminal") return conflict("SUBSCRIPTION_TERMINAL");
-  // A payer whose subscription is not recorded yet: held until it is.
+  // A payer whose subscription is not recorded yet, or a new subscription after
+  // a terminal one: held until the entitlement fold records it (R7, R8). Folding
+  // records one subscription; the held periods are then re-classified, so the
+  // recorded one is granted and any other is DUPLICATE_SUBSCRIPTION. Granting
+  // each new subscription here would let two resubscriptions both be granted.
   return done({ outcome: "held", reason: "SUBSCRIPTION_NOT_CURRENT", paymentKey });
 }
 
@@ -1527,9 +1573,14 @@ const restriction: Readonly<Record<EntitlementStatus, number>> = Object.freeze({
 /**
  * Folds one provider observation into the current snapshot. A webhook or
  * redirect only triggers the read; an unknown read outcome produces no
- * observation (the caller re-reads). Observations order by `observedAt`, then
+ * observation (the caller re-reads). A terminal status is absorbing for its
+ * subscription: a terminal snapshot refuses a live observation of the same
+ * subscription, and a terminal observation replaces a live snapshot of it
+ * whatever its `observedAt`. Otherwise observations order by `observedAt`, then
  * restriction rank, then evidence reference, so ties resolve to the more
- * restrictive status in any arrival order. Throws `BILLING_INPUT_INVALID`.
+ * restrictive status in any arrival order, and any permutation of one
+ * subscription's observations ends with the same status, evidence and
+ * `verifiedAt`. Throws `BILLING_INPUT_INVALID`.
  */
 export function foldEntitlementEvidence(
   currentSnapshot: CurrentBilling_EntitlementSnapshot | null,
@@ -1567,12 +1618,14 @@ export function foldEntitlementEvidence(
   // Only a new subscription after a terminal one may replace the identity.
   if (!sameHolder || (current.subscriptionId !== o.subscriptionId && !terminal))
     return Object.freeze({ result: "identity_changed" });
-  if (
-    current.subscriptionId === o.subscriptionId &&
-    terminal &&
-    !terminalStatuses.includes(o.status)
-  )
+  const sameSubscription = current.subscriptionId === o.subscriptionId;
+  const observedTerminal = terminalStatuses.includes(o.status);
+  if (sameSubscription && terminal && !observedTerminal)
     return Object.freeze({ result: "terminal_revival_refused" });
+  // A terminal observation is absorbing for its subscription, whatever its
+  // `observedAt`: an older cancellation processed after a newer live read still
+  // ends the subscription, so every arrival order converges on the terminal one.
+  if (sameSubscription && !terminal && observedTerminal) return next();
   const a = Date.parse(o.observedAt),
     b = Date.parse(current.verifiedAt);
   const newer =
@@ -1695,14 +1748,18 @@ const uniqueIds = (value: unknown, max: number): value is string[] =>
  * account on morrow_direct; per-shop accounts with explicit allocations on the
  * Shopify route. Each rule runs across every store or share before the next.
  * `implicit` only feeds a one-share allocation that review binds; reservation
- * and dispatch always pass the bound allocation. It reads no wallet and
- * reserves nothing. Throws `BILLING_INPUT_INVALID` for malformed input.
+ * and dispatch always pass the bound allocation. A state used before its
+ * `evaluatedAt` or from its `expiresAt` gives `ENTITLEMENT_NOT_CURRENT`. It
+ * reads no wallet and reserves nothing. Throws `BILLING_INPUT_INVALID` for
+ * malformed input or a bad time.
  */
 export function selectPayers(
   state: WorkspaceBillingState,
   selectionInput: PayerSelectionInput,
+  now: string,
 ): PayerSelection {
   const s = issuedState(state);
+  const at = Date.parse(parseTime(now));
   if (!plainJson(selectionInput)) throw inputInvalid();
   // Isolate first, then validate the copy that is used.
   const input = clone<PayerSelectionInput>(selectionInput);
@@ -1732,6 +1789,8 @@ export function selectPayers(
       (allocation.organizationId !== s.organizationId || allocation.workspaceId !== s.workspaceId))
   )
     return fail("PAYER_NOT_BILLABLE");
+  // 0b. A retained state outside its window is re-evaluated, never trusted.
+  if (!usableAt(s, at)) return fail("ENTITLEMENT_NOT_CURRENT");
   // 1.
   if (s.state === "no_route") return fail("BILLING_NO_ROUTE");
   if (s.state === "not_billable") return fail("BILLING_NOT_ACTIVE");
@@ -1826,7 +1885,11 @@ export function createBillingConstraintsReader(
 ): CurrentConstraintsReader {
   const env = parseEnvironment(environment);
   return Object.freeze({
-    async readCurrent(request: PermissionRequest, actor: Core_ActorRef) {
+    async readCurrent(permissionRequest: PermissionRequest, actorRef: Core_ActorRef) {
+      // Copy the request and actor once; everything below reads only the copies.
+      if (!plainJson(permissionRequest) || !plainJson(actorRef)) throw inputInvalid();
+      const request = clone<PermissionRequest>(permissionRequest);
+      const actor = clone<Core_ActorRef>(actorRef);
       const result: unknown = await provider.readCurrent(request, actor);
       if (!plainJson(result)) throw factsInvalid();
       // Read the provider pair once, as a copy, before checking it.
@@ -1844,8 +1907,9 @@ export function createBillingConstraintsReader(
       const scope = { organizationId: actor.organizationId, workspaceId: actor.workspaceId };
       const raw = await billing(scope);
       const facts = parseWorkspaceBillingFacts(raw, scope, env);
-      const state = workspaceBillingState(facts, clock().toISOString(), env);
-      return { providerAllowed, entitlementAllowed: entitlementFor(state, request) };
+      const at = clock().toISOString();
+      const state = workspaceBillingState(facts, at, env);
+      return { providerAllowed, entitlementAllowed: entitlementFor(state, request, at) };
     },
   });
 }

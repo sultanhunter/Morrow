@@ -115,6 +115,15 @@ export const link = (key, overrides = {}) => ({
   ...structuredClone(base.associations[key]),
   ...overrides,
 });
+/**
+ * An association of the morrow_direct workspace: linked after its route was
+ * fixed at t0, the only order R2 and R3 allow (the facts parser refuses an
+ * older one).
+ */
+export const directLink = (key, overrides = {}) => ({
+  ...structuredClone(base.directAssociations[key]),
+  ...overrides,
+});
 
 const simulatorPayers = {
   morrow: ["morrow_w"],
@@ -123,7 +132,8 @@ const simulatorPayers = {
 /**
  * Simulator facts, a one-share CostAllocation@2 and a vendor reservation for a
  * morrow_direct (`morrow`) or Shopify-route (`shopify`) workspace with iA and iB
- * linked, for `ContractCreditLedger` (scripts/billing-checks.mjs, §7).
+ * linked (after the route on morrow_direct), for `ContractCreditLedger`
+ * (scripts/billing-checks.mjs, §7).
  */
 export function simulatorExample(
   kind,
@@ -173,7 +183,7 @@ export function simulatorExample(
         kind === "morrow" ? base.routes.morrow_direct : base.routes.shopify_app_pricing,
       ),
     },
-    links: [link("iA"), link("iB")],
+    links: kind === "morrow" ? [directLink("iA"), directLink("iB")] : [link("iA"), link("iB")],
     workStoreIds: [],
     usageCaps: {},
   };

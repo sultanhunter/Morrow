@@ -13,6 +13,7 @@ import {
   inspectUsage,
   inspectMeter,
   ContractCreditLedger,
+  capCycleKey,
   inspectPaidWork,
   paidWorkPredicate,
   permissionVerbs,
@@ -25,6 +26,7 @@ import {
 import { validateCurrentBillingDefinition } from "../packages/contracts/src/validation.ts";
 import {
   billingState,
+  directLink,
   library,
   link,
   payerFacts,
@@ -743,7 +745,7 @@ const morrowTarget = () => ({
   state: billingState(
     rawFacts({
       route: L.routes.morrow_direct,
-      associations: [link("iA"), link("iB")],
+      associations: [directLink("iA"), directLink("iB")],
       payers: [payerFacts("morrow_w")],
     }),
   ),
@@ -858,6 +860,21 @@ test("AC18 (simulator): an open reversal blocks the wallet it credited until it 
   );
   m.reserve("reservation-1", y.allocation, y.vendorReservation);
   assert.equal(m.snapshot().wallets.account_morrow_w.available, "70");
+  // A dispute verified before its payment's grant (webhooks arrive in no order)
+  // blocks the payer once the grant lands.
+  const z = currentExample("morrow", { target: morrowTarget() });
+  const early = new ContractCreditLedger(z.facts);
+  assert.equal(early.reverse(dispute).billingAccountId, null);
+  assert.equal(early.grant(structuredClone(L.events.stripe_period_next), L.terms).outcome, "grant");
+  const granted = early.snapshot();
+  assert.throws(
+    () => early.reserve("reservation-1", z.allocation, z.vendorReservation),
+    /PAYER_INACTIVE/,
+  );
+  assert.deepEqual(early.snapshot(), granted);
+  assert.equal(early.reverse({ ...dispute, revision: 2 }).billingAccountId, "account_morrow_w");
+  early.reverse({ ...dispute, status: "cleared", revision: 3 });
+  early.reserve("reservation-1", z.allocation, z.vendorReservation);
 });
 
 test("AC22 (simulator): a share whose route differs from the workspace route is refused", () => {
@@ -955,7 +972,9 @@ test("AC25 (simulator): no retroactive charge, and Shopify extra credits are pos
   s.facts.usageCaps = { account_shopify_a: structuredClone(L.usageCaps.shopify_a) };
   const m = new ContractCreditLedger(s.facts);
   m.reserve("reservation-1", s.allocation, s.vendorReservation);
-  assert.equal(m.snapshot().capUsed.account_shopify_a, "30");
+  const cycle = capCycleKey(L.usageCaps.shopify_a);
+  assert.equal(m.snapshot().capUsed[cycle], "30");
+  assert.equal(m.snapshot().capLiability[cycle], "3");
   assert.equal(m.snapshot().wallets.account_shopify_a.available, "0");
   const second = structuredClone(s.allocation);
   second.id = "allocation_2";
@@ -984,7 +1003,8 @@ test("AC25 (simulator): no retroactive charge, and Shopify extra credits are pos
     },
   ]);
   assert.deepEqual(settled.grants, []);
-  assert.equal(settled.capUsed.account_shopify_a, "20");
+  assert.equal(settled.capUsed[cycle], "20");
+  assert.equal(settled.capLiability[cycle], "1");
   assert.equal(settled.wallets.account_shopify_a.available, "0");
   // A cap bound to another subscription is no cap; a morrow_direct payer never has one.
   const t = currentExample("shopify", { wallet: "0" });
@@ -1005,4 +1025,66 @@ test("AC25 (simulator): no retroactive charge, and Shopify extra credits are pos
       false,
       id,
     );
+});
+
+test("AC25 (simulator): a UsageCap bounds each cycle's credits and USD liability", () => {
+  const capped = () => {
+    const x = currentExample("shopify", { wallet: "0" });
+    x.facts.usageCaps = { account_shopify_a: structuredClone(L.usageCaps.shopify_a) };
+    return x;
+  };
+  const allocationOf = (x, id, credits) => {
+    const a = structuredClone(x.allocation);
+    a.id = id;
+    a.maximumCredits = credits;
+    a.shares[0].maximumCredits = credits;
+    a.allocationDigest = allocationDigest(a);
+    return a;
+  };
+  const vendor = (x, id) => ({ ...x.vendorReservation, id });
+  const cycle = capCycleKey(L.usageCaps.shopify_a);
+  // Two $3.00 shares of 10 credits: 20 credits fit the 50-credit cap, $6.00 does not fit $5.00.
+  const x = capped();
+  const first = allocationOf(x, "allocation_1", "10"),
+    second = allocationOf(x, "allocation_2", "10");
+  const m = new ContractCreditLedger({
+    ...x.facts,
+    approvedAllocationDigest: first.allocationDigest,
+  });
+  m.reserve("reservation-1", first, vendor(x, "vendor_reservation_1"));
+  m.refresh({ approvedAllocationDigest: second.allocationDigest });
+  const before = m.snapshot();
+  assert.deepEqual([before.capUsed[cycle], before.capLiability[cycle]], ["10", "3"]);
+  assert.throws(
+    () => m.reserve("reservation-2", second, vendor(x, "vendor_reservation_2")),
+    /USAGE_CAP_EXCEEDED/,
+  );
+  assert.deepEqual(m.snapshot(), before);
+  // Releasing the first reservation returns its credits and liability to the cycle.
+  m.release("reservation-1");
+  assert.deepEqual([m.snapshot().capUsed[cycle], m.snapshot().capLiability[cycle]], ["0", "0"]);
+  m.reserve("reservation-2", second, vendor(x, "vendor_reservation_2"));
+  // Each cycle has its own usage: the next cycle's cap starts at zero, and the
+  // earlier cycle's reservation still settles against the earlier cycle.
+  const y = capped();
+  const full = allocationOf(y, "allocation_1", "30"),
+    nextFull = allocationOf(y, "allocation_2", "30");
+  const n = new ContractCreditLedger({
+    ...y.facts,
+    approvedAllocationDigest: full.allocationDigest,
+  });
+  n.reserve("reservation-1", full, vendor(y, "vendor_reservation_1"));
+  n.refresh({ approvedAllocationDigest: nextFull.allocationDigest });
+  assert.throws(
+    () => n.reserve("reservation-2", nextFull, vendor(y, "vendor_reservation_2")),
+    /USAGE_CAP_EXCEEDED/,
+  );
+  const nextCap = { ...L.usageCaps.shopify_a, periodStart: "2026-11-18T10:00:00Z", revision: 2 };
+  n.refresh({ usageCaps: { account_shopify_a: nextCap } });
+  n.reserve("reservation-2", nextFull, vendor(y, "vendor_reservation_2"));
+  const both = n.snapshot();
+  assert.deepEqual(both.capUsed, { [cycle]: "30", [capCycleKey(nextCap)]: "30" });
+  assert.deepEqual(both.capLiability, { [cycle]: "3", [capCycleKey(nextCap)]: "3" });
+  n.release("reservation-1");
+  assert.deepEqual(n.snapshot().capUsed, { [cycle]: "0", [capCycleKey(nextCap)]: "30" });
 });

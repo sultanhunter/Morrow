@@ -23,6 +23,14 @@ export function money(value) {
   const [whole, fraction = ""] = value.amount.split(".");
   return BigInt(whole) * 1000000000n + BigInt(fraction.padEnd(9, "0"));
 }
+// The exact decimal amount of a non-negative nanounit total (the inverse of `money`).
+const amountOf = (nanos) => {
+  const fraction = (nanos % 1000000000n).toString().padStart(9, "0").replace(/0+$/, "");
+  return (nanos / 1000000000n).toString() + (fraction ? "." + fraction : "");
+};
+/** One cycle of a Shopify payer's UsageCap: its account, subscription and period start. */
+export const capCycleKey = (cap) =>
+  `${cap.billingAccountId}|${cap.subscriptionKey}|${cap.periodStart}`;
 export const allocationDigest = (allocation) => {
   const { allocationDigest, ...payload } = allocation;
   return digest(payload);
@@ -45,9 +53,13 @@ const validTime = (value) => Number.isFinite(Date.parse(value));
 // (`facts.workStoreIds`) that is not currently linked gives PAYER_NOT_LINKED,
 // and a payer with an open reversal (`facts.reversals[accountId]`) gives
 // PAYER_INACTIVE. On a Shopify payer, credits beyond the wallet are reserved only
-// within the cycle's UsageCap (`facts.usageCaps[accountId]`, less
-// `facts.capUsed[accountId]`). P01.A04's frozen v1 rows read as Shopify-route
-// arithmetic and keep their v1 checks.
+// within the cycle's UsageCap (`facts.usageCaps[accountId]`): its credits less
+// `facts.capUsed[capCycleKey(cap)]`, and its USD liability less
+// `facts.capLiability[capCycleKey(cap)]`, where a share that draws on the cap
+// counts its whole `maximumLiability` (settlement meters that share's whole
+// liability). Each cycle (account, subscription, period start) has its own
+// usage. P01.A04's frozen v1 rows read as Shopify-route arithmetic and keep
+// their v1 checks.
 const v11 = (name, value) => validateCurrentBillingDefinition(name, value);
 const modeOf = (environment) =>
   environment === "production"
@@ -176,11 +188,20 @@ export function inspectAllocation(allocation, facts, { checkAvailable = true } =
           ? usageCapFor(facts, account, entitlement)
           : null;
       if (cap === null) errors.push("CREDITS_EXHAUSTED");
-      else if (
-        units(share.maximumCredits) - units(wallet.available) >
-        units(cap.maximumCredits) - units(facts.capUsed?.[account.id] ?? "0")
-      )
-        errors.push("USAGE_CAP_EXCEEDED");
+      else {
+        const cycle = capCycleKey(cap);
+        const liabilityUsed = money({
+          amount: facts.capLiability?.[cycle] ?? "0",
+          currency: cap.maximumLiability.currency,
+        });
+        if (
+          units(share.maximumCredits) - units(wallet.available) >
+            units(cap.maximumCredits) - units(facts.capUsed?.[cycle] ?? "0") ||
+          share.maximumLiability.currency !== cap.maximumLiability.currency ||
+          money(share.maximumLiability) > money(cap.maximumLiability) - liabilityUsed
+        )
+          errors.push("USAGE_CAP_EXCEEDED");
+      }
     }
     const ceiling = facts.monetaryCeilings?.[account.id];
     if (
@@ -264,6 +285,7 @@ export class ContractCreditLedger {
   #vendorConsumed = 0n;
   #payerMoney = new Map();
   #capUsed = new Map();
+  #capLiability = new Map();
   #grantedKeys = new Map();
   #grants = [];
   #reversals = new Map();
@@ -291,6 +313,7 @@ export class ContractCreditLedger {
       vendorConsumed: this.#vendorConsumed.toString(),
       payerMoney: Object.fromEntries([...this.#payerMoney].map(([k, v]) => [k, v.toString()])),
       capUsed: Object.fromEntries([...this.#capUsed].map(([k, v]) => [k, v.toString()])),
+      capLiability: Object.fromEntries([...this.#capLiability].map(([k, v]) => [k, amountOf(v)])),
       meterEvents: [...this.#meterEvents.values()],
       grants: this.#grants,
       meterDrafts: this.#meterDrafts,
@@ -331,16 +354,21 @@ export class ContractCreditLedger {
     if (paymentTarget !== undefined) this.#target = paymentTarget;
     this.#facts = { ...this.#facts, ...structuredClone(rest) };
   }
-  // The facts every allocation check reads: the ledger's own open reversals
-  // (by the payer each reversed payment credited) and post-paid cap usage.
+  // The facts every allocation check reads: the ledger's own reversals, each
+  // attached at check time to the payer its payment credited (so a reversal
+  // verified before its payment's grant blocks that payer once the grant
+  // lands), and post-paid usage per cap cycle.
   #current() {
     const reversals = {};
-    for (const { reversal, accountId } of this.#reversals.values())
-      if (accountId !== null) (reversals[accountId] ??= []).push(reversal);
+    for (const reversal of this.#reversals.values()) {
+      const accountId = this.#grantedKeys.get(reversal.paymentKey);
+      if (accountId !== undefined) (reversals[accountId] ??= []).push(reversal);
+    }
     return {
       ...this.#facts,
       reversals,
       capUsed: Object.fromEntries([...this.#capUsed].map(([k, v]) => [k, v.toString()])),
+      capLiability: Object.fromEntries([...this.#capLiability].map(([k, v]) => [k, amountOf(v)])),
     };
   }
   reserve(id, allocation, vendorReservation) {
@@ -419,15 +447,21 @@ export class ContractCreditLedger {
       w.available = (units(w.available) - fromWallet).toString();
       w.reserved = (units(w.reserved) + fromWallet).toString();
       w.revision++;
-      if (fromCap > 0n)
-        this.#capUsed.set(
-          share.billingAccountId,
-          (this.#capUsed.get(share.billingAccountId) ?? 0n) + fromCap,
+      // The cycle inspectAllocation checked; a later cycle starts at zero.
+      const cycle =
+        fromCap > 0n ? capCycleKey(this.#facts.usageCaps[share.billingAccountId]) : null;
+      if (cycle !== null) {
+        this.#capUsed.set(cycle, (this.#capUsed.get(cycle) ?? 0n) + fromCap);
+        this.#capLiability.set(
+          cycle,
+          (this.#capLiability.get(cycle) ?? 0n) + money(share.maximumLiability),
         );
+      }
       split.push({
         billingAccountId: share.billingAccountId,
         fromWallet: fromWallet.toString(),
         fromCap: fromCap.toString(),
+        cycle,
       });
       this.#payerMoney.set(
         share.billingAccountId,
@@ -595,11 +629,16 @@ export class ContractCreditLedger {
       w.reserved = (units(w.reserved) - fromWallet).toString();
       w.consumed = (units(w.consumed) + walletUsed).toString();
       w.revision++;
-      if (fromCap > 0n)
-        this.#capUsed.set(
-          u.billingAccountId,
-          this.#capUsed.get(u.billingAccountId) - fromCap + capUsed,
+      if (fromCap > 0n) {
+        // Settled against the cycle the reservation drew on, even after a refresh.
+        this.#capUsed.set(part.cycle, this.#capUsed.get(part.cycle) - fromCap + capUsed);
+        this.#capLiability.set(
+          part.cycle,
+          this.#capLiability.get(part.cycle) -
+            money(s.maximumLiability) +
+            (capUsed > 0n ? money(u.merchantLiability) : 0n),
         );
+      }
       // Post-paid usage settles as a liability and a meter event bound to the
       // cycle's subscription and meter, never as a CreditGrant (R10).
       if (capUsed > 0n) {
@@ -660,18 +699,19 @@ export class ContractCreditLedger {
     });
     return outcome;
   }
-  // R11: records a verified refund or dispute. While it is open, the payer its
-  // payment credited cannot reserve; a reversal of a payment that granted
-  // nothing is recorded only.
+  // R11: records a verified refund or dispute by its payment key. While it is
+  // open, the payer its payment credited cannot reserve, including when the
+  // reversal was verified before the payment was granted (webhooks arrive in no
+  // order); a reversal of a payment that is never granted blocks no payer. The
+  // result names the payer credited so far (null before any grant).
   reverse(reversal) {
     assert(v11("PaymentReversal", reversal), "REVERSAL_INVALID");
     const prior = this.#reversals.get(reversal.paymentKey);
-    assert(!prior || reversal.revision > prior.reversal.revision, "REVERSAL_REVISION_STALE");
-    const accountId = this.#grantedKeys.get(reversal.paymentKey) ?? null;
-    this.#reversals.set(reversal.paymentKey, { reversal: structuredClone(reversal), accountId });
+    assert(!prior || reversal.revision > prior.revision, "REVERSAL_REVISION_STALE");
+    this.#reversals.set(reversal.paymentKey, structuredClone(reversal));
     return {
       paymentKey: reversal.paymentKey,
-      billingAccountId: accountId,
+      billingAccountId: this.#grantedKeys.get(reversal.paymentKey) ?? null,
       status: reversal.status,
     };
   }

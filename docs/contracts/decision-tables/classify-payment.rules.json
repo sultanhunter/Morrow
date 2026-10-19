@@ -27,12 +27,12 @@
     {
       "name": "relation",
       "values": ["none", "current", "other_live", "new_after_terminal", "current_terminal"],
-      "meaning": "The event's subscription against the payer's recorded subscription: none (no payer, or no subscription recorded), current, another while the recorded one is live, another after the recorded one is terminal, or the recorded one itself after it became terminal. A top-up names no subscription, so it is none, current or current_terminal by the payer's recorded subscription."
+      "meaning": "The event's subscription against the payer's recorded subscription (its entitlement), which this dimension alone describes: none (no payer, or a payer with no subscription recorded yet), current (the recorded one, active), other_live (another while the recorded one is active), new_after_terminal (another after the recorded one became terminal) or current_terminal (the recorded one itself, cancelled). A top-up names no subscription, so it is none, current or current_terminal by the payer's recorded subscription."
     },
     {
       "name": "payer",
-      "values": ["none", "billable", "not_billable", "reversed"],
-      "meaning": "The event's payer (Stripe: the workspace's storeless account; App Pricing: the installation's account) as recorded facts: none (no account), an active account with an active entitlement, an active account with a past-due entitlement, or an active account and entitlement with an open reversal. The payer is billable only with a live recorded subscription; only top-ups read it."
+      "values": ["none", "active", "suspended", "reversed"],
+      "meaning": "The event's payer (Stripe: the workspace's storeless account; App Pricing: the installation's account) by its account and reversal facts only, independent of its recorded subscription, which relation alone gives: none (no account), active (an active account with no open reversal), suspended (a suspended account) or reversed (an active account with an open reversal of a payment it was granted). The payer is billable only when it is active and relation names its live recorded subscription; only top-ups read it."
     },
     {
       "name": "attribution",
@@ -78,7 +78,7 @@
       "id": "I3",
       "when": {
         "attribution": ["unattributed"],
-        "payer": ["billable", "not_billable", "reversed"]
+        "payer": ["active", "suspended", "reversed"]
       },
       "outcome": "input_invalid",
       "source": "An unattributed target carries no workspace and no payer (§5 PaymentTarget)."
@@ -115,7 +115,7 @@
       "id": "I7",
       "when": {
         "phase": ["open", "shopify_bound"],
-        "payer": ["billable", "not_billable", "reversed"]
+        "payer": ["active", "suspended", "reversed"]
       },
       "outcome": "input_invalid",
       "source": "Accounts exist only once a route is fixed (§8.3)."
@@ -136,7 +136,7 @@
       "when": {
         "phase": ["morrow_direct"],
         "provider": ["shopify"],
-        "payer": ["billable", "not_billable", "reversed"]
+        "payer": ["active", "suspended", "reversed"]
       },
       "outcome": "input_invalid",
       "source": "A morrow_direct workspace has no per-installation account (R5)."
@@ -146,7 +146,7 @@
       "when": {
         "phase": ["shopify_app_pricing"],
         "provider": ["stripe"],
-        "payer": ["billable", "not_billable", "reversed"]
+        "payer": ["active", "suspended", "reversed"]
       },
       "outcome": "input_invalid",
       "source": "A Shopify-route workspace has no storeless account (R5)."
@@ -198,11 +198,11 @@
       "when": {
         "kind": ["top_up"],
         "phase": ["morrow_direct"],
-        "payer": ["billable"],
+        "payer": ["active"],
         "relation": ["current"]
       },
       "outcome": "grant:purchased",
-      "source": "Rule 7 (R10): a top-up is granted on morrow_direct while the payer is billable."
+      "source": "Rule 7 (R10): a top-up is granted on morrow_direct while the payer is billable: an active account with no open reversal whose current subscription is active."
     },
     {
       "id": "R7b",
@@ -232,7 +232,7 @@
       "id": "R8d",
       "when": { "kind": ["plan_change"] },
       "outcome": "held:SUBSCRIPTION_NOT_CURRENT",
-      "source": "Rule 8 (R8): no payer or subscription matches yet; re-classified when that subscription's period is accepted."
+      "source": "Rule 8 (R8): no payer or subscription matches yet; re-classified when that subscription's period is accepted or the entitlement fold records it."
     },
     {
       "id": "R9a",
@@ -258,9 +258,9 @@
     },
     {
       "id": "R9d",
-      "when": { "kind": ["subscription_period"], "relation": ["current", "new_after_terminal"] },
+      "when": { "kind": ["subscription_period"], "relation": ["current"] },
       "outcome": "grant:included",
-      "source": "Rule 9: the payer's current subscription, or a new one after a terminal one."
+      "source": "Rule 9: a period of the payer's current subscription."
     },
     {
       "id": "R9e",
@@ -276,9 +276,9 @@
     },
     {
       "id": "R9g",
-      "when": { "kind": ["subscription_period"], "relation": ["none"] },
+      "when": { "kind": ["subscription_period"], "relation": ["none", "new_after_terminal"] },
       "outcome": "held:SUBSCRIPTION_NOT_CURRENT",
-      "source": "Rule 9 (R8), recorded refinement: a payer whose subscription is not recorded yet; re-classified once it is."
+      "source": "Rule 9 (R7, R8), recorded refinement: a payer whose subscription is not recorded yet, or a new subscription after a terminal one, is held until the entitlement fold records it. The fold re-classifies the payer's held periods, so the recorded subscription is granted and any other is DUPLICATE_SUBSCRIPTION; two resubscriptions are never both granted."
     }
   ]
 }

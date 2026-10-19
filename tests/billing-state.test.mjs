@@ -39,6 +39,7 @@ import {
 } from "../packages/contracts/src/validation.ts";
 import {
   billingState,
+  directLink,
   library,
   link,
   live,
@@ -435,16 +436,27 @@ const share = (accountKey, credits = "30", revision = 1) => {
     maximumLiability: { amount: "3.00", currency: "USD" },
   };
 };
+// Payers are selected at the state's evaluation time unless `at` says otherwise.
 const select = (
   state,
-  { work = [], spending = { workspace: true, storeIds: [] }, shares = null, scope = scopeW } = {},
+  {
+    work = [],
+    spending = { workspace: true, storeIds: [] },
+    shares = null,
+    scope = scopeW,
+    at = state?.evaluatedAt ?? now,
+  } = {},
 ) =>
-  selectPayers(state, {
-    ...scope,
-    workStoreIds: work,
-    spending,
-    allocation: shares === null ? null : allocation(shares),
-  });
+  selectPayers(
+    state,
+    {
+      ...scope,
+      workStoreIds: work,
+      spending,
+      allocation: shares === null ? null : allocation(shares),
+    },
+    at,
+  );
 
 // The composed reader in front of the human evaluator (§6): the billing reader is
 // called only for paid work, and only through createBillingConstraintsReader.
@@ -727,19 +739,22 @@ test("AC09: a website workspace pays, then links two stores: one route, one paye
     currency: "USD",
   });
   const paid = billingState(morrowFacts());
-  const linked = billingState(morrowFacts({ links: [link("iA"), link("iB")] }));
+  const linked = billingState(morrowFacts({ links: [directLink("iA"), directLink("iB")] }));
   // Linking changes neither the route, the account nor its revision.
   for (const key of ["phase", "route", "mode", "state", "payers", "origin"])
     assert.deepEqual(linked[key], paid[key], key);
   assert.deepEqual(linked.coveredStoreIds, ["store_a", "store_b"]);
-  assert.equal(entitlementFor(linked, routeRequest("creative.image.generate", "execute")), true);
+  assert.equal(
+    entitlementFor(linked, routeRequest("creative.image.generate", "execute"), now),
+    true,
+  );
   for (const store of ["store_a", "store_b"])
     assert.equal(
-      entitlementFor(linked, routeRequest("creative.image.generate", "execute", store)),
+      entitlementFor(linked, routeRequest("creative.image.generate", "execute", store), now),
       true,
     );
   assert.equal(
-    entitlementFor(linked, routeRequest("creative.image.generate", "execute", "store_c")),
+    entitlementFor(linked, routeRequest("creative.image.generate", "execute", "store_c"), now),
     false,
   );
   assert.equal(select(linked, { work: ["store_c"] }).code, "STORE_NOT_LINKED");
@@ -785,19 +800,20 @@ test("AC12: a completed payment means money collected; credits come only from th
     });
   }
   // An App Pricing period in trial, a free plan, a 100% discount, a $0 development-store contract.
+  // Each outcome is exactly {no_charge, paymentKey}: no fixRoute, account or
+  // grant, so no writer can fix a route or credit a wallet from it, and the
+  // phase stays open or shopify_bound.
   const bound = billingState(shopifyBoundFacts());
-  for (const n of [1, 2, 3, 4])
-    assert.equal(
+  for (const n of [1, 2, 3, 4]) {
+    const paymentKey = `shopify:app:7:shop:42:cycle:2026-10-0${n}T10:00:00Z`;
+    assert.deepEqual(
       classify(
         bound,
-        ev("shopify_period_a", {
-          paymentKey: `shopify:app:7:shop:42:cycle:2026-10-0${n}T10:00:00Z`,
-          amountPaid: { amount: "0.00", currency: "USD" },
-        }),
-      ).outcome,
-      "no_charge",
+        ev("shopify_period_a", { paymentKey, amountPaid: { amount: "0.00", currency: "USD" } }),
+      ),
+      { outcome: "no_charge", paymentKey },
     );
-  assert.equal(billingState(openFacts()).phase, "open");
+  }
   // An event can never carry its own credits.
   assert.throws(() => classify(open, { ...ev("stripe_period"), creditUnits: "1000" }), inputError);
   // Terms mismatches are held, never granted.
@@ -979,7 +995,7 @@ test("AC14: plan changes are granted once, never as a duplicate subscription or 
 
 test("AC15: no double billing, with one conflict key per subscription", () => {
   // (a) An App Pricing period on iB of a morrow_direct workspace.
-  const direct = billingState(morrowFacts({ links: [link("iA"), link("iB")] }));
+  const direct = billingState(morrowFacts({ links: [directLink("iA"), directLink("iB")] }));
   const conflict = classify(direct, ev("shopify_period_b"));
   assert.equal(conflict.code, "ROUTE_MISMATCH");
   const key = {
@@ -990,7 +1006,7 @@ test("AC15: no double billing, with one conflict key per subscription", () => {
   assert.deepEqual(conflict.key, key);
   const recorded = billingState(
     morrowFacts({
-      links: [link("iA"), link("iB")],
+      links: [directLink("iA"), directLink("iB")],
       conflicts: [{ ...key, code: "ROUTE_MISMATCH" }],
     }),
   );
@@ -1077,7 +1093,7 @@ test("AC16: payments without a current link", () => {
     "fix_route_and_grant",
   );
   assert.equal(
-    classify(billingState(morrowFacts({ links: [link("iC")] })), ev("shopify_period_c")).code,
+    classify(billingState(morrowFacts({ links: [directLink("iC")] })), ev("shopify_period_c")).code,
     "ROUTE_MISMATCH",
   );
   // (b) iA disconnects without uninstalling: its next period is still its own, and is not spendable.
@@ -1091,7 +1107,7 @@ test("AC16: payments without a current link", () => {
   assert.deepEqual(next.account, { kind: "existing", billingAccountId: "account_shopify_a" });
   assert.equal(s.payers.find((p) => p.storeId === "store_a").status, "not_linked");
   assert.equal(
-    entitlementFor(s, routeRequest("creative.image.generate", "execute", "store_a")),
+    entitlementFor(s, routeRequest("creative.image.generate", "execute", "store_a"), now),
     false,
   );
   assert.equal(select(s, { work: ["store_a"] }).code, "STORE_NOT_LINKED");
@@ -1104,7 +1120,7 @@ test("AC16: payments without a current link", () => {
   const back = billingState(shopifyFacts());
   assert.equal(back.payers.find((p) => p.storeId === "store_a").status, "billable");
   assert.equal(
-    entitlementFor(back, routeRequest("creative.image.generate", "execute", "store_a")),
+    entitlementFor(back, routeRequest("creative.image.generate", "execute", "store_a"), now),
     true,
   );
   // (c) An unmapped customer, and a mapped customer's invoice that traces to no Morrow operation.
@@ -1168,7 +1184,7 @@ test("AC18: an open reversal makes the payer non-billable while Stripe reports a
   );
   assert.equal(s.payers[0].status, "payment_reversed");
   assert.equal(s.state, "not_billable");
-  assert.equal(entitlementFor(s, routeRequest("creative.image.generate", "execute")), false);
+  assert.equal(entitlementFor(s, routeRequest("creative.image.generate", "execute"), now), false);
   assert.equal(select(s).code, "BILLING_NOT_ACTIVE");
   const cleared = billingState(
     morrowFacts({
@@ -1178,8 +1194,11 @@ test("AC18: an open reversal makes the payer non-billable while Stripe reports a
     }),
   );
   assert.equal(cleared.state, "billable");
-  // A reversal of a payment that granted nothing is not attached to any payer (§8.11).
-  assert.equal(billingState(morrowFacts()).payers[0].status, "billable");
+  // A reversal of a payment that granted nothing has no payer to attach to: the
+  // reader attaches to a payer only reversals of payments granted to it
+  // (PayerFacts.openReversals), so the library never sees one. The simulator
+  // covers it (tests/billing.test.mjs, AC18 simulator: recorded only, and a
+  // reversal verified before its grant blocks the payer once the grant lands).
   // A new period paid while the reversal is open is granted; the payer stays reversed.
   const period = classify(s, ev("stripe_period_next"), {
     granted: ["stripe:invoice:in_TESTW00000001"],
@@ -1202,7 +1221,7 @@ test("AC19: test mode outside production and live mode only in production", asyn
   for (const raw of [morrowFacts(), shopifyFacts()]) {
     const s = billingState(raw, { environment: "production" });
     assert.ok(s.payers.every((p) => p.status === "mode_refused"));
-    assert.equal(entitlementFor(s, routeRequest("creative.image.generate", "execute")), false);
+    assert.equal(entitlementFor(s, routeRequest("creative.image.generate", "execute"), now), false);
     const paid = await decideBilling(raw, routeRequest("creative.image.generate", "execute"), {
       environment: "production",
     });
@@ -1565,7 +1584,7 @@ test("AC22: Shopify multi-store work and unrelated shops", () => {
   // An allocation mixing a storeless Morrow-direct share with a store-bound Shopify share.
   const mixed = [share("morrow_w"), share("shopify_a")];
   assert.equal(select(s, { spending, shares: mixed }).code, "PAYER_NOT_BILLABLE");
-  const direct = billingState(morrowFacts({ links: [link("iA")] }));
+  const direct = billingState(morrowFacts({ links: [directLink("iA")] }));
   assert.equal(select(direct, { spending, shares: mixed }).code, "PAYER_NOT_BILLABLE");
   assert.equal(select(direct, { spending, shares: [share("morrow_w")] }).selection, "explicit");
 });
@@ -1685,7 +1704,7 @@ test("AC23: losing a shop, the review-bound allocation and the spending scope", 
 
 test("AC24: tenant binding, input bounds and retained work", async () => {
   const w2 = billingState(rawFacts({ route: L.routes.other_workspace }), { scope: scopeW2 });
-  assert.equal(entitlementFor(w2, routeRequest("creative.image.generate", "execute")), false);
+  assert.equal(entitlementFor(w2, routeRequest("creative.image.generate", "execute"), now), false);
   assert.equal(select(w2).code, "PAYER_NOT_BILLABLE");
   // W′ facts read for W, a W′ event and malformed facts.
   assert.throws(() => facts(rawFacts({ route: L.routes.other_workspace })), factsError);
@@ -2014,7 +2033,10 @@ test("AC32: the library is pure: repeatable, frozen and isolated from its inputs
   );
   // A state this module did not issue is never trusted.
   const forged = structuredClone(s1);
-  assert.equal(entitlementFor(forged, routeRequest("creative.image.generate", "execute")), false);
+  assert.equal(
+    entitlementFor(forged, routeRequest("creative.image.generate", "execute"), now),
+    false,
+  );
   assert.throws(() => purchaseDecision(forged, { action: "subscribe" }), inputError);
   assert.throws(() => billingCallToAction(forged), inputError);
   assert.throws(() => select(forged), inputError);
@@ -2036,14 +2058,17 @@ test("AC33 (PR-B): an accepted seed folds into the state over currently linked s
   assert.deepEqual(s.testSeed.coveredStoreIds, ["store_a"]);
   assert.equal(s.testSeed.payer.creditUnits, "500");
   assert.deepEqual(s.payers, []);
-  assert.equal(entitlementFor(s, routeRequest("inventory.quantity.adjust", "execute")), true);
   assert.equal(
-    entitlementFor(s, routeRequest("inventory.quantity.adjust", "execute", "store_a")),
+    entitlementFor(s, routeRequest("inventory.quantity.adjust", "execute"), during),
+    true,
+  );
+  assert.equal(
+    entitlementFor(s, routeRequest("inventory.quantity.adjust", "execute", "store_a"), during),
     true,
   );
   for (const store of ["store_b", "store_c"])
     assert.equal(
-      entitlementFor(s, routeRequest("inventory.quantity.adjust", "execute", store)),
+      entitlementFor(s, routeRequest("inventory.quantity.adjust", "execute", store), during),
       false,
       store,
     );
@@ -2089,7 +2114,7 @@ test("AC33 (PR-B): an accepted seed folds into the state over currently linked s
   );
   assert.deepEqual(prod.testSeed, { status: "refused", reason: "SEED_REFUSED_IN_PRODUCTION" });
   assert.equal(
-    entitlementFor(prod, routeRequest("inventory.quantity.adjust", "execute", "store_a")),
+    entitlementFor(prod, routeRequest("inventory.quantity.adjust", "execute", "store_a"), during),
     false,
   );
   assert.equal(reads, 0);
@@ -2105,4 +2130,302 @@ test("AC33 (PR-B): an accepted seed folds into the state over currently linked s
       }),
     factsError,
   );
+});
+
+// ---------------------------------------------------------------------------
+// Review findings on PR-B (AI review, separate context, same model family).
+// ---------------------------------------------------------------------------
+const foldAll = (sequence) =>
+  sequence.reduce((snapshot, o) => {
+    const fold = foldEntitlementEvidence(snapshot, o);
+    return fold.result === "next" ? fold.snapshot : snapshot;
+  }, null);
+const allOrders = (list) =>
+  list.length <= 1
+    ? [list]
+    : list.flatMap((x, i) =>
+        allOrders([...list.slice(0, i), ...list.slice(i + 1)]).map((p) => [x, ...p]),
+      );
+
+test("AC20: a terminal observation ends its subscription in every arrival order", () => {
+  const observation = (key, day, ref, status) => {
+    const { schemaVersion, revision, verifiedAt, ...rest } = L.entitlements[key];
+    return {
+      ...rest,
+      observedAt: `2026-10-${day}T10:00:00Z`,
+      providerEvidenceRef: ref.repeat(64),
+      status,
+    };
+  };
+  // An older cancellation processed after a newer live read still ends the subscription.
+  const a18 = observation("morrow_w", 18, "1", "active"),
+    c19 = observation("morrow_w", 19, "2", "cancelled"),
+    a20 = observation("morrow_w", 20, "3", "active");
+  assert.equal(foldAll([a18, c19, a20]).status, "cancelled");
+  assert.equal(foldAll([a18, a20, c19]).status, "cancelled");
+  const live20 = foldEntitlementEvidence(null, a20).snapshot;
+  const absorbed = foldEntitlementEvidence(live20, c19);
+  assert.equal(absorbed.result, "next");
+  assert.deepEqual(
+    [absorbed.snapshot.status, absorbed.snapshot.verifiedAt, absorbed.snapshot.revision],
+    ["cancelled", "2026-10-19T10:00:00Z", 2],
+  );
+  assert.deepEqual(foldEntitlementEvidence(absorbed.snapshot, a20), {
+    result: "terminal_revival_refused",
+  });
+  // Every order of six observations of one subscription, a cancellation among
+  // them with live reads before and after it, ends on the cancellation.
+  const six = [
+    observation("morrow_w", 17, "4", "pending"),
+    a18,
+    c19,
+    observation("morrow_w", 19, "5", "active"),
+    a20,
+    observation("morrow_w", 21, "6", "past_due"),
+  ];
+  const ends = new Set(
+    allOrders(six).map((order) => {
+      const s = foldAll(order);
+      return JSON.stringify([s.status, s.providerEvidenceRef, s.verifiedAt]);
+    }),
+  );
+  assert.equal(allOrders(six).length, 720);
+  assert.deepEqual([...ends], [JSON.stringify(["cancelled", "2".repeat(64), c19.observedAt])]);
+  // Two terminal observations (Shopify: cancelled, then uninstalled): the later
+  // one wins in every order, and no live read revives either.
+  const shopify = [
+    observation("shopify_a", 18, "7", "active"),
+    observation("shopify_a", 19, "8", "cancelled"),
+    observation("shopify_a", 20, "9", "active"),
+    observation("shopify_a", 21, "a", "uninstalled"),
+  ];
+  const shopifyEnds = new Set(
+    allOrders(shopify).map((order) => {
+      const s = foldAll(order);
+      return JSON.stringify([s.status, s.providerEvidenceRef, s.verifiedAt]);
+    }),
+  );
+  assert.deepEqual(
+    [...shopifyEnds],
+    [JSON.stringify(["uninstalled", "a".repeat(64), "2026-10-21T10:00:00Z"])],
+  );
+});
+
+test("AC15: two resubscriptions after a terminal subscription are never both granted", () => {
+  for (const [route, key, base, facts] of [
+    [
+      "stripe",
+      "morrow_w",
+      "stripe_period",
+      (entitlement) => morrowFacts({ payer: payerFacts("morrow_w", { entitlement }) }),
+    ],
+    [
+      "shopify",
+      "shopify_a",
+      "shopify_period_a",
+      (entitlement) =>
+        shopifyFacts({
+          payers: [payerFacts("shopify_a", { entitlement }), payerFacts("shopify_b")],
+        }),
+    ],
+  ]) {
+    const cancelled = { ...L.entitlements[key], status: "cancelled" };
+    const terminal = billingState(facts(cancelled));
+    const resubscription = (n) =>
+      route === "stripe"
+        ? ev(base, {
+            paymentKey: `stripe:invoice:in_TESTW000000${n}0`,
+            subscriptionKey: `stripe:sub:sub_TESTW000000${n}0`,
+          })
+        : ev(base, {
+            paymentKey: `shopify:app:7:shop:42:cycle:2026-10-19T1${n}:00:00Z`,
+            subscriptionKey: `shopify:app:7:shop:42:created:2026-10-19T1${n}:00:00Z`,
+          });
+    const second = resubscription(2),
+      third = resubscription(3);
+    if (route === "stripe")
+      assert.equal(purchaseDecision(terminal, { action: "subscribe" }).allowed, true);
+    // Before the fold records either subscription, both periods are held.
+    for (const e of [second, third])
+      assert.deepEqual(
+        classify(terminal, e),
+        { outcome: "held", reason: "SUBSCRIPTION_NOT_CURRENT", paymentKey: e.paymentKey },
+        route,
+      );
+    // The fold records one new subscription; re-classifying the held periods
+    // grants it once and makes the other a duplicate subscription.
+    const { schemaVersion, revision, verifiedAt, ...rest } = cancelled;
+    const fold = foldEntitlementEvidence(cancelled, {
+      ...rest,
+      status: "active",
+      subscriptionId: second.subscriptionKey,
+      providerEvidenceRef: "9".repeat(64),
+      observedAt: "2026-10-19T12:00:00Z",
+    });
+    assert.equal(fold.result, "next");
+    const recorded = billingState(facts(fold.snapshot));
+    assert.equal(classify(recorded, second).outcome, "grant", route);
+    const duplicate = classify(recorded, third, { granted: [second.paymentKey] });
+    assert.equal(duplicate.code, "DUPLICATE_SUBSCRIPTION", route);
+    assert.equal(duplicate.key.subscriptionKey, third.subscriptionKey);
+    if (route === "stripe")
+      assert.equal(purchaseDecision(recorded, { action: "subscribe" }).code, "SUBSCRIPTION_EXISTS");
+  }
+});
+
+test("AC09: a morrow_direct workspace has no association older than its route", () => {
+  // R2 and R3: an association before payment binds the workspace to Shopify, so
+  // a morrow_direct route with an older association is refused, not derived.
+  assert.throws(() => facts(morrowFacts({ links: [link("iA")] })), factsError);
+  assert.throws(
+    () =>
+      facts(
+        morrowFacts({
+          links: [directLink("iA", { associatedAt: "2026-10-18T09:59:59Z", current: false })],
+        }),
+      ),
+    factsError,
+  );
+  // Linked in the instant the route was fixed, or after it: accepted.
+  const at = billingState(
+    morrowFacts({
+      links: [directLink("iA", { associatedAt: L.routes.morrow_direct.routeFixedAt })],
+    }),
+  );
+  assert.equal(at.phase, "morrow_direct");
+  assert.deepEqual(at.coveredStoreIds, ["store_a"]);
+  // The Shopify route keeps the binding association, which predates its route.
+  assert.equal(billingState(shopifyFacts()).phase, "shopify_app_pricing");
+});
+
+test("AC24: a retained state stops entitling when its seed or entitlement expires", () => {
+  const paid = routeRequest("creative.image.generate", "execute");
+  // A billable morrow_direct state expires with its payer's entitlement.
+  const direct = billingState(morrowFacts());
+  assert.equal(direct.expiresAt, L.entitlements.morrow_w.validUntil);
+  assert.equal(entitlementFor(direct, paid, now), true);
+  assert.equal(entitlementFor(direct, paid, "2026-11-18T09:59:59Z"), true);
+  assert.equal(entitlementFor(direct, paid, "2026-11-18T10:00:00Z"), false);
+  assert.equal(entitlementFor(direct, paid, "2026-10-20T09:59:59Z"), false);
+  assert.equal(select(direct, { at: "2026-11-18T10:00:00Z" }).code, "ENTITLEMENT_NOT_CURRENT");
+  assert.equal(select(direct, { at: "2026-10-20T09:59:59Z" }).code, "ENTITLEMENT_NOT_CURRENT");
+  assert.equal(select(direct, { at: "2026-11-18T09:59:59Z" }).ok, true);
+  // On the Shopify route the earliest billable payer's entitlement bounds it.
+  const early = "2026-10-30T10:00:00Z";
+  const shopify = billingState(
+    shopifyFacts({
+      payers: [
+        payerFacts("shopify_a"),
+        payerFacts("shopify_b", {
+          entitlement: { ...L.entitlements.shopify_b, validUntil: early },
+        }),
+      ],
+    }),
+  );
+  assert.equal(shopify.expiresAt, early);
+  assert.equal(
+    entitlementFor(shopify, routeRequest("creative.image.generate", "execute", "store_a"), early),
+    false,
+  );
+  // A state with an accepted seed stops entitling at the seed's validUntil.
+  const seeded = billingState(
+    rawFacts({
+      route: L.routes.shopify_install_bound,
+      associations: [link("iA")],
+      testSeed: seed(),
+    }),
+    { now: during },
+  );
+  const onA = routeRequest("inventory.quantity.adjust", "execute", "store_a");
+  assert.equal(seeded.expiresAt, seed().validUntil);
+  assert.equal(entitlementFor(seeded, onA, "2026-10-25T09:59:59Z"), true);
+  assert.equal(entitlementFor(seeded, onA, seed().validUntil), false);
+  assert.equal(
+    testSeedEntitles(
+      evaluateTestEntitlementSeed(seed(), scope, during, "staging"),
+      onA,
+      seed().validUntil,
+    ),
+    false,
+  );
+  // Nothing entitles an open state, so it has no expiry; a bad time throws.
+  assert.equal(billingState(openFacts()).expiresAt, null);
+  for (const bad of ["yesterday", "2026-10-20T10:00:00+01:00", null])
+    assert.throws(() => entitlementFor(direct, paid, bad), inputError, String(bad));
+  assert.throws(() => select(direct, { at: "yesterday" }), inputError);
+});
+
+test("AC32: entry points read each JSON input once and use only that copy", async () => {
+  // A proxy that answers the first read of `key` with its value and every later read with `later`.
+  const shifting = (value, key, later) => {
+    let reads = 0;
+    return new Proxy(value, {
+      get(target, k) {
+        if (k === key && reads++ > 0) return later;
+        return target[k];
+      },
+    });
+  };
+  const direct = billingState(morrowFacts());
+  assert.deepEqual(purchaseDecision(direct, shifting({ action: "cancel" }, "action", "anything")), {
+    allowed: true,
+    action: "cancel",
+  });
+  assert.equal(
+    mapProviderStatus(
+      shifting(
+        { provider: "stripe", status: "active", cancelAtPeriodEnd: false },
+        "status",
+        "constructor",
+      ),
+    ),
+    "active",
+  );
+  assert.equal(
+    classifyPayment(
+      shifting(
+        { kind: "unattributed", reason: "CUSTOMER_NOT_MAPPED", environment: "staging" },
+        "reason",
+        "FORGED",
+      ),
+      ev("stripe_period", { organizationId: null, workspaceId: null }),
+      L.terms,
+      new Set(),
+    ).reason,
+    "CUSTOMER_NOT_MAPPED",
+  );
+  assert.equal(
+    parseWorkspaceBillingFacts(
+      openFacts(),
+      shifting({ ...scopeW }, "workspaceId", "workspace_w2"),
+      "staging",
+    ).workspaceId,
+    "workspace_w",
+  );
+  // A Set whose own `has` is shadowed cannot hide a replay.
+  const granted = new Set([L.events.stripe_period_next.paymentKey]);
+  granted.has = () => false;
+  assert.equal(classify(direct, ev("stripe_period_next"), { granted: [] }).outcome, "grant");
+  assert.equal(
+    classifyPayment(workspace(direct), ev("stripe_period_next"), L.terms, granted).outcome,
+    "already_granted",
+  );
+  // The composed reader reads the actor once: the billing reader gets the scope
+  // of the first read, never a later one.
+  const scopes = [];
+  const reader = createBillingConstraintsReader(
+    { readCurrent: async () => ({ providerAllowed: true, entitlementAllowed: false }) },
+    async (scope) => {
+      scopes.push(scope);
+      return morrowFacts();
+    },
+    "staging",
+    () => new Date(now),
+  );
+  const result = await reader.readCurrent(
+    routeRequest("creative.image.generate", "execute"),
+    shifting({ ...routeActor }, "workspaceId", "workspace_w2"),
+  );
+  assert.deepEqual(scopes, [scopeW]);
+  assert.equal(result.entitlementAllowed, true);
 });

@@ -16,6 +16,7 @@ import {
   rawFacts,
   payerFacts,
   link,
+  directLink,
   billingState,
   scopeW,
 } from "../scripts/billing-route-fixtures.mjs";
@@ -78,9 +79,12 @@ const shopifyReversal = {
 };
 
 // Builds the target and event that realize one classify-payment row, and
-// classifies them. An input_invalid row realizes its contradiction literally,
-// which the library must refuse.
-function classifyRow(row) {
+// classifies them. The dimensions are independent: `payer` sets only the
+// account and reversal facts, and `relation` only the recorded subscription
+// (none: no entitlement; current and other_live: an active one; the terminal
+// relations: a cancelled one). An input_invalid row realizes its contradiction
+// literally, which the library must refuse. `onState` sees the workspace state.
+function classifyRow(row, onState = () => {}) {
   const stripe = row.provider === "stripe";
   const provider = row.provider;
   const terminal = row.relation === "new_after_terminal" || row.relation === "current_terminal";
@@ -140,8 +144,10 @@ function classifyRow(row) {
   }
   const associations = [];
   const payers = [];
+  // A morrow_direct workspace links stores only after its route is fixed (R2, R3).
+  const linkOf = row.phase === "morrow_direct" ? directLink : link;
   if (!stripe && row.phase !== "open")
-    associations.push(link("iA", { current: row.attribution === "attributed" }));
+    associations.push(linkOf("iA", { current: row.attribution === "attributed" }));
   if (row.phase === "shopify_app_pricing") {
     associations.push(link("iB"));
     payers.push(payerFacts("shopify_b"));
@@ -153,11 +159,15 @@ function classifyRow(row) {
       : {
           ...structuredClone(L.entitlements[payerKey]),
           subscriptionId: currentSubscription[provider],
-          status: terminal ? "cancelled" : row.payer === "not_billable" ? "past_due" : "active",
+          status: terminal ? "cancelled" : "active",
         };
   if (row.payer !== "none")
     payers.push(
       payerFacts(payerKey, {
+        account:
+          row.payer === "suspended"
+            ? { ...structuredClone(L.accounts[payerKey]), status: "suspended" }
+            : undefined,
         entitlement: recorded,
         openReversals:
           row.payer === "reversed"
@@ -171,6 +181,7 @@ function classifyRow(row) {
   const state = billingState(rawFacts({ route: routeFor[row.phase], associations, payers }), {
     environment,
   });
+  onState(state);
   return classifyPayment({ kind: "workspace", state }, event, terms, new Set());
 }
 
@@ -211,6 +222,39 @@ test("AC10: classifyPayment returns every row's outcome and throws on every inpu
   assert.ok(invalid > 0 && invalid < rows.length);
 });
 
+test("AC10: every decided row realizes its payer and relation as defined, never a contradiction", () => {
+  // The event's payer is billable exactly when the payer is active, its recorded
+  // subscription is live (current or other_live) and, on Shopify, its link is
+  // current; an account with no recorded or a cancelled subscription is not.
+  const rows = parseTable("classify-payment").filter(
+    (r) => r.outcome !== "input_invalid" && r.attribution !== "unattributed" && r.payer !== "none",
+  );
+  assert.ok(rows.length > 0);
+  const wrong = [];
+  for (const row of rows) {
+    let payer;
+    classifyRow(row, (state) => {
+      payer = state.payers.find((p) =>
+        row.provider === "stripe"
+          ? p.installationId === null
+          : p.installationId === "installation_a",
+      );
+    });
+    const billable =
+      row.payer === "active" &&
+      ["current", "other_live"].includes(row.relation) &&
+      row.attribution === "attributed";
+    const terminal = ["current_terminal", "new_after_terminal"].includes(row.relation);
+    if (
+      (payer.status === "billable") !== billable ||
+      (payer.subscriptionKey === null) !== (row.relation === "none") ||
+      payer.subscriptionTerminal !== terminal
+    )
+      wrong.push(`${JSON.stringify(row)}: ${payer.status}`);
+  }
+  assert.deepEqual(wrong.slice(0, 10), []);
+});
+
 test("AC10: the table holds the named cases, and no row moves a fixed route", () => {
   const rows = parseTable("classify-payment");
   const find = (where) =>
@@ -224,7 +268,7 @@ test("AC10: the table holds the named cases, and no row moves a fixed route", ()
           ...live,
           kind: "subscription_period",
           relation: "current_terminal",
-          payer: "not_billable",
+          payer: "active",
           attribution: "attributed",
         }),
       ),
@@ -239,7 +283,7 @@ test("AC10: the table holds the named cases, and no row moves a fixed route", ()
       provider: "stripe",
       kind: "subscription_period",
       relation: "current_terminal",
-      payer: "not_billable",
+      payer: "active",
       attribution: "attributed",
     }),
     ["conflict:SUBSCRIPTION_TERMINAL"],
@@ -270,7 +314,7 @@ test("AC10: the table holds the named cases, and no row moves a fixed route", ()
       provider: "stripe",
       kind: "top_up",
       relation: "current",
-      payer: "billable",
+      payer: "active",
       attribution: "attributed",
     }),
     ["grant:purchased"],
@@ -322,7 +366,7 @@ test("AC10: the table holds the named cases, and no row moves a fixed route", ()
       provider: "shopify",
       kind: "subscription_period",
       relation: "current",
-      payer: "not_billable",
+      payer: "suspended",
       attribution: "associated_not_current",
     }),
     ["grant:included"],
@@ -417,8 +461,9 @@ function purchaseState(row) {
       : row.payer === "billable"
         ? "active"
         : "past_due";
+  const linkOf = row.phase === "morrow_direct" ? directLink : link;
   const associations =
-    row.phase === "open" ? [] : [link("iA", { current: row.link === "current" })];
+    row.phase === "open" ? [] : [linkOf("iA", { current: row.link === "current" })];
   const payers =
     row.phase === "morrow_direct"
       ? [payerFacts("morrow_w", { entitlement: { ...L.entitlements.morrow_w, status } })]

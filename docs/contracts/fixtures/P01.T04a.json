@@ -2959,7 +2959,7 @@
     }
   ],
   "library": {
-    "description": "Building blocks for the PR-B library cases, walkthroughs and decision-table rows (tests/billing-state.test.mjs, tests/billing-decision-tables.test.mjs, scripts/verify-billing.mjs). Records are test mode for staging; production cases copy them with mode live. iA, iB and iC are installations of stores A, B and C (Shopify shops 42, 43 and 44 of app 7). Nothing here is a provider object.",
+    "description": "Building blocks for the PR-B library cases, walkthroughs and decision-table rows (tests/billing-state.test.mjs, tests/billing-decision-tables.test.mjs, scripts/verify-billing.mjs). Records are test mode for staging; production cases copy them with mode live. iA, iB and iC are installations of stores A, B and C (Shopify shops 42, 43 and 44 of app 7). `associations` date iA at the Shopify binding (09:30, before t0); `directAssociations` are the same installations linked to the morrow_direct workspace after its route was fixed at t0 (R2, R3), which is the only order a morrow_direct workspace can have. Nothing here is a provider object.",
     "organizationId": "org_o",
     "workspaceId": "workspace_w",
     "otherWorkspaceId": "workspace_w2",
@@ -3149,6 +3149,26 @@
         "installationId": "installation_a",
         "storeId": "store_a",
         "associatedAt": "2026-10-18T09:30:00Z",
+        "current": true
+      },
+      "iB": {
+        "installationId": "installation_b",
+        "storeId": "store_b",
+        "associatedAt": "2026-10-18T10:30:00Z",
+        "current": true
+      },
+      "iC": {
+        "installationId": "installation_c",
+        "storeId": "store_c",
+        "associatedAt": "2026-10-18T11:30:00Z",
+        "current": true
+      }
+    },
+    "directAssociations": {
+      "iA": {
+        "installationId": "installation_a",
+        "storeId": "store_a",
+        "associatedAt": "2026-10-18T10:15:00Z",
         "current": true
       },
       "iB": {

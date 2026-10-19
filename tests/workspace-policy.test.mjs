@@ -6,7 +6,7 @@ import {
 } from "../packages/policy/src/index.ts";
 import { createBillingConstraintsReader } from "../packages/policy/src/billing-state.ts";
 import { withIdentityRead, identitySql } from "../packages/identity/src/index.ts";
-import { library, link, payerFacts, rawFacts } from "../scripts/billing-route-fixtures.mjs";
+import { directLink, library, payerFacts, rawFacts } from "../scripts/billing-route-fixtures.mjs";
 const proof = "b".repeat(64);
 const actor = {
   kind: "human",
@@ -334,7 +334,7 @@ const billableFacts = () =>
   retenant(
     rawFacts({
       route: L.routes.morrow_direct,
-      associations: [link("iA")],
+      associations: [directLink("iA")],
       payers: [payerFacts("morrow_w")],
     }),
   );
