@@ -210,7 +210,8 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
     "account.createOrganization": (call) =>
       call === 0 ? { kind: "unavailable", offline: false } : null,
   },
-  // The widget yields no token, so the form sends nothing (a send would be denied here).
+  // The widget yields no token, so the form sends nothing. Any send, with or without a token,
+  // gets this scripted denial, so a form that sent anyway would fail the state case.
   account_challenge_unavailable: {
     "account.overview": () => accountForm,
     "account.createOrganization": () => ({ kind: "denied", message: "", reference: null }),

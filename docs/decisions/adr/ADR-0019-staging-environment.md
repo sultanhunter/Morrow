@@ -89,7 +89,7 @@
    - The limits are eventually consistent per Cloudflare location. They are a speed bump, not a quota, and the per-profile windows of ADR-0009 item 8 still apply.
 9. **Observability for M1 (*Recommended*).**
    - Workers Logs are on in staging, with invocation logs, traces, logpush and source maps off.
-   - Only fixed-code events are logged. Rejected requests are not logged, except one fixed-code `morrow_challenge {code:"failed"}` line per failed or held verification (amended 2026-10-19; see Amendments). The per-IP limiter (item 8) caps that line, and it costs about $0.60 per 1M lines.
+   - Only fixed-code events are logged. Rejected requests are not logged, except one fixed-code `morrow_challenge {code:"failed"}` line per failed verification (amended 2026-10-19; see Amendments). The per-IP limiter (item 8) caps that line, and it costs about $0.60 per 1M lines.
    - Cloudflare billing usage alerts go to the owner at about 10% of each included allowance.
    - **M1 is reached with only part of P04.T03a.** P04.T03a's acceptance, "a deliberately failed staging request produces one correlated, redacted event and an alert to a named recipient", stays open, and the P04 Done gate is not claimed. Until P06.T01c, GitHub's failed-run email to the owner is the interim route for an uncertain deploy, rollback or migration.
 10. **Staging database (*Recommended*).**
@@ -167,7 +167,7 @@ Owner decision, 2026-10-19, in chat. Asked "Security gap: the staging rules you 
 
 The second bullet of item 9 now reads:
 
-> Only fixed-code events are logged. Rejected requests are not logged, except one fixed-code `morrow_challenge {code:"failed"}` line per failed or held verification. The per-IP limiter (item 8) caps that line at 15 a minute per IPv4 address or IPv6 /56 (10 at login start plus 5 at signup). It costs about $0.60 per 1M lines (Workers Logs beyond the included allowance).
+> Only fixed-code events are logged. Rejected requests are not logged, except one fixed-code `morrow_challenge {code:"failed"}` line per failed verification. The per-IP limiter (item 8) caps that line at 15 a minute per IPv4 address or IPv6 /56 (10 at login start plus 5 at signup). It costs about $0.60 per 1M lines (Workers Logs beyond the included allowance).
 
 - **Why.** A failed verification is a 403, so the original wording forbade the line that P04.T01i D6 specifies and that M-O1, the staging log probe, needs as its one event a probe can cause on purpose. The line carries a fixed code and no value: no address, token, secret or reply.
 - **What P05.T01ab emits.** The broker logs the line once for each `failed` verdict (403 `challenge_failed`). A held verification answers 503 and logs only its fixed-code fail-closed lines (`morrow_broker {method:"challengeVerify", code}` and `morrow_edge_guard {code:"CHALLENGE_HELD"}`), which item 9 already allowed. Other rejections (403 `challenge_required`, the request guard's 403 and every 429) still log nothing.

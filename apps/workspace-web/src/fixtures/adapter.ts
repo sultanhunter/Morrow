@@ -53,7 +53,11 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   // P05.T01ab: where the scenario's build asks for a challenge, signup needs a token the
   // api guard has never seen; a missing or spent one is the guard's 403 challenge_*,
   // which the HTTP adapter decodes as unavailable (nothing ran).
-  const challenged = challengedIn[scenario] !== undefined;
+  // The fixture guard (a missing or spent token is refused, as the api guard refuses it)
+  // runs only where the widget issues tokens. Where it yields none ("fails"), any send at
+  // all falls through to the scenario's scripted reply, so a form that sent without a
+  // token would show that reply and fail its state case (P05.T01ab review).
+  const challenged = challengedIn[scenario] === "issues";
   const spentChallenges = new Set<string>();
   let created = 0;
   // Scripted reply first; `null` falls through to the seed behaviour.

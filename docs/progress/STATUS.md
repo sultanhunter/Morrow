@@ -34,7 +34,7 @@ In progress:
 - **Third-party GitHub access:** first "i am not working with codex so it won't push anything so leave it"; then, asked again with the risk stated, "Suspend Codex + revoke old token (Recommended)". The platform GitHub Apps stay for staging as a recorded exception (ADR-0019 item 5, ADR-0014 item 5 amendment).
 - **Cloudflare:** P04.T01i OQ-3 "Use this account" (option C, census at every deploy); Wrangler OAuth "Revoke it (Recommended)".
 - **P03.T04f OQ-1:** "Allow both (Recommended)" (ADR-0014 item 4 amendment: light runs pass `foundation`).
-- **P05.T01ab log line:** "Keep it (Recommended)": ADR-0019 item 9 amended to allow one fixed-code `morrow_challenge {code:"failed"}` line per failed or held verification (capped by the per-IP limiter; about $0.60 per 1M lines).
+- **P05.T01ab log line:** "Keep it (Recommended)": ADR-0019 item 9 amended to allow one fixed-code `morrow_challenge {code:"failed"}` line per failed verification (capped by the per-IP limiter; about $0.60 per 1M lines).
 - **2026-10-18:** ADR-0015 billing routes by origin (supersedes ADR-0006; Stripe selected, no account or calls until an approved packet); ADR-0016 collaboration contracts v1.1 (admins read private Asks through audited reads); ADR-0017 membership authority; ADR-0018 proposals without a task; P01.T04a OQ-1 to OQ-3 (purchase permission with P18.T01a; a test entitlement seed for M4; an App Review allowance); P03.T04e OQ-1 (routine): heavy CI on dispatch plus weekly.
 
 ## Last green commit
