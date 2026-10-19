@@ -173,3 +173,156 @@ test("fixed known-string POST dispatch binds exact UTF8 length without altering 
   );
   assert.throws(() => options({ method: "POST", body: new Uint8Array(1) }), /HELD/);
 });
+
+// The hold-description helpers: hosted run 39294535825 held after its last case had passed,
+// with no failed check, no error and a stale stage, because the fixture wrapper does not
+// pass the callback's error on and a test-side pool closure rejected first.
+function labFunctions(names, globals = {}) {
+  const context = vm.createContext({ ...globals });
+  for (const name of names) {
+    const node = ast.statements.find((n) => ts.isFunctionDeclaration(n) && n.name.text === name);
+    assert.ok(node, name);
+    context[name] = vm.runInContext("(" + node.getText(ast) + ")", context);
+  }
+  return context;
+}
+const plain = (value) => JSON.parse(JSON.stringify(value));
+const fakePool = (close, released = 1) => ({
+  close,
+  metrics: {
+    connections: 1,
+    released,
+    closed: 1,
+    discarded: 0,
+    cancelled: 0,
+    backendCleanupVerified: released,
+    unverifiedHostClosures: 0,
+    unrelated: "not copied",
+  },
+});
+
+test("every test-side closure is attempted and named, and one rejection does not hide the others", async () => {
+  const { settleTestSideClosures } = labFunctions(["settleTestSideClosures", "poolMetrics"]);
+  const order = [],
+    records = [];
+  const verified = await settleTestSideClosures(
+    [
+      {
+        label: "authority_read_1001_compact",
+        pool: fakePool(async () => {
+          order.push("rejecting");
+          throw Error("LOCAL_STANDALONE_SQL_UNAVAILABLE");
+        }, 0),
+      },
+      {
+        label: "pre_seal_admission_0",
+        pool: fakePool(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          order.push("slow");
+        }),
+      },
+      { label: "fixture_harness", close: async () => order.push("harness") },
+    ],
+    records,
+  );
+  assert.equal(verified, false);
+  assert.deepEqual(order.sort(), ["harness", "rejecting", "slow"]);
+  assert.deepEqual(
+    records.map((r) => [r.label, r.outcome]),
+    [
+      ["authority_read_1001_compact", "rejected"],
+      ["pre_seal_admission_0", "fulfilled"],
+      ["fixture_harness", "fulfilled"],
+    ],
+  );
+  assert.match(records[0].error.message, /LOCAL_STANDALONE_SQL_UNAVAILABLE/);
+  assert.deepEqual(plain(records[0].metrics), {
+    connections: 1,
+    released: 0,
+    closed: 1,
+    discarded: 0,
+    cancelled: 0,
+    backendCleanupVerified: 0,
+    unverifiedHostClosures: 0,
+  });
+  assert.equal(records[2].metrics, null);
+  assert.ok(records.every((r) => Number.isSafeInteger(r.ms) && r.ms >= 0));
+  assert.ok(records[1].ms >= 4);
+  const clean = [];
+  assert.equal(
+    await settleTestSideClosures([{ label: "only", pool: fakePool(async () => {}) }], clean),
+    true,
+  );
+  assert.equal(clean[0].error, undefined);
+});
+
+test("a held error is described by class, fixed code, redacted message and repository frames only", () => {
+  const root = "/home/runner/work/Morrow/Morrow";
+  const marker = "private-session-secret-000000000001";
+  const lab = labFunctions(["describeLabError", "stackFrames", "redacted", "logSafeError"], {
+    privateMarkers: [marker, "short"],
+    repositoryRoot: root,
+  });
+  const error = Error("LOCAL_STANDALONE_SQL_UNAVAILABLE");
+  error.stack = [
+    "Error: LOCAL_STANDALONE_SQL_UNAVAILABLE",
+    `    at failure (${root}/scripts/local-standalone-sql.mjs:28:25)`,
+    `    at checkBackend (file://${root}/scripts/local-standalone-sql.mjs:284:28)`,
+    `    at async ${root}/node_modules/tsx/dist/esm/index.mjs:1:1`,
+    "    at async /opt/hostedtoolcache/node/lib/internal.js:9:9",
+    `    at async Promise.all (index 3)`,
+    `    at async settleTestSideClosures (${root}/scripts/managed-workspace-api-postgresql-lab.mjs:1196:9)`,
+  ].join("\n");
+  const described = lab.describeLabError(error);
+  assert.deepEqual(plain(described), {
+    name: "Error",
+    code: null,
+    message: "LOCAL_STANDALONE_SQL_UNAVAILABLE",
+    frames: [
+      "scripts/local-standalone-sql.mjs:28:25",
+      "scripts/local-standalone-sql.mjs:284:28",
+      "scripts/managed-workspace-api-postgresql-lab.mjs:1196:9",
+    ],
+  });
+  assert.deepEqual(plain(lab.logSafeError(described)), plain(described));
+  const identity = Object.assign(Error("identity read held"), { code: "IDENTITY_UNAVAILABLE" });
+  identity.name = "IdentityAccessError";
+  assert.equal(lab.describeLabError(identity).code, "IDENTITY_UNAVAILABLE");
+  assert.equal(lab.describeLabError(identity).name, "IdentityAccessError");
+  const leaky = lab.describeLabError(Error("cookie " + marker + " short\u0000tail"));
+  assert.equal(leaky.message, "cookie [private] short?tail");
+  // Free text never reaches the job log; fixed codes, class names and frames do.
+  assert.equal(lab.logSafeError(leaky).message, null);
+  assert.equal(lab.logSafeError(null), null);
+  assert.deepEqual(plain(lab.describeLabError("not an error")), {
+    name: null,
+    code: null,
+    message: "non-error string",
+    frames: [],
+  });
+  assert.equal(lab.describeLabError({ code: "lowercase_code" }).code, null);
+});
+
+test("the authority reads and final closures are attributed, not left to an unlabelled final hold", () => {
+  const facade = source.slice(
+    source.indexOf("for (const item of authorityFixtures)"),
+    source.indexOf('enter("unknown_lease")'),
+  );
+  // The release stays synchronous for withIdentityRead; its verification is joined before
+  // the native request and checked under the read's own name.
+  assert.match(facade, /releases\.push\(\s*owned\.release\(discard\)\.then\(/);
+  assert.match(facade, /releases: await Promise\.all\(releases\)/);
+  assert.match(facade, /"restricted_read_backend_cleanup_verified_" \+ suffix/);
+  assert.match(facade, /restrictedOutcome === "IDENTITY_DENIED"/);
+  assert.equal(/void pending\.catch/.test(facade), false);
+  const final = source.slice(
+    source.indexOf('enter("final_proof_and_native_closure")'),
+    source.indexOf("const finalNamespace = await engine.observeFinalNamespace()"),
+  );
+  assert.match(final, /enter\("final_test_side_sql_closure"\)/);
+  assert.match(final, /settleTestSideClosures\(/);
+  assert.match(final, /enter\("final_namespace"\)/);
+  assert.equal(/await harness\.close\(\)/.test(final), false);
+  assert.equal(/^\s*stage = "/m.test(source), false);
+  assert.match(source, /catch \(error\) \{\s*holdError\(error, "callback"\);\s*throw error;/);
+});

@@ -119,9 +119,19 @@ async function observeRequestCleanup() {
     if (!cleanupFailures.includes(code)) cleanupFailures.push(code);
   }
 }
+// A refused check name is recorded (the first one only): the two diagnosed hosted holds at
+// concurrent_independent_callbacks were a reused name, not a failed check.
+let checkNameHeld = null;
 function check(name, value) {
-  if (!/^[a-z][a-z0-9_]{1,119}$/.test(name) || checks.some((c) => c.name === name))
+  const wellFormed = typeof name === "string" && /^[a-z][a-z0-9_]{1,119}$/.test(name);
+  if (!wellFormed || checks.some((c) => c.name === name)) {
+    checkNameHeld ??= {
+      stage,
+      reason: wellFormed ? "duplicate" : "malformed",
+      name: wellFormed ? name : null,
+    };
     throw Error("CONTROLLED_PG_CHECK_NAME");
+  }
   checks.push({ name, passed: value === true });
   if (value !== true) throw Error("CONTROLLED_PG_CHECK_HELD");
 }
@@ -150,6 +160,9 @@ const privateMarkers = [];
 // private-marker check below still applies. The job log gets only names, codes, flows,
 // frames and statuses; messages stay in the report, which is secret-scanned before upload.
 const dispatchFailures = [];
+// A callback that answered but not as expected: its status, location, Set-Cookie count and
+// body length, so a hold names which part differed.
+const callbackDeliveryHolds = [];
 let callbackError = null;
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/, "");
 function redacted(text, limit = 300) {
@@ -214,6 +227,30 @@ function recordDispatchFailure(label, status, bodyText) {
   if (dispatchFailures.length < 20)
     dispatchFailures.push({ stage, label: redacted(label, 120), status, failure });
 }
+// The callback delivery check's inputs, recorded when the check fails. The location is
+// redacted like every other text; the job log gets only whether it was one of the two
+// expected values.
+function callbackDelivery(serial, response, body, success) {
+  const location = response.headers.get("location");
+  const expectedLocation = success ? "/" : "/auth/result";
+  const observed = {
+    serial,
+    status: response.status,
+    location: typeof location === "string" ? redacted(location, 120) : null,
+    expectedLocation,
+    setCookieCount: response.headers.getSetCookie().length,
+    expectedSetCookieCount: success ? 1 : 0,
+    bodyLength: typeof body === "string" ? body.length : null,
+  };
+  const delivered =
+    observed.status === 303 &&
+    body === "" &&
+    location === expectedLocation &&
+    observed.setCookieCount === observed.expectedSetCookieCount;
+  if (!delivered && callbackDeliveryHolds.length < 20)
+    callbackDeliveryHolds.push({ stage, ...observed });
+  return delivered;
+}
 // The job log line: no message text, and names only when they look like error class names.
 function logSafeFailure() {
   const className = (name) =>
@@ -229,6 +266,16 @@ function logSafeFailure() {
       label: d.label,
       status: d.status,
       failure: d.failure ? { name: className(d.failure.name), code: d.failure.code } : null,
+    })),
+    checkNameHeld,
+    callbackDeliveryHolds: callbackDeliveryHolds.map((d) => ({
+      stage: d.stage,
+      serial: d.serial,
+      status: d.status,
+      locationMatched: d.location === d.expectedLocation,
+      knownLocation: d.location === "/" || d.location === "/auth/result" ? d.location : null,
+      setCookieCount: d.setCookieCount,
+      bodyLength: d.bodyLength,
     })),
     cleanupFailures,
     report: "labs/controlled-neon-postgresql.json",
@@ -485,7 +532,12 @@ try {
       };
       let flowSerial = 0;
       async function start(index) {
-        let serial = null;
+        // Latch this flow's serial before the first await. It was read from the shared
+        // counter after two awaits, so two concurrent starts could both return the later
+        // value and their callbacks then reused one check name (hosted runs 39260319338
+        // and 39286443600: CONTROLLED_PG_CHECK_NAME at actual_84_callback_delivery_3).
+        const serial = ++flowSerial;
+        const oracle = activeOracle;
         try {
           const jar = createBoundedLoginCookieJar();
           const response = await dispatch("/auth/login", {
@@ -500,7 +552,7 @@ try {
           if (response.status !== 200)
             recordDispatchFailure("/auth/login", response.status, await response.text());
           const diagnostic =
-            flowSerial === 0
+            serial === 1
               ? (firstBeginDiagnostic = {
                   responseStatus: response.status,
                   cookieCount: response.headers.getSetCookie().length,
@@ -517,15 +569,15 @@ try {
             return result.accepted === 1;
           };
           check(
-            "actual_84_begin_cookie_" + (serial = ++flowSerial),
+            "actual_84_begin_cookie_" + serial,
             response.status === 200 &&
               response.headers.getSetCookie().length === 1 &&
               acceptCookie(),
           );
           const authorizationUrl = (await response.json()).authorizationUrl;
-          const callback = activeOracle.arm(authorizationUrl);
+          const callback = oracle.arm(authorizationUrl);
           privateMarkers.push(callback.code, callback.token, authorizationUrl);
-          return { jar, callback, serial: flowSerial };
+          return { jar, callback, serial };
         } catch (error) {
           throw inFlow(error, serial);
         }
@@ -550,10 +602,7 @@ try {
             );
           check(
             "actual_84_callback_delivery_" + prepared.serial,
-            response.status === 303 &&
-              body === "" &&
-              response.headers.get("location") === (success ? "/" : "/auth/result") &&
-              response.headers.getSetCookie().length === (success ? 1 : 0),
+            callbackDelivery(prepared.serial, response, body, success),
           );
           if (success) {
             check(
@@ -844,6 +893,8 @@ const report = {
   measured: measured ?? null,
   firstBeginDiagnostic,
   dispatchFailures,
+  checkNameHeld,
+  callbackDeliveryHolds,
   limitations: [
     "Native WSS destination is fully locally intercepted; no remote DNS/TLS/Neon account/proxy qualification.",
     "Only this new fixture uses an attested owned internal IPv4 endpoint with no published ports; host access remains possible and old network-none laboratories are unchanged.",

@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { Log, LogLevel, Miniflare } from "miniflare";
 import { tsImport } from "tsx/esm/api";
@@ -165,6 +166,36 @@ let stage = "owned_engine",
   unexpectedRequests = 0,
   peakInstances = 0;
 const cleanupFailures = [];
+// A hold names where, when and why. The fixture wrapper reports only that its callback was
+// held (it does not pass the callback's error on), and hosted run 39294535825 held after
+// the logout case had passed with no failed check and a stage label left at
+// current_family_logout. So the lab keeps the callback's own error (described at report
+// time, after every private marker is known), the stage it happened in and when, each
+// restricted read's release, and the outcome of every test-side SQL pool closure.
+const labStartedAt = Date.now(),
+  stageTimings = [{ stage, atMs: 0 }],
+  restrictedReads = [],
+  testSideClosures = [],
+  poolLabels = new Map(),
+  repositoryRoot = fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/, "");
+let stageStartedAt = labStartedAt,
+  heldError = null;
+function enter(value) {
+  const now = Date.now();
+  stage = value;
+  stageStartedAt = now;
+  if (stageTimings.length < 32) stageTimings.push({ stage: value, atMs: now - labStartedAt });
+}
+function holdError(error, phase) {
+  const now = Date.now();
+  heldError ??= {
+    stage,
+    phase,
+    atMs: now - labStartedAt,
+    stageElapsedMs: now - stageStartedAt,
+    error,
+  };
+}
 const disposeInstance = (runtime) => {
   if (!disposals.has(runtime))
     disposals.set(
@@ -191,6 +222,7 @@ try {
     const reconciliationPools = [],
       privateReferenceArrays = [];
     try {
+      enter("fixture_setup");
       const migrationSql = new Map(
         manifest.migrations.map((row) => [
           "SET ROLE morrow_identity_owner;\n" + readFileSync("migrations/" + row.file, "utf8"),
@@ -564,10 +596,11 @@ try {
           },
         };
       }
+      enter("isolates");
       const a = await isolate(),
         b = await isolate(),
         jar = createBoundedLoginCookieJar();
-      stage = "native_login_cookie";
+      enter("native_login_cookie");
       const started = await a.fetch("/auth/login", {
         method: "POST",
         headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
@@ -668,7 +701,7 @@ try {
         status.response.status === 200 && JSON.parse(status.body).outcome === "applied",
       );
       cases.push({ name: "native_login_cookie_bootstrap_preview_apply_status", passed: true });
-      stage = "fresh_authority_and_scope";
+      enter("fresh_authority_and_scope");
       check(
         "wrong_workspace_denied",
         (await bootstrap(a, "workspace_missing")).response.status === 401,
@@ -725,7 +758,7 @@ try {
         passed: true,
         secondarySession: "controlled_preseal_SQL_admission_distinct_from_main_native_cookie",
       });
-      stage = "unknown_commit_reconciliation";
+      enter("unknown_commit_reconciliation");
       const unknownLink = secondaryLinks[1].link,
         unknownPreview = await mutation(a, unknownLink, "preview");
       interruptApplyCommit = true;
@@ -743,6 +776,7 @@ try {
         ...Object.values(workspaceStoreLinkingSql),
       ]);
       reconciliationPools.push(reconciliationPool);
+      poolLabels.set(reconciliationPool, "store_linking_reconciliation");
       const reconciliation = await createControlledWorkspaceStoreLinking({
         pool: reconciliationPool,
         now: Date.now,
@@ -757,25 +791,47 @@ try {
         originalOutcome: "outcome_unknown",
         freshOutcome: reconciliation?.outcome,
       });
-      stage = "authority_count_and_wire_caps";
+      enter("authority_count_and_wire_caps");
       const authorityObservations = [];
       for (const item of authorityFixtures) {
+        const suffix = item.count + (item.oversized ? "_oversized" : "_compact");
         const pool = localStandaloneSqlPool(engine.id, "morrow_api", Object.values(identitySql));
         reconciliationPools.push(pool);
+        poolLabels.set(pool, "authority_read_" + suffix);
+        const releases = [];
         const facade = {
           async connect() {
             const control = { deadlineMs: Date.now() + 5000, signal: new AbortController().signal };
             const owned = await pool.connect(control);
             return {
               query: (text, values = []) => owned.query(text, values, control),
+              // The read's release stays synchronous for its caller. Its backend-cleanup
+              // verification used to run unobserved beside the next steps, so a failure
+              // surfaced only at the final pool closure; it is joined below instead.
               release: (discard) => {
-                const pending = owned.release(discard);
-                void pending.catch(() => {});
+                const releasedAt = Date.now();
+                releases.push(
+                  owned.release(discard).then(
+                    () => ({
+                      outcome: "fulfilled",
+                      discard: discard === true,
+                      ms: Date.now() - releasedAt,
+                    }),
+                    (error) => ({
+                      outcome: "rejected",
+                      discard: discard === true,
+                      ms: Date.now() - releasedAt,
+                      error,
+                    }),
+                  ),
+                );
               },
             };
           },
         };
-        let countAccepted = false;
+        let countAccepted = false,
+          restrictedOutcome = "unclassified";
+        const readStartedAt = Date.now();
         try {
           countAccepted = await withIdentityRead(
             facade,
@@ -783,14 +839,28 @@ try {
             item.configured.f.workspace,
             async (scope) => (await scope.readWorkspaceAuthority()).grants.length === item.count,
           );
-        } catch {
-          /* Count ceiling denial remains explicit below. */
+          restrictedOutcome = countAccepted ? "accepted" : "count_mismatch";
+        } catch (error) {
+          // Only the identity denial is the count ceiling; an unavailable read (a deadline,
+          // a lost psql client) is named, not counted as a denial.
+          if (typeof error?.code === "string" && /^IDENTITY_[A-Z_]{1,32}$/.test(error.code))
+            restrictedOutcome = error.code;
         }
+        const read = {
+          label: "authority_read_" + suffix,
+          outcome: restrictedOutcome,
+          readMs: Date.now() - readStartedAt,
+          releases: await Promise.all(releases),
+          metrics: poolMetrics(pool.metrics),
+        };
+        if (restrictedReads.length < 8) restrictedReads.push(read);
         check(
-          "actual_restricted_count_ceiling_" +
-            item.count +
-            (item.oversized ? "_oversized" : "_compact"),
-          countAccepted === (item.count === 1000),
+          "actual_restricted_count_ceiling_" + suffix,
+          item.count === 1000 ? countAccepted === true : restrictedOutcome === "IDENTITY_DENIED",
+        );
+        check(
+          "restricted_read_backend_cleanup_verified_" + suffix,
+          read.releases.length === 1 && read.releases[0].outcome === "fulfilled",
         );
         const beforeNative = service.observations.length;
         const response = await bootstrap(
@@ -828,6 +898,7 @@ try {
             unobservedDataRowBytes: o.largeFrameRemaining ?? 0,
           })),
           restrictedUnixCountAccepted: countAccepted,
+          restrictedUnixOutcome: restrictedOutcome,
           nativeStatus: response.response.status,
           nativeAuthorityAdmitted: response.response.status === 200,
           wireBounds: { frame: 262144, direction: 1048576 },
@@ -836,7 +907,7 @@ try {
         });
       }
       cases.push({ name: "1000_count_accept_1001_deny_native_oversize_hold", passed: true });
-      stage = "unknown_lease";
+      enter("unknown_lease");
       await disposeInstance(b.runtime);
       const rejecting = await isolate("reject");
       const heldRead = await bootstrap(rejecting),
@@ -855,7 +926,7 @@ try {
       };
       cases.push({ name: "unknown_credential_release_before_admin", passed: true });
       await disposeInstance(rejecting.runtime);
-      stage = "current_family_logout";
+      enter("current_family_logout");
       const logout = await a.fetch("/auth/logout", {
         method: "POST",
         headers: {
@@ -877,6 +948,7 @@ try {
         (await mutation(a, firstLink, "status")).response.status === 404,
       );
       cases.push({ name: "current_family_logout_and_future_denial", passed: true });
+      enter("final_proof_and_native_closure");
       check(
         "six_journey_roles_actually_authenticated",
         roles.every((role) =>
@@ -912,8 +984,20 @@ try {
               bridge.metrics.pendingBytes === 0,
           ),
       );
-      await Promise.all(reconciliationPools.map((pool) => pool.close()));
-      await harness.close();
+      // Every test-side closure is attempted and recorded before any of them can hold.
+      enter("final_test_side_sql_closure");
+      check(
+        "test_side_sql_closures_verified",
+        await settleTestSideClosures(
+          [
+            ...reconciliationPools.map((pool) => ({ label: poolLabels.get(pool), pool })),
+            ...harness.pools.map((pool, i) => ({ label: "pre_seal_admission_" + i, pool })),
+            { label: "fixture_harness", close: () => harness.close() },
+          ],
+          testSideClosures,
+        ),
+      );
+      enter("final_namespace");
       const finalNamespace = await engine.observeFinalNamespace();
       check(
         "fresh_final_namespace_absent_without_forced_termination",
@@ -954,6 +1038,9 @@ try {
         provider: { metrics: oracle.metrics, calls: oracle.calls },
         finalNamespace,
       };
+    } catch (error) {
+      holdError(error, "callback");
+      throw error;
     } finally {
       try {
         engine.revokeEndpoint();
@@ -965,6 +1052,9 @@ try {
           harness.secrets.length = 0;
           await harness.close();
         }
+      } catch (error) {
+        holdError(error, "callback_cleanup");
+        throw error;
       } finally {
         for (const references of privateReferenceArrays) references.length = 0;
         privateReferenceArrays.length = 0;
@@ -976,6 +1066,8 @@ try {
     measured.cleanup.container === "absent" && measured.cleanup.network === "absent",
   );
 } catch (error) {
+  // The callback's own error wins; otherwise this one (the wrapper's, or a check here).
+  holdError(error, "lab");
   failure = {
     stage,
     code: "MANAGED_WORKSPACE_POSTGRESQL_HELD",
@@ -983,6 +1075,15 @@ try {
   };
 } finally {
   await cleanup();
+}
+// Described only now, when every private marker (the harness secrets included) is known.
+const describeRecords = (rows) =>
+  rows.map(({ error, ...row }) =>
+    error === undefined ? row : { ...row, error: describeLabError(error) },
+  );
+if (failure && heldError) {
+  const { error, ...where } = heldError;
+  failure.held = { ...where, error: describeLabError(error) };
 }
 for (const [path, digest] of Object.entries(sourceDigests))
   check(
@@ -1012,6 +1113,12 @@ const report = {
   appliedMigrations,
   measured,
   failure,
+  stageTimings,
+  restrictedReads: restrictedReads.map((read) => ({
+    ...read,
+    releases: describeRecords(read.releases),
+  })),
+  testSideClosures: describeRecords(testSideClosures),
   cleanupFailures,
   activeRuntimes: instances.size,
   unexpectedRequests,
@@ -1032,6 +1139,36 @@ privateMarkers.fill("");
 privateMarkers.length = 0;
 require(secretFenceClear);
 const reportPath = writeArtifact(reportName, text);
+// The job log gets the failure's place, timing, error class, code and repository frames,
+// and each test-side SQL outcome; message text only when it is a fixed code.
+if (report.status !== "passed")
+  console.error(
+    "MANAGED_WORKSPACE_PG_FAILURE:" +
+      JSON.stringify({
+        stage: failure?.stage ?? stage,
+        held: failure?.held ? { ...failure.held, error: logSafeError(failure.held.error) } : null,
+        restrictedReads: report.restrictedReads.map((read) => ({
+          label: read.label,
+          outcome: read.outcome,
+          readMs: read.readMs,
+          releases: read.releases.map((r) => ({
+            outcome: r.outcome,
+            ms: r.ms,
+            error: logSafeError(r.error),
+          })),
+        })),
+        testSideClosures: report.testSideClosures
+          .filter((c) => c.outcome !== "fulfilled")
+          .map((c) => ({
+            label: c.label,
+            ms: c.ms,
+            metrics: c.metrics,
+            error: logSafeError(c.error),
+          })),
+        cleanupFailures,
+        report: reportName,
+      }),
+  );
 process.stdout.write(
   JSON.stringify({
     report: reportPath,
@@ -1045,6 +1182,98 @@ if (report.status !== "passed") process.exitCode = 1;
 function literal(value) {
   require(typeof value === "string" && value.length <= 16384);
   return "'" + value.replaceAll("'", "''") + "'";
+}
+
+// Test-side psql pool counters only (both local adapters share these names).
+function poolMetrics(metrics) {
+  const out = {};
+  for (const key of [
+    "connections",
+    "released",
+    "closed",
+    "discarded",
+    "cancelled",
+    "backendCleanupVerified",
+    "unverifiedHostClosures",
+  ])
+    out[key] = Number.isSafeInteger(metrics?.[key]) ? metrics[key] : null;
+  return out;
+}
+
+// Closes every entry (a pool, or a named close function) concurrently, records each
+// outcome with its own duration, and reports whether all of them were verified. One held
+// closure no longer hides the others, and the record names which one it was.
+async function settleTestSideClosures(entries, records) {
+  const outcomes = await Promise.all(
+    entries.map(async (entry) => {
+      const startedAt = Date.now();
+      try {
+        await (entry.close ? entry.close() : entry.pool.close());
+        return { outcome: "fulfilled", ms: Date.now() - startedAt };
+      } catch (error) {
+        return { outcome: "rejected", ms: Date.now() - startedAt, error };
+      }
+    }),
+  );
+  outcomes.forEach((outcome, i) =>
+    records.push({
+      label: entries[i].label,
+      ...outcome,
+      metrics: entries[i].pool ? poolMetrics(entries[i].pool.metrics) : null,
+    }),
+  );
+  return outcomes.every((o) => o.outcome === "fulfilled");
+}
+
+function redacted(text, limit = 300) {
+  let out = String(text);
+  for (const marker of privateMarkers)
+    if (typeof marker === "string" && marker.length >= 8) out = out.replaceAll(marker, "[private]");
+  return out.replace(/[^\x20-\x7e]/g, "?").slice(0, limit);
+}
+
+// Repository-relative frames only: the throw site names which wait or check held (for a
+// memoized rejection, the frames are where it was first created).
+function stackFrames(stack) {
+  const frames = [];
+  if (typeof stack !== "string") return frames;
+  for (const line of stack.split("\n").slice(1)) {
+    const match = /(?:file:\/\/)?(\/[^\s()]+):(\d+):(\d+)\)?$/.exec(line.trim());
+    if (!match || !match[1].startsWith(repositoryRoot + "/")) continue;
+    const path = match[1].slice(repositoryRoot.length + 1);
+    if (!/^[A-Za-z0-9_.@+/-]{1,160}$/.test(path) || path.startsWith("node_modules/")) continue;
+    frames.push(redacted(path + ":" + match[2] + ":" + match[3]));
+    if (frames.length === 6) break;
+  }
+  return frames;
+}
+
+function describeLabError(error) {
+  try {
+    return {
+      name: typeof error?.name === "string" ? redacted(error.name, 64) : null,
+      code:
+        typeof error?.code === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(error.code)
+          ? error.code
+          : null,
+      message: redacted(
+        typeof error?.message === "string" ? error.message : "non-error " + typeof error,
+      ),
+      frames: stackFrames(error?.stack),
+    };
+  } catch {
+    return { name: null, code: null, message: "undescribable failure", frames: [] };
+  }
+}
+
+function logSafeError(described) {
+  if (!described) return null;
+  return {
+    name: /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(described.name ?? "") ? described.name : null,
+    code: described.code,
+    message: /^[A-Z][A-Z0-9_]{2,79}$/.test(described.message ?? "") ? described.message : null,
+    frames: described.frames,
+  };
 }
 
 // New runner-only passive instrumentation. PG DataRows can span many native
