@@ -58,7 +58,6 @@ None for local work. Hosted staging (M1) waits on the owner actions below, P04.T
 
 ## Pending owner actions
 
-- **P04.T01j M-J1:** acknowledge that a non-Morrow member of `morrow_identity_owner` now denies every identity login (ADR-0020 items 3–4; not in its list of availability risks), or ask for an ADR-0020 amendment if a maintenance member must stay possible.
 - **Sign-off:** Plan R1 (Tier 3). The P01 contract sign-off also freezes the v1.1 billing layer, including two PR-A review choices: Shopify-route money is USD-only, and `AllocationShare@2` is a declared superset of v1.
 - **GitHub:** done 2026-10-19. Pro is active, the Actions budget is $10 with a hard stop, and branch protection on `main` requires `foundation` (enforce_admins, no review). See `docs/evidence/live/2026-10-19-github-*`. The ChatGPT Codex Connector app stays installed by owner choice (accepted risk; the Codex task is stopped).
 - **M1 done by Claude (per-action approval, 2026-10-19; `docs/evidence/live/2026-10-19-*`):** GitHub `staging` environment and variables; Neon `morrow-staging` (`sweet-sound-23947873`); WorkOS sign-up off; Cloudflare Wrangler OAuth revoked and a $5 alert; `~/.config/morrow/staging`.
