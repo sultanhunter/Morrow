@@ -36,6 +36,7 @@ import {
 import { projectApproval } from "./projection.js";
 import { viewerRole } from "./reads.js";
 import { decodeCommandResult } from "./result.js";
+import { approvalCaps } from "./submit.js";
 
 // Decide (§5): `governance.approval.decide` under ADR-0011. The Worker reads the
 // family unlocked, asks the kernel about the reviewer and every earlier approver
@@ -237,6 +238,9 @@ export async function decideApproval(
   let derivedCanonical: string | null = null;
   let derivedScope: string | null = null;
   if (derived !== null && !family.proposals.has(derived.id)) {
+    // The published family cap (§5): a family holds at most 25 derived proposals.
+    // SQL repeats it under the root lock, with the workspace's live pending cap.
+    if (family.proposals.size - 1 >= approvalCaps.familyDerivations) return refuse("limit_reached");
     const { proposalDigest: _omitted, ...content } = derived;
     derivedCanonical = canonicalText(content);
     derivedScope = canonicalText(derived.scope);

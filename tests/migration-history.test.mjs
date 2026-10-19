@@ -91,7 +91,7 @@ const published = [
   [
     18,
     "0018.approval-records.sql",
-    "18fa9b08a40d7847621649e5da7cf875756a774aeb312c1d73bfdd05374ec33c",
+    "6ca433edded2bc8590623bb30a6a51fe30b62215ad57dc0e4f7abdb7fecbadea",
   ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each

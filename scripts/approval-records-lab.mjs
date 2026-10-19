@@ -6,7 +6,8 @@
 // review policies never leak between cases (the P03.T04e PR-B template-database
 // harness is not merged yet). Owner-seeded synthetic fixtures only; no provider,
 // credential or merchant data. Runs in the CI pg-core group.
-// MORROW_APPROVAL_LAB_ONLY=AC01,AC04 runs a subset.
+// MORROW_APPROVAL_LAB_ONLY=AC01,AC04 runs a subset. MORROW_APPROVAL_RACE_ROUNDS=n
+// (1-20, default 1; no CI job sets it) repeats the AC17 races on fresh records.
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -69,6 +70,7 @@ export async function runApprovalRecordsLab(db, options = {}) {
   const stats = { retries: 0 };
   const inTx = transactions(db, stats);
   const only = options.only ?? null;
+  const raceRounds = options.raceRounds ?? 1;
   async function section(name, body) {
     if (only && !only.includes(name)) return;
     const started = Date.now();
@@ -173,23 +175,33 @@ export async function runApprovalRecordsLab(db, options = {}) {
     inTx(p, (tx, a) => ap.listApprovals(tx, a, { after, limit }), { readOnly: true });
   // The claim consumer contract: prepare in TS, then the consumer's own definer
   // (prelude with the exclusive organization lock, approval_claim, identity effect).
+  // The consumer names its capability (grants revise unless the refs say otherwise);
+  // o.capability overrides only the value sent to SQL. A fixed o.commandId with the
+  // same prepared values is the read-back of an unknown commit.
   async function claim(p, refs, o = {}) {
+    const consumerRefs = { capabilityId: "governance.grants.revise", ...refs };
+    const commandId = o.commandId ?? randomUUID();
+    // A retry after an unknown outcome resends the same prepared values and command
+    // ID (no new prepare), as the consumer contract requires.
+    let kept = o.prepared ?? null;
     return inTx(
       p,
       async (tx, a, connection) => {
-        const prepared = o.prepared ?? (await ap.prepareApprovalClaim(tx, a, refs));
+        const prepared = kept ?? (await ap.prepareApprovalClaim(tx, a, consumerRefs));
         if ("code" in prepared) {
           tx.rollbackOnly();
           return { outcome: prepared.code, stage: "prepare" };
         }
+        kept = prepared;
         const values = [
-          o.commandId ?? randomUUID(),
+          commandId,
           "c".repeat(64),
           prepared.approvalId,
           String(prepared.approvalRevision),
           o.approvalDigest ?? prepared.approvalDigest,
           prepared.proposalId,
           o.proposalDigest ?? prepared.proposalDigest,
+          o.capability ?? prepared.capabilityId,
           o.countedJson ?? prepared.countedJson,
           o.fail ? "fail" : "ok",
         ];
@@ -198,7 +210,7 @@ export async function runApprovalRecordsLab(db, options = {}) {
         if (o.beforeConsumer) await o.beforeConsumer();
         const rows = (
           await connection.query(
-            "SELECT outcome,effect_id FROM morrow_work.lab_claim_consumer($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+            "SELECT outcome,effect_id FROM morrow_work.lab_claim_consumer($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
             values,
             new AbortController().signal,
           )
@@ -407,6 +419,8 @@ INSERT INTO morrow_work.review_policies VALUES(${literal(org)},${literal(ws)},'r
       digest,
       canonical,
       scopeCanonical: canonicalize(content.scope),
+      // The approval row follows a forged createdAt too (approval_bind's formula).
+      approvalExpiresAt: plusSeconds(content.createdAt, s.rule.pendingExpirySeconds),
     };
   }
   const arrayLiteral = (values) =>
@@ -415,6 +429,10 @@ INSERT INTO morrow_work.review_policies VALUES(${literal(org)},${literal(ws)},'r
       : values.length
         ? "ARRAY[" + values.map(literal).join(",") + "]::text[]"
         : "'{}'::text[]";
+  // The parameters and proposal rows alone (no approval): a refusal is proposal_bind's
+  // or a proposals CHECK, never approval_bind's.
+  const proposalOnlySql = (s, org, ws) =>
+    storedProposalSql(s, org, ws).split("\nINSERT INTO morrow_work.approvals")[0];
   function storedProposalSql(s, org, ws) {
     const d = s.doc;
     return `INSERT INTO morrow_work.proposal_parameters VALUES(${literal(org)},${literal(ws)},${literal(s.parametersId)},${literal(s.parametersCanonical)},${literal(s.parametersDigest)},${literal(d.createdAt)}::timestamptz);
@@ -751,6 +769,24 @@ INSERT INTO morrow_work.approvals(organization_id,workspace_id,id,revision,propo
           .ok,
         name,
       );
+    // The forward-date rule is proposal_bind's own: the parameters and proposal rows
+    // alone (no approval row, so approval_bind never runs) fail there, for the owner
+    // and the command role, while the same rows of the unforged fixture insert.
+    const forward = forgeStored(s, ownerCases.forward_dated);
+    const fromBind = (r) =>
+      !r.ok &&
+      /APPROVAL_RECORD_INVALID/.test(r.stderr) &&
+      /PL\/pgSQL function (morrow_work\.)?proposal_bind\(\) line \d+ at RAISE/.test(r.stderr);
+    const ownerForward = ownerInsert(proposalOnlySql(forward, F.O, ws));
+    const commandForward = db.tryRun(asCommandRole(a, proposalOnlySql(forward, F.O, ws)));
+    check(
+      "AC02:forward_dated_refused_by_proposal_bind",
+      ownerInsert(proposalOnlySql(s, F.O, ws)).ok &&
+        db.tryRun(asCommandRole(a, proposalOnlySql(s, F.O, ws))).ok &&
+        fromBind(ownerForward) &&
+        fromBind(commandForward),
+      { owner: ownerForward.stderr, command: commandForward.stderr },
+    );
     check("AC02:owner_and_command_nothing_written", same(snapshot(ws), before), snapshot(ws));
   });
 
@@ -1270,6 +1306,143 @@ INSERT INTO morrow_work.approvals(organization_id,workspace_id,id,revision,propo
       1,
     );
     check("AC08:rejected", rejected.status === "rejected", rejected);
+
+    // counted_current in SQL alone (TypeScript bypassed): D decides a pending
+    // approval B approved, naming the counted earlier approvers itself. Each call is
+    // a direct cmd_approval_decide in D's freshly entered context (so the prelude is
+    // current and only the counted check can refuse), rolled back.
+    const s6 = await applied(a, grantsBody(C, F.task("a", ws)));
+    await decide(b, s6.proposalRef.id, decision(s6.proposalRef.digest), 1);
+    const snapshotOf = (p, ids) =>
+      inTx(
+        p,
+        (tx) => tx.run("reviewerSnapshot", ["governance.grants.revise", JSON.stringify(ids)]),
+        { readOnly: true },
+      );
+    const entry = (row, patch = {}) => ({
+      principalId: row.principal_id,
+      membershipId: row.membership_id,
+      grantsDigest: row.grants_digest,
+      ...patch,
+    });
+    const [bRow] = await snapshotOf(d, [B.principal]);
+    const [dRow] = await snapshotOf(d, [D.principal]);
+    const [rRow] = await snapshotOf(d, [R.principal]);
+    const decideD = (reviewers, evaluatedAt = bRow.evaluated_at) =>
+      apiCall(
+        d,
+        decideCall([
+          randomUUID(),
+          "d".repeat(64),
+          "corr",
+          s6.proposalRef.id,
+          "2",
+          "approve",
+          null,
+          s6.proposalRef.digest,
+          null,
+          null,
+          null,
+          null,
+          null,
+          counted(evaluatedAt, reviewers),
+        ]),
+      );
+    const bGrant = "g_b_" + ws + "_governance_grants_revise";
+    const editGrant = (validFrom) =>
+      db.admin(
+        `UPDATE morrow_identity.grants SET payload=jsonb_set(payload,'{validFrom}',${literal(JSON.stringify(validFrom))}::jsonb) WHERE id=${literal(bGrant)};`,
+      );
+    const before6 = snapshot(ws);
+    const sqlCounted = {
+      control_current: [decideD([entry(bRow)]), "applied"],
+      wrong_grants_digest: [
+        decideD([entry(bRow, { grantsDigest: "0".repeat(64) })]),
+        "stale_authority",
+      ],
+      wrong_membership: [
+        decideD([entry(bRow, { membershipId: R.membership })]),
+        "REVIEWER_AUTHORITY_LOST",
+      ],
+      no_approve_decision: [decideD([entry(rRow)]), "invalid"],
+      decider_counted: [decideD([entry(bRow), entry(dRow)]), "invalid"],
+      duplicate_reviewer: [decideD([entry(bRow), entry(bRow)]), "invalid"],
+      evaluated_in_future: [decideD([entry(bRow)], plusSeconds(dbNow(), 3600)), "stale_authority"],
+    };
+    // A counted reviewer's grant edited after the snapshot, with no organization
+    // revision bump: its grants digest no longer matches.
+    editGrant("2025-12-31T00:00:00.000Z");
+    try {
+      sqlCounted.grant_edited_after_snapshot = [decideD([entry(bRow)]), "stale_authority"];
+    } finally {
+      editGrant("2026-01-01T00:00:00.000Z");
+    }
+    for (const [name, [got, want]] of Object.entries(sqlCounted))
+      check("AC08:sql_counted_" + name, got === want, { got, want });
+    check("AC08:sql_counted_nothing_written", same(snapshot(ws), before6), snapshot(ws));
+    // The same edit through the module: it lands between reviewer_snapshot and the
+    // command, so the Worker counted B on the old digest and SQL refuses.
+    let edited = false;
+    const editedRun = await decide(d, s6.proposalRef.id, decision(s6.proposalRef.digest), 2, {
+      retry: false,
+      hooks: {
+        async afterQuery(record) {
+          if (!edited && record.text.includes("reviewer_snapshot(")) {
+            edited = true;
+            editGrant("2025-12-31T00:00:00.000Z");
+          }
+        },
+      },
+    }).catch((e) => ({ error: e?.name }));
+    editGrant("2026-01-01T00:00:00.000Z");
+    const afterEdit = await decide(d, s6.proposalRef.id, decision(s6.proposalRef.digest), 2);
+    check(
+      "AC08:grant_edited_after_snapshot_stale",
+      edited &&
+        editedRun.code === "stale_authority" &&
+        afterEdit.status === "approved" &&
+        same(approvalRow(s6.approvalRef.id).counted_reviewer_principal_ids, [
+          B.principal,
+          D.principal,
+        ]),
+      { editedRun, afterEdit },
+    );
+
+    // approval_claim's counted set must equal the stored one exactly: A claims the
+    // first proposal (counted [B, D]); TypeScript prepares, then each variant of the
+    // counted set goes to SQL.
+    const sRefs = {
+      proposalRef: second.proposalRef,
+      approvalRef: second.approvalRef,
+      capabilityId: "governance.grants.revise",
+    };
+    const prepared8 = await inTx(a, (tx, x) => ap.prepareApprovalClaim(tx, x, sRefs), {
+      readOnly: true,
+    });
+    const bClaim = prepared8.counted?.reviewers.find((x) => x.principalId === B.principal);
+    const dClaim = prepared8.counted?.reviewers.find((x) => x.principalId === D.principal);
+    const [rClaim] = await snapshotOf(a, [R.principal]);
+    const withCounted = (reviewers) =>
+      claim(a, sRefs, {
+        prepared: prepared8,
+        countedJson: counted(prepared8.counted.evaluatedAt, reviewers),
+      });
+    const claimCounted = {
+      strict_subset: [await withCounted([bClaim]), "invalid"],
+      strict_superset: [await withCounted([bClaim, dClaim, entry(rClaim)]), "invalid"],
+      other_set: [await withCounted([bClaim, entry(rClaim)]), "invalid"],
+      wrong_grants_digest: [
+        await withCounted([bClaim, { ...dClaim, grantsDigest: "0".repeat(64) }]),
+        "stale_authority",
+      ],
+    };
+    for (const [name, [got, want]] of Object.entries(claimCounted))
+      check("AC08:claim_counted_" + name, got.outcome === want && got.stage === "sql", {
+        got,
+        want,
+      });
+    const exact = await claim(a, sRefs, { prepared: prepared8 });
+    check("AC08:claim_counted_exact_applies", exact.outcome === "applied", exact);
   });
 
   // ===========================================================================
@@ -1323,10 +1496,9 @@ INSERT INTO morrow_work.approvals(organization_id,workspace_id,id,revision,propo
       canonicalize(stored.proposal) === canonicalize(preview.proposal) &&
         stored.approval?.status === "approved",
     );
-    const derivedRow = approvalRow("approval_" + derivedId);
     check(
-      "AC09:inherits_expiry",
-      derivedRow?.expires_text !== undefined &&
+      "AC09:parent_superseded",
+      approvalRow("approval_" + derivedId)?.status === "approved" &&
         approvalRow(s.approvalRef.id).status === "invalidated" &&
         approvalRow(s.approvalRef.id).invalidation_reason === "superseded_by_partial_approval",
     );
@@ -1343,11 +1515,7 @@ INSERT INTO morrow_work.approvals(organization_id,workspace_id,id,revision,propo
       decision(p2.proposalDigest, { selectedTargetIndexes: [2] }),
       2,
     );
-    check(
-      "AC09:derive_after_approved_conflict",
-      derive2.code === "FAMILY_CONFLICT" || derive2.code === "revision_conflict",
-      derive2,
-    );
+    check("AC09:derive_after_approved_conflict", derive2.code === "FAMILY_CONFLICT", derive2);
     const mismatch = await decide(
       b,
       s.proposalRef.id,
@@ -1414,6 +1582,18 @@ INSERT INTO morrow_work.approvals(organization_id,workspace_id,id,revision,propo
       pend.status === "pending" && pend.proposalRef.id === q0.id,
       pend,
     );
+    // While pending, the derived approval carries the root approval's creation and
+    // expiry: a selection never extends the pending window.
+    const q0Row = approvalRow("approval_" + q0.id);
+    const qRootRow = approvalRow(q.approvalRef.id);
+    check(
+      "AC09:inherits_expiry",
+      q0Row?.status === "pending" &&
+        q0Row.expires_text === qRootRow.expires_text &&
+        q0Row.created_text === qRootRow.created_text &&
+        pend.expiresAt === qRootRow.expires_text,
+      { derived: q0Row?.expires_text, root: qRootRow?.expires_text },
+    );
     const rej = await decide(
       d2,
       q.proposalRef.id,
@@ -1428,16 +1608,43 @@ INSERT INTO morrow_work.approvals(organization_id,workspace_id,id,revision,propo
         closed.invalidation_reason === "family_closed",
       { rej, closed: closed?.status },
     );
+    // A later derivation of the rejected root: no member is approved, so the review
+    // library's fold says APPROVAL_NOT_PENDING, and SQL (TypeScript bypassed) agrees.
+    const q1 = previewSelection(qv, [1]).proposal;
     const later = await decide(
       d2,
       q.proposalRef.id,
-      decision(previewSelection(qv, [1]).proposal.proposalDigest, { selectedTargetIndexes: [1] }),
+      decision(q1.proposalDigest, { selectedTargetIndexes: [1] }),
       2,
     );
+    const derivedArgs = (proposal) => {
+      const { proposalDigest: digest, ...content } = proposal;
+      return [canonicalize(content), digest, canonicalize(proposal.scope)];
+    };
+    const [q1text, q1digest, q1scope] = derivedArgs(q1);
+    const laterSql = apiCall(
+      d2,
+      decideCall([
+        randomUUID(),
+        "d".repeat(64),
+        "corr",
+        q.proposalRef.id,
+        "2",
+        "approve",
+        "[1]",
+        q1digest,
+        q1text,
+        q1digest,
+        q1scope,
+        null,
+        null,
+        counted(dbNow()),
+      ]),
+    );
     check(
-      "AC09:later_derivation_conflict",
-      ["FAMILY_CONFLICT", "revision_conflict", "APPROVAL_NOT_PENDING"].includes(later.code),
-      later,
+      "AC09:later_derivation_not_pending",
+      later.code === "APPROVAL_NOT_PENDING" && laterSql === "APPROVAL_NOT_PENDING",
+      { later, laterSql },
     );
     // Owner SQL: a derived approval with a later expiry fails approval_bind; a
     // second approved member violates approvals_one_approved_per_family.
@@ -1466,6 +1673,75 @@ INSERT INTO morrow_work.approvals(organization_id,workspace_id,id,revision,propo
     check(
       "AC09:owner_second_approved_unique",
       !twoApproved.ok && /approvals_one_approved_per_family/.test(twoApproved.stderr),
+    );
+
+    // The published family cap: with quorum 2 every derivation stays pending, so a
+    // reviewer could otherwise derive every subset. A family holds at most 25
+    // derived proposals; the 26th is limit_reached in TypeScript and, with
+    // TypeScript bypassed, in SQL under the root lock; nothing is written.
+    const ws3 = W("W9c");
+    installPolicy(F.O, ws3, 1, rulesWith({ irreversible: { requiredApprovals: 2 } }));
+    const a3 = atW(A, "W9c"),
+      b3 = atW(B, "W9c");
+    const capped = await applied(a3, eraseBody(["c1", "c2", "c3", "c4", "c5"], F.task("a", ws3)));
+    const cappedView = (await read(b3, capped.proposalRef.id)).proposal;
+    const subsets = [];
+    for (let mask = 1; mask < 31; mask++)
+      subsets.push([0, 1, 2, 3, 4].filter((i) => mask & (1 << i)));
+    let derivedCount = 0;
+    for (const selection of subsets.slice(0, ap.approvalCaps.familyDerivations)) {
+      const r = await decide(
+        b3,
+        capped.proposalRef.id,
+        decision(previewSelection(cappedView, selection).proposal.proposalDigest, {
+          selectedTargetIndexes: selection,
+        }),
+        1,
+      );
+      if (r.outcome === "applied" && r.status === "pending") derivedCount++;
+    }
+    const beforeCap = snapshot(ws3);
+    const overTs = subsets[ap.approvalCaps.familyDerivations];
+    const capTs = await decide(
+      b3,
+      capped.proposalRef.id,
+      decision(previewSelection(cappedView, overTs).proposal.proposalDigest, {
+        selectedTargetIndexes: overTs,
+      }),
+      1,
+    );
+    const overSql = subsets[ap.approvalCaps.familyDerivations + 1];
+    const [capText, capDigest, capScope] = derivedArgs(
+      previewSelection(cappedView, overSql).proposal,
+    );
+    const capSql = apiCall(
+      b3,
+      decideCall([
+        randomUUID(),
+        "d".repeat(64),
+        "corr",
+        capped.proposalRef.id,
+        "1",
+        "approve",
+        JSON.stringify(overSql),
+        capDigest,
+        capText,
+        capDigest,
+        capScope,
+        null,
+        null,
+        counted(dbNow()),
+      ]),
+      "COMMIT",
+    );
+    check(
+      "AC09:family_derivation_cap",
+      ap.approvalCaps.familyDerivations === 25 &&
+        derivedCount === 25 &&
+        capTs.code === "limit_reached" &&
+        capSql === "limit_reached" &&
+        same(snapshot(ws3), beforeCap),
+      { derivedCount, capTs, capSql },
     );
   });
 
@@ -1569,6 +1845,7 @@ UPDATE morrow_work.approvals SET status='approved',revision=2,updated_at=${liter
       approvalDigest: refs.approvalRef.digest,
       proposalId: t.doc.id,
       proposalDigest: t.digest,
+      capabilityId: "governance.grants.revise",
       countedJson: counted(dbNow(), []),
     };
     const c2 = await claim(a, refs, { prepared });
@@ -1603,7 +1880,12 @@ UPDATE morrow_work.approvals SET status='approved',revision=2,updated_at=${liter
       b = atW(B, "W12");
     const s = await applied(a, grantsBody(C, F.task("a", ws)));
     const d = await decide(b, s.proposalRef.id, decision(s.proposalRef.digest), 1);
-    const refs = { proposalRef: d.proposalRef, approvalRef: d.approvalRef };
+    // The consumer's refs name the capability it executes (governance.grants.revise).
+    const refs = {
+      proposalRef: d.proposalRef,
+      approvalRef: d.approvalRef,
+      capabilityId: "governance.grants.revise",
+    };
     // Refusals first: wrong refs, a claimant without execute, an effect error.
     const wrongRev = await claim(a, { ...refs, approvalRef: { ...refs.approvalRef, revision: 1 } });
     const wrongDigest = await claim(a, {
@@ -1630,6 +1912,21 @@ UPDATE morrow_work.approvals SET status='approved',revision=2,updated_at=${liter
       [sqlDigest, sqlRevision, sqlProposal].every((x) => x.outcome === "DIGEST_MISMATCH"),
       [sqlDigest, sqlRevision, sqlProposal],
     );
+    // A consumer of another capability cannot spend this approval: the TS prepare
+    // and approval_claim (with prepared values for the right refs) both refuse.
+    const otherCapabilityTs = await claim(a, { ...refs, capabilityId: "governance.privacy.erase" });
+    const otherCapabilitySql = await claim(a, refs, {
+      prepared,
+      capability: "governance.privacy.erase",
+    });
+    check(
+      "AC12:capability_mismatch",
+      otherCapabilityTs.outcome === "DIGEST_MISMATCH" &&
+        otherCapabilityTs.stage === "prepare" &&
+        otherCapabilitySql.outcome === "DIGEST_MISMATCH" &&
+        otherCapabilitySql.stage === "sql",
+      { otherCapabilityTs, otherCapabilitySql },
+    );
     check("AC12:claimant_without_execute", (await claim(b, refs)).outcome === "denied");
     const failed = await claim(a, refs, { fail: true, retry: false }).catch((e) => ({
       outcome: "error:" + e?.name,
@@ -1640,7 +1937,9 @@ UPDATE morrow_work.approvals SET status='approved',revision=2,updated_at=${liter
       ),
     );
     check("AC12:effect_error_leaves_nothing", failed.outcome !== "applied" && noRows === 0, failed);
-    // A counted reviewer removed: refused (kernel) and rolled back.
+    // A counted reviewer removed: refused (kernel) and rolled back. The SQL half runs
+    // in A's freshly entered context, so its prelude is current and approval_claim's
+    // counted check alone refuses (the reviewer is no longer a member).
     db.sql(removeSql(b));
     try {
       const lost = await claim(a, refs);
@@ -1648,19 +1947,54 @@ UPDATE morrow_work.approvals SET status='approved',revision=2,updated_at=${liter
       const sqlLost = await claim(a, refs, { prepared });
       check(
         "AC12:reviewer_authority_lost_sql",
-        ["REVIEWER_AUTHORITY_LOST", "stale_authority"].includes(sqlLost.outcome),
+        sqlLost.outcome === "REVIEWER_AUTHORITY_LOST" && sqlLost.stage === "sql",
         sqlLost,
       );
     } finally {
       db.sql(restoreSql(b));
     }
-    // The claim: one row, one effect from the stored parameters, one event.
+    // The claim: one row, one effect from the stored parameters, one event. Its
+    // COMMIT reply is lost (an unknown outcome); the consumer reads it back by
+    // resending the same prepared values and command ID: `replayed`, the same
+    // effect, nothing written.
     const fresh = await inTx(a, (tx, x) => ap.prepareApprovalClaim(tx, x, refs), {
       readOnly: true,
     });
     const before = approvalRow(s.approvalRef.id);
-    const c = await claim(a, refs, { prepared: fresh });
-    check("AC12:claimed", c.outcome === "applied", c);
+    const claimKey = randomUUID();
+    let loseCommit = true;
+    const unknown = await claim(a, refs, {
+      prepared: fresh,
+      commandId: claimKey,
+      retry: false,
+      hooks: {
+        async afterQuery(record, connection) {
+          if (loseCommit && record.text === "COMMIT") {
+            loseCommit = false;
+            await connection.loseReply();
+          }
+        },
+      },
+    }).catch((e) => ({ outcome: e instanceof WorkOutcomeUnknown ? "uncertain" : e?.name }));
+    const c = await claim(a, refs, { prepared: fresh, commandId: claimKey });
+    const committedEffect = db.sql(
+      `SELECT id FROM morrow_identity.lab_effects WHERE consumer_command_id=${literal(claimKey)};`,
+    );
+    check(
+      "AC12:claimed_unknown_commit_read_back",
+      unknown.outcome === "uncertain" &&
+        c.outcome === "replayed" &&
+        c.effect_id === committedEffect &&
+        committedEffect.length > 0,
+      { unknown, c },
+    );
+    // The read-back belongs to that claimant alone.
+    const otherClaimant = await claim(b, refs, { prepared: fresh, commandId: claimKey });
+    check(
+      "AC12:read_back_other_claimant_refused",
+      otherClaimant.outcome === "APPROVAL_ALREADY_CLAIMED",
+      otherClaimant,
+    );
     const [row] = db.rows(
       `SELECT family_root_id, consumer FROM morrow_work.approval_claims WHERE approval_id=${literal(s.approvalRef.id)}`,
     );
@@ -1703,6 +2037,14 @@ UPDATE morrow_work.approvals SET status='approved',revision=2,updated_at=${liter
         ),
       ) === 1,
     );
+    // Withdrawing the claimed root is a command on a consumed family.
+    const beforeWithdraw = snapshot(ws);
+    const withdrawn = await withdraw(a, s.proposalRef.id, Number(before.revision));
+    check(
+      "AC12:withdraw_claimed_family_conflict",
+      withdrawn.code === "FAMILY_CONFLICT" && same(snapshot(ws), beforeWithdraw),
+      withdrawn,
+    );
     check(
       "AC12:update_of_claimed_raises",
       !db.tryRun(
@@ -1721,7 +2063,7 @@ UPDATE morrow_work.approvals SET status='approved',revision=2,updated_at=${liter
         db.tryRun(
           asApi(
             a,
-            `SELECT * FROM morrow_work.approval_claim('x','1','${"a".repeat(64)}','p','${"a".repeat(64)}','lab.x','${randomUUID()}','{}');`,
+            `SELECT * FROM morrow_work.approval_claim('x','1','${"a".repeat(64)}','p','${"a".repeat(64)}','governance.grants.revise','lab.x','${randomUUID()}','{}');`,
           ),
           { user: "morrow_api_worker" },
         ).stderr,
@@ -1738,7 +2080,11 @@ UPDATE morrow_work.approvals SET status='approved',revision=2,updated_at=${liter
       decision(e01.proposalDigest, { selectedTargetIndexes: [0, 1] }),
       1,
     );
-    const ce = await claim(a, { proposalRef: de.proposalRef, approvalRef: de.approvalRef });
+    const ce = await claim(a, {
+      proposalRef: de.proposalRef,
+      approvalRef: de.approvalRef,
+      capabilityId: "governance.privacy.erase",
+    });
     check("AC12:derived_claimed", ce.outcome === "applied", ce);
     // The derived proposal's effect covers only its own (selected) targets.
     const erased = db.sql(
@@ -1749,15 +2095,38 @@ UPDATE morrow_work.approvals SET status='approved',revision=2,updated_at=${liter
       erased === '["subject:v1", "subject:v2"]',
       erased,
     );
+    // The root (invalidated by the derivation, its family claimed): the claim is
+    // checked first in TS and SQL alike, before any projection or status.
     const parentRef = {
       proposalRef: e.proposalRef,
       approvalRef: (await read(b, e.proposalRef.id)).approvalRef,
+      capabilityId: "governance.privacy.erase",
     };
     const cp = await claim(a, parentRef);
+    const cpSql = await claim(a, parentRef, {
+      prepared: {
+        approvalId: parentRef.approvalRef.id,
+        approvalRevision: parentRef.approvalRef.revision,
+        approvalDigest: parentRef.approvalRef.digest,
+        proposalId: e.proposalRef.id,
+        proposalDigest: e.proposalRef.digest,
+        capabilityId: "governance.privacy.erase",
+        countedJson: counted(dbNow(), []),
+      },
+    });
     check(
       "AC12:family_member_claim_refused",
-      ["APPROVAL_ALREADY_CLAIMED", "state_conflict"].includes(cp.outcome),
-      cp,
+      cp.outcome === "APPROVAL_ALREADY_CLAIMED" &&
+        cp.stage === "prepare" &&
+        cpSql.outcome === "APPROVAL_ALREADY_CLAIMED" &&
+        cpSql.stage === "sql",
+      { cp, cpSql },
+    );
+    const rootWithdraw = await withdraw(a, e.proposalRef.id, parentRef.approvalRef.revision);
+    check(
+      "AC12:withdraw_claimed_root_family_conflict",
+      rootWithdraw.code === "FAMILY_CONFLICT",
+      rootWithdraw,
     );
     const after2 = await decide(
       b,
@@ -2185,281 +2554,422 @@ INSERT INTO morrow_work.approval_claims VALUES(${literal(F.O)},${literal(ws)},${
         if (attempt >= attempts) return { first: result, second, inconclusive: true };
       }
     }
+    // Polls a pg_stat_activity condition from inside the engine (10 ms, with a fresh
+    // statistics snapshot each time) until it holds, for at most `seconds`.
+    const seen = (condition, seconds) =>
+      db
+        .runAsync(
+          `DO $$ BEGIN FOR i IN 1..${seconds * 100} LOOP PERFORM pg_stat_clear_snapshot(); IF EXISTS(SELECT 1 FROM pg_stat_activity WHERE ${condition}) THEN RETURN; END IF; PERFORM pg_sleep(0.01); END LOOP; RAISE EXCEPTION 'CONDITION_NOT_SEEN'; END $$;`,
+        )
+        .then((r) => r.ok);
+    // The command functions under lock, with TypeScript bypassed (the property is
+    // the SQL lock order and the READ COMMITTED re-read after a wait): the first
+    // session's cmd_approval_decide returns and the session then holds its stream
+    // lock and family rows (pg_sleep before COMMIT); the second session's command
+    // is seen waiting on a lock, then re-reads after the first commits. Neither
+    // raw session carries the request prologue's 1 s lock_timeout, so the hold
+    // grows on a slow host until the wait is observed.
+    async function holdSql(setup) {
+      let last = null;
+      for (const hold of [3, 6, 12]) {
+        const { first, second, firstCall, secondCall } = await setup();
+        const one = db.runAsync(
+          asApi(first, `SELECT outcome FROM ${firstCall};\nSELECT pg_sleep(${hold});`, {
+            end: "COMMIT",
+          }),
+          { user: "morrow_api_worker", applicationName: "approval_lab_hold_first" },
+        );
+        const holding = await seen(
+          "application_name='approval_lab_hold_first' AND state='active' AND query LIKE 'SELECT pg_sleep(%'",
+          hold,
+        );
+        const two = db.runAsync(
+          asApi(second, `SELECT outcome FROM ${secondCall};`, { end: "COMMIT" }),
+          {
+            user: "morrow_api_worker",
+            applicationName: "approval_lab_hold_second",
+          },
+        );
+        const waited =
+          holding &&
+          (await seen(
+            "application_name='approval_lab_hold_second' AND wait_event_type='Lock'",
+            hold,
+          ));
+        const [r1, r2] = await Promise.all([one, two]);
+        last = {
+          holding,
+          waited,
+          first: r1.ok ? r1.stdout.split("\n").at(-1) : "error",
+          second: r2.ok ? r2.stdout.split("\n").at(-1) : "error",
+        };
+        if (holding && waited) return last;
+      }
+      return { ...last, inconclusive: true };
+    }
+    const derivedValues = (proposal) => {
+      const { proposalDigest: digest, ...content } = proposal;
+      return [digest, canonicalize(content), digest, canonicalize(proposal.scope)];
+    };
+    const directDecide = (proposalId, revision, digest, selection = null, derived = null) =>
+      decideCall([
+        randomUUID(),
+        "d".repeat(64),
+        "corr",
+        proposalId,
+        String(revision),
+        "approve",
+        selection === null ? null : JSON.stringify(selection),
+        ...(derived ?? [digest, null, null, null]),
+        null,
+        null,
+        counted(dbNow()),
+      ]);
 
-    // (1) Two quorum-1 approvals: B pauses before its command function, D approves
-    // and commits; B's command then sees revision 2 under lock.
-    let s1;
-    const r1 = await pauseBefore(
-      "cmd_approval_decide(",
-      async (hooks) => {
-        s1 = await applied(a, grantsBody(C, F.task("a", ws)));
-        return decide(b, s1.proposalRef.id, decision(s1.proposalRef.digest), 1, {
-          hooks,
-          retry: false,
+    // The races run once per pull request; MORROW_APPROVAL_RACE_ROUNDS repeats them
+    // on fresh records (the repeated-round matrix, run by hand).
+    async function races(tag) {
+      // (1) Two quorum-1 approvals: B pauses before its command function, D approves
+      // and commits; B's command then sees revision 2 under lock.
+      let s1;
+      const r1 = await pauseBefore(
+        "cmd_approval_decide(",
+        async (hooks) => {
+          s1 = await applied(a, grantsBody(C, F.task("a", ws)));
+          return decide(b, s1.proposalRef.id, decision(s1.proposalRef.digest), 1, {
+            hooks,
+            retry: false,
+          });
+        },
+        () => decide(d, s1.proposalRef.id, decision(s1.proposalRef.digest), 1),
+      );
+      check(
+        "AC17:two_approvals_one_wins" + tag,
+        !r1.inconclusive &&
+          r1.second?.status === "approved" &&
+          r1.first.code === "revision_conflict" &&
+          decisionsOf(s1.approvalRef.id) === 1,
+        r1,
+      );
+
+      // (2) Two different partial selections: B ([0]) pauses before its command
+      // function, D ([1]) derives and approves. Under lock B's expected revision is
+      // already stale (D's approval invalidated the root), so B gets the stale
+      // revision first, as the library's fold orders STALE_REVISION before
+      // FAMILY_CONFLICT; B's re-read retry at the current revision is FAMILY_CONFLICT.
+      let e2, e2view;
+      const sel = (proposal, i) =>
+        decision(previewSelection(proposal, i).proposal.proposalDigest, {
+          selectedTargetIndexes: i,
         });
-      },
-      () => decide(d, s1.proposalRef.id, decision(s1.proposalRef.digest), 1),
-    );
-    check(
-      "AC17:two_approvals_one_wins",
-      !r1.inconclusive &&
-        r1.second?.status === "approved" &&
-        r1.first.code === "revision_conflict" &&
-        decisionsOf(s1.approvalRef.id) === 1,
-      r1,
-    );
+      const r2 = await pauseBefore(
+        "cmd_approval_decide(",
+        async (hooks) => {
+          e2 = await applied(a, eraseBody(["x1", "x2", "x3"], F.task("a", ws)));
+          e2view = (await read(b, e2.proposalRef.id)).proposal;
+          return decide(b, e2.proposalRef.id, sel(e2view, [0]), 1, { hooks, retry: false });
+        },
+        () => decide(d, e2.proposalRef.id, sel(e2view, [1]), 1),
+      );
+      const reread = r2.inconclusive
+        ? null
+        : await decide(b, e2.proposalRef.id, sel(e2view, [0]), 2);
+      check(
+        "AC17:two_selections_one_member" + tag,
+        !r2.inconclusive &&
+          r2.second?.status === "approved" &&
+          r2.first.code === "revision_conflict" &&
+          reread?.code === "FAMILY_CONFLICT" &&
+          Number(
+            db.sql(
+              `SELECT count(*) FROM morrow_work.approvals WHERE family_root_id=${literal(e2.proposalRef.id)} AND status='approved';`,
+            ),
+          ) === 1 &&
+          Number(
+            db.sql(
+              `SELECT count(*) FROM morrow_work.proposals WHERE family_root_id=${literal(e2.proposalRef.id)};`,
+            ),
+          ) === 2,
+        { r2, reread },
+      );
 
-    // (2) Two different partial selections: B ([0]) pauses before its command
-    // function, D ([1]) derives and approves. Under lock B's expected revision is
-    // already stale (D's approval invalidated the root), so B gets the stale
-    // revision first, as the library's fold orders STALE_REVISION before
-    // FAMILY_CONFLICT; B's re-read retry at the current revision is FAMILY_CONFLICT.
-    let e2, e2view;
-    const sel = (proposal, i) =>
-      decision(previewSelection(proposal, i).proposal.proposalDigest, {
-        selectedTargetIndexes: i,
+      // (1') and (2') under lock: B's command function has returned and B holds its
+      // locks until COMMIT; D's command waits on them, and after B commits it sees
+      // the new revision (revision_conflict), never B's pre-commit state.
+      let s1h;
+      const r1h = await holdSql(async () => {
+        s1h = await applied(a, grantsBody(C, F.task("a", ws)));
+        const call = () => directDecide(s1h.proposalRef.id, 1, s1h.proposalRef.digest);
+        return { first: b, second: d, firstCall: call(), secondCall: call() };
       });
-    const r2 = await pauseBefore(
-      "cmd_approval_decide(",
-      async (hooks) => {
-        e2 = await applied(a, eraseBody(["x1", "x2", "x3"], F.task("a", ws)));
-        e2view = (await read(b, e2.proposalRef.id)).proposal;
-        return decide(b, e2.proposalRef.id, sel(e2view, [0]), 1, { hooks, retry: false });
-      },
-      () => decide(d, e2.proposalRef.id, sel(e2view, [1]), 1),
-    );
-    const reread = r2.inconclusive ? null : await decide(b, e2.proposalRef.id, sel(e2view, [0]), 2);
-    check(
-      "AC17:two_selections_one_member",
-      !r2.inconclusive &&
-        r2.second?.status === "approved" &&
-        r2.first.code === "revision_conflict" &&
-        reread?.code === "FAMILY_CONFLICT" &&
-        Number(
-          db.sql(
-            `SELECT count(*) FROM morrow_work.approvals WHERE family_root_id=${literal(e2.proposalRef.id)} AND status='approved';`,
-          ),
-        ) === 1 &&
-        Number(
-          db.sql(
-            `SELECT count(*) FROM morrow_work.proposals WHERE family_root_id=${literal(e2.proposalRef.id)};`,
-          ),
-        ) === 2,
-      { r2, reread },
-    );
+      check(
+        "AC17:two_approvals_second_waits_then_stale" + tag,
+        !r1h.inconclusive &&
+          r1h.first === "applied" &&
+          r1h.second === "revision_conflict" &&
+          decisionsOf(s1h.approvalRef.id) === 1 &&
+          approvalRow(s1h.approvalRef.id).status === "approved",
+        r1h,
+      );
+      let e2h, e2hview;
+      const r2h = await holdSql(async () => {
+        e2h = await applied(a, eraseBody(["y1", "y2", "y3"], F.task("a", ws)));
+        e2hview = (await read(b, e2h.proposalRef.id)).proposal;
+        const part = (i) =>
+          directDecide(
+            e2h.proposalRef.id,
+            1,
+            null,
+            i,
+            derivedValues(previewSelection(e2hview, i).proposal),
+          );
+        return { first: b, second: d, firstCall: part([0]), secondCall: part([1]) };
+      });
+      const reread2h = r2h.inconclusive
+        ? null
+        : await decide(d, e2h.proposalRef.id, sel(e2hview, [1]), 2);
+      check(
+        "AC17:two_selections_second_waits_then_stale" + tag,
+        !r2h.inconclusive &&
+          r2h.first === "applied" &&
+          r2h.second === "revision_conflict" &&
+          reread2h?.code === "FAMILY_CONFLICT" &&
+          Number(
+            db.sql(
+              `SELECT count(*) FROM morrow_work.proposals WHERE family_root_id=${literal(e2h.proposalRef.id)};`,
+            ),
+          ) === 2,
+        { r2h, reread2h },
+      );
 
-    // (3) A decision against a 0004 revocation of its reviewer.
-    // (a) The decision holds its locks before COMMIT; the revocation waits on the
-    // organization interlock, then applies after the decision commits.
-    const s3 = await applied(a, grantsBody(C, F.task("a", ws)));
-    let revocation3,
-      waited3 = null;
-    let armed3 = true;
-    const committedFirst = await decide(b, s3.proposalRef.id, decision(s3.proposalRef.digest), 1, {
-      retry: false,
-      hooks: {
-        async afterQuery(record) {
-          if (armed3 && record.text.includes("cmd_approval_decide(")) {
-            armed3 = false;
-            revocation3 = db.runAsync(removeSql(b), { applicationName: "approval_lab_ac17_3a" });
-            waited3 = await db.waitForLockWait("application_name='approval_lab_ac17_3a'");
-          }
-        },
-      },
-    }).catch((e) => ({ error: e?.name }));
-    const revoked3 = await revocation3;
-    check(
-      "AC17:decision_commits_before_revocation",
-      waited3 === true &&
-        committedFirst.status === "approved" &&
-        revoked3?.ok === true &&
-        decisionsOf(s3.approvalRef.id) === 1,
-      { waited3, committedFirst },
-    );
-    db.sql(restoreSql(b));
-    // (b) The revocation commits while the decision is paused before its command
-    // function: the locked recheck finds the reviewer ineligible (401), nothing written.
-    const s3b = await applied(a, grantsBody(C, F.task("a", ws)));
-    const before3b = snapshot(ws);
-    let armed3b = true;
-    const revokedFirst = await decide(b, s3b.proposalRef.id, decision(s3b.proposalRef.digest), 1, {
-      retry: false,
-      hooks: {
-        async beforeQuery(record) {
-          if (armed3b && record.text.includes("cmd_approval_decide(")) {
-            armed3b = false;
-            db.sql(removeSql(b));
-          }
-        },
-      },
-    }).catch((e) => ({ error: e?.name }));
-    check(
-      "AC17:revocation_before_decision_refused",
-      ["unauthenticated", "stale_authority"].includes(revokedFirst.code) &&
-        same(snapshot(ws), before3b),
-      revokedFirst,
-    );
-    db.sql(restoreSql(b));
-
-    // (4) A claim against a 0004 revocation of a counted reviewer.
-    // (a) The consumer holds the organization FOR UPDATE; the revocation waits and
-    // applies after the claim commits.
-    const g4 = await applied(a, grantsBody(C, F.task("a", ws)));
-    const dg4 = await decide(b, g4.proposalRef.id, decision(g4.proposalRef.digest), 1);
-    let revocation4,
-      waited4 = null;
-    const claimedFirst = await claim(
-      a,
-      { proposalRef: dg4.proposalRef, approvalRef: dg4.approvalRef },
-      {
-        retry: false,
-        afterConsumer: async () => {
-          revocation4 = db.runAsync(removeSql(b), { applicationName: "approval_lab_ac17_4a" });
-          waited4 = await db.waitForLockWait("application_name='approval_lab_ac17_4a'");
-        },
-      },
-    ).catch((e) => ({ outcome: "error:" + e?.name }));
-    const revoked4 = await revocation4;
-    check(
-      "AC17:claim_commits_before_revocation",
-      waited4 === true &&
-        claimedFirst.outcome === "applied" &&
-        revoked4?.ok === true &&
-        claimsOf(dg4.approvalRef.id) === 2,
-      { waited4, claimedFirst },
-    );
-    db.sql(restoreSql(b));
-    // (b) The revocation commits after the claim was prepared and before its
-    // consumer runs: the consumer's locked recheck sees the organization revision
-    // move (stale_authority) or the counted reviewer gone (REVIEWER_AUTHORITY_LOST);
-    // either way nothing is written, and a fresh claim is REVIEWER_AUTHORITY_LOST.
-    const g4b = await applied(a, grantsBody(C, F.task("a", ws)));
-    const dg4b = await decide(b, g4b.proposalRef.id, decision(g4b.proposalRef.digest), 1);
-    const refs4b = { proposalRef: dg4b.proposalRef, approvalRef: dg4b.approvalRef };
-    const revokedBeforeClaim = await claim(a, refs4b, {
-      retry: false,
-      beforeConsumer: async () => db.sql(removeSql(b)),
-    }).catch((e) => ({ outcome: "error:" + e?.name }));
-    const freshClaim = await claim(a, refs4b);
-    check(
-      "AC17:revocation_before_claim_refused",
-      ["stale_authority", "REVIEWER_AUTHORITY_LOST"].includes(revokedBeforeClaim.outcome) &&
-        freshClaim.outcome === "REVIEWER_AUTHORITY_LOST" &&
-        claimsOf(dg4b.approvalRef.id) === 0,
-      { revokedBeforeClaim, freshClaim },
-    );
-    db.sql(restoreSql(b));
-
-    // (5) A solo claim against a member being added under the organization
-    // FOR UPDATE. The effective solo approvals are back-dated owner fixtures (a
-    // decision 590 s ago with the default 300 s cool-down), so no wait is needed.
-    const soloApproval = (o) => {
-      const policy = installPolicy(
-        o.org,
-        o.ws,
+      // (3) A decision against a 0004 revocation of its reviewer.
+      // (a) The decision holds its locks before COMMIT; the revocation waits on the
+      // organization interlock, then applies after the decision commits.
+      const s3 = await applied(a, grantsBody(C, F.task("a", ws)));
+      let revocation3,
+        waited3 = null;
+      let armed3 = true;
+      const committedFirst = await decide(
+        b,
+        s3.proposalRef.id,
+        decision(s3.proposalRef.digest),
         1,
-        structuredClone(defaults.rules),
-        plusSeconds(dbNow(), -700),
-      );
-      const created = plusSeconds(dbNow(), -600);
-      const s = storedProposal({
-        org: o.org,
-        ws: o.ws,
-        proposer: o.S,
-        taskId: o.task,
-        capabilityId: "governance.grants.revise",
-        targets: grantsTarget(o.org, o.ws, o.S.principal),
-        beneficiaries: [o.S.principal],
-        policy,
-        createdAt: created,
-        // The consumer derives its effect only from these stored parameters.
-        parameters: { beneficiaryPrincipalId: o.S.principal },
-      });
-      const decided = plusSeconds(created, 10);
-      const effective = plusSeconds(decided, policy.doc.rules.soloOwner.coolDownSeconds);
-      const expires = new Date(
-        Math.min(
-          Date.parse(s.doc.expiresAt),
-          Date.parse(effective) + s.rule.approvedValiditySeconds * 1000,
-        ),
-      ).toISOString();
-      db.workOwner(
-        storedProposalSql(s, o.org, o.ws) +
-          `
-INSERT INTO morrow_work.approval_decisions VALUES(${literal(o.org)},${literal(o.ws)},${literal(s.approvalId)},1,${literal(o.S.principal)},${literal(o.S.membership)},'approve',${literal(s.digest)},${literal(decided)}::timestamptz,${literal(randomUUID())},${literal("d".repeat(64))},NULL,${literal(sha(confirmationPhrase(s.doc)))},${policy.doc.rules.soloOwner.coolDownSeconds});
-UPDATE morrow_work.approvals SET status='approved',revision=2,updated_at=${literal(decided)}::timestamptz,effective_at=${literal(effective)}::timestamptz,expires_at=${literal(expires)}::timestamptz,counted_reviewer_principal_ids=ARRAY[${literal(o.S.principal)}] WHERE id=${literal(s.approvalId)};`,
-      );
-      const row = approvalRow(s.approvalId);
-      return {
-        approvalId: s.approvalId,
-        refs: {
-          proposalRef: proposalRef(s.doc),
-          approvalRef: {
-            organizationId: o.org,
-            workspaceId: o.ws,
-            storeId: null,
-            kind: "approval",
-            id: s.approvalId,
-            revision: 2,
-            digest: ap.approvalRefDigest({
-              organizationId: o.org,
-              workspaceId: o.ws,
-              id: s.approvalId,
-              revision: 2,
-              proposalDigest: s.digest,
-              scopeDigest: row.scope_digest,
-              status: "approved",
-              effectiveAt: row.effective_text,
-              expiresAt: row.expires_text,
-            }),
+        {
+          retry: false,
+          hooks: {
+            async afterQuery(record) {
+              if (armed3 && record.text.includes("cmd_approval_decide(")) {
+                armed3 = false;
+                revocation3 = db.runAsync(removeSql(b), {
+                  applicationName: "approval_lab_ac17_3a",
+                });
+                waited3 = await db.waitForLockWait("application_name='approval_lab_ac17_3a'");
+              }
+            },
           },
         },
-      };
-    };
-    const addMemberSql = (org, name) => `BEGIN; SET LOCAL ROLE morrow_identity_owner;
-${interlock(org)}
-SELECT 1 FROM morrow_identity.organizations WHERE id=${literal(org)} FOR UPDATE;
-INSERT INTO morrow_identity.principals VALUES(${literal("person_" + name)},'human',true);
-INSERT INTO morrow_identity.memberships VALUES(${literal("membership_" + name)},${literal(org)},${literal("person_" + name)},true);
-COMMIT;`;
-    // (a) The solo claim holds the organization FOR UPDATE; the addition waits.
-    const o5a = F.soloOrganization("o17a");
-    const solo5a = soloApproval(o5a);
-    let addition5a,
-      waited5a = null;
-    const soloFirst = await claim(o5a.S, solo5a.refs, {
-      retry: false,
-      afterConsumer: async () => {
-        addition5a = db.runAsync(addMemberSql(o5a.org, "late_o17a"), {
-          applicationName: "approval_lab_ac17_5a",
+      ).catch((e) => ({ error: e?.name }));
+      const revoked3 = await revocation3;
+      check(
+        "AC17:decision_commits_before_revocation" + tag,
+        waited3 === true &&
+          committedFirst.status === "approved" &&
+          revoked3?.ok === true &&
+          decisionsOf(s3.approvalRef.id) === 1,
+        { waited3, committedFirst },
+      );
+      db.sql(restoreSql(b));
+      // (b) The revocation commits while the decision is paused before its command
+      // function: the locked recheck finds the reviewer ineligible (401), nothing written.
+      const s3b = await applied(a, grantsBody(C, F.task("a", ws)));
+      const before3b = snapshot(ws);
+      let armed3b = true;
+      const revokedFirst = await decide(
+        b,
+        s3b.proposalRef.id,
+        decision(s3b.proposalRef.digest),
+        1,
+        {
+          retry: false,
+          hooks: {
+            async beforeQuery(record) {
+              if (armed3b && record.text.includes("cmd_approval_decide(")) {
+                armed3b = false;
+                db.sql(removeSql(b));
+              }
+            },
+          },
+        },
+      ).catch((e) => ({ error: e?.name }));
+      check(
+        "AC17:revocation_before_decision_refused" + tag,
+        ["unauthenticated", "stale_authority"].includes(revokedFirst.code) &&
+          same(snapshot(ws), before3b),
+        revokedFirst,
+      );
+      db.sql(restoreSql(b));
+
+      // (4) A claim against a 0004 revocation of a counted reviewer.
+      // (a) The consumer holds the organization FOR UPDATE; the revocation waits and
+      // applies after the claim commits.
+      const g4 = await applied(a, grantsBody(C, F.task("a", ws)));
+      const dg4 = await decide(b, g4.proposalRef.id, decision(g4.proposalRef.digest), 1);
+      let revocation4,
+        waited4 = null;
+      const claimedFirst = await claim(
+        a,
+        { proposalRef: dg4.proposalRef, approvalRef: dg4.approvalRef },
+        {
+          retry: false,
+          afterConsumer: async () => {
+            revocation4 = db.runAsync(removeSql(b), { applicationName: "approval_lab_ac17_4a" });
+            waited4 = await db.waitForLockWait("application_name='approval_lab_ac17_4a'");
+          },
+        },
+      ).catch((e) => ({ outcome: "error:" + e?.name }));
+      const revoked4 = await revocation4;
+      check(
+        "AC17:claim_commits_before_revocation" + tag,
+        waited4 === true &&
+          claimedFirst.outcome === "applied" &&
+          revoked4?.ok === true &&
+          claimsOf(dg4.approvalRef.id) === 2,
+        { waited4, claimedFirst },
+      );
+      db.sql(restoreSql(b));
+      // (b) The revocation commits after the claim was prepared and before its
+      // consumer runs: the consumer's locked recheck sees the organization revision
+      // move (stale_authority) or the counted reviewer gone (REVIEWER_AUTHORITY_LOST);
+      // either way nothing is written, and a fresh claim is REVIEWER_AUTHORITY_LOST.
+      const g4b = await applied(a, grantsBody(C, F.task("a", ws)));
+      const dg4b = await decide(b, g4b.proposalRef.id, decision(g4b.proposalRef.digest), 1);
+      const refs4b = { proposalRef: dg4b.proposalRef, approvalRef: dg4b.approvalRef };
+      const revokedBeforeClaim = await claim(a, refs4b, {
+        retry: false,
+        beforeConsumer: async () => db.sql(removeSql(b)),
+      }).catch((e) => ({ outcome: "error:" + e?.name }));
+      const freshClaim = await claim(a, refs4b);
+      check(
+        "AC17:revocation_before_claim_refused" + tag,
+        ["stale_authority", "REVIEWER_AUTHORITY_LOST"].includes(revokedBeforeClaim.outcome) &&
+          freshClaim.outcome === "REVIEWER_AUTHORITY_LOST" &&
+          claimsOf(dg4b.approvalRef.id) === 0,
+        { revokedBeforeClaim, freshClaim },
+      );
+      db.sql(restoreSql(b));
+
+      // (5) A solo claim against a member being added under the organization
+      // FOR UPDATE. The effective solo approvals are back-dated owner fixtures (a
+      // decision 590 s ago with the default 300 s cool-down), so no wait is needed.
+      const soloApproval = (o) => {
+        const policy = installPolicy(
+          o.org,
+          o.ws,
+          1,
+          structuredClone(defaults.rules),
+          plusSeconds(dbNow(), -700),
+        );
+        const created = plusSeconds(dbNow(), -600);
+        const s = storedProposal({
+          org: o.org,
+          ws: o.ws,
+          proposer: o.S,
+          taskId: o.task,
+          capabilityId: "governance.grants.revise",
+          targets: grantsTarget(o.org, o.ws, o.S.principal),
+          beneficiaries: [o.S.principal],
+          policy,
+          createdAt: created,
+          // The consumer derives its effect only from these stored parameters.
+          parameters: { beneficiaryPrincipalId: o.S.principal },
         });
-        waited5a = await db.waitForLockWait("application_name='approval_lab_ac17_5a'");
-      },
-    }).catch((e) => ({ outcome: "error:" + e?.name }));
-    const added5a = await addition5a;
-    check(
-      "AC17:solo_claim_commits_before_member_added",
-      waited5a === true &&
-        soloFirst.outcome === "applied" &&
-        added5a?.ok === true &&
-        claimsOf(solo5a.approvalId) === 2,
-      { waited5a, soloFirst },
-    );
-    // (b) The member is added after the claim was prepared and before its consumer
-    // runs: approval_claim projects SOLO_OWNER_STATUS_LOST and rolls back.
-    const o5b = F.soloOrganization("o17b");
-    const solo5b = soloApproval(o5b);
-    const addedFirst = await claim(o5b.S, solo5b.refs, {
-      retry: false,
-      beforeConsumer: async () => db.sql(addMemberSql(o5b.org, "late_o17b")),
-    }).catch((e) => ({ outcome: "error:" + e?.name }));
-    check(
-      "AC17:member_added_before_solo_claim_refused",
-      addedFirst.outcome === "SOLO_OWNER_STATUS_LOST" &&
-        claimsOf(solo5b.approvalId) === 0 &&
-        approvalRow(solo5b.approvalId).status === "approved",
-      addedFirst,
-    );
+        const decided = plusSeconds(created, 10);
+        const effective = plusSeconds(decided, policy.doc.rules.soloOwner.coolDownSeconds);
+        const expires = new Date(
+          Math.min(
+            Date.parse(s.doc.expiresAt),
+            Date.parse(effective) + s.rule.approvedValiditySeconds * 1000,
+          ),
+        ).toISOString();
+        db.workOwner(
+          storedProposalSql(s, o.org, o.ws) +
+            `
+  INSERT INTO morrow_work.approval_decisions VALUES(${literal(o.org)},${literal(o.ws)},${literal(s.approvalId)},1,${literal(o.S.principal)},${literal(o.S.membership)},'approve',${literal(s.digest)},${literal(decided)}::timestamptz,${literal(randomUUID())},${literal("d".repeat(64))},NULL,${literal(sha(confirmationPhrase(s.doc)))},${policy.doc.rules.soloOwner.coolDownSeconds});
+  UPDATE morrow_work.approvals SET status='approved',revision=2,updated_at=${literal(decided)}::timestamptz,effective_at=${literal(effective)}::timestamptz,expires_at=${literal(expires)}::timestamptz,counted_reviewer_principal_ids=ARRAY[${literal(o.S.principal)}] WHERE id=${literal(s.approvalId)};`,
+        );
+        const row = approvalRow(s.approvalId);
+        return {
+          approvalId: s.approvalId,
+          refs: {
+            proposalRef: proposalRef(s.doc),
+            approvalRef: {
+              organizationId: o.org,
+              workspaceId: o.ws,
+              storeId: null,
+              kind: "approval",
+              id: s.approvalId,
+              revision: 2,
+              digest: ap.approvalRefDigest({
+                organizationId: o.org,
+                workspaceId: o.ws,
+                id: s.approvalId,
+                revision: 2,
+                proposalDigest: s.digest,
+                scopeDigest: row.scope_digest,
+                status: "approved",
+                effectiveAt: row.effective_text,
+                expiresAt: row.expires_text,
+              }),
+            },
+          },
+        };
+      };
+      const addMemberSql = (org, name) => `BEGIN; SET LOCAL ROLE morrow_identity_owner;
+  ${interlock(org)}
+  SELECT 1 FROM morrow_identity.organizations WHERE id=${literal(org)} FOR UPDATE;
+  INSERT INTO morrow_identity.principals VALUES(${literal("person_" + name)},'human',true);
+  INSERT INTO morrow_identity.memberships VALUES(${literal("membership_" + name)},${literal(org)},${literal("person_" + name)},true);
+  COMMIT;`;
+      // (a) The solo claim holds the organization FOR UPDATE; the addition waits.
+      const o5a = F.soloOrganization("o17a" + tag);
+      const solo5a = soloApproval(o5a);
+      let addition5a,
+        waited5a = null;
+      const soloFirst = await claim(o5a.S, solo5a.refs, {
+        retry: false,
+        afterConsumer: async () => {
+          addition5a = db.runAsync(addMemberSql(o5a.org, "late_o17a" + tag), {
+            applicationName: "approval_lab_ac17_5a",
+          });
+          waited5a = await db.waitForLockWait("application_name='approval_lab_ac17_5a'");
+        },
+      }).catch((e) => ({ outcome: "error:" + e?.name }));
+      const added5a = await addition5a;
+      check(
+        "AC17:solo_claim_commits_before_member_added" + tag,
+        waited5a === true &&
+          soloFirst.outcome === "applied" &&
+          added5a?.ok === true &&
+          claimsOf(solo5a.approvalId) === 2,
+        { waited5a, soloFirst },
+      );
+      // (b) The member is added after the claim was prepared and before its consumer
+      // runs: approval_claim projects SOLO_OWNER_STATUS_LOST and rolls back.
+      const o5b = F.soloOrganization("o17b" + tag);
+      const solo5b = soloApproval(o5b);
+      const addedFirst = await claim(o5b.S, solo5b.refs, {
+        retry: false,
+        beforeConsumer: async () => db.sql(addMemberSql(o5b.org, "late_o17b" + tag)),
+      }).catch((e) => ({ outcome: "error:" + e?.name }));
+      check(
+        "AC17:member_added_before_solo_claim_refused" + tag,
+        addedFirst.outcome === "SOLO_OWNER_STATUS_LOST" &&
+          claimsOf(solo5b.approvalId) === 0 &&
+          approvalRow(solo5b.approvalId).status === "approved",
+        addedFirst,
+      );
+    }
+    for (let round = 0; round < raceRounds; round++) await races(round === 0 ? "" : "_r" + round);
   });
 
   // ===========================================================================
@@ -2551,6 +3061,9 @@ COMMIT;`;
       "review_capabilities",
       "review_risk_by_effect",
       "review_policy_defaults",
+      // 0015's platform table, whose key 0018 rebuilds and into which it inserts the
+      // approval rows: its append_only and no_truncate triggers survive.
+      "transition_rules",
     ]) {
       const col =
         t === "review_capabilities"
@@ -2559,7 +3072,9 @@ COMMIT;`;
             ? "effect"
             : t === "review_policy_defaults"
               ? "version"
-              : "organization_id";
+              : t === "transition_rules"
+                ? "machine"
+                : "organization_id";
       check(
         "AC19:update_raises_" + t,
         !ownerTry(`UPDATE morrow_work.${t} SET ${col}=${col};`).ok ||
@@ -2939,6 +3454,59 @@ COMMIT;`;
       const r = await submit(atW(A, key), grantsBody(C, F.task("a", ws)));
       check("AC23:" + key + "_" + outcome, r.outcome === outcome, r);
     }
+    // A derivation that stays pending (quorum 2) is a new live pending approval too:
+    // with 998 live rows plus a submitted erase root (999), the first derivation
+    // applies (1,000) and the next is limit_reached in SQL, nothing written.
+    const ws = W("W25");
+    const policy = installPolicy(
+      F.O,
+      ws,
+      1,
+      rulesWith({ irreversible: { requiredApprovals: 2 } }),
+      plusSeconds(now, -3 * 86400),
+    );
+    const live = Array.from({ length: 998 }, () =>
+      storedProposal({
+        org: F.O,
+        ws,
+        proposer: A,
+        taskId: F.task("a", ws),
+        capabilityId: "governance.grants.revise",
+        targets: grantsTarget(F.O, ws, C.principal),
+        beneficiaries: [C.principal],
+        policy,
+        createdAt: now,
+      }),
+    );
+    for (let i = 0; i < live.length; i += 250)
+      db.workOwner(
+        "BEGIN;\n" +
+          live
+            .slice(i, i + 250)
+            .map((s) => storedProposalSql(s, F.O, ws))
+            .join("\n") +
+          "\nCOMMIT;",
+      );
+    const b25 = atW(B, "W25");
+    const root = await applied(atW(A, "W25"), eraseBody(["p1", "p2", "p3"], F.task("a", ws)));
+    const rootView = (await read(b25, root.proposalRef.id)).proposal;
+    const derive = (selection) =>
+      decide(
+        b25,
+        root.proposalRef.id,
+        decision(previewSelection(rootView, selection).proposal.proposalDigest, {
+          selectedTargetIndexes: selection,
+        }),
+        1,
+      );
+    const first = await derive([0]);
+    const beforeFull = snapshot(ws);
+    const full = await derive([1]);
+    check(
+      "AC23:derivation_counts_live_pending",
+      first.status === "pending" && full.code === "limit_reached" && same(snapshot(ws), beforeFull),
+      { first, full },
+    );
   });
 
   // ===========================================================================
@@ -3047,18 +3615,22 @@ async function main() {
   const started = Date.now();
   const print = console.log.bind(console);
   const only = process.env.MORROW_APPROVAL_LAB_ONLY?.split(",") ?? null;
+  const rounds = process.env.MORROW_APPROVAL_RACE_ROUNDS ?? "1";
+  if (!/^([1-9]|1[0-9]|20)$/.test(rounds)) throw Error("MORROW_APPROVAL_RACE_ROUNDS_INVALID");
+  const raceRounds = Number(rounds);
   let result;
   await withWorkDatabase("P06.T01b.approval-records", async (db) => {
     result = await runApprovalRecordsLab(db, {
       only,
       print,
+      raceRounds,
       verbose: process.env.MORROW_APPROVAL_LAB_VERBOSE === "1",
     });
   });
   const report = {
     task: "P06.T01b",
     qualification: "local_postgresql17_network_none_approval_records_acceptance",
-    mode: "pull_request",
+    mode: raceRounds === 1 ? "pull_request" : "race_rounds_" + raceRounds,
     observedAt: new Date().toISOString(),
     durationMs: Date.now() - started,
     checks: result.checks,
@@ -3068,7 +3640,7 @@ async function main() {
       "Cases are isolated by workspace or organization, not by template-database clones (the P03.T04e PR-B harness is not merged).",
       "0004 revocations are reproduced by owner maintenance with the same lock order and effects; back-dated 0004 results are owner-inserted receipt and result pairs.",
       "The routes, the request guard and the workerd lab are PR-2; AC16's S1-S6 and P1-P6 run in lab:tenant-conformance.",
-      "AC17 is the reduced pull-request race set, each race forced once in each order by a hook; no repeated-round race matrix runs yet (open, with the P06.T01a soak, for heavy-faults.yml).",
+      "AC17 forces each race once per round in each order by a hook, including two under-lock variants where the second command waits on the first's locks; the repeated-round matrix (MORROW_APPROVAL_RACE_ROUNDS) runs by hand only and is not yet a heavy-faults.yml leg (open, with the P06.T01a soak).",
     ],
   };
   writeArtifact("labs/approval-records.json", report);

@@ -203,6 +203,7 @@ export function seedApprovalFixtures(db) {
     "W8",
     "W9",
     "W9b",
+    "W9c",
     "W10",
     "W11",
     "W12",
@@ -215,6 +216,7 @@ export function seedApprovalFixtures(db) {
     "W21",
     "W23",
     "W24",
+    "W25",
   ].map((k) => ["ws_ap_" + k.toLowerCase(), k]);
   for (const [ws] of caseWorkspaces) workspace(O, ws);
   workspace(P, "ws_ap_p");

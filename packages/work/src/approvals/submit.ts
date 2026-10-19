@@ -69,6 +69,8 @@ export const approvalCaps = Object.freeze({
   parametersBytes: 32768,
   scopeBytes: 16384,
   candidatesScanned: 1000,
+  /** Derived proposals per family (cmd_approval_decide repeats it under the root lock). */
+  familyDerivations: 25,
 });
 const uuid = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const bytes = (text: string) => new TextEncoder().encode(text).length;

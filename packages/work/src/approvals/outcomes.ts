@@ -96,6 +96,7 @@ const sqlRefusals: ReadonlySet<string> = new Set([
   "limit_reached",
   "DIGEST_MISMATCH",
   "FAMILY_CONFLICT",
+  "APPROVAL_NOT_PENDING",
   "SELF_APPROVAL_DENIED",
   "CONFIRMATION_MISMATCH",
   "CANCEL_NOT_ALLOWED",

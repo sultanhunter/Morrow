@@ -155,7 +155,7 @@
     {
       "sequence": 18,
       "file": "0018.approval-records.sql",
-      "sha256": "18fa9b08a40d7847621649e5da7cf875756a774aeb312c1d73bfdd05374ec33c",
+      "sha256": "6ca433edded2bc8590623bb30a6a51fe30b62215ad57dc0e4f7abdb7fecbadea",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/packets/P06.T01b.md"
     }

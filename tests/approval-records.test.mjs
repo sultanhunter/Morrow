@@ -1002,6 +1002,62 @@ test("migration 0018: P06.T01a rules kept: one event per revision outside approv
   assert.ok(claimed > 0 && projected > claimed);
 });
 
+test("migration 0018: claims bind the consumer's capability and replay only the same claim; withdraw closes claimed families first", () => {
+  const fn = (name, next) =>
+    records.slice(
+      records.indexOf("CREATE FUNCTION morrow_work." + name + "("),
+      records.indexOf(next, records.indexOf("CREATE FUNCTION morrow_work." + name + "(")),
+    );
+  const claim = fn("approval_claim", "\nEND $$;");
+  // The consumer names its capability, and a mismatch is a digest mismatch.
+  assert.match(
+    claim,
+    /p_proposal_id text,p_proposal_digest text,\n p_capability text,p_consumer text,p_consumer_command_id text,p_counted text\)/,
+  );
+  assert.match(claim, /prop\.digest<>p_proposal_digest OR prop\.capability_id<>p_capability/);
+  // Only the same claimant, consumer and command ID reads its claim back; any other
+  // claim in the family is APPROVAL_ALREADY_CLAIMED; both precede the projection.
+  const replay = claim.indexOf("RETURN QUERY SELECT 'replayed'");
+  const already = claim.indexOf("RETURN QUERY SELECT 'APPROVAL_ALREADY_CLAIMED'");
+  const projection = claim.indexOf("morrow_work.approval_projection(");
+  assert.ok(replay > 0 && already > replay && projection > already, [replay, already, projection]);
+  assert.match(
+    claim,
+    /v_claim\.approval_id=a\.id AND v_claim\.principal_id=t\.principal_id AND v_claim\.membership_id=t\.membership_id\n {3}AND v_claim\.consumer=p_consumer AND v_claim\.consumer_command_id=p_consumer_command_id THEN/,
+  );
+  // Withdraw: a claimed family is FAMILY_CONFLICT, before any projection.
+  const withdraw = fn("cmd_approval_withdraw", "\nEND $$;");
+  const closed = withdraw.indexOf("RETURN QUERY SELECT 'FAMILY_CONFLICT'");
+  const projected = withdraw.indexOf("morrow_work.approval_projection(");
+  assert.ok(closed > 0 && projected > closed, [closed, projected]);
+  assert.doesNotMatch(withdraw, /approval_projection\([^;]*EXISTS\(/);
+});
+
+test("migration 0018: decide follows the library's family codes and the published derivation caps", () => {
+  const decideFn = records.slice(
+    records.indexOf("CREATE FUNCTION morrow_work.cmd_approval_decide("),
+    records.indexOf("CREATE FUNCTION morrow_work.cmd_approval_withdraw("),
+  );
+  // An approval while a member is approved is FAMILY_CONFLICT; a root or target no
+  // longer pending is APPROVAL_NOT_PENDING (review.ts foldDecisions' order).
+  const conflict = decideFn.indexOf(
+    "IF p_decision='approve' AND EXISTS(SELECT 1 FROM morrow_work.approvals x",
+  );
+  const notPending = decideFn.indexOf("RETURN QUERY SELECT 'APPROVAL_NOT_PENDING'");
+  assert.ok(conflict > 0 && notPending > conflict, [conflict, notPending]);
+  // A new derivation: at most approvalCaps.familyDerivations per family, and a
+  // pending one counts against the 1,000 live pending approvals.
+  assert.equal(approvalCaps.familyDerivations, 25);
+  assert.match(
+    decideFn,
+    /AND x\.family_root_id=root\.id AND x\.id<>root\.id\)>=25 THEN\n {4}RETURN QUERY SELECT 'limit_reached'/,
+  );
+  assert.match(
+    decideFn,
+    /IF NOT v_solo AND root_approval\.required_approvals>1 AND \(SELECT count\(\*\) FROM morrow_work\.approvals x[^;]*x\.status='pending' AND x\.expires_at>v_now AND x\.review_policy_revision=v_current\)>=1000 THEN/,
+  );
+});
+
 test("laboratory: lab:approval-records runs once, in the pg-core group", () => {
   const pkg = JSON.parse(read("package.json"));
   assert.equal(

@@ -1016,26 +1016,31 @@ BEGIN
 END $$;
 -- The one-use consumption primitive (§5 Claim), called only from a consumer's own
 -- api-executable definer after command_prelude_exclusive, inside the consumer's
--- effect transaction. It locks the family root approval then the approval, reads
--- database time, and requires: the exact approval revision, ApprovalRef digest and
--- proposal digest; no claim in the family; no projected outcome; approved status;
--- effectiveAt reached; the exact counted set still current. It records the claim
--- and approval.claimed, and returns the stored proposal and parameters, from which
--- alone the consumer derives its effect input. Granted to nobody.
+-- effect transaction. The consumer names the capability it executes. It locks the
+-- family root approval then the approval, reads database time, and requires: the
+-- exact approval revision, ApprovalRef digest, proposal digest and capability; no
+-- claim in the family; no projected outcome; approved status; effectiveAt reached;
+-- the exact counted set still current. It records the claim and approval.claimed,
+-- and returns the stored proposal and parameters, from which alone the consumer
+-- derives its effect input. The same claimant, consumer and consumer command ID
+-- reading back its own committed claim (an unknown commit) gets `replayed` and the
+-- same documents, and nothing is written; any other claim in the family is
+-- APPROVAL_ALREADY_CLAIMED. Granted to nobody.
 CREATE FUNCTION morrow_work.approval_claim(p_approval_id text,p_approval_revision text,p_approval_digest text,p_proposal_id text,p_proposal_digest text,
- p_consumer text,p_consumer_command_id text,p_counted text)
+ p_capability text,p_consumer text,p_consumer_command_id text,p_counted text)
 RETURNS TABLE(outcome text,proposal jsonb,parameters jsonb)
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE
  t record; a record; root record; prop record; v_now timestamptz; f record; v_current bigint; v_solo record; v_projection record;
- v_code text; v_parameters text;
+ v_code text; v_parameters text; v_claim record;
 BEGIN
  IF p_approval_id IS NULL OR p_approval_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_approval_revision IS NULL OR p_approval_revision !~ '^[1-9][0-9]{0,15}$'
   OR p_approval_digest IS NULL OR p_approval_digest !~ '^[a-f0-9]{64}$'
   OR p_proposal_id IS NULL OR p_proposal_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_proposal_digest IS NULL OR p_proposal_digest !~ '^[a-f0-9]{64}$'
+  OR p_capability IS NULL OR char_length(p_capability)>128 OR p_capability !~ '^[a-z]+(\.[a-z_]+)+$'
   OR p_consumer IS NULL OR p_consumer !~ '^[a-z][a-z0-9_.]{2,63}$'
   OR p_consumer_command_id IS NULL OR p_consumer_command_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
   OR p_counted IS NULL OR octet_length(p_counted)>4096 OR NOT pg_input_is_valid(p_counted,'jsonb') THEN
@@ -1056,12 +1061,22 @@ BEGIN
  v_now:=morrow_work.db_now();
  SELECT x.id::text AS id,x.digest::text AS digest,x.canonical,x.capability_id,x.task_id::text AS task_id,x.parameters_id::text AS parameters_id INTO prop
   FROM morrow_work.proposals x WHERE x.organization_id=t.organization_id AND x.workspace_id=t.workspace_id AND x.id=a.proposal_id;
- IF a.revision::text<>p_approval_revision OR prop.id<>p_proposal_id OR prop.digest<>p_proposal_digest
+ IF a.revision::text<>p_approval_revision OR prop.id<>p_proposal_id OR prop.digest<>p_proposal_digest OR prop.capability_id<>p_capability
   OR morrow_work.approval_ref_digest(t.organization_id,t.workspace_id,a.id,a.revision,a.proposal_digest,a.scope_digest,a.status,a.effective_at,a.expires_at)<>p_approval_digest THEN
   RETURN QUERY SELECT 'DIGEST_MISMATCH'::text,NULL::jsonb,NULL::jsonb; RETURN;
  END IF;
- IF EXISTS(SELECT 1 FROM morrow_work.approval_claims x WHERE x.organization_id=t.organization_id AND x.workspace_id=t.workspace_id
-   AND x.family_root_id=a.family_root_id) THEN RETURN QUERY SELECT 'APPROVAL_ALREADY_CLAIMED'::text,NULL::jsonb,NULL::jsonb; RETURN; END IF;
+ SELECT x.approval_id::text AS approval_id,x.claimant_principal_id::text AS principal_id,x.claimant_membership_id::text AS membership_id,
+  x.consumer,x.consumer_command_id::text AS consumer_command_id INTO v_claim FROM morrow_work.approval_claims x
+  WHERE x.organization_id=t.organization_id AND x.workspace_id=t.workspace_id AND x.family_root_id=a.family_root_id;
+ IF FOUND THEN
+  IF v_claim.approval_id=a.id AND v_claim.principal_id=t.principal_id AND v_claim.membership_id=t.membership_id
+   AND v_claim.consumer=p_consumer AND v_claim.consumer_command_id=p_consumer_command_id THEN
+   SELECT x.canonical INTO v_parameters FROM morrow_work.proposal_parameters x WHERE x.organization_id=t.organization_id
+    AND x.workspace_id=t.workspace_id AND x.id=prop.parameters_id;
+   RETURN QUERY SELECT 'replayed'::text,prop.canonical::jsonb||jsonb_build_object('proposalDigest',prop.digest),v_parameters::jsonb; RETURN;
+  END IF;
+  RETURN QUERY SELECT 'APPROVAL_ALREADY_CLAIMED'::text,NULL::jsonb,NULL::jsonb; RETURN;
+ END IF;
  SELECT max(x.revision) INTO v_current FROM morrow_work.review_policies x WHERE x.organization_id=t.organization_id AND x.workspace_id=t.workspace_id AND x.id='review-policy';
  SELECT * INTO f FROM morrow_identity.work_ownership_facts(t.organization_id);
  SELECT x.reviewer_principal_id::text AS reviewer,x.decided_at INTO v_solo FROM morrow_work.approval_decisions x
@@ -1446,7 +1461,9 @@ BEGIN
   IF v_projection.code IS NOT NULL THEN RETURN QUERY SELECT v_projection.code,NULL::text; RETURN; END IF;
  END IF;
  -- (i) family: cancel is only the confirming solo reviewer before effectiveAt;
- -- otherwise the root and target are pending and no member is approved.
+ -- otherwise, in the review library's order, an approval while a member is
+ -- approved is FAMILY_CONFLICT, and a root or target no longer pending is
+ -- APPROVAL_NOT_PENDING.
  IF p_decision='cancel_before_effective' THEN
   IF v_solo_decision.reviewer IS DISTINCT FROM p.principal_id OR NOT EXISTS(SELECT 1 FROM morrow_work.approval_decisions x
     WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.approval_id=target.id AND x.solo_phrase_digest IS NOT NULL
@@ -1454,10 +1471,12 @@ BEGIN
    RETURN QUERY SELECT 'CANCEL_NOT_ALLOWED'::text,NULL::text; RETURN;
   END IF;
  ELSE
-  IF root_approval.status<>'pending' OR (NOT v_new AND target.status<>'pending')
-   OR EXISTS(SELECT 1 FROM morrow_work.approvals x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
+  IF p_decision='approve' AND EXISTS(SELECT 1 FROM morrow_work.approvals x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
     AND x.family_root_id=root.id AND x.status='approved') THEN
    RETURN QUERY SELECT 'FAMILY_CONFLICT'::text,NULL::text; RETURN;
+  END IF;
+  IF root_approval.status<>'pending' OR (NOT v_new AND target.status<>'pending') THEN
+   RETURN QUERY SELECT 'APPROVAL_NOT_PENDING'::text,NULL::text; RETURN;
   END IF;
   -- (j) the snapshot's reviewer list, then the conflict set, solo facts and phrase.
   IF (CASE WHEN v_new THEN root_approval.eligible_reviewer_principal_ids ELSE target.eligible_reviewer_principal_ids END) IS NOT NULL
@@ -1485,7 +1504,9 @@ BEGIN
   ELSIF p_phrase_digest IS NOT NULL THEN
    RETURN QUERY SELECT 'CONFIRMATION_MISMATCH'::text,NULL::text; RETURN;
   END IF;
-  -- (k) one decision per reviewer per approval; at most five decisions.
+  -- (k) one decision per reviewer per approval; at most five decisions. A new
+  -- derivation (under the root lock): at most 25 derived proposals per family, and
+  -- one that stays pending counts against the 1,000 live pending approvals.
   IF NOT v_new THEN
    IF EXISTS(SELECT 1 FROM morrow_work.approval_decisions x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
      AND x.approval_id=target.id AND x.reviewer_principal_id=p.principal_id) THEN
@@ -1495,6 +1516,14 @@ BEGIN
     AND x.approval_id=target.id;
    IF v_count>=5 THEN RETURN QUERY SELECT 'limit_reached'::text,NULL::text; RETURN; END IF;
   ELSE
+   IF (SELECT count(*) FROM morrow_work.proposals x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
+     AND x.family_root_id=root.id AND x.id<>root.id)>=25 THEN
+    RETURN QUERY SELECT 'limit_reached'::text,NULL::text; RETURN;
+   END IF;
+   IF NOT v_solo AND root_approval.required_approvals>1 AND (SELECT count(*) FROM morrow_work.approvals x WHERE x.organization_id=p.organization_id
+     AND x.workspace_id=p.workspace_id AND x.status='pending' AND x.expires_at>v_now AND x.review_policy_revision=v_current)>=1000 THEN
+    RETURN QUERY SELECT 'limit_reached'::text,NULL::text; RETURN;
+   END IF;
    v_count:=0;
   END IF;
   -- (l) the earlier approvers the Worker still counts are current under lock.
@@ -1626,11 +1655,14 @@ BEGIN
   AND x.family_root_id=root.id AND x.id<>a.id ORDER BY x.id FOR UPDATE;
  v_now:=morrow_work.db_now();
  IF a.revision::text<>p_expected_revision THEN RETURN QUERY SELECT 'revision_conflict'::text,NULL::text; RETURN; END IF;
+ -- A claimed family is consumed and closed to every command (the first projection
+ -- condition), as in cmd_approval_decide.
+ IF EXISTS(SELECT 1 FROM morrow_work.approval_claims x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
+   AND x.family_root_id=root.id) THEN RETURN QUERY SELECT 'FAMILY_CONFLICT'::text,NULL::text; RETURN; END IF;
  SELECT max(x.revision) INTO v_current FROM morrow_work.review_policies x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
   AND x.id='review-policy';
  SELECT * INTO f FROM morrow_identity.work_ownership_facts(p.organization_id);
- SELECT * INTO v_projection FROM morrow_work.approval_projection(a.status,a.expires_at,a.review_policy_revision,v_current,
-  EXISTS(SELECT 1 FROM morrow_work.approval_claims x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.family_root_id=root.id),
+ SELECT * INTO v_projection FROM morrow_work.approval_projection(a.status,a.expires_at,a.review_policy_revision,v_current,false,
   NULL,NULL,a.quiet_period_seconds,f.owner_principal_id,f.active_human_membership_count,f.last_membership_change_at,v_now);
  IF v_projection.code IS NOT NULL THEN RETURN QUERY SELECT v_projection.code,NULL::text; RETURN; END IF;
  IF a.status<>'pending' THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;
@@ -1688,7 +1720,7 @@ GRANT CREATE ON SCHEMA morrow_work TO morrow_work_command;
 ALTER FUNCTION morrow_work.db_now() OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.command_prelude_exclusive(text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.counted_current(text,text,text,text,jsonb,text[],timestamptz) OWNER TO morrow_work_command;
-ALTER FUNCTION morrow_work.approval_claim(text,text,text,text,text,text,text,text) OWNER TO morrow_work_command;
+ALTER FUNCTION morrow_work.approval_claim(text,text,text,text,text,text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.review_context(text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.review_candidates(text,text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION morrow_work.reviewer_snapshot(text,text) OWNER TO morrow_work_command;

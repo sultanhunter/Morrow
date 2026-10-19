@@ -138,7 +138,10 @@ export const workFunctions = Object.freeze({
     kind: "helper",
     grantees: [],
   },
-  "approval_claim(text,text,text,text,text,text,text,text)": { kind: "helper", grantees: [] },
+  "approval_claim(text,text,text,text,text,text,text,text,text)": {
+    kind: "helper",
+    grantees: [],
+  },
   "policy_bind()": { kind: "trigger", grantees: [] },
   "proposal_bind()": { kind: "trigger", grantees: [] },
   "approval_bind()": { kind: "trigger", grantees: [] },
