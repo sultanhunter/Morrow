@@ -1,6 +1,6 @@
 // P04.T01i PR-B: the pure parts of the staging runner and its CLI (AC06 refusals that
 // need no database, the chain module, the card, the census, the tool parsers, token
-// isolation). PostgreSQL behaviour is qualified by lab:staging-runner (pg-core).
+// isolation). PostgreSQL behaviour is qualified by lab:staging-runner (pg-http).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -29,11 +29,18 @@ import {
   checkAdministrator,
   checkIdentity,
   ledgerDrift,
+  morrowSetRowsQuery,
   neonConnector,
   platformSeedRows,
   provisioningSql,
+  runMigrations,
   scramVerifier,
 } from "../scripts/staging-runner.mjs";
+import {
+  d4Transaction,
+  migrationBody as fixtureMigrationBody,
+  morrowSetRowsSql,
+} from "../scripts/fixtures/createrole-administrator.mjs";
 import {
   cardState,
   censusFindings,
@@ -231,6 +238,97 @@ test("chain: a wrong sha256 on a prerequisite or a migration, or unreviewed byte
     ),
     ["UNREVIEWED_PREREQUISITE_FILE"],
   );
+});
+
+// P04.T01j D4 is the runner's contract (P04.T01j-AC14, P04.md): each entry's statements
+// are d4Transaction's, in order, with the end-of-body role check before RESET ROLE and the
+// ledger INSERT before COMMIT; the body is the fixture's migrationBody for every manifest
+// row; and the catalog check reads every Morrow SET row but the two reviewed ones, as the
+// fixture's morrowSetRowsSql does.
+test("D4: one entry is P04.T01j's d4Transaction, plus the role check and the ledger row", async () => {
+  for (const entry of chain) assert.equal(entry.body, fixtureMigrationBody(entry), entry.file);
+  const entry = chain.find((e) => e.prerequisites.length === 0);
+  const admin = "neondb_owner";
+  const rows = [];
+  const db = fakeDatabase({
+    rules: [
+      [/pg_advisory_(un)?lock/, () => [{ locked: "" }]],
+      [
+        /^SELECT n\.nspowner = r\.oid/,
+        () => [
+          {
+            owned: true,
+            schema_private: true,
+            table_private: true,
+            columns:
+              "sequence:integer,file:text,sha256:text,execute_as:name,prerequisites:jsonb,source_commit:text,applied_at:timestamp with time zone,applied_by:name",
+          },
+        ],
+      ],
+      [/FROM morrow_migrations\.applied ORDER BY sequence$/, () => rows.map((r) => ({ ...r }))],
+      [/nspname <> 'morrow_migrations'/, () => [{ n: 0 }]],
+      [/pg_backend_pid/, () => [{ pid: 4242 }]],
+      [/coalesce\(max\(sequence\), 0\)/, () => [{ n: rows.length, last: 0 }]],
+      [
+        /^SELECT current_user::text AS current_role, session_user/,
+        () => [{ current_role: entry.executeAs, session_role: admin }],
+      ],
+      [
+        /^INSERT INTO morrow_migrations\.applied/,
+        () => {
+          rows.push({
+            sequence: entry.sequence,
+            file: entry.file,
+            sha256: entry.sha256,
+            execute_as: entry.executeAs,
+            prerequisites: "[]",
+            source_commit: "4".repeat(40),
+          });
+          return [];
+        },
+      ],
+    ],
+  });
+  const result = await runMigrations({
+    connect: db.connector().connect,
+    chain: [entry],
+    binding: labBinding,
+    administrator: { name: admin, mode: "createrole" },
+    sourceCommit: "4".repeat(40),
+  });
+  assert.deepEqual(result.applied, [entry.sequence]);
+  const sent = db.statements.map((s) => s.text);
+  const begin = sent.indexOf("BEGIN");
+  const x = entry.executeAs;
+  const d4 = [
+    "BEGIN",
+    `GRANT ${x} TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+    `SET LOCAL ROLE ${x}`,
+    entry.body,
+    "RESET ROLE",
+    `REVOKE ${x} FROM ${admin} GRANTED BY ${admin}`,
+    "COMMIT",
+  ];
+  // The fixture's script is exactly these statements.
+  assert.equal(d4Transaction(entry, admin), d4.map((s, i) => (i === 3 ? s : s + ";\n")).join(""));
+  const transaction = sent.slice(begin, sent.indexOf("COMMIT", begin) + 1);
+  assert.deepEqual(
+    transaction.filter((s) => d4.includes(s)),
+    d4,
+  );
+  const at = (prefix) => transaction.findIndex((s) => s.startsWith(prefix));
+  assert.ok(at("SELECT current_user::text") > transaction.indexOf(entry.body));
+  assert.ok(at("SELECT current_user::text") < transaction.indexOf("RESET ROLE"));
+  assert.ok(at("INSERT INTO morrow_migrations.applied") > at("REVOKE "));
+  assert.ok(at("INSERT INTO morrow_migrations.applied") < transaction.indexOf("COMMIT"));
+  // The catalog check: before the run and after the entry, with the fixture's reading.
+  assert.ok(sent.filter((s) => s === morrowSetRowsQuery).length >= 2);
+  const normalise = (sql) =>
+    sql
+      .replace(/^SELECT count\(\*\)(::int AS n)?/, "SELECT count(*)")
+      .replace(/\s+/g, "")
+      .toLowerCase();
+  assert.equal(normalise(morrowSetRowsQuery), normalise(morrowSetRowsSql));
 });
 
 test("schema head: the ordered (sequence, file, sha256, executeAs, prerequisites) list", () => {

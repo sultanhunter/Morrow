@@ -248,11 +248,14 @@ export function ledgerDrift(rows, chain) {
   return null;
 }
 
-// Every committed runner SET row on a Morrow role (P04.T01j D4): must be zero at rest.
+// The D4 catalog check (P04.T01j D4 and its notes, S5): every SET row whose role or member
+// is a Morrow role, other than the two reviewed work memberships. Zero before the run and
+// after every entry; a REVOKE's exit status is never trusted. The same reading as
+// `morrowSetRowsSql` in scripts/fixtures/createrole-administrator.mjs, which the lab checks.
+export const morrowSetRowsQuery =
+  "SELECT count(*)::int AS n FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles g ON g.oid = m.roleid JOIN pg_catalog.pg_roles u ON u.oid = m.member WHERE m.set_option AND (g.rolname LIKE 'morrow\\_%' OR u.rolname LIKE 'morrow\\_%') AND (g.rolname, u.rolname) NOT IN (('morrow_work_api', 'morrow_api_worker'), ('morrow_work_command', 'morrow_work_owner'))";
 export async function runnerSetRows(connection) {
-  const [row] = await connection.query(
-    "SELECT count(*)::int AS n FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles g ON g.oid = m.roleid WHERE g.rolname LIKE 'morrow\\_%' AND m.set_option AND m.member = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = session_user)",
-  );
+  const [row] = await connection.query(morrowSetRowsQuery);
   return row.n;
 }
 async function assertNoSetRows(connection) {

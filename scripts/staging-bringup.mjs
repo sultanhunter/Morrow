@@ -36,7 +36,7 @@ const section = async (problems, label, fn) => {
 };
 
 // ---------------------------------------------------------------------------
-// preflight. `p`: {staging, cardState, bindingSet, files (inspected), directory
+// preflight. `p`: {staging, cardState, bindingSet, challengeSet, files (inspected), directory
 // (inspected), github, root, pins (package.json devDependencies)}.
 export const pinnedTools = Object.freeze({
   wrangler: "node_modules/wrangler/package.json",
@@ -59,6 +59,9 @@ export async function preflight(ctx, p) {
     branchId: neon.branch_id !== null,
     regionId: neon.region_id !== null,
     binding: p.bindingSet,
+    // P05.T01ab: the api's LOGIN_CHALLENGE_JSON and the broker's
+    // TURNSTILE_CONFIGURATION_JSON (PR-D identifiers; gate 4 checks them).
+    challenge: p.challengeSet,
   };
   for (const [name, set] of Object.entries(identifiers))
     if (!set) pending.push("identifier:" + name);

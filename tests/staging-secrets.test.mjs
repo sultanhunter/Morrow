@@ -20,7 +20,8 @@ import {
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { main } from "../scripts/staging.mjs";
+import { captureConsole, edgeRateLimits, loadWranglerApi } from "../scripts/edge.mjs";
+import { identityConstants, main, workerConfigs } from "../scripts/staging.mjs";
 import { createTools, toolJson } from "../scripts/staging-tools.mjs";
 import { syntheticCredential, syntheticGithubCredential } from "../scripts/staging-token.mjs";
 import {
@@ -119,6 +120,36 @@ async function status({
     planted.cleanup();
   }
 }
+
+// AC02 after P05.T01ab (D1, ADR-0019 items 6 and 8): the broker's exact secret set is
+// `brokerRequiredSecrets`, ten names: WORKOS_API_KEY, TURNSTILE_SECRET_KEY and the eight
+// role passwords. secrets-status, gate 6 and the first-deploy file all use that set, and
+// it is the broker's wrangler `secrets.required` in every environment. ADR-0022's
+// Anthropic, Shopify and Stripe credentials join only with their milestones. The staging
+// api keeps P05.T01ab's three limiters and no required secret.
+test("AC02: the broker's ten secret names are brokerRequiredSecrets and wrangler's secrets.required", async () => {
+  const constants = await identityConstants();
+  assert.equal(constants.roles.length, 8);
+  const expected = [
+    "WORKOS_API_KEY",
+    "TURNSTILE_SECRET_KEY",
+    ...constants.roles.map((role) => constants.passwordSecret(role)),
+  ].sort();
+  assert.equal(constants.brokerSecrets.length, 10);
+  assert.deepEqual(constants.brokerSecrets, expected);
+  const { unstable_readConfig } = await loadWranglerApi();
+  const resolved = (worker, env) =>
+    captureConsole(() => unstable_readConfig({ config: workerConfigs[worker], env }, {})).value;
+  for (const env of [undefined, "staging", "production"])
+    assert.deepEqual(
+      [...resolved("broker", env).secrets.required].sort(),
+      constants.brokerSecrets,
+      String(env),
+    );
+  const api = resolved("api", "staging");
+  assert.deepEqual(api.ratelimits, edgeRateLimits("staging"));
+  assert.deepEqual(api.secrets.required, []);
+});
 
 test("AC08: a healthy staging reports presence, mode, format and age, and exits 0", async () => {
   const { code, report, text } = await status();

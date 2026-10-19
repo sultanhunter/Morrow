@@ -1,10 +1,16 @@
-// lab:staging-runner (P04.T01i AC06, the SQL half of AC07, and the hosted-shape replay;
-// pg-core group). One isolated, network-none PostgreSQL 17.11 container. The staging
-// CLI (`node scripts/staging.mjs migrate | provision-roles`) runs through its real code
-// with fake git and gh, a planted temporary HOME and a psql connector in place of the
-// Neon driver. Superuser mode applies the real chain; the createrole mode of the real
-// chain arrives with P04.T01j (ADR-0020), and until then the P04.T01j D4 SET-row protocol
-// is exercised here on synthetic chains under a non-superuser CREATEROLE administrator.
+// lab:staging-runner (P04.T01i AC06, the SQL half of AC07, the hosted-shape replay, and
+// P04.T01j-AC14; pg-http group). Two isolated, network-none PostgreSQL 17.11 containers.
+// The staging CLI (`node scripts/staging.mjs migrate | provision-roles`) runs through its
+// real code with fake git and gh, a planted temporary HOME and a psql connector in place
+// of the Neon driver.
+// - Container 1, superuser mode: the real chain with the hosted-shape replay, the
+//   refusals, drift, and the D4 SET-row protocol on synthetic chains (kill before COMMIT,
+//   lost acknowledgement, partial prerequisite, concurrency, a role changed by dynamic SQL).
+// - Container 2, createrole mode (ADR-0020, P04.T01j D4 and AC14): the real chain applied
+//   by a Neon-shaped non-superuser CREATEROLE `neondb_owner` (scripts/fixtures/
+//   createrole-administrator.mjs), the hosted-shape provisioning, then the last entry
+//   through a kill before COMMIT and a lost acknowledgement, a superseded digest, and a
+//   planted SET row; zero Morrow SET rows and closed memberships at rest.
 // No provider, credential, host port or merchant data; every secret is a synthetic marker.
 import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -25,6 +31,13 @@ import { loadMigrationChain, schemaHead } from "./migration-chain.mjs";
 import { main } from "./staging.mjs";
 import { runMigrations, runnerSetRows, scramVerifier } from "./staging-runner.mjs";
 import { psqlConnector } from "./fixtures/staging-psql-connection.mjs";
+import {
+  createAdministrator,
+  morrowMembershipCensusSql,
+  morrowRoles,
+  morrowSetRows,
+  psqlAs,
+} from "./fixtures/createrole-administrator.mjs";
 import {
   approvedCard,
   fakeContext,
@@ -725,6 +738,192 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
   };
 });
 
+// --- Container 2: the real chain as a Neon-shaped CREATEROLE administrator (ADR-0020;
+// P04.T01j D4 and AC14). Roles are cluster-wide, so this needs a fresh cluster.
+const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ id, sql }) => {
+  createAdministrator(id, { bypassrls: false });
+  const db = (text) => sql(text, "morrow");
+  const neon = Object.freeze({ name: "neondb_owner", mode: "createrole" });
+  const chain = loadMigrationChain();
+  const last = chain.at(-1).sequence;
+  const planted = home({
+    "neon-owner-url": ownerUrl("neondb_owner"),
+    "workos-api-key": markers.workos,
+    "turnstile-secret": markers.turnstile,
+  });
+  const connector = psqlConnector(id, { user: "neondb_owner", database: "morrow" });
+  const fakes = fakeTools();
+  const base = await fakeContext({
+    home: planted.home,
+    tools: fakes.tools,
+    administrator: neon,
+    database: () => connector,
+  });
+  const run = async (argv) => {
+    const before = { out: base.out.length, err: base.err.length };
+    const code = await main(argv, base.ctx);
+    return {
+      code,
+      out: parse(base.out.slice(before.out)),
+      err: parse(base.err.slice(before.err)),
+    };
+  };
+  const ledger = () =>
+    db(
+      "SELECT coalesce(string_agg(sequence::text, ',' ORDER BY sequence), '') FROM morrow_migrations.applied;",
+    );
+  const through = (n) =>
+    chain
+      .filter((e) => e.sequence <= n)
+      .map((e) => e.sequence)
+      .join(",");
+  // The ADR-0020 closed set, read by the identity owner, as the conformance suite does.
+  const closed = () =>
+    psqlAs(
+      id,
+      "SET ROLE morrow_identity_owner;\nSELECT morrow_identity.morrow_memberships_closed();",
+    ) === "t";
+  const recorded = () =>
+    psqlAs(
+      id,
+      "SET ROLE morrow_identity_owner;\nSELECT r.rolname FROM pg_catalog.pg_roles r WHERE r.oid = morrow_identity.recorded_administrator();",
+    );
+  const census = () =>
+    psqlAs(id, morrowMembershipCensusSql + ";")
+      .split("\n")
+      .filter(Boolean);
+  const direct = (hooks) => ({
+    connect: psqlConnector(id, { user: "neondb_owner", database: "morrow", hooks }).connect,
+    chain,
+    binding: labBinding,
+    administrator: neon,
+    sourceCommit: "4".repeat(40),
+    reconcileWaitMs: 15000,
+  });
+
+  // The chain up to the entry before the last, through the CLI, in createrole mode.
+  base.ctx.chain = () => chain.filter((e) => e.sequence < last);
+  const first = await run(["migrate"]);
+  check(
+    "createrole_applies_the_chain_in_order_with_d4",
+    first.code === 0 &&
+      JSON.stringify(first.out[0]?.applied) ===
+        JSON.stringify(chain.filter((e) => e.sequence < last).map((e) => e.sequence)) &&
+      first.out[0].prerequisites.every((p) => p.outcome === "applied"),
+  );
+  check("createrole_leaves_no_morrow_set_row", morrowSetRows(id) === 0);
+  check("createrole_memberships_closed_and_recorded", closed() && recorded() === "neondb_owner");
+  check(
+    "createrole_ledger_owned_and_written_by_the_administrator",
+    db(
+      "SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid='morrow_migrations.applied'::regclass;",
+    ) === "neondb_owner" &&
+      db("SELECT string_agg(DISTINCT applied_by::text, ',') FROM morrow_migrations.applied;") ===
+        "neondb_owner",
+  );
+
+  // Hosted-shape provisioning by the CREATEROLE administrator (it holds ADMIN on each
+  // role through its creation row), then the replay of the last entry.
+  const provision = await run(["provision-roles", "--first"]);
+  check(
+    "createrole_provisions_roles_in_hosted_shape",
+    provision.code === 0 &&
+      provision.out[0]?.controls === "verified" &&
+      db(
+        `SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (${base.constants.roles.map((r) => `'${r}'`).join(",")}) AND rolcanlogin AND rolconnlimit = 10;`,
+      ) === "8",
+  );
+  check("createrole_provisioning_keeps_memberships_closed", closed() && morrowSetRows(id) === 0);
+
+  // AC14: the last entry through a kill before COMMIT, then a lost acknowledgement.
+  base.ctx.chain = () => chain;
+  const kill = commitFault(last, "kill");
+  const killed = await rejection(runMigrations(direct(kill.hooks)));
+  check(
+    "createrole_kill_before_commit_leaves_no_set_row",
+    kill.hit.count === 1 &&
+      killed?.code === "MIGRATION_NOT_COMMITTED" &&
+      killed.details.sequence === last &&
+      ledger() === through(last - 1) &&
+      morrowSetRows(id) === 0 &&
+      closed(),
+  );
+  const lose = commitFault(last, "lose");
+  const lost = await runMigrations(direct(lose.hooks));
+  check(
+    "createrole_lost_ack_reconciled_with_no_set_row",
+    lose.hit.count === 1 &&
+      JSON.stringify(lost.reconciled) === JSON.stringify([last]) &&
+      lost.applied.length === 0 &&
+      ledger() === through(last) &&
+      morrowSetRows(id) === 0 &&
+      closed(),
+  );
+
+  // AC14: a ledger row with the superseded 0005 digest is drift.
+  const superseded = "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92";
+  const row5 = db("SELECT sha256 FROM morrow_migrations.applied WHERE sequence=5;");
+  check("createrole_ledger_holds_the_rebaselined_0005", row5 !== superseded);
+  db(`UPDATE morrow_migrations.applied SET sha256='${superseded}' WHERE sequence=5;`);
+  const drift = await rejection(runMigrations(direct()));
+  check(
+    "createrole_superseded_digest_is_ledger_drift",
+    drift?.code === "MIGRATION_LEDGER_DRIFT" &&
+      drift.details.reason === "digest" &&
+      drift.details.sequence === 5,
+  );
+  db(`UPDATE morrow_migrations.applied SET sha256='${row5}' WHERE sequence=5;`);
+
+  // The catalog check, not a REVOKE's exit status: a committed runner SET row (the
+  // administrator's own grant, as a D4 transaction would make it) stops the run before
+  // any entry, and the runner and the fixture count it alike.
+  const asAdministrator = (text) => psqlAs(id, text, { user: "neondb_owner" });
+  asAdministrator(
+    "GRANT morrow_identity_owner TO neondb_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;",
+  );
+  const planted1 = await rejection(runMigrations(direct()));
+  const counted = await (async () => {
+    const c = await psqlConnector(id, { user: "neondb_owner", database: "morrow" }).connect();
+    try {
+      return await runnerSetRows(c);
+    } finally {
+      await c.close();
+    }
+  })();
+  check(
+    "createrole_planted_set_row_stops_the_run",
+    planted1?.code === "MIGRATION_SET_ROW_PERSISTED" && counted === 1 && morrowSetRows(id) === 1,
+  );
+  asAdministrator("REVOKE morrow_identity_owner FROM neondb_owner GRANTED BY neondb_owner;");
+
+  // A rerun through the CLI is a no-op and publishes the full head.
+  const again = await run(["migrate"]);
+  check(
+    "createrole_rerun_is_a_no_op",
+    again.code === 0 &&
+      again.out[0].applied.length === 0 &&
+      again.out[0].reconciled.length === 0 &&
+      again.out[0].ledger === chain.length &&
+      fakes.state.variables.STAGING_SCHEMA_HEAD === schemaHead(chain),
+  );
+  // At rest: no SET row on or by a Morrow role, the closed set holds, and the census is
+  // the creation rows plus the two reviewed work memberships (P04.T01j AC04).
+  check(
+    "createrole_at_rest_census_is_creation_rows_and_reviewed_rows",
+    morrowSetRows(id) === 0 && closed() && census().length === morrowRoles.length + 2,
+  );
+  const secretsSeen = [markers.ownerPassword, markers.workos, markers.turnstile];
+  check(
+    "createrole_no_marker_in_statements_or_output",
+    secretsSeen.every(
+      (m) =>
+        connector.statements.every((s) => !s.includes(m)) &&
+        ![...base.out, ...base.err].some((line) => line.includes(m)),
+    ),
+  );
+  return { administrator: "neondb_owner", entries: chain.length, faultEntry: last };
+});
+
 for (const planted of homes) planted.cleanup();
 for (const root of temporary) rmSync(root, { recursive: true, force: true });
 const reportText =
@@ -733,11 +932,11 @@ const reportText =
       task: "P04.T01i",
       observed_at: new Date().toISOString(),
       scope:
-        "Isolated PostgreSQL 17.11 (network none): the staging migration runner in superuser mode over the real chain with the hosted-shape replay, hosted-shape role provisioning with SCRAM verifiers, and the P04.T01j D4 SET-row protocol on synthetic chains under a non-superuser CREATEROLE administrator. Fake git and gh; no provider, credential or network.",
+        "Two isolated PostgreSQL 17.11 containers (network none): the staging migration runner in superuser mode over the real chain with the hosted-shape replay, hosted-shape role provisioning with SCRAM verifiers, and the P04.T01j D4 SET-row protocol on synthetic chains; then the real chain applied by a Neon-shaped non-superuser CREATEROLE administrator with D4, hosted-shape provisioning, a kill before COMMIT, a lost acknowledgement, a superseded digest and a planted SET row (P04.T01j-AC14). Fake git and gh; no provider, credential or network.",
       ...report,
+      createrole: createroleReport,
       checks,
       limitations: [
-        "The createrole mode over the real chain waits for P04.T01j (ADR-0020): migrations 0005-0015 refuse a non-superuser administrator until they are rebaselined.",
         "The Neon serverless driver, WebSocket transport, Neon's own administrator and catalog, and the GitHub and Cloudflare tools are not exercised; Phase B qualifies them under the staging card.",
       ],
     },

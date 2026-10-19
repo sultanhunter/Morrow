@@ -248,6 +248,8 @@ async function deployWorker(ctx, api, { config, name, sha, secretsFile, previous
 //   brokerSecrets   the broker's exact secret names (gate 6)
 //   schemaHead      the committed chain's head (gate 3)
 //   loginDigest     () -> the committed login configuration's digest (gate 4)
+//   challenge       () -> the checked P05.T01ab challenge configuration (gate 4): the
+//                   api's LOGIN_CHALLENGE_JSON and the broker's TURNSTILE_CONFIGURATION_JSON
 //   preconditions   () -> {sourceCommit} (local: clean tree, HEAD = origin/main, green
 //                   foundation on that sha)
 //   firstFiles      () -> {broker, api} absolute paths of the first-deploy secret files,
@@ -364,8 +366,19 @@ async function deployBody(ctx, plan, report, run) {
     });
   }
   report.gates.schema = "ok";
-  // Gate 4: the login configuration digest.
+  // Gate 4: the login configuration digest, and the sign-in guard's configuration
+  // (P05.T01ab). Without both challenge vars, in agreement, the api would map to
+  // API_ENV_ABUSE_GUARD_MISSING and the broker's health would be false, so nothing is
+  // uploaded.
   const digest = await plan.loginDigest();
+  try {
+    await plan.challenge();
+    report.gates.challenge = "ok";
+  } catch (error) {
+    report.gates.challenge =
+      error?.code === "STAGING_CHALLENGE_CONFIGURATION_MISSING" ? "missing" : "invalid";
+    throw error;
+  }
   let firstFiles = null;
   if (plan.mode === "first") {
     firstFiles = await plan.firstFiles(digest);

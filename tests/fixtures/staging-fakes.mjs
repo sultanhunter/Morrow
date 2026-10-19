@@ -520,6 +520,9 @@ export const labBinding = Object.freeze({
   database: "morrow",
 });
 
+// A synthetic Turnstile site key in the broker's `^0x` format (never a real or dummy key).
+export const labSiteKey = "0x" + "labsitekey".repeat(2);
+
 // A context for scripts/staging.mjs over fakes. Every seam is replaceable through
 // `overrides`; nothing reaches a real tool, provider or the operator's HOME.
 export async function fakeContext({
@@ -532,13 +535,20 @@ export async function fakeContext({
   staging,
   binding = labBinding,
   loginConfiguration = null,
+  // P05.T01ab's two challenge vars (D1): a valid pair for the fake origin by default.
+  // Each key replaces one value; null removes it. `api` is LOGIN_CHALLENGE_JSON; `broker`
+  // is TURNSTILE_CONFIGURATION_JSON; `brokerLogin` and `brokerBinding` are the broker's
+  // copies of the api's LOGIN_CONFIGURATION_JSON and MORROW_DATABASE_BINDING_JSON.
+  challengeVars = {},
   administrator = { name: "neondb_owner", mode: "createrole" },
   now = Date.parse("2026-10-20T12:00:00Z"),
   environment = {},
   fetch = null,
   overrides = {},
 }) {
-  const { identityConstants } = await import("../../scripts/staging.mjs");
+  const { checkChallengeConfiguration, identityConstants, stagingChallengeActions } = await import(
+    "../../scripts/staging.mjs"
+  );
   const { stagingFileSpecs, credentialDirectory } = await import("../../scripts/staging-files.mjs");
   const { loadMigrationChain } = await import("../../scripts/migration-chain.mjs");
   const { readFileSync } = await import("node:fs");
@@ -562,6 +572,36 @@ export async function fakeContext({
       branch_id: binding?.branchId ?? null,
     },
   };
+  const bindingJson = binding === null ? null : JSON.stringify(binding);
+  let challengeHost = null;
+  try {
+    challengeHost = new URL(stagingValue.cloudflare?.origin).hostname;
+  } catch {
+    challengeHost = null;
+  }
+  const pick = (key, fallback) =>
+    challengeVars[key] === undefined ? fallback : challengeVars[key];
+  const challengeJson = pick(
+    "api",
+    JSON.stringify({
+      schemaVersion: 1,
+      provider: "turnstile",
+      siteKey: labSiteKey,
+      actions: stagingChallengeActions,
+    }),
+  );
+  const brokerVars = Object.freeze({
+    turnstileJson: pick(
+      "broker",
+      JSON.stringify({
+        schemaVersion: 1,
+        hostname: challengeHost,
+        actions: stagingChallengeActions,
+      }),
+    ),
+    loginConfigurationJson: pick("brokerLogin", loginConfiguration),
+    bindingJson: pick("brokerBinding", bindingJson),
+  });
   const out = [];
   const err = [];
   const reports = [];
@@ -612,8 +652,10 @@ export async function fakeContext({
     config: async () => ({
       staging: stagingValue,
       card,
-      bindingJson: binding === null ? null : JSON.stringify(binding),
+      bindingJson,
       loginConfigurationJson: loginConfiguration,
+      challengeJson,
+      broker: brokerVars,
     }),
     chain: () => loadMigrationChain({ root: repoRoot }),
     tools,
@@ -631,6 +673,7 @@ export async function fakeContext({
     async loginConfiguration() {
       throw new StagingError("STAGING_LOGIN_CONFIGURATION_MISSING");
     },
+    challengeConfiguration: (loaded) => checkChallengeConfiguration(loaded),
     async checkKeyring() {},
     ...overrides,
   };

@@ -1,7 +1,9 @@
 // The one migration chain (P04.T01i D3, ADR-0019 item 12, ADR-0020 item 5). It reads
 // migrations/manifest.json, verifies every migration's sha256 and every pinned
-// prerequisite's sha256 (the manifest's `prerequisites` rows, P03.T04e), and yields
-// frozen entries {sequence, file, sha256, text, body, executeAs, prerequisites}. The
+// prerequisite's sha256 (the manifest's `prerequisites` rows, P03.T04e), applies the
+// single-transaction runner contract of scripts/migration-sql.mjs (P04.T01j D4) to every
+// file, and yields frozen entries {sequence, file, sha256, text, body, executeAs,
+// prerequisites}. The
 // staging runner (scripts/staging.mjs), the delivery checks and the tenant-conformance
 // harness all read the chain through this module; nobody keeps a private file map.
 //

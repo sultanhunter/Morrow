@@ -984,3 +984,24 @@ test("the createrole administrator lab is in pg-core and runs once in CI", () =>
   );
   assert.equal(scriptsReachedByCi().get("lab:createrole-administrator"), 1);
 });
+
+// P04.T01i D3 (AC06, and P04.T01j-AC14 now that P04.T01j has merged): the staging runner
+// lab runs in the pg-http group only, which the `http` leg of the postgres matrix runs
+// once. `core` is the leg closest to its 14-minute cap, so the lab is not there.
+test("the staging runner lab is in pg-http and runs once in CI, on the http leg", () => {
+  const holding = Object.entries(scripts)
+    .filter(([name]) => name.startsWith("lab:group:"))
+    .filter(([, text]) => rootScriptsRun(text).includes("lab:staging-runner"))
+    .map(([name]) => name);
+  assert.deepEqual(holding, ["lab:group:pg-http"]);
+  assert.equal(scripts["lab:staging-runner"], "node --import tsx scripts/staging-runner-lab.mjs");
+  assert.equal(scriptsReachedByCi().get("lab:staging-runner"), 1);
+  const postgres = ci.jobs.postgres;
+  assert.deepEqual(postgres.strategy.matrix.leg, ["core", "http", "linking", "work"]);
+  const runs = steps(postgres).filter((s) => s.run === "npm run lab:group:pg-http");
+  assert.deepEqual(
+    runs.map((s) => s.if),
+    ["matrix.leg == 'http'"],
+  );
+  assert.ok(ci.jobs.foundation.needs.includes("postgres"));
+});

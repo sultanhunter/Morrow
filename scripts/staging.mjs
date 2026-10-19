@@ -90,9 +90,10 @@ export async function identityConstants() {
   return Object.freeze({
     roles: [...protocol.brokerNeonRoleNames],
     passwordSecret: protocol.brokerPasswordSecret,
-    // The broker's ten names (D1): brokerRequiredSecrets plus the Turnstile secret,
-    // which P05.T01ab adds to brokerRequiredSecrets itself.
-    brokerSecrets: [...new Set([...protocol.brokerRequiredSecrets, "TURNSTILE_SECRET_KEY"])].sort(),
+    // The broker's ten names (D1, AC02): WORKOS_API_KEY, P05.T01ab's TURNSTILE_SECRET_KEY
+    // and the eight role passwords. brokerRequiredSecrets is the one list: the wrangler
+    // `secrets.required` of every environment, verify-config and gate 6 all use it.
+    brokerSecrets: [...protocol.brokerRequiredSecrets].sort(),
     parseBinding: protocol.parseBrokerDatabaseBinding,
   });
 }
@@ -102,23 +103,105 @@ export async function loadStagingConfiguration(root) {
   const staging = read("infra/environments/staging.json");
   const card = read("docs/decisions/approvals/staging-card.json");
   const { unstable_readConfig } = await loadWranglerApi();
-  let vars;
-  try {
-    vars = captureConsole(() =>
-      unstable_readConfig({ config: join(root, workerConfigs.api), env: "staging" }, {}),
+  const varsOf = (worker) =>
+    captureConsole(() =>
+      unstable_readConfig({ config: join(root, workerConfigs[worker]), env: "staging" }, {}),
     ).value.vars;
+  let vars, brokerVars;
+  try {
+    vars = varsOf("api");
+    brokerVars = varsOf("broker");
   } catch {
     throw new StagingError("STAGING_CONFIGURATION_UNREADABLE");
   }
+  const text = (record, name) => (typeof record?.[name] === "string" ? record[name] : null);
   return Object.freeze({
     staging,
     card,
-    bindingJson:
-      typeof vars?.MORROW_DATABASE_BINDING_JSON === "string"
-        ? vars.MORROW_DATABASE_BINDING_JSON
-        : null,
-    loginConfigurationJson:
-      typeof vars?.LOGIN_CONFIGURATION_JSON === "string" ? vars.LOGIN_CONFIGURATION_JSON : null,
+    bindingJson: text(vars, "MORROW_DATABASE_BINDING_JSON"),
+    loginConfigurationJson: text(vars, "LOGIN_CONFIGURATION_JSON"),
+    // P05.T01ab (D1, D5): the api's challenge configuration and the broker's own vars.
+    // Both JSON vars name reviewed identifiers (the site key, the workers.dev host), so
+    // they arrive with PR-D; until then they are null and a deploy stops before upload.
+    challengeJson: text(vars, "LOGIN_CHALLENGE_JSON"),
+    broker: Object.freeze({
+      turnstileJson: text(brokerVars, "TURNSTILE_CONFIGURATION_JSON"),
+      loginConfigurationJson: text(brokerVars, "LOGIN_CONFIGURATION_JSON"),
+      bindingJson: text(brokerVars, "MORROW_DATABASE_BINDING_JSON"),
+    }),
+  });
+}
+
+// The actions of D1's LOGIN_CHALLENGE_JSON, in this order (P05.T01ab).
+export const stagingChallengeActions = Object.freeze({
+  login: "account_login",
+  signup: "organization_signup",
+});
+const plainRecord = (value) =>
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  Object.getPrototypeOf(value) === Object.prototype;
+// P05.T01ab (D1, D5; ADR-0019 items 6-8): the api's LOGIN_CHALLENGE_JSON and the broker's
+// TURNSTILE_CONFIGURATION_JSON must both be present and agree before anything is uploaded.
+// Without them the api maps to API_ENV_ABUSE_GUARD_MISSING and the broker's health is
+// false, so a deploy would only fail later, at the health gate. The checks are the
+// runtime's own parsers plus D1's cross-Worker rules: the same actions (D1's values, in
+// the same order), the Turnstile hostname equal to the origin's, and the broker's login
+// configuration and database binding byte-equal to the api's. Fixed codes only.
+export async function checkChallengeConfiguration(loaded) {
+  const broker = loaded?.broker ?? {};
+  if (typeof loaded?.challengeJson !== "string" || typeof broker.turnstileJson !== "string")
+    throw new StagingError("STAGING_CHALLENGE_CONFIGURATION_MISSING");
+  const invalid = (reason) =>
+    new StagingError("STAGING_CHALLENGE_CONFIGURATION_INVALID", { reason });
+  const { tsImport } = await import("tsx/esm/api");
+  const { parseLoginChallengeConfiguration } = await tsImport(
+    "../apps/api/src/abuse-guard.ts",
+    import.meta.url,
+  );
+  const { parseChallengeActions } = await tsImport(
+    "../packages/identity/src/broker-protocol.ts",
+    import.meta.url,
+  );
+  let challenge, apiActions, turnstile, brokerActions;
+  try {
+    challenge = parseLoginChallengeConfiguration(loaded.challengeJson);
+    apiActions = JSON.stringify(JSON.parse(loaded.challengeJson).actions);
+  } catch {
+    throw invalid("api");
+  }
+  try {
+    turnstile = JSON.parse(broker.turnstileJson);
+    if (
+      !plainRecord(turnstile) ||
+      Object.keys(turnstile).sort().join() !== "actions,hostname,schemaVersion" ||
+      turnstile.schemaVersion !== 1
+    )
+      throw Error("shape");
+    parseChallengeActions(turnstile.actions);
+    brokerActions = JSON.stringify(turnstile.actions);
+  } catch {
+    throw invalid("broker");
+  }
+  if (apiActions !== brokerActions || apiActions !== JSON.stringify(stagingChallengeActions))
+    throw invalid("actions");
+  let host = null;
+  try {
+    host = new URL(loaded.staging?.cloudflare?.origin).hostname;
+  } catch {
+    host = null;
+  }
+  if (host === null || turnstile.hostname !== host) throw invalid("hostname");
+  if (
+    broker.loginConfigurationJson !== loaded.loginConfigurationJson ||
+    broker.bindingJson !== loaded.bindingJson
+  )
+    throw invalid("shared_vars");
+  return Object.freeze({
+    provider: challenge.provider,
+    hostname: host,
+    actions: challenge.actions,
   });
 }
 
@@ -724,6 +807,7 @@ command("deploy", {
       checkpoint: writeReport,
       preconditions: () => mainPreconditions(ctx, github.repository),
       loginDigest: async () => (await ctx.loginConfiguration(config)).configurationDigest,
+      challenge: () => ctx.challengeConfiguration(config),
       // The two owner files: exact key sets (their format checks), and the keyring bound
       // to the committed login configuration's digest.
       async firstFiles(digest) {
@@ -830,6 +914,7 @@ command("preflight", {
       card: config.card,
       cardState: cardState(config.card, ctx.now()),
       bindingSet: config.bindingJson !== null,
+      challengeSet: config.challengeJson != null && config.broker?.turnstileJson != null,
       directory: inspectDirectory(ctx.directory),
       files: Object.keys(specs)
         .filter((name) => specs[name].required)
@@ -1050,6 +1135,7 @@ export function defaultContext() {
         throw new StagingError("STAGING_LOGIN_CONFIGURATION_INVALID");
       return parsed;
     },
+    challengeConfiguration: (loaded) => checkChallengeConfiguration(loaded),
     async checkKeyring(keyringJson, digest) {
       const { tsImport } = await import("tsx/esm/api");
       const { parseManagedLoginKeyring } = await tsImport(

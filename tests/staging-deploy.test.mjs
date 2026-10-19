@@ -7,7 +7,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { committedCsp, commands, identityConstants, main } from "../scripts/staging.mjs";
+import {
+  checkChallengeConfiguration,
+  committedCsp,
+  commands,
+  identityConstants,
+  main,
+  stagingChallengeActions,
+} from "../scripts/staging.mjs";
 import { loadMigrationChain, schemaHead } from "../scripts/migration-chain.mjs";
 import { deployOrder, killChecks } from "../scripts/staging-deploy.mjs";
 import {
@@ -25,6 +32,7 @@ import {
   fakeSite,
   fakeTools,
   fakeUuid,
+  labSiteKey,
   plantedHome,
   scriptOf,
 } from "./fixtures/staging-fakes.mjs";
@@ -58,6 +66,7 @@ async function world({
   card,
   files,
   staging,
+  challengeVars,
   overrides = {},
   tools = {},
 } = {}) {
@@ -96,6 +105,7 @@ async function world({
     card,
     staging,
     environment,
+    challengeVars,
     fetch: site.fetch,
     overrides: {
       loginConfiguration: async () => ({ configurationDigest: digest, origin }),
@@ -152,6 +162,7 @@ test("AC04: a green CI deploy runs the gates, then broker, orchestrator, connect
       dryRun: "previous_step",
       schema: "ok",
       configuration: "ok",
+      challenge: "ok",
       brokerSecrets: "ok",
       census: "ok",
       flagBeforeBroker: "on",
@@ -293,6 +304,136 @@ test("AC04: a mismatched schema head, digest or broker secret name, or a failed 
       w.planted.cleanup();
     }
   }
+});
+
+// P05.T01ab reconciliation (D1, D5; ADR-0019 items 6-8): gate 4 also requires the api's
+// LOGIN_CHALLENGE_JSON and the broker's TURNSTILE_CONFIGURATION_JSON, in agreement, so no
+// api is uploaded that would map to API_ENV_ABUSE_GUARD_MISSING and no broker whose health
+// is false. Both carry PR-D identifiers, so today's committed staging config stops here.
+test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and deploys nothing", async () => {
+  const host = new URL(origin).hostname;
+  const apiVar = (patch = {}) =>
+    JSON.stringify({
+      schemaVersion: 1,
+      provider: "turnstile",
+      siteKey: labSiteKey,
+      actions: stagingChallengeActions,
+      ...patch,
+    });
+  const brokerVar = (patch = {}) =>
+    JSON.stringify({
+      schemaVersion: 1,
+      hostname: host,
+      actions: stagingChallengeActions,
+      ...patch,
+    });
+  for (const [label, challengeVars, code, reason] of [
+    ["api var absent", { api: null }, "STAGING_CHALLENGE_CONFIGURATION_MISSING"],
+    ["broker var absent", { broker: null }, "STAGING_CHALLENGE_CONFIGURATION_MISSING"],
+    [
+      "dummy site key",
+      { api: apiVar({ siteKey: "1x00000000000000000000AA" }) },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "api",
+    ],
+    [
+      "api provider none",
+      { api: JSON.stringify({ provider: "none" }) },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "api",
+    ],
+    [
+      "broker extra key",
+      { broker: brokerVar({ secret: "x" }) },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "broker",
+    ],
+    [
+      "actions differ",
+      {
+        broker: brokerVar({ actions: { login: "account_login", signup: "other_signup" } }),
+      },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "actions",
+    ],
+    [
+      "actions reordered",
+      {
+        api: apiVar({ actions: { signup: "organization_signup", login: "account_login" } }),
+        broker: brokerVar({ actions: { signup: "organization_signup", login: "account_login" } }),
+      },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "actions",
+    ],
+    [
+      "not D1's actions",
+      {
+        api: apiVar({ actions: { login: "a_login", signup: "a_signup" } }),
+        broker: brokerVar({ actions: { login: "a_login", signup: "a_signup" } }),
+      },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "actions",
+    ],
+    [
+      "hostname is not the origin's",
+      { broker: brokerVar({ hostname: "morrow-staging-broker.lab.workers.dev" }) },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "hostname",
+    ],
+    [
+      "broker login configuration differs",
+      { brokerLogin: '{"schemaVersion":1}' },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "shared_vars",
+    ],
+    [
+      "broker binding differs",
+      { brokerBinding: '{"schemaVersion":1}' },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "shared_vars",
+    ],
+  ]) {
+    for (const ci of [false, true]) {
+      const w = await world({
+        challengeVars,
+        ...(ci ? { environment: ciEnvironment() } : {}),
+      });
+      try {
+        const { code: exit, result } = await w.run(ci ? ["deploy", "--ci"] : ["deploy"]);
+        assert.equal(exit, 1, label);
+        assert.equal(result.outcome, "failed", label);
+        assert.equal(result.code, code, label);
+        assert.equal(result.failure?.reason, reason, label);
+        assert.equal(
+          result.gates.challenge,
+          code.endsWith("_MISSING") ? "missing" : "invalid",
+          label,
+        );
+        assert.equal(result.gates.brokerSecrets, undefined, label);
+        assert.deepEqual(wranglerCalls(w), [], label);
+      } finally {
+        w.planted.cleanup();
+      }
+    }
+  }
+  // The consistent pair passes gate 4 and the deploy goes on (the other AC04 cases).
+  const ok = await world({ environment: ciEnvironment() });
+  try {
+    const { result } = await ok.run(["deploy", "--ci"]);
+    assert.equal(result.gates.challenge, "ok");
+    assert.equal(result.outcome, "deployed");
+  } finally {
+    ok.planted.cleanup();
+  }
+  // The committed staging configuration has no challenge vars until PR-D.
+  const committed = await import("../scripts/staging.mjs").then((m) =>
+    m.loadStagingConfiguration(process.cwd()),
+  );
+  assert.equal(committed.challengeJson, null);
+  assert.equal(committed.broker.turnstileJson, null);
+  await assert.rejects(checkChallengeConfiguration(committed), {
+    code: "STAGING_CHALLENGE_CONFIGURATION_MISSING",
+  });
 });
 
 test("AC04: a local deploy refuses a HEAD that is not origin/main, a missing or failed foundation, a dirty tree", async () => {
@@ -1243,6 +1384,7 @@ test("preflight: reports pending owner steps without values and blocks on the ca
     assert.equal(code, 0, JSON.stringify(result));
     assert.deepEqual(result.blocking, []);
     assert.ok(result.pending.includes("identifier:rootBranchId"));
+    assert.ok(!result.pending.includes("identifier:challenge"));
     assert.ok(!result.pending.some((p) => p.startsWith("file:")));
     assert.deepEqual(result.tools.wrangler, { pinned: "4.116.0", installed: "4.116.0" });
     assert.equal(result.tools.neonctl.installed, result.tools.neonctl.pinned);
@@ -1252,6 +1394,16 @@ test("preflight: reports pending owner steps without values and blocks on the ca
     for (const value of Object.values(files())) assert.ok(!text.includes(value));
   } finally {
     w.planted.cleanup();
+  }
+  // P05.T01ab: without the broker's TURNSTILE_CONFIGURATION_JSON (a PR-D identifier) the
+  // challenge configuration is a pending owner step, not a blocker.
+  const unset = await world({ files: files(), challengeVars: { broker: null } });
+  try {
+    const { code, result } = await unset.run(["preflight"]);
+    assert.equal(code, 0);
+    assert.ok(result.pending.includes("identifier:challenge"));
+  } finally {
+    unset.planted.cleanup();
   }
   const blocked = await world({
     card: { ...approvedCard(), status: "proposed", approvedOn: null, expiresOn: null },

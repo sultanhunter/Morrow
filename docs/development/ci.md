@@ -127,7 +127,7 @@ For a pull request with two full runs and its merge of an up-to-date head: about
 - **Trigger.** It runs on `workflow_run` of "Morrow foundation" (`completed`, `main`). The job runs only for a successful `push` run on `main` from this repository. It uses the `staging` environment and `concurrency: deploy-staging` without cancelling a running deploy.
 - **Steps without the token.** `node scripts/staging.mjs ci-gates` checks the card, gate 1 (the sha is still the `main` tip) and gate 2 (`STAGING_DEPLOY_ENABLED` is `1` and the workflow is enabled). A stop is a successful no-op. Gate 5 runs `npm run build && npm run edge:check && npm run edge:dry-run`.
 - **The token step.** Only this step's env holds `CLOUDFLARE_API_TOKEN`. It runs `node scripts/staging.mjs deploy --ci`, which:
-  - checks gates 3, 4 and 6, and runs the account census, which stops the run on any finding before an upload;
+  - checks gates 3, 4 (the login configuration digest and the P05.T01ab challenge configuration) and 6, and runs the account census, which stops the run on any finding before an upload;
   - deploys broker, orchestrator, connector and api, re-reading the flag just before every upload and just after the api deploy;
   - checks `/healthz`, then runs the unattended smoke;
   - runs the census again on every path that started an upload, including a failed, unknown or killed one.
