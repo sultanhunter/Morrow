@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { read } from "../scripts/foundation.mjs";
 import {
+  catalogueVersionDigest,
+  inspectModelPolicy,
   validateModelPolicy,
   validateProviders,
   inspectReadiness,
@@ -89,9 +91,43 @@ for (const [name, change, expected] of [
     assert.match(validate(r, b).join("\n"), expected);
   });
 
-test("the model catalogue is closed, adapter-backed and never loses money on a selection", () =>
+test("the model catalogue is adapter-backed, within its margin and never loses money on a selection", () =>
   assert.deepEqual(validateModelPolicy(modelPolicy, registry), []));
-const model = (p, key) => p.catalogue.models.find((m) => m.key === key);
+test("the catalogue derives each selection's worst case and run limit", () => {
+  const [v1] = inspectModelPolicy(modelPolicy, registry).versions;
+  const row = (model, effort) =>
+    v1.selections.find((s) => s.model === model && s.effort === effort);
+  assert.equal(v1.status, "proposed");
+  assert.deepEqual(row("claude_sonnet_5_5", "low"), {
+    model: "claude_sonnet_5_5",
+    effort: "low",
+    credits_per_product: 1,
+    worst_case_usd: "0.132000",
+    products_per_run: 25,
+  });
+  assert.equal(row("claude_opus_5_5", "high").worst_case_usd, "0.704000");
+  assert.equal(row("claude_opus_5_5", "high").products_per_run, 9);
+  assert.equal(row("claude_sonnet_5_5", "high").products_per_run, 19);
+});
+// Catalogue v1 is proposed until the owner confirms it; publishing pins its digest.
+const latest = (p) => p.catalogue.versions.at(-1);
+const model = (p, key) => latest(p).models.find((m) => m.key === key);
+const publish = (p) => {
+  const entry = latest(p);
+  entry.status = "active";
+  entry.owner_confirmation = "synthetic owner confirmation";
+  entry.effective_from = "2026-10-20";
+  p.catalogue.active_version = entry.version;
+  p.catalogue.published_digests[String(entry.version)] = catalogueVersionDigest(entry);
+};
+test("a published catalogue version passes with its pinned digest, and retiring it keeps the digest", () => {
+  const p = structuredClone(modelPolicy);
+  publish(p);
+  assert.deepEqual(validateModelPolicy(p, registry), []);
+  latest(p).status = "retired";
+  p.catalogue.active_version = null;
+  assert.deepEqual(validateModelPolicy(p, registry), []);
+});
 for (const [name, change, expected] of [
   ["automatic fallback", (p) => (p.gateway.automatic_fallback = true), /fallback/],
   ["client model strings", (p) => (p.gateway.client_model_strings = "accepted"), /client model/],
@@ -123,7 +159,7 @@ for (const [name, change, expected] of [
   ],
   [
     "a duplicate model key",
-    (p) => p.catalogue.models.push(structuredClone(p.catalogue.models[0])),
+    (p) => latest(p).models.push(structuredClone(latest(p).models[0])),
     /invalid model key/,
   ],
   [
@@ -133,23 +169,23 @@ for (const [name, change, expected] of [
   ],
   [
     "a thinking budget",
-    (p) => (p.catalogue.efforts[0].request.thinking = { type: "enabled", budget_tokens: 2048 }),
+    (p) => (latest(p).efforts[0].request.thinking = { type: "enabled", budget_tokens: 2048 }),
     /adaptive thinking/,
   ],
   [
     "disabled thinking",
-    (p) => (p.catalogue.efforts[0].request.thinking = { type: "disabled" }),
+    (p) => (latest(p).efforts[0].request.thinking = { type: "disabled" }),
     /adaptive thinking/,
   ],
   [
     "an effort mapped to another level",
-    (p) => (p.catalogue.efforts[0].request.output_config.effort = "high"),
+    (p) => (latest(p).efforts[0].request.output_config.effort = "high"),
     /its own level/,
   ],
-  ["an unknown effort", (p) => (p.catalogue.efforts[0].key = "turbo"), /invalid effort/],
+  ["an unknown effort", (p) => (latest(p).efforts[0].key = "turbo"), /invalid effort/],
   [
     "an output cap above the model's limit",
-    (p) => (p.catalogue.efforts[2].max_output_tokens = 200000),
+    (p) => (latest(p).efforts[2].max_output_tokens = 200000),
     /output limit/,
   ],
   [
@@ -160,28 +196,142 @@ for (const [name, change, expected] of [
   [
     "Opus at high effort for one credit",
     (p) => (model(p, "claude_opus_5_5").credits_per_product.high = 1),
-    /cost more than its credits earn/,
+    /claude_opus_5_5 at high worst case exceeds 0\.90 of its credits' net revenue/,
   ],
   [
     "a cheaper plan",
-    (p) => (p.catalogue.economics.plan_price_usd = "29"),
-    /claude_sonnet_5_5 at low can cost more/,
+    (p) => (latest(p).economics.plan_price_usd = "29"),
+    /claude_sonnet_5_5 at low worst case exceeds/,
   ],
   [
     "a larger input cap",
-    (p) => (p.catalogue.limits.max_input_tokens_per_call = 20000),
-    /cost more than its credits earn/,
+    (p) => (latest(p).limits.max_input_tokens_per_call = 20000),
+    /worst case exceeds/,
+  ],
+  [
+    "a low-effort output cap that leaves no margin",
+    (p) => (latest(p).efforts[0].max_output_tokens = 6000),
+    /claude_sonnet_5_5 at low worst case exceeds 0\.90/,
+  ],
+  [
+    "economics without Stripe Tax",
+    (p) => delete latest(p).economics.tax_fee_rate,
+    /missing plan economics/,
+  ],
+  ["no margin", (p) => (latest(p).economics.max_worst_case_share = "1.5"), /no valid margin/],
+  [
+    "an input cap above Haiku's price tier",
+    (p) => (latest(p).limits.max_input_tokens_per_call = 150000),
+    /claude_haiku_5_5: the input cap leaves its price tier/,
+  ],
+  [
+    "a model with no declared price tier",
+    (p) => delete model(p, "claude_haiku_5_5").rate_tier_max_input_tokens,
+    /no declared price tier/,
+  ],
+  [
+    "a run cap below one Opus high product",
+    (p) => (latest(p).limits.run_cost_cap_usd = "0.5"),
+    /claude_opus_5_5 at high does not fit one product in the run cap/,
+  ],
+  [
+    "a daily cap below the run cap",
+    (p) => (latest(p).limits.workspace_daily_cost_cap_usd = "5"),
+    /daily cap is below the run cap/,
+  ],
+  ["a missing USD cap", (p) => delete latest(p).limits.run_cost_cap_usd, /missing USD caps/],
+  [
+    "a missing product limit",
+    (p) => delete latest(p).limits.max_products_per_run,
+    /per-run limits/,
+  ],
+  [
+    "a failure breaker beyond the run",
+    (p) => (latest(p).limits.max_consecutive_failed_products = 26),
+    /failure breaker/,
+  ],
+  [
+    "an unrecovered-cost cap above what the margin leaves",
+    (p) => (latest(p).limits.workspace_period_unrecovered_cost_cap_usd = "10"),
+    /unrecovered-cost cap exceeds/,
   ],
   [
     "a default that costs two credits",
-    (p) => (p.catalogue.default_selection.effort = "medium"),
+    (p) => (latest(p).default_selection.effort = "medium"),
     /default selection/,
   ],
   [
     "a default outside the catalogue",
-    (p) => (p.catalogue.default_selection.model = "gpt_6_1_sol"),
+    (p) => (latest(p).default_selection.model = "gpt_6_1_sol"),
     /default selection/,
   ],
+  [
+    "a member ceiling below the default",
+    (p) => (latest(p).default_member_credit_ceiling = 0),
+    /default member ceiling/,
+  ],
+  [
+    "an edited published version",
+    (p) => {
+      publish(p);
+      model(p, "claude_opus_5_5").credits_per_product.low = 3;
+    },
+    /version 1 changed since it was published/,
+  ],
+  [
+    "a published version without a pinned digest",
+    (p) => {
+      publish(p);
+      p.catalogue.published_digests = {};
+    },
+    /published without a pinned digest/,
+  ],
+  [
+    "a published version without the owner's confirmation",
+    (p) => {
+      latest(p).owner_confirmation = "";
+      publish(p);
+      latest(p).owner_confirmation = "";
+    },
+    /without the owner's confirmation/,
+  ],
+  [
+    "a pinned digest on a proposed version",
+    (p) => (p.catalogue.published_digests["1"] = catalogueVersionDigest(latest(p))),
+    /proposed version 1 has a pinned digest/,
+  ],
+  [
+    "a removed published version",
+    (p) => (p.catalogue.published_digests["2"] = "0".repeat(64)),
+    /published version 2 was removed/,
+  ],
+  [
+    "two active versions",
+    (p) => {
+      publish(p);
+      const next = structuredClone(latest(p));
+      next.version = 2;
+      p.catalogue.versions.push(next);
+      p.catalogue.published_digests["2"] = catalogueVersionDigest(next);
+    },
+    /at most one active/,
+  ],
+  [
+    "a proposed version before an active one",
+    (p) => {
+      const next = structuredClone(latest(p));
+      next.version = 2;
+      p.catalogue.versions.push(next);
+      publish(p);
+    },
+    /at most one active/,
+  ],
+  [
+    "an active_version that names no active version",
+    (p) => (p.catalogue.active_version = 1),
+    /active_version/,
+  ],
+  ["a version out of sequence", (p) => (latest(p).version = 3), /out of sequence/],
 ])
   test(`model catalogue rejects ${name}`, () => {
     const p = structuredClone(modelPolicy);

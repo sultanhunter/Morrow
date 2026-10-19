@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { root, read, sha } from "./foundation.mjs";
-import { validateModelPolicy, validateProviders } from "./provider-checks.mjs";
+import { inspectModelPolicy, validateProviders } from "./provider-checks.mjs";
 import { estimateStackComponents } from "./stack-cost.mjs";
 import { writeArtifact } from "./artifacts.mjs";
 const registry = read("docs/decisions/providers.json"),
@@ -51,13 +51,17 @@ if (
 )
   errors.push("Selected runtime provider registry drift");
 const model = read("docs/decisions/model-policy.json");
-errors.push(...validateModelPolicy(model, registry));
+const modelCatalogue = inspectModelPolicy(model, registry);
+errors.push(...modelCatalogue.errors);
 const report = {
   task: "P01.T03",
   generated_at: new Date().toISOString(),
   providers: registry.providers.length,
   bindings: bindings.bindings.length,
-  model_catalogue_version: model.catalogue?.version ?? null,
+  model_catalogue: {
+    active_version: model.catalogue?.active_version ?? null,
+    versions: modelCatalogue.versions,
+  },
   scope:
     "Documentary feasibility and selected design consistency only; no real provider, runtime, billing, merchant or production qualification.",
   input_digests: Object.fromEntries(

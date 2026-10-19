@@ -25,7 +25,7 @@ Material decisions (ADR-0002) are recorded here before dependent implementation.
 | [0019](ADR-0019-staging-environment.md) | Staging environment: workers.dev origin, continuous deploy and sign-in abuse protection | Accepted 2026-10-19; item 5 exception for third-party GitHub access (2026-10-19) |
 | [0020](ADR-0020-non-superuser-administrator.md) | Non-superuser migration administrator: one recorded administrator, a closed membership set and a one-time rebaseline of migrations 0005–0015 | Accepted 2026-10-19 |
 | [0021](ADR-0021-mvp-fast-track.md) | MVP fast track: launch one listings slice on a production-grade foundation | Accepted 2026-10-19 |
-| [0022](ADR-0022-mvp-contracts.md) | MVP contracts: listings capability, Shopify, Claude and Stripe usage, model catalogue and selection, broker custody, background tenancy and retention | Accepted 2026-10-19; amends ADR-0007 items 1 and 4 and the 2026-10-14 model provider selection (Anthropic Claude replaces OpenAI for text models) |
+| [0022](ADR-0022-mvp-contracts.md) | MVP contracts: listings capability, Shopify, Claude and Stripe usage, model catalogue and selection, broker custody, background tenancy and retention | Accepted 2026-10-19, except the model catalogue values of items 11 and 16 (Proposed, pending owner confirmation); amends ADR-0007 items 1 and 4 and the 2026-10-14 model provider selection (Anthropic Claude replaces OpenAI for text models) |
 
 ADR-0012 and ADR-0013 record how the P03.T04c overhaul implemented ADR-0002; earlier drafts of them used the numbers 0001, 0007 and 0008.
 

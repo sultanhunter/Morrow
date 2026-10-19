@@ -1,5 +1,7 @@
 // Documentary gate checks for P01. This module cannot enable a connector or
 // authorize dispatch. Later services must verify actual current evidence.
+import { sha } from "./foundation.mjs";
+
 export function validateProviders(registry, bindings, catalogue, dependencies, sources) {
   const errors = [];
   const fail = (message) => errors.push(message);
@@ -90,24 +92,211 @@ export function validateProviders(registry, bindings, catalogue, dependencies, s
   return errors;
 }
 
-// The model catalogue (ADR-0022 items 10, 11 and 16): closed keys, adaptive
-// thinking only, a broker-held adapter for every provider, and no selection
-// whose worst case per product exceeds the revenue of the credits it costs.
+// The model catalogue (ADR-0022 items 10, 11 and 16): opaque keys, adaptive
+// thinking only, a broker-held adapter for every provider, caps that fit at
+// least one product, no selection whose worst case per product exceeds the
+// margin of its credits' net revenue, an unrecovered-cost cap within the rest,
+// and published versions that never change.
 const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
+const VERSION_STATUSES = ["proposed", "active", "retired"];
+const KEY = /^[a-z][a-z0-9_]{0,39}$/;
 const DECIMAL = /^(0|[1-9][0-9]{0,8})(\.[0-9]{1,6})?$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const isDecimal = (value) => typeof value === "string" && DECIMAL.test(value);
+const isCount = (value) => Number.isInteger(value) && value >= 1;
 // A decimal string scaled to an integer number of 10^-places units.
 const scaled = (text, places) => {
   const [whole, fraction = ""] = text.split(".");
   return BigInt(whole) * 10n ** BigInt(places) + BigInt(fraction.padEnd(places, "0") || "0");
 };
+// 10^-12 USD units as a decimal string with six places, for reports.
+const usd = (units) => {
+  const micros = units / 1_000_000n;
+  return `${micros / 1_000_000n}.${String(micros % 1_000_000n).padStart(6, "0")}`;
+};
+const canonicalJson = (value) =>
+  Array.isArray(value)
+    ? `[${value.map(canonicalJson).join(",")}]`
+    : value !== null && typeof value === "object"
+      ? `{${Object.keys(value)
+          .sort()
+          .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+          .join(",")}}`
+      : JSON.stringify(value);
 
-export function validateModelPolicy(policy, registry) {
+// The digest pinned for a published catalogue version. It leaves out `status`,
+// so retiring a version keeps its digest, and covers everything else.
+export function catalogueVersionDigest(entry) {
+  const { status: _status, ...content } = entry;
+  return sha(canonicalJson(content));
+}
+
+function inspectCatalogueVersion(entry, adapters) {
+  const errors = [];
+  const selections = [];
+  const fail = (message) => errors.push(`model catalogue v${entry.version}: ${message}`);
+  const efforts = new Map();
+  for (const effort of entry.efforts ?? []) {
+    const request = effort.request ?? {};
+    if (!EFFORT_LEVELS.includes(effort.key) || efforts.has(effort.key))
+      fail(`invalid effort ${effort.key}`);
+    if (
+      JSON.stringify(Object.keys(request).sort()) !== '["output_config","thinking"]' ||
+      JSON.stringify(request.thinking) !== '{"type":"adaptive"}' ||
+      JSON.stringify(request.output_config) !== JSON.stringify({ effort: effort.key }) ||
+      !isCount(effort.max_output_tokens)
+    )
+      fail(`effort ${effort.key} must map to adaptive thinking and its own level`);
+    efforts.set(effort.key, effort);
+  }
+  if (efforts.size === 0) fail("no effort levels");
+
+  const limits = entry.limits ?? {};
+  const inputCap = limits.max_input_tokens_per_call;
+  const attempts = limits.max_attempts_per_product;
+  const maxProducts = limits.max_products_per_run;
+  if (!isCount(inputCap) || !isCount(attempts) || !isCount(maxProducts))
+    fail("missing per-call or per-run limits");
+  if (
+    !isCount(limits.max_consecutive_failed_products) ||
+    limits.max_consecutive_failed_products > maxProducts
+  )
+    fail("the failure breaker must stop a run within its product limit");
+  const caps = [
+    limits.run_cost_cap_usd,
+    limits.workspace_daily_cost_cap_usd,
+    limits.workspace_period_unrecovered_cost_cap_usd,
+  ];
+  let runCap = null;
+  let unrecoveredCap = null;
+  if (!caps.every(isDecimal) || caps.some((cap) => scaled(cap, 12) === 0n))
+    fail("missing USD caps");
+  else {
+    runCap = scaled(limits.run_cost_cap_usd, 12);
+    unrecoveredCap = scaled(limits.workspace_period_unrecovered_cost_cap_usd, 12);
+    if (scaled(limits.workspace_daily_cost_cap_usd, 12) < runCap)
+      fail("the daily cap is below the run cap");
+  }
+
+  const economics = entry.economics ?? {};
+  const planCredits = economics.plan_credits;
+  const rates = [
+    economics.card_fee_rate,
+    economics.billing_fee_rate,
+    economics.tax_fee_rate,
+    economics.international_card_fee_rate,
+  ];
+  let netRevenue = null;
+  let sharePpm = null;
+  if (
+    !isCount(planCredits) ||
+    ![
+      economics.plan_price_usd,
+      economics.card_fee_fixed_usd,
+      economics.max_worst_case_share,
+      ...rates,
+    ].every(isDecimal)
+  )
+    fail("missing plan economics");
+  else {
+    // Units of 10^-12 USD; fee rates and the margin share in parts per million.
+    const price = scaled(economics.plan_price_usd, 12);
+    const feePpm = rates.reduce((sum, rate) => sum + scaled(rate, 6), 0n);
+    netRevenue = price - (price * feePpm) / 1_000_000n - scaled(economics.card_fee_fixed_usd, 12);
+    sharePpm = scaled(economics.max_worst_case_share, 6);
+    if (netRevenue <= 0n || sharePpm === 0n || sharePpm > 1_000_000n) {
+      fail("plan economics leave no revenue or no valid margin");
+      netRevenue = null;
+    } else if (
+      unrecoveredCap !== null &&
+      unrecoveredCap * 1_000_000n > netRevenue * (1_000_000n - sharePpm)
+    )
+      fail("the unrecovered-cost cap exceeds the plan revenue the margin leaves");
+  }
+
+  const models = new Map();
+  for (const model of entry.models ?? []) {
+    const price = model.rates_usd_per_million_tokens ?? {};
+    const credits = model.credits_per_product ?? {};
+    if (!KEY.test(model.key ?? "") || models.has(model.key)) fail(`invalid model key ${model.key}`);
+    models.set(model.key, model);
+    if (!adapters.has(model.provider))
+      fail(`${model.key} has no broker adapter for ${model.provider}`);
+    if (
+      typeof model.provider_model_id !== "string" ||
+      !/^[a-z0-9][a-z0-9.-]{0,63}$/.test(model.provider_model_id) ||
+      /latest/.test(model.provider_model_id)
+    )
+      fail(`${model.key} has an unpinned provider model`);
+    const priced = isDecimal(price.input) && isDecimal(price.output);
+    if (!priced) fail(`${model.key} has no rates`);
+    // The catalogue prices one tier; null means one price for the whole context.
+    const tier = model.rate_tier_max_input_tokens;
+    if (tier !== null && !isCount(tier)) fail(`${model.key} has no declared price tier`);
+    else if (isCount(tier) && isCount(inputCap) && inputCap > tier)
+      fail(`${model.key}: the input cap leaves its price tier`);
+    if (Object.keys(credits).some((key) => !efforts.has(key)))
+      fail(`${model.key} prices an uncatalogued effort`);
+    for (const [key, effort] of efforts) {
+      const units = credits[key];
+      if (!isCount(units)) {
+        fail(`${model.key} at ${key} has no credit multiplier`);
+        continue;
+      }
+      if (
+        !Number.isInteger(model.max_output_tokens) ||
+        effort.max_output_tokens > model.max_output_tokens
+      )
+        fail(`${model.key} at ${key} exceeds the model's output limit`);
+      if (!priced || !isCount(inputCap) || !isCount(attempts) || !isCount(effort.max_output_tokens))
+        continue;
+      // Per-token prices in 10^-12 USD: a rate per million tokens scaled by 10^6.
+      const worst =
+        BigInt(attempts) *
+        (BigInt(inputCap) * scaled(price.input, 6) +
+          BigInt(effort.max_output_tokens) * scaled(price.output, 6));
+      if (
+        netRevenue !== null &&
+        worst * BigInt(planCredits) * 1_000_000n > BigInt(units) * netRevenue * sharePpm
+      )
+        fail(
+          `${model.key} at ${key} worst case exceeds ${economics.max_worst_case_share} of its credits' net revenue`,
+        );
+      let productsPerRun = null;
+      if (runCap !== null && isCount(maxProducts)) {
+        const fit = worst === 0n ? BigInt(maxProducts) : runCap / worst;
+        productsPerRun = Number(fit < BigInt(maxProducts) ? fit : BigInt(maxProducts));
+        if (productsPerRun < 1)
+          fail(`${model.key} at ${key} does not fit one product in the run cap`);
+      }
+      selections.push({
+        model: model.key,
+        effort: key,
+        credits_per_product: units,
+        worst_case_usd: usd(worst),
+        products_per_run: productsPerRun,
+      });
+    }
+  }
+  if (models.size === 0) fail("no models");
+  const preset = entry.default_selection ?? {};
+  const presetCredits = models.get(preset.model)?.credits_per_product?.[preset.effort];
+  if (presetCredits !== 1) fail("the default selection must exist and cost one credit");
+  if (
+    !isCount(entry.default_member_credit_ceiling) ||
+    entry.default_member_credit_ceiling < (presetCredits ?? 1)
+  )
+    fail("the default member ceiling must admit the default selection");
+  return { errors, selections };
+}
+
+export function inspectModelPolicy(policy, registry) {
   const errors = [];
   const fail = (message) => errors.push(message);
   const gateway = policy.gateway ?? {};
   const data = policy.data_policy ?? {};
   const catalogue = policy.catalogue ?? {};
-  if (policy.schema_version !== 2) fail("model policy: unsupported schema version");
+  if (policy.schema_version !== 3) fail("model policy: unsupported schema version");
   if (
     gateway.automatic_fallback !== false ||
     gateway.provider_side_fallback !== false ||
@@ -135,101 +324,53 @@ export function validateModelPolicy(policy, registry) {
       fail(`model policy: invalid adapter ${adapter.provider}`);
     adapters.add(adapter.provider);
   }
-  if (!Number.isInteger(catalogue.version) || catalogue.version < 1)
-    fail("model catalogue: unversioned");
-  const efforts = new Map();
-  for (const effort of catalogue.efforts ?? []) {
-    const request = effort.request ?? {};
-    if (!EFFORT_LEVELS.includes(effort.key) || efforts.has(effort.key))
-      fail(`model catalogue: invalid effort ${effort.key}`);
-    if (
-      JSON.stringify(Object.keys(request).sort()) !== '["output_config","thinking"]' ||
-      JSON.stringify(request.thinking) !== '{"type":"adaptive"}' ||
-      JSON.stringify(request.output_config) !== JSON.stringify({ effort: effort.key }) ||
-      !Number.isInteger(effort.max_output_tokens) ||
-      effort.max_output_tokens < 1
-    )
-      fail(`model catalogue: effort ${effort.key} must map to adaptive thinking and its own level`);
-    efforts.set(effort.key, effort);
-  }
-  if (efforts.size === 0) fail("model catalogue: no effort levels");
-  const limits = catalogue.limits ?? {};
-  const inputCap = limits.max_input_tokens_per_call;
-  const attempts = limits.max_attempts_per_product;
-  if (!Number.isInteger(inputCap) || inputCap < 1 || !Number.isInteger(attempts) || attempts < 1)
-    fail("model catalogue: missing per-call limits");
-  const economics = catalogue.economics ?? {};
-  const planCredits = economics.plan_credits;
-  const amounts = [
-    economics.plan_price_usd,
-    economics.card_fee_rate,
-    economics.card_fee_fixed_usd,
-    economics.billing_fee_rate,
-  ];
-  let netRevenue = null;
-  if (
-    !Number.isInteger(planCredits) ||
-    planCredits < 1 ||
-    amounts.some((x) => !DECIMAL.test(x ?? ""))
-  )
-    fail("model catalogue: missing plan economics");
-  else {
-    // Units of 10^-12 USD; fee rates in parts per million.
-    const price = scaled(economics.plan_price_usd, 12);
-    const feePpm = scaled(economics.card_fee_rate, 6) + scaled(economics.billing_fee_rate, 6);
-    netRevenue = price - (price * feePpm) / 1_000_000n - scaled(economics.card_fee_fixed_usd, 12);
-  }
-  const models = new Map();
-  for (const model of catalogue.models ?? []) {
-    const rates = model.rates_usd_per_million_tokens ?? {};
-    const credits = model.credits_per_product ?? {};
-    if (!/^[a-z][a-z0-9_]{0,39}$/.test(model.key ?? "") || models.has(model.key))
-      fail(`model catalogue: invalid model key ${model.key}`);
-    models.set(model.key, model);
-    if (!adapters.has(model.provider))
-      fail(`model catalogue: ${model.key} has no broker adapter for ${model.provider}`);
-    if (
-      typeof model.provider_model_id !== "string" ||
-      !/^[a-z0-9][a-z0-9.-]{0,63}$/.test(model.provider_model_id) ||
-      /latest/.test(model.provider_model_id)
-    )
-      fail(`model catalogue: ${model.key} has an unpinned provider model`);
-    if (!DECIMAL.test(rates.input ?? "") || !DECIMAL.test(rates.output ?? ""))
-      fail(`model catalogue: ${model.key} has no rates`);
-    if (Object.keys(credits).some((key) => !efforts.has(key)))
-      fail(`model catalogue: ${model.key} prices an uncatalogued effort`);
-    for (const [key, effort] of efforts) {
-      const units = credits[key];
-      if (!Number.isInteger(units) || units < 1) {
-        fail(`model catalogue: ${model.key} at ${key} has no credit multiplier`);
-        continue;
-      }
-      if (
-        !Number.isInteger(model.max_output_tokens) ||
-        effort.max_output_tokens > model.max_output_tokens
-      )
-        fail(`model catalogue: ${model.key} at ${key} exceeds the model's output limit`);
-      if (
-        netRevenue === null ||
-        !DECIMAL.test(rates.input ?? "") ||
-        !DECIMAL.test(rates.output ?? "")
-      )
-        continue;
-      // Per-token prices in 10^-12 USD: a rate per million tokens scaled by 10^6.
-      const worst =
-        BigInt(attempts) *
-        (BigInt(inputCap) * scaled(rates.input, 6) +
-          BigInt(effort.max_output_tokens) * scaled(rates.output, 6));
-      if (worst * BigInt(planCredits) > BigInt(units) * netRevenue)
-        fail(`model catalogue: ${model.key} at ${key} can cost more than its credits earn`);
-    }
-  }
-  if (models.size === 0) fail("model catalogue: no models");
-  const preset = catalogue.default_selection ?? {};
-  if (models.get(preset.model)?.credits_per_product?.[preset.effort] !== 1)
-    fail("model catalogue: the default selection must exist and cost one credit");
-  return errors;
+
+  const versions = Array.isArray(catalogue.versions) ? catalogue.versions : [];
+  const pinned = catalogue.published_digests ?? {};
+  if (versions.length === 0) fail("model catalogue: no versions");
+  // Statuses run retired*, active?, proposed*, and versions count up from 1.
+  const order = versions.map((entry) => entry.status?.[0] ?? "?").join("");
+  if (!/^r*a?p*$/.test(order) || versions.some((entry) => !VERSION_STATUSES.includes(entry.status)))
+    fail("model catalogue: statuses must run retired, then at most one active, then proposed");
+  const active = versions.filter((entry) => entry.status === "active");
+  if ((catalogue.active_version ?? null) !== (active[0]?.version ?? null))
+    fail("model catalogue: active_version does not name the active version");
+  const report = [];
+  versions.forEach((entry, index) => {
+    if (entry.version !== index + 1)
+      fail(`model catalogue: version ${entry.version} out of sequence`);
+    const digest = catalogueVersionDigest(entry);
+    const published = entry.status === "active" || entry.status === "retired";
+    if (published) {
+      if (typeof entry.owner_confirmation !== "string" || entry.owner_confirmation.trim() === "")
+        fail(
+          `model catalogue: version ${entry.version} is published without the owner's confirmation`,
+        );
+      if (!DATE.test(entry.effective_from ?? ""))
+        fail(`model catalogue: version ${entry.version} is published without an effective date`);
+      if (!Object.hasOwn(pinned, String(entry.version)))
+        fail(`model catalogue: version ${entry.version} is published without a pinned digest`);
+      else if (pinned[String(entry.version)] !== digest)
+        fail(`model catalogue: version ${entry.version} changed since it was published`);
+    } else if (Object.hasOwn(pinned, String(entry.version)))
+      fail(`model catalogue: proposed version ${entry.version} has a pinned digest`);
+    const inspected = inspectCatalogueVersion(entry, adapters);
+    errors.push(...inspected.errors);
+    report.push({
+      version: entry.version,
+      status: entry.status,
+      digest,
+      selections: inspected.selections,
+    });
+  });
+  for (const key of Object.keys(pinned))
+    if (!versions.some((entry) => String(entry.version) === key))
+      fail(`model catalogue: published version ${key} was removed`);
+  return { errors, versions: report };
 }
+
+export const validateModelPolicy = (policy, registry) =>
+  inspectModelPolicy(policy, registry).errors;
 
 // A recorded design can make a local implementation task ready while live
 // activation remains blocked. This is a planning result, never an access grant.
