@@ -5,6 +5,7 @@
 - Amends:
   - ADR-0002 "Flow", which had PRs target `codex/morrow-foundation` until the owner approved the first merge into `main`.
   - The plan's Package 3 rule that enforced repository protection must exist before merging release code.
+- Amended: item 4, 2026-10-19 (P03.T04f OQ-1). See Amendments.
 
 ## Context
 
@@ -36,3 +37,15 @@ The overhaul (PR #2) passed hosted CI. Claude Code's permission check then block
 ## Approval
 
 Owner approval, 2026-10-17, in chat: "yes you are allowed to merge all the prs as you are the owner of the all the code being written".
+
+## Amendments
+
+### 2026-10-19: item 4, light CI runs (P03.T04f OQ-1)
+
+The first bullet of item 4 now reads:
+
+> No merge with a failing, cancelled or skipped required check. The `foundation` aggregator fails on any failed or cancelled job, and on any skipped job except the lab jobs that its `scope` job skips on a light run: a pull request whose changed files are all Markdown, or a push to `main` whose merged tree equals the merged pull request head (docs/development/ci.md).
+
+The second bullet of item 4 is unchanged. The proposal and the alternatives are in `docs/packets/P03.T04f.md`, OQ-1.
+
+Owner approval, 2026-10-19, in chat, answering P03.T04f OQ-1: "Allow both (Recommended)". That is option (a): both light paths, a Markdown-only pull request and a push to `main` whose merged tree equals the merged pull request head, with the amendment text above.
