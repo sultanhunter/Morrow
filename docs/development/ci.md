@@ -10,7 +10,7 @@
 | Any other push to `main` (a squash merge, a head that lacked the latest `main`, a direct push) | all of them (full) | the merged tree was never checked as a whole |
 | `workflow_dispatch` | all of them (full) | a manual full run, on `main` or any branch |
 
-The two light paths await the owner's answer to P03.T04f OQ-1: ADR-0014 item 4 still says the aggregator treats a skipped job as a failure, and changing what the required gate accepts is Material under ADR-0002. Until the owner approves an ADR-0014 amendment, P03.T04f does not merge.
+Changing what the required gate accepts is Material under ADR-0002. The owner approved both light paths on 2026-10-19 (P03.T04f OQ-1, option (a)), and ADR-0014 records the amended item 4.
 
 There are no workflow-level `paths` filters: a workflow skipped by a path filter never reports its checks, so `foundation` would stay pending (see Required check). `scope` narrows the run inside the workflow instead.
 
@@ -58,7 +58,7 @@ Each report-writing job, and each matrix leg, uploads one artifact named `morrow
 
 Anything else fails it: a failed, cancelled or skipped `checks` or `scope`; a missing or unknown `scope` decision; `full=false` on any other event; a lab job that failed, was cancelled or was skipped on a full run, or ran on a light run; a missing lab result. `tests/ci-workflow.test.mjs` runs the aggregator script with bash over these combinations, and runs the `scope` script against a temporary git repository.
 
-This is a change to ADR-0014 item 4, whose text says the aggregator treats a skipped job as a failure. It is P03.T04f owner question OQ-1, and it blocks the merge of P03.T04f until the owner approves an amendment.
+This changes ADR-0014 item 4, whose original text said the aggregator treats a skipped job as a failure. The owner approved the amendment on 2026-10-19 (P03.T04f OQ-1, option (a)); its text is in ADR-0014, section Amendments.
 
 **When the workflow does not run at all.** GitHub reports nothing for a workflow it did not start (for example one skipped by a `paths` or `paths-ignore` filter). With branch protection that requires `foundation`, the check then stays "Expected — waiting for status to be reported" and the pull request cannot merge; it is not treated as skipped or passed. Without branch protection (today, ADR-0014 item 5), nothing blocks the merge button, but ADR-0014 item 1 still needs a green `foundation` on the exact head, so such a pull request could not be merged under the rules. That is why this workflow has no path filters and a Markdown-only pull request runs the light path instead: it costs about 6–7 billed minutes rather than nothing, and `foundation` reports green or red on every pull request.
 

@@ -18,8 +18,8 @@ concurrency:
 #   exactly its second parent's, the merged pull request head, which needed a green
 #   `foundation` on that exact head (ADR-0014 item 1). Any other push runs everything.
 # - workflow_dispatch runs everything, on main or any branch.
-# The two light paths (only `checks`) await the owner's answer to P03.T04f OQ-1, because
-# ADR-0014 item 4 still says `foundation` treats a skipped job as a failure.
+# The owner approved both light paths (only `checks`) on 2026-10-19 (P03.T04f OQ-1,
+# option (a)); ADR-0014 item 4, as amended, allows exactly these skips.
 # Every job that checks out the repository and writes reports routes them to
 # MORROW_ARTIFACTS_DIR, secret-scans that directory, uploads it only when the scan
 # passes, and ends by requiring an unchanged checkout. docs/development/ci.md describes
