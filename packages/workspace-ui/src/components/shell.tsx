@@ -125,7 +125,7 @@ export function WorkspaceSwitcher({
   const wrapper = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const items: readonly WorkspaceSummary[] = workspaces ?? [
-    { workspaceId: current.id, displayName: current.displayName },
+    { workspaceId: current.id, displayName: current.displayName, organizationName: null },
   ];
   useEffect(() => {
     if (!open) return;
@@ -225,7 +225,14 @@ export function WorkspaceSwitcher({
                 }
               }}
             >
-              <span dir="auto">{item.displayName}</span>
+              <span className="switcher-item-text">
+                <span dir="auto">{item.displayName}</span>
+                {item.organizationName !== null ? (
+                  <span className="switcher-item-org" dir="auto">
+                    {item.organizationName}
+                  </span>
+                ) : null}
+              </span>
               {item.workspaceId === current.id ? <Icon name="check" size={16} /> : null}
             </li>
           ))}

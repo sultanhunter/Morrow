@@ -17,6 +17,8 @@ export interface WorkspaceView {
 export interface WorkspaceSummary {
   readonly workspaceId: Id;
   readonly displayName: string;
+  /** The organization's display name; null where only the current workspace is known. */
+  readonly organizationName: string | null;
 }
 export interface AccountOverviewView {
   readonly workspaces: readonly WorkspaceSummary[];

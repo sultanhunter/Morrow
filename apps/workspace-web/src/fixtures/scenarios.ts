@@ -21,6 +21,17 @@ export const scenarioNames = [
   "account_form",
   "account_chooser",
   "account_invite",
+  "account_rate_limited",
+  "account_rate_limited_brief",
+  "account_uncertain",
+  "account_unavailable",
+  "account_invalid_name",
+  "account_signup_refused",
+  "account_signup_denied",
+  "account_already_onboarded",
+  "uncertain_late",
+  "ready_denied",
+  "question_expired",
   "restore_unavailable",
   "bootstrap_unavailable",
   "sign_out_unavailable",
@@ -32,7 +43,8 @@ export type Reply =
   | Outcome<unknown>
   | "pending"
   | "empty_page"
-  | { readonly delayMs: number; readonly outcome: Outcome<unknown> }
+  // A reply after `delayMs`; a null outcome is the seed behaviour, applied then.
+  | { readonly delayMs: number; readonly outcome: Outcome<unknown> | null }
   | null;
 export type Script = Partial<Record<PortMethod, (call: number) => Reply>>;
 
@@ -63,7 +75,13 @@ const denied: Outcome<never> = {
 const sample = (n: number) => ({
   workspaceId: `ws-sample-${n}`,
   displayName: `Sample workspace ${n}`,
+  organizationName: n === 3 ? "Sample organization B" : "Sample organization A",
 });
+const accountForm: Outcome<unknown> = {
+  kind: "ok",
+  value: { workspaces: [], truncated: false, onboarding: "available" },
+  replayed: false,
+};
 
 export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   ready: {},
@@ -95,6 +113,11 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   },
   // The first send is applied but its reply is lost; Check again replays it.
   uncertain: all(creates, (call) => (call === 0 ? { kind: "uncertain" } : null)),
+  // Lost, then a Check again whose replay arrives 1.5 s later: time enough to close the
+  // dialog, or to reopen it on another goal, before the reply lands.
+  uncertain_late: all(creates, (call) =>
+    call === 0 ? { kind: "uncertain" } : call === 1 ? { delayMs: 1500, outcome: null } : null,
+  ),
   // Lost, then a still-in-flight 503 (which stays uncertain), then the replay.
   uncertain_persisting: all(creates, (call) =>
     call === 0
@@ -113,13 +136,7 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
     "account.overview": () => ({ kind: "not_in_build" }),
     "account.createOrganization": () => ({ kind: "not_in_build" }),
   },
-  account_form: {
-    "account.overview": () => ({
-      kind: "ok",
-      value: { workspaces: [], truncated: false, onboarding: "available" },
-      replayed: false,
-    }),
-  },
+  account_form: { "account.overview": () => accountForm },
   account_chooser: {
     "account.overview": () => ({
       kind: "ok",
@@ -135,6 +152,76 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
     "account.overview": () => ({
       kind: "ok",
       value: { workspaces: [], truncated: false, onboarding: "unavailable" },
+      replayed: false,
+    }),
+  },
+  // Signup 429: the action stays off for Retry-After (90 s here, 2 s in the brief one,
+  // whose second submit is created).
+  account_rate_limited: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": () => ({ kind: "rate_limited", retryAfterSeconds: 90 }),
+  },
+  account_rate_limited_brief: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": (call) =>
+      call === 0 ? { kind: "rate_limited", retryAfterSeconds: 2 } : null,
+  },
+  // Signup 503 outcome_unknown: Check again resends the same key and gets `replayed`.
+  account_uncertain: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
+  // GET /workspaces 503: the landing keeps Sign out.
+  account_unavailable: {
+    "account.overview": () => ({ kind: "unavailable", offline: false }),
+  },
+  // Signup 400 invalid_name: both name fields are marked.
+  account_invalid_name: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": () => ({ kind: "invalid", field: "name" }),
+  },
+  // Signup 400 from the request guard (`request_denied`): no field to mark.
+  account_signup_refused: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": () => ({ kind: "invalid", field: null }),
+  },
+  // Signup 403 signup_unavailable, 0.8 s late (the button reads "Creating…"): the action
+  // stays off and the values stay.
+  account_signup_denied: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": () => ({
+      delayMs: 800,
+      outcome: { kind: "denied", message: "", reference: null },
+    }),
+  },
+  // Signup 409 already_onboarded (another tab created it): the account is read again,
+  // and now opens the one workspace.
+  account_already_onboarded: {
+    "account.overview": (call) => (call === 0 ? accountForm : null),
+    "account.createOrganization": () => ({ kind: "conflict", recheck: true, message: "" }),
+  },
+  // Mark ready by someone who may view the task but not change it: the server's 403.
+  ready_denied: {
+    "work.markReady": () => ({
+      kind: "denied",
+      message: "This operation is not permitted.",
+      reference: "corr-fixture-0403",
+    }),
+  },
+  // An open question that has since expired: no answer form.
+  question_expired: {
+    "work.getQuestion": () => ({
+      kind: "ok",
+      value: {
+        id: "q-source",
+        taskId: "task-source",
+        prompt: "Which supplier certificate should product pages cite?",
+        status: "expired",
+        respondent: { principalId: "prn-sample-7f3a", kind: "human", label: null, isSelf: null },
+        revision: 2,
+        updatedAt: "2026-10-15T16:00:00.000Z",
+        expiresAt: "2026-10-15T16:00:00.000Z",
+      },
       replayed: false,
     }),
   },

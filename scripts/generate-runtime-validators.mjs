@@ -24,6 +24,9 @@ import {
   currentBillingDefinitionSelectors,
   capabilityBodySelectors,
   browserValidatorDefinitions,
+  eventPayloadSelectors,
+  eventRegistryPath,
+  readEventRegistry,
 } from "./contract-sources.mjs";
 
 const hash = (value) => createHash("sha256").update(value).digest("hex");
@@ -124,6 +127,7 @@ export async function generateRuntimeValidators(root = repositoryRoot) {
     byKind,
     catalogue.capabilities.map((c) => c.id),
   );
+  const events = eventPayloadSelectors(byKind, readEventRegistry(root));
   const table = standaloneCode(ajv, exports);
   const code =
     table +
@@ -139,7 +143,21 @@ export async function generateRuntimeValidators(root = repositoryRoot) {
     frozen(
       "currentBillingDefinitionSelectors",
       Object.entries(currentBilling).map(([name, selector]) => [name, JSON.stringify(selector)]),
-    );
+    ) +
+    frozen(
+      "eventPayloadSelectors",
+      Object.entries(events).map(([eventType, row]) => [
+        eventType,
+        `Object.freeze(${JSON.stringify(row)})`,
+      ]),
+    ) +
+    // The registry selector (ADR-0016; P01.T02c §8): a registered event type, its
+    // aggregate type and a payload valid against that row's definition.
+    "\nexport function validateEventPayload(eventType, aggregateType, payload) {\n" +
+    '  if (typeof eventType !== "string" || !Object.hasOwn(eventPayloadSelectors, eventType)) return false;\n' +
+    "  const row = eventPayloadSelectors[eventType];\n" +
+    "  return row.aggregateType === aggregateType && validators[row.selector](payload) === true;\n" +
+    "}\n";
   const generated = generatedHeader + (await bundle(code, "morrow-runtime-validators.js", root));
   // Per-definition browser modules: the same Ajv instance and compiled functions as the
   // table, emitted alone. Each must export the function the table exports for its
@@ -181,7 +199,17 @@ export async function generateRuntimeValidators(root = repositoryRoot) {
     "/** Effective `<capability id>.<input|output>` -> exact body selector. */\n" +
     "export const capabilityBodySelectors: Readonly<Record<string, string>>;\n" +
     "/** Effective billing definition name -> exact selector (newest billing layer that defines it). */\n" +
-    "export const currentBillingDefinitionSelectors: Readonly<Record<string, string>>;\n";
+    "export const currentBillingDefinitionSelectors: Readonly<Record<string, string>>;\n" +
+    "/** Registered event type -> its aggregate type and exact payload selector (docs/contracts/event-registry.json). */\n" +
+    "export const eventPayloadSelectors: Readonly<\n" +
+    "  Record<string, Readonly<{ aggregateType: string; selector: string }>>\n" +
+    ">;\n" +
+    "/** True when eventType is registered, aggregateType is its row's and payload validates against its row. */\n" +
+    "export function validateEventPayload(\n" +
+    "  eventType: unknown,\n" +
+    "  aggregateType: unknown,\n" +
+    "  payload: unknown,\n" +
+    "): boolean;\n";
   const countByKind = Object.fromEntries(
     sources.map((s) => [s.kind, Object.keys(s.schema.$defs).length]),
   );
@@ -193,7 +221,11 @@ export async function generateRuntimeValidators(root = repositoryRoot) {
     current_definitions: Object.keys(current).length,
     current_billing_definitions: Object.keys(currentBilling).length,
     capability_bodies: Object.keys(bodies).length,
-    inputs: Object.fromEntries(sources.map((s) => [s.path, hash(s.text)])),
+    event_types: Object.keys(events).length,
+    inputs: {
+      ...Object.fromEntries(sources.map((s) => [s.path, hash(s.text)])),
+      [eventRegistryPath]: hash(readFileSync(resolve(root, eventRegistryPath), "utf8")),
+    },
     compiler: { ajv: "8.20.0", formats: "3.0.1", esbuild: "0.25.12" },
     output: { path: validatorsPath, sha256: hash(generated) },
     browser_validators: browser,

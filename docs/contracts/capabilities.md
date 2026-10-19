@@ -216,6 +216,90 @@ Retention: R02. Verification: Expiry and revocation constrain every future execu
 
 Trace: J01; P14.T01, P17.T01; P01.A01, P14.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
 
+### workspace.conversation.create
+
+Open a private Ask conversation. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
+
+Input: storeId: NullableId. Output: conversationId: Id; revision: Revision.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.conversation.create. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: store, subject. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: An Ask is private to its creating owner; workspace admins read it only through audited, read-only reads. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P07.T03, P14.T01; P01.A01, P14.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### workspace.conversation.post
+
+Post a message to a project, task or Ask conversation. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
+
+Input: conversation: ConversationSelector; parts: MessagePartInputs; replyToMessageId: NullableId. Output: messageId: Id; revision: Revision.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.conversation.post. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: parts, reply, sources. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: A message is visible only to viewers of its subject and every cited source. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P07.T03, P14.T02; P01.A01, P07.A03, P14.A02. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### workspace.project.create
+
+Pin a goal as a project. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
+
+Input: goalId: Id; title: ProjectTitle; tabs: ProjectTabInputs. Output: projectId: Id; revision: Revision.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.project.create. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: goal, title, tabs. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: One project per goal; every tab references a viewable artifact. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P07.T03, P14.T01; P01.A01, P14.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### workspace.project.revise
+
+Revise a project's title and artifact tabs. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
+
+Input: projectId: Id; expectedRevision: Revision; title: ProjectTitle; tabs: ProjectTabInputs. Output: revision: Revision.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.project.revise. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: title, tabs. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: A revision never changes the goal, its scope or its grants. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P07.T03, P14.T02; P01.A01, P14.A02. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### workspace.project.pin
+
+Pin, unpin or reorder a project shortcut. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
+
+Input: projectId: Id; pinned: Boolean; beforeProjectId: NullableId; expectedRevision: Revision. Output: revision: Revision; pinned: Boolean.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.project.pin. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: pin, order. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: Pins are shortcuts that confer nothing. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P07.T03, P14.T01; P01.A01, P14.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### workspace.inbox.read
+
+Read one's own inbox. Owner: Morrow platform owner. Effect: read. Provider: morrow (D01, Design recorded).
+
+Input: filter: InboxFilter; page: PageRequest. Output: items: InboxItems; next: NullablePageCursor.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.inbox.read. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: kind, subject, decision state, read state. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: Items are re-filtered by current subject view at read time. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P07.T03, P14.T03; P01.A01, P07.A03. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### workspace.inbox.mark
+
+Mark one's own inbox items read or unread. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
+
+Input: itemIds: InboxItemIds; state: ReadState. Output: updated: Count.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant workspace.inbox.mark. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: read state. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: Marking read never changes a decision. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J01; P07.T03; P01.A01, P07.A03. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
 ## Catalog
 
 ### catalog.products.read
@@ -1151,6 +1235,18 @@ Authority: human_or_bounded_installation_with_explicit_capability_grant; explici
 Retention: R02. Verification: Deletion replay covers projections artifacts and restored data with explicit retention exceptions. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
 Trace: J13; P05.T01, P17.T01; P01.A01, P05.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
+### governance.access.request
+
+Request access from the people who can grant it. Owner: Morrow platform owner. Effect: internal_write. Provider: morrow (D01, Design recorded).
+
+Input: scope: AccessRequestScope; reason: RequestReason; context: AccessRequestContext. Output: accessRequestId: Id; status: AccessRequestStatus.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant governance.access.request. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: capability, resource, field, reason. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: A request never grants; only a linked reviewed grant revision does. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J13; P05.T02, P14.T03; P01.A01, P05.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
 
 ## Custom agents
 

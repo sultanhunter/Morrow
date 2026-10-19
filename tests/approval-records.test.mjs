@@ -50,6 +50,7 @@ import {
   grantsReviseProducer,
   privacyEraseProducer,
 } from "./fixtures/approval-producers.mjs";
+import { capabilitiesAfter0018, catalogueAt0018 } from "./fixtures/approval-records-fixtures.mjs";
 
 const read = (path) => readFileSync(path, "utf8");
 const oracle = (value) => createHash("sha256").update(canonicalize(value)).digest("hex");
@@ -826,9 +827,16 @@ test("migration 0018: catalogue, risk table, defaults and approval transitions e
         executor: m[6],
       };
     });
+  // 0018 copies the catalogue as reviewed; the rows added after it are named and
+  // none of them may be review-required (no proposal can name one).
+  for (const id of capabilitiesAfter0018) {
+    const c = catalogue.capabilities.find((x) => x.id === id);
+    assert.ok(c && !c.review_required && !c.kill_switch, id);
+    assert.ok(!rows.some((r) => r.id === id), id);
+  }
   assert.deepEqual(
     rows,
-    catalogue.capabilities.map((c) => ({
+    catalogueAt0018(catalogue).map((c) => ({
       id: c.id,
       effect: c.effect,
       irreversible: c.irreversible,

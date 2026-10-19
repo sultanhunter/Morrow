@@ -37,6 +37,8 @@ import { approvalProducers } from "../tests/fixtures/approval-producers.mjs";
 import {
   actorRef,
   backdatedRevocationSql,
+  capabilitiesAfter0018,
+  catalogueAt0018,
   defaults,
   grant,
   grantSql,
@@ -3137,7 +3139,7 @@ INSERT INTO morrow_work.approval_claims VALUES(${literal(F.O)},${literal(ws)},${
       "AC19:catalogue_equal_json",
       same(
         caps,
-        catalogue.capabilities
+        catalogueAt0018(catalogue)
           .map((c) => ({
             capability_id: c.id,
             effect: c.effect,
@@ -3147,6 +3149,16 @@ INSERT INTO morrow_work.approval_claims VALUES(${literal(F.O)},${literal(ws)},${
             executor: c.executor,
           }))
           .sort((x, y) => (x.capability_id < y.capability_id ? -1 : 1)),
+      ),
+    );
+    // The catalogue rows added after 0018 (P01.T02c) are absent, and none is
+    // review-required, so no proposal can name one.
+    check(
+      "AC19:capabilities_after_0018_absent_and_unreviewable",
+      capabilitiesAfter0018.every(
+        (id) =>
+          !caps.some((c) => c.capability_id === id) &&
+          catalogue.capabilities.some((c) => c.id === id && !c.review_required && !c.kill_switch),
       ),
     );
     const risk = Object.fromEntries(

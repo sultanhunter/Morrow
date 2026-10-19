@@ -22,6 +22,26 @@ export const defaults = JSON.parse(
   readFileSync("docs/contracts/review-policy-defaults.json", "utf8"),
 );
 
+// The catalogue rows added after 0018 was pinned: P01.T02c's collaboration
+// capabilities (contracts v1.1, ADR-0016; PR #19). 0018's review_capabilities
+// copies the catalogue as reviewed and stays byte-unchanged, so it lacks them.
+// None is review-required, so no proposal can name one: proposals reference
+// review_capabilities and proposal_bind refuses a capability without a
+// review-required row. A forward migration adds them when a consumer needs them.
+export const capabilitiesAfter0018 = Object.freeze([
+  "workspace.conversation.create",
+  "workspace.conversation.post",
+  "workspace.project.create",
+  "workspace.project.revise",
+  "workspace.project.pin",
+  "workspace.inbox.read",
+  "workspace.inbox.mark",
+  "governance.access.request",
+]);
+/** The catalogue as 0018 copies it, in catalogue order. */
+export const catalogueAt0018 = (catalogue) =>
+  catalogue.capabilities.filter((c) => !capabilitiesAfter0018.includes(c.id));
+
 // Grant template v1 (migration 0013, owner_bootstrap_grants_v1): governance only.
 export const templateV1 = Object.freeze({
   "governance.membership.invite": [

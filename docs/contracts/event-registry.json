@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "contract_version": "morrow.contracts.v1.1",
+  "adr": "ADR-0016",
+  "policy": "Additive registry for EventEnvelope@2 (P01.T02c §8). Each row binds one eventType to its aggregateType (always the first eventType segment) and one core payload definition that carries IDs and statuses only, never message text, at most 512 bytes of JCS. Adding a row is additive (a later v1.x minor) and never needs another envelope replacement; changing or removing a row is a replacement and needs an ADR. The generators emit validateEventPayload from this file ahead of time.",
+  "events": [
+    {
+      "eventType": "goal.created",
+      "aggregateType": "goal",
+      "payloadDefinition": "GoalCreatedPayload",
+      "producer": "P06.T01a",
+      "since": "1.1"
+    },
+    {
+      "eventType": "goal.status_changed",
+      "aggregateType": "goal",
+      "payloadDefinition": "GoalStatusChangedPayload",
+      "producer": "P06.T01a",
+      "since": "1.1"
+    },
+    {
+      "eventType": "task.created",
+      "aggregateType": "task",
+      "payloadDefinition": "TaskCreatedPayload",
+      "producer": "P06.T01a",
+      "since": "1.1"
+    },
+    {
+      "eventType": "task.status_changed",
+      "aggregateType": "task",
+      "payloadDefinition": "TaskStatusChangedPayload",
+      "producer": "P06.T01a",
+      "since": "1.1"
+    },
+    {
+      "eventType": "task.assigned",
+      "aggregateType": "task",
+      "payloadDefinition": "TaskAssignedPayload",
+      "producer": "P06.T01a",
+      "since": "1.1"
+    },
+    {
+      "eventType": "question.requested",
+      "aggregateType": "question",
+      "payloadDefinition": "QuestionRequestedPayload",
+      "producer": "P06.T01a",
+      "since": "1.1"
+    },
+    {
+      "eventType": "question.answered",
+      "aggregateType": "question",
+      "payloadDefinition": "QuestionAnsweredPayload",
+      "producer": "P06.T01a",
+      "since": "1.1"
+    },
+    {
+      "eventType": "question.cancelled",
+      "aggregateType": "question",
+      "payloadDefinition": "EmptyEventPayload",
+      "producer": "P06.T01a",
+      "since": "1.1"
+    },
+    {
+      "eventType": "conversation.created",
+      "aggregateType": "conversation",
+      "payloadDefinition": "ConversationCreatedPayload",
+      "producer": "P07.T03",
+      "since": "1.1"
+    },
+    {
+      "eventType": "message.created",
+      "aggregateType": "message",
+      "payloadDefinition": "MessageCreatedPayload",
+      "producer": "P07.T03",
+      "since": "1.1"
+    },
+    {
+      "eventType": "message.status_changed",
+      "aggregateType": "message",
+      "payloadDefinition": "MessageStatusChangedPayload",
+      "producer": "P07.T03",
+      "since": "1.1"
+    },
+    {
+      "eventType": "project.created",
+      "aggregateType": "project",
+      "payloadDefinition": "ProjectCreatedPayload",
+      "producer": "P07.T03",
+      "since": "1.1"
+    },
+    {
+      "eventType": "project.revised",
+      "aggregateType": "project",
+      "payloadDefinition": "EmptyEventPayload",
+      "producer": "P07.T03",
+      "since": "1.1"
+    },
+    {
+      "eventType": "project.pin_changed",
+      "aggregateType": "project",
+      "payloadDefinition": "ProjectPinChangedPayload",
+      "producer": "P07.T03",
+      "since": "1.1"
+    },
+    {
+      "eventType": "access_request.created",
+      "aggregateType": "access_request",
+      "payloadDefinition": "EmptyEventPayload",
+      "producer": "P05.T02b",
+      "since": "1.1"
+    },
+    {
+      "eventType": "access_request.status_changed",
+      "aggregateType": "access_request",
+      "payloadDefinition": "AccessRequestStatusChangedPayload",
+      "producer": "P05.T02b",
+      "since": "1.1"
+    },
+    {
+      "eventType": "proposal.created",
+      "aggregateType": "proposal",
+      "payloadDefinition": "ProposalCreatedPayload",
+      "producer": "P06.T01b",
+      "since": "1.1"
+    },
+    {
+      "eventType": "approval.created",
+      "aggregateType": "approval",
+      "payloadDefinition": "ApprovalCreatedPayload",
+      "producer": "P06.T01b",
+      "since": "1.1"
+    },
+    {
+      "eventType": "approval.status_changed",
+      "aggregateType": "approval",
+      "payloadDefinition": "ApprovalStatusChangedPayload",
+      "producer": "P06.T01b",
+      "since": "1.1"
+    },
+    {
+      "eventType": "operation.status_changed",
+      "aggregateType": "operation",
+      "payloadDefinition": "OperationStatusChangedPayload",
+      "producer": "P06.T01c",
+      "since": "1.1"
+    },
+    {
+      "eventType": "kill_switch.executed",
+      "aggregateType": "kill_switch",
+      "payloadDefinition": "KillSwitchExecutedPayload",
+      "producer": "P05.T01z, P11.T05",
+      "since": "1.1"
+    },
+    {
+      "eventType": "stop_proposal.dismissed",
+      "aggregateType": "stop_proposal",
+      "payloadDefinition": "EmptyEventPayload",
+      "producer": "P11.T05",
+      "since": "1.1"
+    }
+  ]
+}

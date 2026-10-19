@@ -1,5 +1,10 @@
 import { ajv, digest } from "./contract-checks.mjs";
 import { read } from "./foundation.mjs";
+// P01.T04a §7: the simulator runs under tsx and uses the billing library as the
+// only implementation of payment classification, and the generated v1.1
+// validators for the route records.
+import { classifyPayment } from "../packages/policy/src/billing-state.ts";
+import { validateCurrentBillingDefinition } from "../packages/contracts/src/validation.ts";
 
 export const billing = read("docs/contracts/schemas/v1/billing.schema.json");
 ajv.addSchema(billing);
@@ -18,6 +23,14 @@ export function money(value) {
   const [whole, fraction = ""] = value.amount.split(".");
   return BigInt(whole) * 1000000000n + BigInt(fraction.padEnd(9, "0"));
 }
+// The exact decimal amount of a non-negative nanounit total (the inverse of `money`).
+const amountOf = (nanos) => {
+  const fraction = (nanos % 1000000000n).toString().padStart(9, "0").replace(/0+$/, "");
+  return (nanos / 1000000000n).toString() + (fraction ? "." + fraction : "");
+};
+/** One cycle of a Shopify payer's UsageCap: its account, subscription and period start. */
+export const capCycleKey = (cap) =>
+  `${cap.billingAccountId}|${cap.subscriptionKey}|${cap.periodStart}`;
 export const allocationDigest = (allocation) => {
   const { allocationDigest, ...payload } = allocation;
   return digest(payload);
@@ -33,9 +46,41 @@ const matchesPayer = (a, b) =>
 const validTime = (value) => Number.isFinite(Date.parse(value));
 
 // Trusted facts in these examples are fixture inputs, never a browser/model authority claim.
+// A CostAllocation@2 (contract v1.1, P01.T04a §7) also needs `facts.environment`,
+// `facts.routes[workspaceId]` and `facts.links` (the workspace's associations):
+// a share whose account route or mode disagrees with the workspace route or the
+// environment gives PAYER_ROUTE_INVALID, a share or work store
+// (`facts.workStoreIds`) that is not currently linked gives PAYER_NOT_LINKED,
+// and a payer with an open reversal (`facts.reversals[accountId]`) gives
+// PAYER_INACTIVE. On a Shopify payer, credits beyond the wallet are reserved only
+// within the cycle's UsageCap (`facts.usageCaps[accountId]`): its credits less
+// `facts.capUsed[capCycleKey(cap)]`, and its USD liability less
+// `facts.capLiability[capCycleKey(cap)]`, where a share that draws on the cap
+// counts its whole `maximumLiability` (settlement meters that share's whole
+// liability). Each cycle (account, subscription, period start) has its own
+// usage. P01.A04's frozen v1 rows read as Shopify-route arithmetic and keep
+// their v1 checks.
+const v11 = (name, value) => validateCurrentBillingDefinition(name, value);
+const modeOf = (environment) =>
+  environment === "production"
+    ? "live"
+    : environment === "development" || environment === "staging"
+      ? "test"
+      : null;
+const currentLink = (links, share, now) =>
+  Array.isArray(links) &&
+  links.some(
+    (l) =>
+      l.storeId === share.storeId &&
+      (share.installationId === undefined || l.installationId === share.installationId) &&
+      l.current === true &&
+      Date.parse(l.associatedAt) <= Date.parse(now),
+  );
 export function inspectAllocation(allocation, facts, { checkAvailable = true } = {}) {
   const errors = [];
-  if (!billingValidators.CostAllocation(allocation)) return ["ALLOCATION_SCHEMA_INVALID"];
+  const current = allocation?.schemaVersion === 2;
+  if (current ? !v11("CostAllocation", allocation) : !billingValidators.CostAllocation(allocation))
+    return ["ALLOCATION_SCHEMA_INVALID"];
   if (!validTime(facts.now)) return ["SERVER_TIME_INVALID"];
   if (!facts.authenticated || !facts.currentMembership || !facts.spendingGrant)
     errors.push("SPENDING_AUTHORITY_DENIED");
@@ -54,9 +99,10 @@ export function inspectAllocation(allocation, facts, { checkAvailable = true } =
     errors.push("ALLOCATION_REVIEW_CHANGED");
   if (allocation.rateRevision !== facts.rateRevision || allocation.meterKey !== facts.meterKey)
     errors.push("RATE_CHANGED");
+  const storeShares = allocation.shares.filter((s) => s.storeId !== null);
   if (
     new Set(allocation.shares.map((s) => s.billingAccountId)).size !== allocation.shares.length ||
-    new Set(allocation.shares.map((s) => s.storeId)).size !== allocation.shares.length
+    new Set(storeShares.map((s) => s.storeId)).size !== storeShares.length
   )
     errors.push("DUPLICATE_PAYER_OR_STORE");
   if (
@@ -64,13 +110,29 @@ export function inspectAllocation(allocation, facts, { checkAvailable = true } =
     units(allocation.maximumCredits)
   )
     errors.push("ALLOCATION_TOTAL_MISMATCH");
+  const mode = modeOf(facts.environment);
+  const route = current ? facts.routes?.[allocation.workspaceId] : null;
+  if (current) {
+    if (
+      mode === null ||
+      !v11("WorkspaceBillingRoute", route) ||
+      route.route === null ||
+      route.mode !== mode ||
+      !sameScope(route, allocation)
+    )
+      errors.push("PAYER_ROUTE_INVALID");
+    for (const storeId of facts.workStoreIds ?? [])
+      if (!currentLink(facts.links, { storeId }, facts.now)) errors.push("PAYER_NOT_LINKED");
+  }
   for (const share of allocation.shares) {
     const account = facts.accounts?.[share.billingAccountId],
       entitlement = facts.entitlements?.[share.billingAccountId],
       wallet = facts.wallets?.[share.billingAccountId];
     if (
-      !billingValidators.BillingAccount(account) ||
-      !billingValidators.EntitlementSnapshot(entitlement) ||
+      !(current ? v11("BillingAccount", account) : billingValidators.BillingAccount(account)) ||
+      !(current
+        ? v11("EntitlementSnapshot", entitlement)
+        : billingValidators.EntitlementSnapshot(entitlement)) ||
       !billingValidators.CreditWallet(wallet)
     ) {
       errors.push("PAYER_FACTS_INVALID");
@@ -79,9 +141,24 @@ export function inspectAllocation(allocation, facts, { checkAvailable = true } =
     if (
       !sameScope(account, allocation) ||
       !matchesPayer(share, account) ||
-      !facts.authorizedStoreIds?.includes(share.storeId)
+      (share.storeId !== null && !facts.authorizedStoreIds?.includes(share.storeId))
     )
       errors.push("PAYER_SCOPE_DENIED");
+    if (current) {
+      // R5, R6, R9: one route, its own mode, and a share's store currently linked.
+      if (
+        route?.route !== account.route ||
+        account.mode !== mode ||
+        entitlement.mode !== mode ||
+        entitlement.route !== account.route
+      )
+        errors.push("PAYER_ROUTE_INVALID");
+      if (share.storeId !== null && !currentLink(facts.links, share, facts.now))
+        errors.push("PAYER_NOT_LINKED");
+    }
+    // R11: an open reversal makes the payer non-billable while the provider reports active.
+    if ((facts.reversals?.[account.id] ?? []).some((r) => r.status === "open"))
+      errors.push("PAYER_INACTIVE");
     if (account.status !== "active" || entitlement.status !== "active")
       errors.push("PAYER_INACTIVE");
     if (
@@ -104,8 +181,28 @@ export function inspectAllocation(allocation, facts, { checkAvailable = true } =
       wallet.termsRevision !== facts.termsRevision
     )
       errors.push("WALLET_REVISION_CHANGED");
-    if (checkAvailable && units(share.maximumCredits) > units(wallet.available))
-      errors.push("CREDITS_EXHAUSTED");
+    if (checkAvailable && units(share.maximumCredits) > units(wallet.available)) {
+      // R10: Shopify-route extra credits are post-paid usage within a Morrow cap.
+      const cap =
+        current && account.route === "shopify_app_pricing"
+          ? usageCapFor(facts, account, entitlement)
+          : null;
+      if (cap === null) errors.push("CREDITS_EXHAUSTED");
+      else {
+        const cycle = capCycleKey(cap);
+        const liabilityUsed = money({
+          amount: facts.capLiability?.[cycle] ?? "0",
+          currency: cap.maximumLiability.currency,
+        });
+        if (
+          units(share.maximumCredits) - units(wallet.available) >
+            units(cap.maximumCredits) - units(facts.capUsed?.[cycle] ?? "0") ||
+          share.maximumLiability.currency !== cap.maximumLiability.currency ||
+          money(share.maximumLiability) > money(cap.maximumLiability) - liabilityUsed
+        )
+          errors.push("USAGE_CAP_EXCEEDED");
+      }
+    }
     const ceiling = facts.monetaryCeilings?.[account.id];
     if (
       !billingValidators.BillingMoney(ceiling) ||
@@ -116,6 +213,18 @@ export function inspectAllocation(allocation, facts, { checkAvailable = true } =
       errors.push("MONETARY_LIMIT_DENIED");
   }
   return [...new Set(errors)];
+}
+// The cycle's cap: bound to the payer's account, installation, store and current subscription.
+function usageCapFor(facts, account, entitlement) {
+  const cap = facts.usageCaps?.[account.id];
+  return v11("UsageCap", cap) &&
+    cap.billingAccountId === account.id &&
+    cap.installationId === account.installationId &&
+    cap.storeId === account.storeId &&
+    cap.subscriptionKey === entitlement.subscriptionId &&
+    sameScope(cap, account)
+    ? cap
+    : null;
 }
 
 export function inspectUsage(usage) {
@@ -160,8 +269,12 @@ export function inspectMeter(event, usage, entitlement) {
 
 // Deterministic P01 review model. Production requires transactions, durable records,
 // authorization services, leases and verified provider readback in later packages.
+// P01.T04a §7 adds `grant(event, terms)` (payment classification through the billing
+// library, one wallet credit per (route, mode, paymentKey)), `reverse(reversal)`,
+// Shopify-route post-paid usage within a UsageCap, and USAGE_PREDATES_RESERVATION.
 export class ContractCreditLedger {
   #facts;
+  #target = null;
   #reservations = new Map();
   #usedUsageIds = new Set();
   #usedOperations = new Set();
@@ -171,6 +284,12 @@ export class ContractCreditLedger {
   #vendorReserved = 0n;
   #vendorConsumed = 0n;
   #payerMoney = new Map();
+  #capUsed = new Map();
+  #capLiability = new Map();
+  #grantedKeys = new Map();
+  #grants = [];
+  #reversals = new Map();
+  #meterDrafts = [];
   constructor(facts) {
     assert(validTime(facts.now), "SERVER_TIME_INVALID");
     units(facts.rootMaximumCredits);
@@ -179,7 +298,10 @@ export class ContractCreditLedger {
       Number.isSafeInteger(facts.costScheduleRevision) && facts.costScheduleRevision > 0,
       "COST_SCHEDULE_INVALID",
     );
-    this.#facts = structuredClone(facts);
+    const { paymentTarget = null, ...rest } = facts;
+    // The payment target holds a library-issued state, kept by reference.
+    this.#target = paymentTarget;
+    this.#facts = structuredClone(rest);
   }
   snapshot() {
     return structuredClone({
@@ -190,7 +312,11 @@ export class ContractCreditLedger {
       vendorReserved: this.#vendorReserved.toString(),
       vendorConsumed: this.#vendorConsumed.toString(),
       payerMoney: Object.fromEntries([...this.#payerMoney].map(([k, v]) => [k, v.toString()])),
+      capUsed: Object.fromEntries([...this.#capUsed].map(([k, v]) => [k, v.toString()])),
+      capLiability: Object.fromEntries([...this.#capLiability].map(([k, v]) => [k, amountOf(v)])),
       meterEvents: [...this.#meterEvents.values()],
+      grants: this.#grants,
+      meterDrafts: this.#meterDrafts,
     });
   }
   // Simulates fresh trusted server facts; callers cannot grant authority through payloads.
@@ -213,12 +339,37 @@ export class ContractCreditLedger {
       "meterKey",
       "termsRevision",
       "monetaryCeilings",
+      "environment",
+      "routes",
+      "links",
+      "workStoreIds",
+      "usageCaps",
+      "paymentTarget",
     ];
     assert(
       Object.keys(facts).every((k) => allowed.includes(k)),
       "REFRESH_FIELD_DENIED",
     );
-    this.#facts = { ...this.#facts, ...structuredClone(facts) };
+    const { paymentTarget, ...rest } = facts;
+    if (paymentTarget !== undefined) this.#target = paymentTarget;
+    this.#facts = { ...this.#facts, ...structuredClone(rest) };
+  }
+  // The facts every allocation check reads: the ledger's own reversals, each
+  // attached at check time to the payer its payment credited (so a reversal
+  // verified before its payment's grant blocks that payer once the grant
+  // lands), and post-paid usage per cap cycle.
+  #current() {
+    const reversals = {};
+    for (const reversal of this.#reversals.values()) {
+      const accountId = this.#grantedKeys.get(reversal.paymentKey);
+      if (accountId !== undefined) (reversals[accountId] ??= []).push(reversal);
+    }
+    return {
+      ...this.#facts,
+      reversals,
+      capUsed: Object.fromEntries([...this.#capUsed].map(([k, v]) => [k, v.toString()])),
+      capLiability: Object.fromEntries([...this.#capLiability].map(([k, v]) => [k, amountOf(v)])),
+    };
   }
   reserve(id, allocation, vendorReservation) {
     assert(
@@ -247,7 +398,7 @@ export class ContractCreditLedger {
       );
       return structuredClone(existing.record);
     }
-    const errors = inspectAllocation(allocation, this.#facts);
+    const errors = inspectAllocation(allocation, this.#current());
     assert(!errors.length, errors.join(","));
     assert(
       vendorReservation.status === "reserved" &&
@@ -285,13 +436,33 @@ export class ContractCreditLedger {
         "WALLET_RANGE_INVALID",
       );
     }
-    // All checks finish before any payer is changed.
+    // All checks finish before any payer is changed. The wallet pays first; only
+    // a Shopify payer's cap (checked above) covers the rest, as post-paid usage.
+    const split = [];
     for (const share of allocation.shares) {
       const w = this.#facts.wallets[share.billingAccountId],
-        credits = units(share.maximumCredits);
-      w.available = (units(w.available) - credits).toString();
-      w.reserved = (units(w.reserved) + credits).toString();
+        credits = units(share.maximumCredits),
+        fromWallet = credits <= units(w.available) ? credits : units(w.available),
+        fromCap = credits - fromWallet;
+      w.available = (units(w.available) - fromWallet).toString();
+      w.reserved = (units(w.reserved) + fromWallet).toString();
       w.revision++;
+      // The cycle inspectAllocation checked; a later cycle starts at zero.
+      const cycle =
+        fromCap > 0n ? capCycleKey(this.#facts.usageCaps[share.billingAccountId]) : null;
+      if (cycle !== null) {
+        this.#capUsed.set(cycle, (this.#capUsed.get(cycle) ?? 0n) + fromCap);
+        this.#capLiability.set(
+          cycle,
+          (this.#capLiability.get(cycle) ?? 0n) + money(share.maximumLiability),
+        );
+      }
+      split.push({
+        billingAccountId: share.billingAccountId,
+        fromWallet: fromWallet.toString(),
+        fromCap: fromCap.toString(),
+        cycle,
+      });
       this.#payerMoney.set(
         share.billingAccountId,
         (this.#payerMoney.get(share.billingAccountId) ?? 0n) + money(share.maximumLiability),
@@ -315,9 +486,22 @@ export class ContractCreditLedger {
         this.#facts.entitlements[s.billingAccountId],
       ]),
     );
+    const caps = Object.fromEntries(
+      allocation.shares.map((s) => [
+        s.billingAccountId,
+        this.#facts.usageCaps?.[s.billingAccountId] ?? null,
+      ]),
+    );
     this.#reservations.set(
       id,
-      structuredClone({ record, allocation, vendorOriginal: vendorReservation, entitlements }),
+      structuredClone({
+        record,
+        allocation,
+        vendorOriginal: vendorReservation,
+        entitlements,
+        caps,
+        split,
+      }),
     );
     return structuredClone(record);
   }
@@ -329,7 +513,7 @@ export class ContractCreditLedger {
   dispatch(id) {
     const r = this.#get(id);
     assert(r.record.status === "reserved", "DISPATCH_STATE_INVALID");
-    const errors = inspectAllocation(r.allocation, this.#facts, { checkAvailable: false });
+    const errors = inspectAllocation(r.allocation, this.#current(), { checkAvailable: false });
     assert(!errors.length, errors.join(","));
     r.record.status = "dispatched";
     return structuredClone(r.record);
@@ -398,6 +582,11 @@ export class ContractCreditLedger {
         validTime(u.observedAt) && Date.parse(u.observedAt) <= Date.parse(this.#facts.now),
         "USAGE_TIME_INVALID",
       );
+      // No retroactive charge: usage observed before the reservation existed is not its usage.
+      assert(
+        Date.parse(u.observedAt) >= Date.parse(r.record.createdAt),
+        "USAGE_PREDATES_RESERVATION",
+      );
       const operationKey = u.billingAccountId + ":" + u.operationId;
       assert(
         !ids.has(u.id) &&
@@ -428,14 +617,43 @@ export class ContractCreditLedger {
     let actualCredits = 0n;
     for (const u of usage) {
       const s = r.allocation.shares.find((s) => s.billingAccountId === u.billingAccountId),
+        part = r.split.find((p) => p.billingAccountId === u.billingAccountId),
         w = this.#facts.wallets[u.billingAccountId];
-      const reserved = units(s.maximumCredits),
-        used = units(u.merchantCredits);
+      const fromWallet = units(part.fromWallet),
+        fromCap = units(part.fromCap),
+        used = units(u.merchantCredits),
+        walletUsed = used <= fromWallet ? used : fromWallet,
+        capUsed = used - walletUsed;
       actualCredits += used;
-      w.available = (units(w.available) + reserved - used).toString();
-      w.reserved = (units(w.reserved) - reserved).toString();
-      w.consumed = (units(w.consumed) + used).toString();
+      w.available = (units(w.available) + fromWallet - walletUsed).toString();
+      w.reserved = (units(w.reserved) - fromWallet).toString();
+      w.consumed = (units(w.consumed) + walletUsed).toString();
       w.revision++;
+      if (fromCap > 0n) {
+        // Settled against the cycle the reservation drew on, even after a refresh.
+        this.#capUsed.set(part.cycle, this.#capUsed.get(part.cycle) - fromCap + capUsed);
+        this.#capLiability.set(
+          part.cycle,
+          this.#capLiability.get(part.cycle) -
+            money(s.maximumLiability) +
+            (capUsed > 0n ? money(u.merchantLiability) : 0n),
+        );
+      }
+      // Post-paid usage settles as a liability and a meter event bound to the
+      // cycle's subscription and meter, never as a CreditGrant (R10).
+      if (capUsed > 0n) {
+        const cap = r.caps[u.billingAccountId];
+        this.#meterDrafts.push({
+          usageLiabilityId: u.id,
+          billingAccountId: u.billingAccountId,
+          subscriptionId: cap.subscriptionKey,
+          meterKey: cap.meterKey,
+          periodStart: cap.periodStart,
+          merchantCredits: capUsed.toString(),
+          merchantLiability: structuredClone(u.merchantLiability),
+          status: "pending",
+        });
+      }
       this.#payerMoney.set(
         u.billingAccountId,
         this.#payerMoney.get(u.billingAccountId) -
@@ -447,6 +665,55 @@ export class ContractCreditLedger {
     this.#rootConsumed += actualCredits;
     this.#vendorReserved -= money(r.vendorOriginal.maximumCost);
     this.#vendorConsumed += actualCost;
+  }
+  // R10: applies the billing library's classifyPayment with the ledger's own key
+  // set. Only `grant` and `fix_route_and_grant` credit a wallet, once per
+  // (route, mode, paymentKey); replays, held payments, no-charge events,
+  // conflicts and refusals leave every wallet unchanged.
+  grant(event, terms) {
+    assert(this.#target !== null, "PAYMENT_TARGET_REQUIRED");
+    const outcome = classifyPayment(this.#target, event, terms, new Set(this.#grantedKeys.keys()));
+    if (outcome.outcome !== "grant" && outcome.outcome !== "fix_route_and_grant") return outcome;
+    const account = outcome.account;
+    const accountId =
+      account.kind === "existing"
+        ? account.billingAccountId
+        : "account:" + (account.installationId ?? event.workspaceId);
+    const w = (this.#facts.wallets[accountId] ??= {
+      schemaVersion: 1,
+      billingAccountId: accountId,
+      available: "0",
+      reserved: "0",
+      consumed: "0",
+      rateRevision: this.#facts.rateRevision,
+      termsRevision: outcome.grant.termsRevision,
+      revision: 1,
+    });
+    w.available = (units(w.available) + units(outcome.grant.creditUnits)).toString();
+    w.revision++;
+    this.#grantedKeys.set(outcome.paymentKey, accountId);
+    this.#grants.push({
+      ...structuredClone(outcome.grant),
+      id: "grant-" + (this.#grants.length + 1),
+      billingAccountId: accountId,
+    });
+    return outcome;
+  }
+  // R11: records a verified refund or dispute by its payment key. While it is
+  // open, the payer its payment credited cannot reserve, including when the
+  // reversal was verified before the payment was granted (webhooks arrive in no
+  // order); a reversal of a payment that is never granted blocks no payer. The
+  // result names the payer credited so far (null before any grant).
+  reverse(reversal) {
+    assert(v11("PaymentReversal", reversal), "REVERSAL_INVALID");
+    const prior = this.#reversals.get(reversal.paymentKey);
+    assert(!prior || reversal.revision > prior.revision, "REVERSAL_REVISION_STALE");
+    this.#reversals.set(reversal.paymentKey, structuredClone(reversal));
+    return {
+      paymentKey: reversal.paymentKey,
+      billingAccountId: this.#grantedKeys.get(reversal.paymentKey) ?? null,
+      status: reversal.status,
+    };
   }
   recordMeter(event) {
     const r = [...this.#reservations.values()].find((r) =>

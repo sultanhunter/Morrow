@@ -159,6 +159,278 @@
         "proposal"
       ],
       "additionalProperties": false
+    },
+    "workspace.conversation.create.input": {
+      "type": "object",
+      "properties": {
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableId"
+        }
+      },
+      "required": [
+        "storeId"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.conversation.create.output": {
+      "type": "object",
+      "properties": {
+        "conversationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "conversationId",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.conversation.post.input": {
+      "type": "object",
+      "properties": {
+        "conversation": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ConversationSelector"
+        },
+        "parts": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/MessagePartInputs"
+        },
+        "replyToMessageId": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableId"
+        }
+      },
+      "required": [
+        "conversation",
+        "parts",
+        "replyToMessageId"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.conversation.post.output": {
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "messageId",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.project.create.input": {
+      "type": "object",
+      "properties": {
+        "goalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "title": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ProjectTitle"
+        },
+        "tabs": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ProjectTabInputs"
+        }
+      },
+      "required": [
+        "goalId",
+        "title",
+        "tabs"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.project.create.output": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "projectId",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.project.revise.input": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "expectedRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "title": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ProjectTitle"
+        },
+        "tabs": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ProjectTabInputs"
+        }
+      },
+      "required": [
+        "projectId",
+        "expectedRevision",
+        "title",
+        "tabs"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.project.revise.output": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.project.pin.input": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "pinned": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/Boolean"
+        },
+        "beforeProjectId": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableId"
+        },
+        "expectedRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "projectId",
+        "pinned",
+        "beforeProjectId",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.project.pin.output": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "pinned": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/Boolean"
+        }
+      },
+      "required": [
+        "revision",
+        "pinned"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.inbox.read.input": {
+      "type": "object",
+      "properties": {
+        "filter": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/InboxFilter"
+        },
+        "page": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/PageRequest"
+        }
+      },
+      "required": [
+        "filter",
+        "page"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.inbox.read.output": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/InboxItems"
+        },
+        "next": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullablePageCursor"
+        }
+      },
+      "required": [
+        "items",
+        "next"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.inbox.mark.input": {
+      "type": "object",
+      "properties": {
+        "itemIds": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/InboxItemIds"
+        },
+        "state": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ReadState"
+        }
+      },
+      "required": [
+        "itemIds",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "workspace.inbox.mark.output": {
+      "type": "object",
+      "properties": {
+        "updated": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Count"
+        }
+      },
+      "required": [
+        "updated"
+      ],
+      "additionalProperties": false
+    },
+    "governance.access.request.input": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/AccessRequestScope"
+        },
+        "reason": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/RequestReason"
+        },
+        "context": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/AccessRequestContext"
+        }
+      },
+      "required": [
+        "scope",
+        "reason",
+        "context"
+      ],
+      "additionalProperties": false
+    },
+    "governance.access.request.output": {
+      "type": "object",
+      "properties": {
+        "accessRequestId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "status": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/AccessRequestStatus"
+        }
+      },
+      "required": [
+        "accessRequestId",
+        "status"
+      ],
+      "additionalProperties": false
     }
   }
 }

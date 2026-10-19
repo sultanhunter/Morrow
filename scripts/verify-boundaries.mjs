@@ -7,12 +7,19 @@ import {
   inspectBaselineCoverage,
   inspectDeclaredReplacements,
   inspectSupersededUse,
+  inspectRefinedSelectorUse,
+  inspectEventRegistryBaseline,
   inspectEntitlementWriters,
   replacedDefinitionNames,
   replacedBillingDefinitionNames,
   isBoundarySource,
 } from "./boundary-checks.mjs";
-import { changesPath, readSchemaSources, schemasByKind } from "./contract-sources.mjs";
+import {
+  changesPath,
+  readEventRegistry,
+  readSchemaSources,
+  schemasByKind,
+} from "./contract-sources.mjs";
 import { writeArtifact } from "./artifacts.mjs";
 const files = [];
 function walk(dir) {
@@ -42,6 +49,9 @@ const schemas = Object.fromEntries(
 );
 errors.push(...inspectCompatibility(baseline, schemas));
 errors.push(...inspectBaselineCoverage(baseline, schemaFiles));
+// The event registry is append-only against its pinned rows (ADR-0016 item 6).
+const registry = readEventRegistry();
+errors.push(...inspectEventRegistryBaseline(baseline, registry));
 const changes = JSON.parse(readFileSync(changesPath, "utf8"));
 const layered = schemasByKind(readSchemaSources());
 errors.push(...inspectDeclaredReplacements(changes, layered));
@@ -51,6 +61,8 @@ const replaced = replacedDefinitionNames(changes);
 const replacedBilling = replacedBillingDefinitionNames(changes);
 for (const p of files)
   errors.push(...inspectSupersededUse(p, readFileSync(p, "utf8"), replaced, replacedBilling));
+// Refined v1.1 definitions are validated only through validateCurrentDefinition (P01.T02c).
+for (const p of files) errors.push(...inspectRefinedSelectorUse(p, readFileSync(p, "utf8")));
 // Only the billing reader and its two forwarders set entitlementAllowed (P01.T04a AC29).
 for (const p of files) errors.push(...inspectEntitlementWriters(p, readFileSync(p, "utf8")));
 const negatives = [
@@ -314,6 +326,60 @@ for (const [name, path, code, expected] of [
     name,
     passed: inspectSupersededUse(path, code, replaced, replacedBilling).includes(expected),
   });
+for (const [name, path, code, expected] of [
+  [
+    "refined_validate_definition",
+    "packages/work/src/events.ts",
+    'validateDefinition("core-v1.1", "EventEnvelope", envelope);',
+    "REFINED_DEFINITION_BYPASS:packages/work/src/events.ts:EventEnvelope",
+  ],
+  [
+    "refined_selector",
+    "apps/api/src/stream.ts",
+    'const check = validators["core-v1.1:StreamFrame"];',
+    "REFINED_DEFINITION_BYPASS:apps/api/src/stream.ts:StreamFrame",
+  ],
+  [
+    "refined_admin_read_record",
+    "packages/policy/src/collaboration.ts",
+    'validateDefinition("core-v1.1", "AskAdminReadRecord", record);',
+    "REFINED_DEFINITION_BYPASS:packages/policy/src/collaboration.ts:AskAdminReadRecord",
+  ],
+])
+  negatives.push({ name, passed: inspectRefinedSelectorUse(path, code).includes(expected) });
+// Planted registry deltas: a retyped row, a removed row, a row inserted before a
+// pinned one, and an appended row that is not pinned.
+const registryDelta = (change) => {
+  const copy = structuredClone(registry);
+  change(copy.events);
+  return inspectEventRegistryBaseline(baseline, copy);
+};
+negatives.push(
+  {
+    name: "event_row_changed",
+    passed: registryDelta((rows) => (rows[0].payloadDefinition = "EmptyEventPayload")).includes(
+      "UNREVIEWED_EVENT_ROW_DELTA:" + registry.events[0].eventType,
+    ),
+  },
+  {
+    name: "event_row_removed",
+    passed: registryDelta((rows) => rows.pop()).includes(
+      "UNREVIEWED_EVENT_ROW_DELTA:" + registry.events.at(-1).eventType,
+    ),
+  },
+  {
+    name: "event_row_inserted",
+    passed: registryDelta((rows) =>
+      rows.splice(0, 0, { ...rows[0], eventType: "goal.archived" }),
+    ).includes("UNREVIEWED_EVENT_ROW_DELTA:" + registry.events[0].eventType),
+  },
+  {
+    name: "event_row_unpinned",
+    passed: registryDelta((rows) => rows.push({ ...rows[0], eventType: "goal.archived" })).includes(
+      "UNBASELINED_EVENT_ROW:goal.archived",
+    ),
+  },
+);
 for (const [name, code] of [
   ["entitlement_writer_literal_true", "const facts = { entitlementAllowed: true };"],
   ["entitlement_writer_variable", "const facts = { entitlementAllowed: allowed };"],

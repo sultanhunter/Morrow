@@ -9,6 +9,8 @@ import {
   currentDefinitionSelectors,
   capabilityBodySelectors,
   currentBillingDefinitionSelectors,
+  eventPayloadSelectors,
+  validateEventPayload,
 } from "../packages/contracts/src/generated/runtime-validators.mjs";
 import {
   validateDefinition,
@@ -22,6 +24,8 @@ import {
   currentBillingDefinitionSelectors as expectedBilling,
   capabilityBodySelectors as expectedBodies,
   browserValidatorDefinitions,
+  eventPayloadSelectors as expectedEvents,
+  readEventRegistry,
 } from "../scripts/contract-sources.mjs";
 import standaloneCode from "ajv/dist/standalone/index.js";
 import {
@@ -87,6 +91,7 @@ function parityCorpus() {
   add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.A02.json", "utf8")));
   add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.T02a.json", "utf8")));
   add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.T04a.json", "utf8")));
+  add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.T02c.json", "utf8")));
   return corpus;
 }
 
@@ -290,11 +295,24 @@ test("effective selectors resolve to the newest layer and are frozen", () => {
     ),
   );
   assert.deepEqual({ ...currentBillingDefinitionSelectors }, expectedBilling(byKind));
+  // P01.T02c: the event registry selector (ADR-0016), derived from the registry.
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(eventPayloadSelectors)),
+    expectedEvents(byKind, readEventRegistry()),
+  );
+  for (const row of Object.values(eventPayloadSelectors)) {
+    assert.ok(Object.isFrozen(row));
+    assert.ok(Object.hasOwn(validators, row.selector), row.selector);
+  }
+  assert.equal(validateEventPayload("project.pin_changed", "project", { pinned: true }), true);
+  assert.equal(validateEventPayload("project.pin_changed", "project", { pinned: "yes" }), false);
+  assert.equal(validateEventPayload("hasOwnProperty", "project", {}), false);
   for (const selectors of [
     validators,
     currentDefinitionSelectors,
     capabilityBodySelectors,
     currentBillingDefinitionSelectors,
+    eventPayloadSelectors,
   ])
     assert.ok(Object.isFrozen(selectors));
   for (const selector of [
@@ -316,6 +334,14 @@ test("effective selectors resolve to the newest layer and are frozen", () => {
     capabilityBodySelectors["ads.campaign.pause.output"],
     "capabilities:ads.campaign.pause.output",
   );
+  // P01.T02c: EventEnvelope@2 replaces v1 (ADR-0016); new collaboration bodies are additions.
+  assert.equal(currentDefinitionSelectors.EventEnvelope, "core-v1.1:EventEnvelope");
+  assert.equal(currentDefinitionSelectors.InboxItem, "core-v1.1:InboxItem");
+  for (const io of ["input", "output"])
+    assert.equal(
+      capabilityBodySelectors[`workspace.conversation.post.${io}`],
+      `capabilities-v1.1:workspace.conversation.post.${io}`,
+    );
   // PR-B replacements and additions (ADR-0011).
   assert.equal(currentDefinitionSelectors.Proposal, "core-v1.1:Proposal");
   assert.equal(currentDefinitionSelectors.Approval, "core-v1.1:Approval");
