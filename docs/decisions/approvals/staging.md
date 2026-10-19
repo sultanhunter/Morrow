@@ -1,6 +1,6 @@
 # Staging approval card `staging-card-1`
 
-- **Status:** Proposed, awaiting the owner's approval in chat. Nothing on this card may be done until the owner approves it. Claude then records the approval's quote and date here, and lists the card in STATUS.
+- **Status:** Approved 2026-10-19 by the owner in chat: asked "Approve ADR-0019 (staging rules) and the 30-day staging approval card `staging-card-1`?", the owner answered "Approve both (Recommended)". Valid until 2026-11-18 or the first production resource, whichever comes first. Listed in STATUS under Active approval cards.
 - **Lands as:** `docs/decisions/approvals/staging.md`, in P04.T01i PR-A, alongside ADR-0019.
 - **Scope:** staging only:
   - Cloudflare account `79ff672d013b8f0956437af6eea3c213` (Workers Paid; subdomain `sultanibneusman0.workers.dev`);
@@ -120,4 +120,7 @@ Each of these needs a per-action approval:
 
 ## Approval
 
-- **Owner approval:** pending. When the owner approves in chat, Claude records here the quote, the date, the OQ-2 answer (GitHub plan and Actions budget) and the computed expiry date.
+- **Owner approval:** 2026-10-19, in chat. Question: "Approve ADR-0019 (staging rules) and the 30-day staging approval card `staging-card-1`?" Answer: "Approve both (Recommended)".
+- **Valid until:** 2026-11-18 (30 days after approval), or the creation of the first production resource, whichever comes first.
+- **OQ-2 answer (GitHub plan and Actions budget):** "GitHub Pro (Recommended)". The owner buys GitHub Pro (about $4 a month) as a per-action purchase and sets a capped Actions spending limit (about $10); branch protection on `main` (requires `foundation`, no approving review) is enabled as soon as Pro is active. The purchase is pending and is outside this card.
+- **Effects used under this card:** none yet.

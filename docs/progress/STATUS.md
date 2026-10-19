@@ -20,9 +20,11 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 
 In progress:
 - **P03.T04e PR-A** (PR #11, branch `claude/p03-t04e-a-format-concurrency`): `prettier --check .` under one reviewed `.prettierignore`, unit test files run concurrently through `scripts/run-tests.mjs` with an empty serial list, required `executeAs` and pinned prerequisites on every `migrations/manifest.json` row, and `heavy-faults.yml` (manual plus weekly `unit-stress`). Merged with `main` at `5ad6cc7` on 2026-10-19: rows 12-15 now carry `executeAs`; row 13 pins `infra/identity-onboarding-role-prerequisites.sql` and row 14 `infra/work-role-prerequisites.sql` (the first migration that names the work roles); the files from PRs #9-#15 are re-formatted in one mechanical commit listed in `.git-blame-ignore-revs`. Local format, typecheck, verify and unit tests pass on the merged head; hosted CI and the Tier 2 AI review on it are open. After merge: one `workflow_dispatch` run of `heavy-faults.yml` on `main` (AC22).
+- **P04.T01i PR-A and P04.T01j PR-A** (branch `claude/docs-staging-and-design-refs`, pushed, no PR yet; Markdown only, with the Mobbin design references): ADR-0019 and ADR-0020 Accepted, the approved card `staging-card-1`, the ADR-0014 item 5 amendment, the plan edits (P04.T01i origin, reachability and card; new P04.T01j and P05.T01ab bullets; P04.T03a minimal baseline; invariant 18's exception) and open acceptance sections. M1's journey (AC12) also waits for P14.T01a PR-2. The staging row of `deployment-policy.json` moves to P04.T01i PR-B.
 
-## Decisions recorded 2026-10-18
+## Decisions recorded 2026-10-18 and 2026-10-19
 
+- **2026-10-19, ADR-0019 and `staging-card-1`:** "Approve both (Recommended)" (staging on workers.dev, continuous deploy from `main`, Turnstile and per-IP limits before hosted login, branch protection before production; ADR-0014 item 5 amended; the P05.T01x §11 sign-off is resolved). **ADR-0020:** "Approve ADR-0020 (Recommended)", P04.T01i OQ-1 (B): migrations 0005–0015 are rebaselined once by P04.T01j, which merges before any other migration (P05.T01y's 0016, P06.T01b PR-1). **P04.T01i OQ-2:** "GitHub Pro (Recommended)", with a capped Actions spending limit (about $10) and branch protection on `main` as soon as Pro is active.
 - **ADR-0015 billing routes by origin** (supersedes ADR-0006). Website signups pay on Morrow checkout (Stripe Billing with Stripe Tax; Morrow is the seller) before linking a store. Every other paying workspace, including all Shopify-origin merchants, pays through Shopify App Pricing and never sees Morrow checkout. The route is fixed server-side at the first completed payment (plan Security invariant 24). Stripe is selected and blocked: no account, keys or provider calls until an approved packet.
 - **ADR-0016 collaboration contracts v1.1** (P01.T02c Q1-Q6): as recommended, except workspace admins (holders of `administer` on `workspace.conversation.create`) can read private Asks through audited, read-only reads.
 - **ADR-0017 membership authority** (P05.T01z Q1 and Q3): accepted as designed.
@@ -36,10 +38,11 @@ In progress:
 
 ## Next actions
 
-1. P03.T04e PR-A (PR #11): hosted `foundation` green on the merged head and the Tier 2 AI review, then merge and dispatch `heavy-faults.yml` on `main` (AC22). Then P14.T01a PR-2 (account and work wiring).
-2. P01.T04a PR-B (billing route library).
-3. P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
-4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11). Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.
+Merge order once GitHub Pro is active (no PR opens before then):
+1. P03.T04f (`claude/p03-t04f-ci-efficiency`): its PR first, one full run; then record the hosted job times. Then dispatch `heavy-faults.yml` on `main` (P03.T04e AC22).
+2. This docs PR (`claude/docs-staging-and-design-refs`): Markdown only, so it runs light under P03.T04f.
+3. Then the other pushed branches: P04.T01j PR-B (may start now; it merges after step 2 and before any branch that adds a migration), then P05.T01y (0016 moved to the ADR-0020 helpers) and P06.T01b PR-1; P01.T02c PR-A, P01.T04a PR-B and P14.T01a PR-2 as their reviews allow. P04.T01i PR-B (tooling, no provider effect) and PR-C (P05.T01ab), then Phase B under `staging-card-1`.
+4. After those: P06.T02a (event transport), P06.T01c (OperationLedger) and P01.T02b. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11). Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.
 
 Open plan follow-ups:
 - P06.T01a AC08 soak: a `heavy:*` script that runs `lab:work-postgresql` with `MORROW_WORK_SOAK=1` in `heavy-faults.yml` (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
@@ -51,16 +54,14 @@ Open plan follow-ups:
 
 ## Blockers
 
-None for local work. Hosted staging (M1) waits on the owner actions below. Billing activation waits on the billing owner actions.
+None for local work. Hosted staging (M1) waits on the owner actions below, P04.T01j, P04.T01i PR-B and P05.T01ab. Billing activation waits on the billing owner actions.
 
 ## Pending owner actions
 
-- **Sign-offs:**
-  - Plan R1 (Tier 3). The P01 contract sign-off also freezes the v1.1 billing layer, including two PR-A review choices: Shopify-route money is USD-only, and `AllocationShare@2` is a declared superset of v1.
-  - P05.T01x Part B, before hosted login (M1): account login start is anonymous, so its per-profile windows (10 per 10 s, 100 open) let anyone block every sign-in on a profile (packet §11). Decide whether Turnstile or the edge per-IP limiter gates hosted login activation in every environment, not only sign-up beyond the allowlist (ADR-0009 item 8).
-- **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check before the first hosted deploy (ADR-0014).
+- **Sign-off:** Plan R1 (Tier 3). The P01 contract sign-off also freezes the v1.1 billing layer, including two PR-A review choices: Shopify-route money is USD-only, and `AllocationShare@2` is a declared superset of v1.
+- **GitHub (first):** buy GitHub Pro (about $4 a month, per-action purchase) and set a capped Actions spending limit (about $10); then enable branch protection on `main` requiring `foundation`, with no approving review. No PR opens until Pro is active.
 - **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
-- **M1 prerequisites (P04.T01i):** register the domain; create a dedicated Cloudflare account and share its account ID (an identifier, not a secret); authenticate the Neon CLI and reset the operator password; once the domain exists, configure the WorkOS staging callback and rotate the API key; decide on spending (Workers Paid, the domain, Neon Launch for staging); approve each M1 effect individually or approve standing staging cards. No card may rely on the OperationLedger before P06.T01c lands. For the work API (P06.T01a): create the `morrow_api_worker` login and place its password as the broker secret `MORROW_DB_PASSWORD_MORROW_API_WORKER`; broker health stays false until it is set.
+- **M1 (P04.T01i D9 runbook, steps 2–7, in your own terminal and an unattached browser profile):** 2 prepare `~/.config/morrow/staging` and the helpers; 3 retire the previous agent's access (GitHub apps, tokens, deploy keys, collaborators; Cloudflare tokens and Global API Key; WorkOS users, webhooks, connections; Neon keys and project `cool-butterfly-64820147`); 4 create Neon project `morrow-staging` (Free) and its project key, run `neonctl auth` (4(d)-(e) wait for PR-B); 5 create the two Cloudflare tokens (30-day TTL) and the usage alerts; 6 a new WorkOS API key, email verification on and public sign-up off, a test user; 7 the GitHub `staging` environment, token, variables and branch protection (option A, after Pro). Also confirm for ADR-0020 item 7 that no database you know of applied migration 0005 or later.
 - **Credential rotation:** rotate the E2B personal key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.
 - **Billing (ADR-0015):**
   - When payments work starts: create a Stripe account in test mode (before P18.T01a).
@@ -75,4 +76,4 @@ None. `docs/history/INDEX.md` cites the terminal state of every earlier provider
 
 ## Active approval cards
 
-None. Every earlier provider allowance is consumed.
+- `staging-card-1` (`docs/decisions/approvals/staging.md`): staging only; approved 2026-10-19, valid until 2026-11-18 or the first production resource. No effect used yet. Earlier provider allowances are consumed.

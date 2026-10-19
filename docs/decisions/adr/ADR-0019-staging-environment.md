@@ -1,6 +1,6 @@
 # ADR-0019 Staging environment: workers.dev origin, continuous deploy and sign-in abuse protection
 
-- Status: Proposed, awaiting owner approval in chat. Items 1, 2, 4, 5 and 6, and the per-IP limit in item 8, restate the owner's decisions of 2026-10-19 (chat). The items marked *Recommended* need the owner's approval of this record. No code that depends on them merges before that approval.
+- Status: Accepted 2026-10-19 (owner approval in chat; see Approval). Items 1, 2, 4, 5 and 6, and the per-IP limit in item 8, restate the owner's decisions of 2026-10-19 (chat). The owner's approval of this record also confirms the items marked *Recommended*.
 - Date: 2026-10-19
 - Amends:
   - ADR-0014 item 5 (when branch protection must exist);
@@ -142,4 +142,6 @@ Owner decisions, 2026-10-19, in chat. The owner replied "yes this plan looks goo
 - GitHub branch protection (Pro) is a hard gate before production, not before staging;
 - Turnstile plus a per-IP rate limit in the Worker protect sign-in before staging login goes live.
 
-Before PR-A merges, Claude replaces this paragraph with the owner's verbatim wording for each decision, taken from the session transcript. The items marked *Recommended* (3; the broker placement in 6; 7; the values in 8; 9–15) are confirmed only by the owner's approval of PR-A, which Claude quotes here with its date.
+Before PR-A merges, Claude replaces this paragraph with the owner's verbatim wording for each decision, taken from the session transcript. The items marked *Recommended* (3; the broker placement in 6; 7; the values in 8; 9–15) are confirmed only by the owner's approval of this record, quoted below.
+
+Owner approval of this record, 2026-10-19, in chat. Asked "Approve ADR-0019 (staging rules) and the 30-day staging approval card `staging-card-1`?", the owner answered "Approve both (Recommended)". This accepts every item above, including the *Recommended* ones: item 3 as written (public reachability with no access gate, not the Cloudflare Access alternative) and the ADR-0014 item 5 amendment in item 5. The same answer approves the staging approval card `staging-card-1` (`docs/decisions/approvals/staging.md`). On P04.T01i OQ-2 (item 15, GitHub Actions) the owner answered "GitHub Pro (Recommended)": GitHub Pro, a capped Actions spending limit and branch protection on `main` as soon as Pro is active.
