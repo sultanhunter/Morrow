@@ -22,7 +22,7 @@ Material decisions (ADR-0002) are recorded here before dependent implementation.
 | [0016](ADR-0016-collaboration-contracts-v1-1.md) | Collaboration contracts v1.1: conversations, Asks, mentions, inbox, projects and EventEnvelope@2 | Accepted 2026-10-18 |
 | [0017](ADR-0017-membership-authority.md) | Membership authority and the membership contract additions | Accepted 2026-10-18 |
 | [0018](ADR-0018-proposals-without-a-task.md) | Proposals without a task: human governance proposals only | Accepted 2026-10-18 |
-| [0019](ADR-0019-staging-environment.md) | Staging environment: workers.dev origin, continuous deploy and sign-in abuse protection | Accepted 2026-10-19; item 5 exception for third-party GitHub access (2026-10-19) |
+| [0019](ADR-0019-staging-environment.md) | Staging environment: workers.dev origin, continuous deploy and sign-in abuse protection | Accepted 2026-10-19; item 5 exception for third-party GitHub access (2026-10-19); item 9 amended 2026-10-19 (the failed-verification log line) |
 | [0020](ADR-0020-non-superuser-administrator.md) | Non-superuser migration administrator: one recorded administrator, a closed membership set and a one-time rebaseline of migrations 0005–0015 | Accepted 2026-10-19 |
 | [0021](ADR-0021-mvp-fast-track.md) | MVP fast track: launch one listings slice on a production-grade foundation | Accepted 2026-10-19 |
 
