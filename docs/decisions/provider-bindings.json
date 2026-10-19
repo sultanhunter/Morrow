@@ -1068,20 +1068,20 @@
     },
     {
       "capability": "search.citations.observe",
-      "provider": "openai",
+      "provider": "anthropic",
       "mode": "model",
       "operations": [
-        "POST /v1/responses with web_search; gpt-6.1-sol"
+        "POST /v1/messages with the web_search server tool; a catalogue model"
       ],
       "required_scopes": [],
       "sources": [
-        "S65",
-        "S66"
+        "S150",
+        "S160"
       ],
       "readback": "Store prompt/locale/model/date, cited URLs and repeatability metadata.",
       "restriction": "Synthetic API observation, no consumer-chatbot share or guaranteed inclusion.",
       "remaining_gap": null,
-      "version": "responses:v1/images:v1",
+      "version": "messages:2023-06-01",
       "provider_dependency": "D05",
       "effect": "read",
       "hosts": [
@@ -1168,7 +1168,7 @@
       "readback": "Persist approved input/output digests, model/parameters, cost and fidelity review.",
       "restriction": "Account region/retention eligibility and bounded quality/size. No automatic publication.",
       "remaining_gap": null,
-      "version": "responses:v1/images:v1",
+      "version": "images:v1",
       "provider_dependency": "D06",
       "effect": "billable_job",
       "hosts": [
@@ -1227,7 +1227,7 @@
       "readback": "Persist approved input/output digests, model/parameters, cost and fidelity review.",
       "restriction": "Account region/retention eligibility and bounded quality/size. No automatic publication.",
       "remaining_gap": null,
-      "version": "responses:v1/images:v1",
+      "version": "images:v1",
       "provider_dependency": "D06",
       "effect": "billable_job",
       "hosts": [

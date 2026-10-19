@@ -118,6 +118,11 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
       { orchestrator: (c) => (c.secrets.required = ["OPENAI_API_KEY"]) },
       "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
     ],
+    [
+      { orchestrator: (c) => (c.secrets.required = ["ANTHROPIC_API_KEY"]) },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    [{ api: (c) => (c.vars.ANTHROPIC_BASE_URL = "x") }, "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER"],
     [{ api: (c) => (c.workers_dev = true) }, "EDGE_FLAG_WORKERS_DEV"],
     [{ connector: (c) => (c.env.production.preview_urls = true) }, "EDGE_FLAG_PREVIEW_URLS"],
     [{ broker: (c) => (c.observability.enabled = true) }, "EDGE_FLAG_OBSERVABILITY"],

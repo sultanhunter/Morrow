@@ -1,43 +1,210 @@
 {
-  "schema_version": 1,
-  "plan_sequence": 46,
-  "provider": "openai",
-  "api": "Responses v1 / Images v1",
-  "default_model": "gpt-6.1-sol",
-  "escalation_model": "gpt-6-astra",
-  "image_model": "gpt-image-2.5-sunburst",
-  "identifier_kind": "documented_alias",
-  "immutable_snapshot": null,
-  "alias_drift_policy": "hold affected rollout and re-evaluate pinned routing release; no invented snapshot",
-  "reasoning": "high default; bounded effort/attempts per role",
-  "store": false,
-  "regional_endpoint": null,
-  "regional_project_status": "not_verified",
-  "zero_data_retention_status": "not_granted",
-  "private_content_dispatch": "blocked_until_account_retention_and_data_policy_qualified",
-  "automatic_fallback": false,
-  "max_short_context_input_tokens": 272000,
-  "initial_rates_per_million": {
-    "sol_input": "2",
-    "sol_output": "10",
-    "astra_input": "10",
-    "astra_output": "50"
-  },
-  "rate_exclusions": [
-    "cached input/write policy",
-    "long context",
-    "regional surcharge",
-    "service tier",
-    "image input/output/quality",
-    "web search/tool charges",
-    "reasoning output and retries"
-  ],
-  "quality_status": "not_evaluated",
+  "schema_version": 3,
+  "decision": "ADR-0022",
+  "observed_at": "2026-10-19",
   "sources": [
-    "S65",
-    "S66",
-    "S67",
-    "S68"
+    "S149",
+    "S150",
+    "S151",
+    "S152",
+    "S153",
+    "S154",
+    "S155",
+    "S156",
+    "S157",
+    "S158",
+    "S159"
   ],
-  "regional_endpoint_required": "explicit_customer_or_applicable_obligation_only"
+  "gateway": {
+    "port": "ModelProvider",
+    "call_contract": "ModelCall@1",
+    "result_contract": "ModelResult@1",
+    "selection_contract": "ModelSelection@1",
+    "credential_holder": "broker",
+    "automatic_fallback": false,
+    "provider_side_fallback": false,
+    "client_model_strings": "refused",
+    "adapters": [
+      {
+        "provider": "anthropic",
+        "api": "Messages API (POST /v1/messages), anthropic-version 2023-06-01",
+        "credential": "ANTHROPIC_API_KEY",
+        "sdk_retries": 0
+      }
+    ]
+  },
+  "data_policy": {
+    "sent": [
+      "merchant request text",
+      "product title",
+      "product description HTML",
+      "product SEO title",
+      "product SEO description",
+      "product tags"
+    ],
+    "never_sent": [
+      "customer data",
+      "staff emails",
+      "shop domain",
+      "credentials",
+      "payment data"
+    ],
+    "provider_training": "not_used_by_default_and_no_opt_in",
+    "provider_retention": "deleted within 30 days; if flagged by the provider's trust and safety systems, content up to 2 years and its classification scores up to 7 years",
+    "zero_data_retention_status": "not_granted",
+    "regional_project_status": "not_verified",
+    "inference_geo": "global_default",
+    "stateful_features": [],
+    "morrow_storage": "prompts and raw outputs are not stored; digests and usage only",
+    "structured_output_schema_cache": "up to 24 hours after last use; schemas hold no merchant data"
+  },
+  "quality_status": "not_evaluated",
+  "catalogue": {
+    "id": "morrow-model-catalogue",
+    "active_version": 1,
+    "published_digests": {
+      "1": "fca7f9ac7151f67818e5fa242f5e9bca8e6c36246738e78d0ffbd55c39aed660"
+    },
+    "change_policy": "A published (active or retired) version never changes: its digest is pinned in published_digests and recomputed by npm run verify. A new model, effort, multiplier, cap or price is a new version. A version is published only with the owner's recorded confirmation (ADR-0022, Pending owner confirmation).",
+    "versions": [
+      {
+        "version": 1,
+        "status": "active",
+        "proposed_on": "2026-10-19",
+        "owner_confirmation": "Owner, 2026-10-19, in chat: asked \"Confirm these model, credit and safety values for the beta?\" (catalogue Haiku/Sonnet/Opus 5.5 at low/medium/high; default Sonnet 5.5 low; weights Haiku 1/1/1, Sonnet 1/2/3, Opus 2/4/6; token caps; 90% worst-case margin; failed products free, stop after 3, US$4.50 unrecovered cap; member ceiling 1), answered \"Confirm all (Recommended)\".",
+        "effective_from": "2026-10-19",
+        "default_selection": {
+          "model": "claude_sonnet_5_5",
+          "effort": "low"
+        },
+        "default_member_credit_ceiling": 1,
+        "limits": {
+          "max_input_tokens_per_call": 8000,
+          "max_attempts_per_product": 2,
+          "max_products_per_run": 25,
+          "max_consecutive_failed_products": 3,
+          "run_cost_cap_usd": "7",
+          "workspace_daily_cost_cap_usd": "25",
+          "workspace_period_unrecovered_cost_cap_usd": "4.50",
+          "platform_cap": "anthropic_console_workspace_monthly_spend_limit"
+        },
+        "expected_input_tokens": 3000,
+        "efforts": [
+          {
+            "key": "low",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "low"
+              }
+            },
+            "max_output_tokens": 5000,
+            "expected_output_tokens": 1200
+          },
+          {
+            "key": "medium",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "medium"
+              }
+            },
+            "max_output_tokens": 12000,
+            "expected_output_tokens": 2500
+          },
+          {
+            "key": "high",
+            "request": {
+              "thinking": {
+                "type": "adaptive"
+              },
+              "output_config": {
+                "effort": "high"
+              }
+            },
+            "max_output_tokens": 16000,
+            "expected_output_tokens": 5000
+          }
+        ],
+        "models": [
+          {
+            "key": "claude_haiku_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-haiku-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-10-07",
+            "rates_usd_per_million_tokens": {
+              "input": "0.10",
+              "output": "0.50"
+            },
+            "rate_tier_max_input_tokens": 100000,
+            "credits_per_product": {
+              "low": 1,
+              "medium": 1,
+              "high": 1
+            }
+          },
+          {
+            "key": "claude_sonnet_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-sonnet-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-09-28",
+            "rates_usd_per_million_tokens": {
+              "input": "2",
+              "output": "10"
+            },
+            "rate_tier_max_input_tokens": null,
+            "credits_per_product": {
+              "low": 1,
+              "medium": 2,
+              "high": 3
+            }
+          },
+          {
+            "key": "claude_opus_5_5",
+            "provider": "anthropic",
+            "provider_model_id": "claude-opus-5-5",
+            "context_window_tokens": 1000000,
+            "max_output_tokens": 128000,
+            "retirement_not_before": "2027-09-22",
+            "rates_usd_per_million_tokens": {
+              "input": "4",
+              "output": "20"
+            },
+            "rate_tier_max_input_tokens": null,
+            "credits_per_product": {
+              "low": 2,
+              "medium": 4,
+              "high": 6
+            }
+          }
+        ],
+        "economics": {
+          "plan_price_usd": "49",
+          "plan_credits": 300,
+          "card_fee_rate": "0.029",
+          "card_fee_fixed_usd": "0.30",
+          "billing_fee_rate": "0.007",
+          "tax_fee_rate": "0.005",
+          "international_card_fee_rate": "0.015",
+          "max_worst_case_share": "0.90",
+          "rule": "every selection's worst case per product is at most max_worst_case_share of its credits' share of the plan's net revenue after every fee, and the unrecovered-cost cap is at most the rest"
+        }
+      }
+    ]
+  },
+  "images": {
+    "provider": "openai",
+    "scope": "creative.image.generate and creative.image.revise only (P17.T02e, after launch)",
+    "model": "gpt-image-2.5-sunburst",
+    "credential_bound": false,
+    "status": "unchanged_selection_pending_owner_review"
+  }
 }

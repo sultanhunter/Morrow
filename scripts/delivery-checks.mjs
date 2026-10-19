@@ -7,6 +7,7 @@ import { migrationSqlViolations } from "./migration-sql.mjs";
 export function inspectSecrets(text) {
   const patterns = [
     ["private_key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
+    ["anthropic_key", /\bsk-ant-[a-z0-9]{2,12}-[A-Za-z0-9_-]{32,}/],
     ["openai_key", /\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}/],
     ["github_token", /\bgh[pousr]_[A-Za-z0-9]{36,}/],
     ["aws_access_key", /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/],
@@ -230,6 +231,10 @@ function verify() {
     {
       name: "leaked_fixture_key",
       passed: inspectSecrets("sk-proj-" + "A".repeat(50)).includes("openai_key"),
+    },
+    {
+      name: "anthropic_key_marker",
+      passed: inspectSecrets("sk-ant-" + "api03-" + "A".repeat(60)).includes("anthropic_key"),
     },
     {
       name: "workos_key_marker",

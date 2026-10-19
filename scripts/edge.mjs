@@ -192,7 +192,7 @@ export async function loadWranglerApi() {
   if (!wranglerApi) {
     for (const name of Object.keys(process.env))
       if (
-        /^(WORKOS_|MORROW_DB_PASSWORD_|SHOPIFY_|OPENAI_|E2B_|NEON_|PG|CLOUDFLARE_|CF_|WRANGLER_)/i.test(
+        /^(WORKOS_|MORROW_DB_PASSWORD_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG|CLOUDFLARE_|CF_|WRANGLER_)/i.test(
           name,
         )
       )
@@ -423,7 +423,8 @@ const allowedBindings = Object.freeze({
   orchestrator: ["workflows", "queues", "secrets"],
   connector: ["vars", "secrets"],
 });
-const providerCredentialName = /^(WORKOS_|MORROW_DB_PASSWORD_|SHOPIFY_|OPENAI_|E2B_|NEON_|PG)/i;
+const providerCredentialName =
+  /^(WORKOS_|MORROW_DB_PASSWORD_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG)/i;
 const credentialWord = /KEY|SECRET|PASSWORD|TOKEN/i;
 // Hosted identifiers that P04.T02a must not commit (P04.T01i later allows only the
 // reviewed staging identifiers in env.staging.vars).

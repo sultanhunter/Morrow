@@ -10,7 +10,7 @@ Material decisions (ADR-0002) are recorded here before dependent implementation.
 | [0004](ADR-0004-session-lifecycle.md) | Browser session lifecycle defaults | Accepted 2026-10-17 |
 | [0005](ADR-0005-kill-switches-executor-review-policy.md) | Kill switches, executor classes and review policy | Accepted 2026-10-17 |
 | [0006](ADR-0006-pre-install-billing-state.md) | Billing state before any Shopify store is installed | Superseded by ADR-0015 (2026-10-18); accepted 2026-10-17 |
-| [0007](ADR-0007-broker-credential-custody-v0.md) | Broker credential custody v0 for development and staging | Accepted 2026-10-17 for development and staging only; production custody pending; items 1, 3 and 4 amended by ADR-0019 (2026-10-19) |
+| [0007](ADR-0007-broker-credential-custody-v0.md) | Broker credential custody v0 for development and staging | Accepted 2026-10-17 for development and staging only; production custody pending; items 1, 3 and 4 amended by ADR-0019 (2026-10-19); items 1 and 4 amended by ADR-0022 (2026-10-19) |
 | [0008](ADR-0008-shopify-connector-runtime.md) | Shopify connector runtime: Cloudflare Workers with the `@shopify/shopify-api` web adapter | Accepted 2026-10-18 |
 | [0009](ADR-0009-self-serve-signup.md) | Self-serve enrollment and first-owner signup | Accepted 2026-10-17; note added for ADR-0015; item 8 amended by ADR-0019 (2026-10-19) |
 | [0010](ADR-0010-tenant-data-pattern-and-work-api-v1.md) | Tenant data pattern for P06+ and work API v1 | Accepted 2026-10-17; item 1 refined by ADR-0016 |
@@ -25,6 +25,7 @@ Material decisions (ADR-0002) are recorded here before dependent implementation.
 | [0019](ADR-0019-staging-environment.md) | Staging environment: workers.dev origin, continuous deploy and sign-in abuse protection | Accepted 2026-10-19; item 5 exception for third-party GitHub access (2026-10-19) |
 | [0020](ADR-0020-non-superuser-administrator.md) | Non-superuser migration administrator: one recorded administrator, a closed membership set and a one-time rebaseline of migrations 0005–0015 | Accepted 2026-10-19 |
 | [0021](ADR-0021-mvp-fast-track.md) | MVP fast track: launch one listings slice on a production-grade foundation | Accepted 2026-10-19 |
+| [0022](ADR-0022-mvp-contracts.md) | MVP contracts: listings capability, Shopify, Claude and Stripe usage, model catalogue and selection, broker custody, background tenancy and retention | Accepted 2026-10-19, including the model catalogue values of items 11 and 16 (owner-confirmed the same day; catalogue version 1 active); amends ADR-0007 items 1 and 4 and the 2026-10-14 model provider selection (Anthropic Claude replaces OpenAI for text models) |
 
 ADR-0012 and ADR-0013 record how the P03.T04c overhaul implemented ADR-0002; earlier drafts of them used the numbers 0001, 0007 and 0008.
 

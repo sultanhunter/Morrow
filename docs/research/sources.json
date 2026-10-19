@@ -1114,5 +1114,101 @@
     "observed_at": "2026-10-18",
     "finding": "Partner API activeSubscription(appId: ID!, shopId: ID!) returns ActiveSubscription: app, billingPeriod, cancelAtEndOfCycle, currentBillingCycle (null while in trial), items, legacySubscriptionId (nullable, the legacy Admin API AppSubscription), pendingUpdate (applied at the next billing cycle), shop and trialEndsAt. There is no subscription id, status field or test flag. Arguments are GIDs such as gid://shopify/Shop/1234; the query returns null when the shop has no active subscription and works only for public apps.",
     "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S149",
+    "url": "https://platform.claude.com/docs/en/about-claude/models/overview",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "Claude Opus 5.5, Sonnet 5.5 and Haiku 5.5 have the API IDs claude-opus-5-5, claude-sonnet-5-5 and claude-haiku-5-5, 1M-token context windows and 128K-token synchronous output limits. Thinking is adaptive (always on for Opus 5.5); the default effort is medium on Opus 5.5 and Haiku 5.5 and high on Sonnet 5.5. Every Claude model ID is a pinned snapshot, dateless IDs included. Retirement not sooner than 2027-09-22 (Opus 5.5), 2027-09-28 (Sonnet 5.5) and 2027-10-07 (Haiku 5.5).",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S150",
+    "url": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "Base prices per million tokens: Opus 5.5 $4 input and $20 output; Sonnet 5.5 $2 and $10; Haiku 5.5 $0.10 and $0.50 for prompts up to 100,000 tokens, $0.50 and $2.50 above. Opus 5.5 and Sonnet 5.5 bill the full 1M context at standard prices. Cache hits cost 0.05x base input on Opus 5.5 and Sonnet 5.5; Batch is 50% off; US-only inference_geo is 1.1x on every token category. Web search costs $10 per 1,000 searches plus tokens.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S151",
+    "url": "https://platform.claude.com/docs/en/build-with-claude/effort",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "output_config.effort takes low, medium, high, xhigh or max on Opus 5.5, Sonnet 5.5 and Haiku 5.5; setting the model's default is identical to omitting it. Effort is a behavioural signal, not a strict token budget. xhigh targets long-running agentic and coding work; max has no constraint on token spending. Opus 5.5 rejects thinking type disabled at every effort level; Sonnet 5.5 turns up-front thinking off only with between_tools at high or below.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S152",
+    "url": "https://platform.claude.com/docs/en/build-with-claude/thinking-steering-and-cost",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "Thinking tokens are billed as output tokens whatever the display setting. max_tokens is a hard cap on total output, thinking and response text combined; effort only steers how much of it goes to thinking. usage.output_tokens_details.thinking_tokens reports the reasoning share; output_tokens is the billed total.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S153",
+    "url": "https://platform.claude.com/docs/en/manage-claude/api-and-data-retention",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "Retained data is never used for model training without the customer's express permission. Conversation content is not retained by default except for Covered Models (Claude Fable 5.1, Mythos 5.1, Fable 5, Mythos 5), which require 30-day retention and are not available under ZDR. ZDR is requested from Anthropic sales and enabled per organization; the Console is not covered. Flagged content may be retained up to 2 years even under ZDR. Structured outputs are ZDR-eligible (qualified): only the JSON schema is cached, up to 24 hours since last use; effort and adaptive thinking are eligible.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S154",
+    "url": "https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "Anthropic automatically deletes API inputs and outputs on its back end within 30 days of receipt or generation, unless a longer-retention service under the customer's control is used, the parties agree otherwise (such as zero data retention), Usage Policy enforcement requires it (flagged inputs and outputs up to 2 years, classification scores up to 7 years) or the law requires it.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S155",
+    "url": "https://privacy.claude.com/en/articles/7996868-is-my-data-used-for-model-training",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "By default Anthropic does not use inputs or outputs from its commercial products, including the Anthropic API, to train its models. Exceptions are feedback the customer submits (kept up to 5 years) and data the customer explicitly allows to be used.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S156",
+    "url": "https://platform.claude.com/docs/en/build-with-claude/structured-outputs",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "output_config.format with type json_schema constrains the response on Opus 5.5, Sonnet 5.5 and Haiku 5.5. Objects need additionalProperties false; minLength, maxLength, numeric bounds and recursive schemas are not supported; at most 24 optional and 16 union-typed parameters. A refusal or max_tokens stop may return output that does not match the schema. The grammar covers the final response, not thinking. Incompatible with citations and assistant prefill.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S157",
+    "url": "https://platform.claude.com/docs/en/api/errors",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "An organization or workspace spend limit returns HTTP 400 invalid_request_error; 429 is a rate limit or tier spend cap; 529 is overloaded. The SDK retries transient failures twice by default unless max_retries is set. Opus 5.5 and Sonnet 5.5 reject thinking type disabled and forced tool_choice.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S158",
+    "url": "https://platform.claude.com/docs/en/manage-claude/workspaces",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "Console workspaces separate environments; API keys can be scoped to one workspace; a workspace's monthly spend limit and rate limits are set in the Console and cannot exceed the organization's. Workspaces are recommended for development, staging and production separation.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S159",
+    "url": "https://platform.claude.com/docs/en/build-with-claude/token-counting",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "POST /v1/messages/count_tokens is free, subject to its own rate limits, and returns an estimate that may differ slightly from the billed input. It counts system prompts, tools, images and thinking but rejects server tools.",
+    "evidence_kind": "primary_documentation"
+  },
+  {
+    "id": "S160",
+    "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool",
+    "status": "verified",
+    "observed_at": "2026-10-19",
+    "finding": "The web_search server tool returns results with web_search_result_location citations (URL, title, cited text); max_uses caps searches per request. It costs $10 per 1,000 searches plus tokens, and an organization admin can disable it in the Console.",
+    "evidence_kind": "primary_documentation"
   }
 ]
