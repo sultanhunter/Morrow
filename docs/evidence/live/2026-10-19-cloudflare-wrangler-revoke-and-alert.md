@@ -1,0 +1,29 @@
+# 2026-10-19 Cloudflare: Wrangler OAuth revoked, a $5 billing alert added, and an account census
+
+- **Approval.**
+  - Owner, in chat on 2026-10-19, answering "Revoke it?": "Revoke it (Recommended)".
+  - Owner: "5- you do it cloudflare is also logged in attached browser" (P04.T01i D9 step 5(c), usage alerts).
+- **Exact actions.** All in the attached browser, user `sultanibneusman0@gmail.com`.
+  - My Profile → Access Management → Connected Applications → **Wrangler** (workers.cloudflare.com; 6 permissions; 2 accounts; last accessed 2026-09-29 21:12) → Revoke → confirmed. Afterwards the list shows only "Cloudflare for Startups".
+  - Account `79ff672d013b8f0956437af6eea3c213` → Workers & Pages → Billing Dashboard → Add Budget Alert:
+    - name "Workers billable usage over $5 (Morrow staging guard)";
+    - threshold **$5 USD**;
+    - recipient `sultanibneusman0@gmail.com`;
+    - saved. Alerts → Overview now lists it next to the pre-existing "Default budget alert (auto-created)".
+- **Not done (owner-only).**
+  - Creating `morrow-staging-ci` and `morrow-staging-operator` (their values are shown once).
+  - Changing the Global API Key (needs the owner's password).
+  - Per-allowance usage alerts (10% of requests, CPU and log events). The dollar alert covers billable overage, which is the cost risk named in D6.
+- **Census.**
+  - User API tokens: none.
+  - Account API tokens: 4, all "Workers R2 Storage Bucket Item Write", 4–9 months old, from other products: "Muslimah Pro backend token", "Social Media Agent", "R2 Account Token" and "mascot-migration".
+  - Workers & Pages: none.
+  - R2 buckets: 7 from other products (davinci-workspaces, games, mascot-assets, perri, shopifyflow-evidence, smokesignal-artifacts and social-media-agen), 6.88 GB in total.
+  - The user is also a member of a second account, "Gufrancode@gmail.com's Account".
+- **OQ-3 (account dedication), raised by this census.**
+  - Owner answer in chat on 2026-10-19: "Use this account".
+  - The accepted risk: a token able to deploy Workers on this account could deploy a Worker that binds and reads those R2 buckets.
+  - Mitigations: both Morrow tokens are account-scoped with Workers/Queues permissions only and a TTL of 2026-11-18; the census runs at every deploy; only the owner can push.
+- **Cap and observed cost.** $0. No billable usage this period.
+- **Cleanup.** Delete the alert under Alerts → Overview. Re-authorise Wrangler with `wrangler login` if the owner wants it back.
+- **Unknown outcomes.** None.

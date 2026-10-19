@@ -123,4 +123,4 @@ Each of these needs a per-action approval:
 - **Owner approval:** 2026-10-19, in chat. Question: "Approve ADR-0019 (staging rules) and the 30-day staging approval card `staging-card-1`?" Answer: "Approve both (Recommended)".
 - **Valid until:** 2026-11-18 (30 days after approval), or the creation of the first production resource, whichever comes first.
 - **OQ-2 answer (GitHub plan and Actions budget):** "GitHub Pro (Recommended)". The owner buys GitHub Pro (about $4 a month) as a per-action purchase and sets a capped Actions spending limit (about $10); branch protection on `main` (requires `foundation`, no approving review) is enabled as soon as Pro is active. The purchase is pending and is outside this card.
-- **Effects used under this card:** none yet.
+- **Effects used under this card:** none yet. The owner's D9 steps that Claude performed on per-action approval (2026-10-19) are recorded in `docs/evidence/live/2026-10-19-*`.
