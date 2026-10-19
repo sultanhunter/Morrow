@@ -89,7 +89,7 @@ Measured before P03.T04f (run 39171176579, the pull request run on the P14.T01a 
 
 | Run | Jobs before → after | Billed minutes before | Billed minutes after (estimate) |
 | --- | --- | --- | --- |
-| Full pull request run | 12 → 9 (`scope`, `checks`, `workers`, `postgres` ×3, `pgwire`, `ui`, `foundation`) | about 43 | about 39–42: `scope` 1, `checks` 4–5, `workers` 6, `core-http` 8–9, `linking` 6–7, `work` 5, `pgwire` 4, `ui` 4, `foundation` 1 |
+| Full pull request run | 12 → 10 (`scope`, `checks`, `workers`, `postgres` ×4, `pgwire`, `ui`, `foundation`) | about 43 | about 40–44: `scope` 1, `checks` 4–5, `workers` 6, `core` and `http` 11–12 together (split on 2026-10-20), `linking` 6–7, `work` 5, `pgwire` 4, `ui` 4, `foundation` 1 |
 | Push to `main` merging an up-to-date head | 12 → 3 | about 43 | about 6–7 |
 | Push to `main` of a squash merge or a stale head | 12 → 9 | about 43 | about 39–42 |
 | Markdown-only pull request run | 12 → 3 | about 43 | about 6–7 |
