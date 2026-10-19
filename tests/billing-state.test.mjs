@@ -1633,8 +1633,9 @@ test("AC23: losing a shop, the review-bound allocation and the spending scope", 
     installationId: null,
     mandateId: null,
   };
+  let grantCount = 0;
   const grant = (overrides = {}, scopeOverrides = {}) => ({
-    id: "grant_" + Math.random().toString(36).slice(2, 8),
+    id: `grant_${++grantCount}`,
     principal: actor,
     capabilityId: "creative.image.generate",
     verbs: ["execute"],
