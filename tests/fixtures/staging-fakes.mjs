@@ -13,6 +13,15 @@ import { StagingError } from "../../scripts/staging-common.mjs";
 
 export const fakeSha = (seed) => createHash("sha1").update(String(seed)).digest("hex");
 const ok = (stdout = "") => ({ status: 0, stdout, stderr: "" });
+const missing = () => ({ status: 1, stdout: "", stderr: "HTTP 404" });
+// Worker key -> staging script name, as in infra/environments/staging.json.
+export const scriptOf = Object.freeze({
+  api: "morrow-staging-api",
+  broker: "morrow-staging-broker",
+  orchestrator: "morrow-staging-orchestrator",
+  connector: "morrow-staging-connector",
+});
+export const fakeUuid = (n) => "00000000-0000-4000-8000-" + String(n).padStart(12, "0");
 
 export function fakeTools(options = {}) {
   const calls = [];
@@ -40,7 +49,17 @@ export function fakeTools(options = {}) {
       },
     ],
     bulkInputs: [],
+    // GitHub: variable values, the deploy workflow's state, main's tip and its runs.
+    values: { ...(options.gh?.values ?? {}) },
+    workflow: options.gh?.workflow ?? "active",
+    mainTip: options.gh?.mainTip ?? null,
+    runs: structuredClone(options.gh?.runs ?? []),
+    deployed: [],
+    deploySerial: 100,
   };
+  // `cloudflare` (a fakeCloudflare) receives each successful `wrangler deploy`, so the
+  // deployed version and the api's workers.dev state move as the real ones do.
+  const cloudflare = options.cloudflare ?? null;
   const emit = options.emit ?? null;
   const decorate = (result) =>
     emit
@@ -92,7 +111,41 @@ export function fakeTools(options = {}) {
         return decorate(ok(JSON.stringify(state.ghVariables)));
       if (args[0] === "variable" && args[1] === "set") {
         state.variables[args[2]] = args[args.indexOf("--body") + 1];
+        state.values[args[2]] = args[args.indexOf("--body") + 1];
         return decorate(ok());
+      }
+      if (args[0] === "auth" && args[1] === "status") return decorate(ok());
+      if (args[0] === "api") {
+        const method = args[1] === "-X" ? args[2] : "GET";
+        const path = args[1] === "-X" ? args[3] : args[1];
+        const variable =
+          /^repos\/[^/]+\/[^/]+\/(?:environments\/staging|actions)\/variables\/([A-Z_]+)$/.exec(
+            path,
+          );
+        if (variable)
+          return Object.hasOwn(state.values, variable[1])
+            ? decorate(ok(JSON.stringify({ name: variable[1], value: state.values[variable[1]] })))
+            : missing();
+        if (/\/git\/ref\/heads\/main$/.test(path))
+          return decorate(ok(JSON.stringify({ object: { sha: state.mainTip ?? state.main } })));
+        if (/\/actions\/workflows\/deploy-staging\.yml$/.test(path))
+          return decorate(ok(JSON.stringify({ state: state.workflow })));
+        if (/\/actions\/workflows\/deploy-staging\.yml\/runs\?per_page=\d+$/.test(path))
+          return decorate(ok(JSON.stringify({ workflow_runs: state.runs })));
+        if (method === "PUT" && /\/actions\/workflows\/deploy-staging\.yml\/disable$/.test(path)) {
+          state.workflow = "disabled_manually";
+          return decorate(ok());
+        }
+        if (method === "PUT" && /\/actions\/workflows\/deploy-staging\.yml\/enable$/.test(path)) {
+          state.workflow = "active";
+          return decorate(ok());
+        }
+        const cancel = /\/actions\/runs\/(\d+)\/cancel$/.exec(path);
+        if (method === "POST" && cancel) {
+          const run = state.runs.find((r) => String(r.id) === cancel[1]);
+          if (run) run.status = "completed";
+          return decorate(ok());
+        }
       }
       return { status: 2, stdout: "", stderr: "" };
     },
@@ -129,42 +182,91 @@ export function fakeTools(options = {}) {
       }
       if (args[0] === "versions" && args[1] === "list")
         return decorate(ok(JSON.stringify(state.versions)));
+      if (args[0] === "deploy") {
+        const versionId = fakeUuid(state.deploySerial++);
+        // A hook runs while the upload is "in flight" (the kill race); a deploy then
+        // lands, which on the api re-enables workers.dev, as wrangler does.
+        await options.onDeploy?.(worker, state);
+        const lands = options.deployLands?.(worker) ?? true;
+        if (lands) {
+          state.deployed.push(worker);
+          cloudflare?.deploy(scriptOf[worker], versionId, { workersDev: worker === "api" });
+        }
+        const failed = options.deployFails?.(worker);
+        if (failed) return { status: 1, stdout: emit ?? "", stderr: emit ?? "", output: [] };
+        return {
+          ...decorate(ok("Deployed " + scriptOf[worker])),
+          output: lands
+            ? [
+                { type: "wrangler-session", version: 1 },
+                {
+                  type: "deploy",
+                  version: 1,
+                  worker_name: scriptOf[worker],
+                  version_id: versionId,
+                },
+              ]
+            : [],
+        };
+      }
       return { status: 2, stdout: "", stderr: "" };
     },
     async neonctl(args, { input } = {}) {
       record("neonctl", args, { input: input ?? null });
       const failed = failure("neonctl", args);
       if (failed) return failed;
+      const reply = options.neonctl?.(args, state);
+      if (reply) return decorate(reply);
       return { status: 2, stdout: "", stderr: "" };
     },
   };
   return { tools, calls, state };
 }
 
-// A Cloudflare API with the census reads. `failWith` makes every request fail with a
-// fixed code, as the real client does for an error reply.
+// A Cloudflare API: the census reads, deployments, the workers.dev switch, queues and
+// Turnstile widgets. `failWith` makes every request fail with a fixed code, as the real
+// client does for an error reply. `deploy` is how fakeTools' `wrangler deploy` lands.
 export function fakeCloudflare(options = {}) {
   const calls = [];
-  const scripts = options.scripts ?? [
-    {
-      name: "morrow-staging-api",
-      enabled: true,
-      previews: false,
-      bindings: ["morrow-staging-broker"],
-    },
-    { name: "morrow-staging-broker", enabled: false, previews: false, bindings: [] },
-    { name: "morrow-staging-orchestrator", enabled: false, previews: false, bindings: [] },
-    { name: "morrow-staging-connector", enabled: false, previews: false, bindings: [] },
-  ];
+  const scripts = structuredClone(
+    options.scripts ?? [
+      {
+        name: "morrow-staging-api",
+        enabled: true,
+        previews: false,
+        bindings: ["morrow-staging-broker"],
+      },
+      { name: "morrow-staging-broker", enabled: false, previews: false, bindings: [] },
+      { name: "morrow-staging-orchestrator", enabled: false, previews: false, bindings: [] },
+      { name: "morrow-staging-connector", enabled: false, previews: false, bindings: [] },
+    ],
+  );
+  const deployments = { ...(options.deployments ?? {}) };
+  for (const script of scripts) deployments[script.name] ??= fakeUuid(scripts.indexOf(script) + 1);
+  const queues = structuredClone(options.queues ?? []);
+  const widgets = structuredClone(options.widgets ?? []);
+  const notFound = () => new StagingError("STAGING_CLOUDFLARE_REQUEST_FAILED", { status: 404 });
+  const scriptNamed = (name) => scripts.find((s) => s.name === name);
   const api = {
     async get(segments) {
       calls.push(segments.join("/"));
       if (options.failWith) throw new StagingError(options.failWith, { status: 403 });
       const path = segments.join("/");
       if (path === "workers/scripts") return scripts.map((s) => ({ id: s.name }));
-      const match = /^workers\/scripts\/([^/]+)\/(subdomain|settings)$/.exec(path);
+      const match = /^workers\/scripts\/([^/]+)\/(subdomain|settings|deployments)$/.exec(path);
       if (match) {
-        const script = scripts.find((s) => s.name === match[1]);
+        const script = scriptNamed(match[1]);
+        if (!script) throw notFound();
+        if (match[2] === "deployments")
+          return {
+            deployments: [
+              {
+                id: "dep-" + script.name,
+                created_on: "2026-10-20T10:00:00Z",
+                versions: [{ version_id: deployments[script.name], percentage: 100 }],
+              },
+            ],
+          };
         return match[2] === "subdomain"
           ? { enabled: script.enabled, previews_enabled: script.previews }
           : {
@@ -176,6 +278,10 @@ export function fakeCloudflare(options = {}) {
             };
       }
       if (path === "workers/dispatch/namespaces") return options.namespaces ?? [];
+      if (path === "queues") {
+        if (options.queueListFails) throw notFound();
+        return queues;
+      }
       throw new StagingError("STAGING_CLOUDFLARE_REQUEST_FAILED", { status: 404 });
     },
     async list(segments) {
@@ -184,10 +290,120 @@ export function fakeCloudflare(options = {}) {
       const path = segments.join("/");
       if (path === "pages/projects") return options.pages ?? [];
       if (path === "members") return options.members ?? [{ id: "member-1" }];
+      if (path === "challenges/widgets") return widgets;
+      throw new StagingError("STAGING_CLOUDFLARE_REQUEST_FAILED", { status: 404 });
+    },
+    async request(method, segments, { body } = {}) {
+      calls.push(method + " " + segments.join("/"));
+      if (options.failWith) throw new StagingError(options.failWith, { status: 403 });
+      const path = segments.join("/");
+      const subdomain = /^workers\/scripts\/([^/]+)\/subdomain$/.exec(path);
+      if (method === "POST" && subdomain) {
+        const script = scriptNamed(subdomain[1]);
+        if (!script) throw notFound();
+        if (options.subdomainFails) throw new StagingError("STAGING_CLOUDFLARE_UNAVAILABLE");
+        script.enabled = body.enabled;
+        script.previews = body.previews_enabled;
+        return { success: true, result: { enabled: script.enabled, previews_enabled: false } };
+      }
+      if (method === "POST" && path === "queues") {
+        const outcome = options.queueCreate?.(body.queue_name) ?? "ok";
+        if (outcome !== "fail") queues.push({ queue_name: body.queue_name, queue_id: "q" });
+        if (outcome !== "ok") throw new StagingError("STAGING_CLOUDFLARE_UNAVAILABLE");
+        return { success: true, result: { queue_name: body.queue_name } };
+      }
+      if (method === "POST" && path === "challenges/widgets") {
+        const reply = options.widgetReply ?? {
+          sitekey: "0x4AAAAAAA" + "S".repeat(14),
+          secret: "0x4AAAAAAA" + "s".repeat(24),
+        };
+        if (options.widgetCreate !== "fail")
+          widgets.push({ name: body.name, sitekey: reply.sitekey, domains: body.domains });
+        if (options.widgetCreate === "lost" || options.widgetCreate === "fail")
+          throw new StagingError("STAGING_CLOUDFLARE_UNAVAILABLE");
+        return { success: true, result: { ...reply, name: body.name, domains: body.domains } };
+      }
       throw new StagingError("STAGING_CLOUDFLARE_REQUEST_FAILED", { status: 404 });
     },
   };
-  return { api, calls };
+  const cloud = {
+    api,
+    calls,
+    scripts,
+    queues,
+    widgets,
+    deployments,
+    // A landed `wrangler deploy`: the script exists, its version moves, and on the api
+    // workers.dev is (re-)enabled by the configuration's `workers_dev: true`.
+    deploy(name, versionId, { workersDev = false } = {}) {
+      let script = scriptNamed(name);
+      if (!script) {
+        script = { name, enabled: false, previews: false, bindings: [] };
+        scripts.push(script);
+      }
+      if (workersDev) script.enabled = true;
+      if (name === "morrow-staging-api") script.bindings = ["morrow-staging-broker"];
+      deployments[name] = versionId;
+    },
+    workersDev: (name) => scriptNamed(name)?.enabled ?? null,
+  };
+  return cloud;
+}
+
+// A fake staging origin over a fakeCloudflare: the api answers only while its workers.dev
+// is enabled; the other hostnames never answer. `ready`, `guard` and `limit` shape the
+// api. Every request is recorded (method and path, never a header value).
+export function fakeSite({ cloud, ready = true, guard = true, limit = 10, csp, other = 404 }) {
+  const requests = [];
+  let starts = 0;
+  const json = (status, body, headers = {}) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json; charset=utf-8", ...headers },
+    });
+  const fetch = async (url, init = {}) => {
+    const { host, pathname } = new URL(url);
+    const method = init.method ?? "GET";
+    requests.push({ method, host, path: pathname });
+    const isReady = typeof ready === "function" ? ready() : ready;
+    if (host !== "morrow-staging-api.lab.workers.dev")
+      return new Response("nothing here", { status: other });
+    if (!cloud.workersDev("morrow-staging-api"))
+      return new Response("There is nothing here yet", { status: 404 });
+    if (pathname === "/healthz")
+      return json(200, { schemaVersion: 1, service: "api", ready: isReady });
+    if (pathname === "/")
+      return new Response("<!doctype html>", {
+        status: 200,
+        headers: { "content-type": "text/html", "content-security-policy": csp },
+      });
+    if (pathname === "/w/x/inbox") return new Response("<!doctype html>", { status: 200 });
+    if (pathname === "/api/x") return json(404, { code: "not_found" });
+    if (pathname === "/auth/challenge")
+      return guard
+        ? json(200, {
+            schemaVersion: 1,
+            provider: "turnstile",
+            siteKey: "0x4AAAAAAAx",
+            actions: {},
+          })
+        : json(404, { code: "not_found" });
+    if (pathname === "/auth/login" && method === "POST") {
+      if (!guard) {
+        starts++;
+        return json(200, { schemaVersion: 1, authorizationUrl: "https://example.invalid/" });
+      }
+      const header = new Headers(init.headers).get("x-morrow-challenge");
+      if (!header) return json(403, { schemaVersion: 1, outcome: "challenge_required" });
+      starts++;
+      return starts > limit
+        ? json(429, { schemaVersion: 1, outcome: "rate_limited" }, { "retry-after": "60" })
+        : json(403, { schemaVersion: 1, outcome: "challenge_failed" });
+    }
+    if (pathname === "/workspaces") return json(401, { code: "authentication_required" });
+    return json(404, { code: "not_found" });
+  };
+  return { fetch, requests, flowsCreated: () => (guard ? 0 : starts) };
 }
 
 // A scriptable database for the commands' SQL paths without PostgreSQL. `rules` map a
@@ -286,7 +502,7 @@ export const approvedCard = (approvedOn = "2026-10-19") => {
   return {
     schemaVersion: 1,
     id: "staging-card-1",
-    record: "docs/decisions/approvals/staging.md",
+    // `record` (the Markdown card) is not read by cardState, and labs never name one.
     status: "approved",
     approvedOn,
     expiresOn: expires,
@@ -318,6 +534,8 @@ export async function fakeContext({
   loginConfiguration = null,
   administrator = { name: "neondb_owner", mode: "createrole" },
   now = Date.parse("2026-10-20T12:00:00Z"),
+  environment = {},
+  fetch = null,
   overrides = {},
 }) {
   const { identityConstants } = await import("../../scripts/staging.mjs");
@@ -346,11 +564,46 @@ export async function fakeContext({
   };
   const out = [];
   const err = [];
+  const reports = [];
+  const outputs = {};
+  const sleeps = [];
+  const notices = [];
+  let clock = now;
   const ctx = {
     root: repoRoot,
     home,
     directory: credentialDirectory(home),
-    now: () => now,
+    environment: Object.freeze({
+      ci: false,
+      headSha: null,
+      deployEnabled: null,
+      schemaHead: null,
+      loginDigest: null,
+      accountId: null,
+      ...environment,
+    }),
+    now: () => clock,
+    // The fake clock moves only when a command sleeps.
+    sleep: async (ms) => {
+      sleeps.push(ms);
+      clock += ms;
+    },
+    fetch:
+      fetch ??
+      (async () => {
+        throw new TypeError("fetch failed");
+      }),
+    interactive: () => false,
+    notice: (text) => notices.push(text),
+    browser: async () => {
+      throw new StagingError("STAGING_BROWSER_UNAVAILABLE");
+    },
+    writeReport: (name, value) => reports.push({ name, value: JSON.parse(JSON.stringify(value)) }),
+    setOutput: (name, value) => (outputs[name] = value),
+    gate5: async () => {},
+    probeDatabase: async () => {
+      throw new StagingError("STAGING_DATABASE_UNAVAILABLE");
+    },
     stdout: (line) => out.push(line),
     stderr: (line) => err.push(line),
     administrator,
@@ -381,5 +634,5 @@ export async function fakeContext({
     async checkKeyring() {},
     ...overrides,
   };
-  return { ctx, out, err, constants };
+  return { ctx, out, err, constants, reports, outputs, sleeps, notices };
 }

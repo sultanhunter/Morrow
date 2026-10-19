@@ -127,7 +127,17 @@
     "staging:connections": "node scripts/staging.mjs connections",
     "staging:secrets-status": "node scripts/staging.mjs secrets-status",
     "staging:put-secret": "node scripts/staging.mjs put-secret",
-    "staging:keyring": "node scripts/staging.mjs keyring"
+    "staging:keyring": "node scripts/staging.mjs keyring",
+    "staging:preflight": "node scripts/staging.mjs preflight",
+    "staging:status": "node scripts/staging.mjs status",
+    "staging:neon-probe": "node scripts/staging.mjs neon-probe",
+    "staging:queues": "node scripts/staging.mjs queues",
+    "staging:turnstile-create": "node scripts/staging.mjs turnstile-create",
+    "staging:ci-gates": "node scripts/staging.mjs ci-gates",
+    "staging:deploy": "node scripts/staging.mjs deploy",
+    "staging:smoke": "node scripts/staging.mjs smoke",
+    "staging:kill": "node scripts/staging.mjs kill",
+    "staging:unkill": "node scripts/staging.mjs unkill"
   },
   "devDependencies": {
     "@react-router/dev": "7.18.2",

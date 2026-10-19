@@ -7,7 +7,7 @@
 // stdin (`wrangler secret bulk`), never argv. Tests and labs replace the whole `tools`
 // object with fakes (tests/fixtures/staging-fakes.mjs).
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { edgeChildEnvironment } from "./edge.mjs";
@@ -77,21 +77,26 @@ export function createTools({
     }
   };
   return Object.freeze({
-    async wrangler(args, { input } = {}) {
+    // `outputFile` adds wrangler's structured output (WRANGLER_OUTPUT_FILE_PATH, one JSON
+    // object per line) as `output`, so callers read ids from it rather than from text.
+    async wrangler(args, { input, outputFile = false } = {}) {
       if (!credential || !/^[0-9a-f]{32}$/.test(accountId ?? ""))
         throw new StagingError("STAGING_CLOUDFLARE_UNCONFIGURED");
       return throwaway(async (dir) => {
         const empty = join(dir, "empty.env");
         writeFileSync(empty, "", { mode: 0o600 });
+        const outputPath = join(dir, "wrangler-output.ndjson");
         const env = credential.childEnvironment({
           ...edgeChildEnvironment(dir),
           CLOUDFLARE_ACCOUNT_ID: accountId,
+          ...(outputFile ? { WRANGLER_OUTPUT_FILE_PATH: outputPath } : {}),
         });
-        return runChild(process.execPath, [wranglerBin, ...args, "--env-file=" + empty], {
-          cwd: root,
-          env,
-          input,
-        });
+        const result = await runChild(
+          process.execPath,
+          [wranglerBin, ...args, "--env-file=" + empty],
+          { cwd: root, env, input, timeoutMs: outputFile ? 600000 : 120000 },
+        );
+        return outputFile ? { ...result, output: readOutputEntries(outputPath) } : result;
       });
     },
     async neonctl(args, { input } = {}) {
@@ -129,6 +134,26 @@ export function createTools({
       });
     },
   });
+}
+
+// wrangler's output file: objects only, at most 64 entries; unreadable lines are skipped.
+export function readOutputEntries(path) {
+  let text;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    return [];
+  }
+  const entries = [];
+  for (const line of text.split("\n").slice(0, 64)) {
+    try {
+      const value = JSON.parse(line);
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) entries.push(value);
+    } catch {
+      // Not an entry.
+    }
+  }
+  return entries;
 }
 
 // Parsers: closed shapes in, names and ids out. Anything else is a fixed code.
@@ -191,9 +216,10 @@ export function githubNames(value) {
   });
 }
 
-// The direct Cloudflare API (census reads; part 2 adds the kill switch's subdomain
-// write). Fixed base, closed path segments, no redirects, bounded replies. The header
-// value comes from the opaque credential at the moment of the request.
+// The direct Cloudflare API (the census reads, the kill switch's subdomain write, the
+// queues and the Turnstile widget). Fixed base, closed path segments, no redirects,
+// bounded replies. The header value comes from the opaque credential at the moment of
+// the request.
 export function cloudflareApi({
   credential,
   accountId,

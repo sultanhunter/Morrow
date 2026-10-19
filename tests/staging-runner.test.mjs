@@ -689,7 +689,8 @@ test("cli: unknown subcommands and arguments are usage errors (exit 2)", async (
       assert.equal(await main(argv, ctx), 2, argv.join(" "));
       assert.equal(JSON.parse(err.at(-1)).code, "STAGING_USAGE");
     }
-    assert.deepEqual([...commands.keys()].sort(), [
+    // The full list, with the deploy and bring-up commands, is in staging-deploy.test.mjs.
+    for (const name of [
       "census",
       "connections",
       "keyring",
@@ -699,7 +700,8 @@ test("cli: unknown subcommands and arguments are usage errors (exit 2)", async (
       "schema-head",
       "secrets-status",
       "seed-platform",
-    ]);
+    ])
+      assert.ok(commands.has(name), name);
   } finally {
     planted.cleanup();
   }
@@ -724,7 +726,7 @@ test("cli: schema-head prints the head; effects refuse without the card or ident
       const proposed = await fakeContext({
         home: planted.home,
         tools: fakeTools().tools,
-        card: JSON.parse(read("docs/decisions/approvals/staging-card.json")),
+        card: { ...approvedCard(), status: "proposed", approvedOn: null, expiresOn: null },
       });
       assert.equal(await main(argv, proposed.ctx), 1);
       assert.deepEqual(JSON.parse(proposed.err.at(-1)), {

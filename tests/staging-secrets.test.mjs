@@ -284,6 +284,7 @@ function runChild(scenario, plant = files()) {
       brokerMode: mode("tmp/broker-secrets.json"),
       apiFile: read("tmp/api-secrets.json"),
       apiMode: mode("tmp/api-secrets.json"),
+      turnstileFile: read("turnstile-secret"),
     };
   } finally {
     planted.cleanup();
@@ -310,6 +311,7 @@ function noMarkers(run, extra = []) {
       [],
       "sql",
     );
+  assert.deepEqual(contains(JSON.stringify(run.dump?.reports ?? []), secrets), [], "report");
 }
 
 test("AC07: failing and noisy tools, database errors and bad files never reach the output", () => {
@@ -431,6 +433,66 @@ test("AC07: connections count unknown names without printing them; keyring print
   assert.equal(metadata.configurationDigest, "c".repeat(64));
   assert.match(metadata.keyId, /^[0-9a-f-]{36}$/);
   noMarkers(keyring, [material]);
+});
+
+test("AC07: turnstile-create, the Neon probe, the kill and the deploy never print a marker", async () => {
+  const { identityConstants } = await import("../scripts/staging.mjs");
+  const constants = await identityConstants();
+  const without = (name) => Object.fromEntries(Object.entries(files()).filter(([k]) => k !== name));
+  // The Turnstile secret goes only to its new 0600 file; a lost reply leaves no file.
+  const created = runChild("turnstile-create", without("turnstile-secret"));
+  assert.equal(created.status, 0, created.stderr);
+  assert.equal(oneLine(created, "stdout").siteKey, "0x4AAAAAAA" + "S".repeat(14));
+  assert.equal(created.turnstileFile, "0x4AAAAAAA" + markers.turnstile);
+  noMarkers(created);
+  const lost = runChild("turnstile-lost", without("turnstile-secret"));
+  assert.equal(lost.status, 1);
+  assert.equal(oneLine(lost, "stderr").code, "STAGING_TURNSTILE_SECRET_LOST");
+  assert.equal(lost.turnstileFile, null);
+  noMarkers(lost);
+  // The probe's connection string (with its password) and server errors stay inside.
+  const probe = runChild("neon-probe");
+  assert.equal(probe.status, 0, probe.stderr);
+  const report = oneLine(probe, "stdout");
+  assert.deepEqual(report.mN3, { verifierAccepted: false, sqlstate: "XX000" });
+  assert.equal(report.mN1.revokeSqlstate, "XX000");
+  noMarkers(probe);
+  // A kill with every tool failing and a failing fetch still prints one closed line.
+  const kill = runChild("kill-failing");
+  assert.equal(kill.status, 1);
+  assert.equal(
+    oneLine(kill, "stdout").fallback,
+    "dashboard_workers_dev_disable_and_github_workflow_disable",
+  );
+  noMarkers(kill);
+  // A failed upload with noisy wrangler output: an unknown outcome, no relayed text.
+  const failing = runChild("deploy-failing");
+  assert.equal(failing.status, 1);
+  assert.equal(oneLine(failing, "stdout").outcome, "unknown");
+  noMarkers(failing);
+  // The first deploy hands the secret files to wrangler by path, then unlinks them.
+  const brokerSecrets = Object.fromEntries(
+    constants.brokerSecrets.map((name, i) => [
+      name,
+      name === "WORKOS_API_KEY" ? "sk_test_" + markers.workos : "pw" + i + markers.envDb,
+    ]),
+  );
+  const first = runChild("deploy-first", {
+    ...files(),
+    "tmp/broker-secrets.json": JSON.stringify(brokerSecrets),
+    "tmp/api-secrets.json": JSON.stringify({
+      LOGIN_CAPSULE_KEYRING: "keyring" + markers.malformed,
+    }),
+  });
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+  assert.equal(oneLine(first, "stdout").outcome, "deployed");
+  assert.equal(first.brokerFile, null);
+  assert.equal(first.apiFile, null);
+  const secretsFiles = first.dump.calls
+    .filter((c) => c.tool === "wrangler" && c.args.includes("--secrets-file"))
+    .map((c) => c.args.at(-1).replace(/^.*\/staging\//, ""));
+  assert.deepEqual(secretsFiles, ["tmp/broker-secrets.json", "tmp/api-secrets.json"]);
+  noMarkers(first, Object.values(brokerSecrets));
 });
 
 // ---------------------------------------------------------------------------

@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "staging-card-1",
   "record": "docs/decisions/approvals/staging.md",
-  "status": "proposed",
-  "approvedOn": null,
-  "expiresOn": null,
+  "status": "approved",
+  "approvedOn": "2026-10-19",
+  "expiresOn": "2026-11-18",
   "productionResourceCreated": false,
   "e7": null
 }

@@ -9,11 +9,11 @@
 // reads and local commands do not. `ctx` is the one injection seam: tests and the
 // PostgreSQL lab pass fakes for tools, the Cloudflare API and the database.
 import "./staging-token.mjs"; // FIRST: removes CLOUDFLARE_API_TOKEN from process.env.
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { repositoryRoot } from "./artifacts.mjs";
+import { repositoryRoot, writeArtifact } from "./artifacts.mjs";
 import { captureConsole, loadWranglerApi } from "./edge.mjs";
 import { buildLoginKeyring } from "./login-keyring.mjs";
 import { loadMigrationChain, schemaHead } from "./migration-chain.mjs";
@@ -46,10 +46,32 @@ import {
   createTools,
   githubNames,
   newestVersionId,
+  runChild,
   secretNames,
   toolJson,
   toolOk,
 } from "./staging-tools.mjs";
+import {
+  ciGates,
+  collectCensus,
+  deployOrder,
+  githubVariables,
+  runDeploy,
+  runKill,
+  runUnkill,
+  setVariable,
+} from "./staging-deploy.mjs";
+import {
+  createQueues,
+  createTurnstile,
+  neonProbe,
+  preflight,
+  status as stagingStatus,
+} from "./staging-bringup.mjs";
+import { assistedSmoke, unattendedSmoke } from "./staging-smoke.mjs";
+
+export { censusFindings } from "./staging-deploy.mjs";
+export { githubVariables };
 
 // ---------------------------------------------------------------------------
 // Configuration: staging.json, the card record, and the resolved staging vars of the api
@@ -60,12 +82,6 @@ export const workerConfigs = Object.freeze({
   orchestrator: "apps/workers/wrangler.jsonc",
   connector: "apps/shopify-connector/wrangler.jsonc",
 });
-export const githubVariables = Object.freeze([
-  "CLOUDFLARE_ACCOUNT_ID",
-  "STAGING_DEPLOY_ENABLED",
-  "STAGING_LOGIN_CONFIGURATION_DIGEST",
-  "STAGING_SCHEMA_HEAD",
-]);
 export const githubSecrets = Object.freeze(["CLOUDFLARE_API_TOKEN"]);
 
 export async function identityConstants() {
@@ -140,6 +156,11 @@ const githubScope = (staging) => {
   if (scope === "repository") return [];
   throw new StagingError("STAGING_GITHUB_SCOPE_INVALID");
 };
+// {repository, environment}: the OQ-2 A shape names the `staging` environment.
+const githubTarget = (staging) => ({
+  repository: repositoryOf(staging),
+  environment: githubScope(staging).length ? "staging" : null,
+});
 async function stagingBinding(ctx, config) {
   if (config.bindingJson === null) throw new StagingError("STAGING_IDENTIFIERS_UNSET");
   const constants = await ctx.constants();
@@ -215,20 +236,8 @@ export async function mainPreconditions(ctx, repository, scope) {
     throw new StagingError("STAGING_FOUNDATION_NOT_GREEN");
   return { sourceCommit: main };
 }
-async function publishVariable(ctx, staging, name, value) {
-  if (!githubVariables.includes(name) || !/^[A-Za-z0-9]{1,128}$/.test(value))
-    throw new StagingError("STAGING_VARIABLE_INVALID");
-  await toolOk(ctx.tools, "gh", [
-    "variable",
-    "set",
-    name,
-    "--repo",
-    repositoryOf(staging),
-    ...githubScope(staging),
-    "--body",
-    value,
-  ]);
-}
+const publishVariable = (ctx, staging, name, value) =>
+  setVariable(ctx, githubTarget(staging), name, value);
 const brokerList = async (ctx) =>
   secretNames(
     await toolJson(ctx.tools, "wrangler", [
@@ -484,35 +493,7 @@ command("keyring", {
   },
 });
 
-// M-C2 / D2 census: every script with its workers.dev and preview state, every service
-// binding naming the staging broker (scripts and Pages), dispatch namespaces, members.
-export function censusFindings(snapshot, staging) {
-  const workers = staging.cloudflare.workers;
-  const morrow = new Set(Object.values(workers));
-  const findings = [];
-  for (const script of snapshot.scripts) {
-    if (!morrow.has(script.name)) findings.push({ code: "NOT_MORROW_SCRIPT", name: script.name });
-    if (script.workersDev && script.name !== workers.api)
-      findings.push({ code: "WORKERS_DEV_EXPOSED", name: script.name });
-    if (script.previews) findings.push({ code: "PREVIEWS_ENABLED", name: script.name });
-    if (script.bindsBroker && script.name !== workers.api)
-      findings.push({ code: "BROKER_BOUND_ELSEWHERE", name: script.name });
-  }
-  for (const project of snapshot.pages) {
-    findings.push({ code: "PAGES_PROJECT", name: project.name });
-    if (project.bindsBroker) findings.push({ code: "BROKER_BOUND_ELSEWHERE", name: project.name });
-  }
-  if (snapshot.dispatchNamespaces > 0)
-    findings.push({ code: "DISPATCH_NAMESPACES", count: snapshot.dispatchNamespaces });
-  if (snapshot.members !== 1) findings.push({ code: "ACCOUNT_MEMBERS", count: snapshot.members });
-  return findings;
-}
-const printableName = (name) =>
-  typeof name === "string" && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(name)
-    ? name
-    : "[unprintable]";
-const servicesBind = (services, broker) =>
-  Object.values(services ?? {}).some((service) => service?.service === broker);
+// M-C2 / D2 census (scripts/staging-deploy.mjs collects it; every deploy runs it too).
 command("census", {
   usage: "census",
   parse: noArguments,
@@ -521,44 +502,11 @@ command("census", {
     const staging = config.staging;
     if (staging.cloudflare?.account_id === null)
       throw new StagingError("STAGING_IDENTIFIERS_UNSET");
-    const api = await ctx.cloudflareApi(staging.cloudflare.account_id);
-    const broker = staging.cloudflare.workers.broker;
-    const listed = await api.get(["workers", "scripts"]);
-    if (!Array.isArray(listed)) throw new StagingError("STAGING_CLOUDFLARE_RESPONSE_INVALID");
-    const scripts = [];
-    for (const entry of listed) {
-      const name = printableName(entry?.id);
-      if (name === "[unprintable]") {
-        scripts.push({ name, workersDev: true, previews: true, bindsBroker: false });
-        continue;
-      }
-      const subdomain = await api.get(["workers", "scripts", name, "subdomain"]);
-      const settings = await api.get(["workers", "scripts", name, "settings"]);
-      scripts.push({
-        name,
-        workersDev: subdomain?.enabled !== false,
-        previews: subdomain?.previews_enabled !== false,
-        bindsBroker: (settings?.bindings ?? []).some(
-          (b) => b?.type === "service" && b?.service === broker,
-        ),
-      });
-    }
-    const pages = (await api.list(["pages", "projects"], 10)).map((project) => ({
-      name: printableName(project?.name),
-      bindsBroker:
-        servicesBind(project?.deployment_configs?.production?.services, broker) ||
-        servicesBind(project?.deployment_configs?.preview?.services, broker),
-    }));
-    const namespaces = await api.get(["workers", "dispatch", "namespaces"]);
-    const members = await api.list(["members"]);
-    const snapshot = {
-      scripts,
-      pages,
-      dispatchNamespaces: Array.isArray(namespaces) ? namespaces.length : 1,
-      members: members.length,
-    };
-    const findings = censusFindings(snapshot, staging);
-    return { ...snapshot, findings, exitCode: findings.length ? 1 : 0 };
+    const census = await collectCensus(
+      await ctx.cloudflareApi(staging.cloudflare.account_id),
+      staging,
+    );
+    return { ...census, exitCode: census.findings.length ? 1 : 0 };
   },
 });
 
@@ -703,6 +651,258 @@ command("secrets-status", {
 });
 
 // ---------------------------------------------------------------------------
+// The first bring-up and continuous deploy (P04.T01i D2, D7, D8; trimmed by ADR-0021).
+const identifiersSet = (staging) => {
+  const cloudflare = staging?.cloudflare ?? {};
+  if (
+    cloudflare.account_id === null ||
+    cloudflare.origin === null ||
+    cloudflare.workers_dev_subdomain === null
+  )
+    throw new StagingError("STAGING_IDENTIFIERS_UNSET");
+};
+// The CSP the SPA's _headers commits for `/*` (the smoke compares the hosted header).
+export function committedCsp(root) {
+  const lines = readFileSync(join(root, "apps/workspace-web/public/_headers"), "utf8").split("\n");
+  const block = lines.indexOf("/*");
+  for (const line of lines.slice(block + 1)) {
+    if (!/^\s/.test(line)) break;
+    const match = /^\s+Content-Security-Policy: (.+)$/.exec(line);
+    if (match) return match[1];
+  }
+  throw new StagingError("STAGING_CSP_MISSING");
+}
+const firstFiles = Object.freeze({
+  broker: "tmp/broker-secrets.json",
+  api: "tmp/api-secrets.json",
+});
+
+// The CI step without the token: card, gate 1 (main tip) and gate 2 (flag). It sets the
+// step output `proceed` and exits 0 on every stop.
+command("ci-gates", {
+  usage: "ci-gates",
+  parse: noArguments,
+  async run(ctx) {
+    if (!ctx.environment.ci) throw new StagingError("STAGING_CI_ONLY");
+    const config = await ctx.config();
+    let result;
+    try {
+      result = await ciGates(ctx, {
+        github: githubTarget(config.staging),
+        cardActive: cardState(config.card, ctx.now()).active,
+      });
+    } finally {
+      ctx.setOutput("proceed", result?.proceed === true ? "true" : "false");
+    }
+    return result;
+  },
+});
+
+command("deploy", {
+  usage: "deploy [--first | --ci]",
+  parse(args) {
+    if (args.length === 0) return { mode: "local" };
+    if (args.length === 1 && args[0] === "--first") return { mode: "first" };
+    if (args.length === 1 && args[0] === "--ci") return { mode: "ci" };
+    throw new StagingError("STAGING_USAGE");
+  },
+  async run(ctx, { mode }) {
+    if ((mode === "ci") !== ctx.environment.ci)
+      throw new StagingError(mode === "ci" ? "STAGING_CI_ONLY" : "STAGING_LOCAL_ONLY");
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    const staging = config.staging;
+    identifiersSet(staging);
+    const github = githubTarget(staging);
+    const constants = await ctx.constants();
+    const specs = await ctx.specs();
+    const report = await runDeploy(ctx, {
+      mode,
+      staging,
+      github,
+      configs: workerConfigs,
+      names: staging.cloudflare.workers,
+      brokerSecrets: constants.brokerSecrets,
+      schemaHead: schemaHead(ctx.chain()),
+      csp: committedCsp(ctx.root),
+      preconditions: () => mainPreconditions(ctx, github.repository, "head"),
+      loginDigest: async () => (await ctx.loginConfiguration(config)).configurationDigest,
+      // The two owner files: exact key sets (their format checks), and the keyring bound
+      // to the committed login configuration's digest.
+      async firstFiles(digest) {
+        readCredentialFile(ctx.directory, firstFiles.broker, specs);
+        let keyring;
+        try {
+          keyring = JSON.parse(
+            readCredentialFile(ctx.directory, firstFiles.api, specs),
+          ).LOGIN_CAPSULE_KEYRING;
+        } catch (error) {
+          throw error instanceof StagingError ? error : new StagingError("STAGING_KEYRING_INVALID");
+        }
+        await ctx.checkKeyring(keyring, digest);
+        return {
+          broker: join(ctx.directory, firstFiles.broker),
+          api: join(ctx.directory, firstFiles.api),
+        };
+      },
+      // After the four uploads: unlink both files, publish the digest (E10), and record
+      // the versions that carry the new secrets.
+      async afterFirst(digest, versions) {
+        for (const file of Object.values(firstFiles))
+          try {
+            unlinkSync(join(ctx.directory, file));
+          } catch {
+            // Already gone.
+          }
+        await setVariable(ctx, github, "STAGING_LOGIN_CONFIGURATION_DIGEST", digest);
+        recordRotation(ctx.directory, constants.brokerSecrets, {
+          worker: "broker",
+          versionId: versions.broker.current,
+          now: ctx.now(),
+        });
+        recordRotation(ctx.directory, ["LOGIN_CAPSULE_KEYRING"], {
+          worker: "api",
+          versionId: versions.api.current,
+          now: ctx.now(),
+        });
+      },
+    });
+    const closed = closedReport({ command: "deploy", ...report });
+    ctx.writeReport("staging/deploy-report.json", closed);
+    const ok = ["deployed", "superseded", "disabled"].includes(report.outcome);
+    return { ...report, exitCode: ok ? 0 : 1 };
+  },
+});
+
+// Anyone, any time, no card (D8). It reads only staging.json, so a broken wrangler
+// configuration cannot stop it.
+command("kill", {
+  usage: "kill",
+  parse: noArguments,
+  async run(ctx) {
+    let staging;
+    try {
+      staging = (await ctx.config()).staging;
+    } catch {
+      staging = JSON.parse(readFileSync(join(ctx.root, "infra/environments/staging.json"), "utf8"));
+    }
+    return runKill(ctx, { github: githubTarget(staging), staging });
+  },
+});
+
+command("unkill", {
+  usage: "unkill",
+  parse: noArguments,
+  async run(ctx) {
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    identifiersSet(config.staging);
+    return runUnkill(ctx, { github: githubTarget(config.staging), staging: config.staging });
+  },
+});
+
+command("smoke", {
+  usage: "smoke [--acceptance | --assisted]",
+  parse(args) {
+    if (args.length === 0) return { mode: "unattended" };
+    if (args.length === 1 && args[0] === "--acceptance") return { mode: "acceptance" };
+    if (args.length === 1 && args[0] === "--assisted") return { mode: "assisted" };
+    throw new StagingError("STAGING_USAGE");
+  },
+  async run(ctx, { mode }) {
+    const config = await ctx.config();
+    identifiersSet(config.staging);
+    if (mode !== "unattended") requireActiveCard(config.card, ctx.now());
+    if (mode === "assisted") return assistedSmoke(ctx, { staging: config.staging });
+    const result = await unattendedSmoke(ctx, {
+      staging: config.staging,
+      csp: committedCsp(ctx.root),
+      acceptance: mode === "acceptance",
+    });
+    return { ...result, exitCode: result.failures.length ? 1 : 0 };
+  },
+});
+
+command("preflight", {
+  usage: "preflight",
+  parse: noArguments,
+  async run(ctx) {
+    const config = await ctx.config();
+    const specs = await ctx.specs();
+    const pins = JSON.parse(readFileSync(join(ctx.root, "package.json"), "utf8")).devDependencies;
+    return preflight(ctx, {
+      staging: config.staging,
+      card: config.card,
+      cardState: cardState(config.card, ctx.now()),
+      bindingSet: config.bindingJson !== null,
+      directory: inspectDirectory(ctx.directory),
+      files: Object.keys(specs)
+        .filter((name) => specs[name].required)
+        .map((name) => inspectCredentialFile(ctx.directory, name, specs)),
+      github: githubTarget(config.staging),
+      root: ctx.root,
+      pins: {
+        wrangler: pins?.wrangler ?? null,
+        neonctl: pins?.neonctl ?? null,
+        playwright: pins?.playwright ?? null,
+      },
+    });
+  },
+});
+
+command("status", {
+  usage: "status",
+  parse: noArguments,
+  async run(ctx) {
+    const config = await ctx.config();
+    return stagingStatus(ctx, {
+      staging: config.staging,
+      github: githubTarget(config.staging),
+      names: Object.fromEntries(
+        deployOrder.map((key) => [key, config.staging.cloudflare.workers[key]]),
+      ),
+      schemaHead: schemaHead(ctx.chain()),
+    });
+  },
+});
+
+command("neon-probe", {
+  usage: "neon-probe",
+  parse: noArguments,
+  async run(ctx) {
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    return neonProbe(ctx, {
+      staging: config.staging,
+      administrator: ctx.administrator,
+      connectProbe: (url) => ctx.probeDatabase(url),
+    });
+  },
+});
+
+command("queues", {
+  usage: "queues",
+  parse: noArguments,
+  async run(ctx) {
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    if (config.staging.cloudflare?.account_id === null)
+      throw new StagingError("STAGING_IDENTIFIERS_UNSET");
+    return createQueues(ctx, { staging: config.staging });
+  },
+});
+
+command("turnstile-create", {
+  usage: "turnstile-create",
+  parse: noArguments,
+  async run(ctx) {
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    return createTurnstile(ctx, { staging: config.staging, directory: ctx.directory });
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Output: closed values only. Anything else is replaced, never stringified.
 export function closedReport(value, depth = 0) {
   if (depth > 8) return "[omitted]";
@@ -741,6 +941,29 @@ export async function main(argv, ctx) {
   }
 }
 
+// The deploy workflow's non-secret values (deploy-staging.yml). Only the CI deploy and
+// ci-gates read them; the token itself is captured by staging-token.mjs.
+export function ciEnvironment(source = process.env) {
+  const ci = source.GITHUB_ACTIONS === "true" && source.CI === "true";
+  const value = (name) => (typeof source[name] === "string" ? source[name] : null);
+  return Object.freeze({
+    ci,
+    headSha: value("MORROW_DEPLOY_SHA"),
+    deployEnabled: value("STAGING_DEPLOY_ENABLED"),
+    schemaHead: value("STAGING_SCHEMA_HEAD"),
+    loginDigest: value("STAGING_LOGIN_CONFIGURATION_DIGEST"),
+    accountId: value("STAGING_CLOUDFLARE_ACCOUNT_ID"),
+  });
+}
+// Gate 5's children (build, edge:check, edge:dry-run) get no credential: edge.mjs
+// refuses any CLOUDFLARE_* variable, and the token was removed from process.env.
+const gateEnvironment = (home) => {
+  const env = { HOME: home, LANG: "C" };
+  for (const name of ["PATH", "TMPDIR", "CI"])
+    if (typeof process.env[name] === "string") env[name] = process.env[name];
+  return env;
+};
+
 // The real context. HOME is read before the wrangler API loads (it replaces HOME with a
 // throwaway directory for its own children). The Cloudflare credential is resolved only
 // when a command first needs wrangler or the API: from the CI step's environment, or
@@ -749,13 +972,49 @@ export function defaultContext() {
   const home = homedir();
   const root = repositoryRoot;
   const directory = credentialDirectory(home);
-  const ci = process.env.GITHUB_ACTIONS === "true" && process.env.CI === "true";
+  const environment = ciEnvironment();
+  const ci = environment.ci;
   let constants, specs, config, credential;
   const ctx = {
     root,
     home,
     directory,
+    environment,
     now: () => Date.now(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    fetch: (url, init) => globalThis.fetch(url, init),
+    interactive: () => process.stdin.isTTY === true && process.stderr.isTTY === true,
+    notice: (text) => process.stderr.write(text + "\n"),
+    browser: async () => (await import("playwright")).chromium,
+    writeReport: (name, value) => writeArtifact(name, value),
+    // A step output of the CI job (`proceed`), never a value from a provider.
+    setOutput(name, value) {
+      const path = process.env.GITHUB_OUTPUT;
+      if (
+        ci &&
+        typeof path === "string" &&
+        path !== "" &&
+        /^[a-z]+=(true|false)$/.test(name + "=" + value)
+      )
+        appendFileSync(path, name + "=" + value + "\n");
+    },
+    async gate5() {
+      for (const script of ["build", "edge:check", "edge:dry-run"]) {
+        const result = await runChild("npm", ["run", "--silent", script], {
+          cwd: root,
+          env: gateEnvironment(home),
+          timeoutMs: 900000,
+        });
+        if (result.status !== 0)
+          throw new StagingError("STAGING_GATE5_FAILED", { step: script, status: result.status });
+      }
+    },
+    probeDatabase: (url) =>
+      neonConnector({
+        ownerUrl: url,
+        binding: { hostname: url.host, database: url.database },
+        applicationName: "morrow-staging-probe",
+      }).connect(),
     stdout: (line) => process.stdout.write(line + "\n"),
     stderr: (line) => process.stderr.write(line + "\n"),
     administrator: Object.freeze({ name: "neondb_owner", mode: "createrole" }),
@@ -818,13 +1077,19 @@ export function defaultContext() {
       accountId: (await ctx.config()).staging.cloudflare?.account_id ?? null,
     }));
   const plain = createTools({ root, home });
+  // neonctl gets the project-scoped key (neon-project-api-key) in its environment only.
+  let neon;
+  const neonTools = async () =>
+    (neon ??= createTools({
+      root,
+      home,
+      neonApiKey: readCredentialFile(directory, "neon-project-api-key", await ctx.specs()),
+    }));
   ctx.tools = Object.freeze({
     wrangler: async (args, options) => (await tools()).wrangler(args, options),
     gh: (args, options) => plain.gh(args, options),
     git: (args) => plain.git(args),
-    neonctl: async () => {
-      throw new StagingError("STAGING_NEON_UNCONFIGURED");
-    },
+    neonctl: async (args, options) => (await neonTools()).neonctl(args, options),
   });
   return ctx;
 }
