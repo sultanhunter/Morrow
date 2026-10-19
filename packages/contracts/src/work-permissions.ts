@@ -542,3 +542,98 @@ export function askAdminTemplateViolations(templates: readonly GrantTemplateSumm
     )
     .map((t) => t.id);
 }
+
+/**
+ * Approval record operations (P06.T01b §6; ADR-0010 item 1, ADR-0011 Q5). Each
+ * requirement is one kernel request on the workspace W, decided at database time.
+ * `capabilityId: "proposal"` is the proposal's own capability, and `fields:
+ * "targets"` every field of every target it decides or reads; `proposer` is the
+ * creating verb (`execute`, or `administer` for governance.connection.connect,
+ * which no proposal may use yet). Ownership selects the task-attach verb.
+ *
+ * Declared deviation `governance-input-fields` (Tier 2 confirms): governance grant
+ * fields are capability input names (ADR-0009 item 7), so these reads and commands
+ * request input names while returning whole Proposal@2/Approval@2 objects and
+ * parameters, whose property names template v1 cannot grant; own reads use the
+ * proposer verb, not `view`; reviewer reads use `view` on the preview capability.
+ * The contract check accepts the marker on these rows only.
+ */
+export type ApprovalVerb = "view" | "approve" | "execute" | "administer" | "proposer";
+export interface ApprovalRequirement {
+  readonly capabilityId:
+    | "governance.approval.decide"
+    | "governance.approval.preview"
+    | "workspace.task.create"
+    | "proposal";
+  readonly verb: ApprovalVerb | Readonly<{ own: ApprovalVerb; other: ApprovalVerb }>;
+  readonly fields: readonly string[] | "targets";
+}
+export interface ApprovalPermissionRule {
+  readonly requirements: readonly ApprovalRequirement[];
+  readonly deviation: "governance-input-fields" | null;
+}
+const approvalRule = (
+  requirements: readonly ApprovalRequirement[],
+  deviation: ApprovalPermissionRule["deviation"],
+): Readonly<ApprovalPermissionRule> =>
+  Object.freeze({
+    requirements: Object.freeze(
+      requirements.map((r) =>
+        Object.freeze({
+          ...r,
+          fields: r.fields === "targets" ? "targets" : Object.freeze([...r.fields]),
+        }),
+      ),
+    ),
+    deviation,
+  });
+const previewView = {
+  capabilityId: "governance.approval.preview",
+  verb: "view",
+  fields: ["proposalRef", "selectedTargetIndexes"],
+} as const;
+const decideApprove = {
+  capabilityId: "governance.approval.decide",
+  verb: "approve",
+  fields: ["proposalRef", "decision", "expectedRevision"],
+} as const;
+export const approvalPermissions = Object.freeze({
+  "proposal.submit": approvalRule(
+    [{ capabilityId: "proposal", verb: "proposer", fields: "targets" }],
+    "governance-input-fields",
+  ),
+  "proposal.task_attach": approvalRule(
+    [
+      {
+        capabilityId: "workspace.task.create",
+        verb: { own: "execute", other: "administer" },
+        fields: ["status"],
+      },
+    ],
+    null,
+  ),
+  "approval.reviewer_read": approvalRule(
+    [previewView, decideApprove, { capabilityId: "proposal", verb: "approve", fields: "targets" }],
+    "governance-input-fields",
+  ),
+  "approval.own_read": approvalRule(
+    [{ capabilityId: "proposal", verb: "proposer", fields: "targets" }],
+    "governance-input-fields",
+  ),
+  "approval.decide": approvalRule(
+    [decideApprove, { capabilityId: "proposal", verb: "approve", fields: "targets" }],
+    "governance-input-fields",
+  ),
+  "approval.withdraw": approvalRule(
+    [{ capabilityId: "proposal", verb: "proposer", fields: "targets" }],
+    "governance-input-fields",
+  ),
+  "approval.claim": approvalRule(
+    [{ capabilityId: "proposal", verb: "execute", fields: "targets" }],
+    "governance-input-fields",
+  ),
+} as const);
+export type ApprovalPermissionKey = keyof typeof approvalPermissions;
+/** The creating verb of a proposal's capability (kernel rule: connect is administer). */
+export const proposerVerb = (capabilityId: string): "execute" | "administer" =>
+  capabilityId === "governance.connection.connect" ? "administer" : "execute";

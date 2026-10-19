@@ -144,6 +144,20 @@
       "sha256": "db8111c78e3f6d2a56aa3724a85afdc8f6c078d087a8edd8ee750281818a7b85",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/packets/P05.T01y.md"
+    },
+    {
+      "sequence": 17,
+      "file": "0017.approval-identity-bridge.sql",
+      "sha256": "f069cf9ceeabe828b52e12648020609bc50e62dcf4bd82d0811aaf402d90d672",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/packets/P06.T01b.md"
+    },
+    {
+      "sequence": 18,
+      "file": "0018.approval-records.sql",
+      "sha256": "6ca433edded2bc8590623bb30a6a51fe30b62215ad57dc0e4f7abdb7fecbadea",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/packets/P06.T01b.md"
     }
   ]
 }
