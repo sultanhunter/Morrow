@@ -57,8 +57,11 @@ test("one role table drives the eight role secrets and the broker's required sec
   assert.equal(brokerNeonRoles.morrow_api_worker, "work_request_transaction");
   assert.equal(brokerPasswordSecret("morrow_api_worker"), "MORROW_DB_PASSWORD_MORROW_API_WORKER");
   assert.equal(brokerPasswordSecret("morrow_api"), "MORROW_DB_PASSWORD_MORROW_API");
+  // P05.T01ab (ADR-0019 item 6): the Turnstile secret is the one provider credential
+  // admitted beside WorkOS; ten names in all.
   assert.deepEqual(brokerRequiredSecrets, [
     "WORKOS_API_KEY",
+    "TURNSTILE_SECRET_KEY",
     ...brokerNeonRoleNames.map((role) => "MORROW_DB_PASSWORD_" + role.toUpperCase()),
   ]);
   assert.deepEqual(brokerLimits, {
