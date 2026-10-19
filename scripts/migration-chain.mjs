@@ -199,7 +199,10 @@ export function topLevelStatements(text) {
 }
 
 // Statements a migration body may never contain at top level: anything that ends, opens
-// or nests a transaction, or changes the role or session identity the runner set.
+// or nests a transaction, or the plain forms that change the role or session identity
+// the runner set. This is an early refusal, not the control: dynamic SQL (EXECUTE in a DO
+// block) can still change the role, so the runner checks current_user and session_user
+// at the end of every body, inside its transaction (staging-runner.mjs applyEntry).
 const forbiddenTopLevel = [
   /^(BEGIN|START|COMMIT|END|ROLLBACK|ABORT|SAVEPOINT|RELEASE)\b/i,
   /^PREPARE\s+TRANSACTION\b/i,
@@ -208,6 +211,10 @@ const forbiddenTopLevel = [
   /^DISCARD\b/i,
   /^\\/,
 ];
+// set_config('role' | 'session_authorization', …) anywhere in the text, quoted or not:
+// string literals are blanked in top-level statements, so this reads the raw body.
+const forbiddenAnywhere =
+  /\bset_config\s*\(\s*(E?'|\$[A-Za-z_]*\$)\s*(role|session_authorization)\s*('|\$)/i;
 
 // The body the runner sends inside its own transaction: the file without its first line
 // "BEGIN;" and its last line "COMMIT;" (P04.T01j D4). Anything else denies.
@@ -223,7 +230,10 @@ export function migrationBody(text) {
   } catch {
     throw Error("MIGRATION_TRANSACTION_CONTROL");
   }
-  if (statements.some((s) => forbiddenTopLevel.some((pattern) => pattern.test(s))))
+  if (
+    statements.some((s) => forbiddenTopLevel.some((pattern) => pattern.test(s))) ||
+    forbiddenAnywhere.test(body)
+  )
     throw Error("MIGRATION_TRANSACTION_CONTROL");
   return body;
 }

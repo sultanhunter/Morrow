@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { createHash, webcrypto } from "node:crypto";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -117,6 +118,10 @@ test("chain: transaction control and identity changes are refused in a body", ()
     "PREPARE TRANSACTION 'x';",
     "\\connect other",
     "SELECT 1; begin;",
+    "SELECT set_config('role', 'neondb_owner', true);",
+    "SELECT pg_catalog.set_config( 'ROLE' , 'neondb_owner', false);",
+    "SELECT set_config('session_authorization', 'postgres', true);",
+    "DO $$ BEGIN PERFORM set_config($q$role$q$, 'neondb_owner', true); END $$;",
   ])
     assert.equal(
       codeOf(() => migrationBody("BEGIN;\n" + body + "\nCOMMIT;\n")),
@@ -148,10 +153,11 @@ test("chain: transaction control and identity changes are refused in a body", ()
       "SELECT $tag$ COMMIT; $tag$, 'it''s; COMMIT', E'\\' ROLLBACK;', \"COMMIT;\";",
       "-- COMMIT; SET ROLE x;",
       "/* COMMIT; /* nested */ RESET ROLE; */ SELECT 1;",
+      "SELECT pg_catalog.set_config('morrow.role', 'role', true);",
       "COMMIT;",
     ].join("\n") + "\n",
   );
-  assert.equal(topLevelStatements(body).length, 5);
+  assert.equal(topLevelStatements(body).length, 6);
 });
 
 test("chain: prerequisite roles are parsed exactly, and transaction control denies", () => {
@@ -605,11 +611,11 @@ test("card record: staging-card.json agrees with docs/decisions/approvals/stagin
 
 // ---------------------------------------------------------------------------
 // Preconditions (D2/D3): clean tree, origin/main, a green foundation run on that sha.
-test("preconditions: dirty tree, migrations not from main, HEAD not main, foundation", async () => {
-  const run = async (options, scope = "migrations") => {
+test("preconditions: dirty tree, HEAD not main, foundation", async () => {
+  const run = async (options) => {
     const { tools, calls } = fakeTools(options);
     try {
-      return { result: await mainPreconditions({ tools }, "sultanhunter/Morrow", scope), calls };
+      return { result: await mainPreconditions({ tools }, "sultanhunter/Morrow"), calls };
     } catch (error) {
       return { code: error.code, calls };
     }
@@ -618,19 +624,11 @@ test("preconditions: dirty tree, migrations not from main, HEAD not main, founda
   assert.equal(ok.result.sourceCommit, fakeSha("main"));
   assert.deepEqual(ok.calls[0].args, ["fetch", "--quiet", "--no-tags", "origin", "main"]);
   assert.equal((await run({ git: { status: "?? stray\n" } })).code, "STAGING_TREE_DIRTY");
-  assert.equal(
-    (await run({ git: { diff: "migrations/0015.work-state.sql\n" } })).code,
-    "STAGING_MANIFEST_NOT_MAIN",
-  );
-  assert.equal(
-    (await run({ git: { diff: "infra/work-role-prerequisites.sql\n" } })).code,
-    "STAGING_MANIFEST_NOT_MAIN",
-  );
-  assert.equal(
-    (await run({ git: { diff: "infra/environments/staging.json\n" } })).result.sourceCommit,
-    fakeSha("main"),
-  );
-  assert.equal((await run({ git: { head: fakeSha("other") } }, "head")).code, "STAGING_NOT_MAIN");
+  // An unmerged commit is refused even when migrations/ equals main: the runner, the
+  // chain module and the grant protocol must be reviewed code too.
+  const branch = await run({ git: { head: fakeSha("other") } });
+  assert.equal(branch.code, "STAGING_NOT_MAIN");
+  assert.ok(!branch.calls.some((c) => c.tool === "gh"), "refused before the foundation read");
   assert.equal((await run({ gh: { checkRuns: [] } })).code, "STAGING_FOUNDATION_MISSING");
   assert.equal(
     (
@@ -754,6 +752,56 @@ test("cli: schema-head prints the head; effects refuse without the card or ident
     assert.equal(await main(["migrate"], mismatched.ctx), 1);
     assert.equal(JSON.parse(mismatched.err.at(-1)).code, "STAGING_BINDING_INVALID");
     assert.equal(err.length, 0);
+  } finally {
+    planted.cleanup();
+  }
+});
+
+test("cli: every database or broker-secret effect refuses an unmerged HEAD before any effect", async () => {
+  const planted = plantedHome({
+    "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
+    "workos-api-key": "sk_test_" + "W".repeat(24),
+    "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
+  });
+  try {
+    for (const argv of [
+      ["migrate"],
+      ["provision-roles", "--first"],
+      ["provision-roles", "--rotate", "all"],
+      ["put-secret", "WORKOS_API_KEY"],
+      ["seed-platform"],
+    ]) {
+      for (const [label, options, code] of [
+        ["branch", { git: { head: fakeSha("branch") } }, "STAGING_NOT_MAIN"],
+        ["dirty", { git: { status: " M scripts/staging-runner.mjs\n" } }, "STAGING_TREE_DIRTY"],
+        ["foundation", { gh: { checkRuns: [] } }, "STAGING_FOUNDATION_MISSING"],
+      ]) {
+        const fake = fakeTools(options);
+        const { ctx, err, constants } = await fakeContext({
+          home: planted.home,
+          tools: fake.tools,
+          overrides: {
+            loginConfiguration: async () => ({ origin: "https://x.example" }),
+          },
+        });
+        const db = fakeDatabase({ roles: constants.roles });
+        ctx.database = db.connector;
+        const name = argv.join(" ") + " " + label;
+        assert.equal(await main(argv, ctx), 1, name);
+        assert.equal(JSON.parse(err.at(-1)).code, code, name);
+        assert.deepEqual(db.statements, [], name + ": no SQL");
+        assert.deepEqual(
+          fake.calls.filter((c) => c.tool === "wrangler"),
+          [],
+          name + ": no wrangler call",
+        );
+        assert.ok(
+          !fake.calls.some((c) => c.tool === "gh" && c.args[0] === "variable"),
+          name + ": no variable written",
+        );
+        assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false, name);
+      }
+    }
   } finally {
     planted.cleanup();
   }
@@ -1038,29 +1086,39 @@ test("token: staging-token.mjs is the first import and removes the token before 
     /^import (?!\{ inspect \} from "node:util";)/m,
   );
   const marker = "Q".repeat(36) + "tokn";
+  const ghMarker = "ghs_" + "G".repeat(32) + "tokn";
   const probe = spawnSync(
     process.execPath,
     [
       "--input-type=module",
       "-e",
       [
-        'const { cloudflareCredential } = await import("./scripts/staging.mjs").then(() => import("./scripts/staging-token.mjs"));',
-        "const leaked = Object.entries(process.env).filter(([k, v]) => /^(CLOUDFLARE_|CF_API_|CF_EMAIL)/.test(k) || v.includes(process.argv[1]));",
+        'const { cloudflareCredential, githubCredential } = await import("./scripts/staging.mjs").then(() => import("./scripts/staging-token.mjs"));',
+        "const leaked = Object.entries(process.env).filter(([k, v]) => /^(CLOUDFLARE_|CF_API_|CF_EMAIL|GH_TOKEN$)/.test(k) || v.includes(process.argv[1]) || v.includes(process.argv[2]));",
         'const c = cloudflareCredential({ source: "environment" });',
+        "const g = githubCredential();",
         "const child = c.childEnvironment({ PATH: 'x' });",
-        "console.log(JSON.stringify({ leaked: leaked.map(([k]) => k), childHasToken: child.CLOUDFLARE_API_TOKEN === process.argv[1], json: JSON.stringify({ c }), inspected: (await import('node:util')).inspect(c), text: String(c) }));",
+        "const ghChild = g.childEnvironment({ PATH: 'x' });",
+        "const util = await import('node:util');",
+        "console.log(JSON.stringify({ leaked: leaked.map(([k]) => k), childHasToken: child.CLOUDFLARE_API_TOKEN === process.argv[1], ghChildHasToken: ghChild.GH_TOKEN === process.argv[2] && !('CLOUDFLARE_API_TOKEN' in ghChild), json: JSON.stringify({ c, g }), inspected: util.inspect(c) + util.inspect(g), text: String(c) + String(g) }));",
       ].join("\n"),
       marker,
+      ghMarker,
     ],
-    { cwd: process.cwd(), env: { ...process.env, CLOUDFLARE_API_TOKEN: marker }, encoding: "utf8" },
+    {
+      cwd: process.cwd(),
+      env: { ...process.env, CLOUDFLARE_API_TOKEN: marker, GH_TOKEN: ghMarker },
+      encoding: "utf8",
+    },
   );
   assert.equal(probe.status, 0, probe.stderr);
   const result = JSON.parse(probe.stdout);
   assert.deepEqual(result.leaked, []);
   assert.equal(result.childHasToken, true);
+  assert.equal(result.ghChildHasToken, true);
   for (const text of [result.json, result.inspected, result.text])
-    assert.ok(!text.includes(marker));
-  assert.ok(!probe.stderr.includes(marker));
+    assert.ok(!text.includes(marker) && !text.includes(ghMarker));
+  assert.ok(!probe.stderr.includes(marker) && !probe.stderr.includes(ghMarker));
   // Locally the token comes only from the operator file; an environment token, or any
   // other Cloudflare credential variable, is refused rather than used.
   for (const [env, code] of [

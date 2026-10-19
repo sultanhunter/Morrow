@@ -8,12 +8,14 @@ name: Deploy staging
 #   successful no-op.
 # - Gate 5 (build, edge:check, edge:dry-run) also runs without the token; edge.mjs refuses
 #   every CLOUDFLARE_* variable.
-# - Only the deploy step's env holds the token. It checks gates 3, 4 and 6, deploys,
-#   re-reads the flag just before and just after the api deploy (the GITHUB_TOKEN cannot
-#   read variables, so the live re-read is this workflow's state, which `staging:kill`
-#   disables; hence `actions: read`), then checks /healthz, runs the unattended smoke
-#   and the census. There is no rollback (card effect E11 is suspended): staging rolls
-#   forward from a new green main commit, with the kill switch as the stop.
+# - Only the deploy step's env holds the token. It checks gates 3, 4 and 6 and runs the
+#   census, deploys, re-reading the flag just before every upload and just after the api
+#   deploy (the GITHUB_TOKEN cannot read variables, so the live re-read is this workflow's
+#   state, which `staging:kill` disables; hence `actions: read`), then checks /healthz and
+#   runs the unattended smoke. The census runs again on every path that started an
+#   upload, and the report is written before and after each upload. There is no rollback
+#   (card effect E11 is suspended): staging rolls forward from a new green main commit,
+#   with the kill switch as the stop.
 on:
   workflow_run:
     workflows: ["Morrow foundation"]

@@ -1,8 +1,9 @@
 // Deploy, kill and unkill for staging (P04.T01i D2 and D8, trimmed by ADR-0021), and the
 // account census they share with `staging:census`.
-//   deploy   gates 1–6 of ADR-0019 item 4, the order broker → orchestrator → connector →
-//            api, the deploy flag re-read just before and just after the api deploy, the
-//            health check, the unattended smoke and the census. On ready:false the run
+//   deploy   gates 1–6 of ADR-0019 item 4, a census before any upload, the order broker →
+//            orchestrator → connector → api, the deploy flag re-read just before every
+//            upload and just after the api deploy, the health check, the unattended smoke,
+//            and a census on every path that started an upload. On ready:false the run
 //            fails and keeps both api version ids. There is no rollback: card effect E11
 //            is suspended until the rollback refusal exists, so staging rolls forward.
 //   kill     anyone, any time: the flag to 0, the deploy workflow disabled, queued and
@@ -251,6 +252,9 @@ async function deployWorker(ctx, api, { config, name, sha, secretsFile, previous
 //                   foundation on that sha)
 //   firstFiles      () -> {broker, api} absolute paths of the first-deploy secret files,
 //                   checked (exact key sets, keyring bound to the digest) before use
+//   afterFirst      (versions) -> unlinks the first-deploy files and records the rotation
+//   checkpoint      (report) -> writes the report as it stands (before and after every
+//                   upload), so a cancelled or timed-out run still leaves the record
 //   csp             the committed CSP of the SPA (smoke)
 // A thrown failure ends the run as "failed" with its fixed code; the report keeps
 // everything recorded before it (gates, version ids).
@@ -262,19 +266,47 @@ export async function runDeploy(ctx, plan) {
     versions: {},
     health: null,
     smoke: null,
+    censusBefore: null,
     census: null,
     outcome: "running",
     code: null,
   };
+  // `uploads` counts the `wrangler deploy` calls started; `api` is the Cloudflare client.
+  const run = { api: null, uploads: 0 };
   try {
-    await deployBody(ctx, plan, report);
+    await deployBody(ctx, plan, report, run);
   } catch (error) {
     const { code, ...details } = failureRecord(error);
     Object.assign(report, { outcome: "failed", code, failure: details });
   }
+  if (run.uploads > 0) await finalCensus(plan, report, run.api);
   return report;
 }
-async function deployBody(ctx, plan, report) {
+
+// The census at every deploy (ADR-0019 item 2, OQ-3 C) runs on every path that started
+// an upload: success, a failed or unknown upload, a kill, a health or smoke failure, or a
+// thrown error. Its findings are recorded even when the run has already failed. They fail
+// a run that would otherwise be "deployed", and never change a failure or an unknown
+// outcome into anything else.
+async function finalCensus(plan, report, api) {
+  let failure = null;
+  try {
+    report.census = await collectCensus(api, plan.staging);
+  } catch (error) {
+    failure = failureRecord(error);
+    report.census = { failed: true, code: failure.code };
+  }
+  if (report.outcome !== "deployed") return;
+  if (failure) {
+    const { code, ...details } = failure;
+    Object.assign(report, { outcome: "failed", code, failure: details });
+  } else if (report.census.findings.length)
+    Object.assign(report, { outcome: "failed", code: "STAGING_CENSUS_FINDINGS" });
+}
+
+const flagGate = (key) => "flagBefore" + key[0].toUpperCase() + key.slice(1);
+
+async function deployBody(ctx, plan, report, run) {
   const stop = (outcome, code = null, extra = {}) => {
     Object.assign(report, { outcome, code }, extra);
     return report;
@@ -350,6 +382,7 @@ async function deployBody(ctx, plan, report) {
   }
   // Gate 6: the broker's deployed secret names (a first deploy brings them in its file).
   const api = await ctx.cloudflareApi(plan.staging.cloudflare.account_id);
+  run.api = api;
   const brokerNames = async () =>
     secretNames(
       await toolJson(ctx.tools, "wrangler", [
@@ -377,22 +410,48 @@ async function deployBody(ctx, plan, report) {
     }
     report.gates.brokerSecrets = "ok";
   }
+  // The census before any upload: an existing finding (another script binding the broker,
+  // a workers.dev hostname other than the api's) stops the run before anything changes.
+  report.censusBefore = await collectCensus(api, plan.staging);
+  if (report.censusBefore.findings.length) {
+    report.gates.census = "findings";
+    return stop("failed", "STAGING_CENSUS_FINDINGS");
+  }
+  report.gates.census = "ok";
+  // E10 for a first deploy, before any upload: harmless while the flag is 0, and a failure
+  // here leaves nothing deployed, so `deploy --first` can simply run again.
+  if (plan.mode === "first") {
+    await setVariable(ctx, github, "STAGING_LOGIN_CONFIGURATION_DIGEST", digest);
+    report.gates.digest = "published";
+  }
   // The previous versions, then the deploys in order.
   const previous = {};
   for (const key of deployOrder) {
     previous[key] = await deployedVersion(api, names[key]);
     report.versions[key] = { previous: previous[key], current: null, outcome: "pending" };
   }
+  // The flag: "on", "off" (killed) or "unreadable" (which stops the run too).
+  const flagState = async () => {
+    const flag = await readDeployFlag(ctx, github).catch(() => null);
+    const go = plan.mode === "first" ? flag?.workflow === "active" : flag?.enabled === true;
+    return go ? "on" : flag ? "off" : "unreadable";
+  };
+  const checkpoint = async () => plan.checkpoint?.(report);
   for (const key of deployOrder) {
-    if (key === "api") {
-      const before = await readDeployFlag(ctx, github).catch(() => null);
-      const go = plan.mode === "first" ? before?.workflow === "active" : before?.enabled === true;
-      report.gates.flagBeforeApi = go ? "on" : before ? "off" : "unreadable";
-      if (!go) {
-        report.versions.api.outcome = "not_deployed";
-        return stop("failed", "STAGING_KILLED");
-      }
+    // The re-read just before every upload: a kill during gate 5 or an earlier upload
+    // stops the run here, and the remaining Workers are not deployed.
+    const before = await flagState();
+    report.gates[flagGate(key)] = before;
+    if (before !== "on") {
+      for (const rest of deployOrder.slice(deployOrder.indexOf(key)))
+        report.versions[rest].outcome = "not_deployed";
+      return stop("failed", "STAGING_KILLED", { worker: key });
     }
+    // A run cancelled or timed out from here on leaves a report naming this upload as
+    // in flight: an unknown outcome to reconcile, never a success.
+    report.versions[key].outcome = "in_flight";
+    await checkpoint();
+    run.uploads++;
     const result = await deployWorker(ctx, api, {
       config: plan.configs[key],
       name: names[key],
@@ -405,12 +464,12 @@ async function deployBody(ctx, plan, report) {
       outcome: result.outcome,
       durationMs: result.durationMs,
     });
+    await checkpoint();
     if (key === "api") {
       // The post-deploy re-read: a kill during the api deploy wins.
-      const after = await readDeployFlag(ctx, github).catch(() => null);
-      const go = plan.mode === "first" ? after?.workflow === "active" : after?.enabled === true;
-      report.gates.flagAfterApi = go ? "on" : after ? "off" : "unreadable";
-      if (!go) {
+      const after = await flagState();
+      report.gates.flagAfterApi = after;
+      if (after !== "on") {
         let workersDev = "disabled";
         try {
           await setWorkersDev(api, names.api, false);
@@ -427,7 +486,7 @@ async function deployBody(ctx, plan, report) {
     if (key === "broker" && plan.mode === "first" && !sameNames(await brokerNames()))
       return stop("failed", "STAGING_BROKER_SECRETS_MISMATCH");
   }
-  if (plan.mode === "first") await plan.afterFirst(digest, report.versions);
+  if (plan.mode === "first") await plan.afterFirst(report.versions);
   // Health within 90 s. No rollback (E11 suspended): the run fails and keeps both ids.
   report.health = await waitReady(ctx, plan.staging.cloudflare.origin);
   if (!report.health.ready)
@@ -435,11 +494,9 @@ async function deployBody(ctx, plan, report) {
       rollback: "suspended_e11",
       next: "roll_forward_from_main_or_kill",
     });
-  // The unattended smoke and the census.
+  // The unattended smoke; the census follows in runDeploy, on this path as on every other.
   report.smoke = await unattendedSmoke(ctx, { staging: plan.staging, csp: plan.csp });
-  report.census = await collectCensus(api, plan.staging);
   if (report.smoke.failures.length) return stop("failed", "STAGING_SMOKE_FAILED");
-  if (report.census.findings.length) return stop("failed", "STAGING_CENSUS_FINDINGS");
   return stop("deployed");
 }
 

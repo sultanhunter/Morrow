@@ -59,12 +59,14 @@ export function runChild(command, args, { cwd, env, input, timeoutMs = 120000 } 
 // The real tools. `credential` is the opaque Cloudflare handle from staging-token.mjs;
 // `accountId` is the committed, reviewed account (staging.json). gh keeps the operator's
 // own login (its config under the real HOME); every other child gets a throwaway HOME.
+// `github` is the opaque GH_TOKEN handle from staging-token.mjs (null locally).
 export function createTools({
   root,
   home,
   credential = null,
   accountId = null,
   neonApiKey = null,
+  github = null,
 }) {
   const wranglerBin = join(root, "node_modules/wrangler/bin/wrangler.js");
   const neonctlBin = join(root, "node_modules/neonctl/bin/cli.js");
@@ -110,20 +112,21 @@ export function createTools({
       );
     },
     gh(args, { input } = {}) {
+      const env = {
+        PATH: process.env.PATH ?? "",
+        HOME: home,
+        LANG: "C",
+        GH_PROMPT_DISABLED: "1",
+        GH_NO_UPDATE_NOTIFIER: "1",
+        NO_COLOR: "1",
+        ...(process.env.GH_CONFIG_DIR ? { GH_CONFIG_DIR: process.env.GH_CONFIG_DIR } : {}),
+      };
+      // In the CI steps gh authenticates with the workflow's own GH_TOKEN (contents: read,
+      // actions: read). staging-token.mjs removed it from process.env at startup, so it
+      // reaches gh children only, never wrangler, neonctl, git or any in-process module.
       return runChild("gh", args, {
         cwd: root,
-        env: {
-          PATH: process.env.PATH ?? "",
-          HOME: home,
-          LANG: "C",
-          GH_PROMPT_DISABLED: "1",
-          GH_NO_UPDATE_NOTIFIER: "1",
-          NO_COLOR: "1",
-          ...(process.env.GH_CONFIG_DIR ? { GH_CONFIG_DIR: process.env.GH_CONFIG_DIR } : {}),
-          // In the CI deploy step gh authenticates with the workflow's own GH_TOKEN
-          // (contents: read); it reaches gh only, never wrangler, neonctl or git.
-          ...(process.env.GH_TOKEN ? { GH_TOKEN: process.env.GH_TOKEN } : {}),
-        },
+        env: github ? github.childEnvironment(env) : env,
         input,
       });
     },

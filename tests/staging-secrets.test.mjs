@@ -22,7 +22,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { main } from "../scripts/staging.mjs";
 import { createTools, toolJson } from "../scripts/staging-tools.mjs";
-import { syntheticCredential } from "../scripts/staging-token.mjs";
+import { syntheticCredential, syntheticGithubCredential } from "../scripts/staging-token.mjs";
 import {
   fakeContext,
   fakeDatabase,
@@ -517,8 +517,10 @@ test("AC07: tool children get the token or Neon key in their environment only, n
     chmodSync(join(bin, "gh"), 0o755);
     process.env.PATH = bin + ":" + savedPath;
     process.env.WORKOS_API_KEY = markers.envWorkos;
+    // A GH_TOKEN still in process.env (staging-token.mjs removes it at startup) reaches no
+    // child; gh gets only the captured handle's token.
     const savedGh = process.env.GH_TOKEN;
-    process.env.GH_TOKEN = "ghs_" + markers.tool;
+    process.env.GH_TOKEN = "ghs_env" + markers.envDb;
     after(() =>
       savedGh === undefined ? delete process.env.GH_TOKEN : (process.env.GH_TOKEN = savedGh),
     );
@@ -529,6 +531,7 @@ test("AC07: tool children get the token or Neon key in their environment only, n
       credential: syntheticCredential(token),
       accountId: "a".repeat(32),
       neonApiKey: "napi_" + markers.neonKey,
+      github: syntheticGithubCredential("ghs_" + markers.tool),
     });
     for (const [tool, args] of [
       [
@@ -580,10 +583,12 @@ test("AC07: tool children get the token or Neon key in their environment only, n
     // gh: neither credential, and no inherited provider variable.
     for (const name of ["CLOUDFLARE_API_TOKEN", "NEON_API_KEY", "WORKOS_API_KEY"])
       assert.equal(dumps.gh.env[name], undefined);
-    // The workflow's GH_TOKEN reaches gh only.
+    // The workflow's GH_TOKEN reaches gh only, from the captured handle.
     assert.equal(dumps.gh.env.GH_TOKEN, "ghs_" + markers.tool);
     assert.equal(dumps.wrangler.env.GH_TOKEN, undefined);
     assert.equal(dumps.cli.env.GH_TOKEN, undefined);
+    for (const dump of Object.values(dumps))
+      assert.deepEqual(contains(JSON.stringify(dump.env), [markers.envDb]), []);
     assert.deepEqual(
       Object.keys(dumps.gh.env).filter(
         (k) =>

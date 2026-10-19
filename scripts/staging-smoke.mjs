@@ -190,12 +190,19 @@ export async function unattendedSmoke(ctx, { staging, csp, acceptance = false })
   });
   checks.databasePath = list.status;
   if (list.status !== 401) fail("SMOKE_DATABASE_PATH");
-  // (6) The other three Workers' workers.dev hostnames serve nothing of theirs.
+  // (6) The other three Workers' workers.dev hostnames serve nothing of theirs. Every
+  // Morrow Worker answers in JSON, and the broker and orchestrator answer every path with
+  // their own 404 {"code":"not_found"}, so a JSON reply of any status is exposure; only
+  // Cloudflare's own non-JSON 404 for a hostname with workers.dev off, or no reply, passes.
   checks.others = {};
   for (const [key, url] of Object.entries(others)) {
     const reply = await httpProbe(ctx, url + "/", { headers: { Accept: "*/*" } });
-    checks.others[key] = reply.status;
-    if (reply.status !== null && reply.status !== 404)
+    const body = jsonOf(reply.text);
+    const json =
+      /^application\/json\b/i.test(reply.headers.get("content-type") ?? "") ||
+      (body !== null && typeof body === "object");
+    checks.others[key] = { status: reply.status, json };
+    if (reply.status !== null && (reply.status !== 404 || json))
       fail("SMOKE_WORKERS_DEV_EXPOSED_" + key.toUpperCase());
   }
   // (7) Acceptance only: 11 bogus starts in 60 s produce at least one 429.

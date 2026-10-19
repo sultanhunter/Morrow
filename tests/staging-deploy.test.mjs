@@ -153,6 +153,10 @@ test("AC04: a green CI deploy runs the gates, then broker, orchestrator, connect
       schema: "ok",
       configuration: "ok",
       brokerSecrets: "ok",
+      census: "ok",
+      flagBeforeBroker: "on",
+      flagBeforeOrchestrator: "on",
+      flagBeforeConnector: "on",
       flagBeforeApi: "on",
       flagAfterApi: "on",
     });
@@ -164,16 +168,24 @@ test("AC04: a green CI deploy runs the gates, then broker, orchestrator, connect
     }
     assert.equal(result.health.ready, true);
     assert.deepEqual(result.smoke.failures, []);
+    assert.deepEqual(result.censusBefore.findings, []);
     assert.deepEqual(result.census.findings, []);
     // CI never reads a variable through the API (its token cannot); it re-reads the
-    // workflow's state before and after the api deploy.
+    // workflow's state at gate 2, before every upload and after the api deploy.
     const ghApi = w.fake.calls.filter((c) => c.tool === "gh").map((c) => c.args.join(" "));
     assert.ok(!ghApi.some((a) => /\/variables\//.test(a)), ghApi.join("\n"));
-    assert.equal(ghApi.filter((a) => /deploy-staging\.yml$/.test(a)).length, 3);
-    // The report is written once, through the closed projection.
-    assert.equal(w.reports.length, 1);
-    assert.equal(w.reports[0].name, "staging/deploy-report.json");
-    assert.equal(w.reports[0].value.outcome, "deployed");
+    assert.equal(ghApi.filter((a) => /deploy-staging\.yml$/.test(a)).length, 6);
+    // The report goes through the closed projection before and after every upload, then
+    // once more at the end, always to the same path.
+    assert.ok(w.reports.every((r) => r.name === "staging/deploy-report.json"));
+    assert.equal(w.reports.length, 2 * deployOrder.length + 1);
+    for (const [i, key] of deployOrder.entries()) {
+      const before = w.reports[2 * i].value;
+      assert.equal(before.outcome, "running");
+      assert.equal(before.versions[key].outcome, "in_flight", key);
+      assert.equal(w.reports[2 * i + 1].value.versions[key].outcome, "deployed", key);
+    }
+    assert.equal(w.reports.at(-1).value.outcome, "deployed");
   } finally {
     w.planted.cleanup();
   }
@@ -379,8 +391,153 @@ test("AC04: a failed upload is reconciled: unchanged is not deployed, anything e
     assert.equal(result.versions.connector.outcome, "unknown");
     assert.equal(result.versions.api.outcome, "pending");
     assert.ok(!deployedWorkers(landed).includes("api"));
+    assert.deepEqual(result.census.findings, [], "the census still runs after an unknown upload");
   } finally {
     landed.planted.cleanup();
+  }
+});
+
+// ADR-0019 item 2, OQ-3 C: a census before any upload, and one on every path that
+// started an upload, whatever the outcome.
+test("AC04: a census finding before any upload deploys nothing; every path with an upload is censused", async () => {
+  const bound = await world({
+    environment: ciEnvironment(),
+    scripts: [
+      ...Object.values(scriptOf).map((name) => ({
+        name,
+        enabled: name === scriptOf.api,
+        previews: false,
+        bindings: name === scriptOf.api ? [scriptOf.broker] : [],
+      })),
+      { name: "other-product", enabled: false, previews: false, bindings: [scriptOf.broker] },
+    ],
+  });
+  try {
+    const { code, result } = await bound.run(["deploy", "--ci"]);
+    assert.equal(code, 1);
+    assert.equal(result.code, "STAGING_CENSUS_FINDINGS");
+    assert.equal(result.gates.census, "findings");
+    assert.deepEqual(result.censusBefore.findings.map((f) => f.code).sort(), [
+      "BROKER_BOUND_ELSEWHERE",
+      "NOT_MORROW_SCRIPT",
+    ]);
+    assert.deepEqual(deploys(bound), []);
+    assert.equal(result.census, null, "no upload, so nothing changed to census");
+  } finally {
+    bound.planted.cleanup();
+  }
+  // The broker is exposed while the deploy runs, and the connector upload then fails:
+  // the run fails on the upload, and its census still records the exposure.
+  const exposed = await world({
+    environment: ciEnvironment(),
+    tools: { deployFails: (k) => k === "connector", deployLands: (k) => k !== "connector" },
+  });
+  try {
+    exposed.hooks.onDeploy = (worker) => {
+      if (worker === "orchestrator")
+        exposed.cloud.scripts.find((s) => s.name === scriptOf.broker).enabled = true;
+    };
+    const { code, result } = await exposed.run(["deploy", "--ci"]);
+    assert.equal(code, 1);
+    assert.equal(result.code, "STAGING_DEPLOY_FAILED");
+    assert.equal(result.worker, "connector");
+    assert.deepEqual(result.census.findings, [
+      { code: "WORKERS_DEV_EXPOSED", name: scriptOf.broker },
+    ]);
+    assert.equal(exposed.reports.at(-1).value.census.findings[0].code, "WORKERS_DEV_EXPOSED");
+  } finally {
+    exposed.planted.cleanup();
+  }
+  // A census that cannot be read after the uploads fails a run that would have passed.
+  const unreadable = await world({ environment: ciEnvironment() });
+  try {
+    unreadable.hooks.onDeploy = (worker) => {
+      if (worker === "api")
+        unreadable.cloud.api.list = async () => {
+          throw new StagingError("STAGING_CLOUDFLARE_REQUEST_FAILED", { status: 403 });
+        };
+    };
+    const { code, result } = await unreadable.run(["deploy", "--ci"]);
+    assert.equal(code, 1);
+    assert.equal(result.outcome, "failed");
+    assert.equal(result.code, "STAGING_CLOUDFLARE_REQUEST_FAILED");
+    assert.deepEqual(result.census, { failed: true, code: "STAGING_CLOUDFLARE_REQUEST_FAILED" });
+    assert.equal(result.health.ready, true);
+  } finally {
+    unreadable.planted.cleanup();
+  }
+});
+
+// ADR-0019 item 13: the report is the record unknown outcomes are reconciled against, so
+// it exists before each upload starts, not only when the run ends.
+test("AC04: a run that dies during an upload leaves a report naming that upload in flight", async () => {
+  const w = await world({ environment: ciEnvironment() });
+  try {
+    let seen = null;
+    w.hooks.onDeploy = (worker) => {
+      if (worker === "orchestrator") seen = w.reports.at(-1).value;
+    };
+    await w.run(["deploy", "--ci"]);
+    assert.equal(seen.command, "deploy");
+    assert.equal(seen.outcome, "running");
+    assert.equal(seen.versions.broker.outcome, "deployed");
+    assert.match(seen.versions.broker.current, /^[0-9a-f-]{36}$/);
+    assert.equal(seen.versions.orchestrator.outcome, "in_flight");
+    assert.equal(seen.versions.orchestrator.previous, fakeUuid(3));
+    assert.equal(seen.versions.api.outcome, "pending");
+    assert.equal(seen.gates.flagBeforeOrchestrator, "on");
+  } finally {
+    w.planted.cleanup();
+  }
+});
+
+// Finding: the schema head is a cached variable, so `migrate` withdraws it before it
+// touches the database; a reset that is followed by a failed migrate cannot deploy.
+test("AC04: migrate withdraws the schema head first, so a deploy after a reset stops at gate 3", async () => {
+  const ownerUrl = `postgresql://neondb_owner:${"o".repeat(24)}@ep-lab-runner-000001.us-east-1.aws.neon.tech/morrow?sslmode=require`;
+  const w = await world({ files: { "neon-owner-url": ownerUrl } });
+  try {
+    assert.equal(w.fake.state.values.STAGING_SCHEMA_HEAD, head);
+    // The owner's reset leaves an empty database; the rerun of migrate then fails.
+    let atConnect = null;
+    w.ctx.database = () => ({
+      async connect() {
+        atConnect = w.fake.state.values.STAGING_SCHEMA_HEAD;
+        throw new StagingError("STAGING_DATABASE_UNAVAILABLE");
+      },
+    });
+    const migrate = await w.run(["migrate"]);
+    assert.equal(migrate.code, 1);
+    assert.equal(migrate.result.code, "STAGING_DATABASE_UNAVAILABLE");
+    assert.equal(atConnect, "0", "withdrawn before the first database statement");
+    assert.equal(w.fake.state.values.STAGING_SCHEMA_HEAD, "0");
+    const { code, result } = await w.run(["deploy"]);
+    assert.equal(code, 1);
+    assert.equal(result.code, "STAGING_SCHEMA_HEAD_MISMATCH");
+    assert.deepEqual(deploys(w), []);
+  } finally {
+    w.planted.cleanup();
+  }
+  // A HEAD that is not origin/main never reaches the variable or the database.
+  const branch = await world({
+    files: { "neon-owner-url": ownerUrl },
+    git: { head: fakeSha("branch") },
+  });
+  try {
+    let connected = false;
+    branch.ctx.database = () => ({
+      async connect() {
+        connected = true;
+        throw new StagingError("STAGING_DATABASE_UNAVAILABLE");
+      },
+    });
+    const { code, result } = await branch.run(["migrate"]);
+    assert.equal(code, 1);
+    assert.equal(result.code, "STAGING_NOT_MAIN");
+    assert.equal(connected, false);
+    assert.equal(branch.fake.state.values.STAGING_SCHEMA_HEAD, head);
+  } finally {
+    branch.planted.cleanup();
   }
 });
 
@@ -402,7 +559,8 @@ test("AC05: ready:false within 90 s fails the run, keeps both api version ids an
     assert.equal(result.health.last, "not_ready");
     assert.ok(result.health.waitedMs <= 90000 && result.health.polls >= 18);
     assert.ok(!wranglerCalls(w).some((c) => c.args.includes("rollback")));
-    assert.equal(w.reports[0].value.versions.api.previous, fakeUuid(1));
+    assert.equal(w.reports.at(-1).value.versions.api.previous, fakeUuid(1));
+    assert.deepEqual(result.census.findings, [], "a health failure is censused too");
     assert.equal(commands.has("rollback"), false, "E11 is suspended: no rollback subcommand");
   } finally {
     w.planted.cleanup();
@@ -421,12 +579,54 @@ test("AC14: a kill between gate 2 and the api deploy means no api deploy", async
       const { code, result } = await w.run(environment.ci ? ["deploy", "--ci"] : ["deploy"]);
       assert.equal(code, 1);
       assert.equal(result.code, "STAGING_KILLED");
+      assert.equal(result.worker, "api");
+      assert.equal(result.gates.flagBeforeConnector, "on");
       assert.equal(result.gates.flagBeforeApi, "off");
       assert.equal(result.versions.api.outcome, "not_deployed");
       assert.ok(!deployedWorkers(w).includes("api"));
       assert.equal(w.cloud.workersDev(scriptOf.api), false);
+      assert.deepEqual(result.census.findings, []);
     } finally {
       w.planted.cleanup();
+    }
+  }
+});
+
+test("AC14: a kill during gate 5 or an earlier upload stops before the next upload", async () => {
+  // Local and --first runs build for minutes after gate 2; the flag is read again before
+  // the broker, so a kill during the build deploys nothing.
+  const w = await world();
+  try {
+    w.ctx.gate5 = async () => assert.equal(await main(["kill"], w.ctx), 0);
+    const { code, result } = await w.run(["deploy"]);
+    assert.equal(code, 1);
+    assert.equal(result.code, "STAGING_KILLED");
+    assert.equal(result.worker, "broker");
+    assert.equal(result.gates.flag, "on");
+    assert.equal(result.gates.flagBeforeBroker, "off");
+    for (const key of deployOrder) assert.equal(result.versions[key].outcome, "not_deployed");
+    assert.deepEqual(deploys(w), []);
+    assert.equal(result.census, null);
+  } finally {
+    w.planted.cleanup();
+  }
+  for (const environment of [ciEnvironment(), {}]) {
+    const early = await world({ environment });
+    try {
+      early.hooks.onDeploy = async (worker) => {
+        if (worker === "broker") assert.equal(await main(["kill"], early.ctx), 0);
+      };
+      const { code, result } = await early.run(environment.ci ? ["deploy", "--ci"] : ["deploy"]);
+      assert.equal(code, 1);
+      assert.equal(result.code, "STAGING_KILLED");
+      assert.equal(result.worker, "orchestrator");
+      assert.equal(result.versions.broker.outcome, "deployed");
+      for (const key of ["orchestrator", "connector", "api"])
+        assert.equal(result.versions[key].outcome, "not_deployed", key);
+      assert.deepEqual(deployedWorkers(early), ["broker"]);
+      assert.deepEqual(result.census.findings, []);
+    } finally {
+      early.planted.cleanup();
     }
   }
 });
@@ -447,7 +647,9 @@ test("AC14: a kill during the api deploy means the post-check turns workers.dev 
       assert.equal(result.gates.flagBeforeApi, "on");
       assert.equal(result.gates.flagAfterApi, "off");
       assert.equal(w.cloud.workersDev(scriptOf.api), false);
-      assert.equal(result.health, null, "no health check, smoke or census after a kill");
+      assert.equal(result.health, null, "no health check or smoke after a kill");
+      assert.equal(result.smoke, null);
+      assert.deepEqual(result.census.findings, [], "the read-only census still runs");
     } finally {
       w.planted.cleanup();
     }
@@ -648,6 +850,7 @@ test("first deploy: secret files go to the broker and the api by path, then are 
     assert.equal(result.outcome, "deployed");
     assert.equal(result.gates.flag, "first");
     assert.equal(result.gates.configuration, "keyring_bound");
+    assert.equal(result.gates.digest, "published");
     const byWorker = Object.fromEntries(
       deploys(w).map((c) => [
         configWorker[c.args[c.args.indexOf("--config") + 1].split("/")[1]],
@@ -670,6 +873,39 @@ test("first deploy: secret files go to the broker and the api by path, then are 
     assert.equal(record.secrets.LOGIN_CAPSULE_KEYRING.versionId, result.versions.api.current);
     assert.equal(record.secrets.WORKOS_API_KEY.versionId, result.versions.broker.current);
     assert.equal(result.versions.api.previous, null);
+  } finally {
+    w.planted.cleanup();
+  }
+});
+
+test("first deploy: the digest is published before any upload, so a failed publish can simply run again", async () => {
+  let failing = true;
+  const w = await world({
+    scripts: [],
+    files: firstFiles(),
+    gh: { values: { STAGING_DEPLOY_ENABLED: "0" } },
+    tools: { fail: { gh: (args) => failing && args[0] === "variable" && args[1] === "set" } },
+  });
+  delete w.fake.state.values.STAGING_LOGIN_CONFIGURATION_DIGEST;
+  try {
+    const first = await w.run(["deploy", "--first"]);
+    assert.equal(first.code, 1);
+    assert.equal(first.result.code, "STAGING_GH_FAILED");
+    assert.deepEqual(deploys(w), [], "nothing is uploaded before the digest is published");
+    assert.equal(first.result.census, null);
+    assert.ok(existsSync(join(w.planted.directory, "tmp/broker-secrets.json")));
+    assert.ok(existsSync(join(w.planted.directory, "tmp/api-secrets.json")));
+    assert.equal(w.fake.state.values.STAGING_LOGIN_CONFIGURATION_DIGEST, undefined);
+    failing = false;
+    const again = await w.run(["deploy", "--first"]);
+    assert.equal(again.code, 0, JSON.stringify(again.result));
+    assert.equal(again.result.outcome, "deployed");
+    assert.equal(w.fake.state.values.STAGING_LOGIN_CONFIGURATION_DIGEST, digest);
+    const calls = w.fake.calls.map((c) => c.tool + " " + c.args.slice(0, 2).join(" "));
+    assert.ok(
+      calls.lastIndexOf("gh variable set") < calls.indexOf("wrangler deploy --config"),
+      "published before the first upload",
+    );
   } finally {
     w.planted.cleanup();
   }
@@ -752,7 +988,11 @@ test("smoke: the unattended checks pass on a healthy staging and record routing"
     });
     assert.deepEqual(result.checks.guard, { configured: true, start: 403 });
     assert.equal(result.checks.databasePath, 401);
-    assert.deepEqual(result.checks.others, { broker: 404, orchestrator: 404, connector: 404 });
+    assert.deepEqual(result.checks.others, {
+      broker: { status: 404, json: false },
+      orchestrator: { status: 404, json: false },
+      connector: { status: 404, json: false },
+    });
     assert.equal(result.checks.limiter, undefined);
     assert.equal(w.site.flowsCreated(), 0);
   } finally {
@@ -774,9 +1014,18 @@ test("smoke: no guard means no login start; failures name the check; --acceptanc
   const exposed = await world();
   try {
     const fetch = exposed.ctx.fetch;
+    // An exposed broker or orchestrator answers every path as the real Workers do
+    // (apps/broker/src/index.ts, apps/workers/src/orchestrator.ts): their own JSON 404.
+    const workerNotFound = () =>
+      new Response('{"code":"not_found"}', {
+        status: 404,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      });
     exposed.ctx.fetch = async (url, init) => {
       const { host, pathname } = new URL(url);
-      if (host.startsWith("morrow-staging-broker.")) return new Response("{}", { status: 200 });
+      if (host.startsWith("morrow-staging-broker.")) return workerNotFound();
+      if (host.startsWith("morrow-staging-orchestrator."))
+        return new Response('{"code":"not_found"}', { status: 404 });
       if (host.startsWith("morrow-staging-api.") && pathname === "/")
         return new Response("", {
           status: 200,
@@ -786,7 +1035,13 @@ test("smoke: no guard means no login start; failures name the check; --acceptanc
     };
     const { code, result } = await exposed.run(["smoke"]);
     assert.equal(code, 1);
-    assert.deepEqual(result.failures.sort(), ["SMOKE_SPA", "SMOKE_WORKERS_DEV_EXPOSED_BROKER"]);
+    assert.deepEqual(result.failures.sort(), [
+      "SMOKE_SPA",
+      "SMOKE_WORKERS_DEV_EXPOSED_BROKER",
+      "SMOKE_WORKERS_DEV_EXPOSED_ORCHESTRATOR",
+    ]);
+    assert.deepEqual(result.checks.others.broker, { status: 404, json: true });
+    assert.deepEqual(result.checks.others.connector, { status: 404, json: false });
   } finally {
     exposed.planted.cleanup();
   }

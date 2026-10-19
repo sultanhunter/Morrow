@@ -72,8 +72,8 @@ function tamperedRoot(path) {
   return root;
 }
 // Three synthetic entries under `morrow_<prefix>_owner`, the first pinning one
-// prerequisite that creates two roles.
-function syntheticRoot(prefix, database) {
+// prerequisite that creates two roles. `second` replaces the second entry's body.
+function syntheticRoot(prefix, database, second = null) {
   const root = mkdtempSync(join(tmpdir(), "morrow-staging-lab-syn-"));
   temporary.push(root);
   mkdirSync(join(root, "migrations"));
@@ -83,7 +83,9 @@ function syntheticRoot(prefix, database) {
   const prerequisite = `CREATE ROLE ${owner} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;\nCREATE ROLE ${reader} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;\nGRANT CREATE ON DATABASE ${database} TO ${owner};\n`;
   const files = {
     [`0001.${prefix}-one.sql`]: `BEGIN;\nCREATE SCHEMA morrow_${prefix};\nCREATE TABLE morrow_${prefix}.one(id int);\nCOMMIT;\n`,
-    [`0002.${prefix}-two.sql`]: `BEGIN;\nCREATE TABLE morrow_${prefix}.two(id int);\nSELECT pg_catalog.pg_sleep(0.3);\nCOMMIT;\n`,
+    [`0002.${prefix}-two.sql`]:
+      second ??
+      `BEGIN;\nCREATE TABLE morrow_${prefix}.two(id int);\nSELECT pg_catalog.pg_sleep(0.3);\nCOMMIT;\n`,
     [`0003.${prefix}-three.sql`]: `BEGIN;\nCREATE TABLE morrow_${prefix}.three(id int);\nCOMMIT;\n`,
   };
   const prerequisitePath = `infra/${prefix}-role-prerequisites.sql`;
@@ -194,9 +196,9 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
       "STAGING_TREE_DIRTY",
     ],
     [
-      "manifest_not_from_main",
-      { tools: fakeTools({ git: { diff: "migrations/0015.work-state.sql\n" } }).tools },
-      "STAGING_MANIFEST_NOT_MAIN",
+      "head_not_main",
+      { tools: fakeTools({ git: { head: "b".repeat(40) } }).tools },
+      "STAGING_NOT_MAIN",
     ],
     [
       "foundation_not_green",
@@ -482,6 +484,17 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
     "schema_head_published_for_the_full_chain",
     fakes.state.variables.STAGING_SCHEMA_HEAD === schemaHead(chain),
   );
+  check(
+    "schema_head_withdrawn_before_the_run_and_published_after",
+    fakes.calls
+      .filter(
+        (c) => c.tool === "gh" && c.args[0] === "variable" && c.args[2] === "STAGING_SCHEMA_HEAD",
+      )
+      .slice(-2)
+      .map((c) => c.args[c.args.indexOf("--body") + 1])
+      .join() ===
+      "0," + schemaHead(chain),
+  );
   const again = await run(["migrate"]);
   check(
     "rerun_is_a_no_op",
@@ -520,10 +533,10 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
 
   // --- Synthetic chains: crash before COMMIT, lost acknowledgement, partial
   // prerequisite, concurrency (superuser), then the D4 SET-row protocol (createrole).
-  const synthetic = async (prefix, owner = "postgres") => {
+  const synthetic = async (prefix, owner = "postgres", second = null) => {
     const database = "morrow_" + prefix + "_db";
     sql(`CREATE DATABASE ${database}${owner === "postgres" ? "" : " OWNER " + owner};`);
-    return { ...syntheticRoot(prefix, database), binding: { ...labBinding, database } };
+    return { ...syntheticRoot(prefix, database, second), binding: { ...labBinding, database } };
   };
   const options = (s, administrator, hooks) => ({
     connect: psqlConnector(id, { user: administrator.name, database: s.binding.database, hooks })
@@ -655,6 +668,24 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
         await c.close();
       }
     })()) === 0,
+  );
+
+  // A body that leaves its executeAs through dynamic SQL, which the static guard cannot
+  // see: the runner's end-of-body role check refuses it before COMMIT, so the escaped
+  // DDL, the ledger row and the SET row all roll back.
+  const s6 = await synthetic(
+    "sf",
+    "lab_admin",
+    "BEGIN;\nDO $$ BEGIN EXECUTE 'RESET ' || 'ROLE'; END $$;\nCREATE TABLE public.escaped(id int);\nCOMMIT;\n",
+  );
+  const changed = await rejection(runMigrations(options(s6, createrole)));
+  check(
+    "role_changed_by_dynamic_sql_is_refused_and_rolled_back",
+    changed?.code === "MIGRATION_ROLE_CHANGED" &&
+      changed.details.sequence === 2 &&
+      ledgerOf(s6) === "1" &&
+      db("SELECT to_regclass('public.escaped') IS NULL;", s6.binding.database) === "t" &&
+      setRows() === "0",
   );
 
   // --- AC07: no marker in the tool's output, the statements it sent, or the server log.

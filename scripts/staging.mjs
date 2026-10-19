@@ -8,7 +8,7 @@
 // Effects need the active staging card (docs/decisions/approvals/staging-card.json);
 // reads and local commands do not. `ctx` is the one injection seam: tests and the
 // PostgreSQL lab pass fakes for tools, the Cloudflare API and the database.
-import "./staging-token.mjs"; // FIRST: removes CLOUDFLARE_API_TOKEN from process.env.
+import "./staging-token.mjs"; // FIRST: removes CLOUDFLARE_API_TOKEN and GH_TOKEN from process.env.
 import { appendFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -40,7 +40,7 @@ import {
   sessionIdentity,
   checkIdentity,
 } from "./staging-runner.mjs";
-import { cloudflareCredential } from "./staging-token.mjs";
+import { cloudflareCredential, githubCredential } from "./staging-token.mjs";
 import {
   cloudflareApi,
   createTools,
@@ -190,10 +190,12 @@ function ownerUrlFor(ctx, binding, specs) {
   return url;
 }
 
-// D3/D2 preconditions: a clean tree, `origin/main` freshly fetched, and a green
-// `foundation` check run on that sha. "migrations" scope also requires migrations/ and
-// the prerequisite files to equal origin/main; "head" requires HEAD to be origin/main.
-export async function mainPreconditions(ctx, repository, scope) {
+// D2/D3 preconditions for every effect on the hosted database or the broker's secrets
+// (`migrate`, `provision-roles`, `put-secret`, `seed-platform`) and for a local deploy: a
+// clean tree, HEAD equal to a freshly fetched `origin/main`, and a green `foundation`
+// check run on that sha. So the runner, the chain and the manifest are all reviewed code
+// from main, never an unmerged branch. `kill` needs none of this.
+export async function mainPreconditions(ctx, repository) {
   await toolOk(ctx.tools, "git", ["fetch", "--quiet", "--no-tags", "origin", "main"]);
   const status = await toolOk(ctx.tools, "git", ["status", "--porcelain", "--untracked-files=all"]);
   if (status.trim() !== "") throw new StagingError("STAGING_TREE_DIRTY");
@@ -201,28 +203,10 @@ export async function mainPreconditions(ctx, repository, scope) {
     await toolOk(ctx.tools, "git", ["rev-parse", "--verify", "--quiet", "origin/main^{commit}"])
   ).trim();
   if (!/^[0-9a-f]{40}$/.test(main)) throw new StagingError("STAGING_GIT_OUTPUT_INVALID");
-  if (scope === "head") {
-    const head = (
-      await toolOk(ctx.tools, "git", ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])
-    ).trim();
-    if (head !== main) throw new StagingError("STAGING_NOT_MAIN");
-  } else {
-    const diff = await toolOk(ctx.tools, "git", [
-      "diff",
-      "--name-only",
-      main,
-      "--",
-      "migrations",
-      "infra",
-    ]);
-    const changed = diff
-      .split("\n")
-      .filter(
-        (path) => /^migrations\//.test(path) || /^infra\/[^/]+-prerequisites\.sql$/.test(path),
-      );
-    if (changed.length)
-      throw new StagingError("STAGING_MANIFEST_NOT_MAIN", { files: changed.length });
-  }
+  const head = (
+    await toolOk(ctx.tools, "git", ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])
+  ).trim();
+  if (head !== main) throw new StagingError("STAGING_NOT_MAIN");
   const reply = await toolJson(ctx.tools, "gh", [
     "api",
     `repos/${repository}/commits/${main}/check-runs?check_name=foundation&filter=latest`,
@@ -290,6 +274,10 @@ command("schema-head", {
   },
 });
 
+// The value STAGING_SCHEMA_HEAD holds while the database may be behind the chain. It
+// matches no chain head, so gate 3 stops every deploy until `migrate` succeeds.
+export const schemaHeadWithdrawn = "0";
+
 command("migrate", {
   usage: "migrate",
   parse: noArguments,
@@ -299,9 +287,13 @@ command("migrate", {
     const binding = await stagingBinding(ctx, config);
     const chain = ctx.chain();
     const repository = repositoryOf(config.staging);
-    const { sourceCommit } = await mainPreconditions(ctx, repository, "migrations");
+    const { sourceCommit } = await mainPreconditions(ctx, repository);
     const specs = await ctx.specs();
     const ownerUrl = ownerUrlFor(ctx, binding, specs);
+    // Workers never deploy ahead of their schema (ADR-0019 item 4): the head is withdrawn
+    // before the first database statement and published again only after the whole
+    // chain is applied, so a failed or unknown run leaves it withdrawn.
+    await publishVariable(ctx, config.staging, "STAGING_SCHEMA_HEAD", schemaHeadWithdrawn);
     const result = await runMigrations({
       connect: ctx.database({ ownerUrl, binding }).connect,
       chain,
@@ -327,6 +319,7 @@ command("provision-roles", {
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
     const binding = await stagingBinding(ctx, config);
+    await mainPreconditions(ctx, repositoryOf(config.staging));
     const constants = await ctx.constants();
     const specs = await ctx.specs();
     const ownerUrl = ownerUrlFor(ctx, binding, specs);
@@ -406,6 +399,7 @@ command("put-secret", {
   async run(ctx, { name }) {
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
+    await mainPreconditions(ctx, repositoryOf(config.staging));
     const value = readCredentialFile(ctx.directory, putSecretFiles[name], await ctx.specs());
     await brokerList(ctx);
     const status = await brokerBulk(ctx, { [name]: value });
@@ -445,7 +439,7 @@ command("seed-platform", {
       selfService = { approvalRef: "staging-card-1.e7" };
     }
     const configuration = await ctx.loginConfiguration(config);
-    await mainPreconditions(ctx, repositoryOf(config.staging), "head");
+    await mainPreconditions(ctx, repositoryOf(config.staging));
     const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
     const rows = platformSeedRows(configuration, JSON.parse(configuration.verificationProfileJson));
     const written = await seedPlatform({
@@ -716,6 +710,8 @@ command("deploy", {
     const github = githubTarget(staging);
     const constants = await ctx.constants();
     const specs = await ctx.specs();
+    const writeReport = (report) =>
+      ctx.writeReport("staging/deploy-report.json", closedReport({ command: "deploy", ...report }));
     const report = await runDeploy(ctx, {
       mode,
       staging,
@@ -725,7 +721,8 @@ command("deploy", {
       brokerSecrets: constants.brokerSecrets,
       schemaHead: schemaHead(ctx.chain()),
       csp: committedCsp(ctx.root),
-      preconditions: () => mainPreconditions(ctx, github.repository, "head"),
+      checkpoint: writeReport,
+      preconditions: () => mainPreconditions(ctx, github.repository),
       loginDigest: async () => (await ctx.loginConfiguration(config)).configurationDigest,
       // The two owner files: exact key sets (their format checks), and the keyring bound
       // to the committed login configuration's digest.
@@ -745,16 +742,15 @@ command("deploy", {
           api: join(ctx.directory, firstFiles.api),
         };
       },
-      // After the four uploads: unlink both files, publish the digest (E10), and record
-      // the versions that carry the new secrets.
-      async afterFirst(digest, versions) {
+      // After the four uploads: unlink both files and record the versions that carry the
+      // new secrets. The digest (E10) was published before the first upload.
+      async afterFirst(versions) {
         for (const file of Object.values(firstFiles))
           try {
             unlinkSync(join(ctx.directory, file));
           } catch {
             // Already gone.
           }
-        await setVariable(ctx, github, "STAGING_LOGIN_CONFIGURATION_DIGEST", digest);
         recordRotation(ctx.directory, constants.brokerSecrets, {
           worker: "broker",
           versionId: versions.broker.current,
@@ -767,8 +763,7 @@ command("deploy", {
         });
       },
     });
-    const closed = closedReport({ command: "deploy", ...report });
-    ctx.writeReport("staging/deploy-report.json", closed);
+    writeReport(report);
     const ok = ["deployed", "superseded", "disabled"].includes(report.outcome);
     return { ...report, exitCode: ok ? 0 : 1 };
   },
@@ -1076,7 +1071,8 @@ export function defaultContext() {
       credential: await ctx.credential(),
       accountId: (await ctx.config()).staging.cloudflare?.account_id ?? null,
     }));
-  const plain = createTools({ root, home });
+  // gh gets the captured GH_TOKEN (CI) in its own environment only; git gets none.
+  const plain = createTools({ root, home, github: githubCredential() });
   // neonctl gets the project-scoped key (neon-project-api-key) in its environment only.
   let neon;
   const neonTools = async () =>

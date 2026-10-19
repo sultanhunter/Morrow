@@ -374,6 +374,14 @@ async function applyEntry(state, entry, index, previous) {
       );
     await connection.exec(`SET LOCAL ROLE ${entry.executeAs}`);
     await connection.exec(entry.body);
+    // The body must end as it began: as its executeAs, in the administrator's session.
+    // A body that changed the role (dynamic SQL the static guard cannot see) is refused
+    // here, before COMMIT, so the connection closes and the transaction rolls back.
+    const [who] = await connection.query(
+      "SELECT current_user::text AS current_role, session_user::text AS session_role",
+    );
+    if (who?.current_role !== entry.executeAs || who?.session_role !== admin)
+      throw new StagingError("MIGRATION_ROLE_CHANGED", { sequence: entry.sequence });
     await connection.exec("RESET ROLE");
     if (administrator.mode === "createrole")
       await connection.exec(`REVOKE ${entry.executeAs} FROM ${admin} GRANTED BY ${admin}`);

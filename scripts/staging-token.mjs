@@ -5,7 +5,9 @@
 // accept. The token then reaches only (a) the environment of a wrangler child, the one
 // way wrangler accepts it, and (b) the Authorization header of a direct Cloudflare API
 // request made by the tool itself. It never reaches argv, a file, a log, an error, a
-// report or a JSON serialisation. This module imports only node: builtins.
+// report or a JSON serialisation. The deploy workflow's GH_TOKEN (its GITHUB_TOKEN, with
+// contents: read and actions: read) is moved out of process.env the same way and reaches
+// only gh children. This module imports only node: builtins.
 import { inspect } from "node:util";
 
 const captured =
@@ -13,6 +15,11 @@ const captured =
     ? process.env.CLOUDFLARE_API_TOKEN
     : null;
 delete process.env.CLOUDFLARE_API_TOKEN;
+const capturedGithub =
+  typeof process.env.GH_TOKEN === "string" && process.env.GH_TOKEN !== ""
+    ? process.env.GH_TOKEN
+    : null;
+delete process.env.GH_TOKEN;
 // Never used, never relayed: their presence is reported by name only, then refused.
 const refusedNames = Object.freeze(
   ["CLOUDFLARE_API_KEY", "CLOUDFLARE_EMAIL", "CF_API_TOKEN", "CF_API_KEY", "CF_EMAIL"].filter(
@@ -86,3 +93,26 @@ export function cloudflareCredential({ source, readOperatorToken }) {
 
 // Tests only: a credential over a synthetic marker token, through the same wrapper.
 export const syntheticCredential = (token) => credential(token);
+
+// The GH_TOKEN captured at startup, as an opaque handle whose only output is a gh child's
+// environment; null when none was set (locally gh uses the operator's own login).
+function githubHandle(token) {
+  return Object.freeze({
+    childEnvironment(base) {
+      return { ...base, GH_TOKEN: token };
+    },
+    toJSON() {
+      return "[github credential]";
+    },
+    toString() {
+      return "[github credential]";
+    },
+    [inspect.custom]() {
+      return "[github credential]";
+    },
+  });
+}
+export const githubCredential = () =>
+  capturedGithub === null ? null : githubHandle(capturedGithub);
+// Tests only.
+export const syntheticGithubCredential = (token) => githubHandle(token);
