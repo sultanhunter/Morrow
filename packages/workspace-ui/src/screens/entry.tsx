@@ -5,26 +5,39 @@ import { buildWorkspacePath, workspaceRoutes } from "@morrow/contracts/routes";
 import { copy } from "../copy";
 import type { Id, WorkspaceSummary } from "../model";
 import type { Outcome } from "../port";
-import { useCommand, useDirty, useRead, useServices, type CommandPhase } from "../services";
+import {
+  useChallenge,
+  useCommand,
+  useDirty,
+  useRead,
+  useServices,
+  type CommandPhase,
+} from "../services";
 import { Button, TextField } from "../components/controls";
 import { OutcomeNotice, StateView, StatusRegion, outcomeState } from "../components/feedback";
 
-/** Starts sign-in once; at login body v1 it needs a workspace to name. */
+/**
+ * Starts sign-in once; at login body v1 it needs a workspace to name. The start POST
+ * carries a fresh bot-challenge token (P05.T01ab); a challenge that fails, a 403
+ * `challenge_*` and a 429 all show the existing "Sign-in couldn't start".
+ */
 export function SignInButton({ workspaceId }: { readonly workspaceId: Id | null }) {
   const services = useServices();
+  const challenge = useChallenge("login");
   const [state, setState] = useState<"idle" | "starting" | "failed">("idle");
   const unusable = services.loginBodyVersion === 1 && workspaceId === null;
   const start = async () => {
     if (state === "starting" || unusable) return;
     setState("starting");
-    const result = await services.startSignIn(workspaceId);
-    setState(result === "failed" ? "failed" : "starting");
+    const result = await challenge.run((token) => services.startSignIn(workspaceId, token));
+    setState(result === "started" ? "starting" : "failed");
   };
   return (
     <div className="sign-in">
       <Button variant="primary" onClick={start} disabled={unusable || state === "starting"}>
         {state === "starting" ? copy.signIn.starting : copy.signIn.button}
       </Button>
+      {challenge.host}
       {unusable ? <p className="muted">{copy.signIn.needWorkspaceLink}</p> : null}
       <StatusRegion message={state === "failed" ? copy.signIn.failed : null} />
     </div>

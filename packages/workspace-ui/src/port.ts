@@ -30,9 +30,30 @@ export interface Command<B> {
   readonly body: Readonly<B>;
 }
 
+/**
+ * P05.T01ab: the bot challenge a guarded POST carries (`X-Morrow-Challenge`). The app
+ * mounts one invisible widget per form in a host element the screen renders.
+ */
+export type ChallengeAction = "login" | "signup";
+export interface ChallengeWidget {
+  /**
+   * A fresh single-use token for the next POST; `null` when the server asks for no
+   * challenge (`{"provider":"none"}`); `"failed"` when none could be obtained.
+   */
+  token(): Promise<string | null | "failed">;
+  /** After every guarded POST, so the next one gets a fresh token. */
+  reset(): void;
+  remove(): void;
+}
+export type ChallengeHost = (action: ChallengeAction, element: HTMLElement) => ChallengeWidget;
+
 export interface WorkspacePort {
   readonly session: {
-    startSignIn(workspaceId: Id | null): Promise<Outcome<{ readonly navigateTo: string }>>;
+    /** `challenge` is the X-Morrow-Challenge token, or null when none is asked for. */
+    startSignIn(
+      workspaceId: Id | null,
+      challenge?: string | null,
+    ): Promise<Outcome<{ readonly navigateTo: string }>>;
     signOut(): Promise<Outcome<"ended">>;
     keepAlive(): Promise<Outcome<null>>; // not_in_build until the P05.T01y keeper (§4.14)
   };

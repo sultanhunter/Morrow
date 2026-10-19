@@ -60,7 +60,8 @@ export function decodeLoginStart(reply: Reply): Outcome<{ readonly navigateTo: s
     isWorkosAuthorizeUrl(reply.body.authorizationUrl)
   )
     return { kind: "ok", value: { navigateTo: reply.body.authorizationUrl }, replayed: false };
-  // Any other reply, including 503 login_unavailable, is "Sign-in couldn't start".
+  // Any other reply, including 503 login_unavailable, the guard's 403 challenge_required
+  // and challenge_failed and its 429 rate_limited (P05.T01ab), is "Sign-in couldn't start".
   return unavailable(reply.kind === "not_sent" && reply.offline);
 }
 
@@ -130,6 +131,9 @@ export function identityOutcome<T>(
     return { kind: "invalid", field: "name" };
   if (status === 403 && identityBody(body, ["signup_unavailable"]))
     return { kind: "denied", message: "", reference: null };
+  // P05.T01ab: the api guard answered before the handler ran, so nothing was done.
+  if (status === 403 && identityBody(body, ["challenge_required", "challenge_failed"]))
+    return unavailable();
   if (status === 409 && identityBody(body, ["already_onboarded", "idempotency_conflict"]))
     return {
       kind: "conflict",

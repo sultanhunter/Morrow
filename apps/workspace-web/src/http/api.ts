@@ -4,7 +4,7 @@
 // documented ones, bodies are closed literals with no organization, workspace or
 // principal key, and byte limits are checked before anything is sent.
 import type { Command, Composed, Outcome, PortMethod, WorkspacePort } from "@morrow/workspace-ui";
-import { byteLength, isCommandKey, isId, type Client } from "./client";
+import { byteLength, isChallengeToken, isCommandKey, isId, type Client } from "./client";
 import { decodeBootstrap, decodeLoginStart, decodeLogout } from "./identity-decoders";
 
 export type HttpRequest =
@@ -14,6 +14,8 @@ export type HttpRequest =
       readonly path: string;
       readonly body: string;
       readonly key: string | null;
+      /** P05.T01ab: the X-Morrow-Challenge token, on login start (and signup) only. */
+      readonly challenge?: string;
     };
 export const byteLimits = Object.freeze({ login: 512, signup: 2048, work: 65536 });
 
@@ -25,7 +27,8 @@ const query = (pairs: readonly (readonly [string, string | null])[]) => {
     : "";
 };
 const get = (path: string): HttpRequest => ({ method: "GET", path });
-function post(path: string, body: unknown, key: string | null, limit: number): HttpRequest | null {
+type PostRequest = Extract<HttpRequest, { readonly method: "POST" }>;
+function post(path: string, body: unknown, key: string | null, limit: number): PostRequest | null {
   if (key !== null && !isCommandKey(key)) return null;
   const text = JSON.stringify(body);
   if (byteLength(text) > limit) return null;
@@ -41,10 +44,16 @@ const text = (value: unknown, max: number) =>
 
 /** Every request this adapter can send; `null` means refused before sending. */
 export const requests = {
-  login(version: 1 | 2, workspaceId: string | null): HttpRequest | null {
-    if (version === 2) return post("/auth/login", { schemaVersion: 2 }, null, byteLimits.login);
-    if (!isId(workspaceId)) return null;
-    return post("/auth/login", { schemaVersion: 1, workspaceId }, null, byteLimits.login);
+  login(
+    version: 1 | 2,
+    workspaceId: string | null,
+    challenge: string | null = null,
+  ): HttpRequest | null {
+    if (challenge !== null && !isChallengeToken(challenge)) return null;
+    if (version === 1 && !isId(workspaceId)) return null;
+    const body = version === 2 ? { schemaVersion: 2 } : { schemaVersion: 1, workspaceId };
+    const request = post("/auth/login", body, null, byteLimits.login);
+    return request && challenge !== null ? { ...request, challenge } : request;
   },
   logout: (): HttpRequest => post("/auth/logout", { schemaVersion: 1 }, null, byteLimits.login)!,
   bootstrap: (ws: string) => (isId(ws) ? get(`/workspace/${ws}/bootstrap`) : null),
@@ -201,7 +210,7 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
   const send = (request: HttpRequest) =>
     request.method === "GET"
       ? client.get(request.path, navigationSignal())
-      : client.post(request.path, request.body, request.key);
+      : client.post(request.path, request.body, request.key, request.challenge ?? null);
   // Uncomposed methods (account.*, work.*, people.list and session.keepAlive in this
   // build) answer not_in_build and send nothing. Their routes and decoders are composed
   // when the backend lands (PR-2); until then they stay here, unreachable.
@@ -212,10 +221,13 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
       composed[method] ? run(...args) : Promise.resolve(notInBuild);
   return {
     session: {
-      startSignIn: gated("session.startSignIn", async (workspaceId: string | null) => {
-        const request = requests.login(loginBodyVersion, workspaceId);
-        return request ? decodeLoginStart(await send(request)) : refused;
-      }),
+      startSignIn: gated(
+        "session.startSignIn",
+        async (workspaceId: string | null, challenge: string | null = null) => {
+          const request = requests.login(loginBodyVersion, workspaceId, challenge);
+          return request ? decodeLoginStart(await send(request)) : refused;
+        },
+      ),
       signOut: gated("session.signOut", async () => decodeLogout(await send(requests.logout()))),
       keepAlive: unbuilt,
     },
