@@ -9,14 +9,17 @@ permissions:
 concurrency:
   group: foundation-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
-# P03.T04f: how much runs depends on the event, and `foundation` is the single required
-# status check in every case.
+# P03.T04f: how much runs depends on the event, `scope` decides, and `foundation` is the
+# single required status check in every case.
 # - A pull request runs everything, unless every file it changes is Markdown; then it runs
 #   only `checks`, which holds every check that reads Markdown (plan:check, verify, the
-#   unit tests). `scope` decides.
-# - A push to main runs only `checks`. Each pull request merged only after a green full
-#   run on its exact head, which already contained main (ADR-0014).
+#   unit tests).
+# - A push to main runs only `checks` when the pushed commit is a merge whose tree is
+#   exactly its second parent's, the merged pull request head, which needed a green
+#   `foundation` on that exact head (ADR-0014 item 1). Any other push runs everything.
 # - workflow_dispatch runs everything, on main or any branch.
+# The two light paths (only `checks`) await the owner's answer to P03.T04f OQ-1, because
+# ADR-0014 item 4 still says `foundation` treats a skipped job as a failure.
 # Every job that checks out the repository and writes reports routes them to
 # MORROW_ARTIFACTS_DIR, secret-scans that directory, uploads it only when the scan
 # passes, and ends by requiring an unchanged checkout. docs/development/ci.md describes
@@ -24,7 +27,6 @@ concurrency:
 jobs:
   # Writes no report, so it has no scan, upload or clean-tree steps.
   scope:
-    if: github.event_name != 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -35,18 +37,26 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
           fetch-depth: 0
-      - name: Run everything unless every file the pull request changes is Markdown
+      - name: Run everything unless the pull request changes only Markdown or the push merges a checked head unchanged
         id: decide
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSHED_SHA: ${{ github.sha }}
         run: |
           full=true
           if [ "$EVENT_NAME" = pull_request ]; then
             changed="$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")"
             if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qv '\.md$'; then full=false; fi
             echo "$(printf '%s\n' "$changed" | grep -c .) changed files"
+          elif [ "$EVENT_NAME" = push ]; then
+            # Light only when the merged tree is exactly the merged pull request head: a
+            # squash merge, a direct push or a head that lacked the latest main runs everything.
+            if git rev-parse -q --verify "$PUSHED_SHA^2^{commit}" >/dev/null &&
+              git diff --quiet "$PUSHED_SHA^2" "$PUSHED_SHA" --; then
+              full=false
+            fi
           fi
           echo "event $EVENT_NAME, full=$full"
           echo "full=$full" >> "$GITHUB_OUTPUT"
@@ -307,9 +317,10 @@ jobs:
         run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
 
   # Same name as the former single job, so the required status check is unchanged. It
-  # runs on every event and fails unless `checks` succeeded and every lab job ended as
-  # this event requires: success on a full run, skipped on a push to main or a
-  # Markdown-only pull request. Any failed, cancelled or unexpectedly skipped job fails it.
+  # runs on every event and fails unless `scope` and `checks` succeeded and every lab job
+  # ended as the `scope` decision requires: success on a full run, skipped on a light run
+  # (a Markdown-only pull request, or a push that merges a checked head unchanged). Any
+  # failed, cancelled or unexpectedly skipped job fails it, and so does a missing result.
   foundation:
     if: always()
     needs: [scope, checks, workers, postgres, pgwire, ui]
@@ -326,13 +337,13 @@ jobs:
           LABS: ${{ needs.workers.result }} ${{ needs.postgres.result }} ${{ needs.pgwire.result }} ${{ needs.ui.result }}
         run: |
           echo "event $EVENT_NAME, scope $SCOPE (full=$FULL), job results: $RESULTS"
-          test -n "$RESULTS"
-          test -n "$LABS"
+          set -- $LABS
+          [ "$#" -eq 4 ] || { echo "lab job results: $# of 4"; exit 1; }
           [ "$CHECKS" = success ] || { echo "required job checks: $CHECKS"; exit 1; }
-          if [ "$EVENT_NAME" = push ] && [ "$SCOPE" = skipped ]; then mode=light
-          elif [ "$EVENT_NAME" != push ] && [ "$SCOPE" = success ] && [ "$FULL" = true ]; then mode=full
-          elif [ "$EVENT_NAME" = pull_request ] && [ "$SCOPE" = success ] && [ "$FULL" = false ]; then mode=light
-          else echo "required job scope: $SCOPE (full=$FULL) on $EVENT_NAME"; exit 1; fi
+          [ "$SCOPE" = success ] || { echo "required job scope: $SCOPE"; exit 1; }
+          if [ "$FULL" = true ]; then mode=full
+          elif [ "$FULL" = false ] && { [ "$EVENT_NAME" = pull_request ] || [ "$EVENT_NAME" = push ]; }; then mode=light
+          else echo "scope decision full=$FULL on $EVENT_NAME"; exit 1; fi
           if [ "$mode" = full ]; then want=success; else want=skipped; fi
-          for r in $LABS; do [ "$r" = "$want" ] || { echo "lab job: $r, a $mode run requires $want"; exit 1; }; done
+          for r in "$@"; do [ "$r" = "$want" ] || { echo "lab job: $r, a $mode run requires $want"; exit 1; }; done
           echo "foundation: $mode run"

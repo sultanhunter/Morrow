@@ -26,9 +26,11 @@ const held = () => Error("CONTROLLED_NEON_REAL_PG_WORKER_HELD");
 function expect(value: unknown) {
   if (!value) throw held();
 }
-// What a held request reports to the lab: the error's name, message (printable, at most
-// 300 characters, fixture passwords removed) and a short code, never its stack. The lab
-// records it in its report next to the check that fails on the 503 (P03.T04f).
+// What a held request reports to the lab: the error's name and whole message, with the
+// fixture passwords removed, and a short code; never its stack. It does not shorten them:
+// the lab removes every other private marker from the whole text first and only then cuts
+// it to length, so a marker split by a cut here could not slip past that redaction
+// (P03.T04f).
 function describeFailure(error: unknown, passwords: readonly unknown[]) {
   try {
     const e = (typeof error === "object" && error !== null ? error : {}) as {
@@ -36,6 +38,7 @@ function describeFailure(error: unknown, passwords: readonly unknown[]) {
       message?: unknown;
       code?: unknown;
     };
+    let name = typeof e.name === "string" ? e.name : null;
     let message =
       typeof e.message === "string"
         ? e.message
@@ -43,11 +46,13 @@ function describeFailure(error: unknown, passwords: readonly unknown[]) {
           ? error
           : "non-error " + typeof error;
     for (const password of passwords)
-      if (typeof password === "string" && password.length > 0)
+      if (typeof password === "string" && password.length > 0) {
         message = message.replaceAll(password, "[fixture-password]");
+        name = name?.replaceAll(password, "[fixture-password]") ?? null;
+      }
     return {
-      name: typeof e.name === "string" ? e.name.replace(/[^\x20-\x7e]/g, "?").slice(0, 64) : null,
-      message: message.replace(/[^\x20-\x7e]/g, "?").slice(0, 300),
+      name,
+      message,
       code: typeof e.code === "string" && /^[A-Za-z0-9_]{1,32}$/.test(e.code) ? e.code : null,
     };
   } catch {

@@ -1,9 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, posix } from "node:path";
+import { fileURLToPath } from "node:url";
 import { listUnitFiles, runTests } from "../scripts/run-tests.mjs";
 
 // Structural checks of the GitHub workflows and the npm scripts they reach. They replace
@@ -318,22 +327,24 @@ test("ci.yml runs on every pull request, on push to main and by hand, without pa
     group: "foundation-${{ github.event_name }}-${{ github.ref }}",
     "cancel-in-progress": true,
   });
-  // scope writes no report, so it is exempt from the scan, upload and clean-tree steps.
+  // scope writes no report, so it is exempt from the scan, upload and clean-tree steps. It
+  // runs on every event, so every `foundation` decision rests on a recorded scope result.
   const { scope } = ci.jobs;
-  assert.equal(scope.if, "github.event_name != 'push'");
+  assert.equal(scope.if, undefined);
   assert.equal(scope["runs-on"], "ubuntu-24.04");
   assert.equal(scope["timeout-minutes"], 5);
   assert.equal(scope.needs, undefined);
   assert.deepEqual(scope.outputs, { full: "${{ steps.decide.outputs.full }}" });
   assert.equal(steps(scope).length, 2);
   assert.ok(uses(steps(scope)[0], "actions/checkout"));
-  assert.equal(steps(scope)[0].with["fetch-depth"], 0, "the diff needs the base commit");
+  assert.equal(steps(scope)[0].with["fetch-depth"], 0, "the diffs need the base and parents");
   const decide = steps(scope)[1];
   assert.equal(decide.id, "decide");
   assert.deepEqual(decide.env, {
     EVENT_NAME: "${{ github.event_name }}",
     BASE_SHA: "${{ github.event.pull_request.base.sha }}",
     HEAD_SHA: "${{ github.event.pull_request.head.sha }}",
+    PUSHED_SHA: "${{ github.sha }}",
   });
   assert.equal(rootScriptsRun(decide.run).length, 0);
 });
@@ -349,8 +360,11 @@ function runStep(script, env, cwd) {
 
 test("foundation passes only when every job the event runs succeeded", () => {
   const run = ci.jobs.foundation.steps.at(-1).run;
+  // The step counts the lab results instead of testing LABS for emptiness: the expression
+  // always yields the separating spaces, even when every result is blank.
+  assert.ok(run.includes(`[ "$#" -eq ${labJobIds.length} ]`), "foundation counts every lab result");
   const all = (result) => labJobIds.map(() => result);
-  const outcome = ({ event, scope, full = "", checks = "success", labs }) => {
+  const outcome = ({ event, scope = "success", full = "", checks = "success", labs }) => {
     const env = {
       EVENT_NAME: event,
       RESULTS: [scope, checks, ...labs].join(" "),
@@ -364,78 +378,59 @@ test("foundation passes only when every job the event runs succeeded", () => {
   };
   const one = (result) => [result, ...all("success").slice(1)];
   const oneSkipped = (result) => [result, ...all("skipped").slice(1)];
-  const cases = [
-    // A push to main runs only `checks`.
-    [{ event: "push", scope: "skipped", labs: all("skipped") }, "pass"],
-    [{ event: "push", scope: "skipped", checks: "failure", labs: all("skipped") }, "fail"],
-    [{ event: "push", scope: "skipped", checks: "cancelled", labs: all("skipped") }, "fail"],
-    [{ event: "push", scope: "skipped", checks: "skipped", labs: all("skipped") }, "fail"],
-    [{ event: "push", scope: "success", full: "true", labs: all("success") }, "fail"],
-    [{ event: "push", scope: "skipped", labs: oneSkipped("success") }, "fail"],
-    // A full pull request run needs every job.
-    [{ event: "pull_request", scope: "success", full: "true", labs: all("success") }, "pass"],
-    [{ event: "pull_request", scope: "success", full: "true", labs: one("failure") }, "fail"],
-    [{ event: "pull_request", scope: "success", full: "true", labs: one("cancelled") }, "fail"],
-    [{ event: "pull_request", scope: "success", full: "true", labs: one("skipped") }, "fail"],
-    [
-      {
-        event: "pull_request",
-        scope: "success",
-        full: "true",
-        checks: "failure",
-        labs: all("success"),
-      },
-      "fail",
-    ],
-    // A Markdown-only pull request runs only `checks`.
-    [{ event: "pull_request", scope: "success", full: "false", labs: all("skipped") }, "pass"],
-    [
-      { event: "pull_request", scope: "success", full: "false", labs: oneSkipped("success") },
-      "fail",
-    ],
-    [
-      {
-        event: "pull_request",
-        scope: "success",
-        full: "false",
-        checks: "failure",
-        labs: all("skipped"),
-      },
-      "fail",
-    ],
-    // scope must have decided.
-    [{ event: "pull_request", scope: "failure", labs: all("skipped") }, "fail"],
-    [{ event: "pull_request", scope: "cancelled", labs: all("skipped") }, "fail"],
-    [{ event: "pull_request", scope: "skipped", labs: all("skipped") }, "fail"],
-    [{ event: "pull_request", scope: "success", full: "", labs: all("skipped") }, "fail"],
+  const cases = [];
+  for (const event of ["pull_request", "push"])
+    cases.push(
+      // Full: a pull request that changes more than Markdown, or a push that is not a merge
+      // of an unchanged, already-checked head. Every job must succeed.
+      [{ event, full: "true", labs: all("success") }, "pass"],
+      [{ event, full: "true", labs: one("failure") }, "fail"],
+      [{ event, full: "true", labs: one("cancelled") }, "fail"],
+      [{ event, full: "true", labs: one("skipped") }, "fail"],
+      [{ event, full: "true", checks: "failure", labs: all("success") }, "fail"],
+      [{ event, full: "true", checks: "skipped", labs: all("success") }, "fail"],
+      // Light: a Markdown-only pull request, or a push whose tree is its merged head's.
+      [{ event, full: "false", labs: all("skipped") }, "pass"],
+      [{ event, full: "false", labs: oneSkipped("success") }, "fail"],
+      [{ event, full: "false", checks: "failure", labs: all("skipped") }, "fail"],
+      [{ event, full: "false", checks: "cancelled", labs: all("skipped") }, "fail"],
+      // scope must have decided, on every event.
+      [{ event, scope: "failure", labs: all("skipped") }, "fail"],
+      [{ event, scope: "cancelled", labs: all("skipped") }, "fail"],
+      [{ event, scope: "skipped", labs: all("skipped") }, "fail"],
+      [{ event, scope: "skipped", full: "false", labs: all("skipped") }, "fail"],
+      [{ event, full: "", labs: all("skipped") }, "fail"],
+      [{ event, full: "yes", labs: all("success") }, "fail"],
+    );
+  cases.push(
     // A manual run is always full.
-    [{ event: "workflow_dispatch", scope: "success", full: "true", labs: all("success") }, "pass"],
-    [{ event: "workflow_dispatch", scope: "success", full: "false", labs: all("skipped") }, "fail"],
+    [{ event: "workflow_dispatch", full: "true", labs: all("success") }, "pass"],
+    [{ event: "workflow_dispatch", full: "false", labs: all("skipped") }, "fail"],
     [{ event: "workflow_dispatch", scope: "skipped", labs: all("skipped") }, "fail"],
-    // Nothing to inspect.
-    [{ event: "pull_request", scope: "success", full: "true", labs: [] }, "fail"],
-  ];
+    // Only pull requests and pushes may run light.
+    [{ event: "schedule", full: "false", labs: all("skipped") }, "fail"],
+    // A missing result fails: blank results (the real expression still yields the
+    // separating spaces), one result too few, one too many, or none at all.
+    [{ event: "pull_request", full: "true", labs: all("") }, "fail"],
+    [{ event: "push", full: "false", labs: all("") }, "fail"],
+    [{ event: "pull_request", full: "true", labs: all("success").slice(1) }, "fail"],
+    [{ event: "pull_request", full: "true", labs: [...all("success"), "success"] }, "fail"],
+    [{ event: "pull_request", full: "true", labs: [] }, "fail"],
+  );
   // Every position in LABS counts: one unexpected result anywhere fails the run.
   for (const index of labJobIds.keys()) {
     const at = (base, result) => base.map((r, i) => (i === index ? result : r));
     cases.push(
-      [
-        {
-          event: "pull_request",
-          scope: "success",
-          full: "true",
-          labs: at(all("success"), "failure"),
-        },
-        "fail",
-      ],
-      [{ event: "push", scope: "skipped", labs: at(all("skipped"), "success") }, "fail"],
+      [{ event: "pull_request", full: "true", labs: at(all("success"), "failure") }, "fail"],
+      [{ event: "push", full: "false", labs: at(all("skipped"), "success") }, "fail"],
+      [{ event: "pull_request", full: "true", labs: at(all("success"), "") }, "fail"],
     );
   }
   for (const [input, expected] of cases)
     assert.equal(outcome(input), expected, JSON.stringify(input));
 });
 
-test("scope runs everything unless every file the pull request changes is Markdown", (t) => {
+test("scope runs everything unless a pull request changes only Markdown or a push merges its head unchanged", (t) => {
   const run = steps(ci.jobs.scope)[1].run;
   const root = mkdtempSync(join(tmpdir(), "morrow-ci-scope-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -518,6 +513,42 @@ test("scope runs everything unless every file the pull request changes is Markdo
     status: 0,
     output: "full=true\n",
   });
+  // A push runs light only when it is a merge whose tree is exactly its second parent's
+  // (the merged pull request head, which needed a green `foundation`, ADR-0014 item 1).
+  const push = (sha) => decide({ EVENT_NAME: "push", BASE_SHA: "", HEAD_SHA: "", PUSHED_SHA: sha });
+  const merge = (into, head, name) => {
+    git("checkout", "-q", "-B", "trunk-" + name, into);
+    git("merge", "-q", "--no-ff", "--no-edit", "-m", "merge " + name, head);
+    return git("rev-parse", "HEAD");
+  };
+  const upToDate = branch("up-to-date", () => write("scripts/a.mjs", "export const c = 1;\n"));
+  assert.deepEqual(push(merge(base, upToDate, "up-to-date")), {
+    status: 0,
+    output: "full=false\n",
+  });
+  // The head lacked main's latest commit, so the merged tree was never checked as a whole.
+  const stale = branch("stale", () => write("scripts/c.mjs", "export {};\n"));
+  assert.deepEqual(push(merge(mainAhead, stale, "stale")), { status: 0, output: "full=true\n" });
+  // A Markdown-only head merged into a main that moved on: the same.
+  assert.deepEqual(push(merge(mainAhead, markdown, "stale-markdown")), {
+    status: 0,
+    output: "full=true\n",
+  });
+  // A head that already contained main, merged unchanged: light.
+  git("checkout", "-q", "-b", "contains-main", mainAhead);
+  write("scripts/d.mjs", "export {};\n");
+  git("add", "-A");
+  git("commit", "-q", "-m", "contains-main");
+  const containsMain = git("rev-parse", "HEAD");
+  assert.deepEqual(push(merge(mainAhead, containsMain, "contains-main")), {
+    status: 0,
+    output: "full=false\n",
+  });
+  // A single-parent commit (a squash merge or a direct push) runs everything.
+  assert.deepEqual(push(upToDate), { status: 0, output: "full=true\n" });
+  assert.deepEqual(push(base), { status: 0, output: "full=true\n" });
+  // An unknown pushed commit runs everything rather than failing open.
+  assert.deepEqual(push("0".repeat(40)), { status: 0, output: "full=true\n" });
   // An unreadable diff fails the job, so `foundation` fails; nothing is decided.
   const broken = pr(markdown, "0".repeat(40));
   assert.notEqual(broken.status, 0);
@@ -640,23 +671,110 @@ test("a light run keeps the static checks and unit tests and runs no lab or UI c
       assert.equal(gated.get(name), full.get(name), name);
 });
 
+// Every repository source file a gated CI job can load: the files its npm scripts name,
+// then, transitively, every relative or `@morrow/*` import and every string literal that
+// names an existing repository source file (esbuild entry points, spawned scripts). Paths
+// built at run time are not followed.
+const repoRoot = fileURLToPath(new URL("../", import.meta.url));
+const sourceExtension = /\.(?:mjs|cjs|js|ts|tsx|mts|cts)$/;
+const isRepoFile = (path) => {
+  try {
+    return statSync(join(repoRoot, path)).isFile();
+  } catch {
+    return false;
+  }
+};
+// "@morrow/<name>[/<subpath>]" to the workspace source file its package exports.
+const workspaceSources = new Map();
+for (const group of ["packages", "apps"])
+  for (const directory of readdirSync(join(repoRoot, group))) {
+    const manifestPath = join(repoRoot, group, directory, "package.json");
+    if (!isRepoFile(posix.join(group, directory, "package.json"))) continue;
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const exported =
+      typeof manifest.exports === "string" ? { ".": manifest.exports } : (manifest.exports ?? {});
+    for (const [subpath, target] of Object.entries(exported)) {
+      const file = typeof target === "string" ? target : (target?.import ?? target?.default);
+      if (typeof file === "string" && sourceExtension.test(file))
+        workspaceSources.set(manifest.name + subpath.slice(1), posix.join(group, directory, file));
+    }
+  }
+function resolveSource(from, specifier) {
+  if (workspaceSources.has(specifier)) return workspaceSources.get(specifier);
+  let base;
+  if (specifier.startsWith("./") || specifier.startsWith("../"))
+    base = posix.join(posix.dirname(from), specifier);
+  else if (/^(?:scripts|tests|packages|apps|infra)\//.test(specifier))
+    base = posix.normalize(specifier);
+  else return null;
+  if (base.startsWith("../") || base.split("/").includes("node_modules")) return null;
+  const candidates = [base, base.replace(/\.(m?)js$/, ".$1ts"), base.replace(/\.js$/, ".tsx")];
+  candidates.push(base + ".ts", base + ".tsx", base + ".mjs", base + ".js", base + "/index.ts");
+  return candidates.find((c) => sourceExtension.test(c) && isRepoFile(c)) ?? null;
+}
+function sourcesReachedFrom(entries) {
+  const reached = new Set();
+  const queue = [...entries];
+  while (queue.length > 0) {
+    const file = queue.pop();
+    if (reached.has(file)) continue;
+    reached.add(file);
+    for (const [, specifier] of readFileSync(join(repoRoot, file), "utf8").matchAll(
+      /["'`]([^"'`\s]+)["'`]/g,
+    )) {
+      const target = resolveSource(file, specifier);
+      if (target && !reached.has(target)) queue.push(target);
+    }
+  }
+  return reached;
+}
+
 // A light run skips the labs on the assumption that no lab reads Markdown; the static
-// checks and unit tests that do read it run on every event. A lab entry script that names
-// a Markdown file fails here, and must instead make `scope` treat that file as code.
-test("no script a gated CI job runs names a Markdown file", () => {
+// checks and unit tests that do read it run on every event. A source file that a gated job
+// can load and that names a Markdown file fails here; such a lab must instead make `scope`
+// treat that file as code.
+test("no source file a gated CI job can load names a Markdown file", () => {
   const entries = new Set();
   for (const name of scriptsReachedBy(ci, labJobIds).keys())
     for (const path of scripts[name].match(
-      /\b(?:scripts|tests)\/[A-Za-z0-9_./-]+\.(?:mjs|ts)\b/g,
+      /\b(?:scripts|tests|packages|apps|infra)\/[A-Za-z0-9_./-]+\.(?:mjs|cjs|js|ts|tsx)\b/g,
     ) ?? [])
       entries.add(path);
   assert.ok(entries.size >= 40, String(entries.size));
-  for (const path of entries)
-    assert.doesNotMatch(
-      readFileSync(new URL("../" + path, import.meta.url), "utf8"),
-      /\.md["'`]/,
-      path,
-    );
+  // The Workers that edge:dry-run, smoke:edge-dev and the Workers labs bundle, and the
+  // workspace SPA entries that the workers and ui jobs build.
+  for (const app of readdirSync(join(repoRoot, "apps"))) {
+    const config = posix.join("apps", app, "wrangler.jsonc");
+    if (!isRepoFile(config)) continue;
+    const main = /"main"\s*:\s*"([^"]+)"/.exec(readFileSync(join(repoRoot, config), "utf8"))?.[1];
+    assert.ok(main, config);
+    entries.add(posix.join("apps", app, main));
+  }
+  for (const file of readdirSync(join(repoRoot, "apps/workspace-web/src")))
+    if (/main\.tsx$/.test(file)) entries.add("apps/workspace-web/src/" + file);
+  for (const path of entries) assert.ok(isRepoFile(path), path);
+  const reached = sourcesReachedFrom(entries);
+  // The walk follows relative imports, workspace packages and named source files.
+  for (const path of [
+    "scripts/local-postgres-lab.mjs",
+    "scripts/fixtures/controlled-neon-postgresql-worker.ts",
+    "packages/identity/src/index.ts",
+    "packages/contracts/src/index.ts",
+    "apps/broker/src/index.ts",
+    "apps/workspace-web/src/app.tsx",
+  ])
+    assert.ok(reached.has(path), path);
+  assert.ok(reached.size > 2 * entries.size, `${reached.size} files from ${entries.size}`);
+  for (const path of reached)
+    assert.doesNotMatch(readFileSync(join(repoRoot, path), "utf8"), /\.md["'`]/, path);
+  // The walker itself: a relative `.js` import of a TypeScript file, a workspace subpath
+  // export, and a path outside the repository or under node_modules.
+  assert.equal(
+    resolveSource("packages/identity/src/index.ts", "@morrow/contracts/routes"),
+    "packages/contracts/src/routes.ts",
+  );
+  assert.equal(resolveSource("scripts/x.mjs", "../../outside.mjs"), null);
+  assert.equal(resolveSource("scripts/x.mjs", "../node_modules/miniflare/index.js"), null);
 });
 
 test("npm run verify runs the plan check, and CI reaches it", () => {
