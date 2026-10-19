@@ -325,7 +325,9 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
         command(requests.cancelQuestion(ws, id, c), decodeRevision),
     ),
     getAnswer: gated("work.getAnswer", (ws: string, id: string) =>
-      read(requests.getAnswer(ws, id), (b) => decodeOne(b, "answer", (v) => decodeAnswer(v, id))),
+      read(requests.getAnswer(ws, id), (b) =>
+        decodeOne(b, "answer", (v) => decodeAnswer(v, id, ws)),
+      ),
     ),
   };
   return {

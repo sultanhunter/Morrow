@@ -460,7 +460,46 @@ test("AC28: answers decode with an opaque author; the inbox reads only open ques
   const inbox = await p.work.listMyOpenQuestions(ws, null);
   assert.equal(inbox.value.items[0].respondent.principalId, "p-b");
   assert.equal(calls[1].path, "/workspace/ws-1/work/questions?respondent=me&status=open&limit=50");
-  assert.equal(decodeAnswer({ ...answer, questionId: "q-2" }, "q-1"), null);
+  assert.equal(decodeAnswer({ ...answer, questionId: "q-2" }, "q-1", ws), null);
+});
+
+test("§4.8: an owner or an answer's author of another tenant does not decode", async () => {
+  const person = (extra) => ({ ...actor("p-x"), ...extra });
+  const otherWorkspace = person({ workspaceId: "ws-2" });
+  const otherOrganization = person({ organizationId: "org-2" });
+  const otherTenant = person({ organizationId: "org-2", workspaceId: "ws-2" });
+  for (const owner of [
+    otherWorkspace,
+    otherOrganization,
+    otherTenant,
+    person({ workspaceId: undefined }),
+  ]) {
+    assert.equal(decodeGoal(goal("g-1", { owner }), ws), null, JSON.stringify(owner));
+    assert.equal(decodeTask(task("t-1", { owner }), ws), null, JSON.stringify(owner));
+  }
+  // An organization-level actor (no workspace) of the record's own organization is not
+  // another tenant; of another organization it is.
+  assert.notEqual(decodeGoal(goal("g-1", { owner: person({ workspaceId: null }) }), ws), null);
+  assert.equal(
+    decodeTask(task("t-1", { owner: person({ organizationId: "org-2", workspaceId: null }) }), ws),
+    null,
+  );
+  const answer = {
+    id: "a-1",
+    questionId: "q-1",
+    body: "Supplier A",
+    answeredBy: actor("p-b"),
+    createdAt: "2026-10-19T09:05:00.000Z",
+  };
+  assert.notEqual(decodeAnswer(answer, "q-1", ws), null);
+  // An answer names no organization, so its author must name the path's workspace.
+  for (const answeredBy of [otherWorkspace, otherTenant, person({ workspaceId: null })])
+    assert.equal(decodeAnswer({ ...answer, answeredBy }, "q-1", ws), null);
+  // Through the port: a foreign author is unavailable, never rendered.
+  const { port: p } = port(() =>
+    json(200, { schemaVersion: 1, answer: { ...answer, answeredBy: otherTenant } }),
+  );
+  assert.deepEqual(await p.work.getAnswer(ws, "q-1"), { kind: "unavailable", offline: false });
 });
 
 test("decoders and validators agree on every Goal, Task and Question fixture and rendered-field variant", () => {

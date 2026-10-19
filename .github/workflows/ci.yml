@@ -307,7 +307,7 @@ jobs:
         run: npm run ui:check
       - name: Check the production dist under the unbound dev pair
         run: npm run ui:edge
-      - name: Sign in, enter and sign out in Chromium against the configured harness
+      - name: Run the sign-in, account and work journeys in Chromium against the configured harness
         run: npm run lab:group:ui
       - name: Secret-scan generated reports before upload
         id: artifact_scan

@@ -62,7 +62,9 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
       return Promise.resolve(ok({ items: [], next: null }) as Outcome<T>);
     if (scripted !== null && "delayMs" in scripted) {
       const { delayMs, outcome } = scripted;
-      return new Promise((resolve) => setTimeout(() => resolve(outcome as Outcome<T>), delayMs));
+      return new Promise((resolve) =>
+        setTimeout(() => resolve((outcome ?? fallback()) as Outcome<T>), delayMs),
+      );
     }
     if (scripted !== null && scripted.kind !== "uncertain")
       return Promise.resolve(scripted as Outcome<T>);

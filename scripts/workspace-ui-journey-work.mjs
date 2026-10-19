@@ -52,6 +52,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
     task: marker("task"),
     task2: marker("task-two"),
     question: marker("question"),
+    question2: marker("question-two"),
     answer: marker("answer"),
     refused: marker("refused-answer"),
     organization: marker("organization"),
@@ -105,6 +106,19 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
         ),
       ),
     );
+  // revoke_workspace_access (0014) scopes both updates to the receipt's workspace.
+  const revokeOnW = (p) => {
+    const where = `organization_id=${lit(p.org)} AND workspace_id=${lit(p.workspace)} AND membership_id=${lit(p.membership)}`;
+    return [
+      "BEGIN; SET LOCAL ROLE morrow_identity_owner;",
+      tenant.organizationInterlockSql(p.org),
+      `SELECT 1 FROM morrow_identity.organizations WHERE id=${lit(p.org)} FOR UPDATE;`,
+      `UPDATE morrow_identity.workspace_memberships SET active=false WHERE ${where};`,
+      `UPDATE morrow_identity.grants SET payload=jsonb_set(payload,'{revokedAt}',to_jsonb(to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))) WHERE ${where} AND payload->'revokedAt'='null'::jsonb;`,
+      `UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE id=${lit(p.org)};`,
+      "COMMIT;",
+    ].join("\n");
+  };
   const bOnW = {
     "workspace.goal.create": ["view"],
     "workspace.task.create": ["view"],
@@ -333,10 +347,8 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
         rows.length === 2 &&
           JSON.stringify(rows) === JSON.stringify(overview.workspaces.map((w) => w.workspaceName)),
       );
-      h.check(
-        "AC22:storage_holds_only_the_intended_route",
-        (await morrowKeys(page)).every((k) => k === "morrow.intended.v1"),
-      );
+      // `/` stores no intended route, so after sign-in nothing at all is stored.
+      h.check("AC22:nothing_stored_after_sign_in", (await morrowKeys(page)).length === 0);
       state.rows = rows;
       state.aCookie = await cookieOf(a);
       await sample(page, a.log);
@@ -531,6 +543,14 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
 
     // ---- AC28, AC29 (B side): B's inbox, an uncertain answer reconciled once
     await scenario("AC28_AC29_respondent_answers_once", async () => {
+      // A second open question on the task, addressed to A: B's inbox must not list it.
+      const other = await api(
+        state.aCookie,
+        "POST",
+        `/workspace/${W}/work/tasks/${state.taskId}/questions`,
+        { question: M.question2, respondentId: A.principal },
+      );
+      h.check("AC28:question_to_a_seeded_by_api", other.status === 201);
       const page = await b.context.newPage();
       state.bPage = page;
       await page.goto(`${origin}/w/${W}/inbox`);
@@ -545,7 +565,8 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       await page.getByRole("link", { name: M.question }).waitFor({ timeout: T });
       h.check(
         "AC28:inbox_lists_only_my_open_questions",
-        (await page.locator("ul.item-list li").count()) === 1,
+        (await page.locator("ul.item-list li").count()) === 1 &&
+          !(await page.content()).includes(M.question2),
       );
       state.bCookie = await cookieOf(b);
       await page.getByRole("link", { name: M.question }).click();
@@ -570,7 +591,17 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
           (await page.getByLabel("Your answer").inputValue()) === M.answer,
       );
       h.check("AC11:double_activation_one_request", posts(b.log, answerPath).length === 1);
+      const reconciled = later(
+        page.waitForResponse(
+          (r) => r.request().method() === "POST" && r.url() === origin + answerPath,
+        ),
+      );
       await page.getByRole("button", { name: "Check again" }).dblclick();
+      const replay = await reconciled;
+      h.check(
+        "AC28:check_again_200_replayed",
+        replay.status() === 200 && (await replay.json()).replayed === true,
+      );
       await text(page, "Answer sent.");
       await page.getByText(M.answer).first().waitFor({ timeout: T });
       const sent = posts(b.log, answerPath);
@@ -590,11 +621,27 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
     // ---- AC28, AC29: A refreshes and sees the answer under Questions
     await scenario("AC29_requester_sees_answer", async () => {
       const tab = state.aTab;
+      const answerPath = `/workspace/${W}/work/questions/${state.questionId}/answer`;
+      const answerReads = () =>
+        a.log.requests.filter((r) => r.method === "GET" && new URL(r.url).pathname === answerPath)
+          .length;
       await tab.goto(`${origin}/w/${W}/work/${state.taskId}`);
       await heading(tab, M.task);
+      const before = answerReads();
       await tab.getByRole("tab", { name: "Questions" }).click();
+      const show = tab.getByRole("button", { name: "Show answer" });
+      await show.waitFor({ timeout: T });
+      // One answered question: one disclosure, and no answer read until it is opened.
+      h.check(
+        "AC29:answer_read_only_when_shown",
+        (await show.count()) === 1 && answerReads() === before,
+      );
+      await show.click();
       await tab.getByText(M.answer).first().waitFor({ timeout: T });
-      h.check("AC29:answer_under_questions", await tab.getByText(M.answer).first().isVisible());
+      h.check(
+        "AC29:answer_under_questions",
+        (await tab.getByText(M.answer).first().isVisible()) && answerReads() === before + 1,
+      );
       await sample(tab, a.log);
     });
 
@@ -640,6 +687,11 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
         .getByRole("heading", { name: "Create your organization" })
         .waitFor({ timeout: 2 * T });
       state.cCookie = await cookieOf(c);
+      // A second tab loads the form before the organization exists; it submits later with
+      // its own fresh key, as a reload would (AC25).
+      const stale = await c.context.newPage();
+      await stale.goto(origin + "/");
+      await stale.getByRole("heading", { name: "Create your organization" }).waitFor();
       const lost = await loseReplyOnce(page, origin + "/organizations", state.cCookie, {
         schemaVersion: 1,
         outcome: "outcome_unknown",
@@ -678,26 +730,54 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       );
       // AC26: template v1 is governance-only, so each Home panel shows its own denial.
       await text(page, "Paid work starts once this workspace has an active plan.");
+      // Each panel settles on its own read: wait for the second denial before counting.
+      await page.locator(".panel .state-denied").nth(1).waitFor();
       h.check(
         "AC26:home_panels_each_denied",
         (await page.locator(".panel .state-denied").count()) === 2,
       );
       await page.getByRole("link", { name: "Work", exact: true }).click();
       await text(page, "You don't have access to view work");
-      // A fresh key after a reload: one organization per principal (409), then the list.
-      const again = await api(state.cCookie, "POST", "/organizations", {
-        schemaVersion: 1,
-        organizationName: M.organization,
-        workspaceName: M.workspace,
-      });
-      h.check(
-        "AC25:fresh_key_already_onboarded",
-        again.status === 409 && again.body?.outcome === "already_onboarded",
+      // The second tab's fresh key: one organization per principal (409 already_onboarded),
+      // and the form reads the account again, which now opens the one workspace.
+      await stale.getByLabel("Organization name").fill(M.organization);
+      await stale.getByLabel("Workspace name").fill(M.workspace);
+      const conflict = later(
+        stale.waitForResponse(
+          (r) => r.request().method() === "POST" && r.url() === origin + "/organizations",
+        ),
       );
+      const refetched = later(
+        stale.waitForResponse((r) => r.url() === origin + "/workspaces" && r.status() === 200),
+      );
+      const reopened = later(stale.waitForURL(/\/w\/[^/]+$/, { timeout: T }));
+      await stale.getByRole("button", { name: "Create organization" }).click();
+      const refused = await conflict;
+      const refusedBody = await refused.json();
+      await refetched;
+      await reopened;
+      await heading(stale, M.workspace);
+      const keys = posts(c.log, "/organizations").map((r) => r.key);
+      h.check(
+        "AC25:fresh_key_409_refetches_and_opens",
+        refused.status() === 409 &&
+          refusedBody.outcome === "already_onboarded" &&
+          keys.length === 3 &&
+          keys[2] !== keys[0] &&
+          new URL(stale.url()).pathname === new URL(page.url()).pathname.replace(/\/work$/, ""),
+      );
+      await sample(stale, c.log);
+      await stale.close();
+      const depth = await page.evaluate(() => history.length);
       const replaced = later(page.waitForURL(/\/w\/[^/]+$/, { timeout: T }));
       await page.goto(origin + "/");
       await replaced;
-      h.check("AC22:one_workspace_replaces_location", new URL(page.url()).pathname !== "/");
+      // The account landing replaces `/` with the workspace: one entry, not two.
+      h.check(
+        "AC22:one_workspace_replaces_location",
+        new URL(page.url()).pathname !== "/" &&
+          (await page.evaluate(() => history.length)) === depth + 1,
+      );
       await sample(page, c.log);
     });
 
@@ -796,7 +876,11 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
 
     // ---- AC31: B's access to W is revoked; one view; B's W2 still works
     await scenario("AC31_revocation", async () => {
-      h.adminSql(tenant.revocationSql(B));
+      // The effects of revoke_workspace_access (0014) for B on W only: B's W membership
+      // and B's W grants. B's W2 membership and W2 grants are untouched.
+      const w2Goals = `/workspace/${ids.W2}/work/goals?limit=25`;
+      const w2Before = await api(state.bCookie, "GET", w2Goals);
+      h.adminSql(revokeOnW(B));
       const page = state.bPage;
       const probe = later(page.waitForResponse((r) => r.url() === origin + "/workspaces"));
       await page.getByRole("tab", { name: "Questions" }).click();
@@ -805,12 +889,23 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       const html = await page.content();
       h.check(
         "AC31:no_w_content_in_dom_or_storage",
-        [M.goal, M.task, M.question, M.answer, state.taskId].every((m) => !html.includes(m)) &&
-          (await morrowKeys(page)).length === 0,
+        [M.goal, M.task, M.question, M.question2, M.answer, state.taskId].every(
+          (m) => !html.includes(m),
+        ) && (await morrowKeys(page)).length === 0,
       );
       await page.goto(`${origin}/w/${ids.W2}`);
       await heading(page, M.w2);
       h.check("AC31:other_workspace_still_works", new URL(page.url()).pathname === `/w/${ids.W2}`);
+      // B's W2 goal grant survives: the read is the same field_denied 403 as before, not
+      // the denial of a revoked grant.
+      const w2After = await api(state.bCookie, "GET", w2Goals);
+      h.check(
+        "AC31:w2_work_read_unchanged",
+        w2Before.status === 403 &&
+          w2Before.body?.safeMessage === "The requested fields are not permitted." &&
+          w2After.status === w2Before.status &&
+          w2After.body?.safeMessage === w2Before.body?.safeMessage,
+      );
       await sample(page, b.log);
     });
   } finally {

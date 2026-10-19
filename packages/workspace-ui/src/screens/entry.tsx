@@ -321,9 +321,10 @@ export function CommandFeedback<T>({
         </div>
       );
     case "invalid":
+      // Only a named field can be highlighted; without one the copy says so.
       return (
         <div role="status" className="notice notice-danger">
-          <p>{copy.outcome.invalid}</p>
+          <p>{outcome.field === null ? copy.outcome.refused : copy.outcome.invalid}</p>
         </div>
       );
     case "not_in_build":
@@ -470,11 +471,14 @@ export function AccountScreen({
         <SignInButton workspaceId={null} />
       </section>
     );
+  // A failed read still offers Sign out, so a shared device is never left signed in
+  // with no way out (§4.10); not while loading, which settles into another view.
   if (overview.kind !== "ok")
     return (
       <section className="entry-card" aria-labelledby="account-title">
         <h1 id="account-title">{copy.account.title}</h1>
         {outcomeState(overview, reload)}
+        {overview.kind === "loading" ? null : footer}
       </section>
     );
   const { workspaces, truncated, onboarding } = overview.value;

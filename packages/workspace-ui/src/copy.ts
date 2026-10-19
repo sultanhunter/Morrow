@@ -148,6 +148,8 @@ export const copy = {
       "This task changed. The current values are shown; review them and try again.",
     noQuestions: "No questions on this task.",
     openQuestion: "Open question",
+    showAnswer: "Show answer",
+    hideAnswer: "Hide answer",
     cancelQuestion: "Cancel question",
     questionCancelled: "Question cancelled.",
     peopleUnavailable:
@@ -186,6 +188,9 @@ export const copy = {
     notSaved: "Couldn't save. Nothing was changed.",
     tryAgain: "Try again",
     invalid: "Check the highlighted fields and try again.",
+    // A 400 that names no field (a guard refusal, or a request refused before sending):
+    // nothing on the form is highlighted, and editing it can't fix the request.
+    refused: "This request was refused. Nothing was changed. Reload the page and try again.",
     rateLimited: "Too many attempts. Wait a moment, then try again.",
   },
   reentry: {

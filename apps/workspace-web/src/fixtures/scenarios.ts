@@ -24,6 +24,12 @@ export const scenarioNames = [
   "account_rate_limited",
   "account_rate_limited_brief",
   "account_uncertain",
+  "account_unavailable",
+  "account_invalid_name",
+  "account_signup_refused",
+  "account_signup_denied",
+  "account_already_onboarded",
+  "uncertain_late",
   "ready_denied",
   "question_expired",
   "restore_unavailable",
@@ -37,7 +43,8 @@ export type Reply =
   | Outcome<unknown>
   | "pending"
   | "empty_page"
-  | { readonly delayMs: number; readonly outcome: Outcome<unknown> }
+  // A reply after `delayMs`; a null outcome is the seed behaviour, applied then.
+  | { readonly delayMs: number; readonly outcome: Outcome<unknown> | null }
   | null;
 export type Script = Partial<Record<PortMethod, (call: number) => Reply>>;
 
@@ -106,6 +113,11 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   },
   // The first send is applied but its reply is lost; Check again replays it.
   uncertain: all(creates, (call) => (call === 0 ? { kind: "uncertain" } : null)),
+  // Lost, then a Check again whose replay arrives 1.5 s later: time enough to close the
+  // dialog, or to reopen it on another goal, before the reply lands.
+  uncertain_late: all(creates, (call) =>
+    call === 0 ? { kind: "uncertain" } : call === 1 ? { delayMs: 1500, outcome: null } : null,
+  ),
   // Lost, then a still-in-flight 503 (which stays uncertain), then the replay.
   uncertain_persisting: all(creates, (call) =>
     call === 0
@@ -158,6 +170,35 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   account_uncertain: {
     "account.overview": () => accountForm,
     "account.createOrganization": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
+  // GET /workspaces 503: the landing keeps Sign out.
+  account_unavailable: {
+    "account.overview": () => ({ kind: "unavailable", offline: false }),
+  },
+  // Signup 400 invalid_name: both name fields are marked.
+  account_invalid_name: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": () => ({ kind: "invalid", field: "name" }),
+  },
+  // Signup 400 from the request guard (`request_denied`): no field to mark.
+  account_signup_refused: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": () => ({ kind: "invalid", field: null }),
+  },
+  // Signup 403 signup_unavailable, 0.8 s late (the button reads "Creating…"): the action
+  // stays off and the values stay.
+  account_signup_denied: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": () => ({
+      delayMs: 800,
+      outcome: { kind: "denied", message: "", reference: null },
+    }),
+  },
+  // Signup 409 already_onboarded (another tab created it): the account is read again,
+  // and now opens the one workspace.
+  account_already_onboarded: {
+    "account.overview": (call) => (call === 0 ? accountForm : null),
+    "account.createOrganization": () => ({ kind: "conflict", recheck: true, message: "" }),
   },
   // Mark ready by someone who may view the task but not change it: the server's 403.
   ready_denied: {

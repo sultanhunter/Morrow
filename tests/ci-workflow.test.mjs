@@ -30,7 +30,8 @@ const labsOutsideCi = (name) =>
   name === "lab:edge-postgresql-local" ||
   name === "lab:workspace-ui-journey-local" ||
   name.startsWith("lab:e2b-");
-// The P14.T01a `ui` job installs Chromium and runs 130 browser cases plus the journey lab.
+// The P14.T01a `ui` job installs Chromium and runs 214 browser checks (172 state cases and
+// 21 keyboard walks at two widths) plus the journey lab.
 const timeoutLimit = (id) => (id === "ui" ? 20 : 15);
 
 // Parses the YAML subset these workflows use: block maps and sequences, plain, quoted and

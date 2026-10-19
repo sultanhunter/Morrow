@@ -170,7 +170,8 @@ function CreateGoalDialog({
   readonly ws: Id;
   readonly open: boolean;
   readonly onClose: () => void;
-  readonly onCreated: () => void;
+  /** `fromOpenForm` is false once the dialog was reset while the reply was outstanding. */
+  readonly onCreated: (fromOpenForm: boolean) => void;
 }) {
   const services = useServices();
   const [objective, setObjective] = useState("");
@@ -182,13 +183,16 @@ function CreateGoalDialog({
   >({
     marker: { workspaceId: ws, kind: "goal" },
     send: (c) => services.port.work.createGoal(ws, c),
-    onOutcome: (outcome) => {
-      if (outcome.kind === "ok") {
+    // A reply that lands after Cancel still confirms the goal, but a dialog reopened
+    // since keeps its new draft.
+    onOutcome: (outcome, sent) => {
+      if (outcome.kind !== "ok") return;
+      if (sent.current) {
         setObjective("");
         setCriteria([""]);
         setChecked(false);
-        onCreated();
       }
+      onCreated(sent.current);
     },
   });
   useDirty(open && (objective !== "" || criteria.some((c) => c !== "") || command.busy));
@@ -289,7 +293,8 @@ function CreateTaskDialog({
   readonly ws: Id;
   readonly goal: GoalView | null;
   readonly onClose: () => void;
-  readonly onCreated: (goal: GoalView) => void;
+  /** The goal the confirmed command named; `fromOpenForm` false once the dialog was reset. */
+  readonly onCreated: (goalId: Id, fromOpenForm: boolean) => void;
 }) {
   const services = useServices();
   const [objective, setObjective] = useState("");
@@ -297,12 +302,16 @@ function CreateTaskDialog({
   const command = useCommand<{ goalId: Id; objective: string }, { readonly taskId: Id }>({
     marker: { workspaceId: ws, kind: "task" },
     send: (c) => services.port.work.createTask(ws, c),
-    onOutcome: (outcome) => {
-      if (outcome.kind === "ok" && goal) {
+    // A reply can land after Cancel (Check again in flight), even after the dialog
+    // reopened for another goal: the task belongs to the goal the command named, and a
+    // draft the dialog shows now is kept.
+    onOutcome: (outcome, sent) => {
+      if (outcome.kind !== "ok") return;
+      if (sent.current) {
         setObjective("");
         setChecked(false);
-        onCreated(goal);
       }
+      onCreated(sent.body.goalId, sent.current);
     },
   });
   useDirty(goal !== null && (objective !== "" || command.busy));
@@ -415,8 +424,8 @@ export function WorkScreen({ workspace }: { readonly workspace: WorkspaceView })
         ws={ws}
         open={creatingGoal}
         onClose={() => setCreatingGoal(false)}
-        onCreated={() => {
-          setCreatingGoal(false);
+        onCreated={(fromOpenForm) => {
+          if (fromOpenForm) setCreatingGoal(false);
           setConfirmation(copy.work.goalCreated);
           paged.reload();
         }}
@@ -425,12 +434,13 @@ export function WorkScreen({ workspace }: { readonly workspace: WorkspaceView })
         ws={ws}
         goal={taskGoal}
         onClose={() => setTaskGoal(null)}
-        onCreated={(goal) => {
-          setTaskGoal(null);
+        onCreated={(goalId, fromOpenForm) => {
+          // A dialog reopened since (perhaps for another goal) stays open with its draft.
+          if (fromOpenForm) setTaskGoal(null);
           setConfirmation(copy.work.taskCreated);
           // Show the goal's tasks, read again so the confirmed task is listed.
-          setOpenGoals((current) => new Set(current).add(goal.id));
-          setTaskVersions((current) => ({ ...current, [goal.id]: (current[goal.id] ?? 0) + 1 }));
+          setOpenGoals((current) => new Set(current).add(goalId));
+          setTaskVersions((current) => ({ ...current, [goalId]: (current[goalId] ?? 0) + 1 }));
         }}
       />
     </div>

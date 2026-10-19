@@ -1,8 +1,10 @@
 // Work reply decoding (P14.T01a §4.8, P06.T01a §4.9): the v1 ErrorEnvelope and the v1
 // Goal, Task, Question and answer bodies, decoded by hand (no eval or schema
 // compilation; unknown properties ignored). Each record decoder checks every field the
-// UI renders, and the record's workspace against the path's, so a reply that does not
-// decode is unavailable (reads) or uncertain (commands), never a partial object. The UI
+// UI renders, and the record's workspace against the path's, and so does every person
+// in it (an owner or an answer's author of another tenant does not decode), so a reply
+// that does not decode is unavailable (reads) or uncertain (commands), never a partial
+// object. The server's own tenant check is the control; this is defence in depth. The UI
 // shows an envelope's safeMessage and "Reference: <correlationId>" and never parses
 // either. Statuses decode as any non-empty string; unknown ones render as text.
 import type {
@@ -142,20 +144,33 @@ const inWorkspace = (value: Readonly<Record<string, unknown>>, ws: string) =>
   revision(value.revision) &&
   isUtcTime(value.updatedAt);
 
-/** A v1 ActorRef as an opaque person: no label and no "isSelf" until people.list. */
-export function decodeActor(value: unknown): PersonRef | null {
+/**
+ * A v1 ActorRef as an opaque person: no label and no "isSelf" until people.list. The
+ * person must belong to the record's tenant: the path's workspace, or no workspace (an
+ * organization-level actor) when `organizationId` names the record's organization and
+ * the actor's matches it. An answer names no organization, so `organizationId` is null
+ * there and its author must name the path's workspace.
+ */
+export function decodeActor(
+  value: unknown,
+  ws: string,
+  organizationId: string | null,
+): PersonRef | null {
   if (!record(value)) return null;
-  const { kind, principalId, organizationId, workspaceId, membershipId } = value;
+  const { kind, principalId, membershipId } = value;
   if (typeof kind !== "string" || !actorKinds.includes(kind as PersonRef["kind"])) return null;
-  if (!isId(principalId) || !isId(organizationId)) return null;
-  if (!nullableId(workspaceId) || !nullableId(membershipId)) return null;
+  if (!isId(principalId) || !isId(value.organizationId)) return null;
+  if (organizationId !== null && value.organizationId !== organizationId) return null;
+  if (value.workspaceId !== ws && (value.workspaceId !== null || organizationId === null))
+    return null;
+  if (!nullableId(membershipId)) return null;
   if (!nullableId(value.installationId) || !nullableId(value.mandateId)) return null;
   return { principalId, kind: kind as PersonRef["kind"], label: null, isSelf: null };
 }
 
 export function decodeGoal(value: unknown, ws: string): GoalView | null {
   if (!record(value) || !inWorkspace(value, ws)) return null;
-  const owner = decodeActor(value.owner);
+  const owner = decodeActor(value.owner, ws, value.organizationId as string);
   const list = value.successCriteria;
   if (!owner || !statusText(value.status) || !text(value.objective, 8192)) return null;
   if (!Array.isArray(list) || list.length < 1 || list.length > 100) return null;
@@ -177,7 +192,7 @@ export function decodeGoal(value: unknown, ws: string): GoalView | null {
 
 export function decodeTask(value: unknown, ws: string): TaskView | null {
   if (!record(value) || !inWorkspace(value, ws)) return null;
-  const owner = decodeActor(value.owner);
+  const owner = decodeActor(value.owner, ws, value.organizationId as string);
   if (!owner || !statusText(value.status) || !text(value.objective, 8192)) return null;
   if (!nullableId(value.goalId)) return null;
   return {
@@ -215,9 +230,9 @@ export function decodeQuestion(value: unknown, ws: string): QuestionView | null 
   };
 }
 
-export function decodeAnswer(value: unknown, questionId: string): AnswerView | null {
+export function decodeAnswer(value: unknown, questionId: string, ws: string): AnswerView | null {
   if (!record(value) || !isId(value.id) || value.questionId !== questionId) return null;
-  const answeredBy = decodeActor(value.answeredBy);
+  const answeredBy = decodeActor(value.answeredBy, ws, null);
   if (!answeredBy || !text(value.body, 65536) || !isUtcTime(value.createdAt)) return null;
   return {
     id: value.id,

@@ -187,11 +187,6 @@
   padding: var(--space-2) var(--space-3);
   border-left: 2px solid var(--color-border);
 }
-.answer-title {
-  font-size: var(--type-caption-size);
-  font-weight: 600;
-  color: var(--color-subdued);
-}
 @container workspace (max-width: 1119px) {
   .task-layout {
     grid-template-columns: minmax(0, 1fr);

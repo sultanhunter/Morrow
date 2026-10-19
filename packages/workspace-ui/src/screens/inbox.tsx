@@ -122,7 +122,11 @@ function AnswerForm({
   );
 }
 
-/** The answer to an answered question; `compact` inside a task's question list. */
+/**
+ * The answer to an answered question. `compact` is the inline form in a task's question
+ * list: no landmark and no heading (the row's Show answer button names it), so a page of
+ * answered questions adds no unnamed regions and skips no heading level.
+ */
 export function Answer({
   ws,
   questionId,
@@ -139,12 +143,8 @@ export function Answer({
   );
   if (answer.kind !== "ok") return <>{outcomeState(answer, reload, { compact: true })}</>;
   // The answer's author is an opaque label, never "you" (§4.10).
-  const Heading = compact ? "h3" : "h2";
-  return (
-    <section className={compact ? "answer is-compact" : "answer"} aria-labelledby={titleId}>
-      <Heading id={titleId} className={compact ? "answer-title" : undefined}>
-        {copy.question.answerTitle}
-      </Heading>
+  const body = (
+    <>
       <RecordText as="p" className="reading">
         {answer.value.text}
       </RecordText>
@@ -153,6 +153,13 @@ export function Answer({
         <PersonLabel person={answer.value.answeredBy} />
         <Time value={answer.value.createdAt} />
       </p>
+    </>
+  );
+  if (compact) return <div className="answer is-compact">{body}</div>;
+  return (
+    <section className="answer" aria-labelledby={titleId}>
+      <h2 id={titleId}>{copy.question.answerTitle}</h2>
+      {body}
     </section>
   );
 }
