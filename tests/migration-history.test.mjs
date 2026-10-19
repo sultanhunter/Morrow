@@ -86,12 +86,12 @@ const published = [
   [
     17,
     "0017.approval-identity-bridge.sql",
-    "aeea6fc92ee170dce14e7d3b765f5e3d5d86736213ee2eb8377ac5fa9584966f",
+    "f069cf9ceeabe828b52e12648020609bc50e62dcf4bd82d0811aaf402d90d672",
   ],
   [
     18,
     "0018.approval-records.sql",
-    "bd1008da83d7737a5b1044bf78c8b7dc3e02775c06f08e3ac53469eea08c8f1f",
+    "18fa9b08a40d7847621649e5da7cf875756a774aeb312c1d73bfdd05374ec33c",
   ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each

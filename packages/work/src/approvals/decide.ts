@@ -96,7 +96,10 @@ export async function decideApproval(
     !/^[a-f0-9]{64}$/.test(i.requestDigest) ||
     !validateCurrentDefinition("Id", i.proposalId) ||
     !validateCurrentDefinition("ReviewDecisionInput", decision) ||
-    !validateCurrentDefinition("Revision", i.body.expectedRevision)
+    !validateCurrentDefinition("Revision", i.body.expectedRevision) ||
+    // Comments are bounded by the contract and NUL-free here: PostgreSQL text
+    // cannot hold U+0000, so one never reaches SQL (and never a log).
+    (decision.comment !== null && decision.comment.includes("\u0000"))
   )
     return refuse("invalid");
   // Replay first: only to an actor who can still read the decided proposal.
@@ -146,10 +149,10 @@ export async function decideApproval(
   // decided target (ADR-0011 Q5), at database time.
   const decided = derived !== null ? selection : null;
   const reviewerOk = await eligibleReviewer(a, root, decided, atMs);
-  // 3. Projections at database time, in the SQL order (claims close the family).
+  // 3. Projections at database time, in the SQL order: a claimed family is
+  // consumed and closed to every decision, cancel included, whatever its expiry.
   const facts = projectionFacts(ctx, root.id, family);
-  if (facts.hasClaim && decision.decision !== "cancel_before_effective" && reviewerOk)
-    return refuse("FAMILY_CONFLICT");
+  if (facts.hasClaim && reviewerOk) return refuse("FAMILY_CONFLICT");
   for (const x of [target, decision.decision === "cancel_before_effective" ? null : rootApproval]) {
     if (!x || !reviewerOk) continue;
     const projected = projectApproval(

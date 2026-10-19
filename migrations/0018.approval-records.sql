@@ -15,8 +15,10 @@ BEGIN;
 -- task/payload CHECKs are replaced by strict supersets; (2) the transition_rules
 -- primary key gains the guard; (3) three read-only api definers read identity facts
 -- as target_member does; (4) outbox uniqueness per aggregate revision gains the event
--- type, so one decision may emit approval.decided and approval.status_changed at
--- the decided revision, and a claim may emit approval.claimed without bumping it.
+-- type for the approval aggregate only, so one decision may emit approval.decided
+-- and approval.status_changed at the decided revision, and a claim may emit
+-- approval.claimed without bumping it; every other aggregate keeps one event per
+-- revision (a partial unique index with the P06.T01a key).
 DO $$ BEGIN
  IF current_user<>'morrow_work_owner'
  OR (SELECT count(*) FROM pg_catalog.pg_roles r WHERE r.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api') AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication)<>3
@@ -78,6 +80,8 @@ ALTER TABLE morrow_work.outbox_events DROP CONSTRAINT outbox_events_event_type_c
   WHEN event_type='approval.claimed' THEN payload ? 'consumer' AND payload-'consumer'='{}'::jsonb AND jsonb_typeof(payload->'consumer')='string'
   ELSE false END),
  ADD CONSTRAINT outbox_events_aggregate_revision_event_key UNIQUE (organization_id,workspace_id,aggregate_type,aggregate_id,aggregate_revision,event_type);
+CREATE UNIQUE INDEX outbox_events_one_event_per_revision ON morrow_work.outbox_events (organization_id,workspace_id,aggregate_type,aggregate_id,aggregate_revision)
+ WHERE aggregate_type<>'approval';
 -- The effective approval rows of state-transitions.json at contract v1.1: the v1
 -- rows without the two superseded in 1.1, plus every row since 1.1. Two
 -- pending→invalidated work_service rows differ only by guard, so the key gains it.
@@ -723,8 +727,8 @@ BEGIN
  END IF;
  RETURN NEW;
 END $$;
--- A proposal binds the SQL catalogue: reviewed, not a kill switch, not
--- governance.connection.connect; its risk and irreversible flag; the expiry formula
+-- A proposal binds the SQL catalogue: never forward-dated; reviewed, not a kill
+-- switch, not governance.connection.connect; its risk and irreversible flag; the expiry formula
 -- of its bound policy's effective rule; a derived proposal inherits everything from
 -- a root parent, selects strictly increasing in-range targets in order and never
 -- raises a ceiling.
@@ -732,6 +736,9 @@ CREATE FUNCTION morrow_work.proposal_bind() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 DECLARE cap record; v_risk text; v_rules jsonb; r jsonb; parent record; d jsonb; pd jsonb; v_targets jsonb; i integer; prev integer:=-1;
 BEGIN
+ -- No writer stores a proposal created in the future (commands also bind it to
+ -- their own transaction time).
+ IF NEW.created_at>date_trunc('milliseconds',clock_timestamp()) THEN RAISE EXCEPTION 'APPROVAL_RECORD_INVALID'; END IF;
  SELECT x.effect,x.irreversible,x.review_required,x.kill_switch INTO cap FROM morrow_work.review_capabilities x WHERE x.capability_id=NEW.capability_id;
  IF NOT FOUND OR NOT cap.review_required OR cap.kill_switch OR NEW.capability_id='governance.connection.connect' THEN RAISE EXCEPTION 'APPROVAL_RECORD_INVALID'; END IF;
  SELECT x.risk INTO v_risk FROM morrow_work.review_risk_by_effect x WHERE x.effect=cap.effect;
@@ -1320,7 +1327,8 @@ BEGIN
 END $$;
 
 -- Decide (§5): ADR-0011 under lock, after the Worker's kernel and fold. Order:
--- target and revision, digest, projection, family, reviewer list and conflict set,
+-- target and revision, digest, a claim in the family (consumed: FAMILY_CONFLICT),
+-- projection, family, reviewer list and conflict set,
 -- solo facts and phrase digest, duplicate reviewer, cap, counted reviewers, quorum.
 -- Every non-applied outcome is returned for rollback; nothing is persisted.
 CREATE FUNCTION morrow_work.cmd_approval_decide(p_command_id text,p_request_digest text,p_correlation_id text,p_proposal_id text,p_expected_revision text,
@@ -1421,7 +1429,9 @@ BEGIN
    RETURN QUERY SELECT 'DIGEST_MISMATCH'::text,NULL::text; RETURN;
   END IF;
  END IF;
- -- (h) projections at database time: the target (a cancel's approved member) and the root.
+ -- (h) a claimed family is consumed and closed (the first projection condition), then
+ -- the projections at database time: the target (a cancel's approved member) and the root.
+ IF v_has_claim THEN RETURN QUERY SELECT 'FAMILY_CONFLICT'::text,NULL::text; RETURN; END IF;
  IF NOT v_new THEN
   SELECT x.reviewer_principal_id::text AS reviewer,x.decided_at INTO v_solo_decision FROM morrow_work.approval_decisions x
    WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.approval_id=target.id AND x.solo_phrase_digest IS NOT NULL;
@@ -1435,10 +1445,8 @@ BEGIN
    v_current,false,NULL,NULL,root_approval.quiet_period_seconds,f.owner_principal_id,f.active_human_membership_count,f.last_membership_change_at,v_now);
   IF v_projection.code IS NOT NULL THEN RETURN QUERY SELECT v_projection.code,NULL::text; RETURN; END IF;
  END IF;
- -- (i) family: a claimed family is closed; cancel is only the confirming solo
- -- reviewer before effectiveAt; otherwise the root and target are pending and no
- -- member is approved.
- IF v_has_claim THEN RETURN QUERY SELECT 'FAMILY_CONFLICT'::text,NULL::text; RETURN; END IF;
+ -- (i) family: cancel is only the confirming solo reviewer before effectiveAt;
+ -- otherwise the root and target are pending and no member is approved.
  IF p_decision='cancel_before_effective' THEN
   IF v_solo_decision.reviewer IS DISTINCT FROM p.principal_id OR NOT EXISTS(SELECT 1 FROM morrow_work.approval_decisions x
     WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.approval_id=target.id AND x.solo_phrase_digest IS NOT NULL

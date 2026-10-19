@@ -1,12 +1,15 @@
 BEGIN;
 -- P06.T01b approval identity bridge (ADR-0011, ADR-0010 item 2). Executes AS
--- morrow_identity_owner, after 0015 (P06.T01a). It changes no identity table, row
--- or grant. It adds four definer functions that only morrow_work_command may
+-- morrow_identity_owner, after 0016 (P05.T01y); it builds on 0013 (signup owner
+-- records) and 0014 (the P06.T01a bridge). It changes no identity table, row or
+-- grant. It adds four definer functions that only morrow_work_command may
 -- execute: the workspace ownership facts of the solo-owner rule, the review
 -- candidates and reviewer grants the policy kernel judges in the Worker, and the
 -- exclusive variant of the P06.T01a locked recheck for approval claim consumers.
 -- SQL never interprets a grant here: rows are selected by capability id only and
--- the kernel decides (no verb, revocation or validity filter).
+-- the kernel decides (no verb, revocation or validity filter). Role checks reuse
+-- the existing helpers and pg_has_role; this file never reads the role-membership
+-- catalog directly (the proposed ADR-0020 new-migration rule).
 DO $$ BEGIN
  IF current_user<>'morrow_identity_owner'
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
@@ -125,15 +128,20 @@ REVOKE ALL ON FUNCTION morrow_identity.work_reviewer_grants(text,text,text,text[
 GRANT EXECUTE ON FUNCTION morrow_identity.work_reviewer_grants(text,text,text,text[]) TO morrow_work_command;
 
 -- work_lock_and_recheck (0014) for approval claim consumers, whose effect writes
--- identity rows: identical, except that it takes the organization interlock
--- exclusively and the organization row FOR UPDATE, first and never upgraded, as
--- every identity function that locks an organization FOR UPDATE does (0014).
+-- identity rows. It takes the organization interlock exclusively and the
+-- organization row FOR UPDATE, first and never upgraded, as every identity
+-- function that locks an organization FOR UPDATE does (0014), and then returns
+-- work_lock_and_recheck itself, so the recheck is the 0014 one by construction.
+-- That call's shared interlock and FOR SHARE are already covered by this
+-- transaction's exclusive locks and never wait. No lock is taken for malformed
+-- arguments.
 CREATE FUNCTION morrow_identity.work_lock_and_recheck_exclusive(p_digest text,p_workspace text,p_principal text,p_membership text,p_revision text,p_grants_digest text,p_evaluated_at_us text)
 RETURNS text
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
 DECLARE
- a record; v_org text; v_evaluated timestamptz; v_now timestamptz; v_expired boolean;
+ v_org text;
 BEGIN
+ -- The 0014 scalar checks, before any lock is taken; work_lock_and_recheck repeats them.
  IF p_digest IS NULL OR p_digest !~ '^[a-f0-9]{64}$'
   OR p_workspace IS NULL OR p_workspace !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_principal IS NULL OR p_principal !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
@@ -148,23 +156,7 @@ BEGIN
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.identity.organization',v_org)::text,0));
  PERFORM 1 FROM morrow_identity.organizations o WHERE o.id=v_org FOR UPDATE;
  IF NOT FOUND THEN RETURN 'ineligible'; END IF;
- SELECT * INTO a FROM morrow_identity.work_actor_authority(p_digest,p_workspace);
- IF NOT FOUND OR a.organization_id<>v_org OR a.principal_id<>p_principal OR a.membership_id<>p_membership THEN
-  RETURN 'ineligible';
- END IF;
- IF a.policy_revision::text<>p_revision OR a.grants_digest<>p_grants_digest THEN RETURN 'stale'; END IF;
- v_evaluated:=timestamptz 'epoch'+(p_evaluated_at_us||' microseconds')::interval;
- v_now:=clock_timestamp();
- IF v_evaluated>v_now THEN RETURN 'stale'; END IF;
- BEGIN
-  SELECT EXISTS(SELECT 1 FROM jsonb_array_elements(a.grants) g
-   WHERE g->'expiresAt'<>'null'::jsonb
-     AND (g->>'expiresAt')::timestamptz>v_evaluated AND (g->>'expiresAt')::timestamptz<=v_now)
-  INTO v_expired;
- EXCEPTION WHEN OTHERS THEN RETURN 'stale';
- END;
- IF v_expired IS NOT FALSE THEN RETURN 'stale'; END IF;
- RETURN 'current';
+ RETURN morrow_identity.work_lock_and_recheck(p_digest,p_workspace,p_principal,p_membership,p_revision,p_grants_digest,p_evaluated_at_us);
 END $$;
 REVOKE ALL ON FUNCTION morrow_identity.work_lock_and_recheck_exclusive(text,text,text,text,text,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_identity.work_lock_and_recheck_exclusive(text,text,text,text,text,text,text) TO morrow_work_command;
