@@ -89,6 +89,12 @@ async function send(p, method, path, body, options) {
   return { status: response.status, text, body: JSON.parse(text) };
 }
 const withoutCorrelation = (text) => JSON.stringify({ ...JSON.parse(text), correlationId: null });
+// A cmd_proposal_submit call whose scalars and document shape are valid, built in
+// SQL so createdAt is database time and every digest covers its text.
+function submitProbe(command, digest, task, basis = "own") {
+  const doc = `jsonb_build_object('id','proposal_probe','capabilityId','governance.grants.revise','createdAt',to_char(date_trunc('milliseconds',clock_timestamp()) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'expiresAt','2026-12-31T00:00:00.000Z','targets',jsonb_build_array('{}'::jsonb),'maximumCredits','0','partialApproval','all_or_nothing','beneficiaryPrincipalIds','[]'::jsonb,'parametersRef',jsonb_build_object('id','params_probe'),'derivedFrom',NULL,'taskId','${task}')::text`;
+  return `SELECT x.outcome FROM (SELECT ${doc} AS c) d, morrow_work.cmd_proposal_submit('${command}','${digest}','corr','${task}','${basis}','${randomUUID()}',NULL,'${"a".repeat(64)}','{}','${sha("{}")}',d.c,encode(sha256(convert_to(d.c,'UTF8')),'hex'),'{}') x`;
+}
 const apiSql = (p, statements, options) =>
   db.sql(asApi(p, statements, options), { user: "morrow_api_worker" });
 const counts = () =>
@@ -100,14 +106,17 @@ const counts = () =>
   )[0];
 
 test("P1: with no context both roles see zero rows and every api function is ineligible", () => {
-  for (const table of ["goals", "tasks", "questions", "question_answers"]) {
+  const readable = Object.entries(workTables)
+    .filter(([, t]) => t.class === "tenant_readable")
+    .map(([name]) => name);
+  for (const table of readable) {
     const out = db.sql(
       `BEGIN READ ONLY; SET LOCAL ROLE morrow_work_api; SELECT count(*) FROM morrow_work.${table}; COMMIT;`,
       { user: "morrow_api_worker" },
     );
     assert.equal(out, "0", table);
   }
-  for (const table of Object.keys(workTables).filter((t) => t !== "transition_rules")) {
+  for (const table of Object.keys(workTables).filter((t) => workTables[t].class !== "platform")) {
     const out = db.sql(
       `BEGIN READ ONLY; SET LOCAL ROLE morrow_work_command; SELECT count(*) FROM morrow_work.${table}; COMMIT;`,
     );
@@ -125,6 +134,12 @@ test("P1: with no context both roles see zero rows and every api function is ine
     "cmd_question_request(text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_question_request('${uuid}','${digest}','corr','${records.A.task}','x','${P.B.principal}','${digest}')`,
     "cmd_question_answer(text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_question_answer('${uuid}','${digest}','corr','${records.A.question}','${randomUUID()}','x','1')`,
     "cmd_question_cancel(text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_question_cancel('${uuid}','${digest}','corr','${records.A.question}','1','own')`,
+    // P06.T01b: every scalar is well-formed, so only the missing context refuses.
+    "begin_approval_command(text,text,text)": `SELECT outcome FROM morrow_work.begin_approval_command('approval.decide','${uuid}','${digest}')`,
+    "cmd_proposal_submit(text,text,text,text,text,text,text,text,text,text,text,text,text)":
+      submitProbe(uuid, digest, records.A.task),
+    "cmd_approval_decide(text,text,text,text,text,text,text,text,text,text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_approval_decide('${uuid}','${digest}','corr','proposal_absent','1','approve',NULL,'${digest}',NULL,NULL,NULL,NULL,NULL,'{"evaluatedAt":"2026-10-19T00:00:00.000Z","reviewers":[]}')`,
+    "cmd_approval_withdraw(text,text,text,text,text)": `SELECT outcome FROM morrow_work.cmd_approval_withdraw('${uuid}','${digest}','corr','proposal_absent','1')`,
   };
   for (const [signature, spec] of Object.entries(workFunctions).filter(
     ([, f]) => f.kind === "api",
@@ -137,6 +152,22 @@ test("P1: with no context both roles see zero rows and every api function is ine
         ),
         "0",
       );
+      continue;
+    }
+    if (spec.read) {
+      // The P06.T01b read definers return no row without a context.
+      const call = {
+        "review_context(text,text)": "morrow_work.review_context('governance.grants.revise',NULL)",
+        "review_candidates(text,text,text,text)":
+          "morrow_work.review_candidates('governance.grants.revise','[]',NULL,'25')",
+        "reviewer_snapshot(text,text)": `morrow_work.reviewer_snapshot('governance.grants.revise','["${P.B.principal}"]')`,
+      }[signature];
+      assert.ok(call, signature);
+      const out = db.sql(
+        `BEGIN; SET LOCAL ROLE morrow_work_api; SELECT count(*) FROM ${call}; COMMIT;`,
+        { user: "morrow_api_worker" },
+      );
+      assert.equal(out, "0", signature);
       continue;
     }
     if (signature === "target_member(text)") {
@@ -267,6 +298,10 @@ test("P3: foreign IDs are byte-identical not-found everywhere and writes cannot 
       `SELECT outcome FROM morrow_work.cmd_question_request('${k()}','${d}','corr','${foreign.task}','x','${P.B.principal}','${d}')`,
       `SELECT outcome FROM morrow_work.cmd_question_answer('${k()}','${d}','corr','${foreign.question}','${k()}','x','1')`,
       `SELECT outcome FROM morrow_work.cmd_question_cancel('${k()}','${d}','corr','${foreign.question}','1','other')`,
+      // P06.T01b: a foreign task to attach to, and proposals no tenant policy shows.
+      submitProbe(k(), d, foreign.task, "other"),
+      `SELECT outcome FROM morrow_work.cmd_approval_decide('${k()}','${d}','corr','${foreign.task}','1','approve',NULL,'${d}',NULL,NULL,NULL,NULL,NULL,'{"evaluatedAt":"2026-10-19T00:00:00.000Z","reviewers":[]}')`,
+      `SELECT outcome FROM morrow_work.cmd_approval_withdraw('${k()}','${d}','corr','${foreign.task}','1')`,
     ];
     for (const call of calls)
       assert.equal(
@@ -287,6 +322,17 @@ test("P3: foreign IDs are byte-identical not-found everywhere and writes cannot 
         .split("\n")
         .at(-1),
       "not_found",
+    );
+  // Foreign principals are not review candidates or reviewers of A's workspace.
+  for (const foreign of [P.Y.principal, P.A2.principal])
+    assert.equal(
+      apiSql(
+        P.A,
+        `SELECT count(*) FROM morrow_work.reviewer_snapshot('governance.grants.revise','["${foreign}"]');`,
+      )
+        .split("\n")
+        .at(-1),
+      "0",
     );
   const unchanged = counts();
   // The stream rows of P1-P3 SQL probes are rolled back or never created.

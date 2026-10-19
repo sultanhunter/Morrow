@@ -86,6 +86,16 @@ const published = [
     "0016.browser-session-lifecycle.sql",
     "db8111c78e3f6d2a56aa3724a85afdc8f6c078d087a8edd8ee750281818a7b85",
   ],
+  [
+    17,
+    "0017.approval-identity-bridge.sql",
+    "f069cf9ceeabe828b52e12648020609bc50e62dcf4bd82d0811aaf402d90d672",
+  ],
+  [
+    18,
+    "0018.approval-records.sql",
+    "6ca433edded2bc8590623bb30a6a51fe30b62215ad57dc0e4f7abdb7fecbadea",
+  ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each
 // published row keeps exactly these pinned files, and a later role goes in a new file on its
@@ -144,9 +154,10 @@ const publishedPrerequisites = new Map([
   ],
 ]);
 // The role each published migration was applied under: the identity owner, except the
-// work-state tables, which the work owner creates (P06.T01a).
+// work-state tables (P06.T01a) and the approval records (P06.T01b), which the work owner
+// creates.
 const publishedExecuteAs = (sequence) =>
-  sequence === 15 ? "morrow_work_owner" : "morrow_identity_owner";
+  sequence === 15 || sequence === 18 ? "morrow_work_owner" : "morrow_identity_owner";
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 

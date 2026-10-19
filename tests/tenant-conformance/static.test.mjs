@@ -134,10 +134,15 @@ test("S3: tenant keys, composite parents and the one tenant policy template", ()
       }
     }
   }
-  const platform = rows(
-    "SELECT count(*)::int AS n FROM pg_attribute WHERE attrelid='morrow_work.transition_rules'::regclass AND attname IN ('organization_id','workspace_id')",
-  );
-  assert.equal(platform[0].n, 0);
+  for (const [table, spec] of Object.entries(workTables).filter(
+    ([, t]) => t.class === "platform",
+  )) {
+    const platform = rows(
+      `SELECT count(*)::int AS n FROM pg_attribute WHERE attrelid='morrow_work.${table}'::regclass AND attname IN ('organization_id','workspace_id')`,
+    );
+    assert.equal(platform[0].n, 0, table);
+    assert.deepEqual(spec.parents, [], table);
+  }
   recordConformance("S3", true);
 });
 
@@ -169,10 +174,12 @@ test("S4: the api role reads readable tables column by column; no runtime DELETE
       );
       if (role !== workRoles.owner) assert.ok(!p.d && !p.t, role + " " + table);
     }
-  const platformApi = rows(
-    "SELECT has_any_column_privilege('morrow_work_api','morrow_work.transition_rules','SELECT') AS s",
-  );
-  assert.equal(platformApi[0].s, false);
+  for (const [table] of Object.entries(workTables).filter(([, t]) => t.class === "platform")) {
+    const platformApi = rows(
+      `SELECT has_any_column_privilege('morrow_work_api','morrow_work.${table}','SELECT') AS s`,
+    );
+    assert.equal(platformApi[0].s, false, table);
+  }
   const views = rows(
     "SELECT relname, reloptions FROM pg_class WHERE relnamespace='morrow_work'::regnamespace AND relkind='v'",
   );
