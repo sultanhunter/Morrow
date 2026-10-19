@@ -6,6 +6,7 @@
   - ADR-0002 "Flow", which had PRs target `codex/morrow-foundation` until the owner approved the first merge into `main`.
   - The plan's Package 3 rule that enforced repository protection must exist before merging release code.
 - Amended: item 4, 2026-10-19 (P03.T04f OQ-1). See Amendments.
+- Amended: item 5, 2026-10-19 (ADR-0019), with a third-party GitHub access exception the same day. See Amendments.
 
 ## Context
 
@@ -49,3 +50,17 @@ The first bullet of item 4 now reads:
 The second bullet of item 4 is unchanged. The proposal and the alternatives are in `docs/packets/P03.T04f.md`, OQ-1.
 
 Owner approval, 2026-10-19, in chat, answering P03.T04f OQ-1: "Allow both (Recommended)". That is option (a): both light paths, a Markdown-only pull request and a push to `main` whose merged tree equals the merged pull request head, with the amendment text above.
+
+### 2026-10-19: item 5, branch protection before production (ADR-0019)
+
+> Amendment 2026-10-19 (ADR-0019; owner decision, 2026-10-19, in chat). Item 5 now reads: "Enforced protection on `main` requires the `foundation` check and no approving review. It must exist before the first production deployment, production credential or production resource. It needs GitHub Pro or Team, a purchase the owner approves per action. Staging deploys do not wait for it." Until protection exists, items 3 and 4 are rules, not controls. An account that can push to `main` can change `deploy-staging.yml`, `ci.yml` or `scripts/staging.mjs` in the same push. It therefore controls the staging deploy token, which can deploy a broker that reads every staging broker secret. This is accepted for staging only, which holds synthetic data and the owner's test identity. Mitigations: only the owner's account can push, and every other app, token, deploy key and collaborator is removed before the first deploy. If GitHub Pro is bought, protection is enabled at once.
+
+Owner approval, 2026-10-19, in chat. The staging plan, which made branch protection (Pro) a hard gate before production and not before staging, was approved with "yes this plan looks good" (ADR-0019, Approval). Asked directly "Earlier we agreed (ADR-0014) to turn on GitHub branch protection (GitHub Pro, about $4/month) before the first hosted deploy. With no users and only test data, should that wait until real production?", the owner answered "Required before production (Recommended)". ADR-0019, which carries this amendment, was approved with "Approve both (Recommended)". On P04.T01i OQ-2 the owner chose "GitHub Pro (Recommended)", so protection is enabled as soon as the Pro purchase is active. Pro became active and protection was enabled on 2026-10-19 (`docs/evidence/live/2026-10-19-github-pro-and-branch-protection.md`).
+
+### 2026-10-19: item 5 exception, third-party GitHub access (ADR-0019)
+
+The mitigation "every other app, token, deploy key and collaborator is removed before the first deploy" carries the exception recorded in ADR-0019's Amendments, for staging only:
+- The third-party platform GitHub Apps AWS Connector, Codemagic, DigitalOcean, Expo, Netlify, Render and Vercel keep their access (an accepted MVP risk).
+- Before the first staging deploy, the ChatGPT Codex Connector GitHub App is suspended and the classic token "AppForge Github Actions" (`repo` and `workflow`, no expiry) is deleted. The owner performs both, because GitHub's sudo re-authentication stopped Claude's attempt to suspend the app.
+
+Owner decision, 2026-10-19, in chat: "Suspend Codex + revoke old token (Recommended)" (the question and option are quoted in ADR-0019, Amendments).
