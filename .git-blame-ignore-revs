@@ -1,0 +1,10 @@
+# Commits that only reformat code. Use: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub's blame view reads this file automatically.) PRs merge with a merge commit (ADR-0014),
+# so these SHAs stay on main.
+
+# P03.T04e PR-A: prettier --write of the 20 files the old explicit format lists left out.
+cd320ccf4c03e000a9b13bcdb7318f2eabe86b4c
+
+# P03.T04e PR-A, after merging main (PRs #9-#15): prettier --write of the five files main
+# changed outside the old lists.
+f23eb0e6c25a30aef49cb982ea47935a94d697dc

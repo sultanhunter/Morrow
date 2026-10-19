@@ -84,6 +84,66 @@ const published = [
     "ac947dd48f0bd5d802ebd85bf5e610cafa50809458988e8c25aa7157b12d64c8",
   ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
+// From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each
+// published row keeps exactly these pinned files, and a later role goes in a new file on its
+// new row. The pins are the bytes as they stand, not each row's original setup: before this
+// rule, the roles of migrations 0004-0008 (lifecycle, linking, preauth, resolution, sessions)
+// were appended to row 1's file next to their migrations. Row 1's file is therefore
+// cumulative and valid only on a fresh database, applied before row 1; applying
+// prerequisites row by row to a database already past row 1 is unsupported (input to P04.T01i).
+const publishedPrerequisites = new Map([
+  [
+    1,
+    [
+      {
+        file: "infra/identity-role-prerequisites.sql",
+        sha256: "25bc4de4b968ef51b696a0f9e85c8f482bfa6f4ad1b77114a865d210969ee581",
+      },
+    ],
+  ],
+  [
+    10,
+    [
+      {
+        file: "infra/identity-login-role-prerequisites.sql",
+        sha256: "17c25b456d85d6b0a70fe312be885f4543339da9ebaf04122b585ccc2d4c541b",
+      },
+    ],
+  ],
+  [
+    11,
+    [
+      {
+        file: "infra/identity-logout-role-prerequisites.sql",
+        sha256: "1eb98c94b51d4d2b1c2580fc402234110536ae6a84c185116676766460a0193d",
+      },
+    ],
+  ],
+  // P05.T01x Part B: the onboarding role, before 0013.
+  [
+    13,
+    [
+      {
+        file: "infra/identity-onboarding-role-prerequisites.sql",
+        sha256: "2baa597ab15f6c64957204071dccb96b2ca85bdc24eb2f482c5a9d8a7dd40e53",
+      },
+    ],
+  ],
+  // P06.T01a: the work roles, before 0014, the first migration that names them.
+  [
+    14,
+    [
+      {
+        file: "infra/work-role-prerequisites.sql",
+        sha256: "dbe05f09aa860e5e5e73de9358b5ca15e37c55cf74aec5a9d56571754e3f0b1c",
+      },
+    ],
+  ],
+]);
+// The role each published migration was applied under: the identity owner, except the
+// work-state tables, which the work owner creates (P06.T01a).
+const publishedExecuteAs = (sequence) =>
+  sequence === 15 ? "morrow_work_owner" : "morrow_identity_owner";
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 
@@ -98,6 +158,20 @@ test("the manifest keeps every published migration as an unchanged prefix", () =
 test("every published migration file still hashes to its pinned digest", () => {
   for (const row of published)
     assert.equal(sha(readFileSync("migrations/" + row.file)), row.sha256, row.file);
+});
+
+test("published rows keep their executeAs role and pinned prerequisites", () => {
+  for (const [index, row] of published.entries()) {
+    const { executeAs, prerequisites } = manifest.migrations[index];
+    assert.equal(executeAs, publishedExecuteAs(row.sequence), row.file);
+    assert.deepEqual(prerequisites, publishedPrerequisites.get(row.sequence), row.file);
+  }
+});
+
+test("every published prerequisite file still hashes to its pinned digest", () => {
+  const pinned = [...publishedPrerequisites.values()].flat();
+  assert.equal(pinned.length, 5);
+  for (const { file, sha256 } of pinned) assert.equal(sha(readFileSync(file)), sha256, file);
 });
 
 // The manifest is append-only: published rows are an unchanged, index-aligned

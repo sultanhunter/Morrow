@@ -72,7 +72,7 @@ jobs:
         run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Run one shard of the repository tests, one file at a time
+      - name: Run one shard of the repository tests, parallel-safe files concurrently, then the serial list
         env:
           TEST_SHARD: "${{ matrix.shard }}/2"
         run: npm run test:shard
@@ -277,11 +277,61 @@ jobs:
         if: always()
         run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
 
+  # P14.T01a: the provisional workspace UI. The bounded accessibility, keyboard and
+  # contrast matrix on the fixture build and on the production dist, then the
+  # real-browser sign-in journey against the configured harness and PostgreSQL 17.
+  ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Route reports outside the checkout
+        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Pull the pinned PostgreSQL image
+        run: docker pull "$(node -p 'require("./infra/local-engine.json").image')"
+      - name: Install the pinned Playwright Chromium and its system libraries
+        run: npx playwright install --with-deps chromium
+      - name: Build the workspace SPA and the api Worker
+        run: npm run build
+      - name: Check the fixture build at 1440, 768, 390 and 320 pixels, with keyboard walks
+        run: npm run ui:check
+      - name: Check the production dist under the unbound dev pair
+        run: npm run ui:edge
+      - name: Sign in, enter and sign out in Chromium against the configured harness
+        run: npm run lab:group:ui
+      - name: Secret-scan generated reports before upload
+        id: artifact_scan
+        if: always()
+        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
+      - name: Upload generated reports
+        if: always() && steps.artifact_scan.outcome == 'success'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: morrow-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/morrow-artifacts
+          if-no-files-found: error
+          overwrite: false
+          include-hidden-files: false
+          retention-days: 90
+      - name: Require an unchanged checkout
+        if: always()
+        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
+
   # Same name as the former single job, so the required status check is
   # unchanged. A skipped, cancelled or failed job fails this check.
   foundation:
     if: always()
-    needs: [static, unit, workers-api, workers, postgres, pgwire]
+    needs: [static, unit, workers-api, workers, postgres, pgwire, ui]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

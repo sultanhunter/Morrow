@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
+import { listUnitFiles, runTests } from "../scripts/run-tests.mjs";
 
 // Structural checks of the GitHub workflows and the npm scripts they reach. They replace
 // the workflow assertions of the retired CI evidence collector: hardening settings,
@@ -11,13 +12,26 @@ const scripts = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 ).scripts;
 const headRef = "${{ github.event.pull_request.head.sha || github.sha }}";
+// Every workflow file and the only ref its checkouts may use. A workflow file that is not
+// listed here fails the tests below.
+const checkoutRefs = {
+  "ci.yml": headRef,
+  "heavy-faults.yml": "${{ github.sha }}",
+  "frozen-regressions.yml": "codex-archive-f89ad75",
+};
 const pinnedAction = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
 // Never run by CI: lab:engine is the standalone engine probe (pg-core records the engine
 // build inline), lab:e2b-* are offline-by-default provider operator commands, and
 // lab:edge-postgresql-local is the developer-machine runner of the lab:edge-postgresql
-// journeys (supporting evidence; the pgwire job runs lab:edge-postgresql itself).
+// journeys (supporting evidence; the pgwire job runs lab:edge-postgresql itself), and
+// lab:workspace-ui-journey-local is the same for the P14.T01a browser journey.
 const labsOutsideCi = (name) =>
-  name === "lab:engine" || name === "lab:edge-postgresql-local" || name.startsWith("lab:e2b-");
+  name === "lab:engine" ||
+  name === "lab:edge-postgresql-local" ||
+  name === "lab:workspace-ui-journey-local" ||
+  name.startsWith("lab:e2b-");
+// The P14.T01a `ui` job installs Chromium and runs 130 browser cases plus the journey lab.
+const timeoutLimit = (id) => (id === "ui" ? 20 : 15);
 
 // Parses the YAML subset these workflows use: block maps and sequences, plain, quoted and
 // flow-sequence scalars, `|`/`>-` block scalars and comments.
@@ -109,6 +123,7 @@ const workflows = Object.fromEntries(
   workflowFiles.map((file) => [file, parseWorkflow(workflowText(file))]),
 );
 const ci = workflows["ci.yml"];
+const heavyFaults = workflows["heavy-faults.yml"];
 const steps = (job) => job.steps ?? [];
 const uses = (step, action) => typeof step.uses === "string" && step.uses.startsWith(action + "@");
 
@@ -153,7 +168,7 @@ test("the YAML subset parser reads nested maps, sequences, flow lists and block 
 });
 
 test("every workflow pins actions by commit, never persists credentials and never continues on error", () => {
-  assert.ok(workflowFiles.includes("ci.yml"));
+  assert.deepEqual([...workflowFiles].sort(), Object.keys(checkoutRefs).sort());
   for (const file of workflowFiles) {
     const text = workflowText(file);
     const workflow = workflows[file];
@@ -167,11 +182,7 @@ test("every workflow pins actions by commit, never persists credentials and neve
         if (step.uses !== undefined) assert.match(step.uses, pinnedAction, `${file} ${id}`);
         if (uses(step, "actions/checkout")) {
           assert.equal(step.with?.["persist-credentials"], false, `${file} ${id}`);
-          assert.equal(
-            step.with?.ref,
-            file === "ci.yml" ? headRef : "codex-archive-f89ad75",
-            `${file} ${id}`,
-          );
+          assert.equal(step.with?.ref, checkoutRefs[file], `${file} ${id}`);
         }
       }
     }
@@ -196,11 +207,45 @@ test("every upload is gated on a passing secret scan of what it uploads", () => 
         assert.equal(step.with?.["retention-days"], 90);
         // Archive replays upload tracked report paths, so they upload only after every
         // replay succeeded; otherwise an unregenerated archived report could be uploaded.
-        if (file !== "ci.yml") assert.ok(!step.if.includes("always()"), `${file} ${id}`);
+        if (file === "frozen-regressions.yml")
+          assert.ok(!step.if.includes("always()"), `${file} ${id}`);
       }
     }
   assert.ok(uploads >= Object.keys(ci.jobs).length - 1);
 });
+
+// The hardened step sequence every report-writing job shares: checkout, setup-node from
+// .nvmrc, the artifacts directory outside the checkout, a locked install, the job body, an
+// always-run secret scan, an upload gated on that scan and the clean-tree gate.
+function assertHardenedSteps(id, job, { emptyUploadAllowed = false } = {}) {
+  const jobSteps = steps(job);
+  const at = (predicate) => jobSteps.findIndex(predicate);
+  assert.equal(job["runs-on"], "ubuntu-24.04", id);
+  if (job.strategy?.matrix) assert.equal(job.strategy["fail-fast"], false, id);
+  assert.ok(uses(jobSteps[0], "actions/checkout"), id);
+  const setup = at((s) => uses(s, "actions/setup-node"));
+  assert.equal(jobSteps[setup]?.with?.["node-version-file"], ".nvmrc", id);
+  const route = at(
+    (s) => s.run === 'echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"',
+  );
+  const install = at((s) => s.run === "npm ci --ignore-scripts --no-audit --no-fund");
+  const scan = at((s) => s.id === "artifact_scan");
+  const upload = at((s) => uses(s, "actions/upload-artifact"));
+  assert.ok(0 < setup && setup < route && route < install, id);
+  assert.ok(install + 1 < scan && scan + 1 === upload, `${id} runs its body before the scan`);
+  assert.equal(jobSteps[scan].if, "always()", id);
+  assert.equal(jobSteps[scan].run, 'node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"');
+  assert.equal(jobSteps[upload].if, "always() && steps.artifact_scan.outcome == 'success'");
+  assert.equal(jobSteps[upload].with.path, "${{ runner.temp }}/morrow-artifacts");
+  assert.equal(jobSteps[upload].with["if-no-files-found"], emptyUploadAllowed ? "ignore" : "error");
+  assert.equal(upload, jobSteps.length - 2, id);
+  const clean = jobSteps.at(-1);
+  assert.equal(clean.if, "always()", id);
+  assert.match(clean.run, /test -z "\$\(git status --porcelain --untracked-files=all\)"/, id);
+  // Body steps run unconditionally, except a step restricted to one matrix leg.
+  for (const step of jobSteps.slice(install + 1, scan))
+    assert.ok(step.if === undefined || /^matrix\.[a-z]+ == '[a-z0-9-]+'$/.test(step.if), id);
+}
 
 test("every ci.yml job shares the hardened step sequence and foundation needs every job", () => {
   const { foundation, ...jobs } = ci.jobs;
@@ -213,37 +258,15 @@ test("every ci.yml job shares the hardened step sequence and foundation needs ev
   assert.match(aggregate.run, /test -n "\$RESULTS"/);
   assert.match(aggregate.run, /\[ "\$r" = success \] \|\| \{ [^}]*exit 1; \}/);
   for (const [id, job] of Object.entries(jobs)) {
-    const jobSteps = steps(job);
-    const at = (predicate) => jobSteps.findIndex(predicate);
-    assert.equal(job["runs-on"], "ubuntu-24.04", id);
-    assert.ok(Number.isInteger(job["timeout-minutes"]) && job["timeout-minutes"] <= 15, id);
-    if (job.strategy?.matrix) assert.equal(job.strategy["fail-fast"], false, id);
-    assert.ok(uses(jobSteps[0], "actions/checkout"), id);
-    const setup = at((s) => uses(s, "actions/setup-node"));
-    assert.equal(jobSteps[setup]?.with?.["node-version-file"], ".nvmrc", id);
-    const route = at(
-      (s) => s.run === 'echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"',
+    assert.ok(
+      Number.isInteger(job["timeout-minutes"]) && job["timeout-minutes"] <= timeoutLimit(id),
+      id,
     );
-    const install = at((s) => s.run === "npm ci --ignore-scripts --no-audit --no-fund");
-    const scan = at((s) => s.id === "artifact_scan");
-    const upload = at((s) => uses(s, "actions/upload-artifact"));
-    assert.ok(0 < setup && setup < route && route < install, id);
-    assert.ok(install + 1 < scan && scan + 1 === upload, `${id} runs its body before the scan`);
-    assert.equal(jobSteps[scan].run, 'node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"');
-    assert.equal(jobSteps[upload].if, "always() && steps.artifact_scan.outcome == 'success'");
-    assert.equal(jobSteps[upload].with.path, "${{ runner.temp }}/morrow-artifacts");
-    assert.equal(jobSteps[upload].with["if-no-files-found"], id === "unit" ? "ignore" : "error");
-    assert.equal(upload, jobSteps.length - 2, id);
-    const clean = jobSteps.at(-1);
-    assert.equal(clean.if, "always()", id);
-    assert.match(clean.run, /test -z "\$\(git status --porcelain --untracked-files=all\)"/, id);
-    // Body steps run unconditionally, except a step restricted to one matrix leg.
-    for (const step of jobSteps.slice(install + 1, scan))
-      assert.ok(step.if === undefined || /^matrix\.[a-z]+ == '[a-z0-9-]+'$/.test(step.if), id);
+    assertHardenedSteps(id, job, { emptyUploadAllowed: id === "unit" });
   }
 });
 
-// Expands each ci.yml run step over its job's matrix and step env, then collects
+// Expands each workflow run step over its job's matrix and step env, then collects
 // every npm script it reaches through `npm run` chains in package.json.
 // `npm run x --workspaces` and `npm run x -w pkg` run workspace package scripts, not
 // root scripts, so they are not followed.
@@ -255,7 +278,7 @@ const rootScriptsRun = (command) =>
     .map((segment) => /^npm run "?([A-Za-z0-9:._-]+)"?(.*)$/.exec(segment.trim()))
     .filter((m) => m && !/(^|\s)(--workspaces?|-w)(\s|=|$)/.test(m[2]))
     .map((m) => m[1]);
-function scriptsReachedByCi() {
+function scriptsReachedBy(workflow) {
   const reached = new Map();
   const visit = (name, via, stack = []) => {
     assert.ok(Object.hasOwn(scripts, name), `${via} runs missing npm script ${name}`);
@@ -263,7 +286,7 @@ function scriptsReachedByCi() {
     reached.set(name, (reached.get(name) ?? 0) + 1);
     for (const child of rootScriptsRun(scripts[name])) visit(child, name, [...stack, name]);
   };
-  for (const [id, job] of Object.entries(ci.jobs)) {
+  for (const [id, job] of Object.entries(workflow.jobs)) {
     const axes = Object.entries(job.strategy?.matrix ?? {});
     let variants = [{}];
     for (const [axis, values] of axes)
@@ -288,8 +311,9 @@ function scriptsReachedByCi() {
   }
   return reached;
 }
+const scriptsReachedByCi = () => scriptsReachedBy(ci);
 
-test("CI runs every lab script exactly once and covers the local npm run ci pipeline", () => {
+test("CI runs every lab script exactly once and covers the local npm run ci pipeline", async () => {
   const reached = scriptsReachedByCi();
   for (const [name, text] of Object.entries(scripts)) {
     if (name.startsWith("lab:group:"))
@@ -298,21 +322,32 @@ test("CI runs every lab script exactly once and covers the local npm run ci pipe
     assert.equal(reached.get(name), 1, `${name} must run exactly once in CI`);
   }
   for (const name of reached.keys()) assert.ok(!labsOutsideCi(name), `${name} must not run in CI`);
-  // The unit shards run the same command as `npm test`, split by file.
-  assert.equal(
-    scripts["test:shard"],
-    scripts.test.replace(" tests/", " --test-shard=$TEST_SHARD tests/"),
-  );
+  // The unit shards run the same runner as `npm test`, split by file (P03.T04e §2).
+  assert.equal(scripts.test, "node scripts/run-tests.mjs");
+  assert.equal(scripts["test:shard"], scripts.test + " --shard=$TEST_SHARD");
   const unit = ci.jobs.unit;
   const shards = unit.strategy.matrix.shard;
   assert.deepEqual(
     shards,
     shards.map((_, i) => i + 1),
   );
-  assert.equal(
-    steps(unit).find((s) => s.run === "npm run test:shard")?.env?.TEST_SHARD,
-    "${{ matrix.shard }}/" + shards.length,
-  );
+  const shardValue = steps(unit).find((s) => s.run === "npm run test:shard")?.env?.TEST_SHARD;
+  assert.equal(shardValue, "${{ matrix.shard }}/" + shards.length);
+  // Every top-level tests/*.test.mjs file runs in exactly one CI shard, as the runner
+  // itself lists it for each shard value CI passes.
+  const runs = new Map();
+  for (const shard of shards) {
+    let listed = "";
+    const argv = ["--list", "--shard=" + shardValue.replace("${{ matrix.shard }}", shard)];
+    assert.equal(await runTests(argv, { write: (text) => (listed += text) }), 0);
+    const plan = JSON.parse(listed);
+    for (const file of [...plan.parallel, ...plan.serial])
+      runs.set(file, (runs.get(file) ?? 0) + 1);
+  }
+  const files = listUnitFiles();
+  assert.ok(files.length > 50);
+  assert.deepEqual([...runs.keys()].sort(), files);
+  assert.ok([...runs.values()].every((count) => count === 1));
   for (const name of rootScriptsRun(scripts.ci))
     assert.ok(reached.has(name === "test" ? "test:shard" : name), `CI must run ${name}`);
   assert.ok(reached.has("smoke:scaffold"));
@@ -342,4 +377,91 @@ test("the edge dry-run and dev smoke run once, inside a network-none container w
     scripts.ci.includes("npm run edge:dry-run") && scripts.ci.includes("npm run typecheck:edge"),
   );
   assert.ok(scripts["ci:static"].includes("npm run edge:check"));
+});
+
+// P03.T04e §4: the heavy fault matrices run by hand or weekly, behind a change gate, never
+// on pull requests or pushes and never as part of the required foundation check.
+test("heavy-faults.yml runs by hand or weekly behind the change gate and is never required", () => {
+  assert.deepEqual(heavyFaults.on, { workflow_dispatch: null, schedule: [{ cron: "23 3 * * 1" }] });
+  assert.deepEqual(heavyFaults.concurrency, {
+    group: "heavy-faults",
+    "cancel-in-progress": false,
+  });
+  assert.deepEqual(Object.keys(heavyFaults.jobs).sort(), ["gate", "heavy"]);
+  const { gate, heavy } = heavyFaults.jobs;
+
+  // gate writes no report, so it is exempt from the scan, upload and clean-tree steps.
+  assert.equal(gate["runs-on"], "ubuntu-24.04");
+  assert.equal(gate["timeout-minutes"], 5);
+  assert.deepEqual(gate.outputs, { run: "${{ steps.decide.outputs.run }}" });
+  assert.equal(steps(gate).length, 2);
+  assert.ok(uses(steps(gate)[0], "actions/checkout"));
+  const decide = steps(gate)[1];
+  assert.equal(decide.id, "decide");
+  assert.deepEqual(decide.env, { EVENT_NAME: "${{ github.event_name }}" });
+  assert.match(decide.run, /git log -1 --format=%ct/);
+  assert.match(
+    decide.run,
+    /\[ "\$EVENT_NAME" = workflow_dispatch \] \|\| \[ "\$age" -lt 691200 \]/,
+  );
+  assert.match(decide.run, /echo "run=\$run" >> "\$GITHUB_OUTPUT"/);
+  assert.equal(rootScriptsRun(decide.run).length, 0);
+
+  // heavy runs only when the gate says so, with the hardened sequence of ci.yml.
+  assert.equal(heavy.needs, "gate");
+  assert.equal(heavy.if, "needs.gate.outputs.run == 'true'");
+  assert.equal(heavy["timeout-minutes"], 40);
+  assert.deepEqual(Object.keys(heavy.strategy.matrix), ["suite"]);
+  assertHardenedSteps("heavy", heavy);
+  const body = steps(heavy).find((s) => s.run === 'npm run "heavy:$HEAVY_SUITE"');
+  assert.deepEqual(body?.env, { HEAVY_SUITE: "${{ matrix.suite }}" });
+
+  // Every heavy:* script runs exactly once there and never in ci.yml; heavy-faults.yml
+  // reaches nothing else, so every lab:* still runs exactly once, in ci.yml.
+  const reachedHeavy = scriptsReachedBy(heavyFaults);
+  const reachedCi = scriptsReachedByCi();
+  const heavyScripts = Object.keys(scripts).filter((name) => name.startsWith("heavy:"));
+  assert.ok(heavyScripts.includes("heavy:unit-stress"));
+  assert.deepEqual([...reachedHeavy.keys()].sort(), heavyScripts.sort());
+  for (const name of heavyScripts) {
+    assert.equal(reachedHeavy.get(name), 1, name);
+    assert.ok(!reachedCi.has(name), `${name} must not run in ci.yml`);
+  }
+  assert.equal(
+    scripts["heavy:unit-stress"],
+    "node scripts/run-tests.mjs --repeat=5 --concurrency=8 --junit=heavy/unit",
+  );
+
+  // The required check does not wait for it. (foundation needing exactly the ci.yml jobs is
+  // checked above, and `needs` cannot reach another workflow; this names the intent.)
+  for (const job of Object.keys(heavyFaults.jobs))
+    assert.ok(!ci.jobs.foundation.needs.includes(job), `foundation must not need ${job}`);
+});
+
+test("the ui job builds, runs both UI matrices and the browser journey, after installing Chromium", () => {
+  const ui = ci.jobs.ui;
+  assert.ok(ui, "P14.T01a adds the ui job");
+  const commands = steps(ui)
+    .map((s) => s.run)
+    .filter((run) => typeof run === "string");
+  const order = [
+    "docker pull",
+    "npx playwright install --with-deps chromium",
+    "npm run build",
+    "npm run ui:check",
+    "npm run ui:edge",
+    "npm run lab:group:ui",
+  ].map((command) => commands.findIndex((run) => run.startsWith(command)));
+  assert.ok(
+    order.every((index) => index >= 0),
+    JSON.stringify(order),
+  );
+  assert.deepEqual(
+    [...order].sort((a, b) => a - b),
+    order,
+  );
+  assert.ok(ci.jobs.foundation.needs.includes("ui"));
+  assert.equal(scripts["lab:group:ui"], "npm run lab:workspace-ui-journey");
+  assert.match(scripts.ci, /npm run build && npm run verify:workspace-web/);
+  assert.match(scripts["ci:static"], /npm run build && npm run verify:workspace-web/);
 });
