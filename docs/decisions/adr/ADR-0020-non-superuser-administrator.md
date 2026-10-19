@@ -97,7 +97,7 @@
    - **Mechanics.** `tests/migration-history.test.mjs` holds one rebaseline record (`ADR-0020`, sequences 5–15, the superseded digests). It fails unless this ADR is "Accepted" in the index. Adding a second record needs a new owner-approved ADR.
    - **Closure.** The exception closes when any persistent database first applies any of 0005–0015. That is expected to be the first `staging:migrate` under the staging card. P04.T01i PR-D part 2 cites that live record as the rebaseline record's `closedBy`.
    - **After closure.** Invariant 18 applies to the whole chain without exception, and any fix is a forward migration. The runner's `MIGRATION_LEDGER_DRIFT` refuses any database whose ledger differs from the manifest.
-   - **Before closure.** Corrections to the same files are allowed only within items 1–6, only for a defect that the Neon confirmation or a review finds, and each needs Tier 2 plus `/security-review`.
+   - **Before closure.** Corrections to the same files are allowed only within items 1–6, only for a defect that the Neon confirmation or a review finds, and each needs one AI review (separate context, same model family) with the security lens (ADR-0021 item 5).
 
 8. **Coordination.**
    - **P04.T01j merges before any other migration.** This adds the dependency edges P04.T01j → P05.T01y PR (0016) and P04.T01j → P06.T01b PR-1.

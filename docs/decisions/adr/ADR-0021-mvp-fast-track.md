@@ -3,7 +3,7 @@
 - Status: Accepted 2026-10-19 (owner decision in chat; see Approval)
 - Date: 2026-10-19
 - Supersedes: the settled constraint "Broad production foundation for small and large Shopify brands. No MVP scope reduction of the launch destination." (CLAUDE.md, plan R1).
-- Refines: ADR-0002 (process: packets, ADR triggers, review tiers), ADR-0003 (two-track and the hardening budget), ADR-0015 (billing route at launch).
+- Refines: ADR-0001 (`docs/plan/mvp.md` is the launch plan; `build-plan.md` stays the plan of record and long-term structure), ADR-0002 (process: packets, ADR triggers, review tiers), ADR-0003 (two-track and the hardening budget), ADR-0015 (billing route at launch).
 - Affects: the launch gate, the plan's ordering, CLAUDE.md, and every packet not on the MVP path.
 
 ## Context
@@ -50,7 +50,7 @@ The owner asked to launch sooner and iterate, with good-enough security and a fo
 5. **Process (refines ADR-0002 and ADR-0003):**
    - New work uses a one-page brief in `docs/briefs/`: goal, scope, interfaces touched, security notes and a test checklist. Full packets are reserved for security-heavy work.
    - An ADR is needed only for authority, tenancy, security, money (billing, pricing, spend), provider selection, public contracts or data retention. Other choices are routine and recorded in the brief.
-   - Each PR gets one AI review (separate context, same model family). The security lens is included when the PR touches authority, RLS, migrations, credentials, provider adapters, approvals, budgets, billing or durable execution.
+   - Each PR gets one AI review (separate context, same model family). The security lens is included when the PR touches authority, RLS, migrations, credentials, provider adapters, approvals, budgets, billing or durable execution. Earlier references to "Tier 2 plus `/security-review`" (or `/code-review` plus `/security-review`) in packets, acceptance files and ADRs now mean this one review with the security lens.
    - PRs are feature-sized. CI stays the merge gate, under ADR-0014 with branch protection on `main`.
    - No new heavy-fault or soak labs before launch. Each feature carries ordinary tests and one end-to-end lab path.
    - Provider effects and live data keep their per-action owner approval or the staging card.
@@ -65,7 +65,16 @@ The owner asked to launch sooner and iterate, with good-enough security and a fo
   4. M4: approve and apply;
   5. M5: billing;
   6. M6: beta readiness.
-- Branches already built (sessions, UI, collaboration contracts, the billing library, approval records, the ADR-0020 fix and sign-in protection) merge as they are. The unfinished P04.T01i PR-B is trimmed to deploy-after-CI plus migrations, roles and secrets.
+- Branches already built (sessions, UI, collaboration contracts, the billing library, approval records, the ADR-0020 fix and sign-in protection) merge as they are.
+- **The trimmed P04.T01i PR-B.** It is cut to deploy-after-CI plus migrations, roles and secrets, and it keeps every control the approved card `staging-card-1` relies on:
+  - `staging:kill` and `staging:unkill`, with the deploy flag re-read just before and just after the api deploy;
+  - the ADR-0019 item 4 deploy gates 1–6 (main tip, deploy flag, schema head, login configuration digest, broker secret names, offline build and dry-run);
+  - the account census at every deploy;
+  - for rollback: card effect E11 (Claude's rollbacks) is suspended until the rollback refusal exists. Staging rolls forward instead, through a new green `main` commit, with the kill switch as the stop.
+
+  The hosted kill-race drill (P04.T01i-AC14's hosted part), the keyring, rotation and rollback drills (AC15–AC17) and the p95 report (AC19) move past launch (`docs/acceptance/P04.md`).
+- **Credential-custody gate.** No Shopify, OpenAI or Stripe credential is bound to the broker until an owner-approved ADR supersedes ADR-0007 items 3–4 (trust model v0 and the barred credentials). ADR-0022, proposed on branch `claude/mvp-briefs`, is that ADR. M2, M3 and M5 wait on its approval (`docs/plan/mvp.md`).
+- **Stop controls before effects.** The ADR-0005 stop controls exist before the first agent-initiated store write (invariant 15). They are built in M3/M4.
 - Some of the plan's acceptance rows stay open past launch. STATUS and `docs/plan/mvp.md` say so plainly.
 
 ## Alternatives considered
@@ -80,3 +89,8 @@ Owner, 2026-10-19, in chat: "we are doing too much premature optimizations why n
 Asked "Switch Morrow to an MVP fast track: launch one end-to-end slice (sign up → pay → connect store → AI drafts a change → you approve → Morrow applies it and logs it), keep the core security, and cut process and breadth?", the owner answered: "yes fast track but our foundation architecture should be solid so we can scale the product later without any issues."
 
 Asked for the first job Morrow's AI should do on a merchant's store, the owner answered "Product listings". Asked how the first merchants get Morrow and pay, the owner answered "Invite-only beta (Recommended)": a private Shopify install link per merchant, with a Stripe subscription on Morrow and the App Store listing later.
+
+Owner approval of this record, 2026-10-19, in chat. Asked "ADR-0021 (the fast-track decision) also includes details I filled in from your direction: one-page briefs, one AI review per PR, ADRs only for security/money/tenancy/providers/contracts/data retention, no heavy fault tests before launch, and the old 80-task plan no longer gating launch. Approve ADR-0021 as written?", the owner answered "Approve as written (Recommended)". This accepts items 1–6.
+
+The Consequences bullets on the trimmed P04.T01i PR-B, the credential-custody gate and the stop controls, and the review-reference sentence in item 5, were added after the AI review of PR #17 (separate context, same model family). They apply items 3–5, ADR-0005, ADR-0007 and ADR-0019 and the card as already approved; they narrow Claude's card effects (E11) and do not change the decision.
+
