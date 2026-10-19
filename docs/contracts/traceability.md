@@ -21,6 +21,13 @@ Contract coverage only. Real provider evidence, executable authorization and mer
 | workspace.knowledge.read | J01 | P14.T01, P17.T01 | P01.A01, P14.A01 | D01 |
 | workspace.routine.configure | J01 | P14.T01, P17.T01 | P01.A01, P14.A01 | D01 |
 | workspace.routine.activate | J01 | P14.T01, P17.T01 | P01.A01, P14.A01 | D01 |
+| workspace.conversation.create | J01 | P07.T03, P14.T01 | P01.A01, P14.A01 | D01 |
+| workspace.conversation.post | J01 | P07.T03, P14.T02 | P01.A01, P07.A03, P14.A02 | D01 |
+| workspace.project.create | J01 | P07.T03, P14.T01 | P01.A01, P14.A01 | D01 |
+| workspace.project.revise | J01 | P07.T03, P14.T02 | P01.A01, P14.A02 | D01 |
+| workspace.project.pin | J01 | P07.T03, P14.T01 | P01.A01, P14.A01 | D01 |
+| workspace.inbox.read | J01 | P07.T03, P14.T03 | P01.A01, P07.A03 | D01 |
+| workspace.inbox.mark | J01 | P07.T03 | P01.A01, P07.A03 | D01 |
 | catalog.products.read | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D02 |
 | catalog.audit.create | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D01 |
 | catalog.content.propose | J02 | P09.T02, P17.T01 | P01.A01, P17.A01 | D01 |
@@ -97,6 +104,7 @@ Contract coverage only. Real provider evidence, executable authorization and mer
 | governance.audit.export | J13 | P05.T01, P17.T01 | P01.A01, P05.A01 | D01 |
 | governance.privacy.export | J13 | P05.T01, P17.T01 | P01.A01, P05.A01 | D01 |
 | governance.privacy.erase | J13 | P05.T01, P17.T01 | P01.A01, P05.A01 | D01 |
+| governance.access.request | J13 | P05.T02, P14.T03 | P01.A01, P05.A01 | D01 |
 | agents.listing.read | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D01 |
 | agents.builder.describe | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D01 |
 | agents.installation.stage | J14 | P16.T01, P17.T01 | P01.A01, P16.A01 | D01 |

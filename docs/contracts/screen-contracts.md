@@ -29,3 +29,14 @@ Actions name actual effects: Save draft, Run analysis, Generate images, Request 
 Work panes are artifact-first, with contextual team/agent conversation and durable decisions. At narrow width, explicit controls switch Artifact/Conversation/Activity and restore focus without losing drafts. Primary navigation collapses into an accessible drawer. Dialogs contain focus, have labelled titles and return focus to the opener. Updates announce concise status and do not steal focus while streaming.
 
 Screen ports consume P01 contracts through backend services. They never trust a browser role, host flag, displayed plan or model text. Prototype content is synthetic and visibly marked; it does not establish connection, provider outcomes, live publication, grant ownership or merchant value.
+
+## Collaboration screens (P01.T02c, ADR-0016)
+
+| Screen | Essential information | Main action and observable success |
+| --- | --- | --- |
+| Project | Goal, pinned artifact tabs (current revision, unviewable tabs omitted), contributors, project conversation, activity, decisions | Continue the goal's work in one place; a pin is a shortcut that confers nothing |
+| Ask conversation | Private conversation with the Coordinator, linked work, context scope, and the admin-read notice | Ask and get linked work; the creator sees that workspace admins can read Asks and that each admin read is audited |
+| Access request | Requested capability, verbs, resources, stores, accounts and fields; requester; reason; expiry; linked proposal | A decider denies or links a reviewed grant revision; the requester withdraws; a request never grants anything |
+| Inbox (v1.1) | Eight item kinds; open decision state separate from read state; viewer-relative context | Decide or open the subject; marking read never decides, and deciding never marks read |
+
+Messages show only what the viewer may see now: a message citing a source the viewer cannot view is absent, not redacted, and a reply to it shows no quoted parent. A streamed message the viewer loses access to mid-stream stops with a generic reset. Mentions are requests under the author's own authority. Admins reading another member's Ask get read-only pages with no stream, post or mention controls.

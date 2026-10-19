@@ -496,7 +496,8 @@ test("P01.T04a AC32: eight walkthroughs separate paid work from reads, approvals
         reasons: [],
       });
     }
-  assert.equal(fixtures.length, 86);
+  // 70 original, 8 kill-switch (P01.T02a), 4 collaboration (P01.T02c), 8 entitlement (P01.T04a).
+  assert.equal(fixtures.length, 90);
   // A human's paid execute still needs the entitlement.
   const billed = fixtures.find((f) => f.id === "P01.A01.missing_entitlement_denied.standalone");
   assert.deepEqual(inspectAuthority(find(catalogue, billed.capability), billed.request).reasons, [

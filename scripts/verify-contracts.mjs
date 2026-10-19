@@ -10,15 +10,20 @@ import {
   sources,
   selectorValidator,
   transitionVersions,
+  layered,
+  inspectEventRegistry,
+  inspectCollaborationDefaults,
+  inspectSidebar,
 } from "./contract-checks.mjs";
-import { contractVersion } from "./contract-sources.mjs";
+import { contractVersion, eventRegistryPath } from "./contract-sources.mjs";
 import { writeArtifact } from "./artifacts.mjs";
 
-// P01.A02 holds the frozen v1 cases; P01.T02a and P01.T04a (billing) add the v1.1 cases by exact selector.
+// P01.A02 holds the frozen v1 cases; P01.T02a, P01.T04a (billing) and P01.T02c (collaboration) add the v1.1 cases by exact selector.
 const fixtures = [
   ...read("docs/contracts/fixtures/P01.A02.json"),
   ...read("docs/contracts/fixtures/P01.T02a.json"),
   ...read("docs/contracts/fixtures/P01.T04a.json").cases,
+  ...read("docs/contracts/fixtures/P01.T02c.json").cases,
 ];
 const errors = [];
 const results = fixtures.map((f) => {
@@ -27,23 +32,35 @@ const results = fixtures.map((f) => {
   return { id: f.id, kind: f.kind, passed };
 });
 const transitions = read("docs/contracts/state-transitions.json");
+// Each machine's states: the v1 enums, the artifact list, and the v1.1 message and access_request enums (P01.T02c).
 const enumDefs = {
-  goal: "GoalStatus",
-  task: "TaskStatus",
-  run: "RunStatus",
-  question: "QuestionStatus",
-  approval: "ApprovalStatus",
-  operation: "OperationStatus",
+  goal: "core:GoalStatus",
+  task: "core:TaskStatus",
+  run: "core:RunStatus",
+  question: "core:QuestionStatus",
+  approval: "core:ApprovalStatus",
+  operation: "core:OperationStatus",
   artifact: null,
-  installation: "InstallationStatus",
+  installation: "core:InstallationStatus",
+  message: "core-v1.1:MessageStatus",
+  access_request: "core-v1.1:AccessRequestStatus",
+};
+const statesOf = (aggregate) => {
+  if (!Object.hasOwn(enumDefs, aggregate)) return null;
+  if (enumDefs[aggregate] === null)
+    return ["uploading", "processing", "ready", "failed", "quarantined", "deleted"];
+  const [kind, name] = enumDefs[aggregate].split(":");
+  return layered[kind].$defs[name].enum;
 };
 const capabilityIds = new Set(
   read("docs/contracts/capabilities.json").capabilities.map((c) => c.id),
 );
 for (const [aggregate, rows] of Object.entries(transitions.transitions)) {
-  const states = enumDefs[aggregate]
-    ? core.$defs[enumDefs[aggregate]].enum
-    : ["uploading", "processing", "ready", "failed", "quarantined", "deleted"];
+  const states = statesOf(aggregate);
+  if (!states) {
+    errors.push("unknown transition machine " + aggregate);
+    continue;
+  }
   for (const t of rows)
     if (!states.includes(t.from) || !states.includes(t.to) || !t.guard || !t.actor)
       errors.push("invalid transition " + aggregate);
@@ -90,6 +107,12 @@ for (const r of routes.routes)
     JSON.stringify(r.hosts.sort()) !== JSON.stringify(["standalone"])
   )
     errors.push("route surface " + r.id);
+// P01.T02c (ADR-0016): the event registry, the collaboration defaults and the sidebar model.
+errors.push(
+  ...inspectEventRegistry(read(eventRegistryPath)),
+  ...inspectCollaborationDefaults(read("docs/contracts/collaboration-defaults.json")),
+  ...inspectSidebar(routes),
+);
 const report = {
   task: "P01.T02",
   contract_version: contractVersion,
@@ -109,6 +132,9 @@ const report = {
       ...sources.map((s) => s.path),
       "docs/contracts/fixtures/P01.A02.json",
       "docs/contracts/fixtures/P01.T02a.json",
+      "docs/contracts/fixtures/P01.T02c.json",
+      eventRegistryPath,
+      "docs/contracts/collaboration-defaults.json",
       "docs/contracts/review-policy-defaults.json",
       "docs/contracts/state-transitions.json",
       "package-lock.json",
