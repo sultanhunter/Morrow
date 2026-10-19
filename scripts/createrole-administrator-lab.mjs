@@ -73,7 +73,9 @@ const workOwnerHelpers = [
   "recorded_administrator",
 ];
 // Each run-time guard at the chain head calls executor_memberships_closed this many times
-// (P04.T01j D3, after the later CREATE OR REPLACE redefinitions in 0013 and 0014).
+// (P04.T01j D3, after the later CREATE OR REPLACE redefinitions in 0013 and 0014; 0016
+// replaces end_self_browser_family with the same three calls and adds
+// self_session_role_safe, the rotation guard).
 const helperCallsAtHead = {
   bound_workspace_linking_handoff: 1,
   end_self_browser_family: 3,
@@ -81,6 +83,7 @@ const helperCallsAtHead = {
   link_workspace_store: 1,
   preauth_role_safe: 1,
   resolve_provider_subject_selection: 1,
+  self_session_role_safe: 1,
 };
 const linkCall =
   "BEGIN;\nSELECT outcome FROM morrow_identity.link_workspace_store('h1','c1',repeat('a',64),repeat('b',64),repeat('c',64),'o1','w1','i1','install_first','1','1');\n" +
@@ -107,7 +110,13 @@ const entryCalls = Object.freeze({
   morrow_identity_linking: `SELECT count(*) FROM morrow_identity.lookup_workspace_store_link(repeat('a',64),'w1',repeat('b',64),${command});`,
   // 0011: self logout, with a request digest that matches its inputs.
   morrow_identity_logout: `SELECT f.outcome FROM (VALUES(${command},repeat('a',64),${environment},${application},${client},'p1',repeat('b',64))) v(c,cfg,env,app,cl,prof,sess), LATERAL morrow_identity.end_self_browser_family(v.c,encode(sha256(convert_to(array_to_json(ARRAY['morrow.browser.self_logout','1',v.c,v.cfg,'workos',v.env,v.app,v.cl,v.prof,v.sess])::text,'UTF8')),'hex'),v.cfg,v.env,v.app,v.cl,v.prof,v.sess) f;`,
+  // 0016: self rotation on the logout executor, through self_session_role_safe(), with a
+  // request digest that matches its inputs.
+  rotate_self_browser_generation: `SELECT f.outcome FROM (VALUES(${command},repeat('a',64),${environment},${application},${client},'p1',repeat('b',64),repeat('c',64),'00000000-0000-4000-8000-000000000002')) v(c,cfg,env,app,cl,prof,pres,nd,ng), LATERAL morrow_identity.rotate_self_browser_generation(v.c,encode(sha256(convert_to(array_to_json(ARRAY['morrow.browser.self_rotate','1',v.c,v.cfg,'workos',v.env,v.app,v.cl,v.prof,v.pres,v.nd,v.ng])::text,'UTF8')),'hex'),v.cfg,v.env,v.app,v.cl,v.prof,v.pres,v.nd,v.ng) f;`,
 });
+// An entry point keyed by its function name runs as this executor; every other key is the
+// executor itself.
+const entryExecutor = Object.freeze({ rotate_self_browser_generation: "morrow_identity_logout" });
 const entryScans =
   "SELECT COALESCE(sum(seq_scan+COALESCE(idx_scan,0)),0) FROM pg_catalog.pg_stat_xact_user_tables WHERE schemaname='morrow_identity' AND relname<>'migration_administrator';";
 const helperProbe =
@@ -165,9 +174,13 @@ function session(id) {
   // Table scans started by each inline-guard entry point, by executor.
   const entryReads = () =>
     Object.fromEntries(
-      Object.entries(entryCalls).map(([executor, call]) => [
-        executor,
-        Number(q(`BEGIN;\n${call}\n${entryScans}\nROLLBACK;`, executor).split("\n").at(-1)),
+      Object.entries(entryCalls).map(([key, call]) => [
+        key,
+        Number(
+          q(`BEGIN;\n${call}\n${entryScans}\nROLLBACK;`, entryExecutor[key] ?? key)
+            .split("\n")
+            .at(-1),
+        ),
       ]),
     );
   const entriesPass = () => Object.values(entryReads()).every((n) => n > 0);

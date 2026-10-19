@@ -1,5 +1,6 @@
 BEGIN;
--- P05.T01y session lifecycle (ADR-0004). Applied 0001-0015 bytes stay unchanged.
+-- P05.T01y session lifecycle (ADR-0004). 0001-0004 stay byte-identical; 0005-0015 were
+-- rebaselined once under ADR-0020, whose helpers are this file's only membership reads.
 -- New browser families live 12 hours; each generation lives at most 30 idle minutes and
 -- never past its family. Rotation retires generation n and issues n+1; presenting a
 -- retired generation of a live family revokes the family. Removing an organization
@@ -9,7 +10,7 @@ BEGIN;
 DO $$ BEGIN
  IF current_user<>'morrow_identity_owner'
  OR NOT EXISTS(SELECT 1 FROM pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
- OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname='morrow_identity_logout' AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
+ OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname='morrow_identity_logout' AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND morrow_identity.memberships_closed(r.rolname))
  OR EXISTS(SELECT 1 FROM pg_roles r,pg_roles o WHERE o.rolname='morrow_identity_owner' AND (r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance','morrow_identity_logout','morrow_identity_onboarding','morrow_api_worker') OR r.rolname LIKE 'morrow\_work\_%') AND (pg_has_role(r.oid,o.oid,'MEMBER') OR pg_has_role(o.oid,r.oid,'MEMBER')))
  OR to_regprocedure('morrow_identity.admit_account_family(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)') IS NULL
  OR to_regprocedure('morrow_identity.account_session_principal(text)') IS NULL
@@ -114,14 +115,15 @@ LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
   AND p_generation_expires<=p_generation_created+interval '30 minutes',false)
 $$;
 -- The 0011 self-session executor check over the current executor set: the session user is
--- the logout executor, the owner and executor flags are safe, and no executor (including
--- onboarding, the api Worker login and every morrow_work_ role) has the owner as a member
--- or is a member of it.
+-- the logout executor, the owner and executor flags are safe, the executor's and the
+-- owner's memberships are closed (ADR-0020), and no executor (including onboarding, the
+-- api Worker login and every morrow_work_ role) has the owner as a member or is a member
+-- of it.
 CREATE FUNCTION morrow_identity.self_session_role_safe() RETURNS boolean
 LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
  SELECT current_user='morrow_identity_owner' AND session_user='morrow_identity_logout'
  AND EXISTS(SELECT 1 FROM pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
- AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
+ AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND morrow_identity.executor_memberships_closed(r.rolname))
  AND NOT EXISTS(SELECT 1 FROM pg_roles r,pg_roles o WHERE o.rolname='morrow_identity_owner' AND (r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance','morrow_identity_logout','morrow_identity_onboarding','morrow_api_worker') OR r.rolname LIKE 'morrow\_work\_%') AND (pg_has_role(r.oid,o.oid,'MEMBER') OR pg_has_role(o.oid,r.oid,'MEMBER')))
 $$;
 
@@ -250,7 +252,7 @@ DECLARE pb morrow_identity.provider_session_bindings%ROWTYPE;
 BEGIN
  IF current_user<>'morrow_identity_owner' OR session_user<>'morrow_identity_logout'
  OR NOT EXISTS(SELECT 1 FROM pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
- OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
+ OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND morrow_identity.executor_memberships_closed(r.rolname))
  OR EXISTS(SELECT 1 FROM pg_roles r,pg_roles o WHERE o.rolname='morrow_identity_owner' AND r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance','morrow_identity_logout') AND (pg_has_role(r.oid,o.oid,'MEMBER') OR pg_has_role(o.oid,r.oid,'MEMBER'))) THEN
   RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN;
  END IF;
@@ -285,7 +287,7 @@ BEGIN
  instant:=clock_timestamp();
  IF current_user<>'morrow_identity_owner' OR session_user<>'morrow_identity_logout'
  OR NOT EXISTS(SELECT 1 FROM pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
- OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
+ OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND morrow_identity.executor_memberships_closed(r.rolname))
  OR EXISTS(SELECT 1 FROM pg_roles r,pg_roles o WHERE o.rolname='morrow_identity_owner' AND r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance','morrow_identity_logout') AND (pg_has_role(r.oid,o.oid,'MEMBER') OR pg_has_role(o.oid,r.oid,'MEMBER')))
  OR pb.id IS NULL OR f.id IS NULL OR g.id IS NULL OR f.provider_binding_id<>pb.id OR g.family_id<>f.id OR g.secret_digest<>p_session_digest OR g.generation>f.current_generation
  OR NOT morrow_identity.browser_generation_fits_family(g.created_at,g.expires_at,f.created_at,f.expires_at) OR NOT isfinite(pb.created_at) OR NOT isfinite(f.created_at) OR NOT isfinite(g.created_at) OR NOT isfinite(f.expires_at) OR NOT isfinite(g.expires_at)
@@ -305,7 +307,7 @@ BEGIN
    OR NOT EXISTS(SELECT 1 FROM morrow_identity.browser_session_audits a WHERE a.id::text=effect.audit_id AND a.command_id::text=p_command AND a.request_digest=p_request_digest AND a.kind='family' AND a.target_id=f.id AND a.outcome='revoked' AND a.recorded_at=f.revoked_at)
    OR (SELECT count(*) FROM morrow_identity.browser_session_audits a WHERE a.kind='family' AND a.target_id=f.id AND a.outcome='revoked' AND a.recorded_at=f.revoked_at)<>1
    OR (SELECT count(*) FROM morrow_identity.sessions WHERE session_digest=p_session_digest)+(SELECT count(*) FROM morrow_identity.browser_session_generations WHERE secret_digest=p_session_digest)<>1
-   OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
+   OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND morrow_identity.executor_memberships_closed(r.rolname))
    OR current_user<>'morrow_identity_owner' OR session_user<>'morrow_identity_logout'
    OR NOT EXISTS(SELECT 1 FROM pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
    OR EXISTS(SELECT 1 FROM pg_roles r,pg_roles o WHERE o.rolname='morrow_identity_owner' AND r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance','morrow_identity_logout') AND (pg_has_role(r.oid,o.oid,'MEMBER') OR pg_has_role(o.oid,r.oid,'MEMBER')))
