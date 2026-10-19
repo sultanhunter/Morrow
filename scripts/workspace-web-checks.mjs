@@ -3,15 +3,31 @@
 // exact allowlist, no inline script or style, no Vite manifest, and an entry script of
 // at most 150 KB gzip. The Vite module report (written outside dist) must list no
 // fixture, axe-core, Playwright or runtime-validator module, and must describe this dist.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+// Each JS entry of @morrow/workspace-ui is also bundled for the browser on its own and
+// held to the same module denials (P05.T01y: the session keeper, before P14.T01a wires it).
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
+import { build } from "esbuild";
 import { artifactPath, repositoryRoot, writeArtifact } from "./artifacts.mjs";
 
 export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
 export const allowedUrls = Object.freeze([
   "https://api.workos.com/user_management/authorize",
+  // P05.T01ab: the Turnstile script, explicit rendering only (the CSP allows its origin).
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
   "http://www.w3.org/1999/xhtml",
   "http://www.w3.org/2000/svg",
   "http://www.w3.org/1999/xlink",
@@ -19,12 +35,18 @@ export const allowedUrls = Object.freeze([
   "http://www.w3.org/1998/Math/MathML",
   "https://reactjs.org/docs/error-decoder.html?invariant=",
 ]);
+// The CSP sources `_headers` may name (P05.T01ab: the Turnstile script and frame origin);
+// only `_headers`, and only as a CSP source, never in code.
+export const allowedCspSources = Object.freeze(["https://challenges.cloudflare.com"]);
 export const entryGzipLimit = 150 * 1024;
 const deniedModules = [
   ["fixture", /(^|\/)apps\/workspace-web\/src\/fixtures\//],
   ["axe_core", /(^|\/)node_modules\/axe-core\//],
   ["playwright", /(^|\/)node_modules\/playwright(-core)?\//],
+  // The validator table, directly or through the modules that import it. The generated
+  // per-definition modules (`packages/contracts/src/generated/validators/`) are allowed.
   ["runtime_validators", /runtime-validators/],
+  ["validator_table_entry", /(^|\/)packages\/contracts\/src\/(validation|client)\.ts$/],
 ];
 const urlPattern = /https?:\/\/[^\s"'`)<>\\]+/g;
 
@@ -38,7 +60,10 @@ export function inspectDistFiles(files) {
       problems.push("DIST_MANIFEST:" + path);
     if (text.includes(fixtureCanary)) problems.push("DIST_FIXTURE_CANARY:" + path);
     for (const [url] of text.matchAll(urlPattern))
-      if (!allowedUrls.includes(url))
+      if (
+        !allowedUrls.includes(url) &&
+        !(path === "_headers" && allowedCspSources.includes(url.replace(/;$/, "")))
+      )
         problems.push("DIST_UNLISTED_URL:" + path + ":" + url.slice(0, 120));
     if (name.endsWith(".html")) {
       for (const tag of text.matchAll(/<script\b[^>]*>/gi))
@@ -68,6 +93,144 @@ export function inspectModuleReport(report, distScripts = null) {
       if (!distScripts.includes(name)) problems.push("MODULE_REPORT_STALE:" + name);
   }
   return problems;
+}
+
+// With its per-definition validator the keeper is about 3 KB gzip; with the validator
+// table it was 147 KB.
+export const sessionKeeperGzipLimit = 16 * 1024;
+const sessionKeeperEntry = "@morrow/workspace-ui/session-keeper";
+
+/** Bundles each JS entry of @morrow/workspace-ui for the browser, as the web build would. */
+export async function probeUiEntries({ root = repositoryRoot } = {}) {
+  const manifest = JSON.parse(
+    readFileSync(resolve(root, "packages/workspace-ui/package.json"), "utf8"),
+  );
+  const entries = [],
+    problems = [];
+  for (const [subpath, target] of Object.entries(manifest.exports)) {
+    if (!/\.tsx?$/.test(target)) continue;
+    const entry = "@morrow/workspace-ui" + subpath.slice(1);
+    const result = await build({
+      entryPoints: [resolve(root, "packages/workspace-ui", target)],
+      absWorkingDir: root,
+      bundle: true,
+      platform: "browser",
+      format: "esm",
+      target: "es2022",
+      jsx: "automatic",
+      minify: true,
+      legalComments: "none",
+      write: false,
+      metafile: true,
+      logLevel: "silent",
+    });
+    const text = result.outputFiles[0].contents;
+    const modules = Object.keys(result.metafile.inputs).sort();
+    const gzipBytes = gzipSync(text).length;
+    for (const problem of inspectModuleReport({
+      chunks: [{ fileName: entry, isEntry: true, moduleIds: modules }],
+    }))
+      problems.push(`UI_ENTRY:${entry}:${problem}`);
+    if (entry === sessionKeeperEntry && gzipBytes > sessionKeeperGzipLimit)
+      problems.push(`UI_ENTRY_TOO_LARGE:${entry}:${gzipBytes}`);
+    entries.push({ entry, bytes: text.length, gzip_bytes: gzipBytes, modules });
+  }
+  if (!entries.some((e) => e.entry === sessionKeeperEntry))
+    problems.push("UI_ENTRY_MISSING:" + sessionKeeperEntry);
+  return { entries, problems };
+}
+
+// Deliberate failures the UI entry probe must detect, through the probe itself: planted
+// @morrow/workspace-ui roots (temporary, removed afterwards) whose entries import the
+// validator table, outgrow the keeper's cap or drop the keeper entry. Each planted root
+// must yield exactly the expected problems.
+export async function uiEntryNegativeChecks() {
+  const keeper = "@morrow/workspace-ui/session-keeper";
+  const manifest = (exports) => JSON.stringify({ name: "@morrow/workspace-ui", exports });
+  const both = manifest({
+    ".": "./src/index.ts",
+    "./session-keeper": "./src/session-keeper.ts",
+    "./styles.css": "./src/styles.css",
+  });
+  const stubs = {
+    "packages/workspace-ui/src/styles.css": "a{color:red}\n",
+    "packages/contracts/src/validation.ts":
+      "export const validateCurrentDefinition = (name: string, value: unknown) => name === String(value);\n",
+    "packages/contracts/src/generated/runtime-validators.mjs":
+      "export const validators = Object.freeze({ v0: (value) => value === 0 });\n",
+    "packages/contracts/src/generated/validators/SessionRotationResult.mjs":
+      "export const validateSessionRotationResult = (value) => value === 1;\n",
+  };
+  // Incompressible, deterministic: gzip keeps it well above the keeper's cap.
+  const blob = Array.from({ length: 1000 }, (_, i) =>
+    createHash("sha256").update(String(i)).digest("base64"),
+  ).join("");
+  const cases = [
+    [
+      "ui_entry_validator_table",
+      {
+        "packages/workspace-ui/package.json": both,
+        "packages/workspace-ui/src/index.ts": "export const ready = true;\n",
+        "packages/workspace-ui/src/session-keeper.ts":
+          'export { validateCurrentDefinition } from "../../contracts/src/validation.ts";\n',
+      },
+      [
+        `UI_ENTRY:${keeper}:MODULE_DENIED:validator_table_entry:packages/contracts/src/validation.ts`,
+      ],
+    ],
+    [
+      "ui_entry_table_module",
+      {
+        "packages/workspace-ui/package.json": both,
+        "packages/workspace-ui/src/index.ts":
+          'export { validators } from "../../contracts/src/generated/runtime-validators.mjs";\n',
+        "packages/workspace-ui/src/session-keeper.ts":
+          'export { validateSessionRotationResult } from "../../contracts/src/generated/validators/SessionRotationResult.mjs";\n',
+      },
+      [
+        "UI_ENTRY:@morrow/workspace-ui:MODULE_DENIED:runtime_validators:packages/contracts/src/generated/runtime-validators.mjs",
+      ],
+    ],
+    [
+      "ui_entry_too_large",
+      {
+        "packages/workspace-ui/package.json": both,
+        "packages/workspace-ui/src/index.ts": "export const ready = true;\n",
+        "packages/workspace-ui/src/session-keeper.ts": `export const blob = ${JSON.stringify(blob)};\n`,
+      },
+      [/^UI_ENTRY_TOO_LARGE:@morrow\/workspace-ui\/session-keeper:[0-9]+$/],
+    ],
+    [
+      "ui_entry_missing",
+      {
+        "packages/workspace-ui/package.json": manifest({ ".": "./src/index.ts" }),
+        "packages/workspace-ui/src/index.ts": "export const ready = true;\n",
+      },
+      [`UI_ENTRY_MISSING:${keeper}`],
+    ],
+  ];
+  const checks = [];
+  for (const [name, files, expected] of cases) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "morrow-ui-entries-")));
+    try {
+      for (const [path, text] of Object.entries({ ...stubs, ...files })) {
+        mkdirSync(dirname(join(root, path)), { recursive: true });
+        writeFileSync(join(root, path), text);
+      }
+      const { problems } = await probeUiEntries({ root });
+      const passed =
+        problems.length === expected.length &&
+        expected.every((want, i) =>
+          typeof want === "string" ? problems[i] === want : want.test(problems[i]),
+        );
+      checks.push({ name, passed });
+    } catch {
+      checks.push({ name, passed: false });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  return checks;
 }
 
 function listFiles(root) {
@@ -137,6 +300,31 @@ export function negativeChecks() {
         1,
     ],
     [
+      "near_miss_turnstile_url",
+      inspectDistFiles([
+        { path: "assets/x.js", text: '"https://challenges.cloudflare.com/turnstile/v0/api.js"' },
+      ]).length === 1 &&
+        inspectDistFiles([
+          {
+            path: "assets/x.js",
+            text: '"https://challenges.cloudflare.com/turnstile/v0/siteverify"',
+          },
+        ]).length === 1,
+    ],
+    [
+      "csp_source_only_in_headers",
+      inspectDistFiles([
+        {
+          path: "_headers",
+          text: "script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com;",
+        },
+      ]).length === 0 &&
+        inspectDistFiles([{ path: "_headers", text: "script-src https://evil.example;" }])
+          .length === 1 &&
+        inspectDistFiles([{ path: "assets/x.js", text: '"https://challenges.cloudflare.com"' }])
+          .length === 1,
+    ],
+    [
       "inline_script",
       inspectDistFiles([{ path: "index.html", text: "<script>x()</script>" }]).length === 1,
     ],
@@ -156,6 +344,34 @@ export function negativeChecks() {
       }).length === 1,
     ],
     [
+      "validator_table_module",
+      inspectModuleReport({
+        chunks: [
+          {
+            ...report.chunks[0],
+            moduleIds: ["packages/contracts/src/generated/runtime-validators.mjs"],
+          },
+        ],
+      }).length === 1,
+    ],
+    [
+      "validation_module",
+      inspectModuleReport({
+        chunks: [{ ...report.chunks[0], moduleIds: ["packages/contracts/src/validation.ts"] }],
+      }).length === 1,
+    ],
+    [
+      "browser_validator_allowed",
+      inspectModuleReport({
+        chunks: [
+          {
+            ...report.chunks[0],
+            moduleIds: ["packages/contracts/src/generated/validators/SessionRotationResult.mjs"],
+          },
+        ],
+      }).length === 0,
+    ],
+    [
       "stale_report",
       inspectModuleReport(report, ["assets/main.js", "assets/other.js"]).length === 1,
     ],
@@ -164,23 +380,27 @@ export function negativeChecks() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result = verifyWorkspaceDist();
-  const negatives = negativeChecks();
+  const ui = await probeUiEntries();
+  const negatives = [...negativeChecks(), ...(await uiEntryNegativeChecks())];
   const failedNegatives = negatives
     .filter((n) => !n.passed)
     .map((n) => "NEGATIVE_NOT_DETECTED:" + n.name);
-  const problems = [...result.problems, ...failedNegatives];
+  const problems = [...result.problems, ...ui.problems, ...failedNegatives];
   writeArtifact("workspace-web/verify.json", {
     generated_at: new Date().toISOString(),
     scope:
-      "Production dist of apps/workspace-web: fixture isolation, URL allowlist, inline code, manifest, entry size and module report (P14.T01a AC13, AC19). Not a browser or accessibility check.",
+      "Production dist of apps/workspace-web: fixture isolation, URL allowlist, inline code, manifest, entry size and module report (P14.T01a AC13, AC19); each @morrow/workspace-ui JS entry bundled alone by esbuild against the same module denials, and the session keeper's size (P05.T01y). Not a browser or accessibility check.",
     entry_gzip_bytes: result.entryGzipBytes,
     entry_gzip_limit: entryGzipLimit,
     files: result.files ?? 0,
+    ui_entries: ui.entries,
+    session_keeper_gzip_limit: sessionKeeperGzipLimit,
     negative_checks: negatives,
     problems,
   });
   if (problems.length) throw Error(problems.join("\n"));
+  const keeper = ui.entries.find((e) => e.entry === sessionKeeperEntry);
   console.log(
-    `PASS: workspace dist clean (${result.files} files, entry ${result.entryGzipBytes} B gzip, ${negatives.length} deliberate failures detected).`,
+    `PASS: workspace dist clean (${result.files} files, entry ${result.entryGzipBytes} B gzip, ${negatives.length} deliberate failures detected); ${ui.entries.length} UI entries clean, session keeper ${keeper.bytes} B (${keeper.gzip_bytes} B gzip).`,
   );
 }

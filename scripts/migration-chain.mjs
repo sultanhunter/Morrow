@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { repositoryRoot } from "./artifacts.mjs";
+import { migrationSqlViolations } from "./migration-sql.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 export const executeAsRole = /^morrow_[a-z][a-z0-9_]{0,47}$/;
@@ -70,6 +71,9 @@ export function inspectMigrations(
       if (sha256(sql) !== entry.sha256) errors.push("MIGRATION_CHECKSUM");
       if (!/^\s*BEGIN\s*;/i.test(sql) || !/COMMIT\s*;\s*$/i.test(sql))
         errors.push("MIGRATION_TRANSACTION_ENVELOPE");
+      // The runner contract (ADR-0020 item 5, P04.T01j D4): one transaction, no inner
+      // transaction control, no role or session switch, no psql meta-command.
+      errors.push(...migrationSqlViolations(String(sql)));
     }
     if (typeof entry?.executeAs !== "string" || !executeAsRole.test(entry.executeAs))
       errors.push("INVALID_EXECUTE_AS");

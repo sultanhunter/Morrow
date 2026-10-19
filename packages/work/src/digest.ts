@@ -41,9 +41,11 @@ export type WorkCommandType =
   | "question.request"
   | "question.answer"
   | "question.cancel";
+/** The approval record commands (P06.T01b): submit is producer code; decide and withdraw are PR-2 routes. */
+export type ApprovalCommandType = "proposal.submit" | "approval.decide" | "approval.withdraw";
 
 export function workRequestDigest(
-  type: WorkCommandType,
+  type: WorkCommandType | ApprovalCommandType,
   workspaceId: string,
   pathIds: readonly string[],
   body: unknown,

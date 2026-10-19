@@ -137,7 +137,8 @@ for (const row of [
   { outcome: "replayed" },
   { family_id: null },
   { generation_id: "foreign" },
-  { expires_at_ms: String(now + 900001) },
+  // P05.T01y-AC30: a generation may live 30 minutes after admission; one ms more is held.
+  { expires_at_ms: String(now + 1800001) },
   { outcome: "denied" },
 ])
   cases.push(make("malformed_reply_" + cases.length, { row, expected: "held" }));
@@ -158,6 +159,7 @@ cases.push(
 );
 const paths = [
   "packages/identity/src/workos-browser-session-admission.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/workos-authentication-evidence.ts",
   "packages/identity/src/workos-session-token.ts",
   "packages/identity/src/workos-session-status.ts",

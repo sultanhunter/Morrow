@@ -2,7 +2,12 @@
 // bodies of the P05 login, logout, bootstrap and account routes. Hand-written: no eval,
 // no schema compilation, unknown properties ignored. Each (status, outcome) pair maps to
 // fixed copy; no server text or reference is shown.
-import type { Outcome, WorkspaceView } from "@morrow/workspace-ui";
+import type {
+  AccountOverviewView,
+  Outcome,
+  WorkspaceSummary,
+  WorkspaceView,
+} from "@morrow/workspace-ui";
 import { isId, type Reply } from "./client";
 
 export const workosAuthorizeEndpoint = "https://api.workos.com/user_management/authorize";
@@ -60,7 +65,8 @@ export function decodeLoginStart(reply: Reply): Outcome<{ readonly navigateTo: s
     isWorkosAuthorizeUrl(reply.body.authorizationUrl)
   )
     return { kind: "ok", value: { navigateTo: reply.body.authorizationUrl }, replayed: false };
-  // Any other reply, including 503 login_unavailable, is "Sign-in couldn't start".
+  // Any other reply, including 503 login_unavailable, the guard's 403 challenge_required
+  // and challenge_failed and its 429 rate_limited (P05.T01ab), is "Sign-in couldn't start".
   return unavailable(reply.kind === "not_sent" && reply.offline);
 }
 
@@ -108,6 +114,61 @@ export function decodeBootstrap(reply: Reply, workspaceId: string): Outcome<Work
   return unavailable();
 }
 
+const displayText = (value: unknown): value is string =>
+  typeof value === "string" && value.length >= 1 && value.length <= 200;
+
+/**
+ * GET /workspaces 200 (the v1.1 AccountOverview): at most 100 entries in server order,
+ * each with its organization and workspace ids and display names, distinct workspace
+ * ids, `truncated` and `onboarding`. Unknown properties are ignored; anything else is
+ * not decoded, so the read shows unavailable.
+ */
+export function decodeAccountOverview(body: unknown): AccountOverviewView | null {
+  if (!record(body) || body.schemaVersion !== 1) return null;
+  const { workspaces, truncated, onboarding } = body;
+  if (!Array.isArray(workspaces) || workspaces.length > 100 || typeof truncated !== "boolean")
+    return null;
+  if (onboarding !== "available" && onboarding !== "unavailable") return null;
+  const listed: WorkspaceSummary[] = [];
+  for (const entry of workspaces as readonly unknown[]) {
+    if (
+      !record(entry) ||
+      !isId(entry.organizationId) ||
+      !displayText(entry.organizationName) ||
+      !isId(entry.workspaceId) ||
+      !displayText(entry.workspaceName)
+    )
+      return null;
+    listed.push({
+      workspaceId: entry.workspaceId,
+      displayName: entry.workspaceName,
+      organizationName: entry.organizationName,
+    });
+  }
+  if (new Set(listed.map((w) => w.workspaceId)).size !== listed.length) return null;
+  return { workspaces: listed, truncated, onboarding };
+}
+
+/**
+ * POST /organizations 201 `created` or 200 `replayed` (the v1.1 OrganizationSignupResult):
+ * both ids, distinct. Only the workspace id is used: the UI opens `/w/{workspaceId}`.
+ */
+export function decodeOrganizationSignup(
+  body: unknown,
+  status: number,
+): { readonly workspaceId: string } | null {
+  if (!record(body) || body.schemaVersion !== 1) return null;
+  const expected = status === 201 ? "created" : status === 200 ? "replayed" : null;
+  if (expected === null || body.outcome !== expected) return null;
+  if (!isId(body.organizationId) || !isId(body.workspaceId)) return null;
+  if (body.organizationId === body.workspaceId) return null;
+  return { workspaceId: body.workspaceId };
+}
+
+/** The guard's fixed refusal body: nothing ran, so the reply is terminal. */
+const refusedByGuard = (body: unknown) =>
+  record(body) && body.code === "request_denied" && Object.keys(body).length === 1;
+
 /**
  * The account routes (P05.T01x §9): GET /workspaces and POST /organizations. A terminal
  * outcome needs a decoded identity body; anything else stays unavailable (reads) or
@@ -128,8 +189,17 @@ export function identityOutcome<T>(
   if (status === 401) return { kind: "unauthenticated" };
   if (status === 400 && identityBody(body, ["invalid_name"]))
     return { kind: "invalid", field: "name" };
+  // The request guard refused it before anything ran (P05.T01x §9: Origin, Fetch
+  // Metadata, headers, body shape): terminal, with fixed copy.
+  if ((status === 400 || status === 405) && refusedByGuard(body))
+    return { kind: "invalid", field: null };
+  if (status === 403 && refusedByGuard(body))
+    return { kind: "denied", message: "", reference: null };
   if (status === 403 && identityBody(body, ["signup_unavailable"]))
     return { kind: "denied", message: "", reference: null };
+  // P05.T01ab: the api guard answered before the handler ran, so nothing was done.
+  if (status === 403 && identityBody(body, ["challenge_required", "challenge_failed"]))
+    return unavailable();
   if (status === 409 && identityBody(body, ["already_onboarded", "idempotency_conflict"]))
     return {
       kind: "conflict",

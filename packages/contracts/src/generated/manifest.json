@@ -5,10 +5,11 @@
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "8b0f406037233bcbb0204ca489d681deff8f6331aaa51415ec434a700715a2f5",
-    "docs/contracts/schemas/v1.1/capabilities.schema.json": "43c7adce5fc995c6b3528c9c2489a0a616a1736fb3cbd3452eb90320b8a65962",
+    "docs/contracts/schemas/v1.1/core.schema.json": "a04b42f8c8a4674b73499989bb9a6a1de77b9a1d7e3a1e8360cde0aa2cc697a3",
+    "docs/contracts/schemas/v1.1/capabilities.schema.json": "130d463b12255c8597801330c7885455bbea5a736d1d838383ebb7c580932d7d",
     "docs/contracts/schemas/v1.1/billing.schema.json": "763f73b99def0b5d8b2083f0084c9504e823fa81a3e772db8b3c5a45f94d9490"
   },
+  "event_registry": "db4a4f3a1b8735cf1203a778ce861a22601e48125f6323356a2d23e228ed46a7",
   "replacements": [
     {
       "kind": "capability_body",
@@ -87,20 +88,27 @@
       "name": "CostAllocation",
       "replaces": "billing:CostAllocation",
       "adr": "ADR-0015"
+    },
+    {
+      "kind": "definition",
+      "name": "EventEnvelope",
+      "replaces": "core:EventEnvelope",
+      "adr": "ADR-0016"
     }
   ],
-  "definitions": 392,
+  "definitions": 506,
   "definitions_by_source": {
     "core": 116,
     "capabilities": 206,
     "billing": 12,
-    "core-v1.1": 24,
-    "capabilities-v1.1": 10,
+    "core-v1.1": 122,
+    "capabilities-v1.1": 26,
     "billing-v1.1": 24
   },
-  "current_definitions": 138,
+  "current_definitions": 235,
   "current_billing_definitions": 31,
-  "capabilities": 105,
-  "capability_body_overrides": 10,
-  "generated_sha256": "916f6ffb07ed7de4819d17afe84a28963f6d4ffd509e4253c1d372569946634e"
+  "capabilities": 113,
+  "capability_body_overrides": 26,
+  "event_types": 22,
+  "generated_sha256": "6a5bcb86558d3357664aba217c3b47bbac37afec0ca419f0186d9fef727c8846"
 }

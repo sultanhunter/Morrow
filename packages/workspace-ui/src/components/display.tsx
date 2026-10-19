@@ -19,6 +19,7 @@ const paths = {
   close: ["m6 6 12 12 M6 18 18 6"],
   check: ["m5 12 4 4L19 6"],
   chevron: ["m6 9 6 6 6-6"],
+  forward: ["m9 6 6 6-6 6"],
   document: ["M5 2h9l5 5v15H5z", "M14 2v6h5"],
 } as const;
 export type IconName = keyof typeof paths;

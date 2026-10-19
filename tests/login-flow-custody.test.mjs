@@ -176,6 +176,8 @@ test("safe exact dedicated login and role attributes required", async () => {
     { role: "morrow_api" },
     { login: "postgres" },
     { role_member: true },
+    // ADR-0020 (P04.T01j D5): an unknown preflight fails closed.
+    { role_member: null },
     { owner_member: true },
     { rolreplication: true },
     { rolinherit: true },

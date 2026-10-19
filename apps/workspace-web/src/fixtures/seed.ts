@@ -4,6 +4,7 @@
 import type { GoalView, PersonRef, QuestionView, TaskView } from "@morrow/workspace-ui";
 
 export const fixtureWorkspace = { id: "ws-linen", displayName: "Linen & Form", policyRevision: 7 };
+export const fixtureOrganizationName = "Linen & Form (sample)";
 const person = (principalId: string): PersonRef => ({
   principalId,
   kind: "human",

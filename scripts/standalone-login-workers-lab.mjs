@@ -230,6 +230,7 @@ const paths = [
   "packages/identity/src/standalone-login-protocol.ts",
   "packages/identity/src/login-preauth-control.ts",
   "packages/identity/src/login-flow-custody.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/authentication-exchange-admission.ts",
   "packages/identity/src/workos-session-token.ts",
   "packages/identity/src/workos-session-status-json.ts",

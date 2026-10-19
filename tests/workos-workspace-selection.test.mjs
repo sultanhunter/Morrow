@@ -238,6 +238,8 @@ test("dedicated role requires exact login and all unsafe flags and role membersh
       .map((k) => ({ [k]: true })),
     { extra: false },
     { role: null },
+    // ADR-0020 (P04.T01j D5): an unknown preflight fails closed.
+    { role_member: null },
   ]) {
     const s = await setup({
       result: (stage, standard) =>

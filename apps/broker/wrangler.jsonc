@@ -1,7 +1,8 @@
 // morrow-<env>-broker (ADR-0007): no public route, no workers.dev or preview
 // URL; reachable only through the ApiBroker service-binding entrypoint. It is
-// the only Worker that binds provider credentials: the WorkOS API key and the
-// eight Neon runtime-role passwords (`brokerRequiredSecrets`). No identifier is
+// the only Worker that binds provider credentials: the WorkOS API key, the
+// Turnstile secret (P05.T01ab, ADR-0019 item 6) and the eight Neon runtime-role
+// passwords (`brokerRequiredSecrets`). No identifier is
 // committed; the first hosted deploy fails closed until P04.T01i supplies
 // `wrangler deploy --secrets-file`. Never add merchant or model credentials
 // under the v0 trust model.
@@ -22,6 +23,7 @@
   "secrets": {
     "required": [
       "WORKOS_API_KEY",
+      "TURNSTILE_SECRET_KEY",
       "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGIN",
       "MORROW_DB_PASSWORD_MORROW_IDENTITY_PREAUTH",
       "MORROW_DB_PASSWORD_MORROW_IDENTITY_SESSIONS",
@@ -39,6 +41,7 @@
       "secrets": {
         "required": [
           "WORKOS_API_KEY",
+          "TURNSTILE_SECRET_KEY",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGIN",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_PREAUTH",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_SESSIONS",
@@ -56,6 +59,7 @@
       "secrets": {
         "required": [
           "WORKOS_API_KEY",
+          "TURNSTILE_SECRET_KEY",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGIN",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_PREAUTH",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_SESSIONS",

@@ -156,6 +156,55 @@ test("ordinary shared UI imports allowed", () => {
   ])
     assert.deepEqual(inspectImports("apps/workspace-web/src/test.tsx", code), [], code);
 });
+// P05.T01y: browser code validates through the per-definition modules of the closed list,
+// never through the validator table or the capability client that imports it.
+test("UI validates only through listed per-definition validator modules", () => {
+  const keeper = "packages/workspace-ui/src/session-keeper.ts";
+  assert.deepEqual(
+    inspectImports(
+      keeper,
+      "import {validateSessionRotationResult} from '@morrow/contracts/validators/SessionRotationResult'",
+    ),
+    [],
+  );
+  for (const code of [
+    "import {validateCurrentDefinition} from '@morrow/contracts/validation'",
+    "import {createCapabilityClient} from '@morrow/contracts/client'",
+    "import {validateProposal} from '@morrow/contracts/validators/Proposal'",
+  ])
+    assert.ok(inspectImports(keeper, code).includes("UI_UNREVIEWED_DEPENDENCY"), code);
+  for (const code of [
+    "import {validateDefinition} from '../../contracts/src/validation'",
+    "import {validateDefinition} from '../../contracts/src/validation.ts'",
+    "import {createCapabilityClient} from '../../contracts/src/client'",
+    "import {validators} from '../../contracts/src/generated/runtime-validators.mjs'",
+    // Spellings esbuild and Vite also resolve to the table.
+    "import {validateDefinition} from '../../contracts/src/validation.js'",
+    "import {validateDefinition} from '../../contracts/src/validation.mjs'",
+    "import {createCapabilityClient} from '../../contracts/src/client.js'",
+    "import {validateDefinition} from '../../contracts/src/validation.ts?x'",
+    "import {validateDefinition} from '../../contracts/src/validation.js#x'",
+    "import {createCapabilityClient} from '../../contracts/src/client?raw'",
+    "import {validateDefinition} from '../../contracts/src/Validation.ts'",
+    "export {validateDefinition} from '../../contracts/src/validation.js'",
+    "const v = import('../../contracts/src/validation.js')",
+  ])
+    assert.ok(inspectImports(keeper, code).includes("UI_VALIDATOR_TABLE_IMPORT"), code);
+  // Neighbouring contract sources keep their own rules.
+  for (const code of [
+    "import {routes} from '../../contracts/src/routes.ts'",
+    "import {x} from '../../contracts/src/validation-notes.ts'",
+  ])
+    assert.ok(!inspectImports(keeper, code).includes("UI_VALIDATOR_TABLE_IMPORT"), code);
+  // Server packages keep the table.
+  assert.deepEqual(
+    inspectImports(
+      "packages/identity/src/x.ts",
+      "import {validateDefinition} from '@morrow/contracts/validation'",
+    ),
+    [],
+  );
+});
 // P14.T01a §4.11 (a) and AC13: fixture code is reachable only from fixture-main.tsx.
 test("only the fixture entry, the fixtures themselves and tests import src/fixtures", () => {
   const code = "import {createFixtureAdapter} from './fixtures/adapter';";

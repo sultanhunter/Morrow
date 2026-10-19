@@ -68,6 +68,56 @@ test("AC05: at body v2 the start is exactly {schemaVersion:2}; at v1 without a w
   await v1.port.session.startSignIn("ws-1");
   assert.equal(v1.calls[0].init.body, '{"schemaVersion":1,"workspaceId":"ws-1"}');
 });
+test("P05.T01ab-AC08: a challenge token travels only as X-Morrow-Challenge on the start POST", async () => {
+  const token = "tok." + "A".repeat(64);
+  const { calls, port: p } = port(() =>
+    json(200, { schemaVersion: 1, authorizationUrl: authorize }),
+  );
+  assert.equal((await p.session.startSignIn("ws-1", token)).kind, "ok");
+  assert.equal(headers(calls[0].init).get("x-morrow-challenge"), token);
+  assert.equal(calls[0].init.body, '{"schemaVersion":2}');
+  await p.session.startSignIn("ws-1", null);
+  assert.equal(headers(calls[1].init).has("x-morrow-challenge"), false);
+  // A malformed token is refused before anything is sent.
+  for (const bad of ["", "a b", "a".repeat(2049), "tok\u00e9"])
+    assert.equal((await p.session.startSignIn("ws-1", bad)).kind, "invalid");
+  assert.equal(calls.length, 2);
+  assert.deepEqual(requests.login(2, null, token), {
+    method: "POST",
+    path: "/auth/login",
+    body: '{"schemaVersion":2}',
+    key: null,
+    challenge: token,
+  });
+  assert.equal(requests.login(2, null, "a b"), null);
+  assert.equal(Object.hasOwn(requests.login(2, null), "challenge"), false);
+  // The client itself refuses a malformed token and sends nothing.
+  const recorded = [];
+  const client = createClient({
+    transport: async (path, init) => (recorded.push(init), json(200, {})),
+    online: () => true,
+  });
+  assert.deepEqual(await client.post("/auth/login", "{}", null, "a/b"), {
+    kind: "not_sent",
+    offline: false,
+  });
+  assert.equal(recorded.length, 0);
+});
+test("P05.T01ab: a guard 403 or 429 on the start is 'couldn't start', and nothing navigates", async () => {
+  for (const [status, outcome] of [
+    [403, "challenge_required"],
+    [403, "challenge_failed"],
+    [429, "rate_limited"],
+  ]) {
+    const { port: p } = port(() =>
+      json(status, { schemaVersion: 1, outcome }, status === 429 ? { "retry-after": "60" } : {}),
+    );
+    assert.deepEqual(await p.session.startSignIn("ws-1", "tok.a"), {
+      kind: "unavailable",
+      offline: false,
+    });
+  }
+});
 test("AC05: only the pinned WorkOS origin and path navigate; anything else is 'couldn't start'", async () => {
   for (const authorizationUrl of [
     "https://evil.example/user_management/authorize?x=1",
@@ -226,7 +276,14 @@ test("AC08: only documented query parameters, with the cursor encoded", () => {
       assert.ok(["after", "limit", "goalId", "respondent", "status"].includes(key), key);
 });
 test("§4.2: an uncomposed method returns not_in_build without a request", async () => {
-  const { calls, port: p } = port(() => json(200, {}));
+  // The PR-1 table (session and bootstrap only): every other method sends nothing.
+  const pr1 = Object.fromEntries(
+    Object.keys(composed).map((method) => [
+      method,
+      ["session.startSignIn", "session.signOut", "workspace.bootstrap"].includes(method),
+    ]),
+  );
+  const { calls, port: p } = port(() => json(200, {}), { composed: pr1 });
   for (const outcome of [
     await p.account.overview(),
     await p.work.listGoals("ws", null),
@@ -239,12 +296,9 @@ test("§4.2: an uncomposed method returns not_in_build without a request", async
   ])
     assert.deepEqual(outcome, { kind: "not_in_build" });
   assert.equal(calls.length, 0);
-  assert.deepEqual(
-    Object.entries(composed)
-      .filter(([, on]) => on)
-      .map(([method]) => method),
-    ["session.startSignIn", "session.signOut", "workspace.bootstrap"],
-  );
+  // PR-2 composes account.* and work.* (tests/workspace-web-account-work.test.mjs).
+  assert.equal(composed["account.overview"], true);
+  assert.equal(composed["people.list"], false);
 });
 test("sign-out sends {schemaVersion:1} with no key; a lost reply is uncertain, offline sends nothing", async () => {
   const ended = port(() => json(200, { schemaVersion: 1, outcome: "session_ended" }));

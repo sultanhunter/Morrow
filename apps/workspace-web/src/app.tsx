@@ -28,6 +28,7 @@ import {
   useRead,
   useServices,
   useServicesVersion,
+  type ChallengeHost,
   type Composed,
   type Id,
   type Outcome,
@@ -43,7 +44,13 @@ import { createRouter, type LeaveRequest, type Router } from "./router";
 
 export type SessionView =
   | { readonly kind: "active" }
-  | { readonly kind: "expired"; readonly workspaceId: Id | null; readonly draftsDropped: boolean }
+  | {
+      readonly kind: "expired";
+      readonly workspaceId: Id | null;
+      readonly draftsDropped: boolean;
+      /** The account landing's first read was a 401 and nothing private was shown. */
+      readonly fresh: boolean;
+    }
   | {
       readonly kind: "workspace_unavailable";
       readonly workspaceId: Id;
@@ -71,7 +78,16 @@ export interface AppProps {
   /** Created once per page load by the entry, outside React (StrictMode-safe). */
   readonly runtime: AppRuntime;
   readonly fixture?: ReactNode;
+  /** P05.T01ab: the bot-challenge widget host; without one no form asks for a token. */
+  readonly challenge?: ChallengeHost;
 }
+
+/** A host for builds that ask for no challenge (the fixture build). */
+export const noChallenge: ChallengeHost = () => ({
+  token: () => Promise.resolve(null),
+  reset: () => {},
+  remove: () => {},
+});
 
 export interface AppRuntime {
   readonly router: Router;
@@ -148,7 +164,9 @@ export function screenTitle(view: {
   readonly session: SessionView["kind"];
   readonly match: RouteMatch | null;
   readonly entryFailed: boolean;
+  readonly fresh?: boolean;
 }): string {
+  if (view.session === "expired" && view.fresh) return copy.signIn.title;
   if (view.session !== "active") return sessionTitles[view.session];
   if (!view.match) return copy.notFound.title;
   if (view.entryFailed) return copy.workspace.loadFailedTitle;
@@ -166,6 +184,7 @@ export function App({
   loadRoot,
   runtime,
   fixture,
+  challenge = noChallenge,
 }: AppProps) {
   const { router, guard, pending } = runtime;
   const route = useSyncExternalStore(router.subscribe, router.state);
@@ -186,13 +205,17 @@ export function App({
     setLeave(null);
     guard.bypass();
   };
+  // Whether any private reply (a workspace entry, the account list or a work read) was
+  // shown on this page load: a first 401 at `/` before that is the signed-out entry.
+  const privateShown = useRef(false);
   const expire = (workspaceId: Id | null) => {
     const draftsDropped = guard.hasDirty();
     const intended = intendedOnExpiry(router.state().path, runtime.restored);
     if (intended === null) clearIntended();
     else storeIntended(intended);
     ended();
-    setSession({ kind: "expired", workspaceId, draftsDropped });
+    const fresh = workspaceId === null && !privateShown.current;
+    setSession({ kind: "expired", workspaceId, draftsDropped, fresh });
   };
   // Concurrent 401s (two panels, a read and a command) are handled once: one probe.
   const handling = useRef(false);
@@ -235,7 +258,14 @@ export function App({
 
   // Every port reply passes here: a 401 ends the private view (§4.6).
   const guarded = useMemo(
-    () => guardPort(port, (ws) => void unauthenticatedRef.current({ workspaceId: ws })),
+    () =>
+      guardPort(
+        port,
+        (ws) => void unauthenticatedRef.current({ workspaceId: ws }),
+        () => {
+          privateShown.current = true;
+        },
+      ),
     [port],
   );
 
@@ -279,13 +309,14 @@ export function App({
       dismissMarker: (marker) => pending.dismiss(marker),
       subscribe: (listener) => pending.subscribe(listener),
       version: () => pending.version(),
-      startSignIn: async (workspaceId) => {
-        const outcome = await port.session.startSignIn(workspaceId);
+      startSignIn: async (workspaceId, token) => {
+        const outcome = await port.session.startSignIn(workspaceId, token);
         if (outcome.kind !== "ok") return "failed";
         assignLocation(outcome.value.navigateTo);
         return "started";
       },
       signOut: () => void signOutRef.current(),
+      challenge,
     }),
     // Stable for the app's life: the props it reads never change, callbacks read refs.
     [guarded],
@@ -332,6 +363,7 @@ export function App({
       if (!live) return;
       if (outcome.kind === "ok") {
         if (runtime.restored) runtime.restored.consumed = true;
+        privateShown.current = true;
         setEntry({ ws, state: "ok", view: outcome.value });
       } else if (outcome.kind === "unauthenticated")
         void unauthenticatedRef.current({ workspaceId: ws });
@@ -347,6 +379,7 @@ export function App({
     session: session.kind,
     match: route.match,
     entryFailed: ws !== null && entry?.ws === ws && entry.state === "failed",
+    fresh: session.kind === "expired" && session.fresh,
   });
   useEffect(() => {
     document.title = `${title} · ${copy.brand}`;
@@ -409,7 +442,11 @@ export function App({
     );
   else if (session.kind === "expired")
     content = entryLayout(
-      <SignInScreen workspaceId={session.workspaceId} draftsDropped={session.draftsDropped} />,
+      <SignInScreen
+        workspaceId={session.workspaceId}
+        draftsDropped={session.draftsDropped}
+        fresh={session.fresh}
+      />,
     );
   else if (session.kind === "workspace_unavailable")
     content = entryLayout(
@@ -430,7 +467,10 @@ export function App({
       />,
     );
   else if (!route.match) content = entryLayout(<NotFoundScreen />);
-  else if (route.match.id === "account") content = entryLayout(<AccountScreen />);
+  else if (route.match.id === "account")
+    content = entryLayout(
+      <AccountScreen signOutState={signOutState} onSignOut={() => void signOutRef.current()} />,
+    );
   else if (ws === null || !entry || entry.ws !== ws || entry.state === "loading")
     content = entryLayout(<StateView kind="loading" />);
   else if (entry.state === "failed")
@@ -522,10 +562,14 @@ function WorkspaceFrame({
   );
 }
 
-/** Wraps a port so every `unauthenticated` reply reaches the app's §4.6 handling. */
+/**
+ * Wraps a port so every `unauthenticated` reply reaches the app's §4.6 handling, and
+ * every confirmed private reply is noted (`onPrivate`).
+ */
 export function guardPort(
   port: WorkspacePort,
   onUnauthenticated: (workspaceId: Id | null) => void,
+  onPrivate: () => void = () => {},
 ): WorkspacePort {
   const watch =
     <A extends unknown[], R>(
@@ -535,6 +579,7 @@ export function guardPort(
     async (...args: A): Promise<Outcome<R>> => {
       const outcome = await fn(...args);
       if (outcome.kind === "unauthenticated") onUnauthenticated(scope(args));
+      else if (outcome.kind === "ok") onPrivate();
       return outcome;
     };
   const first = (args: readonly unknown[]) => (typeof args[0] === "string" ? args[0] : null);

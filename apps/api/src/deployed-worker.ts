@@ -3,11 +3,16 @@ import {
   workosSessionNamespace,
   type ApiBrokerRpc,
 } from "../../../packages/identity/src/broker-protocol.js";
-import type { ManagedWorkspaceApiDependencies } from "../../../packages/identity/src/managed-workspace-api.js";
+import {
+  managedApiRoute,
+  type ManagedWorkspaceApiDependencies,
+} from "../../../packages/identity/src/managed-workspace-api.js";
 import { captureManagedWorkspaceBinding } from "../../../packages/identity/src/managed-workspace-binding.js";
 import { createNeonWorkConnector } from "../../../packages/work/src/neon-connector.js";
 import type { WorkApiDependencies } from "../../../packages/work/src/http.js";
+import { createAbuseGuard, type AbuseGuard } from "./abuse-guard.js";
 import {
+  createBrokerChallengeVerifier,
   createBrokerHealth,
   createBrokerNeonCredentialBroker,
   createBrokerSessionPageReader,
@@ -28,6 +33,8 @@ type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
 type WorkspaceApi = ReturnType<typeof createWorkspaceApiWorker>;
 interface Selected {
   readonly api: WorkspaceApi;
+  // P05.T01ab: present whenever the environment mapped; it runs before the router.
+  readonly guard?: AbuseGuard;
   readonly readiness?: () => Promise<ApiKeyringReadiness>;
   readonly brokerHealth?: () => Promise<boolean>;
   keyringLogged: boolean;
@@ -103,6 +110,7 @@ function select(env: unknown): Selected {
       const composed = composeApiDependencies(mapped.values, mapped.broker, () => Date.now());
       selected = {
         api: createWorkspaceApiWorker(composed.dependencies, composed.work),
+        guard: createAbuseGuard(mapped.guard, createBrokerChallengeVerifier(mapped.broker)),
         readiness: composed.readiness,
         brokerHealth: composed.brokerHealth,
         keyringLogged: false,
@@ -165,7 +173,12 @@ export default {
       pathname = "";
     }
     if (pathname === "/healthz") return healthz(request, selected);
-    // No await precedes the selected owner; its response is returned unchanged.
-    return selected.api.fetch(request, env, ctx);
+    const guard = selected.guard;
+    // An unbound api has no guard: every route answers its deny-all response.
+    if (!guard) return selected.api.fetch(request, env, ctx);
+    if (managedApiRoute(pathname) === "challenge")
+      return Promise.resolve(guard.configurationResponse(request));
+    // The guard runs before the router and any SQL; the response is returned unchanged.
+    return guard.handle(request, (forwarded) => selected.api.fetch(forwarded, env, ctx));
   },
 };

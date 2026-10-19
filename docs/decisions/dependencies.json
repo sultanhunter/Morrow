@@ -80,10 +80,9 @@
     "status": "Design recorded",
     "activation": "blocked_until_qualified",
     "sources": [
-      "S65",
-      "S66",
-      "S67",
-      "S68"
+      "S150",
+      "S153",
+      "S160"
     ],
     "design_sequence": 17,
     "engineering_status": "not_implemented",
@@ -291,10 +290,11 @@
     "status": "Design recorded",
     "activation": "blocked_until_qualified",
     "sources": [
-      "S65",
-      "S66",
-      "S67",
-      "S68"
+      "S149",
+      "S150",
+      "S151",
+      "S152",
+      "S153"
     ],
     "design_sequence": 17,
     "engineering_status": "not_implemented",

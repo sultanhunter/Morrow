@@ -325,10 +325,26 @@ test("GET framing body is rejected before controller", async () => {
   );
   assert.equal(calls, 0);
 });
+test("P05.T01y-AC30: the callback session cookie may live the full 30-minute generation", async () => {
+  await serve(
+    (origin) =>
+      bound(origin, async (_req, sink) => sink(plan(303, { cookies: [cookie("session", 1800)] }))),
+    async (origin) => {
+      const r = await raw(origin, "/auth/workos/callback?code=x&state=y", [
+        "Host",
+        new URL(origin).host,
+      ]);
+      assert.equal(r.status, 303);
+      assert.deepEqual(r.headers["set-cookie"], [cookie("session", 1800)]);
+    },
+  );
+});
 for (const [name, output] of [
   ["comma-combined cookie", plan(303, { cookies: [cookie() + ", " + cookie()] })],
   ["Domain attribute", plan(303, { cookies: [cookie() + "; Domain=example.com"] })],
-  ["session lifetime extension", plan(303, { cookies: [cookie("session", 901)] })],
+  // P05.T01y: a generation lives at most 30 idle minutes.
+  ["session lifetime extension", plan(303, { cookies: [cookie("session", 1801)] })],
+  ["session lifetime padded", plan(303, { cookies: [cookie("session", "01800")] })],
   ["preauth on callback", plan(303, { cookies: [cookie("login")] })],
   ["cookie as a response header", plan(303, { headers: [["set-cookie", cookie()]] })],
   ["unbounded body", plan(303, { bodyText: "x".repeat(8193) })],

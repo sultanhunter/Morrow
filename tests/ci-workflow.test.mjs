@@ -45,7 +45,8 @@ const labsOutsideCi = (name) =>
   name === "lab:edge-postgresql-local" ||
   name === "lab:workspace-ui-journey-local" ||
   name.startsWith("lab:e2b-");
-// The P14.T01a `ui` job installs Chromium and runs 130 browser cases plus the journey lab.
+// The P14.T01a `ui` job installs Chromium and runs 214 browser checks (172 state cases and
+// 21 keyboard walks at two widths) plus the journey lab.
 const timeoutLimit = (id) => (id === "ui" ? 20 : 15);
 
 // Parses the YAML subset these workflows use: block maps and sequences, plain, quoted and
@@ -967,4 +968,19 @@ test("the ui job builds, runs both UI matrices and the browser journey, after in
   assert.equal(scripts["lab:group:ui"], "npm run lab:workspace-ui-journey");
   assert.match(scripts.ci, /npm run build && npm run verify:workspace-web/);
   assert.match(scripts["ci:static"], /npm run build && npm run verify:workspace-web/);
+});
+
+// P04.T01j (ADR-0020): the non-superuser administrator lab runs in the pg-core group only,
+// so CI reaches it exactly once; it needs no job of its own.
+test("the createrole administrator lab is in pg-core and runs once in CI", () => {
+  const holding = Object.entries(scripts)
+    .filter(([name]) => name.startsWith("lab:group:"))
+    .filter(([, text]) => rootScriptsRun(text).includes("lab:createrole-administrator"))
+    .map(([name]) => name);
+  assert.deepEqual(holding, ["lab:group:pg-core"]);
+  assert.equal(
+    scripts["lab:createrole-administrator"],
+    "node --import tsx scripts/createrole-administrator-lab.mjs",
+  );
+  assert.equal(scriptsReachedByCi().get("lab:createrole-administrator"), 1);
 });

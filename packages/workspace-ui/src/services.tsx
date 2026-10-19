@@ -11,7 +11,15 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { Id } from "./model";
-import type { Command, Composed, Outcome, WorkspacePort } from "./port";
+import type {
+  ChallengeAction,
+  ChallengeHost,
+  ChallengeWidget,
+  Command,
+  Composed,
+  Outcome,
+  WorkspacePort,
+} from "./port";
 
 export type MarkerKind =
   | "goal"
@@ -47,8 +55,10 @@ export interface UiServices {
   dismissMarker(marker: Marker): void;
   subscribe(listener: () => void): () => void;
   version(): number;
-  startSignIn(workspaceId: Id | null): Promise<"started" | "failed">;
+  startSignIn(workspaceId: Id | null, challenge: string | null): Promise<"started" | "failed">;
   signOut(): void;
+  /** P05.T01ab: mounts the bot-challenge widget of one guarded form. */
+  readonly challenge: ChallengeHost;
 }
 
 const ServicesContext = createContext<UiServices | null>(null);
@@ -123,7 +133,16 @@ export type CommandPhase<T> =
 export function useCommand<B, T>(options: {
   readonly marker: { readonly workspaceId: Id; readonly kind: MarkerKind } | null;
   readonly send: (command: Command<B>) => Promise<Outcome<T>>;
-  readonly onOutcome?: (outcome: Outcome<T>) => void;
+  /**
+   * `sent.body` is the body the reply answers. `sent.current` is false when the form was
+   * reset (a dialog closed, or reopened) while the reply was outstanding: the form no
+   * longer shows that draft, so it must not be cleared or closed, but the outcome (a
+   * confirmed record) is still reported. A stale reply leaves the form's phase alone.
+   */
+  readonly onOutcome?: (
+    outcome: Outcome<T>,
+    sent: { readonly body: B; readonly current: boolean },
+  ) => void;
 }) {
   const services = useServices();
   const command = useRef<Command<B> | null>(null);
@@ -139,25 +158,26 @@ export function useCommand<B, T>(options: {
     };
   }, [services]);
   const dispatch = useCallback(
-    async (current: Command<B>, checking: boolean) => {
+    async (sent: Command<B>, checking: boolean) => {
       setPhase(checking ? { phase: "uncertain", checking: true } : { phase: "sending" });
-      const outcome = await services.runCommand(current, latest.current.marker, () =>
-        latest.current.send(current),
+      const outcome = await services.runCommand(sent, latest.current.marker, () =>
+        latest.current.send(sent),
       );
       if (!live.current) return;
+      const current = command.current === sent;
       if (outcome.kind === "uncertain") {
-        setPhase({ phase: "uncertain", checking: false });
+        if (current) setPhase({ phase: "uncertain", checking: false });
         return;
       }
       if (outcome.kind === "unauthenticated") return; // the app ends the session view
       if (
         ["ok", "invalid", "denied", "not_found", "conflict", "not_in_build"].includes(outcome.kind)
       ) {
-        services.releaseCommand(current.key);
-        command.current = null;
+        services.releaseCommand(sent.key);
+        if (current) command.current = null;
       }
-      setPhase({ phase: "settled", outcome });
-      latest.current.onOutcome?.(outcome);
+      if (current) setPhase({ phase: "settled", outcome });
+      latest.current.onOutcome?.(outcome, { body: sent.body, current });
     },
     [services],
   );
@@ -188,4 +208,45 @@ export function useCommand<B, T>(options: {
   }, [services]);
   const busy = phase.phase === "sending" || phase.phase === "uncertain";
   return { phase, submit, retry, checkAgain, reset, busy } as const;
+}
+
+/**
+ * P05.T01ab: the invisible bot challenge of one guarded form (sign-in and the
+ * create-organization form). Render `host` inside the form; `run` asks for a fresh
+ * token, sends with it and resets the widget afterwards, so every POST carries its own
+ * single-use token. No token means `"challenge_failed"` and nothing is sent.
+ */
+export function useChallenge(action: ChallengeAction) {
+  const services = useServices();
+  const element = useRef<HTMLDivElement | null>(null);
+  const widget = useRef<ChallengeWidget | null>(null);
+  useEffect(() => {
+    if (element.current && !widget.current)
+      widget.current = services.challenge(action, element.current);
+    return () => {
+      widget.current?.remove();
+      widget.current = null;
+    };
+  }, [services, action]);
+  const run = useCallback(
+    async <T,>(send: (token: string | null) => Promise<T>): Promise<T | "challenge_failed"> => {
+      if (!widget.current && element.current)
+        widget.current = services.challenge(action, element.current);
+      const current = widget.current;
+      if (!current) return "challenge_failed";
+      const token = await current.token();
+      if (token === "failed") {
+        current.reset();
+        return "challenge_failed";
+      }
+      try {
+        return await send(token);
+      } finally {
+        current.reset();
+      }
+    },
+    [services, action],
+  );
+  const host = <div ref={element} className="challenge-host" />;
+  return { host, run } as const;
 }

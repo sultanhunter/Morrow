@@ -9,12 +9,15 @@ import {
 } from "../scripts/delivery-checks.mjs";
 for (const [name, text] of [
   ["openai", "sk-proj-" + "A".repeat(50)],
+  ["anthropic", "sk-ant-" + "api03-" + "E".repeat(60)],
   ["github", "ghp_" + "B".repeat(40)],
   ["aws", "AKIA" + "C".repeat(16)],
   ["private", "-----BEGIN " + "PRIVATE KEY-----"],
   ["literal", 'client_secret = "' + "D".repeat(24) + '"'],
 ])
   test("fixture secret denies: " + name, () => assert.ok(inspectSecrets(text).length));
+test("an Anthropic API key is named as one", () =>
+  assert.ok(inspectSecrets("sk-ant-" + "api03-" + "F".repeat(60)).includes("anthropic_key")));
 test("reference/digest does not masquerade as credential", () =>
   assert.deepEqual(inspectSecrets("credentialRef: account-main; digest: " + "a".repeat(64)), []));
 // P04.T01i PR-B: Cloudflare API tokens (no prefix, so only where they are used) and
@@ -72,6 +75,27 @@ test("non-transactional migration needs separate reviewed path", () =>
   assert.ok(
     inspectMigrations(manifest, { [file]: "SELECT 1;" }).includes("MIGRATION_TRANSACTION_ENVELOPE"),
   ));
+// ADR-0020 item 5: the runner wraps each file in its own transaction and role, so a file
+// must be exactly one transaction and must never switch role.
+const withSql = (text) => ({
+  ...manifest,
+  migrations: [
+    { ...manifest.migrations[0], sha256: createHash("sha256").update(text).digest("hex") },
+  ],
+});
+for (const [text, code] of [
+  ["BEGIN; SELECT 1; COMMIT; BEGIN; SELECT 2; COMMIT;", "MIGRATION_TRANSACTION_CONTROL"],
+  ["BEGIN; SAVEPOINT a; COMMIT;", "MIGRATION_TRANSACTION_CONTROL"],
+  ["BEGIN; RESET ROLE; SELECT 1; COMMIT;", "MIGRATION_ROLE_SWITCH"],
+  [
+    "BEGIN; DO $$ BEGIN PERFORM set_config('role','x',true); END $$; COMMIT;",
+    "MIGRATION_ROLE_SWITCH",
+  ],
+  ["BEGIN;\n\\c - other\nSELECT 1; COMMIT;", "MIGRATION_PSQL_META_COMMAND"],
+])
+  test("migration runner contract denies " + code, () =>
+    assert.deepEqual(inspectMigrations(withSql(text), { [file]: text }), [code]),
+  );
 test("reordered migrations deny", () =>
   assert.ok(
     inspectMigrations(

@@ -14,6 +14,7 @@ import {
   workTables,
 } from "./registry.mjs";
 import { conformanceReport, recordConformance } from "./report.mjs";
+import { morrowSetRowsSql } from "../../scripts/fixtures/createrole-administrator.mjs";
 
 conformanceReport("static");
 
@@ -21,11 +22,17 @@ let db, release, started;
 before(async () => {
   let ready;
   const opened = new Promise((resolve) => (ready = resolve));
-  started = withWorkDatabase("P06.T01a.conformance-static", (context) => {
-    db = context;
-    ready();
-    return new Promise((resolve) => (release = resolve));
-  });
+  // The hosted administrator shape (ADR-0020, P04.T01j D7): a non-superuser CREATEROLE
+  // login applies the chain with the D4 runner protocol.
+  started = withWorkDatabase(
+    "P06.T01a.conformance-static",
+    (context) => {
+      db = context;
+      ready();
+      return new Promise((resolve) => (release = resolve));
+    },
+    { administrator: "createrole" },
+  );
   await Promise.race([opened, started]);
   assert.ok(db, "database started");
 });
@@ -33,7 +40,8 @@ after(async () => {
   release?.();
   await started;
 });
-const rows = (query) => db.rows(query);
+// The options carry `role` (SET ROLE before the query) through to the harness.
+const rows = (query, options) => db.rows(query, options);
 const names = (list) => [...list].sort();
 const tenantTables = Object.entries(workTables)
   .filter(([, t]) => t.class !== "platform")
@@ -126,10 +134,15 @@ test("S3: tenant keys, composite parents and the one tenant policy template", ()
       }
     }
   }
-  const platform = rows(
-    "SELECT count(*)::int AS n FROM pg_attribute WHERE attrelid='morrow_work.transition_rules'::regclass AND attname IN ('organization_id','workspace_id')",
-  );
-  assert.equal(platform[0].n, 0);
+  for (const [table, spec] of Object.entries(workTables).filter(
+    ([, t]) => t.class === "platform",
+  )) {
+    const platform = rows(
+      `SELECT count(*)::int AS n FROM pg_attribute WHERE attrelid='morrow_work.${table}'::regclass AND attname IN ('organization_id','workspace_id')`,
+    );
+    assert.equal(platform[0].n, 0, table);
+    assert.deepEqual(spec.parents, [], table);
+  }
   recordConformance("S3", true);
 });
 
@@ -161,10 +174,12 @@ test("S4: the api role reads readable tables column by column; no runtime DELETE
       );
       if (role !== workRoles.owner) assert.ok(!p.d && !p.t, role + " " + table);
     }
-  const platformApi = rows(
-    "SELECT has_any_column_privilege('morrow_work_api','morrow_work.transition_rules','SELECT') AS s",
-  );
-  assert.equal(platformApi[0].s, false);
+  for (const [table] of Object.entries(workTables).filter(([, t]) => t.class === "platform")) {
+    const platformApi = rows(
+      `SELECT has_any_column_privilege('morrow_work_api','morrow_work.${table}','SELECT') AS s`,
+    );
+    assert.equal(platformApi[0].s, false, table);
+  }
   const views = rows(
     "SELECT relname, reloptions FROM pg_class WHERE relnamespace='morrow_work'::regnamespace AND relkind='v'",
   );
@@ -265,14 +280,50 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
     false,
     "0013 revoked admit_browser_family from morrow_identity_sessions",
   );
+  // ADR-0020: the work owner executes exactly the three read-only membership helpers
+  // that 0015 checks (granted by 0014); no other work role executes any of the five.
+  const workOwnerHelpers = [
+    "morrow_identity.memberships_closed(name)",
+    "morrow_identity.morrow_memberships_closed()",
+    "morrow_identity.recorded_administrator()",
+  ];
   const identityFunctions = rows(
     "SELECT p.oid::regprocedure::text AS signature, has_function_privilege('morrow_work_command',p.oid,'EXECUTE') AS c, has_function_privilege('morrow_work_api',p.oid,'EXECUTE') AS a, has_function_privilege('morrow_work_owner',p.oid,'EXECUTE') AS o, has_function_privilege('morrow_api_worker',p.oid,'EXECUTE') AS l FROM pg_proc p WHERE p.pronamespace='morrow_identity'::regnamespace",
   );
   for (const f of identityFunctions) {
     const bridge = bridgeFunctions.includes(f.signature.replace("morrow_identity.", ""));
     assert.equal(f.c, bridge, f.signature);
-    assert.ok(!f.a && !f.o && !f.l, f.signature);
+    assert.equal(f.o, workOwnerHelpers.includes(f.signature), f.signature);
+    assert.ok(!f.a && !f.l, f.signature);
   }
+  assert.equal(identityFunctions.filter((f) => f.o).length, workOwnerHelpers.length);
+  // The five ADR-0020 helpers: owned by the identity owner, no PUBLIC EXECUTE, and no
+  // executor may run any of them.
+  const helperAcl = rows(
+    "SELECT p.oid::regprocedure::text AS signature, p.proowner::regrole::text AS owner, p.proacl IS NOT NULL AS acl, (SELECT count(*) FROM aclexplode(p.proacl) a WHERE a.grantee=0)::int AS public, (SELECT COALESCE(array_agg(a.grantee::regrole::text ORDER BY 1),'{}') FROM aclexplode(p.proacl) a WHERE a.grantee<>0 AND a.grantee<>p.proowner AND a.privilege_type='EXECUTE') AS grantees FROM pg_proc p WHERE p.pronamespace='morrow_identity'::regnamespace AND p.proname IN ('preserve_migration_administrator','recorded_administrator','memberships_closed','morrow_memberships_closed','executor_memberships_closed')",
+  );
+  assert.equal(helperAcl.length, 5);
+  for (const h of helperAcl) {
+    assert.equal(h.owner, "morrow_identity_owner", h.signature);
+    assert.ok(h.acl && h.public === 0, "no PUBLIC EXECUTE " + h.signature);
+    assert.deepEqual(
+      h.grantees,
+      workOwnerHelpers.includes(h.signature) ? ["morrow_work_owner"] : [],
+      h.signature,
+    );
+  }
+  // Across every Morrow role: the owner executes all five and the work owner exactly its
+  // three; no executor, login or other role executes any of them.
+  const helperExecutors = rows(
+    "SELECT r.rolname AS role, p.oid::regprocedure::text AS signature FROM pg_roles r, pg_proc p WHERE r.rolname LIKE 'morrow\\_%' AND p.pronamespace='morrow_identity'::regnamespace AND p.proname IN ('preserve_migration_administrator','recorded_administrator','memberships_closed','morrow_memberships_closed','executor_memberships_closed') AND has_function_privilege(r.oid,p.oid,'EXECUTE')",
+  );
+  assert.deepEqual(
+    helperExecutors.map((x) => x.role + " " + x.signature).sort(),
+    [
+      ...helperAcl.map((h) => "morrow_identity_owner " + h.signature),
+      ...workOwnerHelpers.map((signature) => workRoles.owner + " " + signature),
+    ].sort(),
+  );
   const attributes = rows(
     "SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolbypassrls, rolreplication, rolpassword IS NOT NULL AS has_password FROM pg_authid WHERE rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker')",
   );
@@ -294,20 +345,51 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
     "SELECT rolname FROM pg_roles WHERE rolname ~ '^morrow_(work_(relay|maintenance|operations)|orchestrator_worker)$'",
   );
   assert.deepEqual(forbidden, []);
+  // ADR-0020 (P04.T01j D7): the recorded administrator is the login that applied the
+  // chain, and the rows naming a work role are exact. The suite runs in the hosted shape
+  // only: a non-superuser CREATEROLE administrator. The two reviewed rows are granted by
+  // the recorded administrator, and each work role also has its one PG16+ creation row
+  // (member the administrator, grantor the bootstrap superuser oid 10, admin true, inherit
+  // false, set false). The local superuser shape, which has no creation rows, is checked
+  // by container S of lab:createrole-administrator.
+  assert.equal(db.administrator, "createrole");
+  // The owner reads the record through its identity_owner SELECT policy (FORCE RLS).
+  const [record] = rows(
+    "SELECT current_user AS reader, a.role_oid::bigint AS oid, a.role_name AS name, (SELECT count(*) FROM morrow_identity.migration_administrator)::int AS n FROM morrow_identity.migration_administrator a",
+    { role: "morrow_identity_owner" },
+  );
+  assert.equal(record.reader, "morrow_identity_owner");
+  assert.equal(record.n, 1);
+  assert.equal(record.name, "neondb_owner");
+  assert.notEqual(record.oid, 10);
   const members = rows(
-    "SELECT g.rolname AS role, u.rolname AS member, m.admin_option, m.inherit_option, m.set_option FROM pg_auth_members m JOIN pg_roles g ON g.oid=m.roleid JOIN pg_roles u ON u.oid=m.member WHERE g.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker') OR u.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker')",
+    "SELECT g.rolname AS role, u.rolname AS member, m.grantor::bigint AS grantor, m.admin_option, m.inherit_option, m.set_option FROM pg_auth_members m JOIN pg_roles g ON g.oid=m.roleid JOIN pg_roles u ON u.oid=m.member WHERE g.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker') OR u.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker')",
   );
-  const reviewed = members.filter((m) => m.member.startsWith("morrow_"));
+  const shape = (m) =>
+    [m.role, m.member, m.grantor, m.admin_option, m.inherit_option, m.set_option].join(" ");
   assert.deepEqual(
-    reviewed.map((m) => [m.role, m.member, m.admin_option, m.inherit_option, m.set_option]).sort(),
+    members.map(shape).sort(),
     [
-      ["morrow_work_api", "morrow_api_worker", false, false, true],
-      ["morrow_work_command", "morrow_work_owner", false, false, true],
-    ],
+      ["morrow_work_api", "morrow_api_worker", record.oid, false, false, true],
+      ["morrow_work_command", "morrow_work_owner", record.oid, false, false, true],
+      ...["morrow_work_owner", "morrow_work_command", "morrow_work_api", "morrow_api_worker"].map(
+        (role) => [role, record.name, 10, true, false, false],
+      ),
+    ]
+      .map((row) => row.join(" "))
+      .sort(),
   );
-  // At most one PG16+ CREATEROLE provisioning row per role; a local superuser setup has none.
-  for (const m of members.filter((x) => !x.member.startsWith("morrow_")))
-    assert.ok(m.admin_option && !m.inherit_option && !m.set_option, m.role);
+  // Every Morrow role is closed, evaluated as the owner from a superuser session (so the
+  // in-transaction runner rule (C) cannot apply), and no SET row names a Morrow role
+  // except the two reviewed rows.
+  const [closed] = rows(
+    "SELECT current_user AS caller, morrow_identity.morrow_memberships_closed() AS closed",
+    { role: "morrow_identity_owner" },
+  );
+  assert.equal(closed.caller, "morrow_identity_owner");
+  assert.equal(closed.closed, true);
+  const [setRows] = rows(morrowSetRowsSql.replace("SELECT count(*)", "SELECT count(*)::int AS n"));
+  assert.equal(setRows.n, 0);
   recordConformance("S5", true);
 });
 

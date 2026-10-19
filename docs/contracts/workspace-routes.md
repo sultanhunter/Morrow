@@ -12,7 +12,7 @@ Deep links require server authentication/current membership/resource authority b
 
 Store selection is a navigation filter. Task and proposal targets come from authoritative records and stay visibly pinned. Opening the same record in another authorized browser/session preserves target, persisted revision and current grants. Unsaved local text does not magically transfer; save/checkpoint must complete before a cross-session promise. Browser back/forward and reload preserve logical path and guard unsaved input.
 
-The api Worker serves the SPA through Static Assets and reserves `/auth`, `/workspace`, `/api` and `/healthz` (and everything below them), plus the exact account paths `/workspaces` and `/organizations` (P05.T01x), for itself (`apps/api/src/reserved-paths.ts`); no route pattern may fall under a reserved prefix, which `npm run edge:check` enforces. Static destinations such as agents/new precede dynamic agent IDs. Opaque IDs may not use reserved route slugs. Decode once, validate IDs and re-encode; encoded slashes, traversal, foreign origins, unexpected parameters and token-bearing URLs deny. `packages/contracts/src/routes.ts` (`@morrow/contracts/routes`, generated from this catalogue) is the only matcher and builder; `/` matches only the `account` route. The workspace app (P14.T01a) implements router, authentication and session behavior on it.
+The api Worker serves the SPA through Static Assets and reserves `/auth`, `/workspace`, `/api` and `/healthz` (and everything below them), plus the exact account paths `/workspaces` and `/organizations` (P05.T01x), for itself (`apps/api/src/reserved-paths.ts`; `/auth/challenge`, the P05.T01ab challenge configuration, falls under `/auth`); no route pattern may fall under a reserved prefix, which `npm run edge:check` enforces. Static destinations such as agents/new precede dynamic agent IDs. Opaque IDs may not use reserved route slugs. Decode once, validate IDs and re-encode; encoded slashes, traversal, foreign origins, unexpected parameters and token-bearing URLs deny. `packages/contracts/src/routes.ts` (`@morrow/contracts/routes`, generated from this catalogue) is the only matcher and builder; `/` matches only the `account` route. The workspace app (P14.T01a) implements router, authentication and session behavior on it.
 
 ## Connector boundary
 
@@ -28,3 +28,18 @@ P02.A01 fixtures cover canonical route round-trips, static/detail precedence, pa
 
 Route `account` (`/`) is the signed-in person's account view: `GET /workspaces` lists the workspaces they may enter now and whether first-owner signup is available (`AccountOverview`), and `POST /organizations` creates the first organization (`OrganizationSignupRequest`, `OrganizationSignupResult`). Selection is the URL `/w/{workspaceId}`; the server stores no active workspace, and every bootstrap rechecks eligibility. P14.T01a builds the screens.
 
+
+## Collaboration routes and the sidebar model (P01.T02c, ADR-0016)
+
+Four routes, each J01, standalone, merchant namespace, the standard states and "P02 must qualify interactions":
+
+| id | pattern | parent | data / components |
+| --- | --- | --- | --- |
+| `project` | `/w/:workspaceId/projects/:projectId` | work | goal, pinned_tabs, contributors, conversation, activity, decisions / ScopeHeader, ProjectHeader, ArtifactTabs, ArtifactEditor, Conversation, ActivityList, DecisionSummary |
+| `project_artifact` | `/w/:workspaceId/projects/:projectId/artifacts/:artifactId` | project | project, artifact_revision, lineage / ScopeHeader, ArtifactTabs, ArtifactEditor, Conversation |
+| `ask_conversation` | `/w/:workspaceId/ask/:conversationId` | ask | conversation, linked_work, context_scope / ScopeHeader, Conversation, LinkedWork, AskPrivacyNotice |
+| `access_request` | `/w/:workspaceId/inbox/access-requests/:accessRequestId` | inbox | access_request, requested_scope, requester, expiry / ScopeHeader, AccessRequestDetail, AccessDecision |
+
+There is no `/w/:workspaceId/projects` index route; the Work list filters projects. `AskPrivacyNotice` tells the Ask's creator that workspace admins can read Asks and that each admin read is audited (ADR-0016 item 5).
+
+The `sidebar` key of `workspace-routes.json` is the option-1 sidebar model, checked by `inspectSidebar` (`npm run verify:contracts`): `entry_action` `ask` is an action, not a destination; `primary` is Home, Work, Inbox, Agents, Assets, Knowledge and Settings in that order, with the Inbox badge counting open items; `pinned_projects` are shortcuts to `project` routes in viewer-relative pin-rank order, at most 20, breadcrumb parent `work`; `people_and_agents` link to the people settings section and agent routes, where presence is transient and confers nothing; `footer` shows connection status (→ `connections`) and the credit balance (→ the usage settings section, display only). Every sidebar target is an existing route with valid parameters.

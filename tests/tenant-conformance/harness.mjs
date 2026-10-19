@@ -4,9 +4,18 @@
 // migration (the P03.T04e lab fallback), owner-seeded synthetic fixtures, and a
 // psql-backed WorkSqlConnector that logs in as morrow_api_worker exactly as the
 // api Worker does. No provider, credential, host port or merchant data.
+// The chain is applied by one of two administrators (ADR-0020, P04.T01j D7): the local
+// superuser, as every other lab does, or "createrole", the hosted shape, in which a
+// Neon-shaped non-superuser CREATEROLE login runs the prerequisites and applies each
+// entry with the D4 runner protocol. Fixture seeding always uses the local superuser
+// with SET ROLE, as scaffolding.
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { localPostgresLab } from "../../scripts/local-postgres-lab.mjs";
+import {
+  applyChainAsAdministrator,
+  createAdministrator,
+} from "../../scripts/fixtures/createrole-administrator.mjs";
 import { loadMigrationChain } from "../../scripts/migration-chain.mjs";
 import { validateDefinition } from "../../packages/contracts/src/validation.ts";
 import { workPermissions } from "../../packages/contracts/src/work-permissions.ts";
@@ -126,15 +135,26 @@ export function psqlAsync(
   });
 }
 
-export function applyMigrationChain(id, { stopBefore = Infinity } = {}) {
-  psql(id, "CREATE DATABASE morrow;", { database: "morrow_lab" });
-  const applied = [];
+export function applyMigrationChain(
+  id,
+  { stopBefore = Infinity, administrator = "superuser" } = {},
+) {
+  if (administrator !== "superuser" && administrator !== "createrole")
+    throw Error("HARNESS_ADMINISTRATOR_INVALID");
+  // Both shapes read the one verified chain (P04.T01i D3): every migration and pinned
+  // prerequisite digest is checked before any SQL runs.
   let chain;
   try {
     chain = loadMigrationChain();
   } catch {
     throw Error("HARNESS_MIGRATION_UNQUALIFIED");
   }
+  if (administrator === "createrole") {
+    createAdministrator(id, { bypassrls: false });
+    return applyChainAsAdministrator(id, chain, { stopBefore });
+  }
+  psql(id, "CREATE DATABASE morrow;", { database: "morrow_lab" });
+  const applied = [];
   for (const step of migrationPlan(chain.filter((entry) => entry.sequence < stopBefore))) {
     if (step.kind === "prerequisite") {
       psql(id, step.text);
@@ -577,6 +597,7 @@ export async function withWorkDatabase(packet, use, options = {}) {
     const context = Object.freeze({
       ...engine,
       applied,
+      administrator: options.administrator ?? "superuser",
       sql: run,
       tryRun: (text, opts = {}) => psql(engine.id, text, { ...opts, allowFailure: true }),
       runAsync: (text, opts) => psqlAsync(engine.id, text, opts),

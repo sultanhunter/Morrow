@@ -117,6 +117,46 @@ test("bounded jar models HTTPS host-only delivery, root path, replacement and ex
   assert.equal(jar.header("https://127.0.0.1/"), undefined);
 });
 
+test("P05.T01y-AC28: the jar keeps a 30-minute session cookie and the exact clear removes it", () => {
+  let at = 1000;
+  const jar = createBoundedLoginCookieJar({ now: () => at });
+  const clear = "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
+  assert.deepEqual(
+    jar.ingest("https://127.0.0.1/auth/rotate", headers(cookie("__Host-morrow_session", 1801))),
+    { accepted: 0, rejected: 1 },
+  );
+  assert.deepEqual(
+    jar.ingest("https://127.0.0.1/auth/rotate", headers(cookie("__Host-morrow_session", 1800))),
+    { accepted: 1, rejected: 0 },
+  );
+  // Single-name replacement: a newer cookie replaces the older one; the clear drops it.
+  jar.ingest(
+    "https://127.0.0.1/auth/rotate",
+    headers(cookie("__Host-morrow_session", 1800, replacement)),
+  );
+  assert.equal(jar.header("https://127.0.0.1/"), "__Host-morrow_session=" + replacement);
+  assert.deepEqual(jar.ingest("https://127.0.0.1/auth/logout", headers(clear)), {
+    accepted: 1,
+    rejected: 0,
+  });
+  assert.equal(jar.header("https://127.0.0.1/"), undefined);
+  for (const item of [
+    clear.replace("=;", "=" + value + ";"),
+    clear.replace("__Host-morrow_session", "__Host-morrow_login"),
+    clear.replace("; Secure", ""),
+    clear + "; Domain=127.0.0.1",
+  ]) {
+    jar.ingest("https://127.0.0.1/", headers(cookie("__Host-morrow_session", 60)));
+    assert.deepEqual(jar.ingest("https://127.0.0.1/", headers(item)), { accepted: 0, rejected: 1 });
+    assert.equal(jar.header("https://127.0.0.1/"), "__Host-morrow_session=" + value);
+  }
+  assert.deepEqual(jar.ingest("http://127.0.0.1/auth/logout", headers(clear)), {
+    accepted: 0,
+    rejected: 1,
+  });
+  at = 1000 + 60000;
+  assert.equal(jar.header("https://127.0.0.1/"), undefined);
+});
 test("Secure cookie from HTTP cannot be stored or treated as delivered", () => {
   const jar = createBoundedLoginCookieJar({ now: () => 1000 });
   assert.deepEqual(jar.ingest("http://127.0.0.1:1234/", headers(cookie())), {

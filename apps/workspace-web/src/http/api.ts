@@ -4,8 +4,29 @@
 // documented ones, bodies are closed literals with no organization, workspace or
 // principal key, and byte limits are checked before anything is sent.
 import type { Command, Composed, Outcome, PortMethod, WorkspacePort } from "@morrow/workspace-ui";
-import { byteLength, isCommandKey, isId, type Client } from "./client";
-import { decodeBootstrap, decodeLoginStart, decodeLogout } from "./identity-decoders";
+import { byteLength, isChallengeToken, isCommandKey, isId, type Client } from "./client";
+import {
+  decodeAccountOverview,
+  decodeBootstrap,
+  decodeLoginStart,
+  decodeLogout,
+  decodeOrganizationSignup,
+  identityOutcome,
+} from "./identity-decoders";
+import {
+  decodeAnswer,
+  decodeAnswered,
+  decodeGoal,
+  decodeGoalCreated,
+  decodeOne,
+  decodePage,
+  decodeQuestion,
+  decodeQuestionCreated,
+  decodeRevision,
+  decodeTask,
+  decodeTaskCreated,
+  workOutcome,
+} from "./work-decoders";
 
 export type HttpRequest =
   | { readonly method: "GET"; readonly path: string }
@@ -14,6 +35,8 @@ export type HttpRequest =
       readonly path: string;
       readonly body: string;
       readonly key: string | null;
+      /** P05.T01ab: the X-Morrow-Challenge token, on login start and signup only. */
+      readonly challenge?: string;
     };
 export const byteLimits = Object.freeze({ login: 512, signup: 2048, work: 65536 });
 
@@ -25,7 +48,8 @@ const query = (pairs: readonly (readonly [string, string | null])[]) => {
     : "";
 };
 const get = (path: string): HttpRequest => ({ method: "GET", path });
-function post(path: string, body: unknown, key: string | null, limit: number): HttpRequest | null {
+type PostRequest = Extract<HttpRequest, { readonly method: "POST" }>;
+function post(path: string, body: unknown, key: string | null, limit: number): PostRequest | null {
   if (key !== null && !isCommandKey(key)) return null;
   const text = JSON.stringify(body);
   if (byteLength(text) > limit) return null;
@@ -41,23 +65,34 @@ const text = (value: unknown, max: number) =>
 
 /** Every request this adapter can send; `null` means refused before sending. */
 export const requests = {
-  login(version: 1 | 2, workspaceId: string | null): HttpRequest | null {
-    if (version === 2) return post("/auth/login", { schemaVersion: 2 }, null, byteLimits.login);
-    if (!isId(workspaceId)) return null;
-    return post("/auth/login", { schemaVersion: 1, workspaceId }, null, byteLimits.login);
+  login(
+    version: 1 | 2,
+    workspaceId: string | null,
+    challenge: string | null = null,
+  ): HttpRequest | null {
+    if (challenge !== null && !isChallengeToken(challenge)) return null;
+    if (version === 1 && !isId(workspaceId)) return null;
+    const body = version === 2 ? { schemaVersion: 2 } : { schemaVersion: 1, workspaceId };
+    const request = post("/auth/login", body, null, byteLimits.login);
+    return request && challenge !== null ? { ...request, challenge } : request;
   },
   logout: (): HttpRequest => post("/auth/logout", { schemaVersion: 1 }, null, byteLimits.login)!,
   bootstrap: (ws: string) => (isId(ws) ? get(`/workspace/${ws}/bootstrap`) : null),
   overview: () => get("/workspaces"),
-  createOrganization(c: Command<{ organizationName: string; workspaceName: string }>) {
+  createOrganization(
+    c: Command<{ organizationName: string; workspaceName: string }>,
+    challenge: string | null = null,
+  ): HttpRequest | null {
+    if (challenge !== null && !isChallengeToken(challenge)) return null;
     const { organizationName, workspaceName } = c.body;
     if (!text(organizationName, 400) || !text(workspaceName, 400)) return null;
-    return post(
+    const request = post(
       "/organizations",
       { schemaVersion: 1, organizationName, workspaceName },
       c.key,
       byteLimits.signup,
     );
+    return request && challenge !== null ? { ...request, challenge } : request;
   },
   listGoals: (ws: string, after: string | null) =>
     ids(ws) && cursor(after)
@@ -195,27 +230,129 @@ export interface HttpPortOptions {
 
 const notInBuild = { kind: "not_in_build" } as const;
 const refused = { kind: "invalid", field: null } as const;
+const unknownRecord = { kind: "not_found" } as const;
 
 export function createHttpPort(options: HttpPortOptions): WorkspacePort {
   const { client, composed, loginBodyVersion, navigationSignal } = options;
   const send = (request: HttpRequest) =>
     request.method === "GET"
       ? client.get(request.path, navigationSignal())
-      : client.post(request.path, request.body, request.key);
-  // Uncomposed methods (account.*, work.*, people.list and session.keepAlive in this
-  // build) answer not_in_build and send nothing. Their routes and decoders are composed
-  // when the backend lands (PR-2); until then they stay here, unreachable.
+      : client.post(request.path, request.body, request.key, request.challenge ?? null);
+  // people.list and session.keepAlive stay uncomposed in this build (§4.14): they
+  // answer not_in_build and send nothing.
   const unbuilt = async (..._args: unknown[]) => notInBuild;
   const gated =
     <A extends unknown[], R>(method: PortMethod, run: (...args: A) => Promise<Outcome<R>>) =>
     (...args: A): Promise<Outcome<R>> =>
       composed[method] ? run(...args) : Promise.resolve(notInBuild);
+  // A read whose request can't be built (an id outside the Id pattern) names a record
+  // that can't exist: not_found, with nothing sent. A command that can't be built is
+  // refused before sending (invalid), so it is terminal and never uncertain.
+  const read = async <T>(
+    request: HttpRequest | null,
+    decode: (body: unknown, status: number) => T | null,
+  ): Promise<Outcome<T>> =>
+    request ? workOutcome(await send(request), "read", decode) : unknownRecord;
+  const command = async <T>(
+    request: HttpRequest | null,
+    decode: (body: unknown, status: number) => T | null,
+  ): Promise<Outcome<T>> =>
+    request ? workOutcome(await send(request), "command", decode) : refused;
+  // Single-record reads also check the record is the one the path names.
+  const same = <T extends { readonly id: string }>(id: string, value: T | null) =>
+    value !== null && value.id === id ? value : null;
+  const work: WorkspacePort["work"] = {
+    listGoals: gated("work.listGoals", (ws: string, after: string | null) =>
+      read(requests.listGoals(ws, after), (b) => decodePage(b, (v) => decodeGoal(v, ws))),
+    ),
+    getGoal: gated("work.getGoal", (ws: string, id: string) =>
+      read(requests.getGoal(ws, id), (b) =>
+        decodeOne(b, "goal", (v) => same(id, decodeGoal(v, ws))),
+      ),
+    ),
+    createGoal: gated(
+      "work.createGoal",
+      (ws: string, c: Command<{ objective: string; criteria: readonly string[] }>) =>
+        command(requests.createGoal(ws, c), decodeGoalCreated),
+    ),
+    listTasks: gated("work.listTasks", (ws: string, goalId: string, after: string | null) =>
+      read(requests.listTasks(ws, goalId, after), (b) =>
+        decodePage(b, (v) => {
+          const task = decodeTask(v, ws);
+          return task && task.goalId === goalId ? task : null;
+        }),
+      ),
+    ),
+    getTask: gated("work.getTask", (ws: string, id: string) =>
+      read(requests.getTask(ws, id), (b) =>
+        decodeOne(b, "task", (v) => same(id, decodeTask(v, ws))),
+      ),
+    ),
+    createTask: gated(
+      "work.createTask",
+      (ws: string, c: Command<{ goalId: string; objective: string }>) =>
+        command(requests.createTask(ws, c), decodeTaskCreated),
+    ),
+    markReady: gated(
+      "work.markReady",
+      (ws: string, id: string, c: Command<{ expectedRevision: number }>) =>
+        command(requests.markReady(ws, id, c), decodeRevision),
+    ),
+    assign: gated(
+      "work.assign",
+      (ws: string, id: string, c: Command<{ assigneeId: string; expectedRevision: number }>) =>
+        command(requests.assign(ws, id, c), decodeRevision),
+    ),
+    listTaskQuestions: gated(
+      "work.listTaskQuestions",
+      (ws: string, taskId: string, after: string | null) =>
+        read(requests.listTaskQuestions(ws, taskId, after), (b) =>
+          decodePage(b, (v) => {
+            const question = decodeQuestion(v, ws);
+            return question && question.taskId === taskId ? question : null;
+          }),
+        ),
+    ),
+    ask: gated(
+      "work.ask",
+      (ws: string, taskId: string, c: Command<{ question: string; respondentId: string }>) =>
+        command(requests.ask(ws, taskId, c), decodeQuestionCreated),
+    ),
+    listMyOpenQuestions: gated("work.listMyOpenQuestions", (ws: string, after: string | null) =>
+      read(requests.listMyOpenQuestions(ws, after), (b) =>
+        decodePage(b, (v) => decodeQuestion(v, ws)),
+      ),
+    ),
+    getQuestion: gated("work.getQuestion", (ws: string, id: string) =>
+      read(requests.getQuestion(ws, id), (b) =>
+        decodeOne(b, "question", (v) => same(id, decodeQuestion(v, ws))),
+      ),
+    ),
+    answer: gated(
+      "work.answer",
+      (ws: string, id: string, c: Command<{ text: string; expectedRevision: number }>) =>
+        command(requests.answer(ws, id, c), decodeAnswered),
+    ),
+    cancelQuestion: gated(
+      "work.cancelQuestion",
+      (ws: string, id: string, c: Command<{ expectedRevision: number }>) =>
+        command(requests.cancelQuestion(ws, id, c), decodeRevision),
+    ),
+    getAnswer: gated("work.getAnswer", (ws: string, id: string) =>
+      read(requests.getAnswer(ws, id), (b) =>
+        decodeOne(b, "answer", (v) => decodeAnswer(v, id, ws)),
+      ),
+    ),
+  };
   return {
     session: {
-      startSignIn: gated("session.startSignIn", async (workspaceId: string | null) => {
-        const request = requests.login(loginBodyVersion, workspaceId);
-        return request ? decodeLoginStart(await send(request)) : refused;
-      }),
+      startSignIn: gated(
+        "session.startSignIn",
+        async (workspaceId: string | null, challenge: string | null = null) => {
+          const request = requests.login(loginBodyVersion, workspaceId, challenge);
+          return request ? decodeLoginStart(await send(request)) : refused;
+        },
+      ),
       signOut: gated("session.signOut", async () => decodeLogout(await send(requests.logout()))),
       keepAlive: unbuilt,
     },
@@ -226,26 +363,23 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
       }),
     },
     account: {
-      overview: unbuilt,
-      createOrganization: unbuilt,
+      overview: gated("account.overview", async () =>
+        identityOutcome(await send(requests.overview()), "read", decodeAccountOverview),
+      ),
+      createOrganization: gated(
+        "account.createOrganization",
+        async (
+          c: Command<{ organizationName: string; workspaceName: string }>,
+          challenge: string | null = null,
+        ) => {
+          const request = requests.createOrganization(c, challenge);
+          return request
+            ? identityOutcome(await send(request), "command", decodeOrganizationSignup)
+            : refused;
+        },
+      ),
     },
-    work: {
-      listGoals: unbuilt,
-      getGoal: unbuilt,
-      createGoal: unbuilt,
-      listTasks: unbuilt,
-      getTask: unbuilt,
-      createTask: unbuilt,
-      markReady: unbuilt,
-      assign: unbuilt,
-      listTaskQuestions: unbuilt,
-      ask: unbuilt,
-      listMyOpenQuestions: unbuilt,
-      getQuestion: unbuilt,
-      answer: unbuilt,
-      cancelQuestion: unbuilt,
-      getAnswer: unbuilt,
-    },
+    work,
     people: { list: unbuilt },
   };
 }

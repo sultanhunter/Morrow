@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./session-keeper": "./src/session-keeper.ts",
     "./styles.css": "./src/styles/index.css"
   },
   "scripts": {

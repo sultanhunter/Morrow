@@ -260,3 +260,37 @@ test("every v1 status has a label and an unknown status renders as its own text"
   assert.equal(statusLabel("task", "archived_by_future_version"), "archived_by_future_version");
   assert.equal(statusLabel("task", "constructor"), "constructor");
 });
+
+// P05.T01ab: the guard answers before the route runs, so its 403s are "nothing was
+// done" (unavailable, never uncertain), and its 429 is the account rows' rate_limited.
+test("P05.T01ab guard rejections through the identity and login-start decoders", () => {
+  for (const outcome of ["challenge_required", "challenge_failed"]) {
+    assert.deepEqual(identityOutcome(reply(403, identity(outcome)), "command", decodeSignup), {
+      kind: "unavailable",
+      offline: false,
+    });
+    assert.deepEqual(decodeLoginStart(reply(403, identity(outcome))), {
+      kind: "unavailable",
+      offline: false,
+    });
+  }
+  assert.deepEqual(
+    identityOutcome(
+      reply(429, identity("rate_limited"), { "retry-after": "60" }),
+      "command",
+      decodeSignup,
+    ),
+    { kind: "rate_limited", retryAfterSeconds: 60 },
+  );
+  assert.deepEqual(
+    decodeLoginStart(reply(429, identity("rate_limited"), { "retry-after": "60" })),
+    {
+      kind: "unavailable",
+      offline: false,
+    },
+  );
+  assert.deepEqual(
+    identityOutcome(reply(403, identity("challenge_other")), "command", decodeSignup),
+    { kind: "uncertain" },
+  );
+});

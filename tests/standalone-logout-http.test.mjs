@@ -389,3 +389,162 @@ test(
     assert.equal(late, true);
   },
 );
+
+// P05.T01y-AC26/AC29: the Node adapter's cookie confinement for logout and rotate.
+const clear = "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
+const session = (age) =>
+  "__Host-morrow_session=" +
+  "A".repeat(43) +
+  "; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=" +
+  age;
+for (const [status, bodyText] of [
+  [200, ended],
+  [403, unavailable],
+  [503, unknown],
+])
+  test(`logout ${status} may carry exactly the session clear`, async () => {
+    await serve(
+      (origin) =>
+        binding(origin, async (_, sink) => sink(plan(status, { bodyText, cookies: [clear] }))),
+      async (origin) => {
+        const r = await raw(origin);
+        assert.equal(r.status, status);
+        assert.equal(r.body, bodyText);
+        assert.deepEqual(r.headers["set-cookie"], [clear]);
+      },
+    );
+  });
+for (const [name, output] of [
+  ["clear on 400", plan(400, { cookies: [clear] })],
+  ["clear on 404", plan(404, { cookies: [clear] })],
+  ["clear with a value", plan(200, { cookies: [clear.replace("=;", "=" + "A".repeat(43) + ";")] })],
+  ["two clears", plan(200, { cookies: [clear, clear] })],
+  ["a 401", plan(401, { bodyText: '{"code":"authentication_required"}' })],
+])
+  test(`logout transport refuses ${name}`, async () => {
+    await serve(
+      (origin) => binding(origin, async (_, sink) => sink(output)),
+      async (origin) => {
+        const r = await raw(origin);
+        assert.equal(r.status, 503);
+        assert.equal(r.body, unknown);
+        noCookie(r);
+      },
+    );
+  });
+
+const rotated =
+  '{"schemaVersion":1,"outcome":"rotated","idleRemainingMs":1800000,"absoluteRemainingMs":43000000}';
+const current =
+  '{"schemaVersion":1,"outcome":"current","idleRemainingMs":1790000,"absoluteRemainingMs":43000000}';
+const rotationUnavailable = '{"schemaVersion":1,"outcome":"rotation_unavailable"}';
+const rotationUnknown = '{"schemaVersion":1,"outcome":"rotation_outcome_unknown"}';
+const authenticationRequired = '{"code":"authentication_required"}';
+const rotateBinding = (origin, dispatch) => ({
+  origin,
+  auth: {
+    dispatch: async () => {
+      throw Error("LOGIN_MUST_NOT_RECEIVE_ROTATE");
+    },
+  },
+  rotate: { dispatch },
+});
+test("rotate is denied without its dedicated binding and never reaches login", async () => {
+  await serve(
+    (origin) => ({ ...binding(origin, async () => {}) }),
+    async (origin) => {
+      const r = await raw(origin, { path: "/auth/rotate" });
+      assert.equal(r.status, 404);
+      noCookie(r);
+    },
+    true,
+  );
+});
+for (const [name, output, cookie] of [
+  [
+    "rotated with its cookie",
+    plan(200, { bodyText: rotated, cookies: [session(1800)] }),
+    session(1800),
+  ],
+  ["current without a cookie", plan(200, { bodyText: current }), undefined],
+  ["401", plan(401, { bodyText: authenticationRequired }), undefined],
+  ["403", plan(403, { bodyText: rotationUnavailable }), undefined],
+  ["503 unknown", plan(503, { bodyText: rotationUnknown }), undefined],
+])
+  test(`rotate delivers ${name}`, async () => {
+    let calls = 0;
+    await serve(
+      (origin) =>
+        rotateBinding(origin, async (req, sink) => {
+          calls++;
+          assert.equal(req.url, origin + "/auth/rotate");
+          assert.equal(await req.text(), '{"schemaVersion":1}');
+          sink(output);
+        }),
+      async (origin) => {
+        const r = await raw(origin, { path: "/auth/rotate" });
+        assert.equal(r.status, output.status);
+        assert.equal(r.body, output.bodyText);
+        assert.deepEqual(r.headers["set-cookie"], cookie === undefined ? undefined : [cookie]);
+        assert.equal(r.headers["cache-control"], "no-store");
+      },
+      true,
+    );
+    assert.equal(calls, 1);
+  });
+for (const [name, output] of [
+  ["a 1801-second cookie", plan(200, { bodyText: rotated, cookies: [session(1801)] })],
+  ["rotated without a cookie", plan(200, { bodyText: rotated })],
+  ["current with a cookie", plan(200, { bodyText: current, cookies: [session(60)] })],
+  ["a clear", plan(200, { bodyText: rotated, cookies: [clear] })],
+  ["a 401 with a cookie", plan(401, { bodyText: authenticationRequired, cookies: [session(60)] })],
+  ["an unknown body", plan(200, { bodyText: '{"schemaVersion":1,"outcome":"renewed"}' })],
+  [
+    "a remaining time over 12 hours",
+    plan(200, { bodyText: current.replace("43000000", "432000000") }),
+  ],
+  [
+    "a remaining time just over 12 hours",
+    plan(200, { bodyText: current.replace("43000000", "43200001") }),
+  ],
+  ["a redirect", plan(303, { headers: [["location", "/"]] })],
+])
+  test(`rotate transport refuses ${name} as an unknown outcome without a cookie`, async () => {
+    await serve(
+      (origin) => rotateBinding(origin, async (_, sink) => sink(output)),
+      async (origin) => {
+        const r = await raw(origin, { path: "/auth/rotate" });
+        assert.equal(r.status, 503);
+        assert.equal(r.body, rotationUnknown);
+        noCookie(r);
+      },
+    );
+  });
+test("rotate bodies are bounded at 257 bytes and a pre-dispatch failure is unavailable", async () => {
+  let calls = 0;
+  await serve(
+    (origin) =>
+      rotateBinding(origin, async (req, sink) => {
+        calls++;
+        const text = await req.text().catch(() => "");
+        sink(
+          plan(text.length > 256 ? 400 : 200, {
+            bodyText: text.length > 256 ? rotationUnavailable : current,
+          }),
+        );
+      }),
+    async (origin) => {
+      const r = await raw(origin, { path: "/auth/rotate", body: " ".repeat(4096) });
+      assert.equal(r.status, 400);
+      assert.equal(r.body, rotationUnavailable);
+      noCookie(r);
+      const plain = await raw(origin, {
+        path: "/auth/rotate",
+        headers: ["Authorization", "Bearer x"],
+      });
+      assert.equal(plain.status, 400);
+      noCookie(plain);
+    },
+  );
+  assert.equal(calls, 1);
+});

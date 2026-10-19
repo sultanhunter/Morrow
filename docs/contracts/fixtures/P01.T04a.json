@@ -2957,5 +2957,576 @@
       "valid": false,
       "value": "shopify:plan:growth/annual"
     }
-  ]
+  ],
+  "library": {
+    "description": "Building blocks for the PR-B library cases, walkthroughs and decision-table rows (tests/billing-state.test.mjs, tests/billing-decision-tables.test.mjs, scripts/verify-billing.mjs). Records are test mode for staging; production cases copy them with mode live. iA, iB and iC are installations of stores A, B and C (Shopify shops 42, 43 and 44 of app 7). `associations` date iA at the Shopify binding (09:30, before t0); `directAssociations` are the same installations linked to the morrow_direct workspace after its route was fixed at t0 (R2, R3), which is the only order a morrow_direct workspace can have. Nothing here is a provider object.",
+    "organizationId": "org_o",
+    "workspaceId": "workspace_w",
+    "otherWorkspaceId": "workspace_w2",
+    "t0": "2026-10-18T10:00:00Z",
+    "now": "2026-10-20T10:00:00Z",
+    "terms": {
+      "schemaVersion": 1,
+      "termsRevision": 1,
+      "entries": [
+        {
+          "route": "morrow_direct",
+          "mode": "test",
+          "priceKey": "stripe:price:price_TESTGROWTH01",
+          "kind": "subscription_period",
+          "currency": "USD",
+          "creditUnits": "1000"
+        },
+        {
+          "route": "morrow_direct",
+          "mode": "test",
+          "priceKey": "stripe:price:price_TESTSCALE001",
+          "kind": "subscription_period",
+          "currency": "USD",
+          "creditUnits": "2000"
+        },
+        {
+          "route": "morrow_direct",
+          "mode": "test",
+          "priceKey": "stripe:price:price_TESTTOPUP001",
+          "kind": "top_up",
+          "currency": "USD",
+          "creditUnits": "400"
+        },
+        {
+          "route": "shopify_app_pricing",
+          "mode": "test",
+          "priceKey": "shopify:plan:growth",
+          "kind": "subscription_period",
+          "currency": "USD",
+          "creditUnits": "1000"
+        },
+        {
+          "route": "shopify_app_pricing",
+          "mode": "test",
+          "priceKey": "shopify:plan:scale",
+          "kind": "subscription_period",
+          "currency": "USD",
+          "creditUnits": "2000"
+        },
+        {
+          "route": "morrow_direct",
+          "mode": "live",
+          "priceKey": "stripe:price:price_TESTGROWTH01",
+          "kind": "subscription_period",
+          "currency": "USD",
+          "creditUnits": "1000"
+        },
+        {
+          "route": "shopify_app_pricing",
+          "mode": "live",
+          "priceKey": "shopify:plan:growth",
+          "kind": "subscription_period",
+          "currency": "USD",
+          "creditUnits": "1000"
+        },
+        {
+          "route": "shopify_app_pricing",
+          "mode": "live",
+          "priceKey": "shopify:plan:scale",
+          "kind": "subscription_period",
+          "currency": "USD",
+          "creditUnits": "2000"
+        }
+      ],
+      "planChanges": [
+        {
+          "route": "morrow_direct",
+          "mode": "test",
+          "fromPriceKey": "stripe:price:price_TESTGROWTH01",
+          "toPriceKey": "stripe:price:price_TESTSCALE001",
+          "creditUnits": "500"
+        },
+        {
+          "route": "shopify_app_pricing",
+          "mode": "test",
+          "fromPriceKey": "shopify:plan:growth",
+          "toPriceKey": "shopify:plan:scale",
+          "creditUnits": "500"
+        },
+        {
+          "route": "shopify_app_pricing",
+          "mode": "live",
+          "fromPriceKey": "shopify:plan:growth",
+          "toPriceKey": "shopify:plan:scale",
+          "creditUnits": "500"
+        }
+      ]
+    },
+    "routes": {
+      "open": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "origin": "website",
+        "shopifyBoundAt": null,
+        "route": null,
+        "mode": null,
+        "routeFixedAt": null,
+        "fixingPaymentKey": null,
+        "revision": 1
+      },
+      "website_bound": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "origin": "website",
+        "shopifyBoundAt": "2026-10-18T09:30:00Z",
+        "route": null,
+        "mode": null,
+        "routeFixedAt": null,
+        "fixingPaymentKey": null,
+        "revision": 2
+      },
+      "shopify_install": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "origin": "shopify_install",
+        "shopifyBoundAt": null,
+        "route": null,
+        "mode": null,
+        "routeFixedAt": null,
+        "fixingPaymentKey": null,
+        "revision": 1
+      },
+      "shopify_install_bound": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "origin": "shopify_install",
+        "shopifyBoundAt": "2026-10-18T09:30:00Z",
+        "route": null,
+        "mode": null,
+        "routeFixedAt": null,
+        "fixingPaymentKey": null,
+        "revision": 2
+      },
+      "morrow_direct": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "origin": "website",
+        "shopifyBoundAt": null,
+        "route": "morrow_direct",
+        "mode": "test",
+        "routeFixedAt": "2026-10-18T10:00:00Z",
+        "fixingPaymentKey": "stripe:invoice:in_TESTW00000001",
+        "revision": 2
+      },
+      "shopify_app_pricing": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "origin": "shopify_install",
+        "shopifyBoundAt": "2026-10-18T09:30:00Z",
+        "route": "shopify_app_pricing",
+        "mode": "test",
+        "routeFixedAt": "2026-10-18T10:00:00Z",
+        "fixingPaymentKey": "shopify:app:7:shop:42:cycle:2026-10-18T10:00:00Z",
+        "revision": 3
+      },
+      "other_workspace": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w2",
+        "origin": "website",
+        "shopifyBoundAt": null,
+        "route": null,
+        "mode": null,
+        "routeFixedAt": null,
+        "fixingPaymentKey": null,
+        "revision": 1
+      }
+    },
+    "associations": {
+      "iA": {
+        "installationId": "installation_a",
+        "storeId": "store_a",
+        "associatedAt": "2026-10-18T09:30:00Z",
+        "current": true
+      },
+      "iB": {
+        "installationId": "installation_b",
+        "storeId": "store_b",
+        "associatedAt": "2026-10-18T10:30:00Z",
+        "current": true
+      },
+      "iC": {
+        "installationId": "installation_c",
+        "storeId": "store_c",
+        "associatedAt": "2026-10-18T11:30:00Z",
+        "current": true
+      }
+    },
+    "directAssociations": {
+      "iA": {
+        "installationId": "installation_a",
+        "storeId": "store_a",
+        "associatedAt": "2026-10-18T10:15:00Z",
+        "current": true
+      },
+      "iB": {
+        "installationId": "installation_b",
+        "storeId": "store_b",
+        "associatedAt": "2026-10-18T10:30:00Z",
+        "current": true
+      },
+      "iC": {
+        "installationId": "installation_c",
+        "storeId": "store_c",
+        "associatedAt": "2026-10-18T11:30:00Z",
+        "current": true
+      }
+    },
+    "accounts": {
+      "morrow_w": {
+        "schemaVersion": 2,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "mode": "test",
+        "currency": "USD",
+        "status": "active",
+        "revision": 1,
+        "id": "account_morrow_w",
+        "route": "morrow_direct",
+        "installationId": null,
+        "storeId": null
+      },
+      "shopify_a": {
+        "schemaVersion": 2,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "mode": "test",
+        "currency": "USD",
+        "status": "active",
+        "revision": 1,
+        "id": "account_shopify_a",
+        "route": "shopify_app_pricing",
+        "installationId": "installation_a",
+        "storeId": "store_a"
+      },
+      "shopify_b": {
+        "schemaVersion": 2,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "mode": "test",
+        "currency": "USD",
+        "status": "active",
+        "revision": 1,
+        "id": "account_shopify_b",
+        "route": "shopify_app_pricing",
+        "installationId": "installation_b",
+        "storeId": "store_b"
+      },
+      "shopify_c": {
+        "schemaVersion": 2,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "mode": "test",
+        "currency": "USD",
+        "status": "active",
+        "revision": 1,
+        "id": "account_shopify_c",
+        "route": "shopify_app_pricing",
+        "installationId": "installation_c",
+        "storeId": "store_c"
+      }
+    },
+    "entitlements": {
+      "morrow_w": {
+        "schemaVersion": 2,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "mode": "test",
+        "status": "active",
+        "providerEvidenceRef": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "verifiedAt": "2026-10-18T10:00:00Z",
+        "validUntil": "2026-11-18T10:00:00Z",
+        "revision": 1,
+        "billingAccountId": "account_morrow_w",
+        "route": "morrow_direct",
+        "installationId": null,
+        "storeId": null,
+        "subscriptionId": "stripe:sub:sub_TESTW00000001"
+      },
+      "shopify_a": {
+        "schemaVersion": 2,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "mode": "test",
+        "status": "active",
+        "providerEvidenceRef": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "verifiedAt": "2026-10-18T10:00:00Z",
+        "validUntil": "2026-11-18T10:00:00Z",
+        "revision": 1,
+        "billingAccountId": "account_shopify_a",
+        "route": "shopify_app_pricing",
+        "installationId": "installation_a",
+        "storeId": "store_a",
+        "subscriptionId": "shopify:app:7:shop:42:created:2026-10-18T09:59:00Z"
+      },
+      "shopify_b": {
+        "schemaVersion": 2,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "mode": "test",
+        "status": "active",
+        "providerEvidenceRef": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "verifiedAt": "2026-10-18T10:00:00Z",
+        "validUntil": "2026-11-18T10:00:00Z",
+        "revision": 1,
+        "billingAccountId": "account_shopify_b",
+        "route": "shopify_app_pricing",
+        "installationId": "installation_b",
+        "storeId": "store_b",
+        "subscriptionId": "shopify:app:7:shop:43:created:2026-10-18T10:59:00Z"
+      },
+      "shopify_c": {
+        "schemaVersion": 2,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "mode": "test",
+        "status": "active",
+        "providerEvidenceRef": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "verifiedAt": "2026-10-18T10:00:00Z",
+        "validUntil": "2026-11-18T10:00:00Z",
+        "revision": 1,
+        "billingAccountId": "account_shopify_c",
+        "route": "shopify_app_pricing",
+        "installationId": "installation_c",
+        "storeId": "store_c",
+        "subscriptionId": "shopify:app:7:shop:44:created:2026-10-18T11:59:00Z"
+      }
+    },
+    "events": {
+      "stripe_period": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "route": "morrow_direct",
+        "mode": "test",
+        "kind": "subscription_period",
+        "subscriptionKey": "stripe:sub:sub_TESTW00000001",
+        "priceKey": "stripe:price:price_TESTGROWTH01",
+        "fromPriceKey": null,
+        "periodStart": "2026-10-18T10:00:00Z",
+        "periodEnd": "2026-11-18T10:00:00Z",
+        "installationId": null,
+        "storeId": null,
+        "operationId": "operation_checkout_1",
+        "amountPaid": {
+          "amount": "49.00",
+          "currency": "USD"
+        },
+        "providerEvidenceRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verifiedAt": "2026-10-18T10:00:00Z",
+        "paymentKey": "stripe:invoice:in_TESTW00000001"
+      },
+      "stripe_period_next": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "route": "morrow_direct",
+        "mode": "test",
+        "kind": "subscription_period",
+        "subscriptionKey": "stripe:sub:sub_TESTW00000001",
+        "priceKey": "stripe:price:price_TESTGROWTH01",
+        "fromPriceKey": null,
+        "periodStart": "2026-11-18T10:00:00Z",
+        "periodEnd": "2026-12-18T10:00:00Z",
+        "installationId": null,
+        "storeId": null,
+        "operationId": "operation_checkout_1",
+        "amountPaid": {
+          "amount": "49.00",
+          "currency": "USD"
+        },
+        "providerEvidenceRef": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "verifiedAt": "2026-10-20T09:00:00Z",
+        "paymentKey": "stripe:invoice:in_TESTW00000004"
+      },
+      "stripe_plan_change": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "route": "morrow_direct",
+        "mode": "test",
+        "kind": "plan_change",
+        "subscriptionKey": "stripe:sub:sub_TESTW00000001",
+        "priceKey": "stripe:price:price_TESTSCALE001",
+        "fromPriceKey": "stripe:price:price_TESTGROWTH01",
+        "periodStart": "2026-10-18T10:00:00Z",
+        "periodEnd": "2026-11-18T10:00:00Z",
+        "installationId": null,
+        "storeId": null,
+        "operationId": "operation_checkout_1",
+        "amountPaid": {
+          "amount": "25.50",
+          "currency": "USD"
+        },
+        "providerEvidenceRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verifiedAt": "2026-10-19T10:00:00Z",
+        "paymentKey": "stripe:invoice:in_TESTW00000002"
+      },
+      "stripe_top_up": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "route": "morrow_direct",
+        "mode": "test",
+        "kind": "top_up",
+        "subscriptionKey": null,
+        "priceKey": "stripe:price:price_TESTTOPUP001",
+        "fromPriceKey": null,
+        "periodStart": null,
+        "periodEnd": null,
+        "installationId": null,
+        "storeId": null,
+        "operationId": "operation_checkout_1",
+        "amountPaid": {
+          "amount": "20.00",
+          "currency": "USD"
+        },
+        "providerEvidenceRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verifiedAt": "2026-10-19T11:00:00Z",
+        "paymentKey": "stripe:invoice:in_TESTW00000003"
+      },
+      "shopify_period_a": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "route": "shopify_app_pricing",
+        "mode": "test",
+        "kind": "subscription_period",
+        "fromPriceKey": null,
+        "priceKey": "shopify:plan:growth",
+        "periodStart": "2026-10-18T10:00:00Z",
+        "periodEnd": "2026-11-18T10:00:00Z",
+        "operationId": null,
+        "amountPaid": {
+          "amount": "49.00",
+          "currency": "USD"
+        },
+        "providerEvidenceRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verifiedAt": "2026-10-18T10:00:00Z",
+        "paymentKey": "shopify:app:7:shop:42:cycle:2026-10-18T10:00:00Z",
+        "subscriptionKey": "shopify:app:7:shop:42:created:2026-10-18T09:59:00Z",
+        "installationId": "installation_a",
+        "storeId": "store_a"
+      },
+      "shopify_period_b": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "route": "shopify_app_pricing",
+        "mode": "test",
+        "kind": "subscription_period",
+        "fromPriceKey": null,
+        "priceKey": "shopify:plan:growth",
+        "periodStart": "2026-10-18T11:00:00Z",
+        "periodEnd": "2026-11-18T11:00:00Z",
+        "operationId": null,
+        "amountPaid": {
+          "amount": "49.00",
+          "currency": "USD"
+        },
+        "providerEvidenceRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verifiedAt": "2026-10-18T11:00:00Z",
+        "paymentKey": "shopify:app:7:shop:43:cycle:2026-10-18T11:00:00Z",
+        "subscriptionKey": "shopify:app:7:shop:43:created:2026-10-18T10:59:00Z",
+        "installationId": "installation_b",
+        "storeId": "store_b"
+      },
+      "shopify_period_c": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "route": "shopify_app_pricing",
+        "mode": "test",
+        "kind": "subscription_period",
+        "fromPriceKey": null,
+        "priceKey": "shopify:plan:growth",
+        "periodStart": "2026-10-18T12:00:00Z",
+        "periodEnd": "2026-11-18T12:00:00Z",
+        "operationId": null,
+        "amountPaid": {
+          "amount": "49.00",
+          "currency": "USD"
+        },
+        "providerEvidenceRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verifiedAt": "2026-10-18T12:00:00Z",
+        "paymentKey": "shopify:app:7:shop:44:cycle:2026-10-18T12:00:00Z",
+        "subscriptionKey": "shopify:app:7:shop:44:created:2026-10-18T11:59:00Z",
+        "installationId": "installation_c",
+        "storeId": "store_c"
+      },
+      "shopify_plan_change_a": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "route": "shopify_app_pricing",
+        "mode": "test",
+        "kind": "plan_change",
+        "fromPriceKey": "shopify:plan:growth",
+        "priceKey": "shopify:plan:scale",
+        "periodStart": "2026-10-18T10:00:00Z",
+        "periodEnd": "2026-11-18T10:00:00Z",
+        "operationId": null,
+        "amountPaid": {
+          "amount": "25.00",
+          "currency": "USD"
+        },
+        "providerEvidenceRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verifiedAt": "2026-10-19T10:00:00Z",
+        "paymentKey": "shopify:app:7:shop:42:update:2026-10-19T10:00:00Z",
+        "subscriptionKey": "shopify:app:7:shop:42:created:2026-10-18T09:59:00Z",
+        "installationId": "installation_a",
+        "storeId": "store_a"
+      }
+    },
+    "reversals": {
+      "dispute_morrow_open": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "route": "morrow_direct",
+        "mode": "test",
+        "paymentKey": "stripe:invoice:in_TESTW00000001",
+        "kind": "dispute",
+        "status": "open",
+        "amount": {
+          "amount": "49.00",
+          "currency": "USD"
+        },
+        "providerEvidenceRef": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "verifiedAt": "2026-10-19T12:00:00Z",
+        "revision": 1
+      }
+    },
+    "usageCaps": {
+      "shopify_a": {
+        "schemaVersion": 1,
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "billingAccountId": "account_shopify_a",
+        "installationId": "installation_a",
+        "storeId": "store_a",
+        "subscriptionKey": "shopify:app:7:shop:42:created:2026-10-18T09:59:00Z",
+        "periodStart": "2026-10-18T10:00:00Z",
+        "meterKey": "agent-work",
+        "maximumCredits": "50",
+        "maximumLiability": {
+          "amount": "5.00",
+          "currency": "USD"
+        },
+        "revision": 1
+      }
+    }
+  }
 }

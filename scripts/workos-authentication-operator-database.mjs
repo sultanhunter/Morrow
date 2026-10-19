@@ -16,6 +16,7 @@ const root = realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.ur
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const literal = (value) => "'" + value.replaceAll("'", "''") + "'";
 const used = new WeakSet();
+// 0005 and 0006 carry their ADR-0020 rebaseline digests (P04.T01j); 0001-0004 are unchanged.
 const frozenMigrations = [
   [
     "0001.identity-foundation.sql",
@@ -32,11 +33,11 @@ const frozenMigrations = [
   ],
   [
     "0005.workspace-store-linking.sql",
-    "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "ef8bf098ba9343b939f1f100c152bb0654a673d0cdcf14c4d8966f5f3db0aa0c",
   ],
   [
     "0006.authentication-exchange-admission.sql",
-    "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "02714ef64cb6c4d441d8cc1aab9bae83bdf085397302dec4fdbc5ef65e00b7df",
   ],
 ];
 const failure = () => Error("WORKOS_AUTHENTICATION_OPERATOR_DATABASE_HELD");

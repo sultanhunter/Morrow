@@ -104,8 +104,13 @@ test("bridge: four definers with fixed search paths, EXECUTE for the command rol
     bridge.match(/SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp/g).length,
     7,
   );
+  // ADR-0020 (P04.T01j D2): the one EXECUTE grant to the work owner is the three
+  // read-only membership helpers that 0015 checks while it runs as the work owner.
+  const helperGrant =
+    "GRANT EXECUTE ON FUNCTION morrow_identity.recorded_administrator(),morrow_identity.memberships_closed(name),morrow_identity.morrow_memberships_closed() TO morrow_work_owner;\n";
+  assert.equal(bridge.split(helperGrant).length, 2);
   assert.doesNotMatch(
-    bridge,
+    bridge.replace(helperGrant, ""),
     /GRANT EXECUTE[^;]*TO[^;]*\b(PUBLIC|morrow_work_api|morrow_api_worker|morrow_work_owner)\b/,
   );
   // BEGIN ATOMIC records the dependency on session_eligibility (AC24).
@@ -113,10 +118,10 @@ test("bridge: four definers with fixed search paths, EXECUTE for the command rol
     bridge,
     /work_session_context[\s\S]*?BEGIN ATOMIC[\s\S]*?morrow_identity\.session_eligibility\(p_digest,p_workspace\)/,
   );
-  // No identity table or grant is changed, and no function is dropped or altered.
+  // No identity table is changed, and no function is dropped or altered.
   assert.doesNotMatch(bridge, /\b(ALTER|DROP)\s+(TABLE|FUNCTION)\b/);
   assert.doesNotMatch(bridge, /\bEXECUTE\s+format\b/);
-  assert.equal(bridge.match(/^(GRANT|REVOKE) /gm).length, 12);
+  assert.equal(bridge.match(/^(GRANT|REVOKE) /gm).length, 13);
 });
 
 // One key for the organization interlock: work_lock_and_recheck takes it shared;
@@ -316,6 +321,6 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
   // The `work` leg of the ci.yml postgres matrix (P03.T04f).
   assert.match(
     read(".github/workflows/ci.yml"),
-    /leg: \[core-http, linking, work\]\n[^]*if: matrix\.leg == 'work'\n\s+run: npm run lab:group:pg-work\n/,
+    /leg: \[core, http, linking, work\]\n[^]*if: matrix\.leg == 'work'\n\s+run: npm run lab:group:pg-work\n/,
   );
 });

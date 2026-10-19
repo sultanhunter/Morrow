@@ -22,6 +22,15 @@ Account identity records (P05.T01x Part B, ADR-0009 item 6). All four tables are
 | `organization_signups` | Audit and replay record; organization lifetime | Pseudonymize the principal association on erasure |
 | `self_service_revisions` | Platform configuration audit; at least 365 days, latest row kept | None; `approval_ref` must not be personal data |
 
+Browser session lifecycle records (P05.T01y, ADR-0004, migration 0016). No row holds content: identifiers, digests, instants and a fixed cause.
+
+| Table | Class and retention | Erasure hook |
+| --- | --- | --- |
+| `organization_session_signouts` | Content-free audit, 365 days. A row stays effective while any family committed before it can live (12 hours) or a legacy `sessions` row of the same pair is unexpired | P09.T05 replaces `preserve_session_signout_record()` to pseudonymize `principal_id` on principal erasure and to prune after 365 days |
+| `browser_session_generations`, `browser_session_audits` (rotation and reuse rows) | Content-free audit, 365 days; digests and ids only | P09.T05 replaces `preserve_browser_session_record()` for pruning and pseudonymization. P05.T01y adds no pruning path |
+
+Growth: at most one rotation per 5 minutes of activity, so at most 144 generation rows and 144 audit rows per person per 12-hour day, about 105,000 rows per person-year at 365 days. This is a P09.T05 sizing input; no real data exists before P09.T05.
+
 No real user may enroll until the P09.T05 deletion path covers principal, mapping and enrollment (ADR-0003 hard ordering (b)); self-service stays disabled except on development and staging profiles with an allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Daily recovery snapshots/exports are separately retained thirty-five days in production/seven in staging; they do not provide thirty-five-day point-in-time recovery. Qualify changed storage, matching artifact revision manifests and erasure/revocation replay.
@@ -32,6 +41,6 @@ Shopify mandatory privacy topics apply to public apps regardless of granted data
 
 Object versions, derived search indexes, embeddings if later added, artifact previews, context snippets and external model/provider retained copies are included in the deletion plan. Erasure ledger must survive a restore of older business data; P04 decides its independent retention/durability and tests replay. A record in the restored database alone cannot prove post-backup deletions are remembered. Revocation/deletion replay precedes reads, dispatch and connector reactivation.
 
-OpenAI store:false is required but does not establish zero retention. Regional project eligibility, model/endpoint availability and retention controls require separate account evidence. Hosted files, vector stores, background jobs and other retained tools cannot silently enter an approved low-retention route. Redact or deny sensitive classes where an allowed provider route is absent. [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data)
+Model provider (ADR-0022 item 10): Anthropic does not train on commercial API inputs or outputs by default and deletes them within 30 days; content flagged by its trust and safety systems may be kept up to 2 years, and the classification scores of flagged content up to 7 years. Structured-output schemas are cached up to 24 hours after their last use and hold no merchant data. Zero data retention needs an agreement Morrow does not have, so disclosures say "up to 30 days; if flagged by Anthropic's safety systems, the content up to 2 years and its classification scores up to 7 years". Only the merchant's request text and product catalogue fields are sent; Morrow stores neither prompts nor raw outputs. Files, Batches, code execution, Managed Agents and other retained provider features cannot silently enter this route. Regional processing (`inference_geo`) and model or endpoint eligibility require separate account evidence. Redact or deny sensitive classes where an allowed provider route is absent. [Anthropic API and data retention](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention)
 
 Migration: none yet. P07/P09/P10 implement classified bytes/projections/deletion; P04/P18 qualify recovery. Every policy change names retained content and dependent runs; increasing retention or changing processors requires the canonical plan to change first.

@@ -1,8 +1,16 @@
 import type { ApiBrokerRpc } from "../../../packages/identity/src/broker-protocol.js";
 import { captureManagedWorkspaceBinding } from "../../../packages/identity/src/managed-workspace-binding.js";
 import { loginJson } from "../../../packages/identity/src/standalone-login-protocol.js";
+import {
+  abuseGuardLimiterBindings,
+  parseLoginChallengeConfiguration,
+  type AbuseGuardConfiguration,
+  type AbuseGuardLimiters,
+  type RateLimiter,
+} from "./abuse-guard.js";
 
-// Synchronous Worker env -> ManagedWorkspaceApiDependencies inputs (P04.T02a D6).
+// Synchronous Worker env -> ManagedWorkspaceApiDependencies inputs (P04.T02a D6),
+// plus the P05.T01ab abuse-guard bindings (step 10).
 // It never throws; the first failing check decides the code, and any failure
 // keeps the api on the existing deny-all instance. Production never maps here
 // (ADR-0007 item 9).
@@ -16,7 +24,8 @@ export type ApiEnvironmentCode =
   | "API_ENV_PARTIAL"
   | "API_ENV_VALUE_INVALID"
   | "API_ENV_CROSS_BINDING_MISMATCH"
-  | "API_ENV_BROKER_BINDING_INVALID";
+  | "API_ENV_BROKER_BINDING_INVALID"
+  | "API_ENV_ABUSE_GUARD_MISSING";
 export type ApiEnvironmentName = "development" | "staging" | "production";
 export interface ApiEnvironmentValues {
   readonly login: string;
@@ -31,6 +40,7 @@ export type ApiEnvironmentMapping =
       environment: ApiEnvironmentName;
       values: Readonly<ApiEnvironmentValues>;
       broker: ApiBrokerRpc;
+      guard: Readonly<AbuseGuardConfiguration>;
     }>
   | Readonly<{ ok: false; code: ApiEnvironmentCode }>;
 
@@ -43,7 +53,7 @@ export const apiEnvironmentValueBindings = Object.freeze([
   ["LOGIN_CAPSULE_KEYRING", "keyring", 4096],
 ] as const);
 const environments: readonly string[] = ["development", "staging", "production"];
-const providerPrefix = /^(WORKOS_|MORROW_DB_PASSWORD_|SHOPIFY_|OPENAI_|E2B_|NEON_|PG)/i;
+const providerPrefix = /^(WORKOS_|MORROW_DB_PASSWORD_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG)/i;
 const credentialWord = /KEY|SECRET|PASSWORD|TOKEN/i;
 const encoder = new TextEncoder();
 const fail = (code: ApiEnvironmentCode): ApiEnvironmentMapping =>
@@ -173,21 +183,65 @@ export function mapApiEnvironment(env: unknown): ApiEnvironmentMapping {
     return fail("API_ENV_VALUE_INVALID");
   }
   // 9. The broker service binding (ApiBroker entrypoint).
+  let broker: ApiBrokerRpc;
   try {
-    const broker = dataProperty(record, "BROKER").value;
+    const value = dataProperty(record, "BROKER").value;
     if (
-      broker === null ||
-      typeof broker !== "object" ||
-      typeof (broker as { fetch?: unknown }).fetch !== "function"
+      value === null ||
+      typeof value !== "object" ||
+      typeof (value as { fetch?: unknown }).fetch !== "function"
     )
       return fail("API_ENV_BROKER_BINDING_INVALID");
-    return Object.freeze({
-      ok: true,
-      environment,
-      values: mapped,
-      broker: broker as ApiBrokerRpc,
-    });
+    broker = value as ApiBrokerRpc;
   } catch {
     return fail("API_ENV_BROKER_BINDING_INVALID");
+  }
+  // 10. The abuse guard (P05.T01ab, ADR-0019 items 6-8).
+  const guard = mapAbuseGuard(record, environment);
+  if (!guard) return fail("API_ENV_ABUSE_GUARD_MISSING");
+  return Object.freeze({ ok: true, environment, values: mapped, broker, guard });
+}
+
+// Step 10 as a pure function of the record and the environment, so its rule is tested
+// for every environment: production too, which fails earlier, at step 7, while
+// ADR-0007 item 9 stands. LOGIN_CHALLENGE_JSON and the three limiter bindings are
+// required in staging and production. In development each part is optional (the
+// committed development config binds only the limiters), but a present part must be
+// valid, and the limiters come all three or none. null is API_ENV_ABUSE_GUARD_MISSING.
+export function mapAbuseGuard(
+  record: object,
+  environment: ApiEnvironmentName,
+): Readonly<AbuseGuardConfiguration> | null {
+  try {
+    const challengePresent = Object.hasOwn(record, "LOGIN_CHALLENGE_JSON");
+    const limiterCount = abuseGuardLimiterBindings.filter(([name]) =>
+      Object.hasOwn(record, name),
+    ).length;
+    if (
+      (environment !== "development" && (!challengePresent || limiterCount === 0)) ||
+      (limiterCount !== 0 && limiterCount !== abuseGuardLimiterBindings.length)
+    )
+      return null;
+    const challenge = challengePresent
+      ? parseLoginChallengeConfiguration(dataProperty(record, "LOGIN_CHALLENGE_JSON").value)
+      : null;
+    let limiters: Readonly<AbuseGuardLimiters> | null = null;
+    if (limiterCount !== 0) {
+      const bound: Partial<Record<keyof AbuseGuardLimiters, RateLimiter>> = {};
+      for (const [name, key] of abuseGuardLimiterBindings) {
+        const value = dataProperty(record, name).value;
+        if (
+          value === null ||
+          (typeof value !== "object" && typeof value !== "function") ||
+          typeof (value as { limit?: unknown }).limit !== "function"
+        )
+          return null;
+        bound[key] = value as RateLimiter;
+      }
+      limiters = Object.freeze(bound as AbuseGuardLimiters);
+    }
+    return Object.freeze({ challenge, limiters });
+  } catch {
+    return null;
   }
 }

@@ -469,7 +469,8 @@ await withWorkDatabase("P06.T01a.work-postgresql", async (db) => {
       !insertGoal("active", 1).ok && !insertGoal("draft", 2).ok && insertGoal("draft", 1).ok,
     );
     const rules = db.rows(
-      "SELECT machine, from_status, to_status, actor, guard FROM morrow_work.transition_rules",
+      // P06.T01b (0018) adds the approval machine; goal, task and question stay at v1.
+      "SELECT machine, from_status, to_status, actor, guard FROM morrow_work.transition_rules WHERE machine IN ('goal','task','question')",
     );
     const expected = ["goal", "task", "question"].flatMap((m) =>
       v1Rows(m).map((r) => [m, r.from, r.to, r.actor, r.guard].join("|")),
