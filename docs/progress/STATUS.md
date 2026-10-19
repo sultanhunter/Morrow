@@ -37,7 +37,7 @@ In progress:
 ## Next actions
 
 1. P03.T04e PR-A (PR #11): hosted `foundation` green on the merged head and the Tier 2 AI review, then merge and dispatch `heavy-faults.yml` on `main` (AC22). Then P14.T01a PR-2 (account and work wiring).
-2. P01.T04a PR-B (billing route library).
+2. P01.T04a PR-B (billing route library): implemented and pushed on `claude/p01-t04a-b-billing-routes` (no PR yet, to save Actions minutes); open the PR when minutes allow, then hosted CI, the Tier 2 AI review and `/security-review`.
 3. P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
 4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11). Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.
 
