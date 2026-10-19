@@ -11,6 +11,7 @@ export const copy = {
   closeNavigation: "Close navigation",
   signIn: {
     title: "Sign in to Morrow",
+    landing: "You'll continue to the sign-in page, then come back to your workspaces.",
     sessionEndedTitle: "Sign in to continue",
     sessionEnded: "Your session ended. Sign in again to open this workspace.",
     button: "Sign in",
@@ -43,13 +44,19 @@ export const copy = {
     workspaceName: "Workspace name",
     nameHint: "1 to 100 characters.",
     create: "Create organization",
+    creating: "Creating…",
     created: "Your organization was created.",
     invalidName: "Check this name and try again.",
     unavailable: "Creating an organization isn't available for this account.",
     alreadyOnboarded: "You already created an organization. Your workspaces are listed again.",
     keyConflict: "This request didn't match an earlier one. Edit the form and submit again.",
-    rateLimited: (seconds: number) =>
-      `Too many attempts. You can try again in ${Math.ceil(seconds / 60)} minute(s).`,
+    rateLimited: (seconds: number) => {
+      const wait =
+        seconds < 60
+          ? `${seconds} ${seconds === 1 ? "second" : "seconds"}`
+          : `${Math.ceil(seconds / 60)} ${Math.ceil(seconds / 60) === 1 ? "minute" : "minutes"}`;
+      return `Too many attempts. Nothing was created. You can try again in ${wait}.`;
+    },
   },
   workspace: {
     unavailableTitle: "This workspace isn't available to you",
@@ -141,6 +148,8 @@ export const copy = {
       "This task changed. The current values are shown; review them and try again.",
     noQuestions: "No questions on this task.",
     openQuestion: "Open question",
+    showAnswer: "Show answer",
+    hideAnswer: "Hide answer",
     cancelQuestion: "Cancel question",
     questionCancelled: "Question cancelled.",
     peopleUnavailable:
@@ -162,6 +171,7 @@ export const copy = {
     title: "Question",
     back: "Back to Inbox",
     answerLabel: "Your answer",
+    answerTitle: "Answer",
     answerHint: "Up to 8,192 characters.",
     answerNote: "Answering doesn't approve any change.",
     send: "Send answer",
@@ -178,6 +188,9 @@ export const copy = {
     notSaved: "Couldn't save. Nothing was changed.",
     tryAgain: "Try again",
     invalid: "Check the highlighted fields and try again.",
+    // A 400 that names no field (a guard refusal, or a request refused before sending):
+    // nothing on the form is highlighted, and editing it can't fix the request.
+    refused: "This request was refused. Nothing was changed. Reload the page and try again.",
     rateLimited: "Too many attempts. Wait a moment, then try again.",
   },
   reentry: {

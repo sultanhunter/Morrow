@@ -5550,5 +5550,919 @@
         "HOST_INVALID"
       ]
     }
+  },
+  {
+    "id": "P01.A01.human_opens_private_ask.standalone",
+    "capability": "workspace.conversation.create",
+    "description": "human opens a private Ask (P01.T02c)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "workspace.conversation.create"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "store",
+          "subject"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "store"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.agent_posts_in_task_conversation.standalone",
+    "capability": "workspace.conversation.post",
+    "description": "bounded agent posts in its task conversation (P01.T02c)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "workspace.conversation.post"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "parts",
+          "reply",
+          "sources"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "workspace.conversation.post"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "parts",
+          "reply",
+          "sources"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "parts"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.agent_cannot_read_inbox.standalone",
+    "capability": "workspace.inbox.read",
+    "description": "agent reading an inbox is human-only (P01.T02c)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "workspace.inbox.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "kind",
+          "subject",
+          "decision state",
+          "read state"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "workspace.inbox.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "kind",
+          "subject",
+          "decision state",
+          "read state"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "kind"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "HUMAN_EXECUTOR_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.agent_cannot_request_access.standalone",
+    "capability": "governance.access.request",
+    "description": "agents have no access-request path (P01.T02c)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "governance.access.request"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "capability",
+          "resource",
+          "field",
+          "reason"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "governance.access.request"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "capability",
+          "resource",
+          "field",
+          "reason"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "capability"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": true,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "HUMAN_EXECUTOR_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.human_reads_without_entitlement.standalone_session_b",
+    "capability": "catalog.products.read",
+    "description": "human reads without a billing entitlement (P01.T04a)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": false,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.human_reads_without_entitlement.standalone",
+    "capability": "catalog.products.read",
+    "description": "human reads without a billing entitlement (P01.T04a)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": false,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.human_decides_approval_without_entitlement.standalone_session_b",
+    "capability": "governance.approval.decide",
+    "description": "human decides an approval without a billing entitlement (P01.T04a)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "governance.approval.decide"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "exact resources",
+          "fields",
+          "parameters",
+          "cost",
+          "expiry"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "exact resources"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": false,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.human_decides_approval_without_entitlement.standalone",
+    "capability": "governance.approval.decide",
+    "description": "human decides an approval without a billing entitlement (P01.T04a)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "governance.approval.decide"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "exact resources",
+          "fields",
+          "parameters",
+          "cost",
+          "expiry"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "exact resources"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": false,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.human_pauses_campaigns_without_entitlement.standalone_session_b",
+    "capability": "ads.campaign.pause",
+    "description": "human pauses campaigns without a billing entitlement (ADR-0011 Q8, P01.T04a)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "ads.campaign.pause"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": false,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": null,
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": false,
+        "reviewerEligible": false,
+        "budgetReserved": false,
+        "costMinor": "0",
+        "ceilingMinor": "0",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD",
+        "killSwitchReason": "Overspend on a misconfigured campaign"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.human_pauses_campaigns_without_entitlement.standalone",
+    "capability": "ads.campaign.pause",
+    "description": "human pauses campaigns without a billing entitlement (ADR-0011 Q8, P01.T04a)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "ads.campaign.pause"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "origin": null,
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "delivery status"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": false,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": null,
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": false,
+        "reviewerEligible": false,
+        "budgetReserved": false,
+        "costMinor": "0",
+        "ceilingMinor": "0",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD",
+        "killSwitchReason": "Overspend on a misconfigured campaign"
+      }
+    },
+    "expected": {
+      "allowed": true,
+      "reasons": []
+    }
+  },
+  {
+    "id": "P01.A01.agent_read_requires_entitlement.standalone_session_b",
+    "capability": "catalog.products.read",
+    "description": "agent read is metered model work and needs an entitlement (P01.T04a)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": false,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ENTITLEMENT_DENIED"
+      ]
+    }
+  },
+  {
+    "id": "P01.A01.agent_read_requires_entitlement.standalone",
+    "capability": "catalog.products.read",
+    "description": "agent read is metered model work and needs an entitlement (P01.T04a)",
+    "request": {
+      "host": "standalone",
+      "principal": {
+        "kind": "agent",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "origin": {
+        "kind": "human",
+        "operator": false,
+        "revoked": false,
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "grants": [
+          "catalog.products.read"
+        ],
+        "stores": [
+          "store-a"
+        ],
+        "resources": [
+          "resource-a"
+        ],
+        "accounts": [
+          "account-a"
+        ],
+        "fields": [
+          "title",
+          "description",
+          "SEO",
+          "variants",
+          "media",
+          "tags"
+        ]
+      },
+      "target": {
+        "tenant": "tenant-a",
+        "workspace": "workspace-a",
+        "store": "store-a",
+        "resource": "resource-a",
+        "account": "account-a",
+        "fields": [
+          "title"
+        ]
+      },
+      "conditions": {
+        "mandateCurrent": true,
+        "providerQualified": true,
+        "providerPermission": true,
+        "entitled": false,
+        "sourceAuthorized": true,
+        "preconditionCurrent": true,
+        "approvedDigest": "proposal-v1",
+        "proposalDigest": "proposal-v1",
+        "approvalCurrent": true,
+        "reviewerEligible": true,
+        "budgetReserved": true,
+        "costMinor": "100",
+        "ceilingMinor": "200",
+        "costCurrency": "USD",
+        "ceilingCurrency": "USD"
+      }
+    },
+    "expected": {
+      "allowed": false,
+      "reasons": [
+        "ENTITLEMENT_DENIED"
+      ]
+    }
   }
 ]

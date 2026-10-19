@@ -18,7 +18,7 @@
     "verify:providers": "node scripts/verify-providers.mjs",
     "test:providers": "node --test tests/providers.test.mjs",
     "cost:estimate": "node scripts/cost-estimate.mjs",
-    "verify:billing": "node scripts/verify-billing.mjs",
+    "verify:billing": "node --import tsx scripts/verify-billing.mjs",
     "test:billing": "node --import tsx --test tests/billing.test.mjs",
     "verify:design": "node scripts/verify-design.mjs",
     "ui:tokens": "node scripts/generate-ui-tokens.mjs",

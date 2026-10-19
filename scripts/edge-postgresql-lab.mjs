@@ -75,7 +75,8 @@ function fixtureAdministratorSql(engineId, sql) {
       "-d",
       "morrow",
     ],
-    { input: sql, encoding: "utf8", timeout: 10000, maxBuffer: 1048576 },
+    // Docker on a loaded developer machine can take tens of seconds per exec.
+    { input: sql, encoding: "utf8", timeout: 60000, maxBuffer: 1048576 },
   );
   require(!result.error && result.status === 0, "FIXTURE_SQL_FAILED");
   return result.stdout.trim();
@@ -84,8 +85,13 @@ function fixtureAdministratorSql(engineId, sql) {
 // The journeys, given an owned engine and the matching WSS->TCP service factory.
 // `hook` (P14.T01a) lets the browser lab reuse this setup unchanged: `origin` and
 // `listen` give the api a real HTTPS listener on an ephemeral port, and `journeys`
-// replaces the P04 scenarios; the cleanup and marker checks stay shared.
+// replaces the P04 scenarios; the cleanup and marker checks stay shared. `work`
+// (P14.T01a PR-2) also applies the work role prerequisites and migrations 0014-0015
+// before the seal, so the api's /workspace/:ws/work routes reach PostgreSQL as
+// morrow_api_worker; the engine must then log in that role too.
 export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
+  const work = hook.work === true;
+  const migrationCount = work ? 15 : 13;
   const checks = [];
   const cases = [];
   // privateMarkers: never in the report, logs or results. credentialMarkers (a
@@ -111,14 +117,17 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
   const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
   // The login fixture applies 0001-0013 (0013 is account onboarding); those entries must
   // be present in order and checksum-verified. Later manifest entries are not applied.
-  require(manifest.migrations.length >= 13, "MIGRATION_COUNT");
-  const appliedManifest = manifest.migrations.slice(0, 13);
+  require(manifest.migrations.length >= migrationCount, "MIGRATION_COUNT");
+  const appliedManifest = manifest.migrations.slice(0, migrationCount);
   for (const [i, row] of appliedManifest.entries())
     require(row.sequence === i + 1 &&
       hash(readFileSync("migrations/" + row.file)) === row.sha256, "MIGRATION_DRIFT");
   const migrationSql = new Map(
     appliedManifest.map((row) => [
-      "SET ROLE morrow_identity_owner;\n" + readFileSync("migrations/" + row.file, "utf8"),
+      "SET ROLE " +
+        (row.executeAs ?? "morrow_identity_owner") +
+        ";\n" +
+        readFileSync("migrations/" + row.file, "utf8"),
       row.sequence,
     ]),
   );
@@ -136,6 +145,17 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
     },
     { accountOnboarding: true },
   );
+  // Work (P06.T01a): the reviewed role prerequisites, then 0014 and 0015 with their
+  // manifest `executeAs`, through the same order-checking adapter.
+  if (work) {
+    engine.sql(readFileSync("infra/work-role-prerequisites.sql", "utf8"), "morrow");
+    for (const [text, sequence] of migrationSql)
+      if (sequence > 13) {
+        require(sequence === appliedMigrations + 1, "MIGRATION_ORDER");
+        engine.sql(text, "morrow");
+        appliedMigrations = sequence;
+      }
+  }
   const origin = hook.origin ?? "https://127.0.0.1";
   const configuration = harness.configured({ origin });
   const f = configuration.f;
@@ -170,10 +190,13 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
       ],
     });
   };
-  // The engine logs in the seven identity roles. The P06.T01a work login has no role
-  // in this engine and no journey here borrows it; the broker still requires its secret.
-  const workLoginPassword = "Edge-work-" + randomBytes(18).toString("base64url");
+  // The engine logs in the seven identity roles. Without `work` the P06.T01a work login
+  // has no role in this engine and no journey borrows it; the broker still requires its
+  // secret. With `work` the engine logs it in too, and the broker gets its password.
   const passwords = { ...engine.passwordByRole };
+  require(!work || typeof passwords.morrow_api_worker === "string", "WORK_LOGIN_ROLE");
+  const workLoginPassword =
+    passwords.morrow_api_worker ?? "Edge-work-" + randomBytes(18).toString("base64url");
   secret(keyMarker, workLoginPassword, ...Object.values(passwords));
   const databaseBinding = { ...controlledNeonWireBinding, environment: "development" };
   const apiBindings = (change = {}) => ({
@@ -199,8 +222,13 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
 
   stage = "seal";
   const sealed = await engine.sealSetup();
-  check("all_thirteen_unchanged_migrations", appliedMigrations === 13);
-  check("seven_scram_roles", sealed.scramOfferedRoles === 7);
+  if (work) {
+    check("all_fifteen_unchanged_migrations", appliedMigrations === 15);
+    check("eight_scram_roles", sealed.scramOfferedRoles === 8);
+  } else {
+    check("all_thirteen_unchanged_migrations", appliedMigrations === 13);
+    check("seven_scram_roles", sealed.scramOfferedRoles === 7);
+  }
 
   // Passive PG-wire observation of every bridged connection: the startup role.
   // One bridge service admits at most 256 bridges over its life, and the
@@ -643,6 +671,8 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
       outbound,
       bootstrap,
       json,
+      // Owner fixture SQL after the seal (test side only, over the engine's local socket).
+      adminSql: (sql) => fixtureAdministratorSql(engine.id, sql),
     });
     return finish(null);
   }

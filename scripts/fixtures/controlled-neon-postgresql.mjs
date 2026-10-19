@@ -74,6 +74,11 @@ const workspaceProfile = Object.freeze({
     "morrow_identity_onboarding",
   ]),
 });
+// P14.T01a PR-2: the browser journey lab also logs in the api Worker's work login
+// (P06.T01a, purpose work_request_transaction); its migrations run before the seal.
+const workspaceWorkProfile = Object.freeze({
+  roles: Object.freeze([...workspaceProfile.roles, "morrow_api_worker"]),
+});
 const held = () => Error("CONTROLLED_NEON_POSTGRESQL_HELD");
 const require = (value) => {
   if (!value) throw held();
@@ -197,8 +202,13 @@ export async function controlledNeonPostgresqlLab(use) {
 export async function managedWorkspacePostgresqlLab(use) {
   return ownedPostgresqlLab(use, workspaceProfile);
 }
+export async function managedWorkspaceWorkPostgresqlLab(use) {
+  return ownedPostgresqlLab(use, workspaceWorkProfile);
+}
 async function ownedPostgresqlLab(use, profile) {
-  require(profile === loginProfile || profile === workspaceProfile);
+  require(
+    profile === loginProfile || profile === workspaceProfile || profile === workspaceWorkProfile,
+  );
   const roles = profile.roles;
   // Importing this fixture never starts Docker. Integration is isolated Linux CI only.
   require(

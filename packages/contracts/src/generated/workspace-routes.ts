@@ -229,6 +229,42 @@ export const workspaceRouteCatalogue = {
       "parent": "inbox"
     },
     {
+      "id": "project",
+      "pattern": "/w/:workspaceId/projects/:projectId",
+      "title": "Project",
+      "hosts": [
+        "standalone"
+      ],
+      "parent": "work"
+    },
+    {
+      "id": "project_artifact",
+      "pattern": "/w/:workspaceId/projects/:projectId/artifacts/:artifactId",
+      "title": "Project artifact",
+      "hosts": [
+        "standalone"
+      ],
+      "parent": "project"
+    },
+    {
+      "id": "ask_conversation",
+      "pattern": "/w/:workspaceId/ask/:conversationId",
+      "title": "Ask conversation",
+      "hosts": [
+        "standalone"
+      ],
+      "parent": "ask"
+    },
+    {
+      "id": "access_request",
+      "pattern": "/w/:workspaceId/inbox/access-requests/:accessRequestId",
+      "title": "Access request",
+      "hosts": [
+        "standalone"
+      ],
+      "parent": "inbox"
+    },
+    {
       "id": "settings_section",
       "pattern": "/w/:workspaceId/settings/:section",
       "title": "Settings section",
