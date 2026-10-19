@@ -188,6 +188,12 @@ for (const [name, path, code, expected] of [
     "RUNTIME_ADAPTER_IMPORT_DENIED",
   ],
   [
+    "test_fixture_import",
+    "packages/work/src/approvals/index.ts",
+    "import { approvalProducers } from '../../../../tests/fixtures/approval-producers.mjs';",
+    "TEST_FIXTURE_IMPORT",
+  ],
+  [
     "runtime_adapter_file_url_import",
     "packages/runtime/src/harness.mts",
     `import {createProvider} from ${JSON.stringify(pathToFileURL(resolve("packages/runtime-adapters/src/e2b/client.ts")).href)};`,

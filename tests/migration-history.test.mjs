@@ -78,6 +78,19 @@ const published = [
     "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
   ],
   [15, "0015.work-state.sql", "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9"],
+  // 0016 is reserved for P05.T01y, which merges first; until then the sequence test
+  // below fails on this branch by design (a migration is never inserted ahead of a
+  // published one).
+  [
+    17,
+    "0017.approval-identity-bridge.sql",
+    "aeea6fc92ee170dce14e7d3b765f5e3d5d86736213ee2eb8377ac5fa9584966f",
+  ],
+  [
+    18,
+    "0018.approval-records.sql",
+    "bd1008da83d7737a5b1044bf78c8b7dc3e02775c06f08e3ac53469eea08c8f1f",
+  ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));

@@ -1,3 +1,5 @@
+import { approvalStatements } from "./approvals/sql.js";
+
 // Every statement the work API sends (ADR-0010 item 2). Source-fixed: no caller
 // SQL, role, option or identifier is ever interpolated; values travel only as
 // bind parameters. The prologue is the one fixed, parameter-free SET LOCAL ROLE.
@@ -58,5 +60,7 @@ export const workStatements = Object.freeze({
   questionPageOfTask: `SELECT ${questionColumns} FROM ${questionFrom} WHERE q.task_id=$1::text AND ${after("q", 2, 3)} ORDER BY q.created_at,q.id::text COLLATE "C" LIMIT $4::integer`,
   questionPageForRespondent: `SELECT ${questionColumns} FROM ${questionFrom} WHERE q.respondent_principal_id=$1::text AND ($2::text IS NULL OR q.status=$2::text) AND ${after("q", 3, 4)} ORDER BY q.created_at,q.id::text COLLATE "C" LIMIT $5::integer`,
   answerOfQuestion: `SELECT a.id::text AS id,a.organization_id::text AS organization_id,a.workspace_id::text AS workspace_id,a.question_id::text AS question_id,a.body,a.body_digest::text AS body_digest,a.answered_by_principal_id::text AS answered_by_principal_id,a.answered_by_membership_id::text AS answered_by_membership_id,${utc("a.created_at")} AS created_at FROM morrow_work.question_answers a WHERE a.question_id=$1::text`,
+  // The approval records (P06.T01b), from their own fixed table.
+  ...approvalStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

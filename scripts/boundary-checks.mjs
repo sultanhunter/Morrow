@@ -146,6 +146,9 @@ export function inspectImports(file, code) {
       const target = localTarget;
       if (productionSource && !broker && /^apps\/broker\//.test(target))
         errors.push("BROKER_SOURCE_IMPORT");
+      // Test-only fixtures (such as the P06.T01b approval producers) never reach
+      // product code: the production producer registry stays empty.
+      if (productionSource && /^tests\//.test(target)) errors.push("TEST_FIXTURE_IMPORT");
       if (broker && /^apps\//.test(target) && !/^apps\/broker\//.test(target))
         errors.push("BROKER_APP_IMPORT");
       if (productionSource && adapterPath(target) && !composition) {
