@@ -537,6 +537,7 @@ try {
         // value and their callbacks then reused one check name (hosted runs 39260319338
         // and 39286443600: CONTROLLED_PG_CHECK_NAME at actual_84_callback_delivery_3).
         const serial = ++flowSerial;
+        const oracle = activeOracle;
         try {
           const jar = createBoundedLoginCookieJar();
           const response = await dispatch("/auth/login", {
@@ -574,7 +575,7 @@ try {
               acceptCookie(),
           );
           const authorizationUrl = (await response.json()).authorizationUrl;
-          const callback = activeOracle.arm(authorizationUrl);
+          const callback = oracle.arm(authorizationUrl);
           privateMarkers.push(callback.code, callback.token, authorizationUrl);
           return { jar, callback, serial };
         } catch (error) {
