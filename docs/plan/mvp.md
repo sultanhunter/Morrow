@@ -2,6 +2,8 @@
 
 This is the launch plan. `build-plan.md` stays the long-term roadmap and structure, but this file decides what is built before launch and in what order. Each milestone ships as feature-sized PRs, each with a one-page brief in `docs/briefs/`.
 
+Briefs: the shared architecture spine [`docs/briefs/mvp-architecture.md`](../briefs/mvp-architecture.md), then [M2 Shopify connect](../briefs/M2-shopify-connect.md), [M3 Listings agent](../briefs/M3-listings-agent.md), [M4 Approve and apply](../briefs/M4-approve-and-apply.md) and [M5 Billing](../briefs/M5-billing.md).
+
 ## The launch slice
 
 1. A merchant signs up on the Morrow website.
