@@ -40,7 +40,8 @@ after(async () => {
   release?.();
   await started;
 });
-const rows = (query) => db.rows(query);
+// The options carry `role` (SET ROLE before the query) through to the harness.
+const rows = (query, options) => db.rows(query, options);
 const names = (list) => [...list].sort();
 const tenantTables = Object.entries(workTables)
   .filter(([, t]) => t.class !== "platform")
@@ -338,18 +339,22 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
   );
   assert.deepEqual(forbidden, []);
   // ADR-0020 (P04.T01j D7): the recorded administrator is the login that applied the
-  // chain, and the rows naming a work role are exact. The two reviewed rows are granted by
-  // the recorded administrator. In createrole mode each work role also has its one
-  // PG16+ creation row (member the administrator, grantor the bootstrap superuser oid 10,
-  // admin true, inherit false, set false); a local superuser setup has none.
-  const createrole = db.administrator === "createrole";
+  // chain, and the rows naming a work role are exact. The suite runs in the hosted shape
+  // only: a non-superuser CREATEROLE administrator. The two reviewed rows are granted by
+  // the recorded administrator, and each work role also has its one PG16+ creation row
+  // (member the administrator, grantor the bootstrap superuser oid 10, admin true, inherit
+  // false, set false). The local superuser shape, which has no creation rows, is checked
+  // by container S of lab:createrole-administrator.
+  assert.equal(db.administrator, "createrole");
+  // The owner reads the record through its identity_owner SELECT policy (FORCE RLS).
   const [record] = rows(
-    "SELECT a.role_oid::bigint AS oid, a.role_name AS name, (SELECT count(*) FROM morrow_identity.migration_administrator)::int AS n FROM morrow_identity.migration_administrator a",
+    "SELECT current_user AS reader, a.role_oid::bigint AS oid, a.role_name AS name, (SELECT count(*) FROM morrow_identity.migration_administrator)::int AS n FROM morrow_identity.migration_administrator a",
     { role: "morrow_identity_owner" },
   );
+  assert.equal(record.reader, "morrow_identity_owner");
   assert.equal(record.n, 1);
-  assert.equal(record.name, createrole ? "neondb_owner" : "postgres");
-  assert.equal(createrole, record.oid !== 10);
+  assert.equal(record.name, "neondb_owner");
+  assert.notEqual(record.oid, 10);
   const members = rows(
     "SELECT g.rolname AS role, u.rolname AS member, m.grantor::bigint AS grantor, m.admin_option, m.inherit_option, m.set_option FROM pg_auth_members m JOIN pg_roles g ON g.oid=m.roleid JOIN pg_roles u ON u.oid=m.member WHERE g.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker') OR u.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker')",
   );
@@ -360,11 +365,9 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
     [
       ["morrow_work_api", "morrow_api_worker", record.oid, false, false, true],
       ["morrow_work_command", "morrow_work_owner", record.oid, false, false, true],
-      ...(createrole
-        ? ["morrow_work_owner", "morrow_work_command", "morrow_work_api", "morrow_api_worker"].map(
-            (role) => [role, record.name, 10, true, false, false],
-          )
-        : []),
+      ...["morrow_work_owner", "morrow_work_command", "morrow_work_api", "morrow_api_worker"].map(
+        (role) => [role, record.name, 10, true, false, false],
+      ),
     ]
       .map((row) => row.join(" "))
       .sort(),
@@ -372,9 +375,11 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
   // Every Morrow role is closed, evaluated as the owner from a superuser session (so the
   // in-transaction runner rule (C) cannot apply), and no SET row names a Morrow role
   // except the two reviewed rows.
-  const [closed] = rows("SELECT morrow_identity.morrow_memberships_closed() AS closed", {
-    role: "morrow_identity_owner",
-  });
+  const [closed] = rows(
+    "SELECT current_user AS caller, morrow_identity.morrow_memberships_closed() AS closed",
+    { role: "morrow_identity_owner" },
+  );
+  assert.equal(closed.caller, "morrow_identity_owner");
   assert.equal(closed.closed, true);
   const [setRows] = rows(morrowSetRowsSql.replace("SELECT count(*)", "SELECT count(*)::int AS n"));
   assert.equal(setRows.n, 0);

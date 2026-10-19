@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { scanSqlScript } from "../scripts/migration-sql.mjs";
 
 // Applied migrations are immutable. This frozen list pins every published migration
 // independently of migrations/manifest.json, so a coordinated edit of a migration file
@@ -307,7 +308,11 @@ const exactChanges = Object.freeze({
   ],
 });
 // The D1-D2 preamble of 0005, right after its BEGIN: one table, its policy and trigger,
-// five functions and the administrator check; no GRANT.
+// five functions and the administrator check; no GRANT. It is new text, so the undo below
+// removes it whole; these exact bytes bound it instead, like the exact 0014 and 0015
+// inserts above. A pre-closure correction (ADR-0020 item 7) changes this pin in review,
+// and the statement list below still refuses any statement outside D1 and D2.
+const preambleSha256 = "e44f092dff788b8c7b6c37504540a51f2979eff633757d7df31c62fc9628c2a0";
 const preambleStart = "BEGIN;\n-- ADR-0020 (P04.T01j D1-D2): ";
 const preambleEnd = "END $$;\n-- Controlled local linking only.";
 function splitPreamble(text) {
@@ -339,6 +344,10 @@ function undoRebaseline(sequence, text) {
   });
 }
 
+// ADR-0020 item 7 makes the exception conditional on the owner's confirmation that no
+// database they know of applied 0005 or later. The ADR's Approval section must quote it.
+const confirmationLine =
+  /^Item 7 confirmation, [0-9]{4}-[0-9]{2}-[0-9]{2}, in chat\. .*the owner answered "[^"]+"/m;
 test("ADR-0020: exactly one rebaseline record, and only while its ADR is Accepted", () => {
   assert.equal(rebaselines.length, 1);
   const index = readFileSync("docs/decisions/adr/README.md", "utf8").split("\n");
@@ -349,6 +358,12 @@ test("ADR-0020: exactly one rebaseline record, and only while its ADR is Accepte
     assert.equal(rows.length, 1, record.adr);
     const cells = rows[0].split("|").map((cell) => cell.trim());
     assert.match(cells.at(-2), /^Accepted /, record.adr + " must be Accepted in the index");
+    const file = /\]\((ADR-[0-9]{4}-[a-z0-9-]+\.md)\)/.exec(rows[0])?.[1];
+    assert.ok(file, record.adr);
+    const approval = readFileSync("docs/decisions/adr/" + file, "utf8").split("\n## Approval\n");
+    assert.equal(approval.length, 2, record.adr + " has one Approval section");
+    assert.match(approval[1], confirmationLine, record.adr + " item 7 confirmation is quoted");
+    assert.doesNotMatch(approval[1], /not quoted in this record/);
     assert.deepEqual(
       Object.keys(record.superseded).map(Number),
       [...record.sequences],
@@ -390,6 +405,42 @@ test("ADR-0020: undoing the D3 substitutions reproduces every superseded digest"
     record.sequences.map((s) => genericSites[s].length),
     [1, 2, 2, 3, 2, 2, 4, 1, 2, 1, 0],
   );
+});
+
+// The preamble's top-level statements, in order, with whitespace collapsed. Routine and DO
+// bodies are bound by the digest; their heads, and every other statement, are exact.
+const preambleStatements = Object.freeze([
+  /^CREATE TABLE morrow_identity\.migration_administrator\(singleton boolean PRIMARY KEY DEFAULT true CHECK\(singleton\), role_oid oid NOT NULL, role_name name NOT NULL, recorded_at timestamptz NOT NULL DEFAULT statement_timestamp\(\)\)$/,
+  /^INSERT INTO morrow_identity\.migration_administrator\(role_oid,role_name\) SELECT r\.oid,r\.rolname FROM pg_catalog\.pg_roles r WHERE r\.rolname=session_user AND r\.rolcanlogin AND \(r\.rolsuper OR r\.rolcreaterole\) AND r\.rolname NOT LIKE 'morrow\\_%'$/,
+  /^CREATE FUNCTION morrow_identity\.preserve_migration_administrator\(\) RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,morrow_identity,pg_temp AS \$\$[^$]*\$\$$/,
+  /^CREATE TRIGGER migration_administrator_immutable BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON morrow_identity\.migration_administrator FOR EACH STATEMENT EXECUTE FUNCTION morrow_identity\.preserve_migration_administrator\(\)$/,
+  /^REVOKE ALL ON morrow_identity\.migration_administrator FROM PUBLIC$/,
+  /^ALTER TABLE morrow_identity\.migration_administrator ENABLE ROW LEVEL SECURITY$/,
+  /^ALTER TABLE morrow_identity\.migration_administrator FORCE ROW LEVEL SECURITY$/,
+  /^CREATE POLICY identity_owner ON morrow_identity\.migration_administrator FOR SELECT TO morrow_identity_owner USING\(true\)$/,
+  /^CREATE FUNCTION morrow_identity\.recorded_administrator\(\) RETURNS oid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS \$\$[^$]*\$\$$/,
+  /^CREATE FUNCTION morrow_identity\.memberships_closed\(p_role name\) RETURNS boolean LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS \$\$[^$]*\$\$$/,
+  /^CREATE FUNCTION morrow_identity\.morrow_memberships_closed\(\) RETURNS boolean LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS \$\$[^$]*\$\$$/,
+  /^CREATE FUNCTION morrow_identity\.executor_memberships_closed\(p_executor name\) RETURNS boolean LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS \$\$[^$]*\$\$$/,
+  /^REVOKE ALL ON FUNCTION morrow_identity\.preserve_migration_administrator\(\),morrow_identity\.recorded_administrator\(\), morrow_identity\.memberships_closed\(name\),morrow_identity\.morrow_memberships_closed\(\), morrow_identity\.executor_memberships_closed\(name\) FROM PUBLIC$/,
+  /^DO \$\$ BEGIN IF current_user<>'morrow_identity_owner' OR [^$]* THEN RAISE EXCEPTION 'MIGRATION_ADMINISTRATOR_INVALID'; END IF; END \$\$$/,
+]);
+// Never in the preamble, in any statement or body: a grant, a drop, an owner or default
+// privilege change, disabling or weakening row-level security or a trigger, or a
+// redefinition.
+const preambleForbidden =
+  /\b(GRANT|DROP|OWNER\s+TO|DEFAULT\s+PRIVILEGES|NO\s+FORCE|DISABLE|OR\s+REPLACE|SECURITY\s+INVOKER|BYPASSRLS|SET\s+ROLE)\b/i;
+
+test("ADR-0020: the 0005 preamble is exactly the pinned D1 and D2 text", () => {
+  const { preamble } = splitPreamble(publishedText(5));
+  assert.equal(sha(preamble), preambleSha256);
+  const { statements, code, metaCommand } = scanSqlScript(preamble);
+  assert.equal(metaCommand, false);
+  assert.doesNotMatch(code, preambleForbidden);
+  const collapsed = statements.map((s) => s.replace(/\s+/g, " "));
+  assert.equal(collapsed.length, preambleStatements.length, collapsed.join("\n"));
+  for (const [index, statement] of collapsed.entries())
+    assert.match(statement, preambleStatements[index], `preamble statement ${index + 1}`);
 });
 
 test("ADR-0020: the 0005 preamble defines only the D1 and D2 objects", () => {

@@ -13,6 +13,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { migrationSqlViolations } from "../migration-sql.mjs";
 
 export const administrator = "neondb_owner";
 export const bootstrapSuperuser = "postgres";
@@ -173,11 +174,20 @@ export function manifestChain() {
   });
 }
 
-// A manifest entry without its own first "BEGIN;" and last "COMMIT;" lines.
+// A manifest entry without its own first "BEGIN;" and last "COMMIT;" lines. The file must
+// be one transaction with no other transaction control, no role or session switch and no
+// psql meta-command (scripts/migration-sql.mjs): otherwise an inner COMMIT would commit
+// the runner's SET row, or a RESET ROLE would run the rest of the file as the
+// administrator.
 export function migrationBody(entry) {
   if (!executeAsRole.test(entry?.executeAs ?? "")) throw Error("CREATEROLE_FIXTURE_ROLE_INVALID");
   const { text } = entry;
-  if (typeof text !== "string" || !text.startsWith("BEGIN;\n") || !text.endsWith("\nCOMMIT;\n"))
+  if (
+    typeof text !== "string" ||
+    !text.startsWith("BEGIN;\n") ||
+    !text.endsWith("\nCOMMIT;\n") ||
+    migrationSqlViolations(text).length !== 0
+  )
     throw Error("CREATEROLE_FIXTURE_FRAMING");
   return text.slice("BEGIN;\n".length, text.length - "COMMIT;\n".length);
 }

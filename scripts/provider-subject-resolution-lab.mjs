@@ -945,6 +945,7 @@ writeArtifact(
           "scripts/local-provider-subject-sql.mjs",
           "scripts/provider-subject-resolution-lab.mjs",
           "packages/identity/src/workos-workspace-selection.ts",
+          "packages/identity/src/executor-role-preflight.ts",
           "packages/identity/src/workos-authentication-evidence.ts",
           "packages/identity/src/workos-session-token.ts",
           "packages/identity/src/workos-session-status.ts",

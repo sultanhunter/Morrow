@@ -3,7 +3,7 @@
 // its use by the eight adapters and the pg-wire oracles' independent copies.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { executorRoleMemberSql } from "../packages/identity/src/executor-role-preflight.ts";
 import { accountOnboardingSql } from "../packages/identity/src/account-onboarding.ts";
 import { authenticationExchangeAdmissionSql } from "../packages/identity/src/authentication-exchange-admission.ts";
@@ -83,4 +83,29 @@ test("the pg-wire oracles' independent literals match the adapters byte for byte
     assert.ok(!oldPreflight.test(source), file);
     assert.ok(!source.includes("executor-role-preflight"), file + " keeps an independent literal");
   }
+});
+
+// The labs' source inventories (their sourceHashes and source_snapshot_unchanged evidence,
+// ADR-0012) must cover the D5 text their adapters now import: every inventory array that
+// lists one of the eight adapters also lists executor-role-preflight.ts.
+test("every lab source inventory that lists an adapter also lists the preflight module", () => {
+  const adapterEntry = new RegExp(
+    `^\\s*"packages/identity/src/(${Object.keys(adapters).join("|")})\\.ts",\\s*$`,
+  );
+  const preflightEntry = /^\s*"packages\/identity\/src\/executor-role-preflight\.ts",\s*$/;
+  let inventories = 0;
+  for (const name of readdirSync("scripts").filter((f) => f.endsWith(".mjs"))) {
+    // Array literals end on a line that starts with "]"; the lines between are one segment.
+    const segments = readFileSync("scripts/" + name, "utf8").split(/\n\s*\]/);
+    for (const segment of segments) {
+      const lines = segment.split("\n");
+      if (!lines.some((line) => adapterEntry.test(line))) continue;
+      inventories += 1;
+      assert.ok(
+        lines.some((line) => preflightEntry.test(line)),
+        `scripts/${name} lists an adapter without packages/identity/src/executor-role-preflight.ts`,
+      );
+    }
+  }
+  assert.ok(inventories >= 28, String(inventories));
 });

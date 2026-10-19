@@ -22,8 +22,8 @@ import {
 // P04.T01j D8 (ADR-0020): the non-superuser migration administrator. Three throwaway
 // network-none PostgreSQL 17 containers, one at a time:
 //   B  a Neon-shaped NOBYPASSRLS CREATEROLE administrator: the apply-time boundary cases,
-//      the chain with the D4 runner protocol, the positive state, the N1-N13 negative
-//      matrix and the in-transaction (C) cases;
+//      the chain with the D4 runner protocol, the positive state, the N1-N15 negative
+//      matrix and the in-transaction (C) cases C1-C6;
 //   A  the same administrator with BYPASSRLS: the chain and the positives;
 //   S  the local superuser shape of every other lab: its record and its zero-row census.
 // The local superuser is used only for the D7 setup, the lab-only probe definer and the
@@ -86,6 +86,30 @@ const linkCall =
   "BEGIN;\nSELECT outcome FROM morrow_identity.link_workspace_store('h1','c1',repeat('a',64),repeat('b',64),repeat('c',64),'o1','w1','i1','install_first','1','1');\n" +
   "SELECT count(*) FROM pg_catalog.pg_locks WHERE locktype='advisory' AND pid=pg_catalog.pg_backend_pid();\nROLLBACK;\n";
 const preflightSql = `SELECT ${executorRoleMemberSql} FROM pg_catalog.pg_roles r WHERE r.rolname=current_user;`;
+// AC06: the real entry point of each executor whose guard is written inline (not through
+// executor_role_safe, which lab_probe.guards() calls), with fixed well-formed inputs that
+// match no row. Its outcome is the same whether the guard denies or the lookup finds
+// nothing, so the probe counts the morrow_identity table scans the call started in its own
+// transaction (pg_stat_xact_user_tables): the guard reads only the catalog and the record,
+// and only a call past its guard and input check reads another table. link_workspace_store
+// is checked by its post-guard advisory lock instead.
+const environment = "'environment_'||repeat('A',26)";
+const application = "'app_'||repeat('A',26)";
+const client = "'client_'||repeat('A',26)";
+const command = "'00000000-0000-4000-8000-000000000001'";
+const entryCalls = Object.freeze({
+  // 0006: admission through preauth_role_safe().
+  morrow_identity_preauth: `SELECT count(*) FROM morrow_identity.begin_authentication_exchange(${command},'c1','b1','1',${environment},${application},${client},'https://example.invalid/callback','/r',repeat('a',64),repeat('b',64),repeat('c',64));`,
+  // 0007: resolution. 0013 retired this entry point, so setupProbe gives it back to the
+  // resolution executor for the lab only.
+  morrow_identity_resolution: `SELECT count(*) FROM morrow_identity.resolve_provider_subject_selection('workos',${environment},${application},${client},'https://api.workos.com/user_management/'||${client},'1',repeat('a',64),'user_'||repeat('A',26),'w1');`,
+  // 0009: the linking read, through bound_workspace_linking_handoff.
+  morrow_identity_linking: `SELECT count(*) FROM morrow_identity.lookup_workspace_store_link(repeat('a',64),'w1',repeat('b',64),${command});`,
+  // 0011: self logout, with a request digest that matches its inputs.
+  morrow_identity_logout: `SELECT f.outcome FROM (VALUES(${command},repeat('a',64),${environment},${application},${client},'p1',repeat('b',64))) v(c,cfg,env,app,cl,prof,sess), LATERAL morrow_identity.end_self_browser_family(v.c,encode(sha256(convert_to(array_to_json(ARRAY['morrow.browser.self_logout','1',v.c,v.cfg,'workos',v.env,v.app,v.cl,v.prof,v.sess])::text,'UTF8')),'hex'),v.cfg,v.env,v.app,v.cl,v.prof,v.sess) f;`,
+});
+const entryScans =
+  "SELECT COALESCE(sum(seq_scan+COALESCE(idx_scan,0)),0) FROM pg_catalog.pg_stat_xact_user_tables WHERE schemaname='morrow_identity' AND relname<>'migration_administrator';";
 const helperProbe =
   "DO $$ DECLARE s text:=''; BEGIN\n" +
   [
@@ -126,7 +150,8 @@ function session(id) {
         "  COALESCE(morrow_identity.executor_memberships_closed(session_user)::text,'null')) $$;\n" +
         "REVOKE ALL ON FUNCTION lab_probe.guards() FROM PUBLIC;\n" +
         `GRANT USAGE ON SCHEMA lab_probe TO ${identityExecutors.join(",")};\n` +
-        `GRANT EXECUTE ON FUNCTION lab_probe.guards() TO ${identityExecutors.join(",")};`,
+        `GRANT EXECUTE ON FUNCTION lab_probe.guards() TO ${identityExecutors.join(",")};\n` +
+        "GRANT EXECUTE ON FUNCTION morrow_identity.resolve_provider_subject_selection(text,text,text,text,text,text,text,text,text) TO morrow_identity_resolution;",
     );
   const guards = (executor) => q("SELECT lab_probe.guards();", executor);
   const guardsPass = (executor) =>
@@ -137,6 +162,15 @@ function session(id) {
     const [outcome, locks] = q(linkCall, "morrow_identity_linking").split("\n");
     return { outcome, locks: Number(locks) };
   };
+  // Table scans started by each inline-guard entry point, by executor.
+  const entryReads = () =>
+    Object.fromEntries(
+      Object.entries(entryCalls).map(([executor, call]) => [
+        executor,
+        Number(q(`BEGIN;\n${call}\n${entryScans}\nROLLBACK;`, executor).split("\n").at(-1)),
+      ]),
+    );
+  const entriesPass = () => Object.values(entryReads()).every((n) => n > 0);
   return {
     q,
     attempt,
@@ -149,6 +183,8 @@ function session(id) {
     guardsPass,
     preflight,
     linkLocks,
+    entryReads,
+    entriesPass,
   };
 }
 
@@ -187,6 +223,7 @@ function positives(s, v) {
     `${v}_link_workspace_store_passes_its_guard`,
     link.outcome === "denied" && link.locks === 1,
   );
+  check(`${v}_inline_guard_entry_points_pass_their_guards`, s.entriesPass());
 }
 
 // The shapes of the negative matrix (D8). setup and undo are [user, SQL]; "sim" marks a
@@ -253,6 +290,7 @@ const negatives = [
     ],
     undo: [A, "REVOKE morrow_identity_owner FROM neondb_owner GRANTED BY neondb_owner;"],
     runtime: true,
+    everyone: true,
     preflight: false,
   },
   {
@@ -274,6 +312,7 @@ const negatives = [
     setup: ["postgres", "GRANT neondb_owner TO lab_outsider WITH INHERIT FALSE, SET TRUE;"],
     undo: ["postgres", "REVOKE neondb_owner FROM lab_outsider;"],
     runtime: true,
+    everyone: true,
     preflight: false,
   },
   {
@@ -287,6 +326,7 @@ const negatives = [
       "UPDATE morrow_identity.migration_administrator SET role_name='neondb_owner';\nALTER TABLE morrow_identity.migration_administrator ENABLE TRIGGER migration_administrator_immutable;",
     ],
     runtime: true,
+    everyone: true,
     preflight: false,
   },
   {
@@ -294,6 +334,7 @@ const negatives = [
     setup: ["postgres", "ALTER ROLE neondb_owner SUPERUSER;"],
     undo: ["postgres", "ALTER ROLE neondb_owner NOSUPERUSER;"],
     runtime: true,
+    everyone: true,
     preflight: true,
   },
   {
@@ -313,6 +354,36 @@ const negatives = [
       "SET createrole_self_grant='set, inherit';\nCREATE ROLE morrow_probe_selfgrant NOLOGIN NOINHERIT;",
     ],
     undo: [A, "DROP ROLE morrow_probe_selfgrant;"],
+    runtime: false,
+    preflight: false,
+  },
+  // The grantor conjuncts, each in a shape that differs from an allowed row only by its
+  // grantor. (A) and the D5 preflight need oid 10: the linking creation row with the
+  // administrator as grantor is its only row. The administrator cannot make that row itself
+  // (GRANT ... WITH ADMIN to itself fails with 0LP01, checked below), so it is a catalog
+  // edit (sim).
+  {
+    n: "n14_creation_row_administrator_grantor_sim",
+    setup: [
+      "postgres",
+      "UPDATE pg_catalog.pg_auth_members SET grantor='neondb_owner'::regrole::oid WHERE roleid='morrow_identity_linking'::regrole AND member='neondb_owner'::regrole AND grantor=10::oid;",
+    ],
+    undo: [
+      "postgres",
+      "UPDATE pg_catalog.pg_auth_members SET grantor=10::oid WHERE roleid='morrow_identity_linking'::regrole AND member='neondb_owner'::regrole AND grantor='neondb_owner'::regrole::oid;",
+    ],
+    runtime: true,
+    preflight: true,
+  },
+  // (B) needs the recorded administrator as grantor: the reviewed pair, also granted by the
+  // bootstrap superuser.
+  {
+    n: "n15_reviewed_pair_bootstrap_grantor_sim",
+    setup: [
+      "postgres",
+      "GRANT morrow_work_api TO morrow_api_worker WITH ADMIN FALSE, INHERIT FALSE, SET TRUE GRANTED BY postgres;",
+    ],
+    undo: ["postgres", "REVOKE morrow_work_api FROM morrow_api_worker GRANTED BY postgres;"],
     runtime: false,
     preflight: false,
   },
@@ -344,6 +415,28 @@ const inTransaction = [
     c: "c5_runner_row_tolerated_for_work_owner",
     sql: "GRANT morrow_work_owner TO neondb_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;\nSET LOCAL ROLE morrow_work_owner;\nSELECT morrow_identity.morrow_memberships_closed();",
     expected: "t",
+  },
+  // (C) needs the administrator as grantor: the runner's SET row with another grantor
+  // (a catalog edit, sim; GRANTED BY the bootstrap superuser would merge into the creation
+  // row, which has the same role, member and grantor).
+  {
+    c: "c6_runner_row_other_grantor_denied_sim",
+    setup: [
+      [A, "GRANT morrow_identity_owner TO neondb_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;"],
+      [
+        "postgres",
+        "UPDATE pg_catalog.pg_auth_members SET grantor='lab_outsider'::regrole::oid WHERE roleid='morrow_identity_owner'::regrole AND member='neondb_owner'::regrole AND grantor='neondb_owner'::regrole::oid;",
+      ],
+    ],
+    sql: "SET LOCAL ROLE morrow_identity_owner;\nSELECT morrow_identity.morrow_memberships_closed();",
+    undo: [
+      [
+        "postgres",
+        "UPDATE pg_catalog.pg_auth_members SET grantor='neondb_owner'::regrole::oid WHERE roleid='morrow_identity_owner'::regrole AND member='neondb_owner'::regrole AND grantor='lab_outsider'::regrole::oid;",
+      ],
+      [A, "REVOKE morrow_identity_owner FROM neondb_owner GRANTED BY neondb_owner;"],
+    ],
+    expected: "f",
   },
 ];
 
@@ -500,6 +593,14 @@ const negativeMatrix = await localPostgresLab("P04.T01j.createrole-b", async (en
       JSON.stringify(Object.entries(helperCallsAtHead).map(([name, n]) => `${name}:${n}`)),
   );
 
+  // The administrator cannot give itself ADMIN on a role it created: PostgreSQL refuses to
+  // grant ADMIN back to the grantor it came from (0LP01), so N14 is a sim.
+  r = s.attempt(
+    "GRANT morrow_identity_linking TO neondb_owner WITH ADMIN TRUE, INHERIT FALSE, SET FALSE;",
+    A,
+  );
+  check("b_administrator_cannot_grant_itself_admin", !r.ok && r.sqlstate === "0LP01" && s.closed());
+
   // AC07 and AC13: the negative matrix. Each shape is checked, then removed, and the
   // positive state must return.
   s.q("CREATE ROLE lab_other NOLOGIN NOINHERIT;", A);
@@ -510,6 +611,7 @@ const negativeMatrix = await localPostgresLab("P04.T01j.createrole-b", async (en
     const closedNow = s.closed();
     const guard = s.guards("morrow_identity_linking");
     const link = s.linkLocks();
+    const entries = s.entryReads();
     const preflight = s.preflight("morrow_identity_linking");
     const reviewedExact =
       s
@@ -522,12 +624,14 @@ const negativeMatrix = await localPostgresLab("P04.T01j.createrole-b", async (en
       s.closed() &&
       s.guardsPass("morrow_identity_linking") &&
       s.linkLocks().locks === 1 &&
+      s.entriesPass() &&
       s.setRows() === 0;
     matrix.push({
       shape: shape.n,
       closed: closedNow,
       guard,
       locks: link.locks,
+      entry_reads: entries,
       preflight,
       reviewedExact,
       restored,
@@ -536,22 +640,32 @@ const negativeMatrix = await localPostgresLab("P04.T01j.createrole-b", async (en
     if (shape.runtime)
       check(
         `b_${shape.n}_denied_at_run_time`,
-        guard.endsWith("|false") && guard.startsWith("false|") && link.locks === 0,
+        guard.endsWith("|false") &&
+          guard.startsWith("false|") &&
+          link.locks === 0 &&
+          entries.morrow_identity_linking === 0,
+      );
+    if (shape.everyone)
+      check(
+        `b_${shape.n}_every_inline_guard_entry_point_denies`,
+        Object.values(entries).every((n) => n === 0),
       );
     check(`b_${shape.n}_preflight_${shape.preflight}`, preflight === (shape.preflight ? "t" : "f"));
-    if (shape.n.startsWith("n12_"))
+    if (shape.n.startsWith("n12_") || shape.n.startsWith("n15_"))
       check(`b_${shape.n}_reviewed_rows_not_exact`, reviewedExact === false);
     check(`b_${shape.n}_restored`, restored);
   }
   s.q("DROP ROLE lab_other;", A);
-  s.q("DROP ROLE lab_outsider;");
 
   // AC08: (C) holds only inside the administrator's own transaction, for the current
-  // executeAs owner; it never commits.
+  // executeAs owner and with itself as grantor; it never commits.
   for (const c of inTransaction) {
+    for (const [user, sql] of c.setup ?? []) s.q(sql, user);
     const out = s.q(`BEGIN;\n${c.sql}\nROLLBACK;`, A);
-    check(`b_${c.c}`, out === c.expected && s.setRows() === 0);
+    for (const [user, sql] of c.undo ?? []) s.q(sql, user);
+    check(`b_${c.c}`, out === c.expected && s.setRows() === 0 && s.closed());
   }
+  s.q("DROP ROLE lab_outsider;");
   check(
     "b_final_state_positive",
     s.closed() && s.setRows() === 0 && sameRows(s.census(), createroleCensus(A)),
@@ -604,6 +718,7 @@ await localPostgresLab("P04.T01j.superuser", async (engine) => {
   );
   const link = s.linkLocks();
   check("s_link_workspace_store_passes_its_guard", link.outcome === "denied" && link.locks === 1);
+  check("s_inline_guard_entry_points_pass_their_guards", s.entriesPass());
 });
 
 check(
@@ -641,6 +756,7 @@ const report = {
   limitations: [
     "A local emulation of Neon's administrator model (neon_superuser, neondb_owner); the bootstrap superuser is postgres here and cloud_admin on Neon. The hosted confirmation is P04.T01i M-N1+ (P04.T01j AC15).",
     "Shapes marked sim were produced by the local superuser; they are impossible for the hosted administrator.",
+    "resolve_provider_subject_selection is retired at the chain head (0013 revoked it from the resolution executor); the lab grants it back to that executor to run its real guard.",
     "The runner ledger (morrow_migrations.applied) and its unknown-outcome handling belong to P04.T01i PR-B; this lab applies D4 without a ledger row.",
   ],
 };

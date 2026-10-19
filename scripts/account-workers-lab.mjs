@@ -25,6 +25,7 @@ const impersonatedPage = fixture.page([
 ]);
 const paths = [
   "packages/identity/src/account-onboarding.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/fixed-sql-transaction.ts",
   "packages/identity/src/standalone-request-guard.ts",
   "packages/identity/src/standalone-login.ts",

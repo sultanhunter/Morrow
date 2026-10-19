@@ -36,6 +36,7 @@ const paths = [
   "packages/identity/src/standalone-workspace-bootstrap.ts",
   "packages/identity/src/standalone-store-linking.ts",
   "packages/identity/src/workspace-store-linking-control.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/workspace-store-linking.ts",
   "packages/identity/src/index.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
