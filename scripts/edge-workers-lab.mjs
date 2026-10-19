@@ -1229,20 +1229,30 @@ for (const fault of ["status_500", "redirect", "oversized", "hang"])
   );
 
 // The committed development limiters: login start 10, the callback 20, signup 5 per 60 s.
+// Workers rate limits count per fixed window (Miniflare: 60 s windows on the epoch), so
+// each burst starts with at least 25 s left in its window; the guarded starts carry no
+// token, so every request the limiter admits is a cheap 403 with no broker or database.
+const freshWindow = async (leftMs = 25000) => {
+  const left = 60000 - (Date.now() % 60000);
+  if (left < leftMs) await new Promise((resolve) => setTimeout(resolve, left + 250));
+};
 await instance(
   "P05T01ab_AC01_AC05_limiter",
-  { api: { bindings: apiBindings() } },
+  { api: { bindings: guardedApiBindings() } },
   async ({ fetchApi, events, observed }) => {
     const from = (address) => ({ "CF-Connecting-IP": address });
+    const required = (r) => r.status === 403 && r.body === guardOutcome("challenge_required");
+    await freshWindow();
     const starts = [];
     for (let i = 0; i < 11; i++) starts.push(await startWith(fetchApi, from("198.51.100.10")));
     check(
-      "P05T01ab-AC05:eleventh_start_429",
-      starts.slice(0, 10).every((r) => r.status !== 429) && noStore429(starts[10]),
+      "P05T01ab-AC05:eleventh_start_429_after_ten_challenge_required",
+      starts.slice(0, 10).every(required) && noStore429(starts[10]),
     );
     const other = await startWith(fetchApi, from("198.51.100.11"));
-    check("P05T01ab-AC05:other_address_unaffected", other.status !== 429);
+    check("P05T01ab-AC05:other_address_unaffected", required(other));
     // IPv6: one /56 is one bucket; another /56 is not.
+    await freshWindow();
     const v6 = [];
     for (let i = 0; i < 10; i++)
       v6.push(await startWith(fetchApi, from(`2001:db8:1234:56${i.toString(16)}0::${i + 1}`)));
@@ -1250,25 +1260,19 @@ await instance(
     const otherSite = await startWith(fetchApi, from("2001:db8:1234:5700::1"));
     check(
       "P05T01ab-AC05:ipv6_keyed_by_slash_56",
-      v6.every((r) => r.status !== 429) && noStore429(sameSite) && otherSite.status !== 429,
+      v6.every(required) && noStore429(sameSite) && required(otherSite),
     );
-    // The router's own matcher decides what is login start: only the exact path is
-    // limited (the router answers its own 404 or 400 for the rest).
-    const loose = [];
-    for (const path of ["/auth/login/", "/auth/%6Cogin"])
-      for (let i = 0; i < 11; i++)
-        loose.push(await startWith(fetchApi, from("203.0.113.20"), path));
-    check(
-      "P05T01ab-AC01:trailing_slash_and_encoded_paths_not_guarded",
-      loose.every((r) => r.status === 404 && r.body === loginUnavailable),
-    );
+    // The router's own matcher decides what is login start: a query string is the same
+    // path, so it is limited; the router answers 400 for a start with a query.
+    await freshWindow();
     const query = [];
     for (let i = 0; i < 11; i++)
       query.push(await startWith(fetchApi, from("203.0.113.21"), "/auth/login?x=1"));
     check(
       "P05T01ab-AC01:query_string_is_login_start",
-      query.slice(0, 10).every((r) => r.status !== 429) && noStore429(query[10]),
+      query.slice(0, 10).every(required) && noStore429(query[10]),
     );
+    await freshWindow();
     const heads = [];
     for (let i = 0; i < 21; i++)
       heads.push(
@@ -1281,11 +1285,23 @@ await instance(
         heads[20].body === "" &&
         heads[20].headers.get("retry-after") === "60",
     );
+    await freshWindow();
     const signups = [];
     for (let i = 0; i < 6; i++) signups.push(await signupWith(fetchApi, from("203.0.113.23")));
     check(
       "P05T01ab-AC05:sixth_signup_429",
-      signups.slice(0, 5).every((r) => r.status !== 429) && noStore429(signups[5]),
+      signups.slice(0, 5).every(required) && noStore429(signups[5]),
+    );
+    check("P05T01ab-AC05:limited_and_rejected_reach_no_broker", observed.siteverify === 0);
+    // A trailing slash or an encoded letter is another path: never limited, and the
+    // router answers its own 404.
+    const loose = [];
+    for (const path of ["/auth/login/", "/auth/%6Cogin"])
+      for (let i = 0; i < 11; i++)
+        loose.push(await startWith(fetchApi, from("203.0.113.20"), path));
+    check(
+      "P05T01ab-AC01:trailing_slash_and_encoded_paths_not_guarded",
+      loose.every((r) => r.status === 404 && r.body === loginUnavailable),
     );
     const invalid = await startWith(fetchApi, from("not-an-address"));
     check(
