@@ -245,10 +245,16 @@ test("selector scalars are copied before first await and row cannot replace boun
   }
 });
 test("every unsafe role flag including replication and memberships denies read and apply", async () => {
-  for (const key of Object.keys(role).slice(2))
+  // ADR-0020 (P04.T01j D5): an unknown preflight (role_member NULL) fails closed too.
+  for (const [key, value] of [
+    ...Object.keys(role)
+      .slice(2)
+      .map((k) => [k, true]),
+    ["role_member", null],
+  ])
     for (const method of ["lookup", "apply"]) {
       const f = fixture({
-        query: async (text) => ({ rows: text === sql.role ? [{ ...role, [key]: true }] : [] }),
+        query: async (text) => ({ rows: text === sql.role ? [{ ...role, [key]: value }] : [] }),
       });
       await unknown(
         f.service[method](JSON.stringify(method === "lookup" ? selected : input), control()),

@@ -12,7 +12,7 @@ DO $$ BEGIN
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname='morrow_identity_sessions'
    AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb
    AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication
-   AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid)) THEN
+   AND morrow_identity.memberships_closed(r.rolname)) THEN
   RAISE EXCEPTION 'BROWSER_SESSION_ROLE_PREREQUISITES_INVALID';
  END IF;
 END $$;
@@ -116,7 +116,7 @@ CREATE FUNCTION morrow_identity.browser_sessions_role_safe() RETURNS boolean
 LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
  SELECT current_user='morrow_identity_owner' AND session_user='morrow_identity_sessions'
  AND EXISTS(SELECT 1 FROM pg_catalog.pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
- AND EXISTS(SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
+ AND EXISTS(SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND morrow_identity.executor_memberships_closed(r.rolname))
  AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_roles service,pg_catalog.pg_roles o WHERE o.rolname='morrow_identity_owner' AND service.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions') AND (pg_catalog.pg_has_role(service.oid,o.oid,'MEMBER') OR pg_catalog.pg_has_role(o.oid,service.oid,'MEMBER')))
 $$;
 REVOKE ALL ON FUNCTION morrow_identity.browser_sessions_role_safe() FROM PUBLIC;
@@ -577,7 +577,7 @@ BEGIN
  IF session_user<>'morrow_identity_linking' OR NOT EXISTS(
    SELECT 1 FROM pg_roles x WHERE x.rolname=session_user AND NOT x.rolsuper
      AND NOT x.rolbypassrls AND NOT x.rolcreatedb AND NOT x.rolcreaterole AND NOT x.rolinherit
-     AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=x.oid OR m.roleid=x.oid)) THEN
+     AND morrow_identity.executor_memberships_closed(x.rolname)) THEN
    RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN; END IF;
  IF p_handoff IS NULL OR p_command IS NULL OR p_digest IS NULL OR p_session IS NULL OR p_nonce IS NULL OR p_org IS NULL OR p_workspace IS NULL OR p_installation IS NULL OR p_purpose IS NULL OR p_policy IS NULL OR p_ownership IS NULL
    OR p_handoff !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_command !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'

@@ -1,8 +1,9 @@
 BEGIN;
 -- P06.T01a identity bridge (ADR-0010 item 2). Executes AS morrow_identity_owner.
--- It changes no identity table or grant. It adds four definer functions that only
+-- It changes no identity table. It adds four definer functions that only
 -- morrow_work_command may execute, plus the schema usage and column REFERENCES the
--- work tables' composite foreign keys need, and it gives the three identity
+-- work tables' composite foreign keys need; it lets morrow_work_owner execute three
+-- read-only ADR-0020 membership helpers, which 0015 checks; and it gives the three identity
 -- functions that lock an organization FOR UPDATE the organization interlock (see
 -- the end of this file). No work role and no identity role are members of each
 -- other in either direction.
@@ -15,6 +16,7 @@ DO $$ BEGIN
    WHERE w.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker')
    AND (i.rolname='morrow_api' OR i.rolname LIKE 'morrow\_identity%')
    AND (pg_catalog.pg_has_role(w.oid,i.oid,'MEMBER') OR pg_catalog.pg_has_role(i.oid,w.oid,'MEMBER')))
+ OR NOT morrow_identity.morrow_memberships_closed()
  OR to_regprocedure('morrow_identity.session_eligibility(text,text)') IS NULL
  OR to_regprocedure('morrow_identity.revoke_workspace_access(text,text,text,text,text,text,text,text)') IS NULL
  OR to_regprocedure('morrow_identity.link_workspace_store(text,text,text,text,text,text,text,text,text,text,text)') IS NULL
@@ -23,6 +25,8 @@ DO $$ BEGIN
  THEN RAISE EXCEPTION 'WORK_BRIDGE_PREREQUISITES_INVALID'; END IF;
 END $$;
 GRANT USAGE ON SCHEMA morrow_identity TO morrow_work_owner,morrow_work_command;
+-- ADR-0020: 0015 checks the closed membership set while it runs as the work owner.
+GRANT EXECUTE ON FUNCTION morrow_identity.recorded_administrator(),morrow_identity.memberships_closed(name),morrow_identity.morrow_memberships_closed() TO morrow_work_owner;
 -- Composite foreign key targets only. Referential checks run as the referenced
 -- table's owner, so no SELECT on identity tables is granted to any work role.
 GRANT REFERENCES (organization_id,id) ON morrow_identity.workspaces TO morrow_work_owner;
@@ -297,7 +301,7 @@ BEGIN
  IF session_user<>'morrow_identity_linking' OR NOT EXISTS(
    SELECT 1 FROM pg_roles x WHERE x.rolname=session_user AND NOT x.rolsuper
      AND NOT x.rolbypassrls AND NOT x.rolcreatedb AND NOT x.rolcreaterole AND NOT x.rolinherit
-     AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=x.oid OR m.roleid=x.oid)) THEN
+     AND morrow_identity.executor_memberships_closed(x.rolname)) THEN
    RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN; END IF;
  IF p_handoff IS NULL OR p_command IS NULL OR p_digest IS NULL OR p_session IS NULL OR p_nonce IS NULL OR p_org IS NULL OR p_workspace IS NULL OR p_installation IS NULL OR p_purpose IS NULL OR p_policy IS NULL OR p_ownership IS NULL
    OR p_handoff !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_command !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'

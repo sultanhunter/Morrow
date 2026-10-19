@@ -1,3 +1,4 @@
+import { executorRoleMemberSql } from "./executor-role-preflight.js";
 import {
   createWorkspaceStoreLinks,
   workspaceStoreLinkingSql,
@@ -15,7 +16,7 @@ export const workspaceStoreLinkingControlSql = Object.freeze({
   begin: "BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY",
   role: `SELECT current_user AS role, session_user AS login, r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolinherit,
 pg_catalog.pg_has_role(current_user, 'morrow_identity_owner','MEMBER') AS owner_member,
-EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid) AS role_member,r.rolreplication
+${executorRoleMemberSql},r.rolreplication
 FROM pg_catalog.pg_roles r WHERE r.rolname=current_user`,
   timeout: workspaceStoreLinkingSql.timeout,
   idleTimeout: workspaceStoreLinkingSql.idleTimeout,

@@ -8,7 +8,7 @@ DO $$ BEGIN
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname='morrow_identity_linking'
    AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb
    AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication
-   AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
+   AND morrow_identity.memberships_closed(r.rolname))
  OR EXISTS(SELECT 1 FROM pg_catalog.pg_roles service,pg_catalog.pg_roles owner
    WHERE owner.rolname='morrow_identity_owner'
    AND service.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions')
@@ -39,7 +39,7 @@ BEGIN
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_roles x WHERE x.rolname=session_user
    AND NOT x.rolsuper AND NOT x.rolbypassrls AND NOT x.rolcreatedb AND NOT x.rolcreaterole
    AND NOT x.rolinherit AND NOT x.rolreplication
-   AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=x.oid OR m.roleid=x.oid))
+   AND morrow_identity.executor_memberships_closed(x.rolname))
  OR EXISTS(SELECT 1 FROM pg_catalog.pg_roles service,pg_catalog.pg_roles owner
    WHERE owner.rolname='morrow_identity_owner'
    AND service.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions')

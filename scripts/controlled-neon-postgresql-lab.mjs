@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { Miniflare, Log, LogLevel } from "miniflare";
 import {
@@ -28,6 +29,7 @@ const paths = [
   "packages/identity/src/standalone-login.ts",
   "packages/identity/src/standalone-login-protocol.ts",
   "packages/identity/src/login-flow-custody.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/login-preauth-control.ts",
   "packages/identity/src/authentication-exchange-admission.ts",
   "packages/identity/src/workos-authentication-evidence.ts",
@@ -138,6 +140,100 @@ const binding = {
   database: "morrow",
 };
 const privateMarkers = [];
+// P03.T04f: record what failed, not only where. A fixture response other than the expected
+// one is recorded with the failure the fixture Worker described, and an error that rejects
+// this lab's engine callback is recorded with its message, the login flow it came from and
+// its first repository stack frames: the engine itself reports only that its callback was
+// held, which is all two hosted concurrent-callback holds recorded (no failed check, so the
+// error was not a check). Every private marker is removed from the whole text before it is
+// shortened, so a marker cut in half cannot slip past the redaction, and the report's
+// private-marker check below still applies. The job log gets only names, codes, flows,
+// frames and statuses; messages stay in the report, which is secret-scanned before upload.
+const dispatchFailures = [];
+let callbackError = null;
+const repositoryRoot = fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/, "");
+function redacted(text, limit = 300) {
+  let out = String(text);
+  for (const marker of privateMarkers)
+    if (typeof marker === "string" && marker.length >= 8) out = out.replaceAll(marker, "[private]");
+  return out.replace(/[^\x20-\x7e]/g, "?").slice(0, limit);
+}
+function stackFrames(stack) {
+  const frames = [];
+  if (typeof stack !== "string") return frames;
+  for (const line of stack.split("\n").slice(1)) {
+    const match = /(?:file:\/\/)?(\/[^\s()]+):(\d+):(\d+)\)?$/.exec(line.trim());
+    if (!match || !match[1].startsWith(repositoryRoot + "/")) continue;
+    const path = match[1].slice(repositoryRoot.length + 1);
+    if (!/^[A-Za-z0-9_.@+/-]{1,160}$/.test(path)) continue;
+    frames.push(redacted(path + ":" + match[2] + ":" + match[3]));
+    if (frames.length === 5) break;
+  }
+  return frames;
+}
+// Marks an error with the login flow it came from, so concurrent flows can be told apart.
+function inFlow(error, serial) {
+  try {
+    if (typeof error === "object" && error !== null && !Object.hasOwn(error, "flowSerial"))
+      Object.defineProperty(error, "flowSerial", { value: serial });
+  } catch {
+    // A frozen error keeps no flow; it is still described.
+  }
+  return error;
+}
+function describeError(error) {
+  try {
+    return {
+      name: typeof error?.name === "string" ? redacted(error.name, 64) : null,
+      message: redacted(
+        typeof error?.message === "string" ? error.message : "non-error " + typeof error,
+      ),
+      flowSerial: Number.isInteger(error?.flowSerial) ? error.flowSerial : null,
+      frames: stackFrames(error?.stack),
+    };
+  } catch {
+    return { name: null, message: "undescribable failure", flowSerial: null, frames: [] };
+  }
+}
+function recordDispatchFailure(label, status, bodyText) {
+  let failure = null;
+  try {
+    const body = JSON.parse(bodyText);
+    if (body?.held === true && typeof body.failure?.message === "string")
+      failure = {
+        name: typeof body.failure.name === "string" ? redacted(body.failure.name, 64) : null,
+        message: redacted(body.failure.message),
+        code:
+          typeof body.failure.code === "string" && /^[A-Za-z0-9_]{1,32}$/.test(body.failure.code)
+            ? body.failure.code
+            : null,
+      };
+  } catch {
+    // Not the fixture's held envelope; the status is still recorded.
+  }
+  if (dispatchFailures.length < 20)
+    dispatchFailures.push({ stage, label: redacted(label, 120), status, failure });
+}
+// The job log line: no message text, and names only when they look like error class names.
+function logSafeFailure() {
+  const className = (name) =>
+    typeof name === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(name) ? name : null;
+  const error = failure?.error;
+  return {
+    stage: failure?.stage ?? stage,
+    error: error
+      ? { name: className(error.name), flowSerial: error.flowSerial, frames: error.frames }
+      : null,
+    dispatchFailures: dispatchFailures.map((d) => ({
+      stage: d.stage,
+      label: d.label,
+      status: d.status,
+      failure: d.failure ? { name: className(d.failure.name), code: d.failure.code } : null,
+    })),
+    cleanupFailures,
+    report: "labs/controlled-neon-postgresql.json",
+  };
+}
 try {
   measured = await controlledNeonPostgresqlLab(async (engine) => {
     try {
@@ -326,6 +422,8 @@ try {
                 body: JSON.stringify(input),
               },
         );
+        if (response.status !== 200)
+          recordDispatchFailure(path, response.status, await response.text());
         check("fixture_dispatch_" + checks.length, response.status === 200);
         return response.json();
       };
@@ -387,72 +485,95 @@ try {
       };
       let flowSerial = 0;
       async function start(index) {
-        const jar = createBoundedLoginCookieJar();
-        const response = await dispatch("/auth/login", {
-          method: "POST",
-          headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
-          body: JSON.stringify({ schemaVersion: 2 }),
-        });
-        const diagnostic =
-          flowSerial === 0
-            ? (firstBeginDiagnostic = {
-                responseStatus: response.status,
-                cookieCount: response.headers.getSetCookie().length,
-                jarAccepted: null,
-                jarRejected: null,
-              })
-            : null;
-        const acceptCookie = () => {
-          const result = jar.ingest(origin + "/auth/login", response.headers);
-          if (diagnostic) {
-            diagnostic.jarAccepted = result.accepted;
-            diagnostic.jarRejected = result.rejected;
-          }
-          return result.accepted === 1;
-        };
-        check(
-          "actual_84_begin_cookie_" + ++flowSerial,
-          response.status === 200 && response.headers.getSetCookie().length === 1 && acceptCookie(),
-        );
-        const authorizationUrl = (await response.json()).authorizationUrl;
-        const callback = activeOracle.arm(authorizationUrl);
-        privateMarkers.push(callback.code, callback.token, authorizationUrl);
-        return { jar, callback, serial: flowSerial };
+        let serial = null;
+        try {
+          const jar = createBoundedLoginCookieJar();
+          const response = await dispatch("/auth/login", {
+            method: "POST",
+            headers: {
+              Origin: origin,
+              "Content-Type": "application/json",
+              "X-Morrow-Request": "1",
+            },
+            body: JSON.stringify({ schemaVersion: 2 }),
+          });
+          if (response.status !== 200)
+            recordDispatchFailure("/auth/login", response.status, await response.text());
+          const diagnostic =
+            flowSerial === 0
+              ? (firstBeginDiagnostic = {
+                  responseStatus: response.status,
+                  cookieCount: response.headers.getSetCookie().length,
+                  jarAccepted: null,
+                  jarRejected: null,
+                })
+              : null;
+          const acceptCookie = () => {
+            const result = jar.ingest(origin + "/auth/login", response.headers);
+            if (diagnostic) {
+              diagnostic.jarAccepted = result.accepted;
+              diagnostic.jarRejected = result.rejected;
+            }
+            return result.accepted === 1;
+          };
+          check(
+            "actual_84_begin_cookie_" + (serial = ++flowSerial),
+            response.status === 200 &&
+              response.headers.getSetCookie().length === 1 &&
+              acceptCookie(),
+          );
+          const authorizationUrl = (await response.json()).authorizationUrl;
+          const callback = activeOracle.arm(authorizationUrl);
+          privateMarkers.push(callback.code, callback.token, authorizationUrl);
+          return { jar, callback, serial: flowSerial };
+        } catch (error) {
+          throw inFlow(error, serial);
+        }
       }
       async function finish(prepared, success = true) {
-        const url = new URL(prepared.callback.callbackUrl);
-        const headers = {
-          Cookie: prepared.jar.header(prepared.callback.callbackUrl),
-          "Sec-Fetch-Mode": "navigate",
-          "MF-Sec-Fetch-Mode": "navigate",
-          "Sec-Fetch-Dest": "document",
-          "Sec-Fetch-Site": "cross-site",
-        };
-        const response = await dispatch(url.pathname + url.search, { headers });
-        const body = await response.text();
-        check(
-          "actual_84_callback_delivery_" + prepared.serial,
-          response.status === 303 &&
-            body === "" &&
-            response.headers.get("location") === (success ? "/" : "/auth/result") &&
-            response.headers.getSetCookie().length === (success ? 1 : 0),
-        );
-        if (success) {
+        try {
+          const url = new URL(prepared.callback.callbackUrl);
+          const headers = {
+            Cookie: prepared.jar.header(prepared.callback.callbackUrl),
+            "Sec-Fetch-Mode": "navigate",
+            "MF-Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Site": "cross-site",
+          };
+          const response = await dispatch(url.pathname + url.search, { headers });
+          const body = await response.text();
+          if (response.status !== 303)
+            recordDispatchFailure(
+              "/auth/workos/callback " + prepared.serial,
+              response.status,
+              body,
+            );
           check(
-            "actual_m_initial_session_cookie_" + prepared.serial,
-            prepared.jar.ingest(prepared.callback.callbackUrl, response.headers).accepted === 1,
+            "actual_84_callback_delivery_" + prepared.serial,
+            response.status === 303 &&
+              body === "" &&
+              response.headers.get("location") === (success ? "/" : "/auth/result") &&
+              response.headers.getSetCookie().length === (success ? 1 : 0),
           );
-          const secret = /(?:^|; )__Host-morrow_session=([^;]+)/.exec(
-            prepared.jar.header(origin + "/"),
-          )?.[1];
-          check(
-            "canonical_fresh_cookie_" + prepared.serial,
-            typeof secret === "string" && /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/.test(secret),
-          );
-          privateMarkers.push(secret);
-          return { path: url.pathname + url.search, headers, secret };
+          if (success) {
+            check(
+              "actual_m_initial_session_cookie_" + prepared.serial,
+              prepared.jar.ingest(prepared.callback.callbackUrl, response.headers).accepted === 1,
+            );
+            const secret = /(?:^|; )__Host-morrow_session=([^;]+)/.exec(
+              prepared.jar.header(origin + "/"),
+            )?.[1];
+            check(
+              "canonical_fresh_cookie_" + prepared.serial,
+              typeof secret === "string" && /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/.test(secret),
+            );
+            privateMarkers.push(secret);
+            return { path: url.pathname + url.search, headers, secret };
+          }
+          return { path: url.pathname + url.search, headers };
+        } catch (error) {
+          throw inFlow(error, prepared?.serial ?? null);
         }
-        return { path: url.pathname + url.search, headers };
       }
       phase("full_unchanged_owning_chain");
       await initialize(0);
@@ -650,6 +771,9 @@ try {
         provider: oracles.map((o) => ({ metrics: o.metrics, calls: o.calls })),
         finalNamespace,
       };
+    } catch (error) {
+      callbackError = describeError(error);
+      throw error;
     } finally {
       // Publish each disposal promise before it can call back. Failure must
       // release request resources before this callback rejects to Docker cleanup.
@@ -668,6 +792,7 @@ try {
     stage,
     code: "CONTROLLED_NEON_POSTGRESQL_LAB_HELD",
     observation: error?.observation ?? null,
+    error: callbackError ?? describeError(error),
   };
 } finally {
   // Join the already-published attempts; never retry an unknown disposal.
@@ -718,6 +843,7 @@ const report = {
   },
   measured: measured ?? null,
   firstBeginDiagnostic,
+  dispatchFailures,
   limitations: [
     "Native WSS destination is fully locally intercepted; no remote DNS/TLS/Neon account/proxy qualification.",
     "Only this new fixture uses an attested owned internal IPv4 endpoint with no published ports; host access remains possible and old network-none laboratories are unchanged.",
@@ -733,7 +859,10 @@ if (
 )
   throw Error("CONTROLLED_PG_PRIVATE_REPORT_HELD");
 writeArtifact("labs/controlled-neon-postgresql.json", serialized);
-if (failure || cleanupFailure) throw Error("CONTROLLED_NEON_POSTGRESQL_LAB_HELD:" + stage);
+if (failure || cleanupFailure) {
+  console.error("CONTROLLED_PG_FAILURE:" + JSON.stringify(logSafeFailure()));
+  throw Error("CONTROLLED_NEON_POSTGRESQL_LAB_HELD:" + stage);
+}
 console.log(
   "PASS: " +
     checks.length +
