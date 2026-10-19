@@ -1,3 +1,4 @@
+import { executorRoleMemberSql } from "./executor-role-preflight.js";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { validateDefinition } from "@morrow/contracts/validation";
 import type { IdentitySqlClient, IdentitySqlPool } from "./index.js";
@@ -42,7 +43,7 @@ export const authenticationExchangeAdmissionSql = Object.freeze({
   beginReadOnly: "BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY",
   role: `SELECT current_user AS role, session_user AS login, r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolinherit,
 pg_catalog.pg_has_role(current_user, 'morrow_identity_owner', 'MEMBER') AS owner_member,
-EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid) AS role_member
+${executorRoleMemberSql}
 FROM pg_catalog.pg_roles r WHERE r.rolname=current_user`,
   timeout: "SET LOCAL statement_timeout = '5s'",
   idleTimeout: "SET LOCAL idle_in_transaction_session_timeout = '10s'",

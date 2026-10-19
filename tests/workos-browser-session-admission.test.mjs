@@ -281,6 +281,8 @@ test("safe executor and both membership directions are mandatory", async () => {
       "owner_member",
       "role_member",
     ].map((k) => ({ [k]: true })),
+    // ADR-0020 (P04.T01j D5): an unknown preflight fails closed.
+    { role_member: null },
   ]) {
     const s = await setup({
       result: (stage, standard) => (stage === "role" ? { rows: [role(change)] } : standard),

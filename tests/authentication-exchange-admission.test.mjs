@@ -436,6 +436,8 @@ test("unsafe dedicated roles and memberships rollback before invoking any admiss
       "role_member",
     ].map((key) => ({ [key]: true })),
     { role_member: "false" },
+    // ADR-0020 (P04.T01j D5): an unknown preflight fails closed.
+    { role_member: null },
     { extra: true },
   ];
   for (const rows of [[], [{ ...role }, { ...role }], ...patches.map((p) => [{ ...role, ...p }])]) {
