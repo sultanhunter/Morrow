@@ -24,8 +24,11 @@ export type BrokerNeonRole = keyof typeof brokerNeonRoles;
 export const brokerNeonRoleNames = Object.freeze(Object.keys(brokerNeonRoles) as BrokerNeonRole[]);
 export const brokerPasswordSecret = (role: BrokerNeonRole) =>
   `MORROW_DB_PASSWORD_${role.toUpperCase()}`;
+// P05.T01ab (ADR-0019 item 6): the Turnstile secret is the one provider credential
+// admitted beside WorkOS. It verifies tokens and cannot mint them.
 export const brokerRequiredSecrets: readonly string[] = Object.freeze([
   "WORKOS_API_KEY",
+  "TURNSTILE_SECRET_KEY",
   ...brokerNeonRoleNames.map(brokerPasswordSecret),
 ]);
 export const brokerLimits = Object.freeze({
@@ -48,12 +51,51 @@ export interface ApiBrokerRpc {
   health(): Promise<boolean>;
   neonLease(namespaceJson: string): Promise<string>;
   workosSessionPage(namespaceJson: string, selectorJson: string, budgetMs: number): Promise<string>;
+  // P05.T01ab (ADR-0019 item 6): one siteverify call; held is the error BROKER_HELD.
+  challengeVerify(action: string, token: string, budgetMs: number): Promise<ChallengeVerdict>;
 }
+
+// P05.T01ab: the challenge protocol shared by the api guard and the broker.
+export type ChallengeVerdict = "passed" | "failed";
+export type ChallengeActionName = "login" | "signup";
+export type ChallengeActions = Readonly<Record<ChallengeActionName, string>>;
+export const challengeLimits = Object.freeze({
+  tokenMaxBytes: 2048,
+  budgetMaxMs: 5000,
+  replyMaxBytes: 4096,
+  freshnessMs: 300000,
+  skewMs: 30000,
+});
+// The X-Morrow-Challenge header and the token the broker accepts: 1-2048 bytes.
+export const challengeTokenPattern = /^[A-Za-z0-9._-]{1,2048}$/;
+// Cloudflare's published dummy keys start 1x, 2x or 3x; only a real 0x key passes.
+export const turnstileKeyPattern = /^0x[0-9A-Za-z_-]{20,128}$/;
+// Turnstile actions: up to 32 characters of [A-Za-z0-9_-].
+const actionPattern = /^[A-Za-z0-9_-]{1,32}$/;
 
 const invalid = () => Error("BROKER_PROTOCOL_INVALID");
 const encoder = new TextEncoder();
 const exact = (pattern: RegExp, value: unknown): value is string =>
   typeof value === "string" && pattern.exec(value)?.[0] === value;
+
+export function challengeTokenValid(value: unknown): value is string {
+  return exact(challengeTokenPattern, value);
+}
+
+// Exactly {login, signup}, two distinct Turnstile action names.
+export function parseChallengeActions(value: unknown): ChallengeActions {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join(",") !== "login,signup"
+  )
+    throw invalid();
+  const { login, signup } = value as Record<string, unknown>;
+  if (!exact(actionPattern, login) || !exact(actionPattern, signup) || login === signup)
+    throw invalid();
+  return Object.freeze({ login, signup });
+}
 
 export function brokerUtf8Bytes(value: string): number {
   return encoder.encode(value).length;

@@ -1,8 +1,10 @@
 # Static Assets response headers for the api Worker's same-origin SPA
 # (P04.T02a D6). Worker responses on reserved paths set their own headers.
-# HSTS and form-action wait for P04.T01i (domain policy, AuthKit redirects).
+# P05.T01ab: the Turnstile widget's script and frame come only from
+# challenges.cloudflare.com, and forms post only to this origin. HSTS waits for
+# P04.T01i's domain policy.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
   Cross-Origin-Opener-Policy: same-origin

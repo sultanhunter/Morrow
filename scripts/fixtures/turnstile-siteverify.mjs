@@ -1,0 +1,130 @@
+import { randomBytes } from "node:crypto";
+
+// P05.T01ab lab fixture: a synthetic Turnstile siteverify behind the broker's fixed URL
+// (labs route https://challenges.cloudflare.com to it through Miniflare's outbound
+// service; nothing leaves the machine). The secret and the site key are random `0x`
+// values made per run, never Cloudflare's published dummy keys, which the broker's
+// `^0x` rule refuses by construction. Tokens are issued by the lab and single-use,
+// like Turnstile's own (a second use answers timeout-or-duplicate). `onIssue` sees
+// every issued token, so a lab can register each one as a private marker.
+export const siteverifyOrigin = "https://challenges.cloudflare.com";
+export const siteverifyPath = "/turnstile/v0/siteverify";
+export const labChallengeActions = Object.freeze({
+  login: "account_login",
+  signup: "organization_signup",
+});
+
+// The one Turnstile URL the SPA loads (its CSP and verify:workspace-web allow exactly
+// it). The browser labs fulfil it with `turnstileStub`, never the real script.
+export const turnstileScriptUrl =
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+// A stub `window.turnstile` for the browser labs. `tokensByAction` maps a configured
+// action to tokens the lab issued to its synthetic siteverify; each execute takes the
+// next token of its widget's action, and an empty queue is the widget's error callback.
+// Labs build a fresh stub per script request, so no two page loads share a token.
+export const turnstileStub = (tokensByAction) => `(() => {
+  const tokens = ${JSON.stringify(tokensByAction)};
+  const widgets = new Map();
+  let rendered = 0;
+  window.turnstile = {
+    render(element, options) {
+      const id = "lab-widget-" + ++rendered;
+      widgets.set(id, { element, options });
+      return id;
+    },
+    execute(id) {
+      const widget = widgets.get(id);
+      const token = (tokens[widget.options.action] || []).shift();
+      setTimeout(() =>
+        token ? widget.options.callback(token) : widget.options["error-callback"]("lab"),
+      );
+    },
+    reset() {},
+    remove(id) {
+      widgets.delete(id);
+    },
+  };
+})();`;
+
+export function createSiteverifyOracle({ hostname, now = Date.now, onIssue = () => {} }) {
+  const secret = "0x" + randomBytes(24).toString("base64url");
+  const siteKey = "0x" + randomBytes(16).toString("base64url");
+  const tokens = new Map();
+  const requests = [];
+  const state = { fault: null };
+  const issue = (action, mode = "pass") => {
+    const token = "lab." + randomBytes(48).toString("base64url");
+    tokens.set(token, { action, mode, used: false });
+    onIssue(token);
+    return token;
+  };
+  async function handleRequest(request) {
+    const url = new URL(request.url);
+    const text = await request.text();
+    const form = new URLSearchParams(text);
+    const row = {
+      method: request.method,
+      path: url.pathname,
+      contentType: request.headers.get("content-type"),
+      fields: [...form.keys()],
+      secretMatches: form.get("secret") === secret,
+      // The `success` this oracle answered (null when it answered no verdict).
+      success: null,
+    };
+    requests.push(row);
+    if (url.pathname !== siteverifyPath || request.method !== "POST")
+      return new Response(null, { status: 404 });
+    switch (state.fault) {
+      case "status_500":
+        return new Response("{}", { status: 500 });
+      case "redirect":
+        return new Response(null, { status: 302, headers: { location: url.href } });
+      case "oversized":
+        return new Response(" ".repeat(5000), { headers: { "content-type": "application/json" } });
+      case "hang":
+        return new Promise(() => {});
+      default:
+    }
+    const entry = tokens.get(form.get("response") ?? "");
+    const fresh = entry !== undefined && !entry.used;
+    if (entry) entry.used = true;
+    // Every issued, unused token is a solved challenge, so siteverify says success for
+    // every mode. `other_action`, `other_host` and `stale` differ from a pass only in
+    // the field they name, so the broker's own action, hostname and challenge_ts checks
+    // are what refuse them.
+    const success = fresh && row.secretMatches;
+    row.success = success;
+    return Response.json({
+      success,
+      challenge_ts: new Date(entry?.mode === "stale" ? now() - 400000 : now()).toISOString(),
+      hostname: entry?.mode === "other_host" ? "other.example.test" : hostname,
+      "error-codes": success
+        ? []
+        : entry !== undefined && !fresh
+          ? ["timeout-or-duplicate"]
+          : ["invalid-input-response"],
+      action: entry?.mode === "other_action" ? "other_action" : (entry?.action ?? ""),
+      cdata: "",
+    });
+  }
+  return {
+    secret,
+    siteKey,
+    issue,
+    requests,
+    setFault: (fault) => (state.fault = fault),
+    handleRequest,
+    // The api's LOGIN_CHALLENGE_JSON and the broker's TURNSTILE_CONFIGURATION_JSON.
+    loginChallengeJson: JSON.stringify({
+      schemaVersion: 1,
+      provider: "turnstile",
+      siteKey,
+      actions: labChallengeActions,
+    }),
+    turnstileConfigurationJson: JSON.stringify({
+      schemaVersion: 1,
+      hostname,
+      actions: labChallengeActions,
+    }),
+  };
+}

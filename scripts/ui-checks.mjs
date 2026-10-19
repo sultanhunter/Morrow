@@ -358,6 +358,47 @@ export const fixtureCases = [
       await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
     },
   }),
+  // P05.T01ab (P04.T01i D5): the api guard's 403 challenge_* is the existing "Couldn't
+  // save. Nothing was changed." with Try again, never the terminal refusal.
+  fixtureCase("account", "signup_challenge_failed", "/", {
+    scenario: "account_challenge_failed",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await fillSignup(page);
+      await page.getByText("Couldn't save. Nothing was changed.").waitFor();
+      expect(await page.getByRole("button", { name: "Try again" }).isEnabled(), "try_again");
+      expect(
+        await page.getByRole("button", { name: "Create organization" }).isEnabled(),
+        "not_held",
+      );
+      expect((await page.getByText("isn't available for this account").count()) === 0, "open");
+      expect(
+        (await page.getByLabel("Organization name").inputValue()) === "Linen and Form Ltd",
+        "values_kept",
+      );
+    },
+  }),
+  // A widget that yields no token: the same copy, and nothing is sent (the scenario
+  // would deny a send).
+  fixtureCase("account", "signup_no_token", "/", {
+    scenario: "account_challenge_unavailable",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await fillSignup(page);
+      await page.getByText("Couldn't save. Nothing was changed.").waitFor();
+      expect((await page.getByText("isn't available for this account").count()) === 0, "unsent");
+    },
+  }),
+  // The guard's per-address 429 (Retry-After: 60): the existing signup hold.
+  fixtureCase("account", "signup_guard_rate_limited", "/", {
+    scenario: "account_guard_rate_limited",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await fillSignup(page);
+      await page.getByText("Nothing was created. You can try again in 1 minute.").waitFor();
+      expect(await page.getByRole("button", { name: "Create organization" }).isDisabled(), "held");
+    },
+  }),
   fixtureCase("home", "ready", `/w/${ws}`),
   fixtureCase("home", "partial_denied", `/w/${ws}`, { scenario: "home_partial_denied" }),
   fixtureCase("home", "loading", `/w/${ws}`, { scenario: "loading" }),
@@ -715,6 +756,27 @@ export const keyboardWalks = [
         "form_kept",
       );
       await page.getByRole("button", { name: "Check again" }).focus();
+      await page.keyboard.press("Enter");
+      await page.waitForURL(`**/w/${ws}`);
+      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+    },
+  },
+  {
+    // P05.T01ab: after the guard's 403 challenge_failed, Try again sends with a fresh
+    // token (the fixture widget gives one per reset and the fixture guard refuses a
+    // spent one), and the organization is created.
+    name: "signup_challenge_retry",
+    path: "/",
+    scenario: "account_challenge_failed",
+    run: async (page) => {
+      await tabTo(page, (a) => a.tag === "INPUT");
+      await page.keyboard.type("Linen and Form Ltd");
+      await page.keyboard.press("Tab");
+      await page.keyboard.type("Main");
+      await tabTo(page, (a) => a.text === "Create organization");
+      await page.keyboard.press("Enter");
+      await page.getByText("Couldn't save. Nothing was changed.").waitFor();
+      await page.getByRole("button", { name: "Try again" }).focus();
       await page.keyboard.press("Enter");
       await page.waitForURL(`**/w/${ws}`);
       await page.getByRole("heading", { name: "Linen & Form" }).waitFor();

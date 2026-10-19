@@ -5,7 +5,12 @@
 // account, credential or network. Linux CI only (the `pgwire` job), like the
 // other PG-wire labs; `edge-postgresql-local.mjs` runs the same journeys on a
 // developer machine as supporting evidence only. Covers AC13, AC17, AC18 (second
-// half), AC19, AC20, AC26 (login 200 half) and AC27.
+// half), AC19, AC20, AC26 (login 200 half) and AC27. Since P05.T01ab the api runs
+// with its full development guard (the committed limiters and a challenge): every
+// start and signup carries a fresh token that a synthetic siteverify behind the
+// broker's fixed URL verifies, so the journeys show the guard is transparent
+// (P05.T01ab-AC06). Each request comes from its own documentation address, so no
+// journey meets the per-address limit; lab:edge-workers owns the limiter cases.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -32,6 +37,11 @@ import {
 } from "./fixtures/controlled-neon-pg-wire-oracle.mjs";
 import { createPlatformWorkosProviderOracle } from "./fixtures/fixed-workos-platform-provider.mjs";
 import { createBoundedLoginCookieJar } from "./fixtures/login-https.mjs";
+import {
+  createSiteverifyOracle,
+  labChallengeActions,
+  siteverifyOrigin,
+} from "./fixtures/turnstile-siteverify.mjs";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const held = (code = "HELD") => Error("EDGE_POSTGRESQL_LAB_" + code);
@@ -199,8 +209,15 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
     passwords.morrow_api_worker ?? "Edge-work-" + randomBytes(18).toString("base64url");
   secret(keyMarker, workLoginPassword, ...Object.values(passwords));
   const databaseBinding = { ...controlledNeonWireBinding, environment: "development" };
+  // Every issued Turnstile token is a credential marker, like the secret.
+  const siteverify = createSiteverifyOracle({
+    hostname: new URL(origin).hostname,
+    onIssue: (token) => secret(token),
+  });
+  secret(siteverify.secret);
   const apiBindings = (change = {}) => ({
     MORROW_ENVIRONMENT: "development",
+    LOGIN_CHALLENGE_JSON: siteverify.loginChallengeJson,
     LOGIN_CONFIGURATION_JSON: configuration.configurationJson,
     WORKSPACE_CONFIGURATION_JSON: JSON.stringify({ schemaVersion: 1, mode: "https", origin }),
     LOGOUT_CONFIGURATION_JSON: harness.logoutConfiguration(configuration),
@@ -213,6 +230,8 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
     LOGIN_CONFIGURATION_JSON: configuration.configurationJson,
     MORROW_DATABASE_BINDING_JSON: JSON.stringify(databaseBinding),
     WORKOS_API_KEY: keyMarker,
+    TURNSTILE_SECRET_KEY: siteverify.secret,
+    TURNSTILE_CONFIGURATION_JSON: siteverify.turnstileConfigurationJson,
     ...Object.fromEntries(
       roles.map((role) => ["MORROW_DB_PASSWORD_" + role.toUpperCase(), passwords[role]]),
     ),
@@ -294,7 +313,7 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
   const apiOptions = options(edgeWorkers[0]);
   const brokerOptions = options(edgeWorkers[1]);
 
-  const outbound = { api: [], broker: [], unexpected: 0 };
+  const outbound = { api: [], broker: [], siteverify: 0, unexpected: 0 };
   const logs = [];
   const workersFor = (api, broker) => [
     {
@@ -334,11 +353,21 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
           });
           return oracle.handleRequest(request);
         }
+        if (url.origin === siteverifyOrigin) {
+          outbound.siteverify++;
+          return siteverify.handleRequest(request);
+        }
         outbound.unexpected++;
         return new Response(null, { status: 503 });
       },
     },
   ];
+  // A fresh client address per request (TEST-NET-2 then TEST-NET-3), never limited.
+  let addresses = 0;
+  const nextAddress = () => {
+    const n = addresses++;
+    return `${n < 254 ? "198.51.100" : "203.0.113"}.${(n % 254) + 1}`;
+  };
   async function instance(api = apiBindings(), broker = brokerBindings()) {
     const mf = new Miniflare({
       ...hook.listen,
@@ -359,6 +388,7 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
       const headers = new Headers(init.headers);
       if (init.body !== undefined && !headers.has("Content-Length"))
         headers.set("Content-Length", String(Buffer.byteLength(init.body)));
+      if (!headers.has("CF-Connecting-IP")) headers.set("CF-Connecting-IP", nextAddress());
       const response = await mf.dispatchFetch(origin + path, {
         redirect: "manual",
         ...init,
@@ -418,7 +448,12 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
     loginStarts.push(Date.now());
     return owner.fetch("/auth/login", {
       method: "POST",
-      headers: { Origin: origin, "Content-Type": "application/json", "X-Morrow-Request": "1" },
+      headers: {
+        Origin: origin,
+        "Content-Type": "application/json",
+        "X-Morrow-Request": "1",
+        "X-Morrow-Challenge": siteverify.issue(labChallengeActions.login),
+      },
       body: JSON.stringify({ schemaVersion: 2 }),
     });
   }
@@ -498,6 +533,7 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
         "Content-Type": "application/json",
         "X-Morrow-Request": "1",
         "Idempotency-Key": randomUUID(),
+        "X-Morrow-Challenge": siteverify.issue(labChallengeActions.signup),
       },
       body: JSON.stringify({ schemaVersion: 1, organizationName: "Edge", workspaceName: "Main" }),
     });
@@ -517,6 +553,7 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
   // over the same journey, on one fresh instance.
   async function journey(owner, label) {
     const name = (suffix) => label + ":" + suffix;
+    const verifiedFrom = siteverify.requests.length;
     const firstBridge = service.observations.length;
     const apiFrom = outbound.api.length;
     const brokerFrom = outbound.broker.length;
@@ -656,6 +693,19 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
       name("AC19_no_unexpected_outbound"),
       outbound.unexpected === 0 && oracle.metrics.oracleFailures === 0,
     );
+    // P05.T01ab-AC06: exactly one verification each for the start and the signup,
+    // and the journey above passed unchanged behind the guard.
+    const verified = siteverify.requests.slice(verifiedFrom);
+    check(
+      name("P05T01ab_AC06_one_verification_per_guarded_post"),
+      verified.length === 2 &&
+        verified.every(
+          (row) =>
+            row.method === "POST" &&
+            row.secretMatches &&
+            JSON.stringify(row.fields) === '["secret","response"]',
+        ),
+    );
   }
 
   if (hook.journeys) {
@@ -664,6 +714,7 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
       scenario,
       instance,
       oracle,
+      siteverify,
       f,
       origin,
       secret,
@@ -995,6 +1046,7 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
       outbound: {
         api: outbound.api.length,
         broker: outbound.broker.length,
+        siteverify: outbound.siteverify,
         unexpected: outbound.unexpected,
       },
     };

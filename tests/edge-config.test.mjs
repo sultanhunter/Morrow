@@ -17,6 +17,7 @@ import {
   edgeChildEnvironment,
   edgeEnvironments,
   devBindingTables,
+  edgeRateLimits,
   edgeRefusals,
   edgeWorkers,
   runWrangler,
@@ -64,9 +65,10 @@ test("AC01/AC04: the committed configuration resolves cleanly for 4 Workers x 3 
       { binding: "BROKER", service: `morrow-${environment}-broker`, entrypoint: "ApiBroker" },
     ]);
     assert.deepEqual(verdict.resolved["connector:" + environment].bindings, ["MORROW_ENVIRONMENT"]);
-    // MORROW_ENVIRONMENT, WORKOS_API_KEY and the eight role passwords (P06.T01a adds
-    // morrow_api_worker).
-    assert.equal(verdict.resolved["broker:" + environment].bindings.length, 10);
+    // MORROW_ENVIRONMENT, WORKOS_API_KEY, TURNSTILE_SECRET_KEY (P05.T01ab) and the eight
+    // role passwords (P06.T01a adds morrow_api_worker).
+    assert.equal(verdict.resolved["broker:" + environment].bindings.length, 11);
+    assert.ok(verdict.resolved["broker:" + environment].bindings.includes("TURNSTILE_SECRET_KEY"));
   }
   assert.deepEqual(verdict.reservedWorkerPaths, [...reservedWorkerPaths]);
   assert.deepEqual((await verify(tree())).problems, []);
@@ -157,6 +159,29 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
     [{ api: (c) => (c.assets.binding = "ASSETS") }, "EDGE_API_ASSETS"],
     [{ api: (c) => (c.dev.ip = "0.0.0.0") }, "EDGE_API_DEV"],
     [{ api: (c) => (c.env.staging.vars.MORROW_ENVIRONMENT = "production") }, "EDGE_VARS"],
+    // P05.T01ab: the limiter bindings are exact per environment.
+    [{ api: (c) => (c.ratelimits[0].simple.limit = 100) }, "EDGE_API_RATELIMITS"],
+    [{ api: (c) => (c.env.staging.ratelimits[2].namespace_id = "7003") }, "EDGE_API_RATELIMITS"],
+    [{ api: (c) => c.env.production.ratelimits.pop() }, "EDGE_API_RATELIMITS"],
+    [{ api: (c) => delete c.env.staging.ratelimits }, "EDGE_API_RATELIMITS"],
+    [{ api: (c) => (c.ratelimits[1].simple.period = 10) }, "EDGE_API_RATELIMITS"],
+    [
+      { broker: (c) => (c.ratelimits = structuredClone(edgeRateLimits("development"))) },
+      "EDGE_UNEXPECTED_BINDING_RATELIMITS",
+    ],
+    [
+      {
+        broker: (c) =>
+          (c.env.staging.secrets.required = c.env.staging.secrets.required
+            .slice(0, 1)
+            .concat(c.env.staging.secrets.required.slice(2))),
+      },
+      "EDGE_BROKER_SECRETS",
+    ],
+    [
+      { api: (c) => (c.env.staging.vars.TURNSTILE_SECRET_KEY = "0x" + "A".repeat(30)) },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
   ];
   for (const [index, [mutate, expected]] of cases.entries()) {
     const found = codes(await verify(tree(mutate)));
@@ -193,7 +218,8 @@ test("AC22 (static): run_worker_first is the shared list and no SPA route is sha
   assert.deepEqual(verdict.problems, ["EDGE_ROUTE_SHADOWED_BY_WORKER:shadow"]);
   const headers = readFileSync("apps/workspace-web/public/_headers", "utf8");
   for (const line of [
-    "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    // P05.T01ab: exactly challenges.cloudflare.com for the Turnstile script and frame.
+    "Content-Security-Policy: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
     "X-Content-Type-Options: nosniff",
     "Referrer-Policy: no-referrer",
     "Cross-Origin-Opener-Policy: same-origin",
@@ -384,4 +410,26 @@ test("AC05 (rules): bundle exclusions name the forbidden inputs", () => {
     ),
     ["neon_driver", "neon_pool", "runtime_validators", "api_source"],
   );
+});
+
+test("P05.T01ab: the api's limiter bindings are the packet's D1 values", () => {
+  const expected = (base) => [
+    { name: "LOGIN_START_LIMITER", namespace_id: String(base), simple: { limit: 10, period: 60 } },
+    {
+      name: "LOGIN_CALLBACK_LIMITER",
+      namespace_id: String(base + 1),
+      simple: { limit: 20, period: 60 },
+    },
+    { name: "SIGNUP_LIMITER", namespace_id: String(base + 2), simple: { limit: 5, period: 60 } },
+  ];
+  assert.deepEqual(edgeRateLimits("development"), expected(7001));
+  assert.deepEqual(edgeRateLimits("staging"), expected(7101));
+  assert.deepEqual(edgeRateLimits("production"), expected(7201));
+  const config = parseConfig(readFileSync("apps/api/wrangler.jsonc", "utf8"));
+  assert.deepEqual(config.ratelimits, expected(7001));
+  assert.deepEqual(config.env.staging.ratelimits, expected(7101));
+  assert.deepEqual(config.env.production.ratelimits, expected(7201));
+  // No challenge configuration or site key is committed before PR-D.
+  for (const environment of [config, config.env.staging, config.env.production])
+    assert.deepEqual(Object.keys(environment.vars), ["MORROW_ENVIRONMENT"]);
 });

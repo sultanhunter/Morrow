@@ -842,7 +842,8 @@ test("broker role table: eight roles, onboarding added and the selection role dr
     "workspace_primary_and_one_same_role_observer",
   );
   assert.equal(Object.hasOwn(brokerNeonRoles, "morrow_identity_resolution"), false);
-  assert.equal(brokerRequiredSecrets.length, 9);
+  // WORKOS_API_KEY, TURNSTILE_SECRET_KEY (P05.T01ab) and the eight role passwords.
+  assert.equal(brokerRequiredSecrets.length, 10);
   assert.ok(brokerRequiredSecrets.includes("MORROW_DB_PASSWORD_MORROW_IDENTITY_ONBOARDING"));
   assert.equal(brokerNeonRoles.morrow_api_worker, "work_request_transaction");
   for (const [role, purpose] of Object.entries(brokerNeonRoles)) {

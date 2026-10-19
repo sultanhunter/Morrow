@@ -26,6 +26,8 @@ import { artifactPath, repositoryRoot, writeArtifact } from "./artifacts.mjs";
 export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
 export const allowedUrls = Object.freeze([
   "https://api.workos.com/user_management/authorize",
+  // P05.T01ab: the Turnstile script, explicit rendering only (the CSP allows its origin).
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
   "http://www.w3.org/1999/xhtml",
   "http://www.w3.org/2000/svg",
   "http://www.w3.org/1999/xlink",
@@ -33,6 +35,9 @@ export const allowedUrls = Object.freeze([
   "http://www.w3.org/1998/Math/MathML",
   "https://reactjs.org/docs/error-decoder.html?invariant=",
 ]);
+// The CSP sources `_headers` may name (P05.T01ab: the Turnstile script and frame origin);
+// only `_headers`, and only as a CSP source, never in code.
+export const allowedCspSources = Object.freeze(["https://challenges.cloudflare.com"]);
 export const entryGzipLimit = 150 * 1024;
 const deniedModules = [
   ["fixture", /(^|\/)apps\/workspace-web\/src\/fixtures\//],
@@ -55,7 +60,10 @@ export function inspectDistFiles(files) {
       problems.push("DIST_MANIFEST:" + path);
     if (text.includes(fixtureCanary)) problems.push("DIST_FIXTURE_CANARY:" + path);
     for (const [url] of text.matchAll(urlPattern))
-      if (!allowedUrls.includes(url))
+      if (
+        !allowedUrls.includes(url) &&
+        !(path === "_headers" && allowedCspSources.includes(url.replace(/;$/, "")))
+      )
         problems.push("DIST_UNLISTED_URL:" + path + ":" + url.slice(0, 120));
     if (name.endsWith(".html")) {
       for (const tag of text.matchAll(/<script\b[^>]*>/gi))
@@ -290,6 +298,31 @@ export function negativeChecks() {
       "near_miss_url",
       inspectDistFiles([{ path: "assets/x.js", text: '"https://api.workos.com/other"' }]).length ===
         1,
+    ],
+    [
+      "near_miss_turnstile_url",
+      inspectDistFiles([
+        { path: "assets/x.js", text: '"https://challenges.cloudflare.com/turnstile/v0/api.js"' },
+      ]).length === 1 &&
+        inspectDistFiles([
+          {
+            path: "assets/x.js",
+            text: '"https://challenges.cloudflare.com/turnstile/v0/siteverify"',
+          },
+        ]).length === 1,
+    ],
+    [
+      "csp_source_only_in_headers",
+      inspectDistFiles([
+        {
+          path: "_headers",
+          text: "script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com;",
+        },
+      ]).length === 0 &&
+        inspectDistFiles([{ path: "_headers", text: "script-src https://evil.example;" }])
+          .length === 1 &&
+        inspectDistFiles([{ path: "assets/x.js", text: '"https://challenges.cloudflare.com"' }])
+          .length === 1,
     ],
     [
       "inline_script",

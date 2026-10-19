@@ -4,7 +4,7 @@ Updated 2026-10-20. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active packets
 
-`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#24. The latest:
+`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#25. The latest:
 - PR #10 P05.T01x Part B (`e51e5b7`); PR #12 P06.T01a (`06e4dfe`; Verified waits for the P05 exit gate); PR #13 the ADR-0018 Proposal@2 edit (`08e5ebf`); PR #14 P01.T04a PR-A (`bba3cec`).
 - PR #15 P14.T01a PR-1 (`5ad6cc7`, provisional under ADR-0003).
 - PR #11 P03.T04e PR-A (`f8314e8`). Still open: its AC22 `workflow_dispatch` run of `heavy-faults.yml` (about 18 billed minutes), and the AC04 hosted totals and hosted part of AC05, which P03.T04f moves to its first hosted `checks` job.
@@ -18,10 +18,11 @@ Updated 2026-10-20. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #22 P05.T01y (`d9c60b7`): browser session lifecycle; 0016 on the ADR-0020 helpers.
 - PR #23 (`262604d`): pgwire lab fixes (the concurrent-callback serial race; the workspace-api final hold now named).
 - PR #24 P06.T01b PR-1 (`890099a`): approval records, migrations 0017–0018.
+- PR #25 MVP design (`e8db88f`): ADR-0022 Accepted; Claude behind a provider-neutral model gateway; model catalogue v1 active; briefs M2–M5.
 
 In progress:
-- **MVP design** (`claude/mvp-briefs`, PR #25): ADR-0022 Accepted with the owner's answers; Claude behind a provider-neutral model gateway; model catalogue v1 active (2026-10-19); briefs M2–M5 in `docs/briefs/`.
-- Built branches waiting for the merge train (next actions): P05.T01ab, P04.T01i PR-B.
+- **P05.T01ab = P04.T01i PR-C** (`claude/p05-t01ab-abuse-guard`, PR #27; merged with `main` at `e8db88f`): the api sign-in abuse guard before any SQL (per-address limits 10/20/5 per 60 s; Turnstile through the fourth broker method `challengeVerify`; `GET /auth/challenge`; mapper step 10 fails staging and production closed without it), contract v1.1 additions (506 validators, bundle 2,886,931 bytes), the widget on the sign-in screen and now on PR-2's create-organization form (fresh token per POST; `challenge_*` and 429 keep the form's existing errors), and the labs; the route table gains P05.T01y's `rotate`, unguarded. The owner kept the `failed` log line (ADR-0019 item 9 amended). Local checks 2026-10-20 on the merged head: `format:check`, `typecheck`, `verify`, 3,422 unit tests, `build`, `lab:edge-workers`, `lab:group:workers`, `ui:check` (165/166 with installed Chrome; the one is Chrome's own favicon 404) and the local journey lab (13 cases, 88 checks, zero aborts) pass. Open: PR, one AI review with the security lens, hosted CI including `ui` and `pgwire` (`docs/acceptance/P05.md`). It reconciles with PR-B (verify-config, `_headers`, the broker's ten secret names); PR-D adds its two JSON vars.
+- Built branches waiting for the merge train (next actions): P04.T01i PR-B (trimmed staging tooling); CI leg split (PR #26).
 
 ## Decisions recorded 2026-10-18 and 2026-10-19 (owner, in chat)
 
@@ -33,6 +34,7 @@ In progress:
 - **Third-party GitHub access:** first "i am not working with codex so it won't push anything so leave it"; then, asked again with the risk stated, "Suspend Codex + revoke old token (Recommended)". The platform GitHub Apps stay for staging as a recorded exception (ADR-0019 item 5, ADR-0014 item 5 amendment).
 - **Cloudflare:** P04.T01i OQ-3 "Use this account" (option C, census at every deploy); Wrangler OAuth "Revoke it (Recommended)".
 - **P03.T04f OQ-1:** "Allow both (Recommended)" (ADR-0014 item 4 amendment: light runs pass `foundation`).
+- **P05.T01ab log line:** "Keep it (Recommended)": ADR-0019 item 9 amended to allow one fixed-code `morrow_challenge {code:"failed"}` line per failed verification (capped by the per-IP limiter; about $0.60 per 1M lines).
 - **2026-10-18:** ADR-0015 billing routes by origin (supersedes ADR-0006; Stripe selected, no account or calls until an approved packet); ADR-0016 collaboration contracts v1.1 (admins read private Asks through audited reads); ADR-0017 membership authority; ADR-0018 proposals without a task; P01.T04a OQ-1 to OQ-3 (purchase permission with P18.T01a; a test entitlement seed for M4; an App Review allowance); P03.T04e OQ-1 (routine): heavy CI on dispatch plus weekly.
 
 ## Last green commit
@@ -44,7 +46,7 @@ In progress:
 ## Next actions
 
 MVP fast track (ADR-0021; `docs/plan/mvp.md`). M1, staging live:
-1. Merge train: #18 to #24 merged; next the MVP design (#25), P05.T01ab, then the trimmed P04.T01i PR-B. Each PR gets one AI review (separate context, same model family), with the security lens where it applies.
+1. Merge train: #18 to #25 merged; next P05.T01ab (#27), the CI leg split (#26), then the trimmed P04.T01i PR-B. Each PR gets one AI review (separate context, same model family), with the security lens where it applies.
 2. **The trimmed P04.T01i PR-B:** deploy after green CI, migrations, roles and secrets. It keeps `staging:kill`/`unkill` with the flag re-read around the api deploy, the ADR-0019 item 4 deploy gates 1–6, and the census at every deploy. Card effect E11 (Claude's rollbacks) is suspended until the rollback refusal exists; staging rolls forward instead. AC14's hosted drill, AC15–AC17 and AC19 move past launch (`docs/acceptance/P04.md`).
 3. Staging bring-up under `staging-card-1` once its preconditions hold (below); owner sign-in on staging.
 4. Then M2, M3 and M5 in parallel (ADR-0022 accepted in full, so credentials may be bound for development and staging, and M3 PR-1's catalogue part may build on model catalogue v1, active since 2026-10-19); M4 (with the ADR-0005 stop controls, M3/M4); M6 (the deletion path before the real-store smoke).
