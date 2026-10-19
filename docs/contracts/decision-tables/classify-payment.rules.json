@@ -1,0 +1,284 @@
+{
+  "schema_version": 1,
+  "table": "classify-payment",
+  "packet": "P01.T04a",
+  "description": "The reviewers' specification of classifyPayment (P01.T04a §5 rules 1-9; ADR-0015 R3 and R7-R10), written independently of packages/policy/src/billing-state.ts. The first rule whose every listed dimension matches a row decides it; a dimension a rule does not list matches every value. scripts/billing-decision-tables.mjs generates classify-payment.tsv from these rules, and tests/billing-decision-tables.test.mjs builds a target, event and terms table from every row and checks that the library returns the row's outcome, or throws BILLING_INPUT_INVALID or BILLING_FACTS_INVALID for input_invalid. Replay (already_granted), tenant mismatch and terms mismatch are precedence rules tested separately; every row uses a matching terms entry and an unseen payment key.",
+  "dimensions": [
+    {
+      "name": "phase",
+      "values": ["open", "shopify_bound", "morrow_direct", "shopify_app_pricing"],
+      "meaning": "The workspace's route phase (§3). Ignored for an unattributed target, which has no workspace."
+    },
+    {
+      "name": "provider",
+      "values": ["stripe", "shopify"],
+      "meaning": "The event's payment route: Stripe (morrow_direct) or App Pricing (shopify_app_pricing)."
+    },
+    {
+      "name": "kind",
+      "values": ["subscription_period", "plan_change", "top_up"],
+      "meaning": "The verified event's kind."
+    },
+    {
+      "name": "mode",
+      "values": ["matches", "other"],
+      "meaning": "Whether the event's mode is the environment's (R9)."
+    },
+    {
+      "name": "relation",
+      "values": ["none", "current", "other_live", "new_after_terminal", "current_terminal"],
+      "meaning": "The event's subscription against the payer's recorded subscription: none (no payer, or no subscription recorded), current, another while the recorded one is live, another after the recorded one is terminal, or the recorded one itself after it became terminal. A top-up names no subscription, so it is none, current or current_terminal by the payer's recorded subscription."
+    },
+    {
+      "name": "payer",
+      "values": ["none", "billable", "not_billable", "reversed"],
+      "meaning": "The event's payer (Stripe: the workspace's storeless account; App Pricing: the installation's account) as recorded facts: none (no account), an active account with an active entitlement, an active account with a past-due entitlement, or an active account and entitlement with an open reversal. The payer is billable only with a live recorded subscription; only top-ups read it."
+    },
+    {
+      "name": "attribution",
+      "values": ["attributed", "associated_not_current", "unattributed"],
+      "meaning": "Stripe: a mapped customer (attributed) or not (unattributed). App Pricing: an installation with a current link, associated but not currently linked, or not associated with any workspace (unattributed)."
+    },
+    {
+      "name": "amount",
+      "values": ["positive", "zero"],
+      "meaning": "Whether amountPaid is above zero, that is, money was collected (R3)."
+    }
+  ],
+  "outcomes": [
+    "input_invalid",
+    "refused:PAYMENT_MODE_REFUSED",
+    "held:CUSTOMER_NOT_MAPPED",
+    "held:INSTALLATION_NOT_ASSOCIATED",
+    "held:SUBSCRIPTION_NOT_CURRENT",
+    "no_charge",
+    "conflict:ROUTE_MISMATCH",
+    "conflict:SUBSCRIPTION_REQUIRED",
+    "conflict:DUPLICATE_SUBSCRIPTION",
+    "conflict:SUBSCRIPTION_TERMINAL",
+    "grant:included",
+    "grant:purchased",
+    "fix_route_and_grant:morrow_direct",
+    "fix_route_and_grant:shopify_app_pricing"
+  ],
+  "rules": [
+    {
+      "id": "I1",
+      "when": { "provider": ["shopify"], "kind": ["top_up"] },
+      "outcome": "input_invalid",
+      "source": "An App Pricing event is never a top-up (§4.1; App Pricing has no one-time purchases)."
+    },
+    {
+      "id": "I2",
+      "when": { "provider": ["stripe"], "attribution": ["associated_not_current"] },
+      "outcome": "input_invalid",
+      "source": "A Stripe event names no installation (§4.1)."
+    },
+    {
+      "id": "I3",
+      "when": {
+        "attribution": ["unattributed"],
+        "payer": ["billable", "not_billable", "reversed"]
+      },
+      "outcome": "input_invalid",
+      "source": "An unattributed target carries no workspace and no payer (§5 PaymentTarget)."
+    },
+    {
+      "id": "I4",
+      "when": {
+        "attribution": ["unattributed"],
+        "relation": ["current", "other_live", "new_after_terminal", "current_terminal"]
+      },
+      "outcome": "input_invalid",
+      "source": "An unattributed target carries no recorded subscription (§5 PaymentTarget)."
+    },
+    {
+      "id": "I5",
+      "when": {
+        "payer": ["none"],
+        "relation": ["current", "other_live", "new_after_terminal", "current_terminal"]
+      },
+      "outcome": "input_invalid",
+      "source": "A recorded subscription (an entitlement) needs its account."
+    },
+    {
+      "id": "I6",
+      "when": {
+        "phase": ["open"],
+        "provider": ["shopify"],
+        "attribution": ["attributed", "associated_not_current"]
+      },
+      "outcome": "input_invalid",
+      "source": "No installation was ever associated with an open workspace (§3)."
+    },
+    {
+      "id": "I7",
+      "when": {
+        "phase": ["open", "shopify_bound"],
+        "payer": ["billable", "not_billable", "reversed"]
+      },
+      "outcome": "input_invalid",
+      "source": "Accounts exist only once a route is fixed (§8.3)."
+    },
+    {
+      "id": "I8",
+      "when": {
+        "phase": ["morrow_direct"],
+        "provider": ["stripe"],
+        "attribution": ["attributed"],
+        "payer": ["none"]
+      },
+      "outcome": "input_invalid",
+      "source": "A morrow_direct workspace has exactly one storeless account, created when its route was fixed (R5, §8.3)."
+    },
+    {
+      "id": "I9",
+      "when": {
+        "phase": ["morrow_direct"],
+        "provider": ["shopify"],
+        "payer": ["billable", "not_billable", "reversed"]
+      },
+      "outcome": "input_invalid",
+      "source": "A morrow_direct workspace has no per-installation account (R5)."
+    },
+    {
+      "id": "I10",
+      "when": {
+        "phase": ["shopify_app_pricing"],
+        "provider": ["stripe"],
+        "payer": ["billable", "not_billable", "reversed"]
+      },
+      "outcome": "input_invalid",
+      "source": "A Shopify-route workspace has no storeless account (R5)."
+    },
+    {
+      "id": "I11",
+      "when": { "kind": ["top_up"], "relation": ["other_live", "new_after_terminal"] },
+      "outcome": "input_invalid",
+      "source": "A top-up names no subscription (§4.1)."
+    },
+    {
+      "id": "R1",
+      "when": { "mode": ["other"] },
+      "outcome": "refused:PAYMENT_MODE_REFUSED",
+      "source": "Rule 1 (R9): an event in the other mode neither fixes, entitles nor grants."
+    },
+    {
+      "id": "R3a",
+      "when": { "attribution": ["unattributed"], "provider": ["stripe"] },
+      "outcome": "held:CUSTOMER_NOT_MAPPED",
+      "source": "Rule 3 (R8): held with the target's reason; never dropped or refunded automatically."
+    },
+    {
+      "id": "R3b",
+      "when": { "attribution": ["unattributed"], "provider": ["shopify"] },
+      "outcome": "held:INSTALLATION_NOT_ASSOCIATED",
+      "source": "Rule 3 (R8): a plan chosen on Shopify's plan page before any link; re-classified in the link transaction."
+    },
+    {
+      "id": "R4",
+      "when": { "amount": ["zero"] },
+      "outcome": "no_charge",
+      "source": "Rule 4 (R3): no money collected fixes no route and grants nothing."
+    },
+    {
+      "id": "R5a",
+      "when": { "provider": ["stripe"], "phase": ["shopify_bound", "shopify_app_pricing"] },
+      "outcome": "conflict:ROUTE_MISMATCH",
+      "source": "Rule 5 (R7): a Stripe payment for a Shopify-bound or Shopify-route workspace."
+    },
+    {
+      "id": "R5b",
+      "when": { "provider": ["shopify"], "phase": ["morrow_direct"] },
+      "outcome": "conflict:ROUTE_MISMATCH",
+      "source": "Rule 5 (R7): an App Pricing payment on an installation of a morrow_direct workspace."
+    },
+    {
+      "id": "R7a",
+      "when": {
+        "kind": ["top_up"],
+        "phase": ["morrow_direct"],
+        "payer": ["billable"],
+        "relation": ["current"]
+      },
+      "outcome": "grant:purchased",
+      "source": "Rule 7 (R10): a top-up is granted on morrow_direct while the payer is billable."
+    },
+    {
+      "id": "R7b",
+      "when": { "kind": ["top_up"] },
+      "outcome": "conflict:SUBSCRIPTION_REQUIRED",
+      "source": "Rule 7 (R7): a top-up without a billable subscription."
+    },
+    {
+      "id": "R8a",
+      "when": { "kind": ["plan_change"], "relation": ["current"] },
+      "outcome": "grant:included",
+      "source": "Rule 8: the planChanges entry's credits for the payer's current subscription."
+    },
+    {
+      "id": "R8b",
+      "when": { "kind": ["plan_change"], "relation": ["other_live"] },
+      "outcome": "conflict:DUPLICATE_SUBSCRIPTION",
+      "source": "Rule 8 (R7): a different subscription while the current one is live."
+    },
+    {
+      "id": "R8c",
+      "when": { "kind": ["plan_change"], "relation": ["current_terminal"] },
+      "outcome": "conflict:SUBSCRIPTION_TERMINAL",
+      "source": "Rule 8 (R7): a plan change on a terminal subscription."
+    },
+    {
+      "id": "R8d",
+      "when": { "kind": ["plan_change"] },
+      "outcome": "held:SUBSCRIPTION_NOT_CURRENT",
+      "source": "Rule 8 (R8): no payer or subscription matches yet; re-classified when that subscription's period is accepted."
+    },
+    {
+      "id": "R9a",
+      "when": { "kind": ["subscription_period"], "phase": ["open"], "provider": ["stripe"] },
+      "outcome": "fix_route_and_grant:morrow_direct",
+      "source": "Rule 9 (R3): the first completed Stripe period fixes morrow_direct only in phase open."
+    },
+    {
+      "id": "R9b",
+      "when": {
+        "kind": ["subscription_period"],
+        "phase": ["shopify_bound"],
+        "provider": ["shopify"]
+      },
+      "outcome": "fix_route_and_grant:shopify_app_pricing",
+      "source": "Rule 9 (R3): the first completed App Pricing period of an associated installation fixes shopify_app_pricing only in phase shopify_bound."
+    },
+    {
+      "id": "R9c",
+      "when": { "kind": ["subscription_period"], "payer": ["none"] },
+      "outcome": "grant:included",
+      "source": "Rule 9 (R5): an installation's first period creates its account, current link or not."
+    },
+    {
+      "id": "R9d",
+      "when": { "kind": ["subscription_period"], "relation": ["current", "new_after_terminal"] },
+      "outcome": "grant:included",
+      "source": "Rule 9: the payer's current subscription, or a new one after a terminal one."
+    },
+    {
+      "id": "R9e",
+      "when": { "kind": ["subscription_period"], "relation": ["other_live"] },
+      "outcome": "conflict:DUPLICATE_SUBSCRIPTION",
+      "source": "Rule 9 (R7): a second subscription while the current one is not terminal."
+    },
+    {
+      "id": "R9f",
+      "when": { "kind": ["subscription_period"], "relation": ["current_terminal"] },
+      "outcome": "conflict:SUBSCRIPTION_TERMINAL",
+      "source": "Rule 9 (R7): a late payment on a terminal subscription."
+    },
+    {
+      "id": "R9g",
+      "when": { "kind": ["subscription_period"], "relation": ["none"] },
+      "outcome": "held:SUBSCRIPTION_NOT_CURRENT",
+      "source": "Rule 9 (R8), recorded refinement: a payer whose subscription is not recorded yet; re-classified once it is."
+    }
+  ]
+}
