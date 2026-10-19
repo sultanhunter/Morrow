@@ -61,16 +61,18 @@
   "quality_status": "not_evaluated",
   "catalogue": {
     "id": "morrow-model-catalogue",
-    "active_version": null,
-    "published_digests": {},
+    "active_version": 1,
+    "published_digests": {
+      "1": "fca7f9ac7151f67818e5fa242f5e9bca8e6c36246738e78d0ffbd55c39aed660"
+    },
     "change_policy": "A published (active or retired) version never changes: its digest is pinned in published_digests and recomputed by npm run verify. A new model, effort, multiplier, cap or price is a new version. A version is published only with the owner's recorded confirmation (ADR-0022, Pending owner confirmation).",
     "versions": [
       {
         "version": 1,
-        "status": "proposed",
+        "status": "active",
         "proposed_on": "2026-10-19",
-        "owner_confirmation": null,
-        "effective_from": null,
+        "owner_confirmation": "Owner, 2026-10-19, in chat: asked \"Confirm these model, credit and safety values for the beta?\" (catalogue Haiku/Sonnet/Opus 5.5 at low/medium/high; default Sonnet 5.5 low; weights Haiku 1/1/1, Sonnet 1/2/3, Opus 2/4/6; token caps; 90% worst-case margin; failed products free, stop after 3, US$4.50 unrecovered cap; member ceiling 1), answered \"Confirm all (Recommended)\".",
+        "effective_from": "2026-10-19",
         "default_selection": {
           "model": "claude_sonnet_5_5",
           "effort": "low"
