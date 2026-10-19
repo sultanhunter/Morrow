@@ -1758,3 +1758,50 @@ test("cli: the trimmed PR-B's subcommands, and nothing for rollback, rotation dr
     ["ci-gates", "deploy"],
   );
 });
+
+// D9 step 4 (c)-(e): every neonctl command the owner runs exists, with those options, in
+// the CLI that package.json pins (neonctl 8.8.0 is a shim for `neon` 8.8.0). Read from the
+// installed sources only; the CLI is never run, so nothing reaches Neon.
+test("D9: the owner's neonctl commands exist in the pinned Neon CLI, read without running it", () => {
+  const packet = readFileSync("docs/packets/P04.T01i.md", "utf8");
+  const commands = [
+    ...packet.matchAll(/npx --no-install neonctl ([a-z-]+(?: [a-z-]+)?)([^`)>]*)/g),
+  ];
+  const pins = JSON.parse(readFileSync("package.json", "utf8")).devDependencies;
+  assert.equal(pins.neonctl, "8.8.0");
+  const shim = JSON.parse(readFileSync("node_modules/neonctl/package.json", "utf8"));
+  assert.equal(shim.version, "8.8.0");
+  assert.equal(shim.dependencies.neon, "8.8.0");
+  assert.equal(JSON.parse(readFileSync("node_modules/neon/package.json", "utf8")).version, "8.8.0");
+  const source = (file) => readFileSync(join("node_modules/neon/dist/commands", file), "utf8");
+  // Each D9 command: its source file, the text that defines the (sub)command, its options.
+  const definitions = {
+    auth: ["auth.js", ['const command = "login"', 'const aliases = ["auth"]']],
+    "databases create": ["databases.js", ['const command = "databases"', '.command("create"']],
+    "branches create": ["branches.js", ['const command = "branches"', '.command("create"']],
+    "connection-string staging": [
+      "connection_string.js",
+      ['const command = "connection-string [branch]"'],
+    ],
+  };
+  const seen = new Set();
+  for (const [, name, rest] of commands) {
+    const key = name.startsWith("connection-string") ? "connection-string staging" : name;
+    assert.ok(Object.hasOwn(definitions, key), "unknown D9 neonctl command: " + name);
+    seen.add(key);
+    const [file, defining] = definitions[key];
+    const text = source(file);
+    for (const piece of defining) assert.ok(text.includes(piece), `${key}: ${piece}`);
+    for (const [, option] of rest.matchAll(/--([a-z-]+)/g))
+      assert.ok(
+        text.includes(`"${option}":`) || new RegExp(`[\\s{,]${option}: `).test(text),
+        `${key}: --${option}`,
+      );
+  }
+  assert.deepEqual([...seen].sort(), Object.keys(definitions).sort());
+  // connection-string defaults to the direct (unpooled) host with sslmode=require, which
+  // the runner's owner-URL grammar requires.
+  const cs = source("connection_string.js");
+  assert.match(cs, /pooled: \{\s+type: "boolean",[^}]*default: false/);
+  assert.match(cs, /ssl: \{[^}]*default: "require"/);
+});
