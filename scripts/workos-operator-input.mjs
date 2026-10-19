@@ -43,6 +43,7 @@ export const workosOperatorSourcePaths = Object.freeze([
   "migrations/0005.workspace-store-linking.sql",
   "migrations/0006.authentication-exchange-admission.sql",
   "packages/identity/src/authentication-exchange-admission.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/workos-session-token.ts",
   "packages/contracts/src/validation.ts",
   "packages/contracts/src/generated/runtime-validators.mjs",

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { writeArtifact } from "./artifacts.mjs";
+import { migrationSqlViolations } from "./migration-sql.mjs";
 export function inspectSecrets(text) {
   const patterns = [
     ["private_key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
@@ -74,6 +75,9 @@ export function inspectMigrations(
       if (sha256(sql) !== entry.sha256) errors.push("MIGRATION_CHECKSUM");
       if (!/^\s*BEGIN\s*;/i.test(sql) || !/COMMIT\s*;\s*$/i.test(sql))
         errors.push("MIGRATION_TRANSACTION_ENVELOPE");
+      // The runner contract (ADR-0020 item 5): one transaction, no inner transaction
+      // control, no role or session switch, no psql meta-command.
+      errors.push(...migrationSqlViolations(String(sql)));
     }
     if (typeof entry.executeAs !== "string" || !executeAsRole.test(entry.executeAs))
       errors.push("INVALID_EXECUTE_AS");
@@ -178,6 +182,24 @@ function syntheticMigrationErrors(overrides, extraPrerequisites = {}) {
   );
 }
 const onlyError = (errors, code) => errors.length === 1 && errors[0] === code;
+// One synthetic reviewed row whose SQL is `text`, for the runner-contract negatives.
+const syntheticSqlErrors = (text) =>
+  inspectMigrations(
+    {
+      schema_version: 1,
+      engine: "postgresql17",
+      migrations: [
+        {
+          sequence: 1,
+          file: "0001.example.sql",
+          sha256: sha256(text),
+          reviewRef: "synthetic-review",
+          executeAs: "morrow_identity_owner",
+        },
+      ],
+    },
+    { "0001.example.sql": text },
+  );
 function verify() {
   const { paths, findings: errors } = scanSecrets("."); // Never output matches or values.
   const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
@@ -277,6 +299,20 @@ function verify() {
       ),
     },
     {
+      name: "nested_transaction_control",
+      passed: onlyError(
+        syntheticSqlErrors("BEGIN; SELECT 1; COMMIT; BEGIN; SELECT 2; COMMIT;"),
+        "MIGRATION_TRANSACTION_CONTROL",
+      ),
+    },
+    {
+      name: "role_switch_in_migration",
+      passed: onlyError(
+        syntheticSqlErrors("BEGIN; RESET ROLE; SELECT 1; COMMIT;"),
+        "MIGRATION_ROLE_SWITCH",
+      ),
+    },
+    {
       name: "unreviewed_prerequisite_file",
       passed: onlyError(
         syntheticMigrationErrors([{}], { [examplePrerequisite]: syntheticSql }),
@@ -287,7 +323,7 @@ function verify() {
   writeArtifact("verify/delivery.json", {
     generated_at: new Date().toISOString(),
     scope:
-      "Known-pattern secret guard, dependency locking (bundles bound to integrity-checked parent tarballs), migration metadata/checksum/envelope and executeAs/pinned-prerequisite metadata (every infra/*-prerequisites.sql named by exactly one row) only; not complete secret assurance or PostgreSQL execution. Hosted CI evidenced separately; release protection pending.",
+      "Known-pattern secret guard, dependency locking (bundles bound to integrity-checked parent tarballs), migration metadata/checksum/envelope, the single-transaction runner contract (no inner transaction control, role or session switch or psql meta-command) and executeAs/pinned-prerequisite metadata (every infra/*-prerequisites.sql named by exactly one row) only; not complete secret assurance or PostgreSQL execution. Hosted CI evidenced separately; release protection pending.",
     scanned_files: paths.length,
     dependency_records: Object.keys(lock.packages).length,
     migrations: manifest.migrations.length,

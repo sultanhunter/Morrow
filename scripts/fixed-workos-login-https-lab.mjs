@@ -73,6 +73,7 @@ const paths = [
   "packages/identity/src/standalone-login-protocol.ts",
   "packages/identity/src/standalone-logout.ts",
   "packages/identity/src/self-logout-control.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/login-preauth-control.ts",
   "packages/identity/src/login-flow-custody.ts",
   "packages/identity/src/authentication-exchange-admission.ts",
@@ -436,10 +437,25 @@ try {
         headers: { ...authHeaders(), Cookie: header },
         body: '{"schemaVersion":1}',
       });
+    // P05.T01y-AC26: a logout answered after the SQL call carries exactly the session clear.
+    const sessionClear =
+      "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
     const ended = (response) =>
       response.status === 200 &&
       response.text === '{"schemaVersion":1,"outcome":"session_ended"}' &&
-      response.headers.getSetCookie().length === 0;
+      response.headers.getSetCookie().join() === sessionClear;
+    // After the clear the jar holds no session cookie; any other cookie it held (the login
+    // cookie, until its own Max-Age) is unchanged.
+    const sessionGone = (jar, before) => {
+      const after = jar.header(origin + "/");
+      const rest = before
+        .split("; ")
+        .filter((pair) => !pair.startsWith("__Host-morrow_session="))
+        .join("; ");
+      return (
+        !jar.names().includes("__Host-morrow_session") && (after === undefined || after === rest)
+      );
+    };
     const link = (c, handoff, header, kind, csrf) =>
       request(`/workspace/${c.f.workspace}/store-links${kind === "apply" ? "" : "/" + kind}`, {
         method: "POST",
@@ -520,9 +536,10 @@ try {
         ended(endedReply) && revocations(issued.family_id) === 1,
       );
       check(
-        "q_logout_never_rewrites_cookie",
-        c.jar.ingest(origin + "/auth/logout", endedReply.headers).accepted === 0 &&
-          c.jar.header(origin + "/") === issued.header,
+        "q_logout_clear_removes_only_the_session_cookie",
+        c.jar.header(origin + "/") === issued.header &&
+          c.jar.ingest(origin + "/auth/logout", endedReply.headers).accepted === 1 &&
+          sessionGone(c.jar, issued.header),
       );
       check("retired_cookie_denied_o", (await bootstrap(c, issued.header)).status === 401);
       for (const kind of ["preview", "apply", "status"]) {
@@ -609,12 +626,17 @@ try {
       gate.resolve();
       const delayed = await pending;
       armed = false;
+      // P05.T01y-AC28, the documented fixed-name limitation: the late clear for the older
+      // family names the same cookie, so the jar drops the newer session cookie. The server
+      // ends only the older family (next check: the newer one stays live and bootstraps).
       check(
-        "late_old_ack_cannot_clear_new_issued_cookie",
+        "late_old_ack_clears_newer_session_cookie_fixed_name_limitation",
         ended(delayed) &&
-          newerJar.ingest(origin + "/auth/logout", delayed.headers).accepted === 0 &&
           newerJar.header(origin + "/") === newer.header &&
-          newer.secret !== older.secret,
+          newerJar.ingest(origin + "/auth/logout", delayed.headers).accepted === 1 &&
+          sessionGone(newerJar, newer.header) &&
+          newer.secret !== older.secret &&
+          revocations(older.family_id) === 1,
       );
       check(
         "new_family_remains_live_after_old_ack",
@@ -868,6 +890,7 @@ const report = {
   limitations: [
     "Independent RSA/PKCE/HTTP fixture feeds the real adapter and unchanged84→69→72→78→76→77→M chain; provider final URLs are synthetic attestations, not native DNS/TLS proof.",
     "Actual local merchant HTTPS and a bounded test cookie jar do not qualify browser-engine cookie enforcement, hosted custody or merchant activation.",
+    "The logout clear names the fixed session cookie: a late logout acknowledgement for an older family drops a newer session cookie from the jar while the server keeps the newer family live (P05.T01y-AC28 limitation).",
     "The deliberately rejected lease release is retained as one attempted but unacknowledged synthetic disposal; no page/cookie or release retry follows it.",
     "Late-keyset negative advances only its synthetic clock after Fetch; original callback, operation and five-second observation lifetimes are not extended.",
     "No real WorkOS request, owned credential, Shopify call, live sign-in, refresh or provider logout occurs.",

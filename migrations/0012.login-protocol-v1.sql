@@ -1,13 +1,14 @@
 BEGIN;
 -- Retires the plan-number login controller protocol identifier (P05.T01x Part A).
--- Applied 0001-0011 bytes stay unchanged. Legacy configuration rows stay readable and
+-- 0001-0004 stay byte-identical; 0005-0015 were rebaselined once under ADR-0020. Legacy
+-- configuration rows stay readable and
 -- immutable; the NOT VALID constraint binds only rows written after this migration and is
 -- never validated. Executors may already hold LOGIN when an existing database upgrades, so
 -- the role check is the 0010 flag set without the LOGIN attribute.
 DO $$ BEGIN
  IF current_user<>'morrow_identity_owner'
  OR NOT EXISTS(SELECT 1 FROM pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
- OR (SELECT count(*) FROM pg_roles r WHERE r.rolname IN ('morrow_identity_login','morrow_identity_login_maintenance') AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))<>2
+ OR (SELECT count(*) FROM pg_roles r WHERE r.rolname IN ('morrow_identity_login','morrow_identity_login_maintenance') AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND morrow_identity.memberships_closed(r.rolname))<>2
  OR EXISTS(SELECT 1 FROM pg_roles r,pg_roles o WHERE o.rolname='morrow_identity_owner' AND r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance','morrow_identity_logout') AND (pg_has_role(r.oid,o.oid,'MEMBER') OR pg_has_role(o.oid,r.oid,'MEMBER')))
  OR to_regprocedure('morrow_identity.end_self_browser_family(text,text,text,text,text,text,text,text)') IS NULL
  OR NOT EXISTS(SELECT 1 FROM pg_constraint k WHERE k.conrelid=to_regclass('morrow_identity.login_controller_configurations') AND k.conname='login_controller_configurations_controller_protocol_check' AND k.contype='c')

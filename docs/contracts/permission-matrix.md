@@ -35,6 +35,13 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | workspace.knowledge.read | human_or_bounded_installation_with_explicit_capability_grant | approved knowledge fields | Grant checks | agent_direct_read | No |
 | workspace.routine.configure | human_or_bounded_installation_with_explicit_capability_grant | trigger, timezone, overlap policy, mandate | Grant checks | agent_direct_write | No |
 | workspace.routine.activate | human_or_bounded_installation_with_explicit_capability_grant | active schedule | Required | human_only | No |
+| workspace.conversation.create | human_or_bounded_installation_with_explicit_capability_grant | store, subject | Grant checks | human_only | No |
+| workspace.conversation.post | human_or_bounded_installation_with_explicit_capability_grant | parts, reply, sources | Grant checks | agent_direct_write | No |
+| workspace.project.create | human_or_bounded_installation_with_explicit_capability_grant | goal, title, tabs | Grant checks | human_only | No |
+| workspace.project.revise | human_or_bounded_installation_with_explicit_capability_grant | title, tabs | Grant checks | agent_direct_write | No |
+| workspace.project.pin | human_or_bounded_installation_with_explicit_capability_grant | pin, order | Grant checks | human_only | No |
+| workspace.inbox.read | human_or_bounded_installation_with_explicit_capability_grant | kind, subject, decision state, read state | Grant checks | human_only | No |
+| workspace.inbox.mark | human_or_bounded_installation_with_explicit_capability_grant | read state | Grant checks | human_only | No |
 | catalog.products.read | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO, variants, media, tags | Grant checks | agent_direct_read | No |
 | catalog.audit.create | human_or_bounded_installation_with_explicit_capability_grant | catalog facts, approved claims | Grant checks | agent_direct_write | No |
 | catalog.content.propose | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO title, SEO description | Grant checks | agent_direct_write | No |
@@ -111,6 +118,7 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | governance.audit.export | human_or_bounded_installation_with_explicit_capability_grant | authorized audit records | Grant checks | human_only | No |
 | governance.privacy.export | human_or_bounded_installation_with_explicit_capability_grant | verified subject data | Grant checks | human_only | No |
 | governance.privacy.erase | human_or_bounded_installation_with_explicit_capability_grant | subject records and permitted derived content | Required | human_only | No |
+| governance.access.request | human_or_bounded_installation_with_explicit_capability_grant | capability, resource, field, reason | Grant checks | human_only | No |
 | agents.listing.read | human_or_bounded_installation_with_explicit_capability_grant | public listing and authorized readiness fields | Grant checks | agent_direct_read | No |
 | agents.builder.describe | human_or_bounded_installation_with_explicit_capability_grant | purpose, proposed skills, inputs, outputs, capabilities | Grant checks | agent_direct_write | No |
 | agents.installation.stage | human_or_bounded_installation_with_explicit_capability_grant | release lockfile, configuration, proposed grants | Grant checks | agent_direct_write | No |

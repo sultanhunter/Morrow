@@ -441,7 +441,10 @@ test("managed logout keeps the provided deadline and does not end its caller-own
       pool,
     );
     assert.equal(delivery.status, 200);
-    assert.deepEqual(delivery.cookies, []);
+    // P05.T01y-AC26: the post-SQL plan clears the session cookie.
+    assert.deepEqual(delivery.cookies, [
+      "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
+    ]);
     assert.equal(JSON.parse(delivery.bodyText).outcome, "session_ended");
     assert.equal(controls.length, 1);
     assert.equal(controls[0].deadlineMs, entered + 5000);
@@ -478,7 +481,13 @@ test("legacy and provided-attempt logout preserve identical body/status/SQL deci
       );
       assert.equal(delivery.status, response.status);
       assert.equal(delivery.bodyText, await response.text());
-      assert.deepEqual(delivery.cookies, []);
+      assert.deepEqual(delivery.cookies, response.headers.getSetCookie());
+      assert.deepEqual(
+        delivery.cookies,
+        options.roleUnsafe
+          ? []
+          : ["__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0"],
+      );
       assert.deepEqual(
         a.calls.map((v) => v.stage),
         b.calls.map((v) => v.stage),

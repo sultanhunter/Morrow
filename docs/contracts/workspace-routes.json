@@ -953,6 +953,160 @@
       ]
     },
     {
+      "id": "project",
+      "pattern": "/w/:workspaceId/projects/:projectId",
+      "title": "Project",
+      "data": [
+        "goal",
+        "pinned_tabs",
+        "contributors",
+        "conversation",
+        "activity",
+        "decisions"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "work",
+      "components": [
+        "ScopeHeader",
+        "ProjectHeader",
+        "ArtifactTabs",
+        "ArtifactEditor",
+        "Conversation",
+        "ActivityList",
+        "DecisionSummary"
+      ]
+    },
+    {
+      "id": "project_artifact",
+      "pattern": "/w/:workspaceId/projects/:projectId/artifacts/:artifactId",
+      "title": "Project artifact",
+      "data": [
+        "project",
+        "artifact_revision",
+        "lineage"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "project",
+      "components": [
+        "ScopeHeader",
+        "ArtifactTabs",
+        "ArtifactEditor",
+        "Conversation"
+      ]
+    },
+    {
+      "id": "ask_conversation",
+      "pattern": "/w/:workspaceId/ask/:conversationId",
+      "title": "Ask conversation",
+      "data": [
+        "conversation",
+        "linked_work",
+        "context_scope"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "ask",
+      "components": [
+        "ScopeHeader",
+        "Conversation",
+        "LinkedWork",
+        "AskPrivacyNotice"
+      ]
+    },
+    {
+      "id": "access_request",
+      "pattern": "/w/:workspaceId/inbox/access-requests/:accessRequestId",
+      "title": "Access request",
+      "data": [
+        "access_request",
+        "requested_scope",
+        "requester",
+        "expiry"
+      ],
+      "journey": "J01",
+      "hosts": [
+        "standalone"
+      ],
+      "namespace": "merchant",
+      "states": [
+        "loading",
+        "empty",
+        "ready",
+        "permission_denied",
+        "missing_connection",
+        "stale_source",
+        "conflict",
+        "pending_review",
+        "waiting_input",
+        "recoverable_error",
+        "uncertain_operation",
+        "offline"
+      ],
+      "ui_status": "P02 must qualify interactions",
+      "parent": "inbox",
+      "components": [
+        "ScopeHeader",
+        "AccessRequestDetail",
+        "AccessDecision"
+      ]
+    },
+    {
       "id": "settings_section",
       "pattern": "/w/:workspaceId/settings/:section",
       "title": "Settings section",
@@ -1028,5 +1182,74 @@
       ]
     }
   ],
-  "plan_sequence": 43
+  "plan_sequence": 43,
+  "sidebar": {
+    "description": "Option-1 sidebar model (P01.T02c §11). Ask is the entry action, not a destination. Pins and presence are shortcuts that confer nothing; the credit balance is display only.",
+    "entry_action": "ask",
+    "primary": [
+      {
+        "id": "home",
+        "route": "home"
+      },
+      {
+        "id": "work",
+        "route": "work"
+      },
+      {
+        "id": "inbox",
+        "route": "inbox",
+        "badge": "open_inbox_items"
+      },
+      {
+        "id": "agents",
+        "route": "agents"
+      },
+      {
+        "id": "assets",
+        "route": "assets"
+      },
+      {
+        "id": "knowledge",
+        "route": "knowledge"
+      },
+      {
+        "id": "settings",
+        "route": "settings"
+      }
+    ],
+    "pinned_projects": {
+      "route": "project",
+      "order": "viewer_relative_pin_rank",
+      "maximum": 20,
+      "breadcrumb_parent": "work"
+    },
+    "people_and_agents": [
+      {
+        "id": "people",
+        "route": "settings_section",
+        "params": {
+          "section": "people"
+        }
+      },
+      {
+        "id": "agents",
+        "route": "agent",
+        "presence": "transient_confers_nothing"
+      }
+    ],
+    "footer": [
+      {
+        "id": "connection_status",
+        "route": "connections"
+      },
+      {
+        "id": "credit_balance",
+        "route": "settings_section",
+        "params": {
+          "section": "usage"
+        },
+        "display_only": true
+      }
+    ]
+  }
 }

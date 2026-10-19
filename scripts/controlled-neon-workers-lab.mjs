@@ -25,6 +25,7 @@ const paths = [
   "packages/identity/src/controlled-neon-login-profiles.ts",
   "packages/identity/src/controlled-neon-transport.ts",
   "packages/identity/src/login-flow-custody.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/authentication-exchange-admission.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
 ];

@@ -425,7 +425,8 @@ export default {
       });
       const owner = guard.begin(request);
       let delivered: Response | undefined,
-        cookies = -1;
+        cookies = -1,
+        clear: string | undefined;
       try {
         const configuration = await parseStandaloneLogoutConfigurationWithAttempt(
           logoutPort.configurationJson,
@@ -435,6 +436,7 @@ export default {
           request,
           (output) => {
             cookies = output.cookies.length;
+            clear = output.cookies[0];
             delivered = new Response(output.bodyText, {
               status: output.status,
               headers: output.headers.map(([name, value]) => [name, value] as [string, string]),
@@ -449,7 +451,12 @@ export default {
       }
       const response = delivered!;
       accountResponses.push(response);
-      return { status: response.status, cookies, body: (await response.json()) as unknown };
+      return {
+        status: response.status,
+        cookies,
+        clear,
+        body: (await response.json()) as unknown,
+      };
     }
     const empty = await call("workspaces");
     check(
@@ -684,7 +691,10 @@ export default {
     check(
       "ac38_journey_logout_ends_family_then_401",
       ended.status === 200 &&
-        ended.cookies === 0 &&
+        // P05.T01y-AC26: the post-SQL logout plan carries exactly the session clear.
+        ended.cookies === 1 &&
+        ended.clear ===
+          "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0" &&
         same(ended.body, { schemaVersion: 1, outcome: "session_ended" }) &&
         endedCommitted &&
         afterLogoutList.status === 401 &&

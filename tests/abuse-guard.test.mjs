@@ -205,6 +205,9 @@ test("P05.T01ab-AC01: the guard and the router agree on the edge paths", async (
     ["/organizations/", "POST", "not_found", null],
     ["/%6Frganizations", "POST", "not_found", null],
     ["/auth/logout", "POST", "logout", null],
+    // P05.T01y's rotation is the workspace handler's, like logout, and never guarded.
+    ["/auth/rotate", "POST", "rotate", null],
+    ["/auth/rotate/", "POST", "auth", null],
     ["/auth/challenge", "GET", "challenge", null],
     ["/workspaces", "GET", "workspace", null],
     ["/workspace/w1/bootstrap", "GET", "workspace", null],

@@ -1294,6 +1294,3729 @@
         }
       ]
     },
+    "NullableId": {
+      "description": "An Id or null (a capability body field type; R11 needs a named type).",
+      "anyOf": [
+        {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "Boolean": {
+      "description": "A JSON boolean (a capability body field type).",
+      "type": "boolean"
+    },
+    "StreamPosition": {
+      "description": "Opaque position, AEAD-sealed per viewer by the emitting service (P06.T02a, P07.T03). Never a decodable sequence number and never compared by clients.",
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9_-]{16,512}$"
+    },
+    "PageCursor": {
+      "description": "Opaque page cursor, AEAD-sealed. Its decoded claims bind the principal, workspace, list kind, filter digest and issue time; another principal, workspace, list kind or filter, or an age over 24 hours, gives CURSOR_INVALID (400).",
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9_-]{16,512}$"
+    },
+    "NullablePageCursor": {
+      "description": "The next page cursor, or null on the last page.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PageCursor"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "PageRequest": {
+      "description": "One page of at most 50 items after an opaque cursor, or the first page.",
+      "type": "object",
+      "properties": {
+        "after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PageCursor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "after",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "ConversationRef": {
+      "description": "Exact reference to one conversation revision.",
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "conversation"
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "digest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "kind",
+        "id",
+        "revision",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "MessageRef": {
+      "description": "Exact reference to one message revision.",
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "message"
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "digest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "kind",
+        "id",
+        "revision",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectRef": {
+      "description": "Exact reference to one project revision.",
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "project"
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "digest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "kind",
+        "id",
+        "revision",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "AccessRequestRef": {
+      "description": "Exact reference to one access request revision.",
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "access_request"
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "digest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "kind",
+        "id",
+        "revision",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "OperationRef": {
+      "description": "Exact reference to one operation revision.",
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "operation"
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "digest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "kind",
+        "id",
+        "revision",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "KillSwitchRecordRef": {
+      "description": "Exact reference to one append-only KillSwitchRecord.",
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "kill_switch_record"
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "digest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "kind",
+        "id",
+        "revision",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "EventPayloadRef": {
+      "description": "Binds an event payload to its event: organizationId, workspaceId and storeId equal the envelope's, id is its eventId (validateCurrentDefinition checks both) and revision is always 1. digest is sha256 of the RFC 8785 (JCS) payload, computed from the stored payload when the ref is built; it is not the outbox payload_digest, which hashes PostgreSQL jsonb text. A later fetch by ref resolves the tenant from the session, never from the ref.",
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "event_payload"
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "revision": {
+          "const": 1
+        },
+        "digest": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Digest"
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "kind",
+        "id",
+        "revision",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "TrustClass": {
+      "description": "Evidence trust class. The rank, least trusted first, is in docs/contracts/collaboration-defaults.json; P01.T02b may refine it.",
+      "type": "string",
+      "enum": [
+        "provider_fact",
+        "approved_business_fact",
+        "reviewed_lesson",
+        "work_record",
+        "hypothesis",
+        "synthetic",
+        "untrusted_external"
+      ]
+    },
+    "CitedRef": {
+      "description": "The typed reference union a message part may cite (P01.T02a §9 C2). The four kind constants are distinct, so the union is discriminated by kind.",
+      "anyOf": [
+        {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ArtifactRef"
+        },
+        {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/EvidenceRef"
+        },
+        {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+        },
+        {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/QuestionRef"
+        }
+      ]
+    },
+    "GrantVerb": {
+      "description": "One of the six grant verbs.",
+      "type": "string",
+      "enum": [
+        "view",
+        "propose",
+        "approve",
+        "execute",
+        "delegate",
+        "administer"
+      ]
+    },
+    "BoundedFieldList": {
+      "description": "1 to 100 unique field paths.",
+      "type": "array",
+      "items": {
+        "$ref": "urn:morrow:contracts:core:v1#/$defs/FieldPath"
+      },
+      "minItems": 1,
+      "maxItems": 100,
+      "uniqueItems": true
+    },
+    "RestrictedSource": {
+      "description": "One view requirement: it maps 1:1 to a policy PermissionRequest {capabilityId, verb: view, resource, accountId, fields}. Sources are deduplicated by (capabilityId, resource, accountId) with fields merged; server-derived, never sent by a client.",
+      "type": "object",
+      "properties": {
+        "capabilityId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+        },
+        "resource": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ResourceRef"
+        },
+        "accountId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fields": {
+          "$ref": "#/$defs/BoundedFieldList"
+        }
+      },
+      "required": [
+        "capabilityId",
+        "resource",
+        "accountId",
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "RequestReason": {
+      "description": "A recorded reason: 1 to 1,024 characters, NUL-free, with at least one non-whitespace character.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000]*[^\\s\\u0000][^\\u0000]*$"
+    },
+    "ContextTaint": {
+      "description": "untrusted_external when any cited evidence or model-call context source is untrusted_external; server-derived.",
+      "type": "string",
+      "enum": [
+        "none",
+        "untrusted_external"
+      ]
+    },
+    "ConversationSubject": {
+      "description": "What a conversation is about. One conversation per project and per task, lazily ensured by the first post. An Ask is private to ownerPrincipalId, the creating human (server-derived); workspace admins read it only through audited, read-only reads (ADR-0016 item 5).",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "project"
+            },
+            "projectId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "ownerPrincipalId": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "kind",
+            "projectId",
+            "ownerPrincipalId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task"
+            },
+            "taskId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "ownerPrincipalId": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "kind",
+            "taskId",
+            "ownerPrincipalId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "ask"
+            },
+            "ownerPrincipalId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "ownerPrincipalId"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ConversationSelector": {
+      "description": "Selects the conversation a post goes to.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "project"
+            },
+            "projectId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "projectId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "task"
+            },
+            "taskId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "taskId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "ask"
+            },
+            "conversationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "conversationId"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Conversation": {
+      "description": "A conversation record. No status: conversations have no state machine. Positions are sealed per viewer, and posts never touch the revision or timestamps, so a hidden message leaves no signal.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "description": "Always 1: no v1.1 command revises a conversation, and a post never changes it.",
+          "const": 1
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "updatedAt": {
+          "description": "Equals createdAt; posts never change it.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "subject": {
+          "$ref": "#/$defs/ConversationSubject"
+        },
+        "lastPosition": {
+          "description": "The last position visible to this viewer, or null; viewer-relative.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StreamPosition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "revision",
+        "createdAt",
+        "updatedAt",
+        "subject",
+        "lastPosition"
+      ],
+      "additionalProperties": false
+    },
+    "MessageStatus": {
+      "description": "A human message is created completed. An agent message is created streaming by the runtime writer and ends completed, failed or cancelled; a lost lease ends it failed.",
+      "type": "string",
+      "enum": [
+        "streaming",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "HumanMentionTarget": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "human"
+        },
+        "principalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "kind",
+        "principalId"
+      ],
+      "additionalProperties": false
+    },
+    "AgentMentionTarget": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "agent"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "kind",
+        "installationId"
+      ],
+      "additionalProperties": false
+    },
+    "MentionTarget": {
+      "description": "A mention target: an active member or installation of the trusted workspace that can view the conversation subject now. Not a ref; it confers nothing.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HumanMentionTarget"
+        },
+        {
+          "$ref": "#/$defs/AgentMentionTarget"
+        }
+      ]
+    },
+    "NotifyMentionRequest": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "notify"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "TaskMentionRequest": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "task"
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^[^\\u0000]*$"
+        }
+      },
+      "required": [
+        "kind",
+        "objective"
+      ],
+      "additionalProperties": false
+    },
+    "DelegateMentionRequest": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "delegate"
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^[^\\u0000]*$"
+        }
+      },
+      "required": [
+        "kind",
+        "objective"
+      ],
+      "additionalProperties": false
+    },
+    "MentionRequest": {
+      "description": "What the author asks of the target, under the author's own verbs: notify (an inbox item), task (a draft task, execute on workspace.task.create) or delegate (an agent child task in a task conversation, delegate on workspace.task.delegate). Never authority.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NotifyMentionRequest"
+        },
+        {
+          "$ref": "#/$defs/TaskMentionRequest"
+        },
+        {
+          "$ref": "#/$defs/DelegateMentionRequest"
+        }
+      ]
+    },
+    "TextPart": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "text"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384,
+          "pattern": "^[^\\u0000]*$"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "ArtifactPart": {
+      "description": "Cites one artifact revision. Adds view on workspace.artifact.read over the artifact plus the revision's recorded sources.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "artifact"
+        },
+        "ref": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ArtifactRef"
+        },
+        "anchorRef": {
+          "description": "An anchor of the cited artifact revision, or null.",
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/AnchorRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "ref",
+        "anchorRef"
+      ],
+      "additionalProperties": false
+    },
+    "ProposalPart": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "proposal"
+        },
+        "ref": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+        }
+      },
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "additionalProperties": false
+    },
+    "QuestionPart": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "question"
+        },
+        "ref": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/QuestionRef"
+        }
+      },
+      "required": [
+        "kind",
+        "ref"
+      ],
+      "additionalProperties": false
+    },
+    "EvidenceSummaryPart": {
+      "description": "A summary over 1 to 50 cited evidence records. Evidence with a non-null sourceResource cannot be cited until Evidence@2 (P01.T02b) exists.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "evidence_summary"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/EvidenceRef"
+          },
+          "minItems": 1,
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "trustClass": {
+          "description": "The least-trusted cited evidence class; server-derived.",
+          "$ref": "#/$defs/TrustClass"
+        }
+      },
+      "required": [
+        "kind",
+        "text",
+        "evidenceRefs",
+        "trustClass"
+      ],
+      "additionalProperties": false
+    },
+    "EvidenceSummaryPartInput": {
+      "description": "An evidence summary as a client sends it: the server derives trustClass.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "evidence_summary"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "^[^\\u0000]*$"
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/EvidenceRef"
+          },
+          "minItems": 1,
+          "maxItems": 50,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "kind",
+        "text",
+        "evidenceRefs"
+      ],
+      "additionalProperties": false
+    },
+    "MentionPart": {
+      "description": "A mention of one target: a human with notify or task, or an agent with delegate. Agent-authored messages carry no mention part.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "mention"
+            },
+            "target": {
+              "$ref": "#/$defs/HumanMentionTarget"
+            },
+            "request": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NotifyMentionRequest"
+                },
+                {
+                  "$ref": "#/$defs/TaskMentionRequest"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "request"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "mention"
+            },
+            "target": {
+              "$ref": "#/$defs/AgentMentionTarget"
+            },
+            "request": {
+              "$ref": "#/$defs/DelegateMentionRequest"
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "request"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "MessagePart": {
+      "description": "One typed message part. text and mention parts add no view requirement.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TextPart"
+        },
+        {
+          "$ref": "#/$defs/ArtifactPart"
+        },
+        {
+          "$ref": "#/$defs/ProposalPart"
+        },
+        {
+          "$ref": "#/$defs/QuestionPart"
+        },
+        {
+          "$ref": "#/$defs/EvidenceSummaryPart"
+        },
+        {
+          "$ref": "#/$defs/MentionPart"
+        }
+      ]
+    },
+    "MessagePartInput": {
+      "description": "A message part as a client sends it: evidence summaries carry no trustClass, which the server derives.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TextPart"
+        },
+        {
+          "$ref": "#/$defs/ArtifactPart"
+        },
+        {
+          "$ref": "#/$defs/ProposalPart"
+        },
+        {
+          "$ref": "#/$defs/QuestionPart"
+        },
+        {
+          "$ref": "#/$defs/EvidenceSummaryPartInput"
+        },
+        {
+          "$ref": "#/$defs/MentionPart"
+        }
+      ]
+    },
+    "MessagePartInputs": {
+      "description": "1 to 32 parts, at most 10 of them mentions; at most 64 KiB of JSON (server check).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/MessagePartInput"
+      },
+      "minItems": 1,
+      "maxItems": 32,
+      "contains": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "mention"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "minContains": 0,
+      "maxContains": 10
+    },
+    "MessageOrigin": {
+      "description": "Where an agent message comes from: a run in a project or task conversation (its task is the subject task or a task under the project's goal), or an Ask turn.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "run"
+            },
+            "runId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "runId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "ask_turn"
+            },
+            "turnId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "turnId"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Message": {
+      "description": "A message. A viewer sees it only if they can view the conversation subject, hold view on workspace.conversation.post for the message fields and can view every restricted source (all-of); otherwise it is omitted from pages and counts.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "conversationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "position": {
+          "description": "Sealed per viewer; never a decodable sequence number.",
+          "$ref": "#/$defs/StreamPosition"
+        },
+        "author": {
+          "description": "A human (a HumanActorRef) or an agent naming its installation, with no membership; a service author is invalid.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ActorRef"
+        },
+        "status": {
+          "$ref": "#/$defs/MessageStatus"
+        },
+        "parts": {
+          "description": "0 to 32 parts (at least 1 once completed), at most 10 mentions.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MessagePart"
+          },
+          "minItems": 0,
+          "maxItems": 32,
+          "contains": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "mention"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "minContains": 0,
+          "maxContains": 10
+        },
+        "replyToMessageId": {
+          "description": "A message in the same conversation; viewer-relative: null when the viewer cannot see it.",
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "restrictedSources": {
+          "description": "Server-derived view requirements: the part requirements plus every model-call context source, deduplicated; at most 100 and 64 KiB of JSON. They only grow while streaming.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RestrictedSource"
+          },
+          "minItems": 0,
+          "maxItems": 100
+        },
+        "contextTaint": {
+          "$ref": "#/$defs/ContextTaint"
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MessageOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "revision",
+        "createdAt",
+        "updatedAt",
+        "conversationId",
+        "position",
+        "author",
+        "status",
+        "parts",
+        "replyToMessageId",
+        "restrictedSources",
+        "contextTaint",
+        "origin"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "completed"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "parts": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "author": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "human"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "author"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "author": {
+                "$ref": "#/$defs/HumanActorRef"
+              },
+              "status": {
+                "const": "completed"
+              },
+              "origin": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "author": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "agent"
+                  },
+                  "workspaceId": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                  },
+                  "membershipId": {
+                    "type": "null"
+                  },
+                  "installationId": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "origin": {
+                "type": "object"
+              },
+              "parts": {
+                "type": "array",
+                "not": {
+                  "type": "array",
+                  "contains": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "mention"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "PostInput": {
+      "description": "A post. Restrictions, taint and trust class are server-derived, so a client cannot send them.",
+      "type": "object",
+      "properties": {
+        "conversation": {
+          "$ref": "#/$defs/ConversationSelector"
+        },
+        "parts": {
+          "$ref": "#/$defs/MessagePartInputs"
+        },
+        "replyToMessageId": {
+          "$ref": "#/$defs/NullableId"
+        }
+      },
+      "required": [
+        "conversation",
+        "parts",
+        "replyToMessageId"
+      ],
+      "additionalProperties": false
+    },
+    "MessageDelta": {
+      "description": "A transient streaming delta, applied in sequence order. Deltas of a model call leave only after its context sources are committed and every subscriber is rechecked. A reconnect refetches the committed message and resumes at a sequence above the last seen.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "conversationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "messageId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "sequence": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Count"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "part_start",
+            "text_delta",
+            "part_end",
+            "message_end"
+          ]
+        },
+        "partIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 31
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 4096,
+              "pattern": "^[^\\u0000]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finalStatus": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "completed",
+                "failed",
+                "cancelled"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "conversationId",
+        "messageId",
+        "sequence",
+        "kind",
+        "partIndex",
+        "text",
+        "finalStatus"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "text_delta"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "finalStatus": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "message_end"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "null"
+              },
+              "finalStatus": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "part_start",
+                  "part_end"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "null"
+              },
+              "finalStatus": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "StreamFrame": {
+      "description": "One stream frame. reset is the generic frame for a failed recheck, a resubscription or a policy-revision change; it says nothing more.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "event"
+            },
+            "envelope": {
+              "$ref": "#/$defs/EventEnvelope"
+            }
+          },
+          "required": [
+            "kind",
+            "envelope"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "message_delta"
+            },
+            "delta": {
+              "$ref": "#/$defs/MessageDelta"
+            }
+          },
+          "required": [
+            "kind",
+            "delta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "reset"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "heartbeat"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AskAdminReadAsk": {
+      "description": "One other member's Ask returned by an audited admin list page.",
+      "type": "object",
+      "properties": {
+        "conversationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "askOwnerPrincipalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "conversationId",
+        "askOwnerPrincipalId"
+      ],
+      "additionalProperties": false
+    },
+    "AskAdminReadRecord": {
+      "description": "The content-free audit record of one admin read of Asks (ADR-0016 item 5): one workspace list page, one conversation fetch or one message page. Committed in the read's transaction; content leaves only after that commit. A list record names every other member's Ask on the page in page order, each conversationId once, the reader's own left out; an empty page still gives one record. Never names the reader's own Ask (validateCurrentDefinition also checks that, and each conversationId once). Never contains message text. Retention: 365 days of content-free audit metadata.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "readerPrincipalId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "correlationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "readAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "readKind": {
+              "const": "list"
+            },
+            "asks": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/AskAdminReadAsk"
+              },
+              "minItems": 0,
+              "maxItems": 50,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "readerPrincipalId",
+            "workspaceId",
+            "correlationId",
+            "readAt",
+            "readKind",
+            "asks"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "readerPrincipalId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "correlationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "readAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            "readKind": {
+              "type": "string",
+              "enum": [
+                "conversation",
+                "messages"
+              ]
+            },
+            "conversationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "askOwnerPrincipalId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "messageCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 50
+            }
+          },
+          "required": [
+            "readerPrincipalId",
+            "workspaceId",
+            "correlationId",
+            "readAt",
+            "readKind",
+            "conversationId",
+            "askOwnerPrincipalId",
+            "messageCount"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "InboxKind": {
+      "description": "The eight inbox item kinds.",
+      "type": "string",
+      "enum": [
+        "question",
+        "approval",
+        "access_request",
+        "exception",
+        "assignment",
+        "mention",
+        "stop_notice",
+        "stop_proposal"
+      ]
+    },
+    "InboxSubject": {
+      "description": "What an item is about; its kind equals InboxItem.kind. In a mention, conversationId and createdTaskId are viewer-relative.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "question"
+            },
+            "questionRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/QuestionRef"
+            }
+          },
+          "required": [
+            "kind",
+            "questionRef"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "approval"
+            },
+            "approvalRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/ApprovalRef"
+            },
+            "proposalRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+            }
+          },
+          "required": [
+            "kind",
+            "approvalRef",
+            "proposalRef"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "access_request"
+            },
+            "accessRequestRef": {
+              "$ref": "#/$defs/AccessRequestRef"
+            }
+          },
+          "required": [
+            "kind",
+            "accessRequestRef"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "assignment"
+            },
+            "taskId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "assignmentId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            }
+          },
+          "required": [
+            "kind",
+            "taskId",
+            "assignmentId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "exception"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "uncertain_operation",
+                "failed_operation"
+              ]
+            },
+            "operationRef": {
+              "$ref": "#/$defs/OperationRef"
+            }
+          },
+          "required": [
+            "kind",
+            "reason",
+            "operationRef"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "exception"
+            },
+            "reason": {
+              "const": "quorum_unreachable"
+            },
+            "proposalRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+            },
+            "approvalRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/ApprovalRef"
+            }
+          },
+          "required": [
+            "kind",
+            "reason",
+            "proposalRef",
+            "approvalRef"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "mention"
+            },
+            "messageRef": {
+              "$ref": "#/$defs/MessageRef"
+            },
+            "conversationId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "request": {
+              "type": "string",
+              "enum": [
+                "notify",
+                "task",
+                "delegate"
+              ]
+            },
+            "createdTaskId": {
+              "anyOf": [
+                {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "messageRef",
+            "conversationId",
+            "request",
+            "createdTaskId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "stop_notice"
+            },
+            "killSwitchRecordRef": {
+              "$ref": "#/$defs/KillSwitchRecordRef"
+            }
+          },
+          "required": [
+            "kind",
+            "killSwitchRecordRef"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "stop_proposal"
+            },
+            "proposalRef": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+            }
+          },
+          "required": [
+            "kind",
+            "proposalRef"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "StopProposalStatus": {
+      "description": "Derived, never stored, with precedence executed > dismissed > expired > open: executed when a KillSwitchRecord cites the proposal, dismissed when a dismissal exists, expired at expiresAt.",
+      "type": "string",
+      "enum": [
+        "open",
+        "executed",
+        "dismissed",
+        "expired"
+      ]
+    },
+    "AccessRequestStatus": {
+      "description": "Access request status (state-transitions.json, aggregate access_request).",
+      "type": "string",
+      "enum": [
+        "pending",
+        "granted",
+        "denied",
+        "withdrawn",
+        "expired"
+      ]
+    },
+    "DecisionState": {
+      "description": "The decision state of an item's subject; the kind-to-machine map is fixed. Separate from read state: deciding never changes readState and marking never changes the decision.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "const": "question"
+            },
+            "status": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/QuestionStatus"
+            }
+          },
+          "required": [
+            "machine",
+            "status"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "const": "approval"
+            },
+            "status": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/ApprovalStatus"
+            }
+          },
+          "required": [
+            "machine",
+            "status"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "const": "access_request"
+            },
+            "status": {
+              "$ref": "#/$defs/AccessRequestStatus"
+            }
+          },
+          "required": [
+            "machine",
+            "status"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "const": "operation"
+            },
+            "status": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/OperationStatus"
+            }
+          },
+          "required": [
+            "machine",
+            "status"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "const": "task"
+            },
+            "status": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/TaskStatus"
+            }
+          },
+          "required": [
+            "machine",
+            "status"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "const": "stop_proposal"
+            },
+            "status": {
+              "$ref": "#/$defs/StopProposalStatus"
+            }
+          },
+          "required": [
+            "machine",
+            "status"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "const": "none"
+            },
+            "status": {
+              "const": "informational"
+            }
+          },
+          "required": [
+            "machine",
+            "status"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ReadState": {
+      "description": "Per-recipient read state; never a decision.",
+      "type": "string",
+      "enum": [
+        "read",
+        "unread"
+      ]
+    },
+    "InboxContext": {
+      "description": "Viewer-relative context: each id is null unless the viewer can view it now.",
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "taskId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "projectId",
+        "taskId"
+      ],
+      "additionalProperties": false
+    },
+    "InboxItem": {
+      "description": "An inbox item, re-filtered at read time: returned only to its recipient, who holds view on workspace.inbox.read and can view the subject now. The owner's stop_notice is never target-filtered (ADR-0005).",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "recipientPrincipalId": {
+          "description": "The recipient, who is always the viewer.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "kind": {
+          "$ref": "#/$defs/InboxKind"
+        },
+        "subject": {
+          "$ref": "#/$defs/InboxSubject"
+        },
+        "decisionState": {
+          "$ref": "#/$defs/DecisionState"
+        },
+        "open": {
+          "description": "From the fixed open-state table in docs/contracts/collaboration-defaults.json; the Inbox badge counts open items. A failed_operation exception and every informational item are never open.",
+          "type": "boolean"
+        },
+        "readState": {
+          "$ref": "#/$defs/ReadState"
+        },
+        "readAt": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "$ref": "#/$defs/InboxContext"
+        },
+        "position": {
+          "description": "Sealed per recipient.",
+          "$ref": "#/$defs/StreamPosition"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "revision",
+        "createdAt",
+        "updatedAt",
+        "recipientPrincipalId",
+        "kind",
+        "subject",
+        "decisionState",
+        "open",
+        "readState",
+        "readAt",
+        "context",
+        "position"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "question"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "question"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "decisionState": {
+                "type": "object",
+                "properties": {
+                  "machine": {
+                    "const": "question"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "approval"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "approval"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "decisionState": {
+                "type": "object",
+                "properties": {
+                  "machine": {
+                    "const": "approval"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "access_request"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "access_request"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "decisionState": {
+                "type": "object",
+                "properties": {
+                  "machine": {
+                    "const": "access_request"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "assignment"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "assignment"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "decisionState": {
+                "type": "object",
+                "properties": {
+                  "machine": {
+                    "const": "task"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "mention"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "mention"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "decisionState": {
+                "type": "object",
+                "properties": {
+                  "machine": {
+                    "const": "none"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "stop_notice"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "stop_notice"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "decisionState": {
+                "type": "object",
+                "properties": {
+                  "machine": {
+                    "const": "none"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "stop_proposal"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "stop_proposal"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "decisionState": {
+                "type": "object",
+                "properties": {
+                  "machine": {
+                    "const": "stop_proposal"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "exception"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "exception"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "const": "quorum_unreachable"
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
+            "required": [
+              "subject"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "decisionState": {
+                "type": "object",
+                "properties": {
+                  "machine": {
+                    "const": "approval"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "uncertain_operation",
+                      "failed_operation"
+                    ]
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
+            "required": [
+              "subject"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "decisionState": {
+                "type": "object",
+                "properties": {
+                  "machine": {
+                    "const": "operation"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "subject": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "const": "failed_operation"
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            },
+            "required": [
+              "subject"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "open": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "decisionState": {
+                "type": "object",
+                "properties": {
+                  "machine": {
+                    "const": "none"
+                  }
+                },
+                "required": [
+                  "machine"
+                ]
+              }
+            },
+            "required": [
+              "decisionState"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "open": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "readState": {
+                "const": "read"
+              }
+            },
+            "required": [
+              "readState"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "readAt": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "readAt": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "InboxFilter": {
+      "description": "Inbox list filter; null means any. Every condition applies to the viewer-relative item: projectId matches only InboxItem.context.projectId as this viewer sees it, so a project the viewer cannot view gives the same empty page as an unknown id.",
+      "type": "object",
+      "properties": {
+        "kinds": {
+          "description": "Unique kinds; [] means all.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InboxKind"
+          },
+          "minItems": 0,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "readState": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReadState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "open": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "projectId": {
+          "description": "Matches the viewer-relative context.projectId; never the stored project of an item whose project the viewer cannot view.",
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kinds",
+        "readState",
+        "open",
+        "projectId"
+      ],
+      "additionalProperties": false
+    },
+    "InboxItemIds": {
+      "description": "1 to 100 unique inbox item ids.",
+      "type": "array",
+      "items": {
+        "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+      },
+      "minItems": 1,
+      "maxItems": 100,
+      "uniqueItems": true
+    },
+    "InboxMarkInput": {
+      "description": "Marks the recipient's own items; an idempotent target state with no expectedRevision. Ids the viewer cannot see are omitted silently.",
+      "type": "object",
+      "properties": {
+        "itemIds": {
+          "$ref": "#/$defs/InboxItemIds"
+        },
+        "state": {
+          "$ref": "#/$defs/ReadState"
+        }
+      },
+      "required": [
+        "itemIds",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "InboxItems": {
+      "description": "One page of at most 50 items.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/InboxItem"
+      },
+      "minItems": 0,
+      "maxItems": 50
+    },
+    "InboxPage": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "$ref": "#/$defs/InboxItems"
+        },
+        "next": {
+          "$ref": "#/$defs/NullablePageCursor"
+        }
+      },
+      "required": [
+        "items",
+        "next"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectTitle": {
+      "description": "A project title: 1 to 120 characters, NUL-free.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "pattern": "^[^\\u0000]*$"
+    },
+    "ProjectTabTitle": {
+      "description": "A project tab title: 1 to 60 characters, NUL-free.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60,
+      "pattern": "^[^\\u0000]*$"
+    },
+    "ProjectTab": {
+      "description": "A tab showing the current revision of one artifact.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "title": {
+          "$ref": "#/$defs/ProjectTabTitle"
+        },
+        "artifactId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "artifactId"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectTabInput": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "$ref": "#/$defs/ProjectTabTitle"
+        },
+        "artifactId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "title",
+        "artifactId"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectTabInputs": {
+      "description": "At most 20 tabs, in tab order; each artifactId must pass the reference rule for the writer.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ProjectTabInput"
+      },
+      "minItems": 0,
+      "maxItems": 20
+    },
+    "Project": {
+      "description": "A project is a pinned Goal: a UX record over one goal, never a tenant or permission boundary. Read with goal view (view on workspace.goal.create).",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "type": "null"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "goalId": {
+          "description": "One project per goal.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "title": {
+          "$ref": "#/$defs/ProjectTitle"
+        },
+        "pinned": {
+          "type": "boolean"
+        },
+        "pinRank": {
+          "description": "Viewer-relative dense rank among the pinned projects this viewer can view, from 0; null exactly when unpinned. Pins are workspace-wide, at most 20.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 19
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tabs": {
+          "description": "Viewer-relative: unviewable tabs are omitted; order is tab order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProjectTab"
+          },
+          "minItems": 0,
+          "maxItems": 20
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "revision",
+        "createdAt",
+        "updatedAt",
+        "goalId",
+        "title",
+        "pinned",
+        "pinRank",
+        "tabs"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "pinned": {
+                "const": true
+              }
+            },
+            "required": [
+              "pinned"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "pinRank": {
+                "type": "integer"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "pinRank": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AccessRequestScope": {
+      "description": "The authority a person asks for. Reachable only from the request input and the AccessRequest record; it never grants anything.",
+      "type": "object",
+      "properties": {
+        "capabilityId": {
+          "description": "An existing capability that is not operator_* (server check).",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+        },
+        "verbs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GrantVerb"
+          },
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true
+        },
+        "storeIds": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+          },
+          "minItems": 0,
+          "maxItems": 10,
+          "uniqueItems": true
+        },
+        "accountIds": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+          },
+          "minItems": 0,
+          "maxItems": 10,
+          "uniqueItems": true
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/ResourceRef"
+          },
+          "minItems": 0,
+          "maxItems": 100,
+          "uniqueItems": true
+        },
+        "fields": {
+          "$ref": "#/$defs/BoundedFieldList"
+        }
+      },
+      "required": [
+        "capabilityId",
+        "verbs",
+        "storeIds",
+        "accountIds",
+        "resources",
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "AccessRequestContext": {
+      "description": "Where the request came from. Each id must pass the reference rule for the requester; viewer-relative on read.",
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "taskId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "conversationId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "projectId",
+        "taskId",
+        "conversationId"
+      ],
+      "additionalProperties": false
+    },
+    "AccessRequest": {
+      "description": "A human request for authority. Read by the requester and the deciders (eligible reviewers of the would-be governance.grants.revise proposal, never the requester). Only a linked, reviewed grant revision grants anything.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "type": "null"
+        },
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "createdAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "updatedAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "requester": {
+          "description": "Human only: agents have no access-request path in v1.1.",
+          "$ref": "#/$defs/HumanActorRef"
+        },
+        "scope": {
+          "$ref": "#/$defs/AccessRequestScope"
+        },
+        "reason": {
+          "$ref": "#/$defs/RequestReason"
+        },
+        "context": {
+          "$ref": "#/$defs/AccessRequestContext"
+        },
+        "status": {
+          "$ref": "#/$defs/AccessRequestStatus"
+        },
+        "proposalRef": {
+          "description": "The linked governance.grants.revise proposal (P05.T02b), or null. After a partial approval it names the approved derived proposal.",
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "decidedBy": {
+          "description": "The decider who denied, or the reviewer who rejected the linked proposal.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HumanActorRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expiresAt": {
+          "description": "7 days after creation while pending.",
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "revision",
+        "createdAt",
+        "updatedAt",
+        "requester",
+        "scope",
+        "reason",
+        "context",
+        "status",
+        "proposalRef",
+        "decidedBy",
+        "expiresAt"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "enum": [
+                  "pending",
+                  "withdrawn",
+                  "expired"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "decidedBy": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "denied"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "decidedBy": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "granted"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "proposalRef": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AccessRequestDecisionInput": {
+      "description": "A decider denies a pending request.",
+      "type": "object",
+      "properties": {
+        "accessRequestId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "expectedRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "reason": {
+          "$ref": "#/$defs/RequestReason"
+        }
+      },
+      "required": [
+        "accessRequestId",
+        "expectedRevision",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "AccessRequestWithdrawInput": {
+      "description": "The requester withdraws their own pending request.",
+      "type": "object",
+      "properties": {
+        "accessRequestId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "expectedRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "accessRequestId",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "StopProposalDismissInput": {
+      "description": "Dismisses an open stop proposal (persisted by P11.T05). Needs execute on the proposal's kill-switch capability covering every target; an idempotent target state.",
+      "type": "object",
+      "properties": {
+        "proposalRef": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ProposalRef"
+        },
+        "reason": {
+          "$ref": "#/$defs/RequestReason"
+        }
+      },
+      "required": [
+        "proposalRef",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "EmptyEventPayload": {
+      "description": "An event that carries no payload fields.",
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "GoalCreatedPayload": {
+      "description": "goal.created (P06.T01a).",
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/GoalStatus"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "GoalStatusChangedPayload": {
+      "description": "goal.status_changed (P06.T01a).",
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/GoalStatus"
+        },
+        "to": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/GoalStatus"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "TaskCreatedPayload": {
+      "description": "task.created (P06.T01a).",
+      "type": "object",
+      "properties": {
+        "goalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "status": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/TaskStatus"
+        }
+      },
+      "required": [
+        "goalId",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "TaskStatusChangedPayload": {
+      "description": "task.status_changed (P06.T01a).",
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/TaskStatus"
+        },
+        "to": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/TaskStatus"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "TaskAssignedPayload": {
+      "description": "task.assigned (P06.T01a).",
+      "type": "object",
+      "properties": {
+        "assignmentId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "ownerPrincipalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "assignmentId",
+        "ownerPrincipalId"
+      ],
+      "additionalProperties": false
+    },
+    "QuestionRequestedPayload": {
+      "description": "question.requested (P06.T01a).",
+      "type": "object",
+      "properties": {
+        "respondentPrincipalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "respondentPrincipalId"
+      ],
+      "additionalProperties": false
+    },
+    "QuestionAnsweredPayload": {
+      "description": "question.answered (P06.T01a).",
+      "type": "object",
+      "properties": {
+        "answerId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "answerId"
+      ],
+      "additionalProperties": false
+    },
+    "ConversationCreatedPayload": {
+      "description": "conversation.created (P07.T03).",
+      "type": "object",
+      "properties": {
+        "subjectKind": {
+          "type": "string",
+          "enum": [
+            "project",
+            "task",
+            "ask"
+          ]
+        }
+      },
+      "required": [
+        "subjectKind"
+      ],
+      "additionalProperties": false
+    },
+    "MessageCreatedPayload": {
+      "description": "message.created (P07.T03). Never message text; the relay reads mention rows, not the payload.",
+      "type": "object",
+      "properties": {
+        "conversationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "status": {
+          "$ref": "#/$defs/MessageStatus"
+        },
+        "authorKind": {
+          "type": "string",
+          "enum": [
+            "human",
+            "agent"
+          ]
+        }
+      },
+      "required": [
+        "conversationId",
+        "status",
+        "authorKind"
+      ],
+      "additionalProperties": false
+    },
+    "MessageStatusChangedPayload": {
+      "description": "message.status_changed (P07.T03).",
+      "type": "object",
+      "properties": {
+        "conversationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "from": {
+          "$ref": "#/$defs/MessageStatus"
+        },
+        "to": {
+          "$ref": "#/$defs/MessageStatus"
+        }
+      },
+      "required": [
+        "conversationId",
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectCreatedPayload": {
+      "description": "project.created (P07.T03).",
+      "type": "object",
+      "properties": {
+        "goalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "goalId"
+      ],
+      "additionalProperties": false
+    },
+    "ProjectPinChangedPayload": {
+      "description": "project.pin_changed (P07.T03).",
+      "type": "object",
+      "properties": {
+        "pinned": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pinned"
+      ],
+      "additionalProperties": false
+    },
+    "AccessRequestStatusChangedPayload": {
+      "description": "access_request.status_changed (P05.T02b).",
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/AccessRequestStatus"
+        },
+        "to": {
+          "$ref": "#/$defs/AccessRequestStatus"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "ProposalCreatedPayload": {
+      "description": "proposal.created (P06.T01b).",
+      "type": "object",
+      "properties": {
+        "capabilityId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+        },
+        "killSwitch": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "capabilityId",
+        "killSwitch"
+      ],
+      "additionalProperties": false
+    },
+    "ApprovalCreatedPayload": {
+      "description": "approval.created (P06.T01b).",
+      "type": "object",
+      "properties": {
+        "proposalId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "quorumReachable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "proposalId",
+        "quorumReachable"
+      ],
+      "additionalProperties": false
+    },
+    "ApprovalStatusChangedPayload": {
+      "description": "approval.status_changed (P06.T01b).",
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ApprovalStatus"
+        },
+        "to": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ApprovalStatus"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "OperationStatusChangedPayload": {
+      "description": "operation.status_changed (P06.T01c).",
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/OperationStatus"
+        },
+        "to": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/OperationStatus"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "KillSwitchExecutedPayload": {
+      "description": "kill_switch.executed (P05.T01z, P11.T05).",
+      "type": "object",
+      "properties": {
+        "capabilityId": {
+          "type": "string",
+          "enum": [
+            "ads.campaign.pause",
+            "agents.installation.disable",
+            "governance.membership.revoke",
+            "governance.connection.disconnect",
+            "agents.release.revoke"
+          ]
+        },
+        "sourceProposalId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "capabilityId",
+        "sourceProposalId"
+      ],
+      "additionalProperties": false
+    },
+    "EventPayload": {
+      "description": "Any registered event payload: IDs and statuses only, at most 512 bytes of JCS. docs/contracts/event-registry.json binds each event type to exactly one of these, and validateEventPayload checks it.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EmptyEventPayload"
+        },
+        {
+          "$ref": "#/$defs/GoalCreatedPayload"
+        },
+        {
+          "$ref": "#/$defs/GoalStatusChangedPayload"
+        },
+        {
+          "$ref": "#/$defs/TaskCreatedPayload"
+        },
+        {
+          "$ref": "#/$defs/TaskStatusChangedPayload"
+        },
+        {
+          "$ref": "#/$defs/TaskAssignedPayload"
+        },
+        {
+          "$ref": "#/$defs/QuestionRequestedPayload"
+        },
+        {
+          "$ref": "#/$defs/QuestionAnsweredPayload"
+        },
+        {
+          "$ref": "#/$defs/ConversationCreatedPayload"
+        },
+        {
+          "$ref": "#/$defs/MessageCreatedPayload"
+        },
+        {
+          "$ref": "#/$defs/MessageStatusChangedPayload"
+        },
+        {
+          "$ref": "#/$defs/ProjectCreatedPayload"
+        },
+        {
+          "$ref": "#/$defs/ProjectPinChangedPayload"
+        },
+        {
+          "$ref": "#/$defs/AccessRequestStatusChangedPayload"
+        },
+        {
+          "$ref": "#/$defs/ProposalCreatedPayload"
+        },
+        {
+          "$ref": "#/$defs/ApprovalCreatedPayload"
+        },
+        {
+          "$ref": "#/$defs/ApprovalStatusChangedPayload"
+        },
+        {
+          "$ref": "#/$defs/OperationStatusChangedPayload"
+        },
+        {
+          "$ref": "#/$defs/KillSwitchExecutedPayload"
+        }
+      ]
+    },
+    "EventEnvelope": {
+      "description": "EventEnvelope@2. Replaces core v1 EventEnvelope (changes.json): the v1 payloadRef is an ArtifactRef, and event payloads are not artifacts. validateCurrentDefinition also checks eventType, aggregateType and payload against the additive registry.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "eventId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "eventType": {
+          "description": "A registered event type (docs/contracts/event-registry.json).",
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z_]*(\\.[a-z][a-z_]*)+$"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "aggregateType": {
+          "description": "The registry's aggregate type for eventType.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z_]{0,63}$"
+        },
+        "aggregateId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "aggregateRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        "streamPosition": {
+          "description": "Sealed per viewer; never the gap-free outbox position.",
+          "$ref": "#/$defs/StreamPosition"
+        },
+        "correlationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "causationId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actor": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ActorRef"
+        },
+        "occurredAt": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "payload": {
+          "description": "The registered payload, or null for a viewer who cannot view every payload field (never a partial object).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EventPayload"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "payloadRef": {
+          "description": "Null exactly when payload is null, so a nulled payload leaves no digest to brute-force.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EventPayloadRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "eventId",
+        "eventType",
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "aggregateType",
+        "aggregateId",
+        "aggregateRevision",
+        "streamPosition",
+        "correlationId",
+        "causationId",
+        "actor",
+        "occurredAt",
+        "payload",
+        "payloadRef"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "payload": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "payload"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "payloadRef": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "payloadRef": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SessionRotationResult": {
+      "description": "POST /auth/rotate 200 body (P05.T01y, ADR-0004). rotated: a new generation was committed and its cookie (Max-Age = min(1800, floor(idleRemainingMs / 1000))) is set in the same response; current: the presented generation is younger than 60 seconds, nothing was written and no cookie is set. Remaining times are milliseconds relative to the server's delivery instant, so a client needs no wall clock: idleRemainingMs until the generation's idle expiry, absoluteRemainingMs until the family's 12-hour limit. Every refusal (denied, reuse, expired, unknown, missing or malformed cookie) is 401 with the fixed {\"code\":\"authentication_required\"} body; request-proof, body, path and method failures are 403, 400, 404 or 405 rotation_unavailable; 503 is rotation_unavailable before the statement was sent and rotation_outcome_unknown after (never retried).",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "rotated",
+            "current"
+          ]
+        },
+        "idleRemainingMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 43200000
+        },
+        "absoluteRemainingMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 43200000
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "outcome",
+        "idleRemainingMs",
+        "absoluteRemainingMs"
+      ],
+      "additionalProperties": false
+    },
     "ChallengeToken": {
       "description": "The X-Morrow-Challenge request header (P05.T01ab, ADR-0019 item 7): one single-use Turnstile token, 1-2048 bytes of [A-Za-z0-9._-]. Required on POST /auth/login and POST /organizations wherever GET /auth/challenge names a provider (staging and production). Any other shape is 403 challenge_required without a verification call; a verified request reaches its route with the header removed.",
       "type": "string",

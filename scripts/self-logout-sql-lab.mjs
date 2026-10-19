@@ -36,6 +36,7 @@ const sourcePaths = [
   "scripts/fixtures/standalone-login-fixture.mjs",
   "scripts/standalone-session-fixtures.mjs",
   "packages/identity/src/self-logout-control.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
   "packages/identity/src/workos-authentication-evidence.ts",
   "packages/identity/src/workos-session-token.ts",

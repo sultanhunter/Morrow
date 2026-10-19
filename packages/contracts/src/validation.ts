@@ -3,6 +3,8 @@ import {
   currentDefinitionSelectors,
   capabilityBodySelectors,
   currentBillingDefinitionSelectors,
+  eventPayloadSelectors,
+  validateEventPayload as registeredEventPayload,
 } from "./generated/runtime-validators.mjs";
 import type {
   CapabilityId,
@@ -10,6 +12,8 @@ import type {
   CapabilityOutput,
   CurrentBillingDefinitionName,
   CurrentDefinitionName,
+  EventPayloadOf,
+  EventType,
 } from "./generated/domain";
 /** Exact schema layers. Product code uses the effective (current) selectors below. */
 export type DefinitionSchema = "core" | "billing" | "core-v1.1" | "billing-v1.1";
@@ -43,9 +47,88 @@ export function validateDefinition(
 ): boolean {
   return definitionSchemas.includes(schema) && valid(`${schema}:${name}`, value);
 }
-/** Effective definition: the newest core layer that defines the name. */
+/**
+ * The additive event registry (ADR-0016 item 6; P01.T02c §8): true when
+ * `eventType` is registered, `aggregateType` is its row's and `payload` is valid
+ * against its row's payload definition. A null (redacted) payload is not a payload.
+ */
+export function validateEventPayload<K extends EventType>(
+  eventType: K,
+  aggregateType: unknown,
+  payload: unknown,
+): payload is EventPayloadOf<K> & object;
+export function validateEventPayload(
+  eventType: unknown,
+  aggregateType: unknown,
+  payload: unknown,
+): boolean;
+export function validateEventPayload(eventType: unknown, aggregateType: unknown, payload: unknown) {
+  return registeredEventPayload(eventType, aggregateType, payload);
+}
+/** True when `eventType` is registered with exactly this `aggregateType`. */
+export function eventRegistered(eventType: unknown, aggregateType: unknown): boolean {
+  return (
+    typeof eventType === "string" &&
+    Object.hasOwn(eventPayloadSelectors, eventType) &&
+    eventPayloadSelectors[eventType]!.aggregateType === aggregateType
+  );
+}
+type Tenancy = { organizationId: string; workspaceId: string; storeId: string | null };
+// An EventEnvelope@2 that already passed its schema: a registered type and
+// aggregate, a registered payload unless it was nulled for this viewer (the
+// schema nulls payload and payloadRef together), and a payloadRef bound to this
+// event (§8: the envelope's organization, workspace and store, and id = eventId).
+function registeredEnvelope(envelope: unknown): boolean {
+  const e = envelope as Tenancy & {
+    eventId: string;
+    eventType: unknown;
+    aggregateType: unknown;
+    payload: unknown;
+    payloadRef: (Tenancy & { id: string }) | null;
+  };
+  const ref = e.payloadRef;
+  return (
+    eventRegistered(e.eventType, e.aggregateType) &&
+    (e.payload === null || registeredEventPayload(e.eventType, e.aggregateType, e.payload)) &&
+    (ref === null ||
+      (ref.organizationId === e.organizationId &&
+        ref.workspaceId === e.workspaceId &&
+        ref.storeId === e.storeId &&
+        ref.id === e.eventId))
+  );
+}
+// An AskAdminReadRecord that already passed its schema (ADR-0016 item 5): an
+// admin read never audits the reader's own Ask, and a list names each Ask once.
+function adminReadRecord(record: unknown): boolean {
+  const r = record as {
+    readerPrincipalId: string;
+    readKind: string;
+    askOwnerPrincipalId?: string;
+    asks?: { conversationId: string; askOwnerPrincipalId: string }[];
+  };
+  if (r.readKind !== "list") return r.askOwnerPrincipalId !== r.readerPrincipalId;
+  const asks = r.asks ?? [];
+  return (
+    asks.every((a) => a.askOwnerPrincipalId !== r.readerPrincipalId) &&
+    new Set(asks.map((a) => a.conversationId)).size === asks.length
+  );
+}
+/**
+ * Effective definition: the newest core layer that defines the name. For
+ * EventEnvelope (@2), and a StreamFrame carrying one, this is the schema plus
+ * the event registry selector and the payloadRef binding; for
+ * AskAdminReadRecord, the schema plus its reader and uniqueness rules. Product
+ * code validates these three only here, never by their exact selectors.
+ */
 export function validateCurrentDefinition(name: CurrentDefinitionName, value: unknown): boolean {
-  return selected(currentDefinitionSelectors, name, value);
+  if (!selected(currentDefinitionSelectors, name, value)) return false;
+  if (name === "EventEnvelope") return registeredEnvelope(value);
+  if (name === "StreamFrame") {
+    const frame = value as { kind: string; envelope?: unknown };
+    return frame.kind !== "event" || registeredEnvelope(frame.envelope);
+  }
+  if (name === "AskAdminReadRecord") return adminReadRecord(value);
+  return true;
 }
 /** Effective billing definition: the newest billing layer that defines the name (ADR-0015). */
 export function validateCurrentBillingDefinition(

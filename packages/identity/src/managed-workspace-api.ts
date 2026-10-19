@@ -23,6 +23,7 @@ export type ManagedApiRoute =
   | "login_callback"
   | "challenge"
   | "logout"
+  | "rotate"
   | "auth"
   | "signup"
   | "workspace"
@@ -32,6 +33,7 @@ export function managedApiRoute(pathname: string): ManagedApiRoute {
   if (pathname === "/auth/workos/callback") return "login_callback";
   if (pathname === "/auth/challenge") return "challenge";
   if (pathname === "/auth/logout") return "logout";
+  if (pathname === "/auth/rotate") return "rotate";
   if (pathname === "/auth" || pathname.startsWith("/auth/")) return "auth";
   // The account routes (P05.T01x) are exact paths owned by the workspace handler.
   if (pathname === "/organizations") return "signup";
@@ -127,7 +129,9 @@ export function createWorkersManagedWorkspaceApi(dependencies?: ManagedWorkspace
         }),
       );
     // No await or second budget precedes the selected source owner.
-    if (route === "logout") return configured.workspace.fetch(request, env, actualCtx);
+    // Logout and rotate (P05.T01y) share the workspace handler's attempt, pool and binding.
+    if (route === "logout" || route === "rotate")
+      return configured.workspace.fetch(request, env, actualCtx);
     if (auth) return configured.login.fetch(request, env, actualCtx);
     if (workspace) return configured.workspace.fetch(request, env, actualCtx);
     return Promise.resolve(standaloneJson(404, { code: "not_found" }));

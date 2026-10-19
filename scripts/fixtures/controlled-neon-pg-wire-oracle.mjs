@@ -272,7 +272,7 @@ export const controlledNeonWireBinding = Object.freeze({
   database: "morrow",
 });
 const commonRole =
-  "SELECT current_user AS role,session_user AS login,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolinherit,\npg_catalog.pg_has_role(current_user,'morrow_identity_owner','MEMBER') AS owner_member,\nEXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid) AS role_member\nFROM pg_catalog.pg_roles r WHERE r.rolname=current_user";
+  "SELECT current_user AS role,session_user AS login,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolinherit,\npg_catalog.pg_has_role(current_user,'morrow_identity_owner','MEMBER') AS owner_member,\n(EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid) OR (SELECT count(*) FROM pg_catalog.pg_auth_members m WHERE m.roleid=r.oid)>1 OR EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles u ON u.oid=m.member WHERE m.roleid=r.oid AND NOT (m.grantor=10 AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option AND u.rolname NOT LIKE 'morrow\\_%' AND NOT u.rolsuper))) AS role_member\nFROM pg_catalog.pg_roles r WHERE r.rolname=current_user";
 // These literals are the independent expected wire contract, not imports from
 // the adapter's allowlist. The lab registers exact parameter values in advance.
 export const controlledNeonWireSql = Object.freeze({
@@ -299,7 +299,7 @@ FROM pg_catalog.pg_stat_activity a WHERE a.pid=pg_catalog.pg_backend_pid()`,
     idleTimeout: "5000",
     begin: "BEGIN ISOLATION LEVEL READ COMMITTED",
     roleQuery:
-      "SELECT current_user AS role,session_user AS login,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolinherit,pg_catalog.pg_has_role(current_user,'morrow_identity_owner','MEMBER') AS owner_member,EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid) AS role_member FROM pg_catalog.pg_roles r WHERE r.rolname=current_user",
+      "SELECT current_user AS role,session_user AS login,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolinherit,pg_catalog.pg_has_role(current_user,'morrow_identity_owner','MEMBER') AS owner_member,(EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid) OR (SELECT count(*) FROM pg_catalog.pg_auth_members m WHERE m.roleid=r.oid)>1 OR EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles u ON u.oid=m.member WHERE m.roleid=r.oid AND NOT (m.grantor=10 AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option AND u.rolname NOT LIKE 'morrow\\_%' AND NOT u.rolsuper))) AS role_member FROM pg_catalog.pg_roles r WHERE r.rolname=current_user",
     timeout: "SET LOCAL statement_timeout = '1s'",
     idleTimeoutQuery: "SET LOCAL idle_in_transaction_session_timeout = '5s'",
     domain:
@@ -312,7 +312,7 @@ FROM pg_catalog.pg_stat_activity a WHERE a.pid=pg_catalog.pg_backend_pid()`,
     idleTimeout: "10000",
     begin: "BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE",
     roleQuery:
-      "SELECT current_user AS role, session_user AS login, r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolinherit,\npg_catalog.pg_has_role(current_user, 'morrow_identity_owner', 'MEMBER') AS owner_member,\nEXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid) AS role_member\nFROM pg_catalog.pg_roles r WHERE r.rolname=current_user",
+      "SELECT current_user AS role, session_user AS login, r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolinherit,\npg_catalog.pg_has_role(current_user, 'morrow_identity_owner', 'MEMBER') AS owner_member,\n(EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid) OR (SELECT count(*) FROM pg_catalog.pg_auth_members m WHERE m.roleid=r.oid)>1 OR EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles u ON u.oid=m.member WHERE m.roleid=r.oid AND NOT (m.grantor=10 AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option AND u.rolname NOT LIKE 'morrow\\_%' AND NOT u.rolsuper))) AS role_member\nFROM pg_catalog.pg_roles r WHERE r.rolname=current_user",
     timeout: "SET LOCAL statement_timeout = '5s'",
     idleTimeoutQuery: "SET LOCAL idle_in_transaction_session_timeout = '10s'",
     domain:

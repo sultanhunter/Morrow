@@ -9,6 +9,8 @@ import { executeStandaloneWorkspaceBootstrap } from "./standalone-workspace-boot
 import { executeAccountOverview, executeFirstOrganization } from "./account-onboarding.js";
 import { createStandaloneStoreLinkingExecution } from "./standalone-store-linking.js";
 import { dispatchStandaloneLogoutWithAttempt } from "./standalone-logout.js";
+import { dispatchStandaloneRotationWithAttempt } from "./standalone-session-rotation.js";
+import { SESSION_COOKIE_CLEAR } from "./request-primitives.js";
 import {
   resolveManagedWorkspaceBinding,
   type CapturedManagedWorkspaceBinding,
@@ -36,14 +38,77 @@ type ResponseMetrics = Readonly<{
   ownership: ReturnType<typeof snapshotManagedLoginRequestMetrics> | null;
   pools: ReturnType<typeof snapshotControlledNeonWorkspacePoolMetrics> | null;
 }>;
+// Cookie confinement (P05.T01y §4): logout may carry only the exact clear, on 200, 403
+// and 503; rotate only one session cookie (Max-Age 1..1800) on a 200 rotated answer; every
+// workspace and account route none. Anything else is held.
+const rotatedCookie =
+  /^__Host-morrow_session=[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=([1-9][0-9]{0,3})$/;
+export function confinedCookies(
+  route: "logout" | "rotate",
+  status: number,
+  bodyText: string,
+  cookies: readonly string[],
+): readonly string[] {
+  if (!Array.isArray(cookies) || cookies.length > 1) throw held();
+  if (cookies.length === 0) return cookies;
+  const cookie = cookies[0];
+  if (route === "logout") {
+    if (cookie !== SESSION_COOKIE_CLEAR || ![200, 403, 503].includes(status)) throw held();
+    return cookies;
+  }
+  const age = typeof cookie === "string" ? rotatedCookie.exec(cookie)?.[1] : undefined;
+  const body =
+    /^\{"schemaVersion":1,"outcome":"rotated","idleRemainingMs":(0|[1-9][0-9]{0,7}),"absoluteRemainingMs":(0|[1-9][0-9]{0,7})\}$/.exec(
+      bodyText,
+    );
+  if (
+    age === undefined ||
+    Number(age) > 1800 ||
+    status !== 200 ||
+    !body ||
+    Number(body[1]) > 43200000 ||
+    Number(body[2]) > 43200000
+  )
+    throw held();
+  return cookies;
+}
+// The managed delivery for logout and rotate: the dispatcher's one plan becomes one
+// Response whose Set-Cookie fields are exactly the confined cookies (P05.T01y §4, AC29).
+// delivered() holds unless exactly one plan arrived and the Response's Set-Cookie list
+// equals the confined one.
+export function createManagedCookieDelivery(route: "logout" | "rotate") {
+  let response: Response | undefined, cookie: string | undefined;
+  return Object.freeze({
+    sink(output: {
+      status: number;
+      headers: readonly (readonly [string, string])[];
+      cookies: readonly string[];
+      bodyText: string;
+    }): void {
+      if (response) throw held();
+      const cookies = confinedCookies(route, output.status, output.bodyText, output.cookies);
+      const headers = new Headers(
+        output.headers.map(([name, value]) => [name, value] as [string, string]),
+      );
+      for (const value of cookies) headers.append("Set-Cookie", value);
+      cookie = cookies[0];
+      response = new Response(output.bodyText, { status: output.status, headers });
+    },
+    delivered(): Response {
+      if (!response || response.headers.getSetCookie().join("\n") !== (cookie ?? "")) throw held();
+      return response;
+    },
+  });
+}
 // Only closed snapshots survive delivery. Request scopes, clients and pending
 // cleanup remain owned by the original entry, never this observation map.
 const observations = new WeakMap<Response, ResponseMetrics>();
 const held = () => Error("MANAGED_WORKSPACE_REQUEST_HELD");
-type Route = StandaloneRequestRoute | StandaloneAccountRoute | "logout";
-// The explicit route table: exact account and logout paths, then the workspace suffixes.
+type Route = StandaloneRequestRoute | StandaloneAccountRoute | "logout" | "rotate";
+// The explicit route table: exact account, logout and rotate paths, then the workspace suffixes.
 const exactRoutes: Readonly<Record<string, Route>> = Object.freeze({
   "/auth/logout": "logout",
+  "/auth/rotate": "rotate",
   "/workspaces": "workspaces",
   "/organizations": "organizations",
 });
@@ -100,21 +165,26 @@ export function createWorkersManagedWorkspaceHandler(
       );
       pools = await attempt.wait(preparing);
       attempt.check();
-      if (route === "logout") {
+      if (route === "logout" || route === "rotate") {
         invoked = true;
-        await dispatchStandaloneLogoutWithAttempt(
-          request,
-          (output) => {
-            if (response || output.cookies.length !== 0) throw held();
-            response = new Response(output.bodyText, {
-              status: output.status,
-              headers: output.headers.map(([name, value]) => [name, value] as [string, string]),
-            });
-          },
-          attempt,
-          resolved.logout,
-          pools.logoutPool,
-        );
+        const delivery = createManagedCookieDelivery(route);
+        if (route === "logout")
+          await dispatchStandaloneLogoutWithAttempt(
+            request,
+            delivery.sink,
+            attempt,
+            resolved.logout,
+            pools.logoutPool,
+          );
+        else
+          await dispatchStandaloneRotationWithAttempt(
+            request,
+            delivery.sink,
+            attempt,
+            resolved.logout,
+            pools.logoutPool,
+          );
+        response = delivery.delivered();
       } else if (route === "workspaces" || route === "organizations") {
         const selected = route;
         // The configured login profile is the only profile a family may belong to.
@@ -141,21 +211,30 @@ export function createWorkersManagedWorkspaceHandler(
             : linking.execute(selected, context);
         });
       }
-      if (!response || response.headers.has("set-cookie")) throw held();
+      if (!response) throw held();
+      if (route !== "logout" && route !== "rotate" && response.headers.has("set-cookie"))
+        throw held();
       if (request.signal.aborted) throw held();
     } catch (error) {
       // Never manufacture a replacement delivery after transport cancellation.
       if (request instanceof Request && request.signal.aborted) throw held();
       // Signup is unknown only once its create statement may have been sent; broker
       // lease, connect, role row or BEGIN failures before that stay plain unavailable.
+      // These fallbacks never carry a cookie, for logout or rotate either.
       response =
         invoked &&
         (route === "apply" ||
           route === "logout" ||
+          route === "rotate" ||
           (route === "organizations" && submitted?.() === true))
           ? standaloneJson(503, {
               schemaVersion: 1,
-              outcome: route === "logout" ? "logout_outcome_unknown" : "outcome_unknown",
+              outcome:
+                route === "logout"
+                  ? "logout_outcome_unknown"
+                  : route === "rotate"
+                    ? "rotation_outcome_unknown"
+                    : "outcome_unknown",
             })
           : standaloneJson(error instanceof StandaloneRequestError ? error.status : 503, {
               code: "unavailable",

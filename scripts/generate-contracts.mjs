@@ -11,6 +11,9 @@ import {
   currentDefinitionSelectors,
   currentBillingDefinitionSelectors,
   capabilityBodySelectors,
+  eventPayloadSelectors,
+  eventRegistryPath,
+  readEventRegistry,
 } from "./contract-sources.mjs";
 
 const identifier = (n) => n.replace(/[^A-Za-z0-9_]/g, "_");
@@ -108,6 +111,8 @@ export function generateContracts(root = repositoryRoot) {
     if (s.type === "object" || s.properties) {
       if (s.additionalProperties !== false)
         throw Error("Object is not closed; review generator semantics");
+      // A closed object without properties: `{}` would accept any object in TypeScript.
+      if (Object.keys(s.properties ?? {}).length === 0) return "Record<string, never>";
       return (
         "{ " +
         Object.entries(s.properties ?? {})
@@ -132,6 +137,7 @@ export function generateContracts(root = repositoryRoot) {
     byKind,
     catalogue.capabilities.map((c) => c.id),
   );
+  const events = eventPayloadSelectors(byKind, readEventRegistry(root));
   let output =
     "// Generated from reviewed JSON Schema; do not edit. Runtime schemas enforce conditional/format/range/exactness rules.\n";
   output += `export const contractVersion = ${JSON.stringify(contractVersion)} as const;\n`;
@@ -157,11 +163,18 @@ export function generateContracts(root = repositoryRoot) {
     output += `  ${JSON.stringify(c.id)}: { input: ${nameOf(bodies[c.id + ".input"])}; output: ${nameOf(bodies[c.id + ".output"])}; };\n`;
   output +=
     '}\nexport type CapabilityId = keyof CapabilityBodies;\nexport type CapabilityInput<K extends CapabilityId> = CapabilityBodies[K]["input"];\nexport type CapabilityOutput<K extends CapabilityId> = CapabilityBodies[K]["output"];\n';
+  // The additive event registry of EventEnvelope@2 (ADR-0016; P01.T02c §8).
+  output += "export interface EventPayloads {\n";
+  for (const [eventType, row] of Object.entries(events))
+    output += `  ${JSON.stringify(eventType)}: { aggregateType: ${JSON.stringify(row.aggregateType)}; payload: ${nameOf(row.selector)}; };\n`;
+  output +=
+    '}\nexport type EventType = keyof EventPayloads;\nexport type EventPayloadOf<K extends EventType> = EventPayloads[K]["payload"];\nexport type EventAggregateTypeOf<K extends EventType> = EventPayloads[K]["aggregateType"];\n';
   if (output.includes("undefined")) throw Error("Unresolved capability type");
   const manifest = {
     schema_version: 2,
     contract_version: contractVersion,
     schemas: Object.fromEntries(sources.map((s) => [s.path, sha256(s.text)])),
+    event_registry: sha256(readFileSync(resolve(root, eventRegistryPath), "utf8")),
     replacements: changes.changes.map(({ kind, name, replaces, adr }) => ({
       kind,
       name,
@@ -178,6 +191,7 @@ export function generateContracts(root = repositoryRoot) {
     capability_body_overrides: Object.values(bodies).filter(
       (selector) => !selector.startsWith("capabilities:"),
     ).length,
+    event_types: Object.keys(events).length,
     generated_sha256: sha256(output),
   };
   return {

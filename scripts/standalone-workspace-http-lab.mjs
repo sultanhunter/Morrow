@@ -50,6 +50,7 @@ const paths = [
   "packages/identity/src/standalone-workspace-bootstrap.ts",
   "packages/identity/src/index.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/workos-authentication-evidence.ts",
   "packages/identity/src/workos-session-token.ts",
   "packages/identity/src/workos-session-status.ts",

@@ -639,6 +639,14 @@ test("signup: failures before submission are unavailable; after it outcome_unkno
       unavailable,
       false,
     ],
+    // ADR-0020 (P04.T01j D5): an unknown preflight fails closed.
+    [
+      signupScript(created, {
+        [accountOnboardingSql.role]: () => ({ rows: [{ ...onboardingRole, role_member: null }] }),
+      }),
+      unavailable,
+      false,
+    ],
     [
       signupScript(created, { [accountOnboardingSql.create]: () => Promise.reject(Error("lost")) }),
       unknown,

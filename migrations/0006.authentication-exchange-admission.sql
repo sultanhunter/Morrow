@@ -5,7 +5,7 @@ DO $$ BEGIN
  OR EXISTS(SELECT 1 FROM pg_roles WHERE rolname='morrow_identity_owner' AND rolcanlogin)
  OR EXISTS(SELECT 1 FROM pg_auth_members WHERE roleid=(SELECT oid FROM pg_roles WHERE rolname='morrow_identity_owner') AND member IN (SELECT oid FROM pg_roles WHERE rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth')))
  OR pg_has_role('morrow_api','morrow_identity_owner','MEMBER') OR pg_has_role('morrow_identity_lifecycle','morrow_identity_owner','MEMBER') OR pg_has_role('morrow_identity_linking','morrow_identity_owner','MEMBER')
- OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname='morrow_identity_preauth' AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid)) THEN
+ OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname='morrow_identity_preauth' AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND morrow_identity.memberships_closed(r.rolname)) THEN
   RAISE EXCEPTION 'PREAUTH_ROLE_PREREQUISITES_INVALID';
  END IF;
 END $$;
@@ -46,7 +46,7 @@ DO $$ DECLARE t text; BEGIN
 END $$;
 CREATE FUNCTION morrow_identity.preauth_role_safe() RETURNS boolean
 LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
- SELECT session_user='morrow_identity_preauth' AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
+ SELECT session_user='morrow_identity_preauth' AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND morrow_identity.executor_memberships_closed(r.rolname))
 $$;
 REVOKE ALL ON FUNCTION morrow_identity.preauth_role_safe() FROM PUBLIC;
 CREATE FUNCTION morrow_identity.preserve_preauth_record() RETURNS trigger

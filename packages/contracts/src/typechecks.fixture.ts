@@ -5,10 +5,15 @@ import type {
   CurrentBilling_TestEntitlementSeed,
   CurrentBillingDefinitionName,
   Current_Approval,
+  Current_EventEnvelope,
   Current_KillSwitchControl,
+  Current_Message,
   Current_Proposal,
   CurrentDefinitionName,
+  EventPayloadOf,
+  EventType,
 } from "./generated/domain";
+import type { approvalDecideFields } from "./work-permissions";
 const goodInput: CapabilityInput<"workspace.goal.create"> = {
   objective: "Investigate",
   storeIds: ["demo"],
@@ -152,3 +157,89 @@ void seedMode;
 void liveSeed;
 void billingName;
 void coreAsBilling;
+// P01.T02c (ADR-0016): EventEnvelope@2 replaces the v1 envelope, and message parts are a closed union.
+const actor = {
+  kind: "human",
+  principalId: "human",
+  organizationId: "org",
+  workspaceId: "workspace",
+  membershipId: "membership",
+  installationId: null,
+  mandateId: null,
+} as const;
+const envelope: Current_EventEnvelope = {
+  schemaVersion: 2,
+  eventId: "event",
+  eventType: "message.created",
+  organizationId: "org",
+  workspaceId: "workspace",
+  storeId: null,
+  aggregateType: "message",
+  aggregateId: "message",
+  aggregateRevision: 1,
+  streamPosition: "pos_AbCdEfGhIjKlMnOp",
+  correlationId: "correlation",
+  causationId: null,
+  actor,
+  occurredAt: "2026-10-19T10:00:00Z",
+  payload: null,
+  payloadRef: null,
+};
+const v1EnvelopeValue = {
+  schemaVersion: 1,
+  eventId: "event",
+  eventType: "task.created",
+  organizationId: "org",
+  workspaceId: "workspace",
+  storeId: null,
+  aggregateType: "task",
+  aggregateId: "task",
+  aggregateRevision: 1,
+  streamPosition: "1",
+  correlationId: "correlation",
+  causationId: null,
+  actor,
+  occurredAt: "2026-10-19T10:00:00Z",
+  payloadRef: { ...proposalRef, kind: "artifact" },
+} as const;
+// @ts-expect-error a v1 envelope (schemaVersion 1, ArtifactRef payloadRef, no payload) is not EventEnvelope@2
+const v1Envelope: Current_EventEnvelope = v1EnvelopeValue;
+type PartKind = Current_Message["parts"][number]["kind"];
+type SixKinds = "text" | "artifact" | "proposal" | "question" | "evidence_summary" | "mention";
+const partKinds: [PartKind] extends [SixKinds]
+  ? [SixKinds] extends [PartKind]
+    ? true
+    : false
+  : false = true;
+// @ts-expect-error there is no image part
+const imageKind: PartKind = "image";
+const created: EventPayloadOf<"message.created"> = {
+  conversationId: "conversation",
+  status: "completed",
+  authorKind: "human",
+};
+// @ts-expect-error message text never enters an event payload
+const withText: EventPayloadOf<"message.created"> = { ...created, text: "Hello" };
+// @ts-expect-error unregistered event types are not EventTypes
+const deleted: EventType = "message.deleted";
+const emptyPayload: EventPayloadOf<"project.revised"> = {};
+// @ts-expect-error an empty payload carries no fields
+const nonEmptyPayload: EventPayloadOf<"project.revised"> = { goalId: "goal" };
+void envelope;
+void v1Envelope;
+void partKinds;
+void imageKind;
+void created;
+void withText;
+void deleted;
+void emptyPayload;
+void nonEmptyPayload;
+// A decider requests every governance.approval.decide input field (ADR-0011 Q5), as reviewerEligible does.
+type DecideField = keyof CapabilityInput<"governance.approval.decide">;
+type DeciderField = (typeof approvalDecideFields)[number];
+const deciderFields: [DecideField] extends [DeciderField]
+  ? [DeciderField] extends [DecideField]
+    ? true
+    : false
+  : false = true;
+void deciderFields;

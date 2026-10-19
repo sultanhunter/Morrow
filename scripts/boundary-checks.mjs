@@ -3,7 +3,13 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { definitionLayers, bodyLayers, billingLayers } from "./contract-sources.mjs";
+import canonicalize from "canonicalize";
+import {
+  definitionLayers,
+  bodyLayers,
+  billingLayers,
+  browserValidatorDefinitions,
+} from "./contract-sources.mjs";
 const root = resolve(".");
 // Source organization checks for reviewed literal specifiers and recognized loaders.
 // This is not hermetic: aliases, custom module resolution and transitive code need
@@ -126,9 +132,10 @@ export function inspectImports(file, code) {
         "@morrow/workspace-ui",
         "@morrow/workspace-ui/styles.css",
         "@morrow/contracts",
-        "@morrow/contracts/client",
         "@morrow/contracts/routes",
-        "@morrow/contracts/validation",
+        // Never the validator table (`/validation`, or `/client`, which imports it): only
+        // the generated per-definition modules of the closed browser list (P05.T01y).
+        ...browserValidatorDefinitions.map((name) => `@morrow/contracts/validators/${name}`),
         "@morrow/entry-ports",
       ].includes(specifier)
     )
@@ -162,6 +169,15 @@ export function inspectImports(file, code) {
         )
       )
         errors.push("UI_RELATIVE_ESCAPE");
+      // Every spelling a bundler resolves to the table: any script extension (Bundler
+      // resolution maps `.js` to `.ts`), a `?query` or `#hash` suffix, any letter case.
+      if (
+        ui &&
+        /^packages\/contracts\/src\/(?:(?:validation|client)(?:\.[cm]?[jt]sx?)?$|generated\/runtime-validators)/i.test(
+          target.replace(/[?#].*$/s, ""),
+        )
+      )
+        errors.push("UI_VALIDATOR_TABLE_IMPORT");
       if (neutral && /^apps\//.test(target)) errors.push("NEUTRAL_APP_IMPORT");
       if (neutral && !/^packages\/(contracts|entry-ports)\/src\//.test(target))
         errors.push("NEUTRAL_RELATIVE_ESCAPE");
@@ -273,6 +289,27 @@ export function inspectBaselineCoverage(baseline, schemaPaths) {
     )
     .map((path) => "UNBASELINED_SCHEMA:" + path);
 }
+// The event registry (ADR-0016 item 6) is append-only: the baseline pins each
+// row by the SHA-256 of its JCS form, in registry order. A changed, removed or
+// reordered row is a replacement (events.md: an ADR and a deliberate baseline
+// edit), and a new row must be appended after the pinned ones and pinned too.
+export const eventRowDigest = (row) => createHash("sha256").update(canonicalize(row)).digest("hex");
+export function inspectEventRegistryBaseline(baseline, registry) {
+  const pinned = baseline?.event_registry?.rows;
+  if (!pinned || typeof pinned !== "object" || Array.isArray(pinned))
+    return ["UNBASELINED_EVENT_REGISTRY"];
+  const rows = Array.isArray(registry?.events) ? registry.events : [];
+  const errors = [];
+  const types = Object.keys(pinned);
+  types.forEach((type, i) => {
+    const row = rows[i];
+    if (!row || row.eventType !== type || eventRowDigest(row) !== pinned[type])
+      errors.push("UNREVIEWED_EVENT_ROW_DELTA:" + type);
+  });
+  for (const row of rows.slice(types.length))
+    errors.push("UNBASELINED_EVENT_ROW:" + (row?.eventType ?? JSON.stringify(row)));
+  return errors;
+}
 // A newest-layer definition (core or billing) that reuses an older name, or a
 // newest-layer capability body that overrides an older body, is a replacement:
 // it must be declared in changes.json, and every declaration must name a real
@@ -326,6 +363,50 @@ export const replacedBillingDefinitionNames = (changes) =>
   replacedNames(changes, "billing_definition");
 // Generated files define every exact selector and type, replaced ones included.
 const generatedContracts = /^packages\/contracts\/src\/generated\//;
+// EventEnvelope@2, the StreamFrame carrying it and AskAdminReadRecord have code
+// rules beyond their schemas (the event registry, the payloadRef binding, the
+// admin-read reader and uniqueness rules), applied only by
+// `validateCurrentDefinition` in packages/contracts/src/validation.ts. Product
+// code under apps/ and packages/ never validates them by their exact v1.1
+// selector: a `"core-v1.1:<name>"` literal or `validateDefinition("core-v1.1", <name>)`.
+export const refinedDefinitionNames = Object.freeze([
+  "AskAdminReadRecord",
+  "EventEnvelope",
+  "StreamFrame",
+]);
+export function inspectRefinedSelectorUse(file, code) {
+  const path = relative(root, resolve(file)).replaceAll("\\", "/");
+  if (!/^(apps|packages)\//.test(path) || generatedContracts.test(path)) return [];
+  const names = new Set(refinedDefinitionNames);
+  const found = new Set();
+  const literal = (node) =>
+    node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+      ? node.text
+      : null;
+  const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, scriptKind(file));
+  const visit = (node) => {
+    const text = literal(node);
+    if (text?.startsWith("core-v1.1:") && names.has(text.slice(10))) found.add(text.slice(10));
+    if (ts.isCallExpression(node)) {
+      const callee = ts.isIdentifier(node.expression)
+        ? node.expression.text
+        : ts.isPropertyAccessExpression(node.expression)
+          ? node.expression.name.text
+          : null;
+      const name = literal(node.arguments[1]);
+      if (
+        callee === "validateDefinition" &&
+        literal(node.arguments[0]) === "core-v1.1" &&
+        name !== null &&
+        names.has(name)
+      )
+        found.add(name);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return [...found].sort().map((name) => `REFINED_DEFINITION_BYPASS:${path}:${name}`);
+}
 // Product code under apps/ and packages/ must not validate or type a replaced v1
 // definition: `validateDefinition("core", <replaced>)`, a `"core:<replaced>"`
 // selector or a `Core_<replaced>` type, and likewise `"billing"`, `"billing:"` and

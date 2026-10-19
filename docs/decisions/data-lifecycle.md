@@ -22,6 +22,15 @@ Account identity records (P05.T01x Part B, ADR-0009 item 6). All four tables are
 | `organization_signups` | Audit and replay record; organization lifetime | Pseudonymize the principal association on erasure |
 | `self_service_revisions` | Platform configuration audit; at least 365 days, latest row kept | None; `approval_ref` must not be personal data |
 
+Browser session lifecycle records (P05.T01y, ADR-0004, migration 0016). No row holds content: identifiers, digests, instants and a fixed cause.
+
+| Table | Class and retention | Erasure hook |
+| --- | --- | --- |
+| `organization_session_signouts` | Content-free audit, 365 days. A row stays effective while any family committed before it can live (12 hours) or a legacy `sessions` row of the same pair is unexpired | P09.T05 replaces `preserve_session_signout_record()` to pseudonymize `principal_id` on principal erasure and to prune after 365 days |
+| `browser_session_generations`, `browser_session_audits` (rotation and reuse rows) | Content-free audit, 365 days; digests and ids only | P09.T05 replaces `preserve_browser_session_record()` for pruning and pseudonymization. P05.T01y adds no pruning path |
+
+Growth: at most one rotation per 5 minutes of activity, so at most 144 generation rows and 144 audit rows per person per 12-hour day, about 105,000 rows per person-year at 365 days. This is a P09.T05 sizing input; no real data exists before P09.T05.
+
 No real user may enroll until the P09.T05 deletion path covers principal, mapping and enrollment (ADR-0003 hard ordering (b)); self-service stays disabled except on development and staging profiles with an allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Daily recovery snapshots/exports are separately retained thirty-five days in production/seven in staging; they do not provide thirty-five-day point-in-time recovery. Qualify changed storage, matching artifact revision manifests and erasure/revocation replay.
