@@ -1,6 +1,6 @@
 // Inbox and question detail (P14.T01a §4.10). The answer form appears for anyone who
 // can view an open question; the server decides, and its 403 or 409 is rendered.
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useId, useState, type FormEvent } from "react";
 import { copy } from "../copy";
 import type { Id, QuestionView, WorkspaceView } from "../model";
 import { useCommand, useDirty, useRead, useServices } from "../services";
@@ -122,15 +122,29 @@ function AnswerForm({
   );
 }
 
-function Answer({ ws, questionId }: { readonly ws: Id; readonly questionId: Id }) {
+/**
+ * The answer to an answered question. `compact` is the inline form in a task's question
+ * list: no landmark and no heading (the row's Show answer button names it), so a page of
+ * answered questions adds no unnamed regions and skips no heading level.
+ */
+export function Answer({
+  ws,
+  questionId,
+  compact = false,
+}: {
+  readonly ws: Id;
+  readonly questionId: Id;
+  readonly compact?: boolean;
+}) {
   const services = useServices();
+  const titleId = useId();
   const [answer, reload] = useRead(`${ws}|answer|${questionId}`, () =>
     services.port.work.getAnswer(ws, questionId),
   );
   if (answer.kind !== "ok") return <>{outcomeState(answer, reload, { compact: true })}</>;
-  return (
-    <section className="answer" aria-labelledby="answer-title">
-      <h2 id="answer-title">{copy.question.answerLabel}</h2>
+  // The answer's author is an opaque label, never "you" (§4.10).
+  const body = (
+    <>
       <RecordText as="p" className="reading">
         {answer.value.text}
       </RecordText>
@@ -139,6 +153,13 @@ function Answer({ ws, questionId }: { readonly ws: Id; readonly questionId: Id }
         <PersonLabel person={answer.value.answeredBy} />
         <Time value={answer.value.createdAt} />
       </p>
+    </>
+  );
+  if (compact) return <div className="answer is-compact">{body}</div>;
+  return (
+    <section className="answer" aria-labelledby={titleId}>
+      <h2 id={titleId}>{copy.question.answerTitle}</h2>
+      {body}
     </section>
   );
 }

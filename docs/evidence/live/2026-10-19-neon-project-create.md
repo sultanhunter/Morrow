@@ -1,0 +1,21 @@
+# 2026-10-19 Neon: project morrow-staging created
+
+- **Approval.** Owner, in chat on 2026-10-19: "4- you do it. neon is also logged in attached browser" (P04.T01i D9 step 4(a)), with staging card `staging-card-1` approved the same day.
+- **Exact action.** In the attached browser, Neon console, organization `org-spring-rice-18345724`: New project.
+  - Name `morrow-staging`.
+  - Region AWS US East 1 (N. Virginia).
+  - PostgreSQL 17.
+  - Services: Postgres only. Object storage, Functions, AI gateway, Realtime and Neon Auth were left off.
+  - Database name left at the default `neondb`, which Neon creates on the root branch. P04.T01i D9 step 4(d) later creates the empty `morrow` database there and the `staging` child branch, through the pinned neonctl. `neondb` stays empty and unused.
+- **Resources.**
+  - Project id **`sweet-sound-23947873`**.
+  - Root branch `br-noisy-wind-b7cxr2a1`, named `production` by Neon's default. The name is only Neon's label: the branch belongs to the staging project, is never migrated or bound, and is **not** a production resource for `staging-card-1`'s expiry ("the first production resource"). ADR-0019 item 10 records this.
+  - One compute.
+  - Plan shown: Free.
+- **Secrets.** No connection string or password was displayed, copied or stored. No API key was created.
+- **Cap and observed cost.** Neon Free has no card and cannot bill; observed $0.
+- **Cleanup.** Delete the project in the console (owner-run).
+- **Unknown outcomes.** None.
+- **Read-only inventory, same session.**
+  - The old project `Morrow-staging` (`cool-butterfly-64820147`, created about 2026-10-10 by the previous agent) still exists. Deleting it is permanent, so the owner performs it.
+  - No personal or organization API keys are listed.

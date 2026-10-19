@@ -1,0 +1,36 @@
+# 2026-10-19 Cloudflare: Wrangler OAuth revoked, a $5 billing alert added, and an account census
+
+- **Approval.**
+  - Owner, in chat on 2026-10-19, answering "Revoke it?": "Revoke it (Recommended)".
+  - Owner: "5- you do it cloudflare is also logged in attached browser" (P04.T01i D9 step 5(c), usage alerts).
+- **Exact actions.** All in the attached browser, user `sultanibneusman0@gmail.com`.
+  - My Profile → Access Management → Connected Applications → **Wrangler** (workers.cloudflare.com; 6 permissions; 2 accounts; last accessed 2026-09-29 21:12) → Revoke → confirmed. Afterwards the list shows only "Cloudflare for Startups".
+  - Account `79ff672d013b8f0956437af6eea3c213` → Workers & Pages → Billing Dashboard → Add Budget Alert:
+    - name "Workers billable usage over $5 (Morrow staging guard)";
+    - threshold **$5 USD**;
+    - recipient `sultanibneusman0@gmail.com`;
+    - saved. Alerts → Overview now lists it next to the pre-existing "Default budget alert (auto-created)".
+- **Not done (owner-only).**
+  - Creating `morrow-staging-ci` and `morrow-staging-operator` (their values are shown once).
+  - Changing the Global API Key (needs the owner's password).
+  - Per-allowance usage alerts (10% of requests, CPU and log events). The dollar alert covers billable overage, which is the cost risk named in D6. Until those alerts exist, the D6 fallback applies: the $5 alert plus the owner's weekly check of Billing → Usage. The first deploy (card E1) waits until the alerts exist or the owner's acceptance of the fallback is recorded.
+- **Census.** Read-only.
+  - **A deviation from D9's rule, at the owner's request** ("5- you do it ..."). Claude opened the API-token list pages, which show names only (with each token's permission summary and dates, never a value): My Profile → API Tokens and the account's API Tokens page, at about 11:51 UTC. P04.T01i D9 says Claude never opens the API-token pages. Claude opened no token's detail, roll or create page.
+  - User API tokens: none.
+  - Account API tokens: 4, all "Workers R2 Storage Bucket Item Write", 4–9 months old, from other products: "Muslimah Pro backend token", "Social Media Agent", "R2 Account Token" and "mascot-migration".
+  - Workers & Pages: none.
+  - R2 buckets: 7 from other products (davinci-workspaces, games, mascot-assets, perri, shopifyflow-evidence, smokesignal-artifacts and "social-media-agen" as displayed, which the dashboard may have truncated), 6.88 GB in total.
+  - The census also found a second account the user belongs to. Its name contains a third party's email address, so it is not recorded here.
+- **OQ-3 (account dedication), raised by this census.**
+  - Owner answer in chat on 2026-10-19: "Use this account".
+  - The accepted risk: a token able to deploy Workers on this account could deploy a Worker that binds and reads those R2 buckets.
+  - Mitigations:
+    - The two Morrow tokens do not exist yet. The owner creates them (P04.T01i D9 step 5), restricted to this account, with a 30-day TTL ending 2026-11-18:
+      - `morrow-staging-ci`: Account · Workers Scripts · Edit, Queues · Edit and Account Settings · Read, plus Workflows if it is listed;
+      - `morrow-staging-operator`: the same, plus Turnstile · Edit, Cloudflare Pages · Read, and Workers Observability · Read if it is listed.
+    - Workers Scripts · Edit can deploy a Worker that binds this account's R2 buckets, so these scopes do not by themselves contain the risk.
+    - The census runs at every deploy.
+    - Only the owner's account can push, with branch protection on `main`, apart from the platform GitHub Apps accepted in the ADR-0019 item 5 exception.
+- **Cap and observed cost.** $0. No billable usage this period.
+- **Cleanup.** Delete the alert under Alerts → Overview. Re-authorise Wrangler with `wrangler login` if the owner wants it back.
+- **Unknown outcomes.** None.

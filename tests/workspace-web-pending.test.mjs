@@ -122,6 +122,30 @@ test("AC12: markers are text-free, capped at 20, kept on 401, cleared by dismiss
   );
   assert.equal(pending.markers().length, 0, "unexpected entries are ignored");
 });
+test("AC10, AC12: a Check again whose form closed meanwhile still settles its marker", async () => {
+  // The dialog closes (release) while Check again is in flight. A late terminal reply
+  // removes the marker it started with; a late uncertain one neither re-registers the
+  // key (which would hold the leave guard for a form that no longer exists) nor adds a
+  // second marker.
+  for (const late of [
+    { kind: "ok", value: { taskId: "t-9" }, replayed: true },
+    { kind: "uncertain" },
+    { kind: "unavailable", offline: false },
+  ]) {
+    const pending = createPending({ storage: new MemoryStorage() });
+    await pending.run(command, marker, () => Promise.resolve({ kind: "uncertain" }));
+    assert.equal(pending.markers().length, 1);
+    let settle;
+    const check = pending.run(command, marker, () => new Promise((r) => (settle = r)));
+    pending.release(key);
+    settle(late);
+    const outcome = await check;
+    assert.equal(outcome.kind, late.kind === "ok" ? "ok" : "uncertain", late.kind);
+    assert.equal(pending.blocking(), false, late.kind);
+    assert.equal(pending.liveMarkers().length, 0, late.kind);
+    assert.equal(pending.markers().length, late.kind === "ok" ? 0 : 1, late.kind);
+  }
+});
 test("AC12: beforeunload is registered only while dirty or pending; a 401 bypasses the guard", async () => {
   const win = fakeWindow("/w/ws-1");
   const pending = createPending({ storage: new MemoryStorage() });

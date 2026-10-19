@@ -143,6 +143,11 @@ test("AC03: document.title is each screen's own heading or its route title", () 
   const view = (session, match = home, entryFailed = false) =>
     screenTitle({ session, match, entryFailed });
   assert.equal(view("expired"), "Sign in to continue");
+  // PR-2: a first 401 at `/` with nothing private shown is the signed-out entry.
+  assert.equal(
+    screenTitle({ session: "expired", match: null, entryFailed: false, fresh: true }),
+    "Sign in to Morrow",
+  );
   assert.equal(view("workspace_unavailable"), "This workspace isn't available to you");
   assert.equal(view("probe_failed"), "This workspace couldn't load");
   assert.equal(view("signed_out"), "You're signed out");

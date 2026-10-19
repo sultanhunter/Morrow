@@ -26,6 +26,46 @@ const held = () => Error("CONTROLLED_NEON_REAL_PG_WORKER_HELD");
 function expect(value: unknown) {
   if (!value) throw held();
 }
+// What a held request reports to the lab: the error's name and whole message, with the
+// fixture passwords removed, and a short code; never its stack. It does not shorten them:
+// the lab removes every other private marker from the whole text first and only then cuts
+// it to length, so a marker split by a cut here could not slip past that redaction
+// (P03.T04f).
+function describeFailure(error: unknown, passwords: readonly unknown[]) {
+  try {
+    const e = (typeof error === "object" && error !== null ? error : {}) as {
+      name?: unknown;
+      message?: unknown;
+      code?: unknown;
+    };
+    let name = typeof e.name === "string" ? e.name : null;
+    let message =
+      typeof e.message === "string"
+        ? e.message
+        : typeof error === "string"
+          ? error
+          : "non-error " + typeof error;
+    for (const password of passwords)
+      if (typeof password === "string" && password.length > 0) {
+        message = message.replaceAll(password, "[fixture-password]");
+        name = name?.replaceAll(password, "[fixture-password]") ?? null;
+      }
+    return {
+      name,
+      message,
+      code: typeof e.code === "string" && /^[A-Za-z0-9_]{1,32}$/.test(e.code) ? e.code : null,
+    };
+  } catch {
+    return { name: null, message: "undescribable failure", code: null };
+  }
+}
+function fixturePasswords(setupJson: string): unknown[] {
+  try {
+    return Object.values((JSON.parse(setupJson) as Setup).passwordByRole ?? {});
+  } catch {
+    return [];
+  }
+}
 async function initialized(
   setup: Setup,
   index: number,
@@ -408,9 +448,16 @@ export default {
         });
       }
       expect(current);
-      return current!.auth.fetch(request);
-    } catch {
-      return new Response("held", { status: 503 });
+      // Awaited, so a rejection from the login bridge is caught below and held as a 503
+      // that describes it. Returned without await, the rejection escaped this catch and
+      // reached the runtime as an uncaught exception (Miniflare answers it with a 500 error
+      // page), so the lab saw neither the fixture's held response nor the reason.
+      return await current!.auth.fetch(request);
+    } catch (error) {
+      return Response.json(
+        { held: true, failure: describeFailure(error, fixturePasswords(env.SETUP_JSON)) },
+        { status: 503 },
+      );
     }
   },
 };
