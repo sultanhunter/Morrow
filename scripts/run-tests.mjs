@@ -1,4 +1,4 @@
-// The repository test runner behind `npm test`, `npm run test:shard` and the heavy
+// The repository test runner behind `npm test` (CI's `checks` job) and the heavy
 // unit-stress leg (P03.T04e §2). It lists the top-level tests/*.test.mjs files, runs
 // the parallel-safe ones with --test-concurrency=<k>, then the timing-sensitive files
 // named in tests/serial-tests.json one at a time, and exits 1 if either run failed. A
