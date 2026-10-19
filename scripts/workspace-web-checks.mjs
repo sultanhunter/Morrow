@@ -3,10 +3,13 @@
 // exact allowlist, no inline script or style, no Vite manifest, and an entry script of
 // at most 150 KB gzip. The Vite module report (written outside dist) must list no
 // fixture, axe-core, Playwright or runtime-validator module, and must describe this dist.
+// Each JS entry of @morrow/workspace-ui is also bundled for the browser on its own and
+// held to the same module denials (P05.T01y: the session keeper, before P14.T01a wires it).
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
+import { build } from "esbuild";
 import { artifactPath, repositoryRoot, writeArtifact } from "./artifacts.mjs";
 
 export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
@@ -24,7 +27,10 @@ const deniedModules = [
   ["fixture", /(^|\/)apps\/workspace-web\/src\/fixtures\//],
   ["axe_core", /(^|\/)node_modules\/axe-core\//],
   ["playwright", /(^|\/)node_modules\/playwright(-core)?\//],
+  // The validator table, directly or through the modules that import it. The generated
+  // per-definition modules (`packages/contracts/src/generated/validators/`) are allowed.
   ["runtime_validators", /runtime-validators/],
+  ["validator_table_entry", /(^|\/)packages\/contracts\/src\/(validation|client)\.ts$/],
 ];
 const urlPattern = /https?:\/\/[^\s"'`)<>\\]+/g;
 
@@ -68,6 +74,51 @@ export function inspectModuleReport(report, distScripts = null) {
       if (!distScripts.includes(name)) problems.push("MODULE_REPORT_STALE:" + name);
   }
   return problems;
+}
+
+// With its per-definition validator the keeper is about 3 KB gzip; with the validator
+// table it was 147 KB.
+export const sessionKeeperGzipLimit = 16 * 1024;
+const sessionKeeperEntry = "@morrow/workspace-ui/session-keeper";
+
+/** Bundles each JS entry of @morrow/workspace-ui for the browser, as the web build would. */
+export async function probeUiEntries({ root = repositoryRoot } = {}) {
+  const manifest = JSON.parse(
+    readFileSync(resolve(root, "packages/workspace-ui/package.json"), "utf8"),
+  );
+  const entries = [],
+    problems = [];
+  for (const [subpath, target] of Object.entries(manifest.exports)) {
+    if (!/\.tsx?$/.test(target)) continue;
+    const entry = "@morrow/workspace-ui" + subpath.slice(1);
+    const result = await build({
+      entryPoints: [resolve(root, "packages/workspace-ui", target)],
+      absWorkingDir: root,
+      bundle: true,
+      platform: "browser",
+      format: "esm",
+      target: "es2022",
+      jsx: "automatic",
+      minify: true,
+      legalComments: "none",
+      write: false,
+      metafile: true,
+      logLevel: "silent",
+    });
+    const text = result.outputFiles[0].contents;
+    const modules = Object.keys(result.metafile.inputs).sort();
+    const gzipBytes = gzipSync(text).length;
+    for (const problem of inspectModuleReport({
+      chunks: [{ fileName: entry, isEntry: true, moduleIds: modules }],
+    }))
+      problems.push(`UI_ENTRY:${entry}:${problem}`);
+    if (entry === sessionKeeperEntry && gzipBytes > sessionKeeperGzipLimit)
+      problems.push(`UI_ENTRY_TOO_LARGE:${entry}:${gzipBytes}`);
+    entries.push({ entry, bytes: text.length, gzip_bytes: gzipBytes, modules });
+  }
+  if (!entries.some((e) => e.entry === sessionKeeperEntry))
+    problems.push("UI_ENTRY_MISSING:" + sessionKeeperEntry);
+  return { entries, problems };
 }
 
 function listFiles(root) {
@@ -156,6 +207,34 @@ export function negativeChecks() {
       }).length === 1,
     ],
     [
+      "validator_table_module",
+      inspectModuleReport({
+        chunks: [
+          {
+            ...report.chunks[0],
+            moduleIds: ["packages/contracts/src/generated/runtime-validators.mjs"],
+          },
+        ],
+      }).length === 1,
+    ],
+    [
+      "validation_module",
+      inspectModuleReport({
+        chunks: [{ ...report.chunks[0], moduleIds: ["packages/contracts/src/validation.ts"] }],
+      }).length === 1,
+    ],
+    [
+      "browser_validator_allowed",
+      inspectModuleReport({
+        chunks: [
+          {
+            ...report.chunks[0],
+            moduleIds: ["packages/contracts/src/generated/validators/SessionRotationResult.mjs"],
+          },
+        ],
+      }).length === 0,
+    ],
+    [
       "stale_report",
       inspectModuleReport(report, ["assets/main.js", "assets/other.js"]).length === 1,
     ],
@@ -164,23 +243,27 @@ export function negativeChecks() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result = verifyWorkspaceDist();
+  const ui = await probeUiEntries();
   const negatives = negativeChecks();
   const failedNegatives = negatives
     .filter((n) => !n.passed)
     .map((n) => "NEGATIVE_NOT_DETECTED:" + n.name);
-  const problems = [...result.problems, ...failedNegatives];
+  const problems = [...result.problems, ...ui.problems, ...failedNegatives];
   writeArtifact("workspace-web/verify.json", {
     generated_at: new Date().toISOString(),
     scope:
-      "Production dist of apps/workspace-web: fixture isolation, URL allowlist, inline code, manifest, entry size and module report (P14.T01a AC13, AC19). Not a browser or accessibility check.",
+      "Production dist of apps/workspace-web: fixture isolation, URL allowlist, inline code, manifest, entry size and module report (P14.T01a AC13, AC19); each @morrow/workspace-ui JS entry bundled alone by esbuild against the same module denials, and the session keeper's size (P05.T01y). Not a browser or accessibility check.",
     entry_gzip_bytes: result.entryGzipBytes,
     entry_gzip_limit: entryGzipLimit,
     files: result.files ?? 0,
+    ui_entries: ui.entries,
+    session_keeper_gzip_limit: sessionKeeperGzipLimit,
     negative_checks: negatives,
     problems,
   });
   if (problems.length) throw Error(problems.join("\n"));
+  const keeper = ui.entries.find((e) => e.entry === sessionKeeperEntry);
   console.log(
-    `PASS: workspace dist clean (${result.files} files, entry ${result.entryGzipBytes} B gzip, ${negatives.length} deliberate failures detected).`,
+    `PASS: workspace dist clean (${result.files} files, entry ${result.entryGzipBytes} B gzip, ${negatives.length} deliberate failures detected); ${ui.entries.length} UI entries clean, session keeper ${keeper.bytes} B (${keeper.gzip_bytes} B gzip).`,
   );
 }

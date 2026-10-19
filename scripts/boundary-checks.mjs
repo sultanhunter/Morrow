@@ -3,7 +3,12 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { definitionLayers, bodyLayers, billingLayers } from "./contract-sources.mjs";
+import {
+  definitionLayers,
+  bodyLayers,
+  billingLayers,
+  browserValidatorDefinitions,
+} from "./contract-sources.mjs";
 const root = resolve(".");
 // Source organization checks for reviewed literal specifiers and recognized loaders.
 // This is not hermetic: aliases, custom module resolution and transitive code need
@@ -126,9 +131,10 @@ export function inspectImports(file, code) {
         "@morrow/workspace-ui",
         "@morrow/workspace-ui/styles.css",
         "@morrow/contracts",
-        "@morrow/contracts/client",
         "@morrow/contracts/routes",
-        "@morrow/contracts/validation",
+        // Never the validator table (`/validation`, or `/client`, which imports it): only
+        // the generated per-definition modules of the closed browser list (P05.T01y).
+        ...browserValidatorDefinitions.map((name) => `@morrow/contracts/validators/${name}`),
         "@morrow/entry-ports",
       ].includes(specifier)
     )
@@ -162,6 +168,13 @@ export function inspectImports(file, code) {
         )
       )
         errors.push("UI_RELATIVE_ESCAPE");
+      if (
+        ui &&
+        /^packages\/contracts\/src\/(?:(?:validation|client)(?:\.ts)?$|generated\/runtime-validators)/.test(
+          target,
+        )
+      )
+        errors.push("UI_VALIDATOR_TABLE_IMPORT");
       if (neutral && /^apps\//.test(target)) errors.push("NEUTRAL_APP_IMPORT");
       if (neutral && !/^packages\/(contracts|entry-ports)\/src\//.test(target))
         errors.push("NEUTRAL_RELATIVE_ESCAPE");

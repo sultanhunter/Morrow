@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import {
@@ -20,12 +21,16 @@ import {
   currentDefinitionSelectors as expectedCurrent,
   currentBillingDefinitionSelectors as expectedBilling,
   capabilityBodySelectors as expectedBodies,
+  browserValidatorDefinitions,
 } from "../scripts/contract-sources.mjs";
+import { browserValidatorsDirectory } from "../scripts/generate-runtime-validators.mjs";
 
 const sources = readSchemaSources();
 const definitionCount = sources.reduce((n, s) => n + Object.keys(s.schema.$defs).length, 0);
 
-test("every generated validator agrees with the original compiler on bounded valid/invalid corpus", () => {
+const schemas = schemasByKind(sources);
+// The original compiler, at runtime and only in tests: the oracle for the generated code.
+function referenceCompiler() {
   const ajv = new Ajv2020({
     strict: true,
     allErrors: true,
@@ -35,8 +40,14 @@ test("every generated validator agrees with the original compiler on bounded val
     removeAdditional: false,
   });
   addFormats(ajv);
-  const schemas = schemasByKind(sources);
   for (const schema of Object.values(schemas)) ajv.addSchema(schema);
+  return (selector) => {
+    const split = selector.indexOf(":");
+    const kind = selector.slice(0, split);
+    return ajv.getSchema(`${schemas[kind].$id}#/$defs/${selector.slice(split + 1)}`);
+  };
+}
+function parityCorpus() {
   const corpus = [
     undefined,
     null,
@@ -71,15 +82,21 @@ test("every generated validator agrees with the original compiler on bounded val
   add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.A02.json", "utf8")));
   add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.T02a.json", "utf8")));
   add(JSON.parse(readFileSync("docs/contracts/fixtures/P01.T04a.json", "utf8")));
+  return corpus;
+}
+
+test("every generated validator agrees with the original compiler on bounded valid/invalid corpus", () => {
+  const reference = referenceCompiler();
+  const corpus = parityCorpus();
   assert.equal(Object.keys(validators).length, definitionCount);
   let accepted = 0,
     rejected = 0;
   for (const [kind, schema] of Object.entries(schemas))
     for (const definition of Object.keys(schema.$defs)) {
-      const reference = ajv.getSchema(`${schema.$id}#/$defs/${definition}`);
+      const original = reference(`${kind}:${definition}`);
       const compiled = validators[`${kind}:${definition}`];
       for (const value of corpus) {
-        const result = reference(structuredClone(value));
+        const result = original(structuredClone(value));
         assert.equal(compiled(structuredClone(value)), result, `${kind}:${definition}`);
         if (result) accepted++;
         else rejected++;
@@ -87,6 +104,62 @@ test("every generated validator agrees with the original compiler on bounded val
     }
   assert.ok(accepted > 100);
   assert.ok(rejected > 1000);
+});
+// P05.T01y: each browser module is the table's validator for the effective selector, alone.
+test("per-definition browser modules agree with their table entry and the original compiler", async () => {
+  const manifest = JSON.parse(
+    readFileSync("packages/contracts/src/generated/runtime-validators.json", "utf8"),
+  );
+  assert.deepEqual(Object.keys(manifest.browser_validators), [...browserValidatorDefinitions]);
+  assert.deepEqual(
+    readdirSync(browserValidatorsDirectory).sort(),
+    browserValidatorDefinitions.flatMap((name) => [`${name}.d.mts`, `${name}.mjs`]).sort(),
+  );
+  const reference = referenceCompiler();
+  const rotation = { schemaVersion: 1, outcome: "rotated", idleRemainingMs: 1800000 };
+  const rotationAccepted = [
+    { ...rotation, absoluteRemainingMs: 43200000 },
+    { ...rotation, outcome: "current", idleRemainingMs: 0, absoluteRemainingMs: 0 },
+  ];
+  const rotationRefused = [
+    { ...rotation, absoluteRemainingMs: 43200001 },
+    { ...rotation, absoluteRemainingMs: -1 },
+    { ...rotation, absoluteRemainingMs: 1.5 },
+    { ...rotation, absoluteRemainingMs: "1" },
+    { ...rotation, absoluteRemainingMs: 1, outcome: "reuse_revoked" },
+    { ...rotation, absoluteRemainingMs: 1, schemaVersion: 2 },
+    { ...rotation, absoluteRemainingMs: 1, extra: true },
+    rotation,
+  ];
+  const corpus = [...parityCorpus(), ...rotationAccepted, ...rotationRefused];
+  for (const name of browserValidatorDefinitions) {
+    const selector = currentDefinitionSelectors[name];
+    const exportName = `validate${name}`;
+    const path = `${browserValidatorsDirectory}/${name}.mjs`;
+    assert.deepEqual(manifest.browser_validators[name], {
+      selector,
+      export: exportName,
+      path,
+      sha256: createHash("sha256").update(readFileSync(path)).digest("hex"),
+    });
+    // Through the package export, as browser code imports it.
+    const module = await import(`@morrow/contracts/validators/${name}`);
+    assert.deepEqual(Object.keys(module), [exportName]);
+    const original = reference(selector);
+    let accepted = 0;
+    for (const value of corpus) {
+      const result = original(structuredClone(value));
+      assert.equal(validators[selector](structuredClone(value)), result, selector);
+      assert.equal(module[exportName](structuredClone(value)), result, `${name} module`);
+      if (result) accepted++;
+    }
+    assert.ok(accepted > 0, `${name}: the corpus has an accepted value`);
+  }
+  const { validateSessionRotationResult } = await import(
+    "@morrow/contracts/validators/SessionRotationResult"
+  );
+  for (const value of rotationAccepted) assert.equal(validateSessionRotationResult(value), true);
+  for (const value of rotationRefused) assert.equal(validateSessionRotationResult(value), false);
 });
 test("closed validator selectors cannot invoke inherited names or coerce input", () => {
   for (const name of ["constructor", "toString", "__proto__", "unknown"])

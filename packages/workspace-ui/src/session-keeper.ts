@@ -1,4 +1,4 @@
-import { validateCurrentDefinition } from "@morrow/contracts/validation";
+import { validateSessionRotationResult } from "@morrow/contracts/validators/SessionRotationResult";
 
 // The client session keeper (P05.T01y §7, ADR-0004). Framework-free. Workspace and work
 // routes record no session activity, so the keeper rotates the session while the person
@@ -13,9 +13,9 @@ import { validateCurrentDefinition } from "@morrow/contracts/validation";
 // when it settled after the failing request was sent: only then can it explain the 401.
 //
 // A separate entry (`@morrow/workspace-ui/session-keeper`), not re-exported by the package
-// index: the generated validator table it imports is denied in the workspace-web bundle
-// (scripts/workspace-web-checks.mjs). Wiring it into the UI (P14.T01a) needs a
-// per-definition validator export first.
+// index until P14.T01a wires it into the UI. It imports the generated per-definition
+// validator for the effective `SessionRotationResult`, never the validator table, which
+// `verify:workspace-web` denies in browser bundles and checks for this entry.
 
 export interface SessionKeeperOptions {
   readonly fetch: typeof fetch;
@@ -122,7 +122,7 @@ export function createSessionKeeper(options: Readonly<SessionKeeperOptions>): Se
     } catch {
       return "unavailable";
     }
-    if (!validateCurrentDefinition("SessionRotationResult", body)) return "unavailable";
+    if (!validateSessionRotationResult(body)) return "unavailable";
     const result = body as {
       outcome: "rotated" | "current";
       idleRemainingMs: number;

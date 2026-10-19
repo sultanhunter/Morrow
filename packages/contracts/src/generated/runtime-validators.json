@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "contract_version": "morrow.contracts.v1.1",
   "definitions": 393,
   "definitions_by_source": {
@@ -29,6 +29,14 @@
   "output": {
     "path": "packages/contracts/src/generated/runtime-validators.mjs",
     "sha256": "6b4e74b6a6b9c0e0a9f5091d77bf84e79bc2277f5464c0d38414a43abe902e96"
+  },
+  "browser_validators": {
+    "SessionRotationResult": {
+      "selector": "core-v1.1:SessionRotationResult",
+      "export": "validateSessionRotationResult",
+      "path": "packages/contracts/src/generated/validators/SessionRotationResult.mjs",
+      "sha256": "ff11db15d21b08a2b3072280f08c6ea1e9432daa822fe2e94926c23606e95e82"
+    }
   },
   "scope": "Ahead-of-time validators only; no runtime schema compilation or hosted qualification"
 }

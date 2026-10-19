@@ -48,6 +48,13 @@ export const definitionLayers = Object.freeze(["core-v1.1", "core"]);
 export const bodyLayers = Object.freeze(["capabilities-v1.1", "capabilities"]);
 export const billingLayers = Object.freeze(["billing-v1.1", "billing"]);
 
+// The effective core definitions that browser code may validate. Each gets its own
+// generated module, `@morrow/contracts/validators/<Name>`, exporting `validate<Name>`: the
+// table's compiled validator alone, so a browser bundle never carries the validator table
+// (P05.T01y; `verify:workspace-web`). Closed and reviewed: the UI allowlist in
+// boundary-checks admits exactly these specifiers. Adding a name is routine; regenerate.
+export const browserValidatorDefinitions = Object.freeze(["SessionRotationResult"]);
+
 export const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Reads every source, in source order, as text and parsed JSON. */

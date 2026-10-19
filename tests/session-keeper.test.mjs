@@ -6,6 +6,7 @@ import {
   SESSION_ROTATE_INTERVAL_MS,
   SESSION_ROTATE_WAIT_MS,
 } from "../packages/workspace-ui/src/session-keeper.ts";
+import { probeUiEntries, sessionKeeperGzipLimit } from "../scripts/workspace-web-checks.mjs";
 
 // P05.T01y-AC31: the client session keeper with fake timers, locks and fetch.
 const tick = async (n = 5) => {
@@ -462,4 +463,15 @@ test("dispose stops timers and rotations; activity binding uses user input only"
   assert.deepEqual(added.sort(), ["focus", "keydown", "pointerdown", "visibilitychange"]);
   unbind();
   assert.deepEqual(added, []);
+});
+
+test("the keeper's browser bundle carries its one validator, never the validator table", async () => {
+  const { entries, problems } = await probeUiEntries();
+  assert.deepEqual(problems, []);
+  const entry = entries.find((e) => e.entry === "@morrow/workspace-ui/session-keeper");
+  assert.deepEqual(
+    entry.modules.filter((id) => id.startsWith("packages/contracts/")),
+    ["packages/contracts/src/generated/validators/SessionRotationResult.mjs"],
+  );
+  assert.ok(entry.gzip_bytes <= sessionKeeperGzipLimit, String(entry.gzip_bytes));
 });
