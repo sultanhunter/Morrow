@@ -130,6 +130,7 @@ test("AC03: replacements are declared, and undeclared ones are reported", () => 
       ["billing_definition", "CreditGrant", "ADR-0015"],
       ["billing_definition", "AllocationShare", "ADR-0015"],
       ["billing_definition", "CostAllocation", "ADR-0015"],
+      ["definition", "EventEnvelope", "ADR-0016"],
     ],
   );
   const prefixes = {
@@ -294,7 +295,7 @@ test("AC10: contractVersion has exactly one source", () => {
 
 test("AC11: product code cannot validate or type a replaced v1 definition", () => {
   const replaced = replacedDefinitionNames(changes);
-  assert.deepEqual(replaced, ["Proposal", "Approval"]);
+  assert.deepEqual(replaced, ["Proposal", "Approval", "EventEnvelope"]);
   const check = (path, code) => inspectSupersededUse(path, code, replaced);
   assert.deepEqual(
     check("packages/policy/src/x.ts", 'validateDefinition("core","Proposal", value);'),
@@ -649,7 +650,9 @@ test("P01.T04a AC11: no request or capability input can carry a billing route", 
       : "capabilities";
     return [`${kind}:${c.id}.input`, layered[kind].$defs[`${c.id}.input`], layered[kind].$id];
   });
-  assert.equal(inputs.length, 105);
+  // Derived from the catalogue: P01.T02c added eight capabilities (ADR-0016).
+  assert.equal(inputs.length, catalogue.capabilities.length);
+  assert.ok(inputs.some(([name]) => name === "capabilities-v1.1:governance.access.request.input"));
   const requests = [];
   for (const kind of ["core-v1.1", "core"])
     for (const name of Object.keys(layered[kind].$defs))

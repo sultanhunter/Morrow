@@ -646,6 +646,74 @@
         "actor": "owner",
         "guard": "schedules_stopped_effects_reconciled"
       }
+    ],
+    "message": [
+      {
+        "from": "streaming",
+        "to": "completed",
+        "actor": "runtime",
+        "guard": "current_lease",
+        "since": "1.1"
+      },
+      {
+        "from": "streaming",
+        "to": "failed",
+        "actor": "runtime",
+        "guard": "current_lease",
+        "since": "1.1"
+      },
+      {
+        "from": "streaming",
+        "to": "cancelled",
+        "actor": "runtime",
+        "guard": "current_lease",
+        "since": "1.1"
+      },
+      {
+        "from": "streaming",
+        "to": "failed",
+        "actor": "work_service",
+        "guard": "lease_lost",
+        "since": "1.1"
+      }
+    ],
+    "access_request": [
+      {
+        "from": "pending",
+        "to": "granted",
+        "actor": "work_service",
+        "guard": "linked_grant_revision_committed",
+        "since": "1.1"
+      },
+      {
+        "from": "pending",
+        "to": "denied",
+        "actor": "eligible_decider",
+        "guard": "decider_rule_not_requester",
+        "since": "1.1"
+      },
+      {
+        "from": "pending",
+        "to": "denied",
+        "actor": "work_service",
+        "guard": "linked_proposal_rejected",
+        "since": "1.1"
+      },
+      {
+        "from": "pending",
+        "to": "withdrawn",
+        "actor": "requester",
+        "guard": "own_request_current_revision",
+        "since": "1.1",
+        "capability": "governance.access.request"
+      },
+      {
+        "from": "pending",
+        "to": "expired",
+        "actor": "work_service",
+        "guard": "expires_at_passed",
+        "since": "1.1"
+      }
     ]
   }
 }

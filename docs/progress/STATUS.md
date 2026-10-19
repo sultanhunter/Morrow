@@ -4,16 +4,17 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active packets
 
-`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#17. The latest:
+`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#18. The latest:
 - PR #10 P05.T01x Part B (`e51e5b7`); PR #12 P06.T01a (`06e4dfe`; Verified waits for the P05 exit gate); PR #13 the ADR-0018 Proposal@2 edit (`08e5ebf`); PR #14 P01.T04a PR-A (`bba3cec`).
 - PR #15 P14.T01a PR-1 (`5ad6cc7`, provisional under ADR-0003).
 - PR #11 P03.T04e PR-A (`f8314e8`). Still open: its AC22 `workflow_dispatch` run of `heavy-faults.yml` (about 18 billed minutes), and the AC04 hosted totals and hosted part of AC05, which P03.T04f moves to its first hosted `checks` job.
 - PR #16 P03.T04f CI cost reduction (`5806049`): light runs for Markdown-only PRs and for pushes whose tree equals the merged PR head; 9 jobs instead of 12; the pgwire hold now records its stage and frames (run 39260319338 held once at `actual_84_callback_delivery_3`, then passed on rerun).
 - PR #17 docs, merged as `8b451e8`: ADR-0019, ADR-0020 and ADR-0021 Accepted; `staging-card-1`; P04.T01i and P04.T01j PR-A packets; the ADR-0014 item 4 and 5 amendments; `docs/plan/mvp.md`; the 2026-10-19 live evidence; the Mobbin design references.
+- PR #18 P14.T01a PR-2 (`30a6331`): account and work wiring in the provisional UI.
 
 In progress:
-- **P14.T01a PR-2** (`claude/p14-t01a-pr2-account-and-work`, merge train): `composed.ts` turns on `account.*` and `work.*` (keep-alive and people stay off); AccountOverview, signup, Goal, Task, Question and answer decoders with validator parity; the signed-out entry at `/`, account rows, the signup 429 hold, task-list refresh and inline answers (`docs/design/mobbin-references.md`); 48 more `ui:check` state cases and 5 walks; the journey lab's PR-2 journeys (AC22-AC32) on the edge harness, which now applies 0014-0015. Tier 2 findings applied (the AC30 hold was the synthetic WorkOS oracle listing expired sessions as active). Packet §12 and `docs/acceptance/P14.md` record local runs; the hosted `ui` job is the authority.
-- Built branches waiting for the merge train (next actions): P01.T02c PR-A, P01.T04a PR-B, P04.T01j PR-B, P05.T01y, P06.T01b PR-1, P05.T01ab, P04.T01i PR-B. `claude/mvp-briefs` holds the M2–M5 briefs and the proposed ADR-0022.
+- **P01.T02c PR-A** (`claude/p01-t02c-a-collab-contracts`, merge train; merged with `main` at `30a6331`): collaboration contracts v1.1 (ADR-0016): EventEnvelope@2 as the one declared replacement, the additive event registry (22 rows, pinned in `release-baseline.json`) and `validateEventPayload`, eight capabilities (six `human_only`), `collaborationPermissions` with the audited Ask admin row, two v1.1 machines, four routes and the sidebar model. The overnight AI review findings are applied (2026-10-19); local `npm run ci`, `smoke:scaffold` and the workers, workspace-api, pg-work and pg-core labs pass, while pg-linking and pg-http failed under host load on the branch and on `main` alike (`docs/acceptance/P01.md`). Hosted CI, the Tier 2 AI review (separate context, same model family) and `/security-review` are open. PR-B (`@morrow/policy/collaboration`) follows.
+- Built branches waiting for the merge train (next actions): P01.T04a PR-B, P04.T01j PR-B, P05.T01y, P06.T01b PR-1, P05.T01ab, P04.T01i PR-B. `claude/mvp-briefs` holds the M2–M5 briefs and the proposed ADR-0022.
 
 ## Decisions recorded 2026-10-18 and 2026-10-19 (owner, in chat)
 
@@ -35,7 +36,7 @@ In progress:
 ## Next actions
 
 MVP fast track (ADR-0021; `docs/plan/mvp.md`). M1, staging live:
-1. Merge train: P14.T01a PR-2 (hosted `foundation` and `ui`, the first hosted run of the PR-2 journeys), then P01.T02c PR-A, P01.T04a PR-B (with the walkthrough-count fix 86→90), P04.T01j PR-B, P05.T01y (0016 on the ADR-0020 helpers), P06.T01b PR-1, P05.T01ab, then the trimmed P04.T01i PR-B. Each PR gets one AI review (separate context, same model family), with the security lens where it applies.
+1. Merge train: P14.T01a PR-2 merged (#18); next P01.T02c PR-A, P01.T04a PR-B (with the walkthrough-count fix 86→90), P04.T01j PR-B, P05.T01y (0016 on the ADR-0020 helpers), P06.T01b PR-1, P05.T01ab, then the trimmed P04.T01i PR-B. Each PR gets one AI review (separate context, same model family), with the security lens where it applies.
 2. **The trimmed P04.T01i PR-B:** deploy after green CI, migrations, roles and secrets. It keeps `staging:kill`/`unkill` with the flag re-read around the api deploy, the ADR-0019 item 4 deploy gates 1–6, and the census at every deploy. Card effect E11 (Claude's rollbacks) is suspended until the rollback refusal exists; staging rolls forward instead. AC14's hosted drill, AC15–AC17 and AC19 move past launch (`docs/acceptance/P04.md`).
 3. Staging bring-up under `staging-card-1` once its preconditions hold (below); owner sign-in on staging.
 4. Then M2, M3 and M5 in parallel, each behind the credential-custody gate; M4 (with the ADR-0005 stop controls, M3/M4); M6 (the deletion path before the real-store smoke).
