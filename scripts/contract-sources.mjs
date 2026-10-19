@@ -119,13 +119,22 @@ export const readEventRegistry = (root = repositoryRoot) =>
 const eventTypePattern = /^[a-z][a-z_]*(\.[a-z][a-z_]*)+$/;
 const aggregateTypePattern = /^[a-z][a-z_]{0,63}$/;
 const registryRowKeys = "aggregateType,eventType,payloadDefinition,producer,since";
+// A row's `since`: a contract minor from 1.1 (the registry's first) through the
+// current contract version, so a later v1.x minor appends rows without editing
+// this check; release-baseline.json pins the rows themselves.
+export const eventRegistrySince = Object.freeze(
+  (() => {
+    const [, major, minor] = /v(\d+)\.(\d+)$/.exec(contractVersion);
+    return Array.from({ length: Number(minor) }, (_, i) => `${major}.${i + 1}`);
+  })(),
+);
 
 /**
  * Maps each registered event type to its aggregate type and the exact selector
  * of its payload definition (the newest core layer that defines it). Throws on
  * a malformed row: a closed row of five strings, a well-formed and unique event
  * type, an aggregate type equal to its first segment, a payload definition that
- * exists and ends in "Payload", and `since` "1.1".
+ * exists and ends in "Payload", and a `since` in `eventRegistrySince`.
  */
 export function eventPayloadSelectors(byKind, registry) {
   if (
@@ -149,7 +158,7 @@ export function eventPayloadSelectors(byKind, registry) {
       row.aggregateType === row.eventType.split(".")[0] &&
       /Payload$/.test(row.payloadDefinition) &&
       Object.hasOwn(current, row.payloadDefinition) &&
-      row.since === "1.1" &&
+      eventRegistrySince.includes(row.since) &&
       !Object.hasOwn(rows, row.eventType);
     if (!valid) throw Error("EVENT_REGISTRY_INVALID:" + JSON.stringify(row?.eventType ?? row));
     rows[row.eventType] = {

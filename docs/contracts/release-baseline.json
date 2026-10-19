@@ -14,9 +14,37 @@
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "67b4ec081a29a28254f9ffb87e0070e3692da937d171437f9d44131c27c93fa3",
+    "docs/contracts/schemas/v1.1/core.schema.json": "8b4183f8998283975161c65163930c43a4f4760a18b92e870e7bac7238e596be",
     "docs/contracts/schemas/v1.1/capabilities.schema.json": "130d463b12255c8597801330c7885455bbea5a736d1d838383ebb7c580932d7d",
     "docs/contracts/schemas/v1.1/billing.schema.json": "763f73b99def0b5d8b2083f0084c9504e823fa81a3e772db8b3c5a45f94d9490"
   },
-  "change_policy": "Any schema delta requires reviewed compatibility/migration evidence and deliberate baseline update; generation never updates this baseline. v1 is frozen. v1.1 stays a candidate until the Tier 3 P01 contract sign-off; until then a change to it is a deliberate edit of this baseline, and afterwards additions open schemas/v1.2/ (docs/contracts/contract-versions.md)."
+  "event_registry": {
+    "path": "docs/contracts/event-registry.json",
+    "description": "Each registered row by the SHA-256 of its RFC 8785 (JCS) form, in registry order. Rows are append-only: a changed, removed or reordered row is a replacement (an ADR and a deliberate edit here), and a new row is appended to the registry and pinned here (verify:boundaries).",
+    "rows": {
+      "goal.created": "ee4f2c478884235ab06888cb2078326c8db7a1a0665f482f369d18857807663b",
+      "goal.status_changed": "df5f6f52ef055c15e29c15d08b6c282bd15c285e7835028e597152899a7962a2",
+      "task.created": "1acdf50ce3e2331f662a57b5a0e21a004d74542972f9afd2f4f2e5e4641aa871",
+      "task.status_changed": "378a6d8626bc1cafff5b386e759e4adf4ab600dca4b14b38b73b02e2c51d53e5",
+      "task.assigned": "792861da3d577ce6058f9a0bb11c7edaced0bbb6bb9f4b4e070b7901019b8ddb",
+      "question.requested": "654ede893e349ebd914c0842504ebe1f60dcf763c5ff775c3521062949051d1d",
+      "question.answered": "b33bcb41916da8531deebe3b60fcdd2cd9d1d2e0c025b7ebe16141714869457d",
+      "question.cancelled": "9b96008680461375b87ee47909956192a059ac7d343d25dc8cba00fbf1855fc3",
+      "conversation.created": "e4ef864a569f27775cf2b015efe97db793e7e319c5008b6b7b81b49e0600eab9",
+      "message.created": "b488f1fc9e0ab59befb16918e835a463f597ecae10704d1fd30c7c6c1c5cc552",
+      "message.status_changed": "e4c1a643d5f80cdc8dd795abe0b3d1b04c89c67e095e8e33f57862fc2f295b9a",
+      "project.created": "260ba4253067bcd364abb9eae3d45b968e2190ff1bb508ad67b6a0726f8c872d",
+      "project.revised": "c4709ad59ab4687067137336bfda3b9155e61ff1d80b1bdc425a9031fdcf36d7",
+      "project.pin_changed": "9e1e6678969d75a93985269596c9d42d86569e2941616935f427ab4a2f313425",
+      "access_request.created": "2d6719deee77da8b207572718518ad17e3ce9452058d75b2020ceef80c7fc65a",
+      "access_request.status_changed": "f117d0714e3e2a0f89685f022e4bb78c3b51ccc5b35215a237db4b92c3449ed2",
+      "proposal.created": "7c64f6c265f7b2d7f5959766bea25cc3833e15e9344e6912a0406870bf10747b",
+      "approval.created": "d41263bfe811bd42c3336c67682f1007f6f995657826afd7006c2086f2b34807",
+      "approval.status_changed": "fa49f159db3eb4087ba6be5a2f7293e179913289093eb9e021db659e7cf2c96c",
+      "operation.status_changed": "77f68806b8792ef092e1b1ecfeecafd2226db206fa79e0a58bc427b2f417c396",
+      "kill_switch.executed": "54d2860b376c8f4154bef4a58e572b5806101ef5afec6a082f9a3a8a6af4d8ca",
+      "stop_proposal.dismissed": "140f29eb5979a7e9b0f9b2f1698f7025b1100474f3d00c72baa53a66c042ea38"
+    }
+  },
+  "change_policy": "Any schema delta requires reviewed compatibility/migration evidence and deliberate baseline update; generation never updates this baseline. v1 is frozen. v1.1 stays a candidate until the Tier 3 P01 contract sign-off; until then a change to it is a deliberate edit of this baseline, and afterwards additions open schemas/v1.2/ (docs/contracts/contract-versions.md). The event registry rows are pinned the same way (event_registry)."
 }

@@ -157,6 +157,7 @@ try {
   ).cases;
   const schemaCases = collaboration.filter((c) => c.kind === "schema");
   const eventCases = collaboration.filter((c) => c.kind === "event");
+  const currentCases = collaboration.filter((c) => c.kind === "current");
   const registryRows = readEventRegistry().events;
   assert.equal(Object.keys(eventPayloadSelectors).length, registryRows.length);
   const payloadCases = eventCases
@@ -171,6 +172,7 @@ try {
     body: JSON.stringify({
       schema: schemaCases.map(({ selector, value }) => ({ selector, value })),
       events: eventCases.map((c) => c.value),
+      current: currentCases.map(({ definition, value }) => ({ definition, value })),
       payloads: payloadCases,
     }),
     headers: { "content-type": "application/json" },
@@ -184,6 +186,10 @@ try {
   assert.deepEqual(
     collaborationResults.events,
     eventCases.map((c) => c.valid),
+  );
+  assert.deepEqual(
+    collaborationResults.current,
+    currentCases.map((c) => c.valid),
   );
   assert.deepEqual(
     collaborationResults.payloads,
@@ -229,6 +235,7 @@ try {
         review_preview_cases: selections.length,
         collaboration_schema_cases: schemaCases.length,
         collaboration_event_cases: eventCases.length,
+        collaboration_current_cases: currentCases.length,
         event_registry_rows: registryRows.length,
         review_preview_digests_equal: true,
         dynamic_code_generation_denied: true,
@@ -247,7 +254,7 @@ try {
     ) + "\n",
   );
   console.log(
-    `PASS: local Workers runtime; ${(definitions * corpus.length).toLocaleString("en-US")} validator cases over ${definitions} selectors, ${schemaCases.length + eventCases.length} collaboration cases and ${registryRows.length} registry rows, ${selections.length} review previews equal to Node, SDK settings, dynamic-code denial, two concurrent fixture reads; zero provider calls.`,
+    `PASS: local Workers runtime; ${(definitions * corpus.length).toLocaleString("en-US")} validator cases over ${definitions} selectors, ${schemaCases.length + eventCases.length + currentCases.length} collaboration cases and ${registryRows.length} registry rows, ${selections.length} review previews equal to Node, SDK settings, dynamic-code denial, two concurrent fixture reads; zero provider calls.`,
   );
 } finally {
   await runtime.dispose();

@@ -21,6 +21,7 @@ import {
   scope,
   grant,
   digest,
+  ref,
   clone,
   at,
   from,
@@ -71,12 +72,13 @@ async function unavailable(fixture, mode = "delegation") {
     return true;
   });
 }
-function retarget(fixture, capabilityId, verb, kind = "order", fields = ["refund_amount"]) {
+// `target` is a resource kind (its fixture resource) or an exact ResourceRef.
+function retarget(fixture, capabilityId, verb, target = "order", fields = ["refund_amount"]) {
   const operation = fixture.input.operation;
   Object.assign(operation, {
     capabilityId,
     verb,
-    resource: resource(kind, `${kind}_a`),
+    resource: typeof target === "string" ? resource(target, `${target}_a`) : clone(target),
     fields: [...fields],
   });
   const domainScope = scope([operation.resource], fields);
@@ -1110,14 +1112,65 @@ test("P01.T02c AC08: agents get capability_denied for view, propose and execute 
       }
   }
 });
+// The workspace W every collaboration row names as its resource. A W request has
+// no store and no account, so every scope on the path is W-scoped (storeIds and
+// accountIds empty, as ADR-0010 work grants are), and the installation and its
+// grant records are workspace-level (storeId null).
+const workspaceResource = {
+  organizationId: "org_a",
+  workspaceId: "workspace_a",
+  storeId: null,
+  connectionId: null,
+  kind: "workspace",
+  id: "workspace_a",
+};
+function retargetWorkspace(fixture, capabilityId, verb, fields) {
+  retarget(fixture, capabilityId, verb, workspaceResource, fields);
+  const { envelope, hops, origin, executor, constraints } = fixture.facts;
+  fixture.input.operation.accountId = null;
+  constraints.accountId = null;
+  for (const scoped of [
+    envelope.scope,
+    ...hops.map((hop) => hop.scope),
+    origin.grants[0].scope,
+    origin.grants[1].scope,
+    executor.installation.scope,
+    ...executor.current.grants.map((g) => g.scope),
+    executor.owner.grants[0].scope,
+  ])
+    Object.assign(scoped, { storeIds: [], accountIds: [] });
+  executor.installation.storeId = null;
+  synchronizeExecutor(fixture.facts);
+  for (const record of executor.grantRecords) record.storeId = null;
+  executor.installation.grantRefs = executor.grantRecords.map((record) => ({
+    ...ref("grant", record.payload.id, record.recordRevision, digest(record.payload)),
+    storeId: null,
+  }));
+  return fixture;
+}
 test("P01.T02c AC08: under a task envelope the kernel allows the planned project read, task-conversation subject view, message read and post", async () => {
   for (const key of ["project.read", "task.subjectView", "message.read", "message.post"]) {
     const rule = collaborationPermissions[key];
     assert.equal(rule.agents, "kernel", key);
     for (const r of rule.requires) {
-      const f = retarget(delegationFixture(), r.capabilityId, r.verb, "task", [...r.fields]);
+      // Each requirement is planned exactly as the row declares it: verb, fields and W.
+      assert.equal(r.resource, "workspace", key);
+      assert.equal(typeof r.verb, "string", key);
+      const f = retargetWorkspace(delegationFixture(), r.capabilityId, r.verb, r.fields);
+      assert.deepEqual(
+        [f.input.operation.resource, f.input.operation.accountId, f.input.operation.fields],
+        [workspaceResource, null, [...r.fields]],
+      );
       const result = await allowed(f);
       assert.ok(result.obligations.includes("recheck_at_dispatch"), key);
+      // Not tautological: the same request is denied when the task envelope does not
+      // cover W, or does not cover every requested field.
+      const narrowed = retargetWorkspace(delegationFixture(), r.capabilityId, r.verb, r.fields);
+      narrowed.facts.envelope.scope.resources = [resource("task", "task_a")];
+      assert.equal(await reasonFor(narrowed), "origin_denied", key);
+      const fewer = retargetWorkspace(delegationFixture(), r.capabilityId, r.verb, r.fields);
+      fewer.facts.envelope.scope.fields = r.fields.slice(1);
+      assert.equal(await reasonFor(fewer), "origin_denied", key);
     }
   }
   // An agent-reachable row never names a human_only or eligible_human_* capability.

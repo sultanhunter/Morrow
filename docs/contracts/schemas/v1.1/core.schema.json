@@ -1625,7 +1625,7 @@
       "additionalProperties": false
     },
     "EventPayloadRef": {
-      "description": "Binds an event payload: id is the eventId and digest is sha256 of the RFC 8785 (JCS) payload, the outbox payload_digest. Revision is always 1.",
+      "description": "Binds an event payload to its event: organizationId, workspaceId and storeId equal the envelope's, id is its eventId (validateCurrentDefinition checks both) and revision is always 1. digest is sha256 of the RFC 8785 (JCS) payload, computed from the stored payload when the ref is built; it is not the outbox payload_digest, which hashes PostgreSQL jsonb text. A later fetch by ref resolves the tenant from the session, never from the ref.",
       "type": "object",
       "properties": {
         "organizationId": {
@@ -2409,7 +2409,7 @@
           "$ref": "#/$defs/StreamPosition"
         },
         "author": {
-          "description": "A human or an agent; a service author is invalid.",
+          "description": "A human (a HumanActorRef) or an agent naming its installation, with no membership; a service author is invalid.",
           "$ref": "urn:morrow:contracts:core:v1#/$defs/ActorRef"
         },
         "status": {
@@ -2556,6 +2556,15 @@
                 "properties": {
                   "kind": {
                     "const": "agent"
+                  },
+                  "workspaceId": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                  },
+                  "membershipId": {
+                    "type": "null"
+                  },
+                  "installationId": {
+                    "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
                   }
                 },
                 "required": [
@@ -2835,7 +2844,7 @@
       "additionalProperties": false
     },
     "AskAdminReadRecord": {
-      "description": "The content-free audit record of one admin read of Asks (ADR-0016 item 5): one workspace list page, one conversation fetch or one message page. Committed in the read's transaction; content leaves only after that commit. A list record names every other member's Ask on the page in page order, each conversationId once, the reader's own left out; an empty page still gives one record. Never contains message text. Retention: 365 days of content-free audit metadata.",
+      "description": "The content-free audit record of one admin read of Asks (ADR-0016 item 5): one workspace list page, one conversation fetch or one message page. Committed in the read's transaction; content leaves only after that commit. A list record names every other member's Ask on the page in page order, each conversationId once, the reader's own left out; an empty page still gives one record. Never names the reader's own Ask (validateCurrentDefinition also checks that, and each conversationId once). Never contains message text. Retention: 365 days of content-free audit metadata.",
       "anyOf": [
         {
           "type": "object",
@@ -2861,7 +2870,8 @@
                 "$ref": "#/$defs/AskAdminReadAsk"
               },
               "minItems": 0,
-              "maxItems": 50
+              "maxItems": 50,
+              "uniqueItems": true
             }
           },
           "required": [
@@ -3860,7 +3870,7 @@
       ]
     },
     "InboxFilter": {
-      "description": "Inbox list filter; null means any.",
+      "description": "Inbox list filter; null means any. Every condition applies to the viewer-relative item: projectId matches only InboxItem.context.projectId as this viewer sees it, so a project the viewer cannot view gives the same empty page as an unknown id.",
       "type": "object",
       "properties": {
         "kinds": {
@@ -3894,6 +3904,7 @@
           ]
         },
         "projectId": {
+          "description": "Matches the viewer-relative context.projectId; never the stored project of an item whose project the viewer cannot view.",
           "anyOf": [
             {
               "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"

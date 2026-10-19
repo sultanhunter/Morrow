@@ -199,12 +199,30 @@ const registry = () => (registryCache ??= eventPayloadSelectors(layered, readEve
 export function inspectEvent(envelope, rows = registry()) {
   if (!selectorValidator("core-v1.1:EventEnvelope")(envelope)) return false;
   const row = Object.hasOwn(rows, envelope.eventType) ? rows[envelope.eventType] : null;
+  const ref = envelope.payloadRef;
   return (
     row !== null &&
     row.aggregateType === envelope.aggregateType &&
-    (envelope.payload === null || selectorValidator(row.selector)(envelope.payload))
+    (envelope.payload === null || selectorValidator(row.selector)(envelope.payload)) &&
+    // The payloadRef names this event: its organization, workspace, store and id (§8).
+    (ref === null ||
+      (ref.id === envelope.eventId &&
+        ["organizationId", "workspaceId", "storeId"].every((key) => ref[key] === envelope[key])))
   );
 }
+// AskAdminReadRecord by the reference compiler (ADR-0016 item 5): the schema, no
+// record audits the reader's own Ask, and a list names each conversationId once.
+export function inspectAskAdminReadRecord(record) {
+  if (!selectorValidator("core-v1.1:AskAdminReadRecord")(record)) return false;
+  if (record.readKind !== "list") return record.askOwnerPrincipalId !== record.readerPrincipalId;
+  const ids = record.asks.map((a) => a.conversationId);
+  return (
+    record.asks.every((a) => a.askOwnerPrincipalId !== record.readerPrincipalId) &&
+    new Set(ids).size === ids.length
+  );
+}
+// Current-definition cases whose rules go beyond the schema (`validateCurrentDefinition`).
+const currentInspectors = Object.freeze({ AskAdminReadRecord: inspectAskAdminReadRecord });
 const idRef = "urn:morrow:contracts:core:v1#/$defs/Id";
 // The largest JSON value a payload property schema admits (IDs, statuses, booleans and null only), or null when it admits anything else.
 function largest(schema) {
@@ -480,6 +498,11 @@ export function checkFixture(f) {
       (f.selector ? selectorValidator(f.selector) : validators[f.definition])(f.value) === f.valid
     );
   if (f.kind === "event") return inspectEvent(f.value) === f.valid;
+  if (f.kind === "current") {
+    if (!Object.hasOwn(currentInspectors, f.definition))
+      throw new Error("Unknown current definition " + f.definition);
+    return currentInspectors[f.definition](f.value) === f.valid;
+  }
   if (f.kind === "binding")
     return (
       JSON.stringify(inspectBinding(f.context).sort()) ===

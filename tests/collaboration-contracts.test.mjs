@@ -5,20 +5,27 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
+  eventRowDigest,
   inspectDeclaredReplacements,
+  inspectEventRegistryBaseline,
+  inspectRefinedSelectorUse,
   inspectSupersededUse,
+  refinedDefinitionNames,
   replacedDefinitionNames,
 } from "../scripts/boundary-checks.mjs";
 import {
   changesPath,
   currentDefinitionSelectors,
   eventPayloadSelectors,
+  eventRegistryPath,
+  eventRegistrySince,
   readEventRegistry,
   readSchemaSources,
   schemasByKind,
 } from "../scripts/contract-sources.mjs";
 import {
   checkFixture,
+  inspectAskAdminReadRecord,
   inspectCollaborationDefaults,
   inspectEvent,
   inspectEventRegistry,
@@ -37,7 +44,9 @@ import {
   validateEventPayload,
 } from "../packages/contracts/src/validation.ts";
 import {
+  approvalDecideFields,
   askAdminGrant,
+  askAdminTemplateIds,
   askAdminTemplateViolations,
   collaborationPermissions,
   workMetadataFields,
@@ -254,6 +263,8 @@ test("AC02: every new definition, body and registry row has a valid and an inval
     assert.equal(checkFixture(f), true, f.id);
     if (f.kind === "event")
       assert.equal(validateCurrentDefinition("EventEnvelope", f.value), f.valid, f.id);
+    if (f.kind === "current")
+      assert.equal(validateCurrentDefinition(f.definition, f.value), f.valid, f.id);
     if (f.kind !== "schema") continue;
     const name = f.selector.slice(f.selector.indexOf(":") + 1);
     if (f.selector.startsWith("core-v1.1:"))
@@ -299,6 +310,8 @@ test("AC03: message parts, origin and authors", () => {
     "message.service_author",
     "message.agent_mention",
     "message.agent_null_origin",
+    "message.agent_no_installation",
+    "message.agent_membership",
     "message.human_origin",
     "message.human_streaming",
     "source.no_fields",
@@ -347,6 +360,9 @@ test("AC05: the eight inbox kinds with their subjects and machines; read state i
     "inbox.failed_open",
   ])
     assert.equal(fixture(id).valid, false, id);
+  // The projectId filter matches only the viewer-relative context (no hidden-project oracle).
+  assert.match(core11.InboxFilter.description, /viewer-relative/);
+  assert.match(core11.InboxFilter.properties.projectId.description, /viewer-relative/);
 });
 
 test("AC06: the additive event registry", () => {
@@ -407,11 +423,19 @@ test("AC06: the additive event registry", () => {
     "event.null_payload_with_ref",
     "event.ref_without_payload",
     "event.artifact_ref",
+    "event.ref_other_organization",
+    "event.ref_other_workspace",
+    "event.ref_other_store",
+    "event.ref_other_event",
   ]) {
     assert.equal(fixture(id).valid, false, id);
     assert.equal(inspectEvent(fixture(id).value), false, id);
     assert.equal(validateCurrentDefinition("EventEnvelope", fixture(id).value), false, id);
   }
+  // The payloadRef binding is a code rule: the exact selector cannot express it, which
+  // is why product code never validates an envelope by that selector (verify:boundaries).
+  for (const id of ["event.ref_other_organization", "event.ref_other_event"])
+    assert.equal(validateDefinition("core-v1.1", "EventEnvelope", fixture(id).value), true, id);
   // A nulled payload nulls its ref; the envelope then needs only a registered type.
   assert.equal(validateCurrentDefinition("EventEnvelope", fixture("event.redacted").value), true);
   // A stream frame carries only a registered envelope.
@@ -472,6 +496,121 @@ test("AC06: the additive event registry", () => {
   assert.deepEqual(inspectEventRegistry(registry, large), [
     "EVENT_PAYLOAD_TOO_LARGE:ProjectCreatedPayload",
   ]);
+  // `since` is a known contract minor from 1.1 through the current version.
+  assert.deepEqual(eventRegistrySince, ["1.1"]);
+  for (const since of ["1", "1.2", "2.0"])
+    assert.match(
+      mutate((r) => (r.events[0].since = since)).join(),
+      /EVENT_REGISTRY_INVALID/,
+      since,
+    );
+});
+
+test("AC06: registry rows are pinned in the release baseline and append-only", () => {
+  assert.equal(baseline.event_registry.path, eventRegistryPath);
+  assert.deepEqual(
+    Object.keys(baseline.event_registry.rows),
+    registry.events.map((r) => r.eventType),
+  );
+  assert.deepEqual(inspectEventRegistryBaseline(baseline, registry), []);
+  for (const row of registry.events)
+    assert.equal(baseline.event_registry.rows[row.eventType], eventRowDigest(row), row.eventType);
+  const delta = (change) => {
+    const copy = structuredClone(registry);
+    change(copy.events);
+    return inspectEventRegistryBaseline(baseline, copy);
+  };
+  const message = registry.events.findIndex((r) => r.eventType === "message.created");
+  assert.deepEqual(
+    delta((rows) => (rows[message].aggregateType = "conversation")),
+    ["UNREVIEWED_EVENT_ROW_DELTA:message.created"],
+  );
+  assert.deepEqual(
+    delta((rows) => (rows[message].payloadDefinition = "MessageStatusChangedPayload")),
+    ["UNREVIEWED_EVENT_ROW_DELTA:message.created"],
+  );
+  assert.deepEqual(delta((rows) => rows.splice(message, 1)).slice(0, 1), [
+    "UNREVIEWED_EVENT_ROW_DELTA:message.created",
+  ]);
+  assert.deepEqual(
+    delta((rows) => rows.push({ ...rows[0], eventType: "goal.archived" })),
+    ["UNBASELINED_EVENT_ROW:goal.archived"],
+  );
+  assert.deepEqual(
+    inspectEventRegistryBaseline({ ...baseline, event_registry: undefined }, registry),
+    ["UNBASELINED_EVENT_REGISTRY"],
+  );
+  // A row appended and pinned passes.
+  const appended = structuredClone(registry);
+  appended.events.push({ ...registry.events[0], eventType: "goal.archived" });
+  const pinned = structuredClone(baseline);
+  pinned.event_registry.rows["goal.archived"] = eventRowDigest(appended.events.at(-1));
+  assert.deepEqual(inspectEventRegistryBaseline(pinned, appended), []);
+});
+
+test("refined v1.1 definitions are validated only through validateCurrentDefinition", () => {
+  // The boundary list equals the names validation.ts refines beyond their schemas.
+  const source = readFileSync("packages/contracts/src/validation.ts", "utf8");
+  const body = source.slice(source.indexOf("export function validateCurrentDefinition"));
+  const refined = [...body.slice(0, body.indexOf("\n}\n")).matchAll(/name === "([A-Za-z]+)"/g)]
+    .map((m) => m[1])
+    .sort();
+  assert.deepEqual(refined, [...refinedDefinitionNames]);
+  for (const name of refinedDefinitionNames) {
+    for (const code of [
+      `validateDefinition("core-v1.1", "${name}", value);`,
+      `const v = validators["core-v1.1:${name}"];`,
+    ])
+      assert.deepEqual(inspectRefinedSelectorUse("packages/work/src/x.ts", code), [
+        `REFINED_DEFINITION_BYPASS:packages/work/src/x.ts:${name}`,
+      ]);
+    assert.deepEqual(
+      inspectRefinedSelectorUse(
+        "packages/work/src/x.ts",
+        `validateCurrentDefinition("${name}", value); type T = CoreV1_1_${name};`,
+      ),
+      [],
+    );
+    // Tests and generated files may use the exact selector.
+    assert.deepEqual(
+      inspectRefinedSelectorUse(
+        "tests/x.test.mjs",
+        `validateDefinition("core-v1.1", "${name}", v);`,
+      ),
+      [],
+    );
+  }
+  assert.deepEqual(
+    inspectRefinedSelectorUse(
+      "packages/contracts/src/generated/runtime-validators.mjs",
+      'export const s = "core-v1.1:EventEnvelope";',
+    ),
+    [],
+  );
+});
+
+test("AskAdminReadRecord: never the reader's own Ask, each Ask once (ADR-0016 item 5)", () => {
+  const cases = fixtures.filter((f) => f.kind === "current");
+  assert.ok(cases.some((f) => f.valid) && cases.some((f) => !f.valid));
+  for (const f of cases) {
+    assert.equal(f.definition, "AskAdminReadRecord", f.id);
+    assert.equal(inspectAskAdminReadRecord(f.value), f.valid, f.id);
+    assert.equal(validateCurrentDefinition("AskAdminReadRecord", f.value), f.valid, f.id);
+  }
+  // The schema alone admits a second owner for one conversation and the reader's own Ask.
+  for (const id of [
+    "admin_read.current.same_conversation_two_owners",
+    "admin_read.current.own_ask_listed",
+    "admin_read.current.own_conversation",
+  ])
+    assert.equal(
+      validateDefinition("core-v1.1", "AskAdminReadRecord", fixture(id).value),
+      true,
+      id,
+    );
+  // An exact duplicate is schema-invalid (uniqueItems).
+  assert.equal(fixture("admin_read.duplicate_ask").valid, false);
+  assert.equal(core11.AskAdminReadRecord.anyOf[0].properties.asks.uniqueItems, true);
 });
 
 test("AC07: eight catalogue entries with every field; six human_only; no control; dropped IDs absent", () => {
@@ -543,7 +682,9 @@ test("AC07: eight catalogue entries with every field; six human_only; no control
 
 test("AC09: the collaboration permission rows pass the work-permissions contract check", () => {
   const byId = new Map(catalogue.capabilities.map((c) => [c.id, c]));
-  const reasons = /^(subject_key|viewer_identity|viewer_relative_position|derived_from:.+)$/;
+  const reasons =
+    /^(subject_key|viewer_identity|viewer_relative_position|reviewer_rule|derived_from:.+)$/;
+  const verbsOf = (r) => (typeof r.verb === "string" ? [r.verb] : [r.verb.own, r.verb.other]);
   for (const [key, rule] of Object.entries(collaborationPermissions)) {
     assert.ok(rule.requires.length > 0, key);
     for (const requirement of rule.requires) {
@@ -561,6 +702,17 @@ test("AC09: the collaboration permission rows pass the work-permissions contract
     }
     for (const other of rule.composes)
       assert.ok(Object.hasOwn(collaborationPermissions, other), key);
+    // A subject rule names existing rows for each subject kind.
+    if (rule.subject) {
+      assert.deepEqual(Object.keys(rule.subject).sort(), ["ask", "project", "task"], key);
+      for (const rows of Object.values(rule.subject)) {
+        assert.ok(rows.length > 0, key);
+        for (const other of rows) assert.ok(Object.hasOwn(collaborationPermissions, other), key);
+      }
+    }
+    // Referenced inputs are fields the row's write requests.
+    for (const field of rule.references)
+      assert.ok(rule.requires[0].fields.includes(field), `${key} ${field}`);
     if (rule.reads) {
       // Each read requests every non-metadata field its definition returns, or names why it need not.
       const definition = core11[rule.reads.definition];
@@ -572,6 +724,8 @@ test("AC09: the collaboration permission rows pass the work-permissions contract
         assert.ok(requested !== (ungated !== undefined), `${key} ${property}`);
         if (ungated) {
           assert.match(ungated, reasons, `${key} ${property}`);
+          // Only the reviewer rule of a decider shows a record without requested fields.
+          if (ungated === "reviewer_rule") assert.equal(rule.holder, "decider", key);
           if (ungated.startsWith("derived_from:"))
             assert.ok(fields.includes(ungated.slice(13)), key);
         }
@@ -603,6 +757,60 @@ test("AC09: the collaboration permission rows pass the work-permissions contract
     ],
   );
   assert.equal(collaborationPermissions["ask.read"].agents, "ask_envelope");
+  // Rows compose without cycles, through `composes` and subject rules alike.
+  const next = (k) => [
+    ...collaborationPermissions[k].composes,
+    ...Object.values(collaborationPermissions[k].subject ?? {}).flat(),
+  ];
+  const acyclic = (k, path = []) => {
+    assert.ok(!path.includes(k), [...path, k].join(" -> "));
+    for (const other of next(k)) acyclic(other, [...path, k]);
+  };
+  for (const key of Object.keys(collaborationPermissions)) acyclic(key);
+  // Message reads and posts need the subject view (§3 part (a)) and every source.
+  const subjectViews = { project: ["project.subjectView"], task: ["task.subjectView"] };
+  const messageRows = Object.entries(collaborationPermissions).filter(
+    ([, r]) => r.requires[0].capabilityId === "workspace.conversation.post",
+  );
+  assert.deepEqual(messageRows.map(([k]) => k).sort(), [
+    "ask.read",
+    "message.post",
+    "message.read",
+  ]);
+  for (const key of ["message.read", "message.post"]) {
+    const rule = collaborationPermissions[key];
+    assert.deepEqual(
+      [rule.subject.project, rule.subject.task],
+      [subjectViews.project, subjectViews.task],
+      key,
+    );
+    assert.equal(rule.everySource, true, key);
+  }
+  // An Ask's subject is its owner (agents: the owner's Ask envelope); an admin only reads.
+  assert.deepEqual(collaborationPermissions["message.read"].subject.ask, [
+    "ask.read",
+    "ask.adminRead",
+  ]);
+  assert.deepEqual(collaborationPermissions["message.post"].subject.ask, ["ask.read"]);
+  for (const [key, rule] of Object.entries(collaborationPermissions))
+    if (key !== "message.read" && key !== "message.post") assert.equal(rule.subject, null, key);
+  // Inputs that name ids pass the §3 reference rule: tab artifacts, the pin anchor, cited
+  // parts and reply, the Ask store, and the access request's scope and context.
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(collaborationPermissions)
+        .filter(([, r]) => r.references.length)
+        .map(([k, r]) => [k, [...r.references]]),
+    ),
+    {
+      "ask.create": ["storeId"],
+      "message.post": ["parts", "replyToMessageId"],
+      "project.create": ["tabs"],
+      "project.revise": ["tabs"],
+      "project.pin": ["beforeProjectId"],
+      "accessRequest.create": ["scope", "context"],
+    },
+  );
   // The Ask admin row (ADR-0016 item 5): administer on conversation.create over W, audited, read-only, never agents.
   const admin = collaborationPermissions["ask.adminRead"];
   assert.deepEqual(
@@ -624,7 +832,7 @@ test("AC09: the collaboration permission rows pass the work-permissions contract
       true,
       "never",
       "ask_admin",
-      ["message.read"],
+      [],
     ],
   );
   assert.deepEqual(
@@ -633,37 +841,63 @@ test("AC09: the collaboration permission rows pass the work-permissions contract
       .map(([k]) => k),
     ["ask.adminRead"],
   );
-  // Only the admin row uses administer on conversation.create; no write row uses it.
+  // Only the admin row uses administer on conversation.create, by a fixed or an ownership verb.
   for (const [key, rule] of Object.entries(collaborationPermissions))
     for (const r of rule.requires)
-      if (r.capabilityId === askAdminGrant.capabilityId && r.verb === "administer")
+      if (r.capabilityId === askAdminGrant.capabilityId && verbsOf(r).includes("administer"))
         assert.equal(key, "ask.adminRead");
   // Deciders are reviewers of the would-be grant revision; withdraw and mark stay with their holder.
+  const decider = collaborationPermissions["accessRequest.decide"];
   assert.deepEqual(
-    collaborationPermissions["accessRequest.decide"].requires.map((r) => [
-      r.capabilityId,
-      r.verb,
-      r.resource,
-    ]),
+    decider.requires.map((r) => [r.capabilityId, r.verb, r.resource]),
     [
       ["governance.approval.decide", "approve", "workspace"],
       ["governance.grants.revise", "approve", "requested_scope"],
     ],
   );
+  // The decider requests every approval.decide input field, as reviewerEligible
+  // (`decideFields` in packages/policy/src/review.ts) does: a partial grant never decides.
+  const decideFields = Object.keys(byId.get("governance.approval.decide").input.fields);
+  assert.deepEqual([...decider.requires[0].fields], decideFields);
+  assert.deepEqual([...approvalDecideFields], decideFields);
+  assert.match(
+    readFileSync("packages/policy/src/review.ts", "utf8"),
+    /const decideFields = Object\.freeze\(\s*Object\.keys\(capabilities\.get\("governance\.approval\.decide"\)\?\.input\.fields/,
+  );
+  // The decider's read returns the same AccessRequest fields as the requester's read.
+  assert.equal(decider.reads.definition, "AccessRequest");
+  assert.deepEqual(Object.keys(decider.reads.ungated), [
+    ...collaborationPermissions["accessRequest.read"].requires[0].fields,
+  ]);
   assert.equal(collaborationPermissions["accessRequest.withdraw"].holder, "requester");
   assert.equal(collaborationPermissions["inbox.mark"].holder, "recipient");
   assert.ok(Object.isFrozen(collaborationPermissions));
   assert.ok(Object.isFrozen(collaborationPermissions["project.read"].requires[0].fields));
-  // The binding template check (ADR-0016 item 5).
+  // The binding template check (ADR-0016 item 5) is default-deny: only the owner v2
+  // and workspace-admin-v2 templates may carry the grant.
+  assert.deepEqual([...askAdminTemplateIds], ["owner-bootstrap-v2", "workspace-admin-v2"]);
   const carries = { capabilityId: "workspace.conversation.create", verbs: ["view", "administer"] };
   assert.deepEqual(
     askAdminTemplateViolations([
-      { id: "owner-v2", grants: [carries] },
+      { id: "owner-bootstrap-v2", grants: [carries] },
       { id: "workspace-admin-v2", grants: [carries] },
       { id: "workspace-member-v2", grants: [{ ...carries, verbs: ["execute"] }] },
       { id: "workspace-member-v3", grants: [carries] },
+      { id: "workspace-members-v2", grants: [carries] },
+      { id: "workspace-admin-v1", grants: [carries] },
+      { id: "owner-bootstrap-v1", grants: [carries] },
+      { id: "seo-specialist-v1", grants: [carries] },
+      { id: "owner-v2", grants: [carries] },
+      { id: "viewer-v1", grants: [{ ...carries, verbs: ["view"] }] },
     ]),
-    ["workspace-member-v3"],
+    [
+      "workspace-member-v3",
+      "workspace-members-v2",
+      "workspace-admin-v1",
+      "owner-bootstrap-v1",
+      "seo-specialist-v1",
+      "owner-v2",
+    ],
   );
 });
 

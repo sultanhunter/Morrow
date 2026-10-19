@@ -2772,6 +2772,110 @@
       }
     },
     {
+      "id": "P01.T02c.message.agent_no_installation",
+      "kind": "schema",
+      "selector": "core-v1.1:Message",
+      "valid": false,
+      "value": {
+        "schemaVersion": 1,
+        "id": "message_m1",
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "storeId": null,
+        "revision": 1,
+        "createdAt": "2026-10-19T10:00:00Z",
+        "updatedAt": "2026-10-19T10:00:00Z",
+        "conversationId": "conversation_c",
+        "position": "pos_AbCdEfGhIjKlMnOp",
+        "author": {
+          "kind": "agent",
+          "principalId": "agent_i",
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "membershipId": null,
+          "installationId": null,
+          "mandateId": null
+        },
+        "status": "streaming",
+        "parts": [],
+        "replyToMessageId": null,
+        "restrictedSources": [
+          {
+            "capabilityId": "orders.costs.read",
+            "resource": {
+              "organizationId": "org_o",
+              "workspaceId": "workspace_w",
+              "storeId": "store_a",
+              "connectionId": null,
+              "kind": "product",
+              "id": "product_p"
+            },
+            "accountId": null,
+            "fields": [
+              "cost"
+            ]
+          }
+        ],
+        "contextTaint": "none",
+        "origin": {
+          "kind": "run",
+          "runId": "run_r"
+        }
+      }
+    },
+    {
+      "id": "P01.T02c.message.agent_membership",
+      "kind": "schema",
+      "selector": "core-v1.1:Message",
+      "valid": false,
+      "value": {
+        "schemaVersion": 1,
+        "id": "message_m1",
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "storeId": null,
+        "revision": 1,
+        "createdAt": "2026-10-19T10:00:00Z",
+        "updatedAt": "2026-10-19T10:00:00Z",
+        "conversationId": "conversation_c",
+        "position": "pos_AbCdEfGhIjKlMnOp",
+        "author": {
+          "kind": "agent",
+          "principalId": "agent_i",
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "membershipId": "membership_m",
+          "installationId": "installation_i",
+          "mandateId": null
+        },
+        "status": "streaming",
+        "parts": [],
+        "replyToMessageId": null,
+        "restrictedSources": [
+          {
+            "capabilityId": "orders.costs.read",
+            "resource": {
+              "organizationId": "org_o",
+              "workspaceId": "workspace_w",
+              "storeId": "store_a",
+              "connectionId": null,
+              "kind": "product",
+              "id": "product_p"
+            },
+            "accountId": null,
+            "fields": [
+              "cost"
+            ]
+          }
+        ],
+        "contextTaint": "none",
+        "origin": {
+          "kind": "run",
+          "runId": "run_r"
+        }
+      }
+    },
+    {
       "id": "P01.T02c.message.human_origin",
       "kind": "schema",
       "selector": "core-v1.1:Message",
@@ -5377,6 +5481,203 @@
         "conversationId": "conversation_maya",
         "askOwnerPrincipalId": "human_maya",
         "messageCount": 51
+      }
+    },
+    {
+      "id": "P01.T02c.admin_read.duplicate_ask",
+      "kind": "schema",
+      "selector": "core-v1.1:AskAdminReadRecord",
+      "valid": false,
+      "value": {
+        "readerPrincipalId": "human_ana",
+        "workspaceId": "workspace_w",
+        "correlationId": "correlation_c",
+        "readAt": "2026-10-19T10:00:00Z",
+        "readKind": "list",
+        "asks": [
+          {
+            "conversationId": "conversation_maya",
+            "askOwnerPrincipalId": "human_maya"
+          },
+          {
+            "conversationId": "conversation_maya",
+            "askOwnerPrincipalId": "human_maya"
+          }
+        ]
+      }
+    },
+    {
+      "id": "P01.T02c.admin_read.current.list",
+      "kind": "current",
+      "definition": "AskAdminReadRecord",
+      "valid": true,
+      "value": {
+        "readerPrincipalId": "human_ana",
+        "workspaceId": "workspace_w",
+        "correlationId": "correlation_c",
+        "readAt": "2026-10-19T10:00:00Z",
+        "readKind": "list",
+        "asks": [
+          {
+            "conversationId": "conversation_maya",
+            "askOwnerPrincipalId": "human_maya"
+          },
+          {
+            "conversationId": "conversation_leo",
+            "askOwnerPrincipalId": "human_leo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "P01.T02c.admin_read.current.list_empty",
+      "kind": "current",
+      "definition": "AskAdminReadRecord",
+      "valid": true,
+      "value": {
+        "readerPrincipalId": "human_ana",
+        "workspaceId": "workspace_w",
+        "correlationId": "correlation_c",
+        "readAt": "2026-10-19T10:00:00Z",
+        "readKind": "list",
+        "asks": []
+      }
+    },
+    {
+      "id": "P01.T02c.admin_read.current.conversation",
+      "kind": "current",
+      "definition": "AskAdminReadRecord",
+      "valid": true,
+      "value": {
+        "readerPrincipalId": "human_ana",
+        "workspaceId": "workspace_w",
+        "correlationId": "correlation_c",
+        "readAt": "2026-10-19T10:00:00Z",
+        "readKind": "conversation",
+        "conversationId": "conversation_maya",
+        "askOwnerPrincipalId": "human_maya",
+        "messageCount": 0
+      }
+    },
+    {
+      "id": "P01.T02c.admin_read.current.messages",
+      "kind": "current",
+      "definition": "AskAdminReadRecord",
+      "valid": true,
+      "value": {
+        "readerPrincipalId": "human_ana",
+        "workspaceId": "workspace_w",
+        "correlationId": "correlation_c",
+        "readAt": "2026-10-19T10:00:00Z",
+        "readKind": "messages",
+        "conversationId": "conversation_maya",
+        "askOwnerPrincipalId": "human_maya",
+        "messageCount": 50
+      }
+    },
+    {
+      "id": "P01.T02c.admin_read.current.same_conversation_two_owners",
+      "kind": "current",
+      "definition": "AskAdminReadRecord",
+      "valid": false,
+      "value": {
+        "readerPrincipalId": "human_ana",
+        "workspaceId": "workspace_w",
+        "correlationId": "correlation_c",
+        "readAt": "2026-10-19T10:00:00Z",
+        "readKind": "list",
+        "asks": [
+          {
+            "conversationId": "conversation_maya",
+            "askOwnerPrincipalId": "human_maya"
+          },
+          {
+            "conversationId": "conversation_maya",
+            "askOwnerPrincipalId": "human_leo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "P01.T02c.admin_read.current.duplicate_ask",
+      "kind": "current",
+      "definition": "AskAdminReadRecord",
+      "valid": false,
+      "value": {
+        "readerPrincipalId": "human_ana",
+        "workspaceId": "workspace_w",
+        "correlationId": "correlation_c",
+        "readAt": "2026-10-19T10:00:00Z",
+        "readKind": "list",
+        "asks": [
+          {
+            "conversationId": "conversation_maya",
+            "askOwnerPrincipalId": "human_maya"
+          },
+          {
+            "conversationId": "conversation_maya",
+            "askOwnerPrincipalId": "human_maya"
+          }
+        ]
+      }
+    },
+    {
+      "id": "P01.T02c.admin_read.current.own_ask_listed",
+      "kind": "current",
+      "definition": "AskAdminReadRecord",
+      "valid": false,
+      "value": {
+        "readerPrincipalId": "human_ana",
+        "workspaceId": "workspace_w",
+        "correlationId": "correlation_c",
+        "readAt": "2026-10-19T10:00:00Z",
+        "readKind": "list",
+        "asks": [
+          {
+            "conversationId": "conversation_maya",
+            "askOwnerPrincipalId": "human_maya"
+          },
+          {
+            "conversationId": "conversation_leo",
+            "askOwnerPrincipalId": "human_leo"
+          },
+          {
+            "conversationId": "conversation_ana",
+            "askOwnerPrincipalId": "human_ana"
+          }
+        ]
+      }
+    },
+    {
+      "id": "P01.T02c.admin_read.current.own_conversation",
+      "kind": "current",
+      "definition": "AskAdminReadRecord",
+      "valid": false,
+      "value": {
+        "readerPrincipalId": "human_ana",
+        "workspaceId": "workspace_w",
+        "correlationId": "correlation_c",
+        "readAt": "2026-10-19T10:00:00Z",
+        "readKind": "conversation",
+        "conversationId": "conversation_ana",
+        "askOwnerPrincipalId": "human_ana",
+        "messageCount": 0
+      }
+    },
+    {
+      "id": "P01.T02c.admin_read.current.own_messages",
+      "kind": "current",
+      "definition": "AskAdminReadRecord",
+      "valid": false,
+      "value": {
+        "readerPrincipalId": "human_ana",
+        "workspaceId": "workspace_w",
+        "correlationId": "correlation_c",
+        "readAt": "2026-10-19T10:00:00Z",
+        "readKind": "messages",
+        "conversationId": "conversation_ana",
+        "askOwnerPrincipalId": "human_ana",
+        "messageCount": 3
       }
     },
     {
@@ -9866,6 +10167,178 @@
           "storeId": null,
           "kind": "artifact",
           "id": "artifact_a",
+          "revision": 1,
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "id": "P01.T02c.event.ref_other_organization",
+      "kind": "event",
+      "valid": false,
+      "value": {
+        "schemaVersion": 2,
+        "eventId": "event_e1",
+        "eventType": "message.created",
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "storeId": null,
+        "aggregateType": "message",
+        "aggregateId": "aggregate_a",
+        "aggregateRevision": 1,
+        "streamPosition": "pos_AbCdEfGhIjKlMnOp",
+        "correlationId": "correlation_c",
+        "causationId": null,
+        "actor": {
+          "kind": "human",
+          "principalId": "human_maya",
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "membershipId": "membership_maya",
+          "installationId": null,
+          "mandateId": null
+        },
+        "occurredAt": "2026-10-19T10:00:00Z",
+        "payload": {
+          "conversationId": "conversation_c",
+          "status": "completed",
+          "authorKind": "human"
+        },
+        "payloadRef": {
+          "organizationId": "org_other",
+          "workspaceId": "workspace_w",
+          "storeId": null,
+          "kind": "event_payload",
+          "id": "event_e1",
+          "revision": 1,
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "id": "P01.T02c.event.ref_other_workspace",
+      "kind": "event",
+      "valid": false,
+      "value": {
+        "schemaVersion": 2,
+        "eventId": "event_e1",
+        "eventType": "message.created",
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "storeId": null,
+        "aggregateType": "message",
+        "aggregateId": "aggregate_a",
+        "aggregateRevision": 1,
+        "streamPosition": "pos_AbCdEfGhIjKlMnOp",
+        "correlationId": "correlation_c",
+        "causationId": null,
+        "actor": {
+          "kind": "human",
+          "principalId": "human_maya",
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "membershipId": "membership_maya",
+          "installationId": null,
+          "mandateId": null
+        },
+        "occurredAt": "2026-10-19T10:00:00Z",
+        "payload": {
+          "conversationId": "conversation_c",
+          "status": "completed",
+          "authorKind": "human"
+        },
+        "payloadRef": {
+          "organizationId": "org_o",
+          "workspaceId": "workspace_other",
+          "storeId": null,
+          "kind": "event_payload",
+          "id": "event_e1",
+          "revision": 1,
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "id": "P01.T02c.event.ref_other_store",
+      "kind": "event",
+      "valid": false,
+      "value": {
+        "schemaVersion": 2,
+        "eventId": "event_e1",
+        "eventType": "message.created",
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "storeId": null,
+        "aggregateType": "message",
+        "aggregateId": "aggregate_a",
+        "aggregateRevision": 1,
+        "streamPosition": "pos_AbCdEfGhIjKlMnOp",
+        "correlationId": "correlation_c",
+        "causationId": null,
+        "actor": {
+          "kind": "human",
+          "principalId": "human_maya",
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "membershipId": "membership_maya",
+          "installationId": null,
+          "mandateId": null
+        },
+        "occurredAt": "2026-10-19T10:00:00Z",
+        "payload": {
+          "conversationId": "conversation_c",
+          "status": "completed",
+          "authorKind": "human"
+        },
+        "payloadRef": {
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "storeId": "store_s",
+          "kind": "event_payload",
+          "id": "event_e1",
+          "revision": 1,
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "id": "P01.T02c.event.ref_other_event",
+      "kind": "event",
+      "valid": false,
+      "value": {
+        "schemaVersion": 2,
+        "eventId": "event_e1",
+        "eventType": "message.created",
+        "organizationId": "org_o",
+        "workspaceId": "workspace_w",
+        "storeId": null,
+        "aggregateType": "message",
+        "aggregateId": "aggregate_a",
+        "aggregateRevision": 1,
+        "streamPosition": "pos_AbCdEfGhIjKlMnOp",
+        "correlationId": "correlation_c",
+        "causationId": null,
+        "actor": {
+          "kind": "human",
+          "principalId": "human_maya",
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "membershipId": "membership_maya",
+          "installationId": null,
+          "mandateId": null
+        },
+        "occurredAt": "2026-10-19T10:00:00Z",
+        "payload": {
+          "conversationId": "conversation_c",
+          "status": "completed",
+          "authorKind": "human"
+        },
+        "payloadRef": {
+          "organizationId": "org_o",
+          "workspaceId": "workspace_w",
+          "storeId": null,
+          "kind": "event_payload",
+          "id": "event_someone_else",
           "revision": 1,
           "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }

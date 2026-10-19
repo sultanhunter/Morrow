@@ -23,11 +23,13 @@ export default {
         ),
       );
     }
-    // P01.T02c (ADR-0016): exact-selector cases and the event registry selector.
+    // P01.T02c (ADR-0016): exact-selector cases, the event registry selector and
+    // the current-definition rules beyond the schemas.
     if (path === "/collaboration") {
-      const { schema, events, payloads } = (await request.json()) as {
+      const { schema, events, current, payloads } = (await request.json()) as {
         schema: { selector: string; value: unknown }[];
         events: unknown[];
+        current: { definition: "AskAdminReadRecord"; value: unknown }[];
         payloads: { eventType: string; aggregateType: string; payload: unknown }[];
       };
       return Response.json({
@@ -35,6 +37,9 @@ export default {
           Object.hasOwn(validators, selector) ? validators[selector]!(value) : null,
         ),
         events: events.map((envelope) => validateCurrentDefinition("EventEnvelope", envelope)),
+        current: current.map(({ definition, value }) =>
+          validateCurrentDefinition(definition, value),
+        ),
         payloads: payloads.map(({ eventType, aggregateType, payload }) =>
           validateEventPayload(eventType, aggregateType, payload),
         ),

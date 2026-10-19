@@ -73,20 +73,52 @@ export function eventRegistered(eventType: unknown, aggregateType: unknown): boo
     eventPayloadSelectors[eventType]!.aggregateType === aggregateType
   );
 }
+type Tenancy = { organizationId: string; workspaceId: string; storeId: string | null };
 // An EventEnvelope@2 that already passed its schema: a registered type and
-// aggregate, and a registered payload unless it was nulled for this viewer
-// (the schema nulls payload and payloadRef together).
+// aggregate, a registered payload unless it was nulled for this viewer (the
+// schema nulls payload and payloadRef together), and a payloadRef bound to this
+// event (§8: the envelope's organization, workspace and store, and id = eventId).
 function registeredEnvelope(envelope: unknown): boolean {
-  const e = envelope as { eventType: unknown; aggregateType: unknown; payload: unknown };
+  const e = envelope as Tenancy & {
+    eventId: string;
+    eventType: unknown;
+    aggregateType: unknown;
+    payload: unknown;
+    payloadRef: (Tenancy & { id: string }) | null;
+  };
+  const ref = e.payloadRef;
   return (
     eventRegistered(e.eventType, e.aggregateType) &&
-    (e.payload === null || registeredEventPayload(e.eventType, e.aggregateType, e.payload))
+    (e.payload === null || registeredEventPayload(e.eventType, e.aggregateType, e.payload)) &&
+    (ref === null ||
+      (ref.organizationId === e.organizationId &&
+        ref.workspaceId === e.workspaceId &&
+        ref.storeId === e.storeId &&
+        ref.id === e.eventId))
+  );
+}
+// An AskAdminReadRecord that already passed its schema (ADR-0016 item 5): an
+// admin read never audits the reader's own Ask, and a list names each Ask once.
+function adminReadRecord(record: unknown): boolean {
+  const r = record as {
+    readerPrincipalId: string;
+    readKind: string;
+    askOwnerPrincipalId?: string;
+    asks?: { conversationId: string; askOwnerPrincipalId: string }[];
+  };
+  if (r.readKind !== "list") return r.askOwnerPrincipalId !== r.readerPrincipalId;
+  const asks = r.asks ?? [];
+  return (
+    asks.every((a) => a.askOwnerPrincipalId !== r.readerPrincipalId) &&
+    new Set(asks.map((a) => a.conversationId)).size === asks.length
   );
 }
 /**
  * Effective definition: the newest core layer that defines the name. For
  * EventEnvelope (@2), and a StreamFrame carrying one, this is the schema plus
- * the event registry selector.
+ * the event registry selector and the payloadRef binding; for
+ * AskAdminReadRecord, the schema plus its reader and uniqueness rules. Product
+ * code validates these three only here, never by their exact selectors.
  */
 export function validateCurrentDefinition(name: CurrentDefinitionName, value: unknown): boolean {
   if (!selected(currentDefinitionSelectors, name, value)) return false;
@@ -95,6 +127,7 @@ export function validateCurrentDefinition(name: CurrentDefinitionName, value: un
     const frame = value as { kind: string; envelope?: unknown };
     return frame.kind !== "event" || registeredEnvelope(frame.envelope);
   }
+  if (name === "AskAdminReadRecord") return adminReadRecord(value);
   return true;
 }
 /** Effective billing definition: the newest billing layer that defines the name (ADR-0015). */

@@ -13,6 +13,7 @@ import type {
   EventPayloadOf,
   EventType,
 } from "./generated/domain";
+import type { approvalDecideFields } from "./work-permissions";
 const goodInput: CapabilityInput<"workspace.goal.create"> = {
   objective: "Investigate",
   storeIds: ["demo"],
@@ -233,3 +234,12 @@ void withText;
 void deleted;
 void emptyPayload;
 void nonEmptyPayload;
+// A decider requests every governance.approval.decide input field (ADR-0011 Q5), as reviewerEligible does.
+type DecideField = keyof CapabilityInput<"governance.approval.decide">;
+type DeciderField = (typeof approvalDecideFields)[number];
+const deciderFields: [DecideField] extends [DeciderField]
+  ? [DeciderField] extends [DecideField]
+    ? true
+    : false
+  : false = true;
+void deciderFields;
