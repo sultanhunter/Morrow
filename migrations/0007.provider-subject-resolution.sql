@@ -12,7 +12,7 @@ DO $$ BEGIN
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname='morrow_identity_resolution'
    AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb
    AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication
-   AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid)) THEN
+   AND morrow_identity.memberships_closed(r.rolname)) THEN
   RAISE EXCEPTION 'RESOLUTION_ROLE_PREREQUISITES_INVALID';
  END IF;
 END $$;
@@ -129,7 +129,7 @@ BEGIN
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname=session_user
    AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole
    AND NOT r.rolinherit AND NOT r.rolreplication
-   AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid)) THEN RETURN; END IF;
+   AND morrow_identity.executor_memberships_closed(r.rolname)) THEN RETURN; END IF;
  IF p_provider IS NULL OR p_environment IS NULL OR p_application IS NULL OR p_client IS NULL
    OR p_issuer IS NULL OR p_token_revision IS NULL OR p_token_digest IS NULL OR p_subject IS NULL OR p_workspace IS NULL
    OR p_provider<>'workos' OR p_environment !~ '^environment_[A-Z0-9]{26}$'

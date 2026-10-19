@@ -583,6 +583,7 @@ try {
   result.checks.push({ name: "zero_outbound_requests", passed: true });
   const paths = [
     "packages/identity/src/workos-workspace-selection.ts",
+    "packages/identity/src/executor-role-preflight.ts",
     "packages/identity/src/workos-authentication-evidence.ts",
     "packages/identity/src/workos-session-token.ts",
     "packages/identity/src/workos-session-status.ts",

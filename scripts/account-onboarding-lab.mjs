@@ -92,6 +92,7 @@ const sourcePaths = [
   "scripts/standalone-session-fixtures.mjs",
   "scripts/fixtures/standalone-login-fixture.mjs",
   "packages/identity/src/account-onboarding.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/fixed-sql-transaction.ts",
   "packages/identity/src/workos-browser-session-admission.ts",
   "packages/identity/src/login-flow-custody.ts",

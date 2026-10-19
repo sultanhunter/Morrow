@@ -2,7 +2,7 @@ BEGIN;
 -- Local provider-free custody only; original identity SQL remains untouched.
 DO $$ BEGIN
  IF current_user<>'morrow_identity_owner' OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='morrow_identity_owner' AND NOT rolcanlogin AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolinherit AND NOT rolreplication)
- OR (SELECT count(*) FROM pg_roles r WHERE r.rolname IN ('morrow_identity_login','morrow_identity_login_maintenance') AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))<>2
+ OR (SELECT count(*) FROM pg_roles r WHERE r.rolname IN ('morrow_identity_login','morrow_identity_login_maintenance') AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND morrow_identity.memberships_closed(r.rolname))<>2
  OR EXISTS(SELECT 1 FROM pg_roles r,pg_roles o WHERE o.rolname='morrow_identity_owner' AND r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance') AND (pg_has_role(r.oid,o.oid,'MEMBER') OR pg_has_role(o.oid,r.oid,'MEMBER'))) THEN RAISE EXCEPTION 'LOGIN_ROLE_PREREQUISITES_INVALID'; END IF;
 END $$;
 CREATE TABLE morrow_identity.login_controller_configurations (
@@ -71,7 +71,7 @@ CREATE FUNCTION morrow_identity.login_role_safe(maintenance boolean DEFAULT fals
 LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
  SELECT current_user='morrow_identity_owner' AND session_user=CASE WHEN maintenance THEN 'morrow_identity_login_maintenance' ELSE 'morrow_identity_login' END
  AND EXISTS(SELECT 1 FROM pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
- AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
+ AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND morrow_identity.executor_memberships_closed(r.rolname))
  AND NOT EXISTS(SELECT 1 FROM pg_roles r,pg_roles o WHERE o.rolname='morrow_identity_owner' AND r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance') AND (pg_has_role(r.oid,o.oid,'MEMBER') OR pg_has_role(o.oid,r.oid,'MEMBER')))
 $$;
 CREATE FUNCTION morrow_identity.login_configuration_current(p_configuration text,p_workspace text) RETURNS boolean

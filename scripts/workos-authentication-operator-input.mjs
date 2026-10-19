@@ -88,6 +88,7 @@ export const workosAuthenticationOperatorSourcePaths = Object.freeze([
   "packages/identity/src/workos-session-status.ts",
   "packages/identity/src/workos-authentication-evidence.ts",
   "packages/identity/src/authentication-exchange-admission.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/contracts/src/validation.ts",
   "packages/contracts/src/generated/runtime-validators.mjs",
   "packages/identity/package.json",

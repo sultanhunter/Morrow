@@ -32,6 +32,7 @@ const sourcePaths = [
   "scripts/standalone-session-fixtures.mjs",
   "scripts/fixtures/standalone-linking-fixture.mjs",
   "packages/identity/src/workspace-store-linking-control.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/workspace-store-linking.ts",
   "packages/identity/src/standalone-workspace-bootstrap.ts",
   "packages/identity/src/standalone-request-guard.ts",

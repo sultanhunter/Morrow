@@ -7,6 +7,7 @@ import { writeArtifact } from "./artifacts.mjs";
 
 const paths = [
   "packages/identity/src/workspace-store-linking.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/policy/src/index.ts",
   "scripts/fixtures/workspace-store-linking-worker.ts",
   "scripts/workspace-store-linking-workers-lab.mjs",

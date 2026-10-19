@@ -10,15 +10,11 @@ DO $$ BEGIN
  OR (SELECT count(*) FROM pg_catalog.pg_roles r WHERE r.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api') AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication)<>3
  OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname='morrow_api_worker' AND r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication)
  -- Exactly the two reviewed memberships among the work roles (inherit false, set
- -- true), plus at most one PG16+ CREATEROLE provisioning row per role whose
- -- member is not a Morrow role (admin true, inherit false, set false).
+ -- true), and every membership row naming a Morrow role is in the ADR-0020 closed set.
  OR (SELECT count(*) FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles g ON g.oid=m.roleid JOIN pg_catalog.pg_roles u ON u.oid=m.member
    WHERE (g.rolname,u.rolname) IN (('morrow_work_api','morrow_api_worker'),('morrow_work_command','morrow_work_owner'))
    AND NOT m.admin_option AND NOT m.inherit_option AND m.set_option)<>2
- OR EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles g ON g.oid=m.roleid JOIN pg_catalog.pg_roles u ON u.oid=m.member
-   WHERE (g.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker') OR u.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker'))
-   AND (g.rolname,u.rolname) NOT IN (('morrow_work_api','morrow_api_worker'),('morrow_work_command','morrow_work_owner'))
-   AND NOT (u.rolname NOT LIKE 'morrow\_%' AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option))
+ OR NOT morrow_identity.morrow_memberships_closed()
  OR EXISTS(SELECT 1 FROM pg_catalog.pg_roles w,pg_catalog.pg_roles i
    WHERE w.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker')
    AND (i.rolname='morrow_api' OR i.rolname LIKE 'morrow\_identity%')

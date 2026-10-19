@@ -4,7 +4,7 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active packets
 
-`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#19. The latest:
+`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#20. The latest:
 - PR #10 P05.T01x Part B (`e51e5b7`); PR #12 P06.T01a (`06e4dfe`; Verified waits for the P05 exit gate); PR #13 the ADR-0018 Proposal@2 edit (`08e5ebf`); PR #14 P01.T04a PR-A (`bba3cec`).
 - PR #15 P14.T01a PR-1 (`5ad6cc7`, provisional under ADR-0003).
 - PR #11 P03.T04e PR-A (`f8314e8`). Still open: its AC22 `workflow_dispatch` run of `heavy-faults.yml` (about 18 billed minutes), and the AC04 hosted totals and hosted part of AC05, which P03.T04f moves to its first hosted `checks` job.
@@ -12,10 +12,11 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #17 docs, merged as `8b451e8`: ADR-0019, ADR-0020 and ADR-0021 Accepted; `staging-card-1`; P04.T01i and P04.T01j PR-A packets; the ADR-0014 item 4 and 5 amendments; `docs/plan/mvp.md`; the 2026-10-19 live evidence; the Mobbin design references.
 - PR #18 P14.T01a PR-2 (`30a6331`): account and work wiring in the provisional UI.
 - PR #19 P01.T02c PR-A (`e0adf5d`): collaboration contracts v1.1 (ADR-0016).
+- PR #20 P01.T04a PR-B (`8183e16`): the billing route library `@morrow/policy/billing-state` and its decision tables.
 
 In progress:
-- **P01.T04a PR-B** (`claude/p01-t04a-b-billing-routes`, merge train): the billing route library `@morrow/policy/billing-state` (origin, phase, payment classification, payer selection, entitlement), the generated decision tables, the constraints reader and the contract simulator on billing v1.1; 11 review findings addressed in `360aac4`.
-- Built branches waiting for the merge train (next actions): P04.T01j PR-B, P05.T01y, P06.T01b PR-1, P05.T01ab, P04.T01i PR-B. `claude/mvp-briefs` holds the M2–M5 briefs and the proposed ADR-0022.
+- **P04.T01j PR-B** (`claude/p04-t01j-createrole-administrator`, merge train; merged with `main` at `8183e16`; M-J1 acknowledged by the owner): migrations 0005–0015 rebaselined once under ADR-0020, the frozen rebaseline record (`closedBy` null; the 0005 preamble pinned; ADR-0020's item 7 quote required), the D5 preflight in eight adapters and both oracles, the single-transaction runner rule (`scripts/migration-sql.mjs`, also in `inspectMigrations`), `lab:createrole-administrator` in `pg-core` (118 checks: N1–N15, C1–C6, the inline-guard entry points) and the conformance suite in createrole mode. Tier 2 AI review (separate context, same model family) done: 11 findings addressed. Local `npm run ci` (2,758 unit tests), every local pg group and `lab:workspace-api-workers` pass. Open: hosted CI (with `pgwire`, `ui`, the `core-http` leg time), the owner's M-J1 acknowledgement, AC14 (with P04.T01i PR-B), AC15–AC16 (hosted).
+- Built branches waiting for the merge train (next actions): P05.T01y, P06.T01b PR-1, P05.T01ab, P04.T01i PR-B. `claude/mvp-briefs` holds the M2–M5 briefs and the proposed ADR-0022.
 
 ## Decisions recorded 2026-10-18 and 2026-10-19 (owner, in chat)
 
@@ -37,7 +38,7 @@ In progress:
 ## Next actions
 
 MVP fast track (ADR-0021; `docs/plan/mvp.md`). M1, staging live:
-1. Merge train: P14.T01a PR-2 (#18) and P01.T02c PR-A (#19) merged; next P01.T04a PR-B (this branch, with the walkthrough-count fix 86→90), P04.T01j PR-B, P05.T01y (0016 on the ADR-0020 helpers), P06.T01b PR-1, P05.T01ab, then the trimmed P04.T01i PR-B. Each PR gets one AI review (separate context, same model family), with the security lens where it applies.
+1. Merge train: #18, #19 and #20 merged; next P04.T01j PR-B (this branch), P05.T01y (0016 on the ADR-0020 helpers), P06.T01b PR-1, P05.T01ab, then the trimmed P04.T01i PR-B. Each PR gets one AI review (separate context, same model family), with the security lens where it applies.
 2. **The trimmed P04.T01i PR-B:** deploy after green CI, migrations, roles and secrets. It keeps `staging:kill`/`unkill` with the flag re-read around the api deploy, the ADR-0019 item 4 deploy gates 1–6, and the census at every deploy. Card effect E11 (Claude's rollbacks) is suspended until the rollback refusal exists; staging rolls forward instead. AC14's hosted drill, AC15–AC17 and AC19 move past launch (`docs/acceptance/P04.md`).
 3. Staging bring-up under `staging-card-1` once its preconditions hold (below); owner sign-in on staging.
 4. Then M2, M3 and M5 in parallel, each behind the credential-custody gate; M4 (with the ADR-0005 stop controls, M3/M4); M6 (the deletion path before the real-store smoke).
