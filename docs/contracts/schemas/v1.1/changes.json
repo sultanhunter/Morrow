@@ -92,6 +92,13 @@
       "replaces": "billing:CostAllocation",
       "reason": "CostAllocation@2: schemaVersion 2 over AllocationShare@2 shares.",
       "adr": "ADR-0015"
+    },
+    {
+      "kind": "definition",
+      "name": "EventEnvelope",
+      "replaces": "core:EventEnvelope",
+      "reason": "EventEnvelope@2: schemaVersion 2; the v1 payloadRef is an ArtifactRef and event payloads are not artifacts. An additive event registry (docs/contracts/event-registry.json) replaces the closed aggregate enum; payloads carry IDs and statuses only; payload and payloadRef (an EventPayloadRef) are nulled together; streamPosition is sealed per viewer. A v1 envelope is not a valid EventEnvelope@2.",
+      "adr": "ADR-0016"
     }
   ]
 }

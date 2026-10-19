@@ -4,7 +4,7 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 
 ## Read at the start of every session
 1. `docs/progress/STATUS.md`: active packet, last green commit, next action, blockers, pending owner actions.
-2. The active packet in `docs/packets/` (when there is one), and the plan sections it cites.
+2. The active brief in `docs/briefs/` or packet in `docs/packets/` (when present), and the plan sections it cites.
 3. `docs/plan/mvp.md` is the **launch plan** (ADR-0021, MVP fast track). `docs/plan/build-plan.md` is the long-term plan of record and structure (ADR-0001). Decisions live in `docs/decisions/adr/`. `docs/references/*` is supporting detail; where it conflicts with the plan, the plan wins.
 4. `git status` and `git log -5`. Pre-R1 history (evidence, archived plans, the old Page sequences) is in tag `codex-archive-f89ad75`. Recover a file with `git show codex-archive-f89ad75:<path>`.
 
@@ -32,11 +32,14 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 - Applied migrations are immutable. Change the schema only with new forward migrations.
 
 ## Change classification (ADR-0002)
-- **Material** changes need an owner-approved ADR before dependent code (narrowed by ADR-0021 item 5). Material means:
-  - scope, the package/task structure, the authority model, tenancy, retention or public contracts;
-  - provider or model selection, billing, pricing or credits;
-  - gates or dependency edges, deployment boundaries;
-  - spending money, real merchant data, external messages, or creating provider resources.
+- **Material** changes need an owner-approved ADR before dependent code. ADR-0021 item 5 sets the list. Material means:
+  - authority, tenancy or security;
+  - money: billing, pricing and spend;
+  - provider selection;
+  - public contracts;
+  - data retention;
+  - deployment boundaries and credential custody (security);
+  - real merchant data, external messages, or creating provider resources (security, retention or money).
 - **Routine** changes are plain commits with tests: fixes, refactors, CI and harness work, lettered packet splits, wording.
 - Hardening budget: at most two consecutive lettered children on one subsystem without an observable product delta, unless an ADR names the threat being retired.
 - New work uses a one-page brief in `docs/briefs/` (goal, scope, interfaces touched, security notes, test checklist). Full packets only for security-heavy work. No new heavy-fault or soak labs before launch.

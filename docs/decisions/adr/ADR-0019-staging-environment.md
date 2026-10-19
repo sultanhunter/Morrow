@@ -2,6 +2,7 @@
 
 - Status: Accepted 2026-10-19 (owner approval in chat; see Approval). Items 1, 2, 4, 5 and 6, and the per-IP limit in item 8, restate the owner's decisions of 2026-10-19 (chat). The owner's approval of this record also confirms the items marked *Recommended*.
 - Date: 2026-10-19
+- Amended: item 5, 2026-10-19 (owner answer on third-party GitHub access: an exception for the platform GitHub Apps). See Amendments.
 - Amends:
   - ADR-0014 item 5 (when branch protection must exist);
   - ADR-0007 items 1, 3 and 4 (a public workers.dev route on the api, a fourth broker method, and one more provider credential in the broker);
@@ -15,7 +16,7 @@
 - **M1 needs a hosted staging origin.** M1 is "A synthetic person signs in on the hosted staging origin and reaches a workspace; a real-browser Playwright login smoke passes". On 2026-10-19 the owner decided to stand up one live environment now instead of first buying a domain or a GitHub plan.
 - **Accounts.**
   - The Cloudflare account `79ff672d013b8f0956437af6eea3c213` has Workers Paid active, no zones, and the free subdomain `sultanibneusman0.workers.dev`.
-  - `sultanhunter/Morrow` is a private repository on GitHub Free. The branch-protection API answers 403 "Upgrade to GitHub Pro", and Free has no environments for private repositories.
+  - `sultanhunter/Morrow` is a private repository, then on GitHub Free. The branch-protection API answered 403 "Upgrade to GitHub Pro". Environments were also believed unavailable to private repositories on Free, but the `staging` environment and its `main`-only branch policy were created on Free at 11:41 UTC on 2026-10-19 (`docs/evidence/live/2026-10-19-github-staging-environment.md`). The owner bought GitHub Pro later that day, and branch protection on `main` followed.
   - The Neon organisation is on the Free plan.
   - The WorkOS staging environment is `environment_01M4HG7FV7X8EFXE1J9S6GG00R`.
 - **Login lock-out.** Account login start is anonymous. Its per-profile windows (10 per 10 s, 100 open) let anyone lock every sign-in out of a profile (P05.T01x §11). ADR-0009 item 8 required Turnstile and an edge per-IP limiter only before sign-up opens beyond the allowlist.
@@ -36,14 +37,14 @@
    - **ADR-0007 item 1** changes from "P04.T01i adds a domain to the api only" to "P04.T01i adds the workers.dev hostname, and later a custom domain, to the api only". The broker, orchestrator and connector keep `workers_dev:false` and `preview_urls:false`, with no routes.
    - **Later custom domain.** It is a configuration change: the route, the WorkOS redirect, the Turnstile hostname, the login configuration and a keyring rotation. Buying the domain is a per-action decision.
    - *Recommended:* the Worker name `morrow-staging-api`. Also a census at every deploy, which fails if any script, Pages project or dispatch namespace in the account exposes workers.dev or binds `morrow-staging-broker`. `workers.dev` is on the Public Suffix List, so every Worker under the subdomain is same-site with the api; `__Host-` cookies and invariant 22 remain the protections.
-3. **Public reachability (*Recommended*; not decided by the owner).**
+3. **Public reachability (*Recommended*; accepted with this record, as written).**
    - Staging is publicly reachable with no access gate. This answers the plan's question of how staging is kept off the public internet. The controls are:
      - WorkOS public sign-up off and email verification on;
      - self-service only on the staging profile, allowlisted to the owner's test user (ADR-0009 items 10 and 11);
      - Turnstile and per-IP limits (items 6 and 8);
      - synthetic data only (invariant 16).
    - **The alternative is Cloudflare Access on the workers.dev hostname** (Zero Trust Free). It is stronger, but the unattended smoke and CI would then need an Access service token, a further secret. The WorkOS callback would also pass through Access.
-   - When approving this record, the owner may choose the alternative instead. It costs one configuration change and one secret.
+   - The owner approved this record as written, so staging is public with no access gate. Switching to the alternative later costs one configuration change and one secret, and needs a short amendment.
 4. **Continuous deploy from `main` (owner).**
    - A push to `main` whose "Morrow foundation" run succeeds deploys the four staging Workers through `.github/workflows/deploy-staging.yml`. A local `staging:deploy` is possible only from `origin/main` with a green `foundation` check on that exact sha.
    - *Recommended gates:*
@@ -60,7 +61,7 @@
    - **Residual risk, accepted for staging only.** Until protection exists, ADR-0014 items 3 and 4 are rules, not controls. An account that can push to `main` can change the deploy workflow, `ci.yml` or `scripts/staging.mjs` in the same push. That account therefore controls the staging deploy token, which can deploy a broker that reads every staging broker secret.
    - **Mitigations.**
      - Only the owner's account (which Claude uses) can push.
-     - Every other GitHub App, OAuth app, token, deploy key and collaborator is removed before the first deploy.
+     - Every other GitHub App, OAuth app, token, deploy key and collaborator is removed before the first deploy, except the platform GitHub Apps named in the 2026-10-19 exception (see Amendments).
      - If GitHub Pro is bought, protection is turned on at once, at no extra cost.
 6. **Turnstile before staging login (owner); verification in the broker (*Recommended*).**
    - An invisible Turnstile widget guards account login start (`POST /auth/login`) and organization signup (`POST /organizations`).
@@ -93,7 +94,7 @@
    - **M1 is reached with only part of P04.T03a.** P04.T03a's acceptance, "a deliberately failed staging request produces one correlated, redacted event and an alert to a named recipient", stays open, and the P04 Done gate is not claimed. Until P06.T01c, GitHub's failed-run email to the owner is the interim route for an uncertain deploy, rollback or migration.
 10. **Staging database (*Recommended*).**
     - **Project.** A new Neon Free project `morrow-staging` (PG17, AWS us-east-1, no card on file).
-    - **Branches.** A root branch that holds only the empty database `morrow` and is never migrated, and one child branch `staging` that is migrated and bound.
+    - **Branches.** The root branch is never migrated. Neon names it `production` by default (`br-noisy-wind-b7cxr2a1`); that is only Neon's label, and it is not a production resource for the staging card's expiry. It holds Neon's default empty database `neondb` and the empty database `morrow` that P04.T01i D9 step 4(d) creates. One child branch, `staging`, is migrated and bound.
     - **Reset.** `neonctl branches reset staging --parent`, which keeps the branch id and host. Only the owner runs it.
     - **Recovery window.** Neon Free's history window (about 6 hours, as observed) replaces `deployment-policy.json`'s staging `Launch` plan and `pitr_staging` 7 until P04.T04 decides Neon Launch. Staging holds only synthetic data, so a reset stands in for a restore. The seven-day staging recovery requirement stays open in P04.T04.
 11. **More committed identifiers (*Recommended*).** These are committed as reviewed, non-secret values in addition to ADR-0007 item 7's list:
@@ -126,7 +127,7 @@
 
 ## Consequences
 
-- **Readiness.** Staging can go live once the staging card is approved, OQ-1 is settled (ADR-0020 and P04.T01j if B), and P04.T01i PR-B and P05.T01ab have merged. M1 itself, meaning sign-up and the workspace list, also waits for P14.T01a PR-2, which hosts the sign-up widget.
+- **Readiness.** Staging can go live once the staging card is approved, OQ-1 is settled (ADR-0020 and P04.T01j if B), and P04.T01i PR-B and P05.T01ab have merged. M1 itself, meaning sign-up and the workspace list, also waits for P14.T01a PR-2, which hosts the sign-up widget. Before the first deploy, the Codex app is suspended and the AppForge token deleted (Amendments, item 5 exception).
 - **Push access until protection.** Until branch protection exists, push access to `main` is equivalent to custody of the staging broker secrets. Production cannot be created until protection exists (item 5).
 - **Production unchanged.** Production stays unbindable (ADR-0007 item 9).
 - **Two decisions still need recording.** A custom domain, or Cloudflare Access instead of public reachability, is a later configuration change, each recorded by a short amendment to this ADR.
@@ -137,10 +138,27 @@
 
 Owner decisions, 2026-10-19 (IST), in chat, verbatim from the session transcript:
 - The owner asked why staging was needed instead of production from the start, and then, on the staging plan (one live `staging` environment deployed continuously from `main` after `foundation` passes, production-in-waiting, with a clean production created from the same config before the first real merchant), replied: "yes this plan looks good, i logged in the cloudflare account sultanibneusman0@gmail.com in the attached browser, also logged in the work os account and the neon account also".
-- Asked "There's no domain on your Cloudflare account yet. Where should the first live Morrow environment run?", the owner answered "Free workers.dev URL now (Recommended)" (item 1: `sultanibneusman0.workers.dev` on account `79ff672d013b8f0956437af6eea3c213`, with a custom domain later).
+- Asked "There's no domain on your Cloudflare account yet. Where should the first live Morrow environment run?", the owner answered "Free workers.dev URL now (Recommended)" (item 2, the origin: `sultanibneusman0.workers.dev` on account `79ff672d013b8f0956437af6eea3c213`, with a custom domain later).
 - Asked "Earlier we agreed (ADR-0014) to turn on GitHub branch protection (GitHub Pro, about $4/month) before the first hosted deploy. With no users and only test data, should that wait until real production?", the owner answered "Required before production (Recommended)" (item 5).
 - Asked "Login start is anonymous, so a bot could use up the sign-in quota and lock everyone out. Protect it before the live site's login is switched on?", the owner answered "Turnstile + rate limit now (Recommended)" (items 6 and 8).
 
-The items marked *Recommended* (3; the broker placement in 6; 7; the values in 8; 9–15) are confirmed only by the owner's approval of this record, quoted below.
+The items marked *Recommended* (the Worker name and the census in 2; 3; the deploy gates in 4; the broker placement in 6; 7; the values in 8; 9–15) are confirmed only by the owner's approval of this record, quoted below.
 
 Owner approval of this record, 2026-10-19, in chat. Asked "Approve ADR-0019 (staging rules) and the 30-day staging approval card `staging-card-1`?", the owner answered "Approve both (Recommended)". This accepts every item above, including the *Recommended* ones: item 3 as written (public reachability with no access gate, not the Cloudflare Access alternative) and the ADR-0014 item 5 amendment in item 5. The same answer approves the staging approval card `staging-card-1` (`docs/decisions/approvals/staging.md`). On P04.T01i OQ-2 (item 15, GitHub Actions) the owner answered "GitHub Pro (Recommended)": GitHub Pro, a capped Actions spending limit and branch protection on `main` as soon as Pro is active.
+
+## Amendments
+
+### 2026-10-19: item 5 exception, third-party GitHub access
+
+Item 5's mitigation "Every other GitHub App, OAuth app, token, deploy key and collaborator is removed before the first deploy" now carries one exception, accepted for staging only:
+- **Kept (accepted MVP risk).** The third-party platform GitHub Apps AWS Connector, Codemagic, DigitalOcean, Expo, Netlify, Render and Vercel keep their access to the repository.
+- **Removed before the first staging deploy (a hard precondition).**
+  - The ChatGPT Codex Connector GitHub App (read and write access to all repositories) is suspended. Suspension is reversible.
+  - The classic personal access token "AppForge Github Actions" (`repo` and `workflow` scopes, no expiry; GitHub showed "Last used within the last 10 months") is deleted.
+- **Why it matters even with branch protection on.** Protection on `main` (enabled 2026-10-19) requires the `foundation` check and no approving review. A principal with write access can open a pull request that changes CI, get a green `foundation`, merge it, and so control `deploy-staging` and the staging broker secrets. Staging shares the Cloudflare account with the owner's other products (P04.T01i OQ-3), so the same path could reach their R2 buckets.
+- **Who acts.** Claude's attempt to suspend the Codex app in the attached browser stopped at GitHub's sudo re-authentication prompt, and nothing changed. The owner performs both the suspension and the token deletion.
+- **Scope.** The exception covers staging only. Production needs its own decision on these apps before the first production deployment, credential or resource (item 5).
+
+The same exception applies to the ADR-0014 item 5 amendment.
+
+Owner decision, 2026-10-19, in chat. Asked "Security gap: the staging rules you approved (ADR-0019) assume no outside app can push to the Morrow repo. Today several can: the Codex app (read/write to all repos), plus Vercel, Netlify and others, and an old no-expiry token 'AppForge Github Actions' (repo + workflow access). Anything that can push to Morrow could change CI and deploy code that reads the staging keys. And because staging shares your Cloudflare account, that code could also reach your other products' R2 buckets. What should we do?", the owner answered "Suspend Codex + revoke old token (Recommended)". The option read: "I suspend the Codex app (reversible; you said you don't use it) and you delete the 10-month-unused 'AppForge' token. The reputable platform apps (Vercel, Netlify, etc.) stay, recorded as an accepted MVP risk." This supersedes the owner's earlier answer on the Codex app the same day, "i am not working with codex so it won't push anything so leave it".

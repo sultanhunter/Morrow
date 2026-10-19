@@ -124,3 +124,74 @@ test("ancestry follows parents to the destination", () => {
   assert.deepEqual(routeAncestry(catalogue, "question"), ["question", "inbox"]);
   assert.deepEqual(routeAncestry(catalogue, "task"), ["task", "work"]);
 });
+// P01.T02c AC10 (ADR-0016): project, project artifact, Ask conversation and access request routes, and the sidebar.
+const added = {
+  project: "/w/workspace-1/projects/project-1",
+  project_artifact: "/w/workspace-1/projects/project-1/artifacts/artifact-1",
+  ask_conversation: "/w/workspace-1/ask/conversation-1",
+  access_request: "/w/workspace-1/inbox/access-requests/request-1",
+};
+test("AC10: the four collaboration routes round-trip with full route metadata", () => {
+  const states = catalogue.routes.find((r) => r.id === "task").states;
+  for (const [id, path] of Object.entries(added)) {
+    const r = catalogue.routes.find((x) => x.id === id);
+    assert.deepEqual(
+      [r.journey, r.hosts, r.namespace, r.ui_status, r.states],
+      ["J01", ["standalone"], "merchant", "P02 must qualify interactions", states],
+      id,
+    );
+    assert.ok(r.title && r.data.length && r.components.length, id);
+    for (const routes of [catalogue, workspaceRoutes]) {
+      const match = matchWorkspacePath(routes, path);
+      assert.equal(match.id, id);
+      assert.equal(buildWorkspacePath(routes, id, match.params), path);
+    }
+  }
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.keys(added).map((id) => [id, catalogue.routes.find((r) => r.id === id).parent]),
+    ),
+    {
+      project: "work",
+      project_artifact: "project",
+      ask_conversation: "ask",
+      access_request: "inbox",
+    },
+  );
+  assert.ok(
+    catalogue.routes
+      .find((r) => r.id === "ask_conversation")
+      .components.includes("AskPrivacyNotice"),
+  );
+});
+for (const path of [
+  "/w/ws/projects",
+  "/w/ws/projects/p1/artifacts",
+  "/w/ws/inbox/access/r1",
+  "/w/ws/projects/p1?tab=2",
+  "/w/ws/projects/p1%2Fx",
+  "/w/ws/projects/p1#tab",
+])
+  test("AC10: no route for " + path, () => {
+    assert.equal(matchWorkspacePath(catalogue, path), null);
+    assert.equal(matchWorkspacePath(workspaceRoutes, path), null);
+  });
+test("AC10: the sidebar is the seven destinations with Ask as an action", () => {
+  const s = catalogue.sidebar,
+    ids = new Set(catalogue.routes.map((r) => r.id));
+  assert.deepEqual(
+    s.primary.map((p) => p.id),
+    ["home", "work", "inbox", "agents", "assets", "knowledge", "settings"],
+  );
+  assert.equal(s.entry_action, "ask");
+  assert.ok(!s.primary.some((p) => p.id === "ask" || p.route === "ask"));
+  for (const t of [...s.primary, ...s.people_and_agents, ...s.footer])
+    assert.ok(ids.has(t.route), t.id);
+  assert.deepEqual(
+    [s.pinned_projects.route, s.pinned_projects.maximum, s.pinned_projects.breadcrumb_parent],
+    ["project", 20, "work"],
+  );
+  assert.equal(s.primary.find((p) => p.id === "inbox").badge, "open_inbox_items");
+  assert.ok(s.footer.find((f) => f.id === "credit_balance").display_only);
+  assert.ok(!catalogue.routes.some((r) => r.pattern === "/w/:workspaceId/projects"));
+});

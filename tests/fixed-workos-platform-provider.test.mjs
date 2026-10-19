@@ -115,6 +115,42 @@ test("fixed active catalogue needs a valid session marker and separately seeded 
   assert.equal(page.data.length, 1);
   assert.equal(page.data[0].id, issued.claims.sid);
 });
+test("the active catalogue lists only live sessions: a later sign-in of the same subject reads no expired row", async () => {
+  // P14.T01a AC30: A signs in again minutes after its first session. A row past its
+  // expiry would make the session reader refuse the whole page.
+  let at = Date.UTC(2026, 9, 19, 9, 0, 0);
+  const oracle = createPlatformWorkosProviderOracle({ now: () => at });
+  const subjectId = "user_" + "A".repeat(26);
+  const first = oracle.issueAuthorization({
+    challenge,
+    subjectId,
+    sessionId: "session_" + "1".repeat(26),
+  });
+  oracle.activate(first);
+  at += 180000;
+  const second = oracle.issueAuthorization({
+    challenge,
+    subjectId,
+    sessionId: "session_" + "2".repeat(26),
+  });
+  oracle.activate(second);
+  const page = await (
+    await oracle.handleRequest(
+      new Request(
+        "https://api.workos.com/user_management/users/" +
+          subjectId +
+          "/sessions?limit=100&order=asc",
+        { headers: { Accept: "application/json", Authorization: "Bearer " + oracle.marker } },
+      ),
+    )
+  ).json();
+  assert.deepEqual(
+    page.data.map((row) => row.id),
+    [second.claims.sid],
+  );
+  assert.ok(page.data.every((row) => Date.parse(row.expires_at) > at));
+  assert.equal(oracle.metrics.oracleFailures, 0);
+});
 test("actual authorization URL is registered before the keyless POST", async () => {
   const oracle = createPlatformWorkosProviderOracle();
   const url = new URL("https://api.workos.com/user_management/authorize");

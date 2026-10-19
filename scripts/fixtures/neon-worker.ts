@@ -1,5 +1,9 @@
 // Local workerd fixture only; never deployed or imported by an application.
-import { validators } from "../../packages/contracts/src/generated/runtime-validators.mjs";
+import {
+  validators,
+  validateEventPayload,
+} from "../../packages/contracts/src/generated/runtime-validators.mjs";
+import { validateCurrentDefinition } from "../../packages/contracts/src/validation";
 import { createNeonIdentityClient, withNeonIdentityRead } from "../../packages/identity/src/neon";
 import { withDriverIdentityRead } from "../../packages/identity/src/neon-request";
 import { identitySql } from "../../packages/identity/src/index";
@@ -18,6 +22,28 @@ export default {
           ]),
         ),
       );
+    }
+    // P01.T02c (ADR-0016): exact-selector cases, the event registry selector and
+    // the current-definition rules beyond the schemas.
+    if (path === "/collaboration") {
+      const { schema, events, current, payloads } = (await request.json()) as {
+        schema: { selector: string; value: unknown }[];
+        events: unknown[];
+        current: { definition: "AskAdminReadRecord"; value: unknown }[];
+        payloads: { eventType: string; aggregateType: string; payload: unknown }[];
+      };
+      return Response.json({
+        schema: schema.map(({ selector, value }) =>
+          Object.hasOwn(validators, selector) ? validators[selector]!(value) : null,
+        ),
+        events: events.map((envelope) => validateCurrentDefinition("EventEnvelope", envelope)),
+        current: current.map(({ definition, value }) =>
+          validateCurrentDefinition(definition, value),
+        ),
+        payloads: payloads.map(({ eventType, aggregateType, payload }) =>
+          validateEventPayload(eventType, aggregateType, payload),
+        ),
+      });
     }
     // P01.T02a: the deterministic derived proposal, compared with Node by the lab.
     if (path === "/review-preview") {
