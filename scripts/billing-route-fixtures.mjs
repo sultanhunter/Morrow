@@ -10,6 +10,7 @@ import {
   parseWorkspaceBillingFacts,
   workspaceBillingState,
 } from "../packages/policy/src/billing-state.ts";
+import { allocationDigest } from "./billing-checks.mjs";
 
 export const routeFixturePath = "docs/contracts/fixtures/P01.T04a.json";
 const fixture = JSON.parse(readFileSync(resolve(root, routeFixturePath), "utf8"));
@@ -114,3 +115,103 @@ export const link = (key, overrides = {}) => ({
   ...structuredClone(base.associations[key]),
   ...overrides,
 });
+
+const simulatorPayers = {
+  morrow: ["morrow_w"],
+  shopify: ["shopify_a", "shopify_b"],
+};
+/**
+ * Simulator facts, a one-share CostAllocation@2 and a vendor reservation for a
+ * morrow_direct (`morrow`) or Shopify-route (`shopify`) workspace with iA and iB
+ * linked, for `ContractCreditLedger` (scripts/billing-checks.mjs, §7).
+ */
+export function simulatorExample(
+  kind,
+  { wallet = "100", target = null, environment = "staging" } = {},
+) {
+  const keys = simulatorPayers[kind];
+  const byId = (pick) =>
+    Object.fromEntries(keys.map((k) => [base.accounts[k].id, structuredClone(pick(k))]));
+  const facts = {
+    now: base.now,
+    organizationId: "org_o",
+    workspaceId: "workspace_w",
+    rootRunId: "run_1",
+    taskId: "task_1",
+    authenticated: true,
+    currentMembership: true,
+    spendingGrant: true,
+    providerQualified: true,
+    rateQualified: true,
+    economicAdmission: true,
+    rateRevision: 1,
+    termsRevision: 1,
+    meterKey: "agent-work",
+    authorizedStoreIds: ["store_a", "store_b"],
+    rootMaximumCredits: "500",
+    vendorId: "openai",
+    costScheduleRevision: 1,
+    vendorBudget: { amount: "50", currency: "USD" },
+    accounts: byId((k) => base.accounts[k]),
+    entitlements: byId((k) => base.entitlements[k]),
+    entitlementRevisions: byId(() => 1),
+    entitlementEvidence: byId((k) => base.entitlements[k].providerEvidenceRef),
+    wallets: byId((k) => ({
+      schemaVersion: 1,
+      billingAccountId: base.accounts[k].id,
+      available: wallet,
+      reserved: "0",
+      consumed: "0",
+      rateRevision: 1,
+      termsRevision: 1,
+      revision: 1,
+    })),
+    monetaryCeilings: byId(() => ({ amount: "10", currency: "USD" })),
+    environment,
+    routes: {
+      workspace_w: structuredClone(
+        kind === "morrow" ? base.routes.morrow_direct : base.routes.shopify_app_pricing,
+      ),
+    },
+    links: [link("iA"), link("iB")],
+    workStoreIds: [],
+    usageCaps: {},
+  };
+  if (target) facts.paymentTarget = target;
+  const account = base.accounts[keys[0]];
+  const allocation = {
+    schemaVersion: 2,
+    id: "allocation_1",
+    organizationId: "org_o",
+    workspaceId: "workspace_w",
+    taskId: "task_1",
+    rootRunId: "run_1",
+    revision: 1,
+    rateRevision: 1,
+    meterKey: "agent-work",
+    maximumCredits: "30",
+    shares: [
+      {
+        billingAccountId: account.id,
+        installationId: account.installationId,
+        storeId: account.storeId,
+        entitlementRevision: 1,
+        maximumCredits: "30",
+        maximumLiability: { amount: "3.00", currency: "USD" },
+      },
+    ],
+    allocationDigest: "0".repeat(64),
+  };
+  allocation.allocationDigest = allocationDigest(allocation);
+  facts.approvedAllocationDigest = allocation.allocationDigest;
+  const vendorReservation = {
+    schemaVersion: 1,
+    id: "vendor_reservation_1",
+    rootRunId: "run_1",
+    vendorId: "openai",
+    costScheduleRevision: 1,
+    maximumCost: { amount: "1.5", currency: "USD" },
+    status: "reserved",
+  };
+  return { facts, allocation, vendorReservation };
+}

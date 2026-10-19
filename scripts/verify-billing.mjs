@@ -10,6 +10,31 @@ import {
 } from "./billing-checks.mjs";
 import { inspectReadiness } from "./provider-checks.mjs";
 import { writeArtifact } from "./artifacts.mjs";
+import { checkDecisionTables } from "./billing-decision-tables.mjs";
+import {
+  billingState,
+  library,
+  link,
+  live,
+  payerFacts,
+  rawFacts,
+  simulatorExample,
+  templates as templateRows,
+} from "./billing-route-fixtures.mjs";
+import {
+  billingCallToAction,
+  classifyPayment,
+  createBillingConstraintsReader,
+  entitlementFor,
+  morrowPurchaseActions,
+  originForCreation,
+  purchaseDecision,
+  selectPayers,
+} from "../packages/policy/src/billing-state.ts";
+import { isPaidWork } from "../packages/policy/src/paid-work.ts";
+
+// Runs under tsx (npm run verify:billing): the walkthroughs use
+// packages/policy/src/billing-state.ts as the only implementation.
 
 const f = read("docs/contracts/fixtures/P01.A04.json");
 f.allocation.allocationDigest = allocationDigest(f.allocation);
@@ -41,6 +66,7 @@ check("small brand retains installation payer", () => {
 check("specialist team reconciles two payers and one vendor cost", () => {
   const l = new ContractCreditLedger(f.facts);
   l.reserve("reservation-1", f.allocation, f.vendorReservation);
+  l.refresh({ now: "2026-10-06T13:05:00Z" });
   l.dispatch("reservation-1");
   l.uncertain("reservation-1");
   l.settle("reservation-1", f.usage, {
@@ -123,6 +149,283 @@ check("paid-work table rejects a paid template row", () => {
     "PAID_WORK_TABLE_INVALID:PW5:workspace-member-v1",
   );
 });
+// P01.T04a §5: the two decision tables match their rule lists (--check).
+for (const e of checkDecisionTables()) errors.push(e);
+
+// P01.T04a §7: five walkthroughs over docs/contracts/fixtures/P01.T04a.json.
+const L = library();
+const W = L.workspaceId;
+const workRequest = (capabilityId, verb, storeId = null) => ({
+  capabilityId,
+  verb,
+  resource: {
+    organizationId: L.organizationId,
+    workspaceId: W,
+    storeId,
+    connectionId: null,
+    kind: storeId === null ? "workspace" : "product",
+    id: storeId === null ? W : "product_1",
+  },
+  accountId: null,
+  fields: ["briefRef"],
+});
+const actor = {
+  kind: "human",
+  principalId: "human_o",
+  organizationId: L.organizationId,
+  workspaceId: W,
+  membershipId: "membership_o",
+  installationId: null,
+  mandateId: null,
+};
+const classify = (state, event, granted = []) =>
+  classifyPayment({ kind: "workspace", state }, event, L.terms, new Set(granted));
+const event = (key, overrides = {}) => ({ ...structuredClone(L.events[key]), ...overrides });
+const select = (state, work, spending, shares = null) =>
+  selectPayers(state, {
+    organizationId: L.organizationId,
+    workspaceId: W,
+    workStoreIds: work,
+    spending,
+    allocation:
+      shares === null
+        ? null
+        : {
+            schemaVersion: 2,
+            id: "allocation_1",
+            organizationId: L.organizationId,
+            workspaceId: W,
+            taskId: "task_1",
+            rootRunId: "run_1",
+            revision: 1,
+            rateRevision: 1,
+            meterKey: "agent-work",
+            maximumCredits: "50",
+            shares,
+            allocationDigest: "e".repeat(64),
+          },
+  });
+const morrowRefused = (state) =>
+  morrowPurchaseActions.every(
+    (action) => purchaseDecision(state, { action }).code === "PURCHASE_ROUTE_MISMATCH",
+  );
+async function walkthrough(name, run) {
+  try {
+    if (!(await run())) throw new Error("unexpected outcome");
+    checks.push({ name, passed: true });
+  } catch (e) {
+    checks.push({ name, passed: false });
+    errors.push(name + ": " + e.message);
+  }
+}
+await walkthrough(
+  "website workspace sets up and invites but cannot run paid work before its first payment",
+  async () => {
+    if (originForCreation({ kind: "website_signup", installHandoffPending: false }) !== "website")
+      return false;
+    const raw = rawFacts({ route: L.routes.open });
+    let billingReads = 0;
+    const reader = createBillingConstraintsReader(
+      { readCurrent: async () => ({ providerAllowed: true, entitlementAllowed: false }) },
+      async () => {
+        billingReads++;
+        return structuredClone(raw);
+      },
+      "staging",
+      () => new Date(L.now),
+    );
+    for (const rows of Object.values(templateRows()))
+      for (const row of rows)
+        for (const verb of row.verbs) {
+          const c = await reader.readCurrent(workRequest(row.capabilityId, verb), actor);
+          if (c.entitlementAllowed !== false || isPaidWork(row.capabilityId, verb)) return false;
+        }
+    if (billingReads !== 0) return false;
+    const paid = await reader.readCurrent(workRequest("creative.image.generate", "execute"), actor);
+    const s = billingState(raw);
+    return (
+      paid.entitlementAllowed === false &&
+      billingReads === 1 &&
+      s.phase === "open" &&
+      s.state === "no_route" &&
+      select(s, [], { workspace: true, storeIds: [] }).code === "BILLING_NO_ROUTE" &&
+      purchaseDecision(s, { action: "subscribe" }).allowed === true &&
+      purchaseDecision(s, { action: "top_up" }).code === "SUBSCRIPTION_REQUIRED" &&
+      billingCallToAction(s).kind === "morrow_plans"
+    );
+  },
+);
+await walkthrough(
+  "Shopify-origin workspace never reaches Morrow checkout and becomes billable through App Pricing",
+  () => {
+    if (originForCreation({ kind: "install_continuation" }) !== "shopify_install") return false;
+    const bound = billingState(
+      rawFacts({ route: L.routes.shopify_install_bound, associations: [link("iA")] }),
+    );
+    const stripe = classify(bound, event("stripe_period"));
+    const fixed = classify(bound, event("shopify_period_a"));
+    const after = billingState(
+      rawFacts({
+        route: L.routes.shopify_app_pricing,
+        associations: [link("iA")],
+        payers: [payerFacts("shopify_a")],
+      }),
+    );
+    return (
+      morrowRefused(bound) &&
+      billingCallToAction(bound).kind === "shopify_plan_page" &&
+      stripe.outcome === "conflict" &&
+      stripe.code === "ROUTE_MISMATCH" &&
+      fixed.outcome === "fix_route_and_grant" &&
+      fixed.fixRoute.route === "shopify_app_pricing" &&
+      after.state === "billable" &&
+      after.purchaseSurface === "shopify" &&
+      morrowRefused(after) &&
+      entitlementFor(after, workRequest("creative.image.generate", "execute", "store_a"))
+    );
+  },
+);
+await walkthrough(
+  "a merchant who loses the install handoff still gets a Shopify-origin workspace",
+  () => {
+    // The handoff is kept after it expires, so it is still pending at signup.
+    const origin = originForCreation({ kind: "website_signup", installHandoffPending: true });
+    const route = { ...L.routes.shopify_install, origin };
+    const unlinked = billingState(rawFacts({ route }));
+    const linked = billingState(
+      rawFacts({
+        route: { ...route, shopifyBoundAt: "2026-10-18T09:30:00Z" },
+        associations: [link("iA")],
+      }),
+    );
+    return (
+      origin === "shopify_install" &&
+      unlinked.phase === "shopify_bound" &&
+      morrowRefused(unlinked) &&
+      billingCallToAction(unlinked).kind === "none" &&
+      morrowRefused(linked) &&
+      billingCallToAction(linked).kind === "shopify_plan_page"
+    );
+  },
+);
+await walkthrough(
+  "website workspace pays, then links two stores: one route, one payer, no retroactive charge",
+  () => {
+    const open = billingState(rawFacts({ route: L.routes.open }));
+    const x = simulatorExample("morrow", { target: { kind: "workspace", state: open } });
+    const ledger = new ContractCreditLedger(x.facts);
+    const fixed = ledger.grant(event("stripe_period"), L.terms);
+    const credited = ledger.snapshot();
+    const paid = billingState(
+      rawFacts({ route: L.routes.morrow_direct, payers: [payerFacts("morrow_w")] }),
+    );
+    const linked = billingState(
+      rawFacts({
+        route: L.routes.morrow_direct,
+        associations: [link("iA"), link("iB")],
+        payers: [payerFacts("morrow_w")],
+      }),
+    );
+    ledger.refresh({ links: [link("iA"), link("iB"), link("iC")] });
+    const implicit = select(linked, ["store_a", "store_b"], { workspace: true, storeIds: [] });
+    return (
+      fixed.outcome === "fix_route_and_grant" &&
+      fixed.fixRoute.route === "morrow_direct" &&
+      fixed.account.installationId === null &&
+      credited.grants.length === 1 &&
+      JSON.stringify(ledger.snapshot()) === JSON.stringify(credited) &&
+      linked.route === paid.route &&
+      linked.payers.length === 1 &&
+      JSON.stringify(linked.payers) === JSON.stringify(paid.payers) &&
+      JSON.stringify(linked.coveredStoreIds) === JSON.stringify(["store_a", "store_b"]) &&
+      implicit.ok &&
+      implicit.shares.length === 1 &&
+      implicit.shares[0].storeId === null &&
+      classify(linked, event("shopify_period_b")).code === "ROUTE_MISMATCH" &&
+      purchaseDecision(linked, { action: "shopify_plan_page", storeId: "store_a" }).code ===
+        "PURCHASE_ROUTE_MISMATCH"
+    );
+  },
+);
+await walkthrough(
+  "Shopify multi-store work needs an explicit allocation, and duplicate, cross-route, $0, held and test-mode payments grant nothing in production",
+  () => {
+    const state = billingState(
+      live(
+        rawFacts({
+          route: L.routes.shopify_app_pricing,
+          associations: [link("iA"), link("iB")],
+          payers: [payerFacts("shopify_a"), payerFacts("shopify_b")],
+        }),
+      ),
+      { environment: "production" },
+    );
+    const spending = { workspace: true, storeIds: ["store_a", "store_b"] };
+    const share = (key, credits) => ({
+      billingAccountId: L.accounts[key].id,
+      installationId: L.accounts[key].installationId,
+      storeId: L.accounts[key].storeId,
+      entitlementRevision: 1,
+      maximumCredits: credits,
+      maximumLiability: { amount: "3.00", currency: "USD" },
+    });
+    const x = simulatorExample("shopify", { environment: "production" });
+    const facts = live(x.facts);
+    facts.paymentTarget = { kind: "workspace", state };
+    const ledger = new ContractCreditLedger(facts);
+    const before = ledger.snapshot();
+    const nextCycle = { paymentKey: "shopify:app:7:shop:42:cycle:2026-11-18T10:00:00Z" };
+    const outcomes = [
+      ledger.grant(
+        live(
+          event("shopify_period_a", {
+            ...nextCycle,
+            subscriptionKey: "shopify:app:7:shop:42:created:2026-10-19T09:00:00Z",
+          }),
+        ),
+        L.terms,
+      ),
+      ledger.grant(live(event("stripe_period")), L.terms),
+      ledger.grant(
+        live(
+          event("shopify_period_a", {
+            ...nextCycle,
+            amountPaid: { amount: "0.00", currency: "USD" },
+          }),
+        ),
+        L.terms,
+      ),
+      ledger.grant(
+        live(event("shopify_period_a", { ...nextCycle, priceKey: "shopify:plan:unknown" })),
+        L.terms,
+      ),
+      ledger.grant(event("shopify_period_a", nextCycle), L.terms),
+    ].map((o) => o.code ?? o.reason ?? o.outcome);
+    const unchanged = JSON.stringify(ledger.snapshot()) === JSON.stringify(before);
+    const granted = ledger.grant(live(event("shopify_period_a", nextCycle)), L.terms);
+    const replay = ledger.grant(live(event("shopify_period_a", nextCycle)), L.terms);
+    return (
+      select(state, ["store_a", "store_b"], spending).code === "ALLOCATION_REQUIRED" &&
+      select(state, ["store_a", "store_b"], spending, [
+        share("shopify_a", "30"),
+        share("shopify_b", "20"),
+      ]).selection === "explicit" &&
+      JSON.stringify(outcomes) ===
+        JSON.stringify([
+          "DUPLICATE_SUBSCRIPTION",
+          "ROUTE_MISMATCH",
+          "no_charge",
+          "TERMS_MISMATCH",
+          "PAYMENT_MODE_REFUSED",
+        ]) &&
+      unchanged &&
+      granted.outcome === "grant" &&
+      replay.outcome === "already_granted" &&
+      ledger.snapshot().grants.length === 1
+    );
+  },
+);
+
 const decisions = read("docs/decisions/readiness.json");
 check(
   "local design packet ready with pending external reviews",
@@ -166,6 +469,16 @@ for (const d of decisions.consumed_decisions) {
 }
 const inputs = [
   "docs/contracts/schemas/v1/billing.schema.json",
+  "docs/contracts/decision-tables/classify-payment.rules.json",
+  "docs/contracts/decision-tables/classify-payment.tsv",
+  "docs/contracts/decision-tables/purchase-decision.rules.json",
+  "docs/contracts/decision-tables/purchase-decision.tsv",
+  "packages/policy/src/billing-state.ts",
+  "packages/policy/src/paid-work.ts",
+  "scripts/billing-decision-tables.mjs",
+  "scripts/billing-route-fixtures.mjs",
+  "tests/billing-state.test.mjs",
+  "tests/billing-decision-tables.test.mjs",
   "docs/contracts/schemas/v1.1/billing.schema.json",
   "docs/contracts/paid-work.json",
   "docs/contracts/fixtures/P01.T04a.json",
@@ -183,6 +496,7 @@ const report = {
   generated_at: new Date().toISOString(),
   billing_definitions: Object.keys(billing.$defs).length,
   paid_work_capabilities: paidCapabilities.length,
+  decision_tables: ["classify-payment", "purchase-decision"],
   checks,
   scope:
     "Synthetic design, exact arithmetic and semantic walkthroughs only. No concurrent database, rate activation, provider charge, independent review or merchant usability proof.",
@@ -197,5 +511,5 @@ if (errors.length) {
   process.exitCode = 1;
 } else
   console.log(
-    `PASS: ${report.billing_definitions} billing definitions, ${report.paid_work_capabilities} paid-work capabilities (PW1-PW5) and ${checks.length} billing/readiness checks. Billing activation remains blocked.`,
+    `PASS: ${report.billing_definitions} billing definitions, ${report.paid_work_capabilities} paid-work capabilities (PW1-PW5), 2 decision tables and ${checks.length} billing/readiness checks and walkthroughs. Billing activation remains blocked.`,
   );

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { read } from "../scripts/foundation.mjs";
 import { digest } from "../scripts/contract-checks.mjs";
 import {
@@ -21,6 +22,15 @@ import {
   paidWorkCapabilityIds,
   paidWorkTableValid,
 } from "../packages/policy/src/paid-work.ts";
+import { validateCurrentBillingDefinition } from "../packages/contracts/src/validation.ts";
+import {
+  billingState,
+  library,
+  link,
+  payerFacts,
+  rawFacts,
+  simulatorExample as currentExample,
+} from "../scripts/billing-route-fixtures.mjs";
 
 function example() {
   const f = structuredClone(read("docs/contracts/fixtures/P01.A04.json"));
@@ -28,10 +38,14 @@ function example() {
   f.facts.approvedAllocationDigest = f.allocation.allocationDigest;
   return f;
 }
+// The reservation is created at 13:00; P01.A04's usage is observed at 13:01, so
+// the ledger's clock moves to 13:05 before any settlement (P01.T04a §7).
+const settleTime = "2026-10-06T13:05:00Z";
 function ready() {
   const f = example(),
     ledger = new ContractCreditLedger(f.facts);
   ledger.reserve("reservation-1", f.allocation, f.vendorReservation);
+  ledger.refresh({ now: settleTime });
   return { ...f, ledger };
 }
 function settled() {
@@ -716,4 +730,279 @@ test("AC01: the three template lists must all be present", () => {
   const t = structuredClone(templates);
   delete t["workspace-admin-v1"];
   assert.deepEqual(inspectPaidWork(paidWork, catalogue, t), ["PAID_WORK_TABLE_INVALID:PW5"]);
+});
+
+// ---------------------------------------------------------------------------
+// P01.T04a PR-B (§7): the simulator on contract v1.1 allocations. Routes, links,
+// reversals, Shopify-route usage caps, grants through the billing library and
+// USAGE_PREDATES_RESERVATION (AC12, AC18, AC22, AC24, AC25 simulator parts).
+// ---------------------------------------------------------------------------
+const L = library();
+const morrowTarget = () => ({
+  kind: "workspace",
+  state: billingState(
+    rawFacts({
+      route: L.routes.morrow_direct,
+      associations: [link("iA"), link("iB")],
+      payers: [payerFacts("morrow_w")],
+    }),
+  ),
+});
+const usageFor = (x, credits, observedAt = "2026-10-20T10:01:00Z") => [
+  {
+    schemaVersion: 1,
+    id: "usage_1",
+    reservationId: "reservation-1",
+    operationId: "operation_1",
+    billingAccountId: x.allocation.shares[0].billingAccountId,
+    merchantCredits: credits,
+    merchantLiability: { amount: "1", currency: "USD" },
+    providerCost: { amount: "0.2", currency: "USD" },
+    providerCostStatus: "known",
+    rateRevision: 1,
+    observedAt,
+    status: "reconciled",
+  },
+];
+const settleOptions = { verifiedProviderEvidence: true, verifiedRateEvidence: true };
+
+test("P01.T04a: a v1.1 morrow_direct allocation reserves, dispatches and settles", () => {
+  const x = currentExample("morrow");
+  assert.deepEqual(inspectAllocation(x.allocation, x.facts), []);
+  const l = new ContractCreditLedger(x.facts);
+  l.reserve("reservation-1", x.allocation, x.vendorReservation);
+  l.dispatch("reservation-1");
+  l.refresh({ now: "2026-10-20T10:05:00Z" });
+  l.settle("reservation-1", usageFor(x, "20"), settleOptions);
+  const s = l.snapshot();
+  assert.equal(s.wallets.account_morrow_w.available, "80");
+  assert.equal(s.wallets.account_morrow_w.consumed, "20");
+  assert.deepEqual(s.meterDrafts, []);
+});
+
+test("AC12 (simulator): only a granted payment credits a wallet, once per payment key", () => {
+  const x = currentExample("morrow", { target: morrowTarget() });
+  const l = new ContractCreditLedger(x.facts);
+  const before = l.snapshot();
+  const event = (key, overrides = {}) => ({ ...structuredClone(L.events[key]), ...overrides });
+  for (const [name, e, outcome] of [
+    [
+      "$0 invoice",
+      event("stripe_period_next", { amountPaid: { amount: "0.00", currency: "USD" } }),
+      "no_charge",
+    ],
+    [
+      "test mode refused in production terms",
+      event("stripe_period_next", { mode: "live" }),
+      "refused",
+    ],
+    [
+      "held for terms",
+      event("stripe_period_next", { priceKey: "stripe:price:price_TESTUNKNOWN1" }),
+      "held",
+    ],
+    ["cross-route payment", event("shopify_period_b"), "conflict"],
+    [
+      "duplicate subscription",
+      event("stripe_period_next", { subscriptionKey: "stripe:sub:sub_TESTW00000002" }),
+      "conflict",
+    ],
+  ]) {
+    assert.equal(l.grant(e, L.terms).outcome, outcome, name);
+    assert.deepEqual(l.snapshot(), before, name);
+  }
+  const granted = l.grant(event("stripe_period_next"), L.terms);
+  assert.equal(granted.outcome, "grant");
+  const after = l.snapshot();
+  assert.equal(after.wallets.account_morrow_w.available, "1100");
+  assert.equal(after.grants.length, 1);
+  assert.equal(validateCurrentBillingDefinition("CreditGrant", after.grants[0]), true);
+  assert.equal(l.grant(event("stripe_period_next"), L.terms).outcome, "already_granted");
+  assert.deepEqual(l.snapshot(), after);
+  // A top-up is a purchased grant on a billable morrow_direct payer.
+  assert.equal(l.grant(event("stripe_top_up"), L.terms).grant.kind, "purchased");
+  assert.equal(l.snapshot().wallets.account_morrow_w.available, "1500");
+});
+
+test("AC18 (simulator): an open reversal blocks the wallet it credited until it clears", () => {
+  const x = currentExample("morrow", { target: morrowTarget() });
+  const l = new ContractCreditLedger(x.facts);
+  l.grant({ ...structuredClone(L.events.stripe_period_next) }, L.terms);
+  const dispute = {
+    ...structuredClone(L.reversals.dispute_morrow_open),
+    paymentKey: L.events.stripe_period_next.paymentKey,
+  };
+  assert.deepEqual(l.reverse(dispute), {
+    paymentKey: dispute.paymentKey,
+    billingAccountId: "account_morrow_w",
+    status: "open",
+  });
+  const before = l.snapshot();
+  assert.throws(
+    () => l.reserve("reservation-1", x.allocation, x.vendorReservation),
+    /PAYER_INACTIVE/,
+  );
+  assert.deepEqual(l.snapshot(), before);
+  assert.throws(() => l.reverse(dispute), /REVERSAL_REVISION_STALE/);
+  l.reverse({ ...dispute, status: "cleared", revision: 2 });
+  l.reserve("reservation-1", x.allocation, x.vendorReservation);
+  // A reversal that lands after reservation stops dispatch.
+  l.reverse({ ...dispute, status: "open", revision: 3 });
+  assert.throws(() => l.dispatch("reservation-1"), /PAYER_INACTIVE/);
+  // A reversal of a payment that granted nothing is recorded only.
+  const y = currentExample("morrow", { target: morrowTarget() });
+  const m = new ContractCreditLedger(y.facts);
+  assert.equal(
+    m.reverse({ ...dispute, paymentKey: "stripe:invoice:in_TESTW00000099" }).billingAccountId,
+    null,
+  );
+  m.reserve("reservation-1", y.allocation, y.vendorReservation);
+  assert.equal(m.snapshot().wallets.account_morrow_w.available, "70");
+});
+
+test("AC22 (simulator): a share whose route differs from the workspace route is refused", () => {
+  for (const kind of ["morrow", "shopify"]) {
+    const x = currentExample(kind);
+    x.facts.accounts.account_morrow_w = structuredClone(L.accounts.morrow_w);
+    x.facts.accounts.account_shopify_a = structuredClone(L.accounts.shopify_a);
+    x.facts.entitlements.account_morrow_w = structuredClone(L.entitlements.morrow_w);
+    x.facts.entitlements.account_shopify_a = structuredClone(L.entitlements.shopify_a);
+    for (const id of ["account_morrow_w", "account_shopify_a"]) {
+      x.facts.wallets[id] ??= {
+        ...structuredClone(Object.values(x.facts.wallets)[0]),
+        billingAccountId: id,
+      };
+      x.facts.monetaryCeilings[id] ??= { amount: "10", currency: "USD" };
+    }
+    const mixed = JSON.parse(
+      readFileSync("docs/contracts/fixtures/P01.T04a.json", "utf8"),
+    ).cases.find((c) => c.id === "P01.T04a.allocation.two_routes").value;
+    assert.ok(inspectAllocation(mixed, x.facts).includes("PAYER_ROUTE_INVALID"), kind);
+  }
+  // A share in another mode than the environment's, and a route record of another mode.
+  const x = currentExample("morrow");
+  x.facts.environment = "production";
+  assert.ok(inspectAllocation(x.allocation, x.facts).includes("PAYER_ROUTE_INVALID"));
+  const y = currentExample("morrow");
+  y.facts.routes = {};
+  assert.ok(inspectAllocation(y.allocation, y.facts).includes("PAYER_ROUTE_INVALID"));
+});
+
+test("AC24 (simulator): no credits, cancellation and disconnects stop reservation or dispatch", () => {
+  const empty = currentExample("morrow", { wallet: "0" });
+  assert.throws(
+    () =>
+      new ContractCreditLedger(empty.facts).reserve(
+        "reservation-1",
+        empty.allocation,
+        empty.vendorReservation,
+      ),
+    /CREDITS_EXHAUSTED/,
+  );
+  const x = currentExample("morrow");
+  const l = new ContractCreditLedger(x.facts);
+  l.reserve("reservation-1", x.allocation, x.vendorReservation);
+  l.refresh({
+    entitlements: { account_morrow_w: { ...L.entitlements.morrow_w, status: "cancelled" } },
+  });
+  assert.throws(() => l.dispatch("reservation-1"), /PAYER_INACTIVE/);
+  // A Shopify share whose store's link is no longer current, and unlinked work stores.
+  const s = currentExample("shopify");
+  const m = new ContractCreditLedger(s.facts);
+  m.reserve("reservation-1", s.allocation, s.vendorReservation);
+  m.refresh({ links: [link("iA", { current: false }), link("iB")] });
+  assert.throws(() => m.dispatch("reservation-1"), /PAYER_NOT_LINKED/);
+  const w = currentExample("morrow");
+  w.facts.workStoreIds = ["store_c"];
+  assert.ok(inspectAllocation(w.allocation, w.facts).includes("PAYER_NOT_LINKED"));
+});
+
+test("AC25 (simulator): no retroactive charge, and Shopify extra credits are post-paid within a cap", () => {
+  const x = currentExample("morrow", { target: morrowTarget() });
+  const l = new ContractCreditLedger(x.facts);
+  l.reserve("reservation-1", x.allocation, x.vendorReservation);
+  const before = l.snapshot();
+  // A link refresh changes no reservation, liability, meter event or wallet.
+  l.refresh({ links: [link("iA"), link("iB"), link("iC")] });
+  assert.deepEqual(l.snapshot(), before);
+  l.dispatch("reservation-1");
+  l.refresh({ now: "2026-10-20T10:05:00Z" });
+  const dispatched = l.snapshot();
+  assert.throws(
+    () => l.settle("reservation-1", usageFor(x, "20", "2026-10-20T09:59:00Z"), settleOptions),
+    /USAGE_PREDATES_RESERVATION/,
+  );
+  assert.deepEqual(l.snapshot(), dispatched);
+  // Fixing a route creates no liability for earlier usage.
+  const open = currentExample("morrow", {
+    target: { kind: "workspace", state: billingState(rawFacts({ route: L.routes.open })) },
+  });
+  const o = new ContractCreditLedger(open.facts);
+  const fixed = o.grant(structuredClone(L.events.stripe_period), L.terms);
+  assert.equal(fixed.outcome, "fix_route_and_grant");
+  const snapshot = o.snapshot();
+  assert.deepEqual(
+    [snapshot.reservations, snapshot.meterDrafts, snapshot.meterEvents],
+    [[], [], []],
+  );
+  // A Shopify payer with an empty wallet: no cap, no reservation.
+  const s = currentExample("shopify", { wallet: "0" });
+  assert.throws(
+    () =>
+      new ContractCreditLedger(s.facts).reserve("reservation-1", s.allocation, s.vendorReservation),
+    /CREDITS_EXHAUSTED/,
+  );
+  s.facts.usageCaps = { account_shopify_a: structuredClone(L.usageCaps.shopify_a) };
+  const m = new ContractCreditLedger(s.facts);
+  m.reserve("reservation-1", s.allocation, s.vendorReservation);
+  assert.equal(m.snapshot().capUsed.account_shopify_a, "30");
+  assert.equal(m.snapshot().wallets.account_shopify_a.available, "0");
+  const second = structuredClone(s.allocation);
+  second.id = "allocation_2";
+  second.allocationDigest = allocationDigest(second);
+  m.refresh({ approvedAllocationDigest: second.allocationDigest });
+  const vendor = { ...s.vendorReservation, id: "vendor_reservation_2" };
+  const capped = m.snapshot();
+  assert.throws(() => m.reserve("reservation-2", second, vendor), /USAGE_CAP_EXCEEDED/);
+  assert.deepEqual(m.snapshot(), capped);
+  // Settlement drafts a liability and a meter event on the cycle's subscription; no grant.
+  m.refresh({ approvedAllocationDigest: s.allocation.allocationDigest });
+  m.dispatch("reservation-1");
+  m.refresh({ now: "2026-10-20T10:05:00Z" });
+  m.settle("reservation-1", usageFor(s, "20"), settleOptions);
+  const settled = m.snapshot();
+  assert.deepEqual(settled.meterDrafts, [
+    {
+      usageLiabilityId: "usage_1",
+      billingAccountId: "account_shopify_a",
+      subscriptionId: L.usageCaps.shopify_a.subscriptionKey,
+      meterKey: "agent-work",
+      periodStart: L.usageCaps.shopify_a.periodStart,
+      merchantCredits: "20",
+      merchantLiability: { amount: "1", currency: "USD" },
+      status: "pending",
+    },
+  ]);
+  assert.deepEqual(settled.grants, []);
+  assert.equal(settled.capUsed.account_shopify_a, "20");
+  assert.equal(settled.wallets.account_shopify_a.available, "0");
+  // A cap bound to another subscription is no cap; a morrow_direct payer never has one.
+  const t = currentExample("shopify", { wallet: "0" });
+  t.facts.usageCaps = {
+    account_shopify_a: {
+      ...L.usageCaps.shopify_a,
+      subscriptionKey: L.entitlements.shopify_b.subscriptionId,
+    },
+  };
+  assert.ok(inspectAllocation(t.allocation, t.facts).includes("CREDITS_EXHAUSTED"));
+  const capCases = JSON.parse(readFileSync("docs/contracts/fixtures/P01.T04a.json", "utf8")).cases;
+  for (const id of ["usage_cap.morrow_direct_account", "usage_cap.non_usd"])
+    assert.equal(
+      validateCurrentBillingDefinition(
+        "UsageCap",
+        capCases.find((c) => c.id === "P01.T04a." + id).value,
+      ),
+      false,
+      id,
+    );
 });

@@ -468,3 +468,38 @@ test("kill-switch walkthroughs are not blocked by entitlement (ADR-0011 Q8)", ()
     "ENTITLEMENT_DENIED",
   ]);
 });
+// P01.T04a AC32: entitlement gates only a human's paid work in the walkthroughs;
+// an agent's every operation is metered model work.
+test("P01.T04a AC32: eight walkthroughs separate paid work from reads, approvals, stops and agent reads", () => {
+  const fixtures = read("docs/acceptance/P01.A01-fixtures.json");
+  const names = [
+    ["human_reads_without_entitlement", "catalog.products.read", []],
+    ["human_decides_approval_without_entitlement", "governance.approval.decide", []],
+    ["human_pauses_campaigns_without_entitlement", "ads.campaign.pause", []],
+    ["agent_read_requires_entitlement", "catalog.products.read", ["ENTITLEMENT_DENIED"]],
+  ];
+  for (const [name, capability, reasons] of names)
+    for (const variant of ["standalone_session_b", "standalone"]) {
+      const fixture = fixtures.find((f) => f.id === `P01.A01.${name}.${variant}`);
+      assert.ok(fixture, name + variant);
+      assert.equal(fixture.capability, capability);
+      assert.equal(fixture.request.conditions.entitled, false);
+      assert.deepEqual(inspectAuthority(find(catalogue, capability), fixture.request), {
+        allowed: reasons.length === 0,
+        reasons,
+      });
+      // With an entitlement every one of them is allowed.
+      const entitled = structuredClone(fixture.request);
+      entitled.conditions.entitled = true;
+      assert.deepEqual(inspectAuthority(find(catalogue, capability), entitled), {
+        allowed: true,
+        reasons: [],
+      });
+    }
+  assert.equal(fixtures.length, 86);
+  // A human's paid execute still needs the entitlement.
+  const billed = fixtures.find((f) => f.id === "P01.A01.missing_entitlement_denied.standalone");
+  assert.deepEqual(inspectAuthority(find(catalogue, billed.capability), billed.request).reasons, [
+    "ENTITLEMENT_DENIED",
+  ]);
+});
