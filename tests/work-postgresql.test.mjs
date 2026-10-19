@@ -7,12 +7,12 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { inspectMigrations } from "../scripts/delivery-checks.mjs";
 import { workStatements } from "../packages/work/src/sql.ts";
+import { loadMigrationChain } from "../scripts/migration-chain.mjs";
 import {
-  migrationPrerequisite,
+  migrationPlan,
   organizationInterlockSql,
   revocationSql,
   restoreSql,
-  workMigrationFiles,
 } from "./tenant-conformance/harness.mjs";
 
 const read = (path) => readFileSync(path, "utf8");
@@ -212,30 +212,28 @@ test("bridge: from 0014 on, every organization FOR UPDATE follows the exclusive 
   assert.equal(found.filter((f) => f === "0014.work-identity-bridge.sql").length, 3);
 });
 
-test("harness: role prerequisites are keyed by migration name and exist for every manifest entry", () => {
-  assert.equal(
-    migrationPrerequisite("0001.identity-foundation.sql"),
-    "infra/identity-role-prerequisites.sql",
+test("harness: the chain module supplies each row's pinned prerequisites and executeAs", () => {
+  const chain = loadMigrationChain();
+  const plan = migrationPlan(chain);
+  // Every pinned prerequisite runs once, immediately before the first row that pins it,
+  // and every manifest row runs under its own executeAs: no private file map remains.
+  const expected = manifest.migrations.flatMap((m) => [
+    ...(m.prerequisites ?? []).map((p) => ["prerequisite", p.file]),
+    ["migration", m.file, m.executeAs],
+  ]);
+  assert.deepEqual(
+    plan.map((step) =>
+      step.kind === "prerequisite"
+        ? [step.kind, step.file]
+        : [step.kind, step.file, step.executeAs],
+    ),
+    expected,
   );
-  // P05.T01x Part B keeps its prerequisite under any sequence it merges with.
-  for (const file of ["0013.account-onboarding.sql", "0016.account-onboarding.sql"])
-    assert.equal(migrationPrerequisite(file), "infra/identity-onboarding-role-prerequisites.sql");
-  assert.equal(migrationPrerequisite("0015.work-state.sql"), null);
-  for (const m of manifest.migrations) {
-    const file = migrationPrerequisite(m.file);
-    if (file) assert.ok(read(file).length > 0, m.file);
-  }
-  // The harness applies exactly the prerequisites the manifest pins on each row: its keyed
-  // identity files, plus the work roles before the first work migration.
-  for (const m of manifest.migrations) {
-    const applied = [migrationPrerequisite(m.file)].filter(Boolean);
-    if (m.file === workMigrationFiles[0]) applied.push("infra/work-role-prerequisites.sql");
-    assert.deepEqual(
-      (m.prerequisites ?? []).map((p) => p.file),
-      applied,
-      m.file,
-    );
-  }
+  for (const step of plan)
+    if (step.kind === "prerequisite") assert.equal(step.text, read(step.file), step.file);
+  const harness = read("tests/tenant-conformance/harness.mjs");
+  assert.doesNotMatch(harness, /-prerequisites\.sql/);
+  assert.match(harness, /loadMigrationChain/);
 });
 
 test("work state: definers have fixed search paths and no dynamic SQL; tasks stop at ready", () => {

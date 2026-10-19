@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { writeArtifact } from "./artifacts.mjs";
+import { inspectMigrations, loadMigrationChain, MigrationChainError } from "./migration-chain.mjs";
 export function inspectSecrets(text) {
   const patterns = [
     ["private_key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
@@ -16,95 +17,12 @@ export function inspectSecrets(text) {
       /\b(?:apiSecretKey|client_secret|access_token|password)\b["']?\s*[:=]\s*["'][^"'\s]{16,}["']/i,
     ],
   ];
-  return patterns.filter(([, pattern]) => pattern.test(text)).map(([kind]) => kind);
+  return [...new Set(patterns.filter(([, pattern]) => pattern.test(text)).map(([kind]) => kind))];
 }
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const executeAsRole = /^morrow_[a-z][a-z0-9_]{0,47}$/;
-const sha256Hex = /^[0-9a-f]{64}$/;
-const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-// A prerequisite entry is exactly {file, sha256}; any other key (say a `runAs`) denies
-// rather than being silently ignored by the administrator-run consumer.
-const isPrerequisiteEntry = (value) =>
-  typeof value === "object" &&
-  value !== null &&
-  Object.getPrototypeOf(value) === Object.prototype &&
-  Object.keys(value).sort().join() === "file,sha256" &&
-  typeof value.file === "string" &&
-  typeof value.sha256 === "string" &&
-  sha256Hex.test(value.sha256);
-// Pure: the caller passes migration SQL by file name and every prerequisite file's bytes by
-// repository path. Every row names the restricted owner role it is applied under
-// (`executeAs`). A row that needs administrator setup first lists pinned `prerequisites`
-// ({file, sha256}) under prerequisiteDirectory; each prerequisite file belongs to exactly
-// one row, and a passed prerequisite file that no row names denies.
-export function inspectMigrations(
-  manifest,
-  files,
-  prerequisites = {},
-  { prerequisiteDirectory = "infra" } = {},
-) {
-  const errors = [];
-  if (
-    manifest.schema_version !== 1 ||
-    manifest.engine !== "postgresql17" ||
-    !Array.isArray(manifest.migrations)
-  )
-    return ["INVALID_MIGRATION_MANIFEST"];
-  const prerequisitePath = new RegExp(
-    "^" + escapeRegExp(prerequisiteDirectory) + "/[a-z0-9-]+-prerequisites\\.sql$",
-  );
-  const prerequisiteFiles = new Set();
-  const namedPrerequisites = new Set();
-  let previous = 0;
-  const names = new Set();
-  for (const entry of manifest.migrations) {
-    if (
-      !Number.isInteger(entry.sequence) ||
-      entry.sequence <= previous ||
-      !/^\d{4}\.[a-z0-9-]+\.sql$/.test(entry.file) ||
-      names.has(entry.file) ||
-      !entry.reviewRef
-    )
-      errors.push("INVALID_MIGRATION_RECORD");
-    previous = entry.sequence;
-    names.add(entry.file);
-    const sql = files[entry.file];
-    if (!sql) errors.push("MISSING_MIGRATION");
-    else {
-      if (sha256(sql) !== entry.sha256) errors.push("MIGRATION_CHECKSUM");
-      if (!/^\s*BEGIN\s*;/i.test(sql) || !/COMMIT\s*;\s*$/i.test(sql))
-        errors.push("MIGRATION_TRANSACTION_ENVELOPE");
-    }
-    if (typeof entry.executeAs !== "string" || !executeAsRole.test(entry.executeAs))
-      errors.push("INVALID_EXECUTE_AS");
-    if (entry.prerequisites !== undefined) {
-      if (!Array.isArray(entry.prerequisites) || entry.prerequisites.length === 0)
-        errors.push("INVALID_PREREQUISITE");
-      else
-        for (const prerequisite of entry.prerequisites) {
-          const file = prerequisite?.file;
-          if (typeof file === "string") namedPrerequisites.add(file);
-          if (
-            !isPrerequisiteEntry(prerequisite) ||
-            !prerequisitePath.test(file) ||
-            !Object.hasOwn(prerequisites, file) ||
-            !(typeof prerequisites[file] === "string" || prerequisites[file] instanceof Uint8Array)
-          ) {
-            errors.push("INVALID_PREREQUISITE");
-            continue;
-          }
-          if (prerequisiteFiles.has(file)) errors.push("DUPLICATE_PREREQUISITE");
-          prerequisiteFiles.add(file);
-          if (sha256(prerequisites[file]) !== prerequisite.sha256)
-            errors.push("PREREQUISITE_CHECKSUM");
-        }
-    }
-  }
-  if (Object.keys(files).some((name) => !names.has(name))) errors.push("UNREVIEWED_MIGRATION_FILE");
-  if (Object.keys(prerequisites).some((path) => !namedPrerequisites.has(path)))
-    errors.push("UNREVIEWED_PREREQUISITE_FILE");
-  return [...new Set(errors)];
-}
+// The manifest checks live in the shared chain module (P04.T01i D3); this module keeps
+// its historical export for existing callers.
+export { inspectMigrations };
 export function lockedBundleAncestor(path, packages) {
   if (!packages[path]?.inBundle) return false;
   let parent = path;
@@ -181,18 +99,15 @@ const onlyError = (errors, code) => errors.length === 1 && errors[0] === code;
 function verify() {
   const { paths, findings: errors } = scanSecrets("."); // Never output matches or values.
   const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-  const sql = Object.fromEntries(
-    readdirSync("migrations")
-      .filter((p) => p.endsWith(".sql"))
-      .map((p) => [p, readFileSync("migrations/" + p, "utf8")]),
-  );
-  // Prerequisite bytes by repository path; inspectMigrations checks the ones rows name.
-  const prerequisites = Object.fromEntries(
-    readdirSync("infra")
-      .filter((p) => p.endsWith("-prerequisites.sql"))
-      .map((p) => ["infra/" + p, readFileSync("infra/" + p)]),
-  );
-  const migrationErrors = inspectMigrations(manifest, sql, prerequisites);
+  // The shared chain: manifest records, digests, pinned prerequisites and each body's
+  // transaction envelope, exactly as the staging runner and the harness read them.
+  const migrationErrors = [];
+  try {
+    loadMigrationChain({ root: "." });
+  } catch (error) {
+    if (!(error instanceof MigrationChainError)) throw error;
+    migrationErrors.push(...error.codes);
+  }
   const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
   if (lock.lockfileVersion !== 3) migrationErrors.push("LOCK_VERSION");
   for (const [path, pkg] of Object.entries(lock.packages)) {
