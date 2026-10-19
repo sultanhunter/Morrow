@@ -54,6 +54,25 @@ function callbackRequest(flow, change = {}) {
     },
   );
 }
+test("P05.T01y-AC30: the callback cookie lives min(1800, remaining) seconds and needs at least one", async () => {
+  for (const [lifetime, maxAge] of [
+    [1800000, "1800"],
+    [1799999, "1799"],
+    [900000, "900"],
+  ]) {
+    const bridge = await createStandaloneLoginBridge(fixture({ admissionLifetimeMs: lifetime }));
+    const result = await bridge.fetch(callbackRequest(await started(bridge)));
+    assert.equal(result.headers.get("location"), "/");
+    const cookies = result.headers.getSetCookie();
+    assert.equal(cookies.length, 1);
+    assert.equal(cookies[0].endsWith("; Max-Age=" + maxAge), true);
+  }
+  // Under one second of remaining time no session cookie is delivered.
+  const bridge = await createStandaloneLoginBridge(fixture({ admissionLifetimeMs: 999 }));
+  const result = await bridge.fetch(callbackRequest(await started(bridge)));
+  assert.equal(result.headers.get("location"), "/auth/result");
+  assert.equal(result.headers.has("set-cookie"), false);
+});
 test("start → real owning76/77/M composition emits only opaque cookie, then replay never resends", async () => {
   const f = fixture(),
     bridge = await createStandaloneLoginBridge(f),

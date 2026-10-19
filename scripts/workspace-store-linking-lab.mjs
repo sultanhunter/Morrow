@@ -1005,6 +1005,7 @@ const sources = [
   "migrations/0005.workspace-store-linking.sql",
   "infra/identity-role-prerequisites.sql",
   "packages/identity/src/workspace-store-linking.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "scripts/local-store-linking-sql.mjs",
   "scripts/workspace-store-linking-lab.mjs",
 ];

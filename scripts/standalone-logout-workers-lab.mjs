@@ -141,6 +141,7 @@ for (const mode of ["sinkThrow", "sinkReject", "sinkPending"])
 const paths = [
   "packages/identity/src/standalone-logout.ts",
   "packages/identity/src/self-logout-control.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/standalone-login-protocol.ts",
   "packages/identity/src/workos-session-status-json.ts",
   "packages/identity/src/standalone-workspace-bootstrap.ts",

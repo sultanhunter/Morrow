@@ -1,13 +1,14 @@
 BEGIN;
 -- Self-service enrollment at the first verified sign-in and first-owner signup (P05.T01x
--- Part B, ADR-0009). Applied 0001-0012 bytes stay unchanged. Enrollment confers no tenant
+-- Part B, ADR-0009). 0001-0004 stay byte-identical; 0005-0015 were rebaselined once
+-- under ADR-0020. Enrollment confers no tenant
 -- authority; signup is a separate human-initiated command with one fixed grant template.
 -- Existing executors may already hold LOGIN on an upgraded database; the new onboarding
 -- executor must still be NOLOGIN. IS NFC NORMALIZED needs a UTF8 database.
 DO $$ BEGIN
  IF current_user<>'morrow_identity_owner'
  OR NOT EXISTS(SELECT 1 FROM pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
- OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname='morrow_identity_onboarding' AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
+ OR NOT EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname='morrow_identity_onboarding' AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND morrow_identity.memberships_closed(r.rolname))
  OR (SELECT count(*) FROM pg_roles r WHERE r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance','morrow_identity_logout') AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication)<>9
  OR EXISTS(SELECT 1 FROM pg_roles r,pg_roles o WHERE o.rolname='morrow_identity_owner' AND r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance','morrow_identity_logout','morrow_identity_onboarding') AND (pg_has_role(r.oid,o.oid,'MEMBER') OR pg_has_role(o.oid,r.oid,'MEMBER')))
  OR (SELECT pg_encoding_to_char(d.encoding) FROM pg_database d WHERE d.datname=current_database())<>'UTF8'
@@ -150,7 +151,7 @@ CREATE FUNCTION morrow_identity.executor_role_safe(p_executor text) RETURNS bool
 LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
  SELECT current_user='morrow_identity_owner' AND session_user=p_executor
  AND EXISTS(SELECT 1 FROM pg_roles o WHERE o.rolname='morrow_identity_owner' AND NOT o.rolcanlogin AND NOT o.rolsuper AND NOT o.rolbypassrls AND NOT o.rolcreatedb AND NOT o.rolcreaterole AND NOT o.rolinherit AND NOT o.rolreplication)
- AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid))
+ AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.rolname=session_user AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolinherit AND NOT r.rolreplication AND morrow_identity.executor_memberships_closed(r.rolname))
  AND NOT EXISTS(SELECT 1 FROM pg_roles r,pg_roles o WHERE o.rolname='morrow_identity_owner' AND r.rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth','morrow_identity_resolution','morrow_identity_sessions','morrow_identity_login','morrow_identity_login_maintenance','morrow_identity_logout','morrow_identity_onboarding') AND (pg_has_role(r.oid,o.oid,'MEMBER') OR pg_has_role(o.oid,r.oid,'MEMBER')))
 $$;
 CREATE OR REPLACE FUNCTION morrow_identity.browser_sessions_role_safe() RETURNS boolean

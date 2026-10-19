@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "table": "purchase-decision",
+  "packet": "P01.T04a",
+  "description": "The reviewers' specification of purchaseDecision (P01.T04a §5 table; ADR-0015 item 3), written independently of packages/policy/src/billing-state.ts. The first rule whose every listed dimension matches a row decides it. scripts/billing-decision-tables.mjs generates purchase-decision.tsv from these rules, and tests/billing-decision-tables.test.mjs checks the library against every row. A Shopify-bound or Shopify-route workspace is refused every Morrow action in every row.",
+  "dimensions": [
+    {
+      "name": "phase",
+      "values": ["open", "shopify_bound", "morrow_direct", "shopify_app_pricing"],
+      "meaning": "The workspace's route phase (§3)."
+    },
+    {
+      "name": "action",
+      "values": [
+        "subscribe",
+        "change_plan",
+        "top_up",
+        "update_payment_method",
+        "cancel",
+        "billing_portal",
+        "view_invoices",
+        "shopify_plan_page",
+        "shopify_usage_cap"
+      ],
+      "meaning": "The purchase action: seven Morrow actions, and two Shopify actions on store A."
+    },
+    {
+      "name": "link",
+      "values": ["current", "not_current"],
+      "meaning": "Whether store A's link is current. An open workspace has no link."
+    },
+    {
+      "name": "payer",
+      "values": ["billable", "not_billable"],
+      "meaning": "The relevant payer's recorded facts (morrow_direct: the workspace account; Shopify: store A's account): an active account with an active entitlement, or a past-due one. It is billable only with a live subscription and, on Shopify, a current link. Unfixed phases have no payer."
+    },
+    {
+      "name": "subscription",
+      "values": ["live", "terminal"],
+      "meaning": "Whether that payer's subscription is terminal (cancelled, or uninstalled on Shopify)."
+    }
+  ],
+  "outcomes": [
+    "allowed",
+    "PURCHASE_ROUTE_MISMATCH",
+    "SUBSCRIPTION_REQUIRED",
+    "SUBSCRIPTION_EXISTS",
+    "STORE_NOT_LINKED",
+    "STORE_NOT_BILLABLE"
+  ],
+  "rules": [
+    {
+      "id": "P1",
+      "when": { "phase": ["open"], "action": ["subscribe"] },
+      "outcome": "allowed",
+      "source": "open: subscribe only."
+    },
+    {
+      "id": "P2",
+      "when": {
+        "phase": ["open"],
+        "action": [
+          "change_plan",
+          "top_up",
+          "update_payment_method",
+          "cancel",
+          "billing_portal",
+          "view_invoices"
+        ]
+      },
+      "outcome": "SUBSCRIPTION_REQUIRED",
+      "source": "open: every other Morrow action needs a plan first."
+    },
+    {
+      "id": "P3",
+      "when": { "phase": ["open"] },
+      "outcome": "PURCHASE_ROUTE_MISMATCH",
+      "source": "open: the Shopify actions belong to the Shopify route."
+    },
+    {
+      "id": "P4",
+      "when": {
+        "phase": ["shopify_bound", "shopify_app_pricing"],
+        "action": [
+          "subscribe",
+          "change_plan",
+          "top_up",
+          "update_payment_method",
+          "cancel",
+          "billing_portal",
+          "view_invoices"
+        ]
+      },
+      "outcome": "PURCHASE_ROUTE_MISMATCH",
+      "source": "Shopify phases: every Morrow action is refused (ADR-0015 item 3)."
+    },
+    {
+      "id": "P5",
+      "when": {
+        "phase": ["shopify_bound", "shopify_app_pricing"],
+        "action": ["shopify_plan_page"],
+        "link": ["current"]
+      },
+      "outcome": "allowed",
+      "source": "Shopify phases: the plan page while the store's link is current."
+    },
+    {
+      "id": "P6",
+      "when": { "phase": ["shopify_bound", "shopify_app_pricing"], "action": ["shopify_plan_page"] },
+      "outcome": "STORE_NOT_LINKED",
+      "source": "Shopify phases: no plan page for a store that is not linked."
+    },
+    {
+      "id": "P7",
+      "when": { "phase": ["shopify_bound"], "action": ["shopify_usage_cap"] },
+      "outcome": "SUBSCRIPTION_REQUIRED",
+      "source": "shopify_bound: no usage cap before a plan."
+    },
+    {
+      "id": "P8",
+      "when": {
+        "phase": ["shopify_app_pricing"],
+        "action": ["shopify_usage_cap"],
+        "link": ["current"],
+        "payer": ["billable"],
+        "subscription": ["live"]
+      },
+      "outcome": "allowed",
+      "source": "shopify_app_pricing: a usage cap when the store's own payer is billable."
+    },
+    {
+      "id": "P9",
+      "when": { "phase": ["shopify_app_pricing"], "action": ["shopify_usage_cap"] },
+      "outcome": "STORE_NOT_BILLABLE",
+      "source": "shopify_app_pricing: otherwise the store's payer is not billable."
+    },
+    {
+      "id": "P10",
+      "when": {
+        "phase": ["morrow_direct"],
+        "action": ["shopify_plan_page", "shopify_usage_cap"]
+      },
+      "outcome": "PURCHASE_ROUTE_MISMATCH",
+      "source": "morrow_direct: a linked store is never charged through App Pricing (ADR-0015 item 3)."
+    },
+    {
+      "id": "P11",
+      "when": { "phase": ["morrow_direct"], "action": ["subscribe"], "subscription": ["terminal"] },
+      "outcome": "allowed",
+      "source": "morrow_direct: resubscription after a terminal subscription."
+    },
+    {
+      "id": "P12",
+      "when": { "phase": ["morrow_direct"], "action": ["subscribe"] },
+      "outcome": "SUBSCRIPTION_EXISTS",
+      "source": "morrow_direct: one subscription; change it instead."
+    },
+    {
+      "id": "P13",
+      "when": {
+        "phase": ["morrow_direct"],
+        "action": ["top_up"],
+        "payer": ["billable"],
+        "subscription": ["live"]
+      },
+      "outcome": "allowed",
+      "source": "morrow_direct: a top-up needs a billable workspace."
+    },
+    {
+      "id": "P14",
+      "when": { "phase": ["morrow_direct"], "action": ["top_up"] },
+      "outcome": "SUBSCRIPTION_REQUIRED",
+      "source": "morrow_direct: no top-up without a billable subscription."
+    },
+    {
+      "id": "P15",
+      "when": { "phase": ["morrow_direct"] },
+      "outcome": "allowed",
+      "source": "morrow_direct: change_plan, update_payment_method, cancel, billing_portal and view_invoices."
+    }
+  ]
+}

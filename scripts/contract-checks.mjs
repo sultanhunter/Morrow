@@ -2,7 +2,13 @@ import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import canonicalize from "canonicalize";
 import { read, sha } from "./foundation.mjs";
-import { readSchemaSources, contractVersion } from "./contract-sources.mjs";
+import {
+  readSchemaSources,
+  contractVersion,
+  schemasByKind,
+  eventPayloadSelectors,
+  readEventRegistry,
+} from "./contract-sources.mjs";
 
 if (Number(process.versions.node.split(".")[0]) !== 24)
   throw new Error("Contract checks require the pinned Node 24 runtime");
@@ -180,11 +186,323 @@ export function inspectHandoff(v) {
     v.currentGrant
   );
 }
+// --- P01.T02c (ADR-0016): event registry, collaboration defaults and sidebar ---
+export const layered = schemasByKind(sources);
+const defOf = (selector) => {
+  const i = selector.indexOf(":");
+  return layered[selector.slice(0, i)]?.$defs?.[selector.slice(i + 1)];
+};
+let registryCache = null;
+const registry = () => (registryCache ??= eventPayloadSelectors(layered, readEventRegistry()));
+// EventEnvelope@2 by the reference compiler: the schema plus the registry row of
+// its eventType (aggregate type and payload definition); a nulled payload is allowed.
+export function inspectEvent(envelope, rows = registry()) {
+  if (!selectorValidator("core-v1.1:EventEnvelope")(envelope)) return false;
+  const row = Object.hasOwn(rows, envelope.eventType) ? rows[envelope.eventType] : null;
+  const ref = envelope.payloadRef;
+  return (
+    row !== null &&
+    row.aggregateType === envelope.aggregateType &&
+    (envelope.payload === null || selectorValidator(row.selector)(envelope.payload)) &&
+    // The payloadRef names this event: its organization, workspace, store and id (§8).
+    (ref === null ||
+      (ref.id === envelope.eventId &&
+        ["organizationId", "workspaceId", "storeId"].every((key) => ref[key] === envelope[key])))
+  );
+}
+// AskAdminReadRecord by the reference compiler (ADR-0016 item 5): the schema, no
+// record audits the reader's own Ask, and a list names each conversationId once.
+export function inspectAskAdminReadRecord(record) {
+  if (!selectorValidator("core-v1.1:AskAdminReadRecord")(record)) return false;
+  if (record.readKind !== "list") return record.askOwnerPrincipalId !== record.readerPrincipalId;
+  const ids = record.asks.map((a) => a.conversationId);
+  return (
+    record.asks.every((a) => a.askOwnerPrincipalId !== record.readerPrincipalId) &&
+    new Set(ids).size === ids.length
+  );
+}
+// Current-definition cases whose rules go beyond the schema (`validateCurrentDefinition`).
+const currentInspectors = Object.freeze({ AskAdminReadRecord: inspectAskAdminReadRecord });
+const idRef = "urn:morrow:contracts:core:v1#/$defs/Id";
+// The largest JSON value a payload property schema admits (IDs, statuses, booleans and null only), or null when it admits anything else.
+function largest(schema) {
+  if (schema?.$ref === idRef || schema?.$ref === "urn:morrow:contracts:core:v1#/$defs/CapabilityId")
+    return "x".repeat(128);
+  if (typeof schema?.$ref === "string") {
+    const [base, name] = schema.$ref.split("#/$defs/"),
+      target = (base ? Object.values(layered).find((s) => s.$id === base) : layered["core-v1.1"])
+        ?.$defs?.[name];
+    return /Status$/.test(name) && Array.isArray(target?.enum)
+      ? [...target.enum].sort((a, b) => b.length - a.length)[0]
+      : null;
+  }
+  if (schema?.type === "boolean") return false;
+  if (schema?.type === "string" && Array.isArray(schema.enum))
+    return [...schema.enum].sort((a, b) => b.length - a.length)[0];
+  if (Array.isArray(schema?.anyOf) && schema.anyOf.length === 2 && schema.anyOf[1].type === "null")
+    return largest(schema.anyOf[0]);
+  return null;
+}
+// Registry rows are well formed; every EventPayload member is registered and every row's payload is a member; payloads carry IDs and statuses only, at most 512 JCS bytes.
+export function inspectEventRegistry(file, byKind = layered) {
+  let rows;
+  try {
+    rows = eventPayloadSelectors(byKind, file);
+  } catch (error) {
+    return [error.message];
+  }
+  const errors = [],
+    union = (byKind["core-v1.1"].$defs.EventPayload?.anyOf ?? []).map((r) =>
+      r.$ref.replace("#/$defs/", ""),
+    );
+  const used = new Set(file.events.map((r) => r.payloadDefinition));
+  for (const name of union) if (!used.has(name)) errors.push("EVENT_PAYLOAD_UNREGISTERED:" + name);
+  for (const name of used) {
+    if (!union.includes(name)) errors.push("EVENT_PAYLOAD_NOT_IN_UNION:" + name);
+    const schema = byKind["core-v1.1"].$defs[name];
+    if (!schema || schema.type !== "object" || schema.additionalProperties !== false) {
+      errors.push("EVENT_PAYLOAD_NOT_CLOSED:" + name);
+      continue;
+    }
+    const maximal = {};
+    for (const [key, property] of Object.entries(schema.properties)) {
+      const value = largest(property);
+      if (value === null) errors.push(`EVENT_PAYLOAD_NOT_IDS_AND_STATUSES:${name}.${key}`);
+      else maximal[key] = value;
+    }
+    if (Buffer.byteLength(canonicalize(maximal)) > 512)
+      errors.push("EVENT_PAYLOAD_TOO_LARGE:" + name);
+  }
+  if (Object.keys(rows).length !== file.events.length) errors.push("EVENT_REGISTRY_INVALID:count");
+  return errors;
+}
+const enumOf = (s) =>
+  s?.enum ??
+  (s?.$ref
+    ? enumOf(
+        defOf(
+          s.$ref.startsWith("#")
+            ? "core-v1.1:" + s.$ref.slice(8)
+            : "core:" + s.$ref.split("#/$defs/")[1],
+        ),
+      )
+    : s && "const" in s
+      ? [s.const]
+      : undefined);
+// docs/contracts/collaboration-defaults.json agrees with the v1.1 schemas: the trust rank orders every TrustClass, every inbox kind maps to DecisionState machines, open states belong to their machine, and each published limit equals the schema bound.
+export function inspectCollaborationDefaults(d, byKind = layered) {
+  const errors = [],
+    defs = byKind["core-v1.1"].$defs,
+    same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  if (
+    !d ||
+    typeof d !== "object" ||
+    !same(Object.keys(d).sort(), [
+      "adr",
+      "kindMachines",
+      "limits",
+      "neverOpen",
+      "openStates",
+      "schema_version",
+      "trustRank",
+    ]) ||
+    d.schema_version !== 1 ||
+    !same(d.adr, ["ADR-0016"])
+  )
+    return ["COLLABORATION_DEFAULTS_INVALID"];
+  if (
+    d.trustRank.length !== defs.TrustClass.enum.length ||
+    !same([...d.trustRank].sort(), [...defs.TrustClass.enum].sort())
+  )
+    errors.push("TRUST_RANK_INVALID");
+  const machines = Object.fromEntries(
+    defs.DecisionState.anyOf.map((o) => [o.properties.machine.const, enumOf(o.properties.status)]),
+  );
+  if (!same(Object.keys(d.kindMachines), defs.InboxKind.enum)) errors.push("KIND_MACHINES_INVALID");
+  for (const list of Object.values(d.kindMachines))
+    if (!Array.isArray(list) || !list.length || list.some((m) => !Object.hasOwn(machines, m)))
+      errors.push("KIND_MACHINES_INVALID");
+  // The InboxItem conditions fix each kind's machine; an exception's machine follows its reason.
+  const fixed = {};
+  for (const c of defs.InboxItem.allOf ?? []) {
+    const machine = c.then?.properties?.decisionState?.properties?.machine?.const,
+      kind = c.if?.properties?.kind?.const;
+    if (machine === undefined) continue;
+    const key = kind ?? (c.if?.properties?.subject?.properties?.reason ? "exception" : undefined);
+    if (key) (fixed[key] ??= []).push(machine);
+  }
+  if (
+    !same(
+      Object.keys(d.kindMachines).map((k) => [k, [...(d.kindMachines[k] ?? [])].sort()]),
+      Object.keys(d.kindMachines).map((k) => [k, [...(fixed[k] ?? [])].sort()]),
+    )
+  )
+    errors.push("KIND_MACHINES_INVALID");
+  if (!same(Object.keys(d.openStates).sort(), Object.keys(machines).sort()))
+    errors.push("OPEN_STATES_INVALID");
+  for (const [machine, states] of Object.entries(d.openStates))
+    if (
+      !Array.isArray(states) ||
+      new Set(states).size !== states.length ||
+      states.some((s) => !machines[machine]?.includes(s)) ||
+      (machine === "none" && states.length)
+    )
+      errors.push("OPEN_STATES_INVALID:" + machine);
+  if (!same(d.neverOpen, ["failed_operation"])) errors.push("NEVER_OPEN_INVALID");
+  const l = d.limits,
+    p = defs.Message.properties,
+    a = defs.AccessRequestScope.properties;
+  for (const [name, actual, expected] of [
+    [
+      "messageParts",
+      [l.messageParts?.minimum, l.messageParts?.maximum],
+      [defs.MessagePartInputs.minItems, defs.MessagePartInputs.maxItems],
+    ],
+    [
+      "mentionPartsPerMessage",
+      [l.mentionPartsPerMessage, l.mentionPartsPerMessage],
+      [defs.MessagePartInputs.maxContains, p.parts.maxContains],
+    ],
+    ["textPartCharacters", l.textPartCharacters, defs.TextPart.properties.text.maxLength],
+    [
+      "evidenceSummaryCharacters",
+      l.evidenceSummaryCharacters,
+      defs.EvidenceSummaryPart.properties.text.maxLength,
+    ],
+    [
+      "evidenceRefsPerSummary",
+      l.evidenceRefsPerSummary,
+      defs.EvidenceSummaryPart.properties.evidenceRefs.maxItems,
+    ],
+    ["restrictedSourcesPerMessage", l.restrictedSourcesPerMessage, p.restrictedSources.maxItems],
+    ["fieldsPerSource", l.fieldsPerSource, defs.BoundedFieldList.maxItems],
+    ["viewRequirementsPerMessage", l.viewRequirementsPerMessage, p.restrictedSources.maxItems + 2],
+    [
+      "pageSize",
+      [l.pageSize?.minimum, l.pageSize?.maximum],
+      [defs.PageRequest.properties.limit.minimum, defs.PageRequest.properties.limit.maximum],
+    ],
+    [
+      "inboxMarkBatch",
+      [l.inboxMarkBatch?.minimum, l.inboxMarkBatch?.maximum],
+      [defs.InboxItemIds.minItems, defs.InboxItemIds.maxItems],
+    ],
+    ["projectTitleCharacters", l.projectTitleCharacters, defs.ProjectTitle.maxLength],
+    [
+      "projectTabs",
+      [l.projectTabs, l.projectTabs],
+      [defs.ProjectTabInputs.maxItems, defs.Project.properties.tabs.maxItems],
+    ],
+    ["projectTabTitleCharacters", l.projectTabTitleCharacters, defs.ProjectTabTitle.maxLength],
+    [
+      "pinnedProjectsPerWorkspace",
+      l.pinnedProjectsPerWorkspace,
+      defs.Project.properties.pinRank.anyOf[0].maximum + 1,
+    ],
+    ["accessRequest.resources", l.accessRequest?.resources, a.resources.maxItems],
+    ["accessRequest.stores", l.accessRequest?.stores, a.storeIds.maxItems],
+    ["accessRequest.accounts", l.accessRequest?.accounts, a.accountIds.maxItems],
+    [
+      "accessRequest.fields",
+      [l.accessRequest?.fields?.minimum, l.accessRequest?.fields?.maximum],
+      [defs.BoundedFieldList.minItems, defs.BoundedFieldList.maxItems],
+    ],
+    [
+      "accessRequest.reasonCharacters",
+      l.accessRequest?.reasonCharacters,
+      defs.RequestReason.maxLength,
+    ],
+    [
+      "askAdminReadRecordAsks",
+      l.askAdminReadRecordAsks,
+      defs.AskAdminReadRecord.anyOf[0].properties.asks.maxItems,
+    ],
+  ])
+    if (!same(actual, expected)) errors.push("LIMIT_DRIFT:" + name);
+  return [...new Set(errors)];
+}
+// The option-1 sidebar (P01.T02c §11): Ask is an action; the seven primary destinations in order; every target is an existing route with valid parameters; pinned projects target `project`, at most 20.
+export const primaryDestinations = Object.freeze([
+  "home",
+  "work",
+  "inbox",
+  "agents",
+  "assets",
+  "knowledge",
+  "settings",
+]);
+export function inspectSidebar(routes) {
+  const errors = [],
+    s = routes?.sidebar,
+    byId = new Map((routes?.routes ?? []).map((r) => [r.id, r]));
+  if (!s || typeof s !== "object") return ["SIDEBAR_MISSING"];
+  if (
+    JSON.stringify(Object.keys(s).sort()) !==
+    JSON.stringify([
+      "description",
+      "entry_action",
+      "footer",
+      "people_and_agents",
+      "pinned_projects",
+      "primary",
+    ])
+  )
+    errors.push("SIDEBAR_KEYS");
+  if (s.entry_action !== "ask" || !byId.has("ask")) errors.push("SIDEBAR_ENTRY_ACTION");
+  const params = (t) => {
+    const r = byId.get(t.route);
+    if (!r) return false;
+    const names = [...r.pattern.matchAll(/:([A-Za-z][A-Za-z0-9]*)/g)]
+      .map((m) => m[1])
+      .filter((n) => n !== "workspaceId");
+    const given = t.params ?? {};
+    return (
+      JSON.stringify(Object.keys(given).sort()) ===
+        JSON.stringify(names.filter((n) => n in given).sort()) &&
+      Object.entries(given).every(
+        ([k, v]) => names.includes(k) && (r.parameter_enums?.[k]?.includes(v) ?? false),
+      )
+    );
+  };
+  const targets = [...(s.primary ?? []), ...(s.people_and_agents ?? []), ...(s.footer ?? [])];
+  for (const t of targets)
+    if (!byId.has(t.route) || (t.params !== undefined && !params(t)))
+      errors.push("SIDEBAR_TARGET:" + t.id);
+  if (
+    JSON.stringify((s.primary ?? []).map((t) => t.id)) !== JSON.stringify(primaryDestinations) ||
+    (s.primary ?? []).some((t) => t.route !== t.id || t.params !== undefined)
+  )
+    errors.push("SIDEBAR_PRIMARY");
+  if ((s.primary ?? []).some((t) => t.id === "ask" || t.route === "ask"))
+    errors.push("SIDEBAR_ASK_IS_ACTION");
+  if (
+    (s.primary ?? []).find((t) => t.id === "inbox")?.badge !== "open_inbox_items" ||
+    (s.primary ?? []).some((t) => t.id !== "inbox" && t.badge !== undefined)
+  )
+    errors.push("SIDEBAR_BADGE");
+  const p = s.pinned_projects;
+  if (
+    !p ||
+    p.route !== "project" ||
+    p.maximum !== 20 ||
+    p.order !== "viewer_relative_pin_rank" ||
+    p.breadcrumb_parent !== "work" ||
+    byId.get("project")?.parent !== "work"
+  )
+    errors.push("SIDEBAR_PINNED_PROJECTS");
+  return errors;
+}
 export function checkFixture(f) {
   if (f.kind === "schema")
     return (
       (f.selector ? selectorValidator(f.selector) : validators[f.definition])(f.value) === f.valid
     );
+  if (f.kind === "event") return inspectEvent(f.value) === f.valid;
+  if (f.kind === "current") {
+    if (!Object.hasOwn(currentInspectors, f.definition))
+      throw new Error("Unknown current definition " + f.definition);
+    return currentInspectors[f.definition](f.value) === f.valid;
+  }
   if (f.kind === "binding")
     return (
       JSON.stringify(inspectBinding(f.context).sort()) ===

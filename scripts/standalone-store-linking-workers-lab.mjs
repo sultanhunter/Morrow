@@ -182,6 +182,7 @@ add("lost_status_ack", {
 const paths = [
   "packages/identity/src/standalone-store-linking.ts",
   "packages/identity/src/workspace-store-linking-control.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/workspace-store-linking.ts",
   "packages/identity/src/standalone-request-guard.ts",
   "packages/identity/src/standalone-workspace-bootstrap.ts",

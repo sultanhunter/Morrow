@@ -2,6 +2,7 @@ import { identitySql } from "./index.js";
 import { workspaceStoreLinkingControlSql } from "./workspace-store-linking-control.js";
 import { workspaceStoreLinkingSql } from "./workspace-store-linking.js";
 import { selfLogoutSql } from "./self-logout-control.js";
+import { selfRotationSql } from "./self-session-rotation-control.js";
 import { accountOnboardingSql, accountOverviewSql } from "./account-onboarding.js";
 import {
   controlledNeonHeld,
@@ -78,10 +79,11 @@ export const controlledNeonWorkspaceProfiles = Object.freeze({
     5000,
     10000,
   ),
+  // Self logout and self rotation (P05.T01y): one executor, one envelope, two definers.
   logoutPool: profile(
     "morrow_identity_logout",
-    selfLogoutSql,
-    { begin: 0, role: 0, timeout: 0, idleTimeout: 0, end: 8, commit: 0, rollback: 0 },
+    { ...selfLogoutSql, rotate: selfRotationSql.rotate },
+    { begin: 0, role: 0, timeout: 0, idleTimeout: 0, end: 8, rotate: 10, commit: 0, rollback: 0 },
     1000,
     5000,
   ),

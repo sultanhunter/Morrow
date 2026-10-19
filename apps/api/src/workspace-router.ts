@@ -5,6 +5,7 @@ import { createWorkspaceHttpListener, type WorkspaceHttpBinding } from "./worksp
 export interface WorkspaceApiHttpBinding extends WorkspaceHttpBinding {
   readonly auth: AuthDispatchHandler;
   readonly logout?: AuthDispatchHandler;
+  readonly rotate?: AuthDispatchHandler;
 }
 
 // Runtime binding remains source-owned. The ordinary scaffold supplies none.
@@ -17,6 +18,7 @@ export function createWorkspaceApiHttpListener(binding?: WorkspaceApiHttpBinding
       origin: configured.origin,
       auth: configured.auth,
       ...(configured.logout ? { logout: configured.logout } : {}),
+      ...(configured.rotate ? { rotate: configured.rotate } : {}),
     },
   );
   return (request: IncomingMessage, response: ServerResponse): void => {

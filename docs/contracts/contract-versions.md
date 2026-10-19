@@ -1,6 +1,6 @@
 # Contract versions
 
-Owner: Morrow platform owner. Decisions: ADR-0005 (kill switches, executor classes), ADR-0011 Q0 (versioning) and ADR-0015 (the billing layer). Packets: P01.T02a and P01.T04a. This file describes how contract versions are built and checked; the schemas themselves are the authority.
+Owner: Morrow platform owner. Decisions: ADR-0005 (kill switches, executor classes), ADR-0011 Q0 (versioning), ADR-0015 (the billing layer) and ADR-0016 (collaboration contracts). Packets: P01.T02a, P01.T04a and P01.T02c. This file describes how contract versions are built and checked; the schemas themselves are the authority.
 
 ## Contract sets
 
@@ -42,9 +42,21 @@ PR-B also adds the bodies of two new capabilities, `governance.review_policy.rev
 
 P05.T01x Part B (ADR-0009 item 5) adds three v1.1 definitions for the account routes, all additions and none a replacement, so `changes.json` is unchanged: `AccountOverview` (`GET /workspaces`), `OrganizationSignupRequest` and `OrganizationSignupResult` (`POST /organizations`). The baseline hash of `schemas/v1.1/core.schema.json` was updated deliberately; the bundle grew to 1,857,713 bytes.
 
+P05.T01y (ADR-0004) adds one v1.1 definition, `SessionRotationResult` (the `POST /auth/rotate` 200 body), an addition and not a replacement, so `changes.json` is unchanged. The baseline hash of `schemas/v1.1/core.schema.json` was updated deliberately; the generated validator bundle is 2,207,978 bytes.
+
 The ADR-0018 follow-up edits Proposal@2 while v1.1 is a candidate: `taskId` becomes `Id | null`, and a null `taskId` requires a `governance.*` `capabilityId` and a `HumanActorRef` `proposedBy` (an `allOf` rule). The review library adds the catalogue Governance-domain check, the task binding and the `requestedBy` derivation, which JSON Schema cannot express. It is a deliberate edit of the candidate: the `Proposal` entry in `changes.json` keeps its place and records the edit in its reason, and the baseline hash of `schemas/v1.1/core.schema.json` is updated; with the Part B definitions the bundle is 1,860,473 bytes. If v1.1 had been frozen, the edit would have opened `schemas/v1.2/` instead.
 
 New v1.1 definitions in PR-A: `HumanActorRef`, `KillSwitchControl`, `CampaignRef`, `CampaignRefs` and `KillSwitchRecord`. In PR-B: `NonNegativeDecimal`, `NonNegativeMoney`, `RiskClass`, `SelectionIndexes`, `TargetSelection`, `ProposalTarget`, `ProposalDerivation`, `ReviewRule`, `RestrictedReviewRule`, `SoloOwnerRule`, `ReviewPolicyRules`, `ReviewPolicy`, `ApprovalDecision` and `ReviewDecisionInput`. Credit ceilings reuse billing v1 `CreditUnits` by absolute URI. `KillSwitchRecord.capabilityId` is limited to the five kill switches, and its `targets` are v1 `ResourceRef`s: a campaign uses kind `campaign`, an installation `installation`, a membership `member` and a release `release`; `KillSwitchTargetKind` (`packages/policy/src/review-facts.ts`) uses the same kinds. v1 `ResourceRef` has no kind for a store connection, so how a disconnect names its target is open; P05.T01z settles it with a deliberate v1.1 edit before sign-off.
+
+## Collaboration contracts (P01.T02c PR-A, ADR-0016)
+
+P01.T02c declares one replacement, `EventEnvelope` (definition, `replaces: "core:EventEnvelope"`): EventEnvelope@2 has `schemaVersion` 2, a nullable registered `payload` and an `EventPayloadRef` `payloadRef` nulled together with it, a per-viewer sealed `StreamPosition`, and a registry-checked `eventType` and `aggregateType` in place of the v1 closed aggregate enum and `ArtifactRef` payload ref. A v1 envelope is not a valid EventEnvelope@2.
+
+Every other P01.T02c definition is a new name in `schemas/v1.1/core.schema.json` (94 in all, the replacement included), and the eight capability bodies in `schemas/v1.1/capabilities.schema.json` are additions: `workspace.conversation.{create,post}`, `workspace.project.{create,revise,pin}`, `workspace.inbox.{read,mark}` and `governance.access.request`. They cover the shared types (`StreamPosition`, `PageCursor`, `PageRequest`, the ref family, `TrustClass`, `CitedRef`, `RestrictedSource`), conversations and messages (`Conversation`, `Message` with its six part kinds, `PostInput`, `MessageDelta`, `StreamFrame`, `AskAdminReadRecord`), the inbox (`InboxItem`, `InboxSubject`, `DecisionState`, `InboxFilter`, `InboxMarkInput`, `InboxPage`), projects and access requests (`Project`, `AccessRequest`, `AccessRequestScope`, the decision and withdraw inputs, `StopProposalDismissInput`) and the 19 event payload definitions with their `EventPayload` union. Body field types that the catalogue names (R11) are new named definitions such as `NullableId`, `Boolean`, `MessagePartInputs`, `ProjectTabInputs` and `InboxItems`.
+
+`docs/contracts/event-registry.json` is the additive event registry. Both generators read it through `eventPayloadSelectors` in `scripts/contract-sources.mjs`: `domain.ts` gains `EventPayloads`, `EventType`, `EventPayloadOf<K>` and `EventAggregateTypeOf<K>`, and the validator bundle gains the frozen `eventPayloadSelectors` map and `validateEventPayload(eventType, aggregateType, payload)`. `validateCurrentDefinition("EventEnvelope", e)`, and `"StreamFrame"` for an event frame, is the schema plus that selector. `inspectEventRegistry`, `inspectCollaborationDefaults` and `inspectSidebar` (`scripts/contract-checks.mjs`, run by `npm run verify:contracts`) check the registry, `collaboration-defaults.json` and the routes' sidebar model against the schemas. `release-baseline.json` also pins each registry row (`event_registry`), and `inspectEventRegistryBaseline` (`npm run verify:boundaries`) keeps the registry append-only. The generator also types a closed object without properties as `Record<string, never>`, so an empty payload accepts no fields.
+
+The collaboration definitions bring the bundle from 2,202,717 to 2,871,586 bytes (146,710 to 199,654 bytes gzipped, about 36 percent more), mostly because the inbox item, message and envelope validators inline their part, subject and payload unions. With P05.T01y's `SessionRotationResult` as well, the bundle is 2,876,847 bytes.
 
 ## Billing layer (P01.T04a, ADR-0015)
 
@@ -68,12 +80,15 @@ If v1.1 is frozen before a later billing addition merges, that addition opens `s
 - A billing definition resolves to `billing-v1.1:<Name>` if it exists, otherwise `billing:<Name>` (`billingLayers` in `scripts/contract-sources.mjs`).
 - A capability body resolves to `capabilities-v1.1:<id>.<io>` if it exists, otherwise `capabilities:<id>.<io>`.
 
-The generated bundle `packages/contracts/src/generated/runtime-validators.mjs` exports four frozen maps: `validators` (every exact selector), `currentDefinitionSelectors`, `capabilityBodySelectors` and `currentBillingDefinitionSelectors`. `packages/contracts/src/validation.ts` exposes:
+The generated bundle `packages/contracts/src/generated/runtime-validators.mjs` exports five frozen maps: `validators` (every exact selector), `currentDefinitionSelectors`, `capabilityBodySelectors`, `currentBillingDefinitionSelectors` and `eventPayloadSelectors` (P01.T02c), and the registry selector `validateEventPayload`. `packages/contracts/src/validation.ts` exposes:
 
 - `validateCapabilityInput` and `validateCapabilityOutput`: the effective body. Product code and the typed client use these.
-- `validateCurrentDefinition(name, value)`: the effective definition. Product code uses this.
+- `validateCurrentDefinition(name, value)`: the effective definition. Product code uses this. For `EventEnvelope` and an event `StreamFrame` it also applies the event registry and binds `payloadRef` to the envelope's tenant and `eventId`; for `AskAdminReadRecord` it also rejects a record naming the reader's own Ask or one conversation twice. Product code never validates those three by their exact selector (`inspectRefinedSelectorUse`, `REFINED_DEFINITION_BYPASS`).
+- `validateEventPayload(eventType, aggregateType, payload)` and `eventRegistered(eventType, aggregateType)`: the event registry (P01.T02c).
 - `validateCurrentBillingDefinition(name, value)`: the effective billing definition. Product code uses this.
 - `validateDefinition(schema, name, value)` with `schema` one of `core`, `billing`, `core-v1.1` or `billing-v1.1`: an exact selector, kept for the frozen baseline, historical fixtures and tests.
+
+Browser code never imports that bundle (P05.T01y). For each name in the closed list `browserValidatorDefinitions` (`scripts/contract-sources.mjs`; today `SessionRotationResult`), the generator also emits `packages/contracts/src/generated/validators/<Name>.mjs`, imported as `@morrow/contracts/validators/<Name>`. It exports only `validate<Name>`: the table's compiled validator for the effective selector, from the same Ajv instance, emitted without the table (the generator checks that the table exports the same function and contains its code byte for byte). The UI import allowlist (`scripts/boundary-checks.mjs`) admits exactly these specifiers and never `@morrow/contracts/validation` or `@morrow/contracts/client`, and `verify:workspace-web` denies the table in every browser bundle.
 
 The generated types follow the same rule: `CapabilityInput<K>` is the effective body, `Current_<Name>` aliases (with `CurrentDefinitions` and `CurrentDefinitionName`) name the effective definitions, and `CurrentBilling_<Name>` aliases (with `CurrentBillingDefinitions` and `CurrentBillingDefinitionName`) the effective billing definitions. The v1 types stay exported for history.
 
@@ -86,16 +101,16 @@ Validators are generated ahead of time with one Ajv 2020 instance (`npm run cont
 | Hashes of every baselined schema | `inspectCompatibility` (`scripts/boundary-checks.mjs`) | `UNREVIEWED_SCHEMA_DELTA:<path>` |
 | Every `docs/contracts/schemas/**/*.schema.json` is baselined | `inspectBaselineCoverage` | `UNBASELINED_SCHEMA:<path>` |
 | Every replacement is declared, and every declaration names a real replacement | `inspectDeclaredReplacements` | `UNDECLARED_REPLACEMENT:<name>` |
-| Generated output matches the sources | `generate-contracts.mjs --check`, `generate-runtime-validators.mjs --check` | drift error |
+| Generated output matches the sources, including each per-definition browser module, and the browser validators directory holds nothing else | `generate-contracts.mjs --check`, `generate-runtime-validators.mjs --check` | drift error |
 | The catalogue describes the effective bodies | `validateCatalogue` rule R11 (`scripts/foundation.mjs`) | `R11 ...` |
 | Product code under `apps/` and `packages/` never validates or types a replaced v1 definition: `validateDefinition("core", <replaced>)`, a `"core:<replaced>"` selector or a `Core_<replaced>` type, and the same with `"billing"`, `"billing:"` and `Billing_` for a replaced billing definition | `inspectSupersededUse` (replaced names read from `changes.json`; generated files exempt) | `SUPERSEDED_CONTRACT_USE:<file>:<name>` |
 | Only the billing constraints reader and its two forwarders set a non-false `entitlementAllowed` in product code (P01.T04a §2) | `inspectEntitlementWriters` | `ENTITLEMENT_WRITER_UNAPPROVED:<file>:<line>` |
 
-`npm run verify:boundaries` runs the first four and the last two with deliberate negative examples. `tests/contract-versioning.test.mjs` covers P01.T02a AC01-AC05, AC10 and AC11, and P01.T04a AC11, AC29 and AC30.
+`npm run verify:boundaries` runs the first four and the last two with deliberate negative examples. `tests/contract-versioning.test.mjs` covers P01.T02a AC01-AC05, AC10 and AC11, and P01.T04a AC11, AC29 and AC30; `tests/collaboration-contracts.test.mjs` covers P01.T02c AC01-AC07, AC09, AC11 and AC12.
 
 ## Transitions
 
-`state-transitions.json` rows may carry `since` (the version that adds the row), `superseded_in` (the version from which it no longer applies) and `capability` (the capability that performs it). `inspectTransition(fixture, version)` in `scripts/contract-checks.mjs` uses only the rows in force at that version, `1` or `1.1` (default: the current version). In 1.1 the v1 approval rows guarded by `exact_digest_scope_and_current_policy` are superseded by the quorum, solo-owner, rejection, cancellation and partial-approval rows, and tasks gain `draft→cancelled` and `ready→cancelled` (`workspace.task.cancel`, ADR-0010 item 5).
+`state-transitions.json` rows may carry `since` (the version that adds the row), `superseded_in` (the version from which it no longer applies) and `capability` (the capability that performs it). `inspectTransition(fixture, version)` in `scripts/contract-checks.mjs` uses only the rows in force at that version, `1` or `1.1` (default: the current version). In 1.1 the v1 approval rows guarded by `exact_digest_scope_and_current_policy` are superseded by the quorum, solo-owner, rejection, cancellation and partial-approval rows, and tasks gain `draft→cancelled` and `ready→cancelled` (`workspace.task.cancel`, ADR-0010 item 5). P01.T02c adds two machines, both `since: "1.1"` and absent at v1: `message` (`streaming→completed|failed|cancelled` by the runtime under the current lease, and `streaming→failed` by the work service on a lost lease) and `access_request` (`pending→granted` and `pending→denied` by the work service when the linked grant revision commits or its proposal is rejected, `pending→denied` by an eligible decider, `pending→withdrawn` by the requester and `pending→expired` at `expiresAt`). A stop proposal's status is derived and has no machine.
 
 ## Baseline
 

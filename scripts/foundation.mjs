@@ -196,6 +196,14 @@ export function validateCatalogue(catalogue, dependencies, tasks, types, bodies)
   return errors;
 }
 
+// Paid work for a walkthrough's execute (docs/contracts/paid-work.json, read once on
+// first use): a paid effect on a capability that is not a kill switch.
+let paidWorkTable = null;
+const paidWork = (c) => {
+  paidWorkTable ??= read("docs/contracts/paid-work.json");
+  return paidWorkTable.paidEffects.includes(c.effect) && c.kill_switch !== true;
+};
+
 // Synthetic contract walkthrough only. It is not a production policy engine.
 // A walkthrough models execution of the capability; agents may only propose
 // human_only capabilities, which the agent kernel tests cover.
@@ -237,8 +245,11 @@ export function inspectAuthority(c, request) {
   if (p.kind === "agent" && !q.mandateCurrent) failures.push("MANDATE_EXPIRED");
   if (!q.providerQualified) failures.push("PROVIDER_NOT_QUALIFIED");
   if (!q.providerPermission) failures.push("PROVIDER_PERMISSION_DENIED");
-  // Kill switches are never blocked by entitlement or credit balance (ADR-0011 Q8); provider limits still apply.
-  if (!q.entitled && !c.kill_switch) failures.push("ENTITLEMENT_DENIED");
+  // Entitlement gates only paid work for a human (P01.T04a §1, §7; a walkthrough models
+  // execute), so reads, approvals and kill switches (ADR-0011 Q8) never read it;
+  // provider limits still apply. Every agent operation is metered model work, so the
+  // agent kernel checks entitlement on every operation.
+  if (!q.entitled && (p.kind === "agent" || paidWork(c))) failures.push("ENTITLEMENT_DENIED");
   if (!q.sourceAuthorized) failures.push("SOURCE_AUTHORITY_DENIED");
   if (!q.preconditionCurrent) failures.push("PRECONDITION_CONFLICT");
   // Kill switches never need an exact approval (ADR-0005).

@@ -8,3 +8,13 @@ export const currentDefinitionSelectors: Readonly<Record<string, string>>;
 export const capabilityBodySelectors: Readonly<Record<string, string>>;
 /** Effective billing definition name -> exact selector (newest billing layer that defines it). */
 export const currentBillingDefinitionSelectors: Readonly<Record<string, string>>;
+/** Registered event type -> its aggregate type and exact payload selector (docs/contracts/event-registry.json). */
+export const eventPayloadSelectors: Readonly<
+  Record<string, Readonly<{ aggregateType: string; selector: string }>>
+>;
+/** True when eventType is registered, aggregateType is its row's and payload validates against its row. */
+export function validateEventPayload(
+  eventType: unknown,
+  aggregateType: unknown,
+  payload: unknown,
+): boolean;

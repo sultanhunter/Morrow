@@ -118,12 +118,13 @@ function request(route = "bootstrap", change = {}) {
     apply: "/workspace/workspace_a/store-links",
     status: "/workspace/workspace_a/store-links/status",
     logout: "/auth/logout",
+    rotate: "/auth/rotate",
     login: "/auth/login",
   };
   const { headers = {}, path = paths[route], ...rest } = change;
   const mutation = route !== "bootstrap";
   const body =
-    route === "logout"
+    route === "logout" || route === "rotate"
       ? { schemaVersion: 1 }
       : route === "login"
         ? { schemaVersion: 2 }
@@ -201,6 +202,7 @@ test("ordinary default entry is unbound and denies every exposed route without c
     ["bootstrap", 401],
     ["preview", 401],
     ["logout", 503],
+    ["rotate", 503],
     ["login", 503],
   ]) {
     const response = await defaultWorker.fetch(request(route), undefined, ctx);
@@ -500,4 +502,47 @@ test("account routes refuse their envelope before any lease (P05.T01x-AC28)", as
     assert.equal(response.headers.has("set-cookie"), false);
     assert.deepEqual(f.borrows, []);
   }
+});
+
+// P05.T01y-AC23/AC25/AC29: POST /auth/rotate through the managed entry.
+test("rotate refuses its envelope before any lease with the workspace 401 for a bad cookie", async () => {
+  for (const [change, status, body] of [
+    [{ headers: { Cookie: "" } }, 401, { code: "authentication_required" }],
+    [
+      { headers: { Cookie: `__Host-morrow_session=${secret}; __Host-morrow_session=${secret}` } },
+      401,
+      { code: "authentication_required" },
+    ],
+    [{ body: "{}" }, 400, { schemaVersion: 1, outcome: "rotation_unavailable" }],
+    [
+      { headers: { Origin: "https://evil.example" } },
+      403,
+      { schemaVersion: 1, outcome: "rotation_unavailable" },
+    ],
+    [
+      { headers: { "Sec-Fetch-Site": "cross-site" } },
+      403,
+      { schemaVersion: 1, outcome: "rotation_unavailable" },
+    ],
+    [{ method: "PUT" }, 405, { schemaVersion: 1, outcome: "rotation_unavailable" }],
+  ]) {
+    const f = fixture(),
+      worker = createWorkspaceApiWorker(f.dependencies);
+    const response = await run(f, worker, request("rotate", change));
+    assert.equal(response.status, status, JSON.stringify(change));
+    assert.deepEqual(await response.json(), body);
+    assert.deepEqual(f.borrows, []);
+  }
+});
+test("rotate reaches the logout pool; a broker lease failure is unavailable, never unknown", async () => {
+  const f = fixture(),
+    worker = createWorkspaceApiWorker(f.dependencies);
+  const response = await run(f, worker, request("rotate"));
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { schemaVersion: 1, outcome: "rotation_unavailable" });
+  assert.equal(f.borrows.length, 1);
+  assert.equal(f.borrows[0].namespace.role, "morrow_identity_logout");
+  const m = snapshotManagedWorkspaceResponseMetrics(response);
+  assert.equal(m.attemptEnded, true);
+  assert.equal(m.initialDeadlineMs, epoch + 5000);
 });
