@@ -20,6 +20,7 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 
 In progress:
 - **P03.T04e PR-A** (PR #11, branch `claude/p03-t04e-a-format-concurrency`): `prettier --check .` under one reviewed `.prettierignore`, unit test files run concurrently through `scripts/run-tests.mjs` with an empty serial list, required `executeAs` and pinned prerequisites on every `migrations/manifest.json` row, and `heavy-faults.yml` (manual plus weekly `unit-stress`). Merged with `main` at `5ad6cc7` on 2026-10-19: rows 12-15 now carry `executeAs`; row 13 pins `infra/identity-onboarding-role-prerequisites.sql` and row 14 `infra/work-role-prerequisites.sql` (the first migration that names the work roles); the files from PRs #9-#15 are re-formatted in one mechanical commit listed in `.git-blame-ignore-revs`. Local format, typecheck, verify and unit tests pass on the merged head; hosted CI and the Tier 2 AI review on it are open. After merge: one `workflow_dispatch` run of `heavy-faults.yml` on `main` (AC22).
+- **P05.T01ab = P04.T01i PR-C** (branch `claude/p05-t01ab-abuse-guard`, on the docs branch, pushed, no PR yet): the api sign-in abuse guard before any SQL (per-address limits 10/20/5 per 60 s; Turnstile through the fourth broker method `challengeVerify`; `GET /auth/challenge`; mapper step 10 fails staging and production closed without it), contract v1.1 additions, the sign-in widget and the labs. Local `npm run ci`, `smoke:scaffold` and the labs pass (`docs/acceptance/P05.md`); hosted CI, the Tier 2 AI review and `/security-review` are open. It reconciles with PR-B (verify-config, `_headers`, the broker's ten secret names); PR-D adds its two JSON vars.
 - **P04.T01i PR-A and P04.T01j PR-A** (branch `claude/docs-staging-and-design-refs`, pushed, no PR yet; Markdown only, with the Mobbin design references): ADR-0019 and ADR-0020 Accepted, the approved card `staging-card-1`, the ADR-0014 item 5 amendment, the plan edits (P04.T01i origin, reachability and card; new P04.T01j and P05.T01ab bullets; P04.T03a minimal baseline; invariant 18's exception) and open acceptance sections. M1's journey (AC12) also waits for P14.T01a PR-2. The staging row of `deployment-policy.json` moves to P04.T01i PR-B.
 
 ## Decisions recorded 2026-10-18 and 2026-10-19
@@ -41,7 +42,7 @@ In progress:
 Merge order once GitHub Pro is active (no PR opens before then):
 1. P03.T04f (`claude/p03-t04f-ci-efficiency`): its PR first, one full run; then record the hosted job times. Then dispatch `heavy-faults.yml` on `main` (P03.T04e AC22).
 2. This docs PR (`claude/docs-staging-and-design-refs`): Markdown only, so it runs light under P03.T04f.
-3. Then the other pushed branches: P04.T01j PR-B (may start now; it merges after step 2 and before any branch that adds a migration), then P05.T01y (0016 moved to the ADR-0020 helpers) and P06.T01b PR-1; P01.T02c PR-A, P01.T04a PR-B and P14.T01a PR-2 as their reviews allow. P04.T01i PR-B (tooling, no provider effect) and PR-C (P05.T01ab), then Phase B under `staging-card-1`.
+3. Then the other pushed branches: P04.T01j PR-B (may start now; it merges after step 2 and before any branch that adds a migration), then P05.T01y (0016 moved to the ADR-0020 helpers) and P06.T01b PR-1; P01.T02c PR-A, P01.T04a PR-B and P14.T01a PR-2 as their reviews allow. P04.T01i PR-B (tooling, no provider effect) and PR-C (P05.T01ab, pushed), then Phase B under `staging-card-1`.
 4. After those: P06.T02a (event transport), P06.T01c (OperationLedger) and P01.T02b. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11). Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.
 
 Open plan follow-ups:
@@ -54,7 +55,7 @@ Open plan follow-ups:
 
 ## Blockers
 
-None for local work. Hosted staging (M1) waits on the owner actions below, P04.T01j, P04.T01i PR-B and P05.T01ab. Billing activation waits on the billing owner actions.
+None for local work. Hosted staging (M1) waits on the owner actions below, P04.T01j, P04.T01i PR-B, the merge of P05.T01ab and PR-D. Billing activation waits on the billing owner actions.
 
 ## Pending owner actions
 
