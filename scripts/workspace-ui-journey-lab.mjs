@@ -1,11 +1,14 @@
-// P14.T01a browser journey lab (AC20, AC21): a real Chromium against the P04.T02a
+// P14.T01a browser journey lab (AC20-AC32): a real Chromium against the P04.T02a
 // configured harness (the real wrangler dry-run api and broker bundles in Miniflare,
 // isolated PostgreSQL 17 over the WSS->TCP bridge, the synthetic WorkOS oracle). The api
 // gets an HTTPS listener on 127.0.0.1:<ephemeral> with a lab-generated certificate, and
-// serves the production dist through Static Assets. The browser signs in through the
-// SPA, enters the workspace through bootstrap and signs out. Every request other than
-// the lab origin and the intercepted WorkOS authorize navigation is aborted and counted:
-// zero egress. No trace, HAR, video or screenshot is recorded.
+// serves the production dist through Static Assets. PR-1 (AC20): the browser signs in
+// through the SPA, enters the workspace through bootstrap and signs out. PR-2 (AC22-AC32,
+// scripts/workspace-ui-journey-work.mjs): the engine also applies 0014-0015 and logs in
+// the api Worker's work login, and three people work through the account and work
+// routes. Every request other than the lab origin and the intercepted WorkOS authorize
+// navigation is aborted and counted: zero egress. No trace, HAR, video or screenshot is
+// recorded.
 //   node scripts/workspace-ui-journey-lab.mjs           Linux CI (`ui` job) only
 //   node scripts/workspace-ui-journey-lab.mjs --local   a developer Mac with Docker
 //                                                        (supporting evidence only)
@@ -18,8 +21,9 @@ import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { artifactPath, writeArtifact } from "./artifacts.mjs";
 import { edgeRefusals } from "./edge.mjs";
-import { edgePostgresqlJourneys } from "./edge-postgresql-lab.mjs";
+import { edgePostgresqlJourneys, edgePostgresqlRoles } from "./edge-postgresql-lab.mjs";
 import { labChallengeActions } from "./fixtures/turnstile-siteverify.mjs";
+import { accountAndWorkJourneys } from "./workspace-ui-journey-work.mjs";
 
 const held = (code) => Error("WORKSPACE_UI_JOURNEY_" + code);
 const require = (condition, code) => {
@@ -107,6 +111,7 @@ export async function workspaceUiJourney(engine, createService) {
   const result = await edgePostgresqlJourneys(engine, createService, {
     origin,
     listen: { host: "127.0.0.1", port, httpsKey: tls.key, httpsCert: tls.cert },
+    work: true,
     journeys: async (h) => {
       h.secret(tls.key);
       await h.scenario("AC20_real_browser_sign_in_bootstrap_sign_out", async () => {
@@ -294,10 +299,21 @@ export async function workspaceUiJourney(engine, createService) {
         h.check("AC20:zero_aborted_requests", observed.aborted === 0);
         h.check("AC20:zero_unexpected_outbound", h.outbound.unexpected === 0);
       });
+      // PR-2: the account and work journeys on a fresh instance and browser.
+      const browser = await chromium.launch({ headless: true });
+      try {
+        await accountAndWorkJourneys(h, { browser, observed });
+      } finally {
+        await browser.close();
+      }
+      h.check("AC22_AC32:zero_aborted_requests", observed.aborted === 0);
+      h.check("AC22_AC32:zero_unexpected_outbound", h.outbound.unexpected === 0);
     },
   });
   return result;
 }
+// The engine logs in the seven edge roles plus the api Worker's work login (P06.T01a).
+const uiEngineRoles = Object.freeze([...edgePostgresqlRoles, "morrow_api_worker"]);
 
 // AC21: no trace, HAR or video exists; no planted marker reaches the ui artifacts.
 function artifactHygiene(markers) {
@@ -341,19 +357,20 @@ async function main() {
         "./fixtures/controlled-neon-tcp-bridge.mjs"
       );
       result = (
-        await localEngine((engine) =>
-          workspaceUiJourney(engine, createSyntheticLoopbackControlledNeonTcpService),
+        await localEngine(
+          (engine) => workspaceUiJourney(engine, createSyntheticLoopbackControlledNeonTcpService),
+          { roles: uiEngineRoles },
         )
       ).result;
     } else {
-      const { managedWorkspacePostgresqlLab } = await import(
+      const { managedWorkspaceWorkPostgresqlLab } = await import(
         "./fixtures/controlled-neon-postgresql.mjs"
       );
       const { createControlledNeonTcpService } = await import(
         "./fixtures/controlled-neon-tcp-bridge.mjs"
       );
       result = (
-        await managedWorkspacePostgresqlLab((engine) =>
+        await managedWorkspaceWorkPostgresqlLab((engine) =>
           workspaceUiJourney(engine, createControlledNeonTcpService),
         )
       ).result;
@@ -373,7 +390,7 @@ async function main() {
     status: passed ? "passed" : "held",
     scope: local
       ? "Local-only supporting run (Docker Desktop engine, loopback-published port). Not CI evidence: the hosted `ui` job is the authority."
-      : "Real Chromium (Playwright) against the real wrangler dry-run api and broker bundles in local workerd, with the production SPA on Static Assets, isolated PostgreSQL 17 and synthetic WorkOS; zero egress. Not hosted Cloudflare, Neon or WorkOS qualification.",
+      : "Real Chromium (Playwright) against the real wrangler dry-run api and broker bundles in local workerd, with the production SPA on Static Assets, isolated PostgreSQL 17 (migrations 0001-0015, owner-SQL work grants) and synthetic WorkOS; zero egress. Not hosted Cloudflare, Neon or WorkOS qualification.",
     platform: process.platform,
     durationMs: Date.now() - started,
     appliedMigrations: result?.appliedMigrations ?? null,

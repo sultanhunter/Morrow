@@ -151,6 +151,12 @@ export function createPending({
       if (existing && existing.generation === generation)
         return existing.flight as Promise<Outcome<T>>;
       const started = generation;
+      // A Check again starts while the key is uncertain. If its form is reset meanwhile
+      // (a dialog closed: `release`), the reply still settles this command: a terminal
+      // one removes the marker it started with, and another uncertain one doesn't
+      // register the key again or add a second marker.
+      const startedUncertain = uncertain.has(command.key);
+      const startMarker = uncertain.get(command.key) ?? null;
       const flight: Promise<Outcome<T>> = (async (): Promise<Outcome<T>> => {
         let outcome: Outcome<T>;
         try {
@@ -159,15 +165,16 @@ export function createPending({
           outcome = { kind: "uncertain" };
         }
         if (started !== generation) return outcome; // it outlived a sign-out
-        const wasUncertain = uncertain.has(command.key);
+        const held = uncertain.has(command.key);
+        const wasUncertain = held || startedUncertain;
         if (wasUncertain && (outcome.kind === "unavailable" || outcome.kind === "rate_limited"))
           outcome = { kind: "uncertain" };
         if (outcome.kind === "uncertain") {
           if (!wasUncertain)
             uncertain.set(command.key, marker ? addMarker(marker.workspaceId, marker.kind) : null);
         } else if (isTerminal(outcome) || outcome.kind === "not_in_build") {
-          const held = uncertain.get(command.key);
-          if (held) removeMarker(held);
+          const entry = held ? uncertain.get(command.key) : startMarker;
+          if (entry) removeMarker(entry);
           uncertain.delete(command.key);
         }
         // `unauthenticated` keeps the marker: the change may still have been saved.

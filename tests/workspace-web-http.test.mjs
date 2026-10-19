@@ -276,7 +276,14 @@ test("AC08: only documented query parameters, with the cursor encoded", () => {
       assert.ok(["after", "limit", "goalId", "respondent", "status"].includes(key), key);
 });
 test("§4.2: an uncomposed method returns not_in_build without a request", async () => {
-  const { calls, port: p } = port(() => json(200, {}));
+  // The PR-1 table (session and bootstrap only): every other method sends nothing.
+  const pr1 = Object.fromEntries(
+    Object.keys(composed).map((method) => [
+      method,
+      ["session.startSignIn", "session.signOut", "workspace.bootstrap"].includes(method),
+    ]),
+  );
+  const { calls, port: p } = port(() => json(200, {}), { composed: pr1 });
   for (const outcome of [
     await p.account.overview(),
     await p.work.listGoals("ws", null),
@@ -289,12 +296,9 @@ test("§4.2: an uncomposed method returns not_in_build without a request", async
   ])
     assert.deepEqual(outcome, { kind: "not_in_build" });
   assert.equal(calls.length, 0);
-  assert.deepEqual(
-    Object.entries(composed)
-      .filter(([, on]) => on)
-      .map(([method]) => method),
-    ["session.startSignIn", "session.signOut", "workspace.bootstrap"],
-  );
+  // PR-2 composes account.* and work.* (tests/workspace-web-account-work.test.mjs).
+  assert.equal(composed["account.overview"], true);
+  assert.equal(composed["people.list"], false);
 });
 test("sign-out sends {schemaVersion:1} with no key; a lost reply is uncertain, offline sends nothing", async () => {
   const ended = port(() => json(200, { schemaVersion: 1, outcome: "session_ended" }));

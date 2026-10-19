@@ -97,7 +97,7 @@
    - **Mechanics.** `tests/migration-history.test.mjs` holds one rebaseline record (`ADR-0020`, sequences 5–15, the superseded digests). It fails unless this ADR is "Accepted" in the index. Adding a second record needs a new owner-approved ADR.
    - **Closure.** The exception closes when any persistent database first applies any of 0005–0015. That is expected to be the first `staging:migrate` under the staging card. P04.T01i PR-D part 2 cites that live record as the rebaseline record's `closedBy`.
    - **After closure.** Invariant 18 applies to the whole chain without exception, and any fix is a forward migration. The runner's `MIGRATION_LEDGER_DRIFT` refuses any database whose ledger differs from the manifest.
-   - **Before closure.** Corrections to the same files are allowed only within items 1–6, only for a defect that the Neon confirmation or a review finds, and each needs Tier 2 plus `/security-review`.
+   - **Before closure.** Corrections to the same files are allowed only within items 1–6, only for a defect that the Neon confirmation or a review finds, and each needs one AI review (separate context, same model family) with the security lens (ADR-0021 item 5).
 
 8. **Coordination.**
    - **P04.T01j merges before any other migration.** This adds the dependency edges P04.T01j → P05.T01y PR (0016) and P04.T01j → P06.T01b PR-1.
@@ -135,4 +135,4 @@
 
 Owner approval, 2026-10-19, in chat. Asked "Approve ADR-0020: rebaseline migrations 0005–0015 so Neon's non-superuser admin can run them? ..." (abbreviated here), the owner answered "Approve ADR-0020 (Recommended)". This approves items 1–8. It answers P04.T01i OQ-1 with option (B) and P04.T01j OQ-1.
 
-Item 7 also asks the owner to confirm that no database they know of has applied migration 0005 or later, naming any personal or Codex-era database. That confirmation is not quoted in this record. It is to be recorded here before the P04.T01j PR-B rebaseline merges.
+Item 7 confirmation, 2026-10-19, in chat. Asked "ADR-0020 also asks you to confirm one fact: do you know of ANY database (personal, Codex-era, or anywhere else) that ran Morrow's migrations 0005 or later? As far as I know, the old Neon project only ever got migrations 1–3.", the owner answered "None that I know of". The old Neon project `cool-butterfly-64820147` held migrations 1–3 only and is being deleted by the owner.
