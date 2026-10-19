@@ -22,7 +22,7 @@ const executeAsRole = /^morrow_[a-z]+_owner$/;
 const container = /^[a-f0-9]{64}$/;
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 
-// The 15 roles the prerequisite files create, in creation order. In createrole mode each
+// The 18 roles the prerequisite files create, in creation order. In createrole mode each
 // has exactly one creation row; in superuser mode none has any row of its own.
 export const morrowRoles = Object.freeze([
   "morrow_identity_owner",
@@ -40,6 +40,16 @@ export const morrowRoles = Object.freeze([
   "morrow_work_command",
   "morrow_work_api",
   "morrow_api_worker",
+  // M2 PR-1 (ADR-0022 item 8): the three membership-free executor logins.
+  "morrow_connector_ingress",
+  "morrow_runtime_executor",
+  "morrow_vault_broker",
+]);
+// The three spine executor logins (infra/spine-executor-role-prerequisites.sql, 0019).
+export const spineExecutors = Object.freeze([
+  "morrow_connector_ingress",
+  "morrow_runtime_executor",
+  "morrow_vault_broker",
 ]);
 // The nine identity executors that log in at run time (ADR-0007 item 5 and onboarding).
 export const identityExecutors = Object.freeze([

@@ -316,9 +316,14 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
     pkg.scripts["lab:tenant-conformance"],
     "node --import tsx --test --test-concurrency=1 tests/tenant-conformance/static.test.mjs tests/tenant-conformance/probes.test.mjs",
   );
+  // M2 PR-1 appends its spine foundation lab to the same group.
+  assert.equal(
+    pkg.scripts["lab:spine-foundation"],
+    "node --import tsx scripts/spine-foundation-lab.mjs",
+  );
   assert.equal(
     pkg.scripts["lab:group:pg-work"],
-    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers",
+    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation",
   );
   // The `work` leg of the ci.yml postgres matrix (P03.T04f).
   assert.match(

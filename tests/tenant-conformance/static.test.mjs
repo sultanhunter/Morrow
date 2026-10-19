@@ -5,8 +5,13 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { withWorkDatabase } from "./harness.mjs";
 import {
+  billingFunctions,
+  billingTables,
   bridgeFunctions,
+  executorLogins,
   registeredRoutes,
+  vaultFunctions,
+  vaultTables,
   workDomains,
   workFunctions,
   workRouteProbes,
@@ -46,11 +51,94 @@ const names = (list) => [...list].sort();
 const tenantTables = Object.entries(workTables)
   .filter(([, t]) => t.class !== "platform")
   .map(([name]) => name);
+// The api role reads tenant-readable tables and the tenant rows plus platform rows of
+// tenant_or_platform tables.
 const readable = Object.entries(workTables)
-  .filter(([, t]) => t.class === "tenant_readable")
+  .filter(([, t]) => t.class === "tenant_readable" || t.class === "tenant_or_platform")
   .map(([name]) => name);
 const tenantPredicate =
   "(((organization_id)::text, (workspace_id)::text) = ( SELECT c.organization_id,\n    c.workspace_id\n   FROM morrow_work.current_tenant() c(organization_id, workspace_id, principal_id, membership_id, policy_revision)))";
+// The lease-context twin (M2 PR-1): the same row comparison against current_lease().
+const leasePredicate =
+  "(((organization_id)::text, (workspace_id)::text) = ( SELECT c.organization_id,\n    c.workspace_id\n   FROM morrow_work.current_lease() c(organization_id, workspace_id, lease_id, generation, kind, subject_id, store_id, connection_id, installation_id, initiator_principal_id, initiator_membership_id, expires_at)))";
+const orPlatform = (predicate) => "((organization_id IS NULL) OR " + predicate + ")";
+// The exactly-checked extra policies (registry `policies`): [command, roles, qual, check].
+const extraPolicies = {
+  lease_self: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_runtime_executor'::name) AND ((id)::text = current_setting('morrow.work_lease_id'::text, true)))",
+    "((SESSION_USER = 'morrow_runtime_executor'::name) AND ((id)::text = current_setting('morrow.work_lease_id'::text, true)))",
+  ],
+  lease_pending: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_runtime_executor'::name) AND (status = 'active'::text) AND (started_at IS NULL) AND (kind = ANY (ARRAY['run'::text, 'operation'::text])))",
+    null,
+  ],
+  route_signup: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "((origin = 'website'::text) AND (route IS NULL) AND (mode IS NULL) AND (route_fixed_at IS NULL) AND (fixing_payment_key IS NULL) AND ((revision)::bigint = 1))",
+  ],
+  vault_broker: [
+    "ALL",
+    "{morrow_work_command}",
+    "(SESSION_USER = 'morrow_vault_broker'::name)",
+    "(SESSION_USER = 'morrow_vault_broker'::name)",
+  ],
+};
+// One table's policies against the template of its class and its registry extras.
+function checkPolicies(schema, table, spec) {
+  const policies = rows(
+    `SELECT policyname, cmd, roles::text AS roles, qual, with_check FROM pg_policies WHERE schemaname='${schema}' AND tablename='${table}' ORDER BY policyname`,
+  );
+  const mixed = spec.class === "tenant_or_platform";
+  const vault = spec.class === "vault_platform" || spec.class === "vault_tenant";
+  const expected = ["work_owner"]
+    .concat(vault ? ["vault_broker"] : ["tenant_command"])
+    .concat(spec.class === "tenant_readable" || mixed ? ["tenant_read"] : [])
+    .concat(spec.lease || mixed ? ["tenant_lease"] : [])
+    .concat(spec.policies ?? []);
+  assert.deepEqual(names(policies.map((p) => p.policyname)), names(expected), table);
+  for (const policy of policies) {
+    const shape = [policy.cmd, policy.roles, policy.qual, policy.with_check];
+    if (policy.policyname === "work_owner")
+      assert.deepEqual(shape, ["ALL", "{morrow_work_owner}", "true", "true"], table);
+    else if (policy.policyname === "tenant_command")
+      assert.deepEqual(
+        shape,
+        [
+          "ALL",
+          "{morrow_work_command}",
+          mixed ? orPlatform(tenantPredicate) : tenantPredicate,
+          tenantPredicate,
+        ],
+        table,
+      );
+    else if (policy.policyname === "tenant_lease")
+      assert.deepEqual(
+        shape,
+        mixed
+          ? ["SELECT", "{morrow_work_command}", orPlatform(leasePredicate), null]
+          : ["ALL", "{morrow_work_command}", leasePredicate, leasePredicate],
+        table,
+      );
+    else if (policy.policyname === "tenant_read")
+      assert.deepEqual(
+        shape,
+        [
+          "SELECT",
+          "{morrow_work_api}",
+          mixed ? orPlatform(tenantPredicate) : tenantPredicate,
+          null,
+        ],
+        table,
+      );
+    else assert.deepEqual(shape, extraPolicies[policy.policyname], table + " " + policy.policyname);
+  }
+}
 
 test("S1: every morrow_work object is registered and nothing else exists", () => {
   const tables = rows(
@@ -84,18 +172,30 @@ test("S2: every table has ENABLE and FORCE row-level security", () => {
 
 test("S3: tenant keys, composite parents and the one tenant policy template", () => {
   for (const table of tenantTables) {
+    const mixed = workTables[table].class === "tenant_or_platform";
     const columns = rows(
       `SELECT attname, attnotnull FROM pg_attribute WHERE attrelid='morrow_work.${table}'::regclass AND attname IN ('organization_id','workspace_id') AND NOT attisdropped`,
     );
     assert.equal(columns.length, 2, table);
+    // Platform rows of a tenant_or_platform table have both keys null (its CHECK).
     assert.ok(
-      columns.every((c) => c.attnotnull),
+      columns.every((c) => c.attnotnull === !mixed),
       table,
     );
-    const pk = rows(
-      `SELECT (SELECT array_agg(a.attname ORDER BY k.ord) FROM unnest(c.conkey) WITH ORDINALITY k(attnum,ord) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum) AS columns FROM pg_constraint c WHERE c.conrelid='morrow_work.${table}'::regclass AND c.contype='p'`,
+    const keys = rows(
+      `SELECT c.contype AS kind,(SELECT array_agg(a.attname ORDER BY k.ord) FROM unnest(c.conkey) WITH ORDINALITY k(attnum,ord) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum) AS columns FROM pg_constraint c WHERE c.conrelid='morrow_work.${table}'::regclass AND c.contype IN ('p','u')`,
     );
-    assert.deepEqual(pk[0].columns.slice(0, 2), ["organization_id", "workspace_id"], table);
+    // The primary key leads with the tenant keys. A tenant_or_platform table has a global
+    // id primary key instead, and a unique (organization_id, workspace_id, id) key that its
+    // children's composite foreign keys reference.
+    const pk = keys.find((k) => k.kind === "p").columns;
+    if (mixed) {
+      assert.deepEqual(pk, ["id"], table);
+      assert.ok(
+        keys.some((k) => k.columns.join() === "organization_id,workspace_id,id"),
+        table,
+      );
+    } else assert.deepEqual(pk.slice(0, 2), ["organization_id", "workspace_id"], table);
     const fks = rows(
       `SELECT c.confrelid::regclass::text AS parent,(SELECT array_agg(a.attname ORDER BY k.ord) FROM unnest(c.conkey) WITH ORDINALITY k(attnum,ord) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum) AS columns FROM pg_constraint c WHERE c.conrelid='morrow_work.${table}'::regclass AND c.contype='f'`,
     );
@@ -111,28 +211,7 @@ test("S3: tenant keys, composite parents and the one tenant policy template", ()
         table + " -> " + parent,
       );
     }
-    const policies = rows(
-      `SELECT policyname, cmd, roles::text AS roles, qual, with_check FROM pg_policies WHERE schemaname='morrow_work' AND tablename='${table}' ORDER BY policyname`,
-    );
-    const expected = ["tenant_command", "work_owner"].concat(
-      readable.includes(table) ? ["tenant_read"] : [],
-    );
-    assert.deepEqual(names(policies.map((p) => p.policyname)), names(expected), table);
-    for (const policy of policies) {
-      if (policy.policyname === "work_owner") {
-        assert.equal(policy.roles, "{morrow_work_owner}");
-        assert.equal(policy.qual, "true");
-      } else if (policy.policyname === "tenant_command") {
-        assert.equal(policy.roles, "{morrow_work_command}");
-        assert.equal(policy.cmd, "ALL");
-        assert.equal(policy.qual, tenantPredicate, table);
-        assert.equal(policy.with_check, tenantPredicate, table);
-      } else {
-        assert.equal(policy.roles, "{morrow_work_api}");
-        assert.equal(policy.cmd, "SELECT");
-        assert.equal(policy.qual, tenantPredicate, table);
-      }
-    }
+    checkPolicies("morrow_work", table, workTables[table]);
   }
   for (const [table, spec] of Object.entries(workTables).filter(
     ([, t]) => t.class === "platform",
@@ -187,6 +266,11 @@ test("S4: the api role reads readable tables column by column; no runtime DELETE
   recordConformance("S4", true);
 });
 
+// Definer kinds: the api functions, the resolvers, and (M2 PR-1) the runtime, vault and
+// signup-bridge definers. Every definer is owned by the command role; operator functions
+// are INVOKER and owned by the owner, like triggers and checks.
+const definerKinds = ["api", "resolver", "runtime", "vault", "bridge_in"];
+
 test("S5: definers, owners, search paths, grants, parameters, roles and memberships", () => {
   const functions = rows(
     "SELECT regexp_replace(p.oid::regprocedure::text,'^morrow_work\\.','') AS signature, p.prosecdef, p.proowner::regrole::text AS owner, p.proconfig, p.proacl::text AS acl, pg_get_function_identity_arguments(p.oid) AS arguments, (SELECT COALESCE(array_agg(a.grantee::regrole::text ORDER BY 1),'{}') FROM aclexplode(p.proacl) a WHERE a.grantee<>0 AND a.grantee<>p.proowner AND a.privilege_type='EXECUTE') AS grantees, (SELECT count(*) FROM aclexplode(p.proacl) a WHERE a.grantee=0)::int AS public FROM pg_proc p WHERE p.pronamespace='morrow_work'::regnamespace",
@@ -200,11 +284,11 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
       (f.proconfig ?? []).some((c) => c.startsWith("search_path=pg_catalog")),
       "search_path " + f.signature,
     );
-    const definer = spec.kind === "api" || spec.kind === "resolver";
+    const definer = definerKinds.includes(spec.kind);
     assert.equal(f.prosecdef, definer, f.signature);
     if (definer || spec.kind === "helper") assert.equal(f.owner, workRoles.command, f.signature);
     else assert.equal(f.owner, workRoles.owner, f.signature);
-    if (spec.kind === "api")
+    if (spec.kind === "api" || spec.kind === "runtime")
       for (const name of f.arguments
         .split(", ")
         .filter(Boolean)
@@ -220,7 +304,16 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
           f.signature + " " + name,
         );
   }
+  // The one cross-tenant definer returns exactly its registered id columns (spine §5).
+  for (const [signature, spec] of Object.entries(workFunctions).filter(([, f]) => f.crossTenant)) {
+    const [result] = rows(
+      `SELECT array_to_string(p.proargnames[p.pronargs+1:],',') AS columns, p.proretset FROM pg_proc p WHERE p.oid='morrow_work.${signature}'::regprocedure`,
+    );
+    assert.equal(result.columns, spec.columns.join(","), signature);
+    assert.equal(result.proretset, true, signature);
+  }
   const roles = [
+    ...Object.keys(executorLogins),
     "morrow_work_owner",
     "morrow_work_command",
     "morrow_work_api",
@@ -290,6 +383,17 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
   const identityFunctions = rows(
     "SELECT p.oid::regprocedure::text AS signature, has_function_privilege('morrow_work_command',p.oid,'EXECUTE') AS c, has_function_privilege('morrow_work_api',p.oid,'EXECUTE') AS a, has_function_privilege('morrow_work_owner',p.oid,'EXECUTE') AS o, has_function_privilege('morrow_api_worker',p.oid,'EXECUTE') AS l FROM pg_proc p WHERE p.pronamespace='morrow_identity'::regnamespace",
   );
+  // No executor login executes any identity function (ADR-0022 item 8).
+  const loginIdentity = rows(
+    `SELECT r.rolname, p.oid::regprocedure::text AS signature FROM pg_roles r, pg_proc p WHERE r.rolname IN (${Object.keys(
+      executorLogins,
+    )
+      .map((l) => `'${l}'`)
+      .join(
+        ",",
+      )}) AND p.pronamespace='morrow_identity'::regnamespace AND has_function_privilege(r.oid,p.oid,'EXECUTE')`,
+  );
+  assert.deepEqual(loginIdentity, []);
   for (const f of identityFunctions) {
     const bridge = bridgeFunctions.includes(f.signature.replace("morrow_identity.", ""));
     assert.equal(f.c, bridge, f.signature);
@@ -325,11 +429,19 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
     ].sort(),
   );
   const attributes = rows(
-    "SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolbypassrls, rolreplication, rolpassword IS NOT NULL AS has_password FROM pg_authid WHERE rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker')",
+    `SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolbypassrls, rolreplication, rolpassword IS NOT NULL AS has_password FROM pg_authid WHERE rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker',${Object.keys(
+      executorLogins,
+    )
+      .map((l) => `'${l}'`)
+      .join(",")})`,
   );
-  assert.equal(attributes.length, 4);
+  assert.equal(attributes.length, 4 + Object.keys(executorLogins).length);
   for (const r of attributes) {
-    assert.equal(r.rolcanlogin, r.rolname === workRoles.login, r.rolname);
+    assert.equal(
+      r.rolcanlogin,
+      r.rolname === workRoles.login || Object.hasOwn(executorLogins, r.rolname),
+      r.rolname,
+    );
     for (const flag of [
       "rolsuper",
       "rolcreatedb",
@@ -379,6 +491,23 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
       .map((row) => row.join(" "))
       .sort(),
   );
+  // The executor logins are membership-free (ADR-0022 item 8): each has exactly its PG16+
+  // creation row and no other row names it, in either direction.
+  const loginMembers = rows(
+    `SELECT g.rolname AS role, u.rolname AS member, m.grantor::bigint AS grantor, m.admin_option, m.inherit_option, m.set_option FROM pg_auth_members m JOIN pg_roles g ON g.oid=m.roleid JOIN pg_roles u ON u.oid=m.member WHERE g.rolname IN (${Object.keys(
+      executorLogins,
+    )
+      .map((l) => `'${l}'`)
+      .join(",")}) OR u.rolname IN (${Object.keys(executorLogins)
+      .map((l) => `'${l}'`)
+      .join(",")})`,
+  );
+  assert.deepEqual(
+    loginMembers.map(shape).sort(),
+    Object.keys(executorLogins)
+      .map((login) => [login, record.name, 10, true, false, false].join(" "))
+      .sort(),
+  );
   // Every Morrow role is closed, evaluated as the owner from a superuser session (so the
   // in-transaction runner rule (C) cannot apply), and no SET row names a Morrow role
   // except the two reviewed rows.
@@ -397,4 +526,124 @@ test("S6: workRoutes and the registry match one-to-one", () => {
   assert.deepEqual(names(registeredRoutes), names(Object.keys(workRouteProbes)));
   assert.equal(new Set(registeredRoutes).size, registeredRoutes.length);
   recordConformance("S6", true);
+});
+
+// M2 PR-1 (0020): morrow_billing and morrow_vault follow S1-S5 in their own registries,
+// and each executor login executes exactly its registered functions.
+test("S7: the billing and vault schemas, and what each executor login may execute", () => {
+  for (const [schema, tables, functions] of [
+    ["morrow_billing", billingTables, billingFunctions],
+    ["morrow_vault", vaultTables, vaultFunctions],
+  ]) {
+    // S1: every object registered and nothing else; no domain, view or sequence.
+    const relations = rows(
+      `SELECT c.relname, c.relkind FROM pg_class c WHERE c.relnamespace='${schema}'::regnamespace AND c.relkind IN ('r','p','v','m','S','f')`,
+    );
+    assert.deepEqual(names(relations.map((t) => t.relname)), names(Object.keys(tables)), schema);
+    assert.ok(relations.every((t) => t.relkind === "r"));
+    const types = rows(
+      `SELECT t.typname FROM pg_type t WHERE t.typnamespace='${schema}'::regnamespace AND t.typtype='d'`,
+    );
+    assert.deepEqual(types, [], schema);
+    const schemaAcl = rows(
+      `SELECT n.nspowner::regrole::text AS owner, (SELECT COALESCE(array_agg(a.grantee::regrole::text||':'||a.privilege_type ORDER BY 1),'{}') FROM aclexplode(n.nspacl) a WHERE a.grantee<>n.nspowner) AS grants FROM pg_namespace n WHERE n.nspname='${schema}'`,
+    );
+    assert.equal(schemaAcl[0].owner, workRoles.owner, schema);
+    assert.deepEqual(
+      [...schemaAcl[0].grants].sort(),
+      schema === "morrow_billing"
+        ? ["morrow_identity_owner:USAGE", "morrow_work_api:USAGE", "morrow_work_command:USAGE"]
+        : ["morrow_vault_broker:USAGE", "morrow_work_command:USAGE"],
+      schema,
+    );
+    for (const [table, spec] of Object.entries(tables)) {
+      // S2 and S3.
+      const [t] = rows(
+        `SELECT relrowsecurity, relforcerowsecurity, relowner::regrole::text AS owner FROM pg_class WHERE oid='${schema}.${table}'::regclass`,
+      );
+      assert.ok(t.relrowsecurity && t.relforcerowsecurity && t.owner === workRoles.owner, table);
+      checkPolicies(schema, table, spec);
+      if (spec.class !== "vault_platform") {
+        const fks = rows(
+          `SELECT c.confrelid::regclass::text AS parent,(SELECT array_agg(a.attname ORDER BY k.ord) FROM unnest(c.conkey) WITH ORDINALITY k(attnum,ord) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum) AS columns FROM pg_constraint c WHERE c.conrelid='${schema}.${table}'::regclass AND c.contype='f'`,
+        );
+        for (const parent of spec.parents)
+          assert.ok(
+            fks.some(
+              (fk) =>
+                fk.parent === parent &&
+                fk.columns[0] === "organization_id" &&
+                fk.columns[1] === "workspace_id",
+            ),
+            table + " -> " + parent,
+          );
+      }
+      // S4: the command role holds SELECT (and, for the route, INSERT); the api role reads
+      // only the route, column by column; nobody else holds anything; no DELETE or TRUNCATE.
+      const acl = rows(
+        `SELECT a.grantee::regrole::text AS grantee, a.privilege_type FROM pg_class c, aclexplode(c.relacl) a WHERE c.oid='${schema}.${table}'::regclass AND a.grantee<>c.relowner`,
+      );
+      assert.deepEqual(
+        acl.map((a) => a.grantee + ":" + a.privilege_type).sort(),
+        schema === "morrow_billing"
+          ? ["morrow_work_command:INSERT", "morrow_work_command:SELECT"]
+          : ["morrow_work_command:SELECT"],
+        table,
+      );
+      const columns = rows(
+        `SELECT DISTINCT a.grantee::regrole::text AS grantee, a.privilege_type FROM pg_attribute t, aclexplode(t.attacl) a WHERE t.attrelid='${schema}.${table}'::regclass AND t.attacl IS NOT NULL`,
+      );
+      assert.deepEqual(
+        columns.map((a) => a.grantee + ":" + a.privilege_type),
+        schema === "morrow_billing" ? ["morrow_work_api:SELECT"] : [],
+        table,
+      );
+    }
+    // S5: functions.
+    const fns = rows(
+      `SELECT regexp_replace(p.oid::regprocedure::text,'^${schema}\\.','') AS signature, p.prosecdef, p.proowner::regrole::text AS owner, p.proconfig, p.proacl IS NOT NULL AS acl, pg_get_function_identity_arguments(p.oid) AS arguments, (SELECT COALESCE(array_agg(a.grantee::regrole::text ORDER BY 1),'{}') FROM aclexplode(p.proacl) a WHERE a.grantee<>0 AND a.grantee<>p.proowner AND a.privilege_type='EXECUTE') AS grantees, (SELECT count(*) FROM aclexplode(p.proacl) a WHERE a.grantee=0)::int AS public FROM pg_proc p WHERE p.pronamespace='${schema}'::regnamespace`,
+    );
+    assert.deepEqual(names(fns.map((f) => f.signature)), names(Object.keys(functions)), schema);
+    for (const f of fns) {
+      const spec = functions[f.signature];
+      assert.ok(f.acl && f.public === 0, "no PUBLIC EXECUTE " + f.signature);
+      assert.deepEqual([...f.grantees].sort(), spec.grantees, f.signature);
+      assert.ok(
+        (f.proconfig ?? []).some((c) => c.startsWith("search_path=pg_catalog")),
+        "search_path " + f.signature,
+      );
+      const definer = definerKinds.includes(spec.kind);
+      assert.equal(f.prosecdef, definer, f.signature);
+      assert.equal(f.owner, definer ? workRoles.command : workRoles.owner, f.signature);
+      if (definer)
+        for (const name of f.arguments
+          .split(", ")
+          .filter(Boolean)
+          .map((a) => a.split(" ")[0]))
+          assert.ok(
+            (spec.tenantParameters ?? []).includes(name) ||
+              !/organization|workspace|actor|membership|principal/.test(name),
+            f.signature + " " + name,
+          );
+    }
+  }
+  // Every function an executor login may execute, in any schema, is exactly its list; it
+  // holds no table, column, sequence or schema privilege beyond USAGE on those schemas.
+  for (const [login, allowed] of Object.entries(executorLogins)) {
+    const executable = rows(
+      `SELECT p.oid::regprocedure::text AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname LIKE 'morrow\\_%' AND has_function_privilege('${login}',p.oid,'EXECUTE')`,
+    );
+    assert.deepEqual(names(executable.map((f) => f.signature)), names(allowed), login);
+    const [privileges] = rows(
+      `SELECT (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname LIKE 'morrow\\_%' AND (has_table_privilege('${login}',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('${login}',c.oid,'SELECT,INSERT,UPDATE,REFERENCES')))::int AS tables, (SELECT COALESCE(array_agg(n.nspname ORDER BY 1),'{}') FROM pg_namespace n WHERE n.nspname LIKE 'morrow\\_%' AND has_schema_privilege('${login}',n.oid,'USAGE')) AS schemas, (SELECT count(*) FROM pg_namespace n WHERE n.nspname LIKE 'morrow\\_%' AND has_schema_privilege('${login}',n.oid,'CREATE'))::int AS creates`,
+    );
+    assert.equal(privileges.tables, 0, login);
+    assert.equal(privileges.creates, 0, login);
+    assert.deepEqual(
+      privileges.schemas,
+      [...new Set(allowed.map((signature) => signature.split(".")[0]))].sort(),
+      login,
+    );
+  }
+  recordConformance("S7", true);
 });

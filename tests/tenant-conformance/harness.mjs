@@ -43,6 +43,8 @@ const prerequisites = new Map([
   ["login-flow-custody.sql", "infra/identity-login-role-prerequisites.sql"],
   ["self-browser-family-logout.sql", "infra/identity-logout-role-prerequisites.sql"],
   ["account-onboarding.sql", "infra/identity-onboarding-role-prerequisites.sql"],
+  // M2 PR-1: the three membership-free executor logins (ADR-0022 item 8), before 0019.
+  ["spine-identity-bridge.sql", "infra/spine-executor-role-prerequisites.sql"],
 ]);
 export const migrationPrerequisite = (file) =>
   prerequisites.get(file.replace(/^[0-9]{4}\./, "")) ?? null;

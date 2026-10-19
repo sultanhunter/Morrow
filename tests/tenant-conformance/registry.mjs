@@ -14,7 +14,10 @@ export const workRoles = Object.freeze({
 
 // Table classes: tenant_readable (api role reads, column SELECT), tenant_internal
 // (only the command role, through definer functions), platform (no tenant columns,
-// no api grants).
+// no api grants), tenant_or_platform (tenant rows, plus platform rows whose tenant keys
+// are both null; readable like tenant_readable, platform rows visible to every tenant).
+// `lease: true` adds the lease-context twin of the command policy (tenant_lease, through
+// current_lease()); `policies` names a table's extra, exactly-checked policies.
 export const workTables = Object.freeze({
   goals: { class: "tenant_readable", parents: ["workspace_streams"] },
   tasks: { class: "tenant_readable", parents: ["goals"] },
@@ -35,12 +38,25 @@ export const workTables = Object.freeze({
   review_capabilities: { class: "platform", parents: [] },
   review_risk_by_effect: { class: "platform", parents: [] },
   review_policy_defaults: { class: "platform", parents: [] },
+  // M2 PR-1 spine foundation (migration 0020).
+  work_leases: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    policies: ["lease_pending", "lease_self"],
+  },
+  stop_controls: { class: "tenant_or_platform", parents: ["morrow_identity.workspaces"] },
+  stop_records: { class: "tenant_or_platform", parents: ["stop_controls"] },
+  operations: { class: "tenant_readable", parents: ["morrow_identity.workspaces"], lease: true },
+  operation_transitions: { class: "tenant_readable", parents: ["operations"], lease: true },
 });
 
 // API functions: SECURITY DEFINER, owned by the command role, EXECUTE for the api
 // role only, no organization/workspace/actor parameter (enter_context's digest
-// and workspace are resolved through session_eligibility()). current_tenant() is
-// the one non-API definer: the read and write policies call it.
+// and workspace are resolved through session_eligibility()). current_tenant() and
+// current_lease() are the resolvers: the policies call them. Runtime functions (M2
+// PR-1) are the same shape for morrow_runtime_executor and take ids only; operator
+// functions are INVOKER, owned by the owner and granted to nobody (the owner's
+// audited scripts only).
 export const workFunctions = Object.freeze({
   "current_tenant()": { kind: "resolver", grantees: ["morrow_work_api"] },
   "enter_context(text,text)": {
@@ -147,6 +163,32 @@ export const workFunctions = Object.freeze({
   "approval_bind()": { kind: "trigger", grantees: [] },
   "approval_enforce_status()": { kind: "trigger", grantees: [] },
   "decision_bind()": { kind: "trigger", grantees: [] },
+  // M2 PR-1 spine foundation (migration 0020). current_lease() is called only by the
+  // command role's policies and definers, so no role is granted it. pending_starts() is
+  // the one cross-tenant read: content-free, ids only.
+  "current_lease()": { kind: "resolver", grantees: [] },
+  "enter_lease(text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "pending_starts()": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+    crossTenant: true,
+    columns: ["kind", "subject_id", "lease_id", "generation"],
+  },
+  "lease_mark_started()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "lease_release()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "stop_active(text,text,text,text,text)": { kind: "helper", grantees: [] },
+  "lease_open(text,text,text,text,text)": { kind: "helper", grantees: [] },
+  "operation_transition(text,text,text,bigint,text,text,text,text,text,text)": {
+    kind: "helper",
+    grantees: [],
+  },
+  "lease_guard()": { kind: "trigger", grantees: [] },
+  "stop_guard()": { kind: "trigger", grantees: [] },
+  "stop_record_bind()": { kind: "trigger", grantees: [] },
+  "operation_guard()": { kind: "trigger", grantees: [] },
+  "operation_transition_bind()": { kind: "trigger", grantees: [] },
+  "platform_stop_set(text,text)": { kind: "operator", grantees: [] },
+  "platform_stop_lift(text,text)": { kind: "operator", grantees: [] },
   // Pure functions used by CHECK constraints and INVOKER triggers (the writer's
   // privileges), so only the command role holds EXECUTE (the valid_scope pattern).
   "sha256_text(text)": { kind: "check", grantees: ["morrow_work_command"] },
@@ -186,7 +228,51 @@ export const bridgeFunctions = Object.freeze([
   "work_review_candidates(text,text,text,text[],text,integer)",
   "work_reviewer_grants(text,text,text,text[])",
   "work_lock_and_recheck_exclusive(text,text,text,text,text,text,text)",
+  // M2 PR-1 (0019).
+  "work_executor_safe(text)",
+  "work_lease_member_current(text,text,text,text)",
 ]);
+// M2 PR-1 (0020): the two schemas the work owner creates beside morrow_work. The billing
+// route is tenant-readable with one extra insert policy for the signup bridge; the vault
+// is readable only while the session user is the broker's login (vault_broker).
+export const billingTables = Object.freeze({
+  workspace_billing_routes: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces"],
+    policies: ["route_signup"],
+  },
+});
+export const billingFunctions = Object.freeze({
+  // The signup bridge: the identity owner calls it from 0021's trigger and backfill,
+  // with the tenant of the identity row it is handling.
+  "record_signup_route(text,text,timestamp with time zone)": {
+    kind: "bridge_in",
+    grantees: ["morrow_identity_owner"],
+    tenantParameters: ["p_organization_id", "p_workspace_id"],
+  },
+  "route_guard()": { kind: "trigger", grantees: [] },
+});
+export const vaultTables = Object.freeze({
+  app_secrets: { class: "vault_platform", parents: [] },
+  credentials: { class: "vault_tenant", parents: ["morrow_identity.workspaces"] },
+});
+export const vaultFunctions = Object.freeze({
+  "app_secret_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "app_secret_put(text,text,text,text)": { kind: "operator", grantees: [] },
+  "vault_guard()": { kind: "trigger", grantees: [] },
+});
+// The three membership-free executor logins (ADR-0022 item 8) and the functions each
+// may execute, across every schema.
+export const executorLogins = Object.freeze({
+  morrow_connector_ingress: [],
+  morrow_runtime_executor: [
+    "morrow_work.enter_lease(text,text)",
+    "morrow_work.lease_mark_started()",
+    "morrow_work.lease_release()",
+    "morrow_work.pending_starts()",
+  ],
+  morrow_vault_broker: ["morrow_vault.app_secret_get(text)"],
+});
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);
 
 // Each route's P3 probe: which fixture record supplies its foreign IDs and body.

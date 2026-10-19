@@ -96,6 +96,21 @@ const published = [
     "0018.approval-records.sql",
     "6ca433edded2bc8590623bb30a6a51fe30b62215ad57dc0e4f7abdb7fecbadea",
   ],
+  [
+    19,
+    "0019.spine-identity-bridge.sql",
+    "e7e8a0ac95b1f85adbebfd78242e90310ea8a01c0e926355330ee0b8585f376e",
+  ],
+  [
+    20,
+    "0020.spine-foundation.sql",
+    "a2b1e01fa63fac0e35588bd4d0ebff06e1b781a509b93b224e8adb299ecc85c5",
+  ],
+  [
+    21,
+    "0021.signup-billing-route.sql",
+    "5ea67667a852d03caecced11c73f6a6ad3caeef19d4c211c3f5609ab52ea7d7b",
+  ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each
 // published row keeps exactly these pinned files, and a later role goes in a new file on its
@@ -152,12 +167,22 @@ const publishedPrerequisites = new Map([
       },
     ],
   ],
+  // M2 PR-1: the three membership-free executor logins (ADR-0022 item 8), before 0019.
+  [
+    19,
+    [
+      {
+        file: "infra/spine-executor-role-prerequisites.sql",
+        sha256: "9de904e5d954da5c48506f961d5c6f3884909276af5a022eedfcc9118e77a90b",
+      },
+    ],
+  ],
 ]);
 // The role each published migration was applied under: the identity owner, except the
-// work-state tables (P06.T01a) and the approval records (P06.T01b), which the work owner
-// creates.
+// work-state tables (P06.T01a), the approval records (P06.T01b) and the spine foundation
+// (M2 PR-1), which the work owner creates.
 const publishedExecuteAs = (sequence) =>
-  sequence === 15 || sequence === 18 ? "morrow_work_owner" : "morrow_identity_owner";
+  [15, 18, 20].includes(sequence) ? "morrow_work_owner" : "morrow_identity_owner";
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 
@@ -184,7 +209,7 @@ test("published rows keep their executeAs role and pinned prerequisites", () => 
 
 test("every published prerequisite file still hashes to its pinned digest", () => {
   const pinned = [...publishedPrerequisites.values()].flat();
-  assert.equal(pinned.length, 5);
+  assert.equal(pinned.length, 6);
   for (const { file, sha256 } of pinned) assert.equal(sha(readFileSync(file)), sha256, file);
 });
 

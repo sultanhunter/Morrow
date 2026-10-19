@@ -1,0 +1,223 @@
+// M2 PR-1 spine foundation (migrations 0019-0021): static checks of the migration text,
+// the manifest rows, the role prerequisites and the conformance registry. The behaviour is
+// proved by lab:spine-foundation, lab:tenant-conformance and lab:createrole-administrator
+// against PostgreSQL 17.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { migrationSqlViolations } from "../scripts/migration-sql.mjs";
+import { migrationPrerequisite } from "./tenant-conformance/harness.mjs";
+import {
+  billingFunctions,
+  billingTables,
+  bridgeFunctions,
+  executorLogins,
+  vaultFunctions,
+  vaultTables,
+  workFunctions,
+  workTables,
+} from "./tenant-conformance/registry.mjs";
+
+const read = (path) => readFileSync(path, "utf8");
+const sha = (text) => createHash("sha256").update(text).digest("hex");
+const bridge = read("migrations/0019.spine-identity-bridge.sql");
+const foundation = read("migrations/0020.spine-foundation.sql");
+const signup = read("migrations/0021.signup-billing-route.sql");
+const prerequisites = read("infra/spine-executor-role-prerequisites.sql");
+const code = (text) => text.replace(/--.*$/gm, "");
+const logins = ["morrow_connector_ingress", "morrow_runtime_executor", "morrow_vault_broker"];
+
+test("manifest: rows 19-21, their executeAs roles, digests and the one prerequisite", () => {
+  const manifest = JSON.parse(read("migrations/manifest.json"));
+  const rows = manifest.migrations.filter(
+    (m) => m.reviewRef === "docs/briefs/M2-shopify-connect.md",
+  );
+  assert.deepEqual(
+    rows.map((m) => [m.sequence, m.file, m.executeAs]),
+    [
+      [19, "0019.spine-identity-bridge.sql", "morrow_identity_owner"],
+      [20, "0020.spine-foundation.sql", "morrow_work_owner"],
+      [21, "0021.signup-billing-route.sql", "morrow_identity_owner"],
+    ],
+  );
+  for (const m of rows) assert.equal(sha(read("migrations/" + m.file)), m.sha256);
+  assert.deepEqual(rows[0].prerequisites, [
+    { file: "infra/spine-executor-role-prerequisites.sql", sha256: sha(prerequisites) },
+  ]);
+  assert.equal(rows[1].prerequisites, undefined);
+  assert.equal(rows[2].prerequisites, undefined);
+  // The superuser harness applies the same prerequisite before 0019.
+  assert.equal(
+    migrationPrerequisite("0019.spine-identity-bridge.sql"),
+    "infra/spine-executor-role-prerequisites.sql",
+  );
+});
+
+test("migrations: one transaction each, the runner contract, fixed search paths, no membership catalog", () => {
+  for (const [file, text] of [
+    ["0019", bridge],
+    ["0020", foundation],
+    ["0021", signup],
+  ]) {
+    assert.deepEqual(migrationSqlViolations(text), [], file);
+    // ADR-0020 item 6: the helpers only.
+    assert.equal(text.includes("pg_auth_" + "members"), false, file);
+    for (const fn of text.matchAll(
+      /CREATE (?:OR REPLACE )?FUNCTION [^\n]+\n(?:[^\n]*\n)*?LANGUAGE [^\n]*/g,
+    ))
+      assert.match(fn[0], /SET search_path=pg_catalog/, fn[0].slice(0, 80));
+    assert.doesNotMatch(code(text), /\bEXECUTE\s+(?!format\(|FUNCTION\b|ON\b)/, file);
+    assert.doesNotMatch(code(text), /GRANT[^;]*\b(DELETE|TRUNCATE)\b/, file);
+    assert.doesNotMatch(code(text), /TO PUBLIC/, file);
+  }
+  // Every new function has an explicit PUBLIC revoke.
+  for (const text of [bridge, foundation, signup])
+    for (const [, name] of text.matchAll(/CREATE FUNCTION ([a-z_]+\.[a-z_]+)\(/g))
+      assert.match(
+        text,
+        new RegExp("REVOKE ALL ON FUNCTION " + name.replace(".", "\\.") + "\\("),
+        name,
+      );
+});
+
+test("roles: three membership-free executor logins, no password, no new owner or membership", () => {
+  for (const login of logins)
+    assert.match(
+      prerequisites,
+      new RegExp(
+        `CREATE ROLE ${login} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS NOREPLICATION;`,
+      ),
+    );
+  assert.equal((prerequisites.match(/CREATE ROLE /g) ?? []).length, 3);
+  assert.doesNotMatch(code(prerequisites), /PASSWORD|GRANT|IN ROLE|\bROLE morrow_[a-z_]+ TO\b/i);
+  // No migration creates, alters or grants a role (ADR-0022 item 8; ADR-0020).
+  for (const text of [bridge, foundation, signup])
+    assert.doesNotMatch(code(text), /CREATE ROLE|ALTER ROLE|GRANT morrow_[a-z_]+ TO/);
+  // Each login executes only its registered definers.
+  assert.deepEqual(Object.keys(executorLogins).sort(), logins);
+  for (const [login, functions] of Object.entries(executorLogins)) {
+    const granted = [
+      ...code(foundation).matchAll(/GRANT EXECUTE ON FUNCTION ([^;]*?) TO ([a-z_,]+);/g),
+    ]
+      .filter((m) => m[2].split(",").includes(login))
+      .flatMap((m) => m[1].split(/,\s*(?=morrow_)/).map((f) => f.trim().replace(/\s+/g, "")));
+    assert.deepEqual(granted.sort(), [...functions].sort(), login);
+  }
+  // The guard every new definer uses names exactly the three logins.
+  assert.match(
+    bridge,
+    /p_executor IN \('morrow_connector_ingress','morrow_runtime_executor','morrow_vault_broker'\)/,
+  );
+  assert.match(bridge, /morrow_identity\.executor_memberships_closed\(r\.rolname\)/);
+});
+
+test("0020: the operation rows equal state-transitions.json, unchanged", () => {
+  const contract = JSON.parse(read("docs/contracts/state-transitions.json")).transitions.operation;
+  const rows = [
+    ...foundation.matchAll(/\('operation','([a-z_]+)','([a-z_]+)','([a-z_]+)','([a-z_]+)'\)/g),
+  ].map((m) => m.slice(1).join("|"));
+  assert.deepEqual(
+    rows,
+    contract.map((r) => [r.from, r.to, r.actor, r.guard].join("|")),
+  );
+});
+
+test("0020: lease terms, the stop interlock and the session-only lease_open", () => {
+  assert.match(
+    foundation,
+    /CASE kind WHEN 'read' THEN interval '60 seconds'\s+WHEN 'run' THEN interval '30 minutes' ELSE interval '15 minutes' END/,
+  );
+  // lease_open takes both stop keys shared, then reads the stops; a stop takes its key
+  // exclusively before it revokes.
+  const open = foundation.slice(
+    foundation.indexOf("CREATE FUNCTION morrow_work.lease_open("),
+    foundation.indexOf("CREATE FUNCTION morrow_work.operation_transition("),
+  );
+  const order = [
+    "morrow_work.current_tenant()",
+    "pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.stop','platform')",
+    "pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.stop',",
+    "morrow_work.stop_active(",
+    "INSERT INTO morrow_work.work_leases",
+  ].map((needle) => open.indexOf(needle));
+  assert.ok(
+    order.every((i) => i > 0),
+    JSON.stringify(order),
+  );
+  assert.deepEqual(
+    [...order].sort((x, y) => x - y),
+    order,
+  );
+  assert.doesNotMatch(open, /current_lease/);
+  const guard = foundation.slice(
+    foundation.indexOf("CREATE FUNCTION morrow_work.stop_guard()"),
+    foundation.indexOf("CREATE FUNCTION morrow_work.stop_record_bind()"),
+  );
+  assert.ok(
+    guard.indexOf("pg_advisory_xact_lock(") < guard.indexOf("UPDATE morrow_work.work_leases"),
+  );
+  // current_lease() is read only through the session-free runtime path.
+  const lease = foundation.slice(
+    foundation.indexOf("CREATE FUNCTION morrow_work.current_lease()"),
+    foundation.indexOf("REVOKE ALL ON FUNCTION morrow_work.current_lease()"),
+  );
+  assert.match(lease, /work_executor_safe\('morrow_runtime_executor'\)/);
+  assert.match(lease, /current_setting\('morrow\.work_session_digest',true\),''\)<>''/);
+  assert.match(lease, /work_lease_member_current\(/);
+  // pending_starts returns ids only.
+  assert.match(
+    foundation,
+    /CREATE FUNCTION morrow_work\.pending_starts\(\)\nRETURNS TABLE\(kind text,subject_id text,lease_id text,generation text\)/,
+  );
+});
+
+test("registry: every 0020 object is registered with its class", () => {
+  for (const table of [
+    "work_leases",
+    "stop_controls",
+    "stop_records",
+    "operations",
+    "operation_transitions",
+  ]) {
+    assert.ok(workTables[table], table);
+    assert.match(foundation, new RegExp(`CREATE TABLE morrow_work\\.${table} \\(`));
+  }
+  assert.deepEqual(Object.keys(billingTables), ["workspace_billing_routes"]);
+  assert.deepEqual(Object.keys(vaultTables).sort(), ["app_secrets", "credentials"]);
+  for (const [schema, functions] of [
+    ["morrow_work", workFunctions],
+    ["morrow_billing", billingFunctions],
+    ["morrow_vault", vaultFunctions],
+  ])
+    for (const [, name] of foundation.matchAll(
+      new RegExp(`CREATE FUNCTION ${schema}\\.([a-z_]+)\\(`, "g"),
+    ))
+      assert.ok(
+        Object.keys(functions).some((signature) => signature.startsWith(name + "(")),
+        schema + "." + name,
+      );
+  for (const name of ["work_executor_safe", "work_lease_member_current"])
+    assert.ok(
+      bridgeFunctions.some((signature) => signature.startsWith(name + "(")),
+      name,
+    );
+  assert.equal(workFunctions["pending_starts()"].crossTenant, true);
+});
+
+test("0021: the signup row records the website route in its transaction; nothing else does", () => {
+  assert.match(
+    signup,
+    /CREATE TRIGGER signup_billing_route AFTER INSERT ON morrow_identity\.organization_signups\n FOR EACH ROW EXECUTE FUNCTION morrow_identity\.signup_billing_route\(\);/,
+  );
+  assert.match(
+    foundation,
+    /GRANT EXECUTE ON FUNCTION morrow_billing\.record_signup_route\(text,text,timestamptz\) TO morrow_identity_owner;/,
+  );
+  // The bridge inserts the unfixed website shape only, which its policy also bounds.
+  assert.match(foundation, /VALUES \(p_organization_id,p_workspace_id,'website',/);
+  assert.match(
+    foundation,
+    /CREATE POLICY route_signup ON morrow_billing\.workspace_billing_routes FOR INSERT TO morrow_work_command\n WITH CHECK \(origin='website' AND route IS NULL/,
+  );
+});
