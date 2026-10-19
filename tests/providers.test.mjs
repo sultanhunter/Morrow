@@ -97,7 +97,7 @@ test("the catalogue derives each selection's worst case and run limit", () => {
   const [v1] = inspectModelPolicy(modelPolicy, registry).versions;
   const row = (model, effort) =>
     v1.selections.find((s) => s.model === model && s.effort === effort);
-  assert.equal(v1.status, "proposed");
+  assert.equal(v1.status, "active");
   assert.deepEqual(row("claude_sonnet_5_5", "low"), {
     model: "claude_sonnet_5_5",
     effort: "low",
@@ -109,7 +109,26 @@ test("the catalogue derives each selection's worst case and run limit", () => {
   assert.equal(row("claude_opus_5_5", "high").products_per_run, 9);
   assert.equal(row("claude_sonnet_5_5", "high").products_per_run, 19);
 });
-// Catalogue v1 is proposed until the owner confirms it; publishing pins its digest.
+// Catalogue v1 was published on the owner's confirmation (2026-10-19); its digest is pinned.
+test("catalogue v1 is active with the owner's confirmation, an effective date and its pinned digest", () => {
+  const v1 = modelPolicy.catalogue.versions[0];
+  assert.equal(v1.status, "active");
+  assert.equal(modelPolicy.catalogue.active_version, 1);
+  assert.match(v1.owner_confirmation, /Confirm all \(Recommended\)/);
+  assert.equal(v1.effective_from, "2026-10-19");
+  assert.equal(modelPolicy.catalogue.published_digests["1"], catalogueVersionDigest(v1));
+});
+// The rule cases start from v1 as it stood before publication: proposed, nothing pinned.
+const proposedBase = () => {
+  const p = structuredClone(modelPolicy);
+  const v1 = p.catalogue.versions[0];
+  v1.status = "proposed";
+  v1.owner_confirmation = null;
+  v1.effective_from = null;
+  p.catalogue.active_version = null;
+  p.catalogue.published_digests = {};
+  return p;
+};
 const latest = (p) => p.catalogue.versions.at(-1);
 const model = (p, key) => latest(p).models.find((m) => m.key === key);
 const publish = (p) => {
@@ -121,7 +140,7 @@ const publish = (p) => {
   p.catalogue.published_digests[String(entry.version)] = catalogueVersionDigest(entry);
 };
 test("a published catalogue version passes with its pinned digest, and retiring it keeps the digest", () => {
-  const p = structuredClone(modelPolicy);
+  const p = proposedBase();
   publish(p);
   assert.deepEqual(validateModelPolicy(p, registry), []);
   latest(p).status = "retired";
@@ -334,7 +353,7 @@ for (const [name, change, expected] of [
   ["a version out of sequence", (p) => (latest(p).version = 3), /out of sequence/],
 ])
   test(`model catalogue rejects ${name}`, () => {
-    const p = structuredClone(modelPolicy);
+    const p = proposedBase();
     change(p);
     assert.match(validateModelPolicy(p, registry).join("\n"), expected);
   });
