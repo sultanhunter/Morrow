@@ -118,7 +118,16 @@
     "lab:group:pgwire": "npm run lab:controlled-neon-postgresql && npm run lab:managed-login-postgresql && npm run lab:workspace-api-postgresql && npm run lab:edge-postgresql",
     "lab:workspace-ui-journey": "node scripts/workspace-ui-journey-lab.mjs",
     "lab:workspace-ui-journey-local": "node scripts/workspace-ui-journey-lab.mjs --local",
-    "lab:group:ui": "npm run lab:workspace-ui-journey"
+    "lab:group:ui": "npm run lab:workspace-ui-journey",
+    "staging:schema-head": "node scripts/staging.mjs schema-head",
+    "staging:migrate": "node scripts/staging.mjs migrate",
+    "staging:provision-roles": "node scripts/staging.mjs provision-roles",
+    "staging:seed-platform": "node scripts/staging.mjs seed-platform",
+    "staging:census": "node scripts/staging.mjs census",
+    "staging:connections": "node scripts/staging.mjs connections",
+    "staging:secrets-status": "node scripts/staging.mjs secrets-status",
+    "staging:put-secret": "node scripts/staging.mjs put-secret",
+    "staging:keyring": "node scripts/staging.mjs keyring"
   },
   "devDependencies": {
     "@react-router/dev": "7.18.2",
