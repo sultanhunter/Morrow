@@ -323,6 +323,6 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
   // The `work` leg of the ci.yml postgres matrix (P03.T04f).
   assert.match(
     read(".github/workflows/ci.yml"),
-    /leg: \[core-http, linking, work\]\n[^]*if: matrix\.leg == 'work'\n\s+run: npm run lab:group:pg-work\n/,
+    /leg: \[core, http, linking, work\]\n[^]*if: matrix\.leg == 'work'\n\s+run: npm run lab:group:pg-work\n/,
   );
 });
