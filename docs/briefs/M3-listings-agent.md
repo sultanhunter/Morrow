@@ -1,6 +1,6 @@
 # M3 Listings agent
 
-- Status: brief, 2026-10-19 (revised after critique). Spine: [mvp-architecture.md](mvp-architecture.md) §2 steps 6–9, §4, §5, §7, §9, §10. Material choices: ADR-0022 items 1–3, 10, 11, 15 and 16 (accepted 2026-10-19, except the model catalogue values listed under its "Pending owner confirmation", which stay Proposed).
+- Status: brief, 2026-10-19 (revised after critique). Spine: [mvp-architecture.md](mvp-architecture.md) §2 steps 6–9, §4, §5, §7, §9, §10. Material choices: ADR-0022 items 1–3, 10, 11, 15 and 16 (accepted 2026-10-19, including the model catalogue values listed under its "Owner confirmation of the catalogue values (2026-10-19)").
 - Plan IDs: P13.T01a–T03a, P05.T04b (minimum), P11.T04a (minimum), P11.T05a (stops). Branch `claude/m3-listings-agent`, from M2 PR-1; two PRs.
 
 ## Goal
@@ -16,7 +16,7 @@ The owner enables the Listings agent for a linked store. A merchant asks for bet
   - stops: "Stop AI work" (`agents.installation.disable`), the owner-run platform stop script, and the stop checks in `resolve_call`;
   - `credit_wallets`, `credit_reservations`, `vendor_cost_reservations`;
   - the unrecovered-cost ledger per workspace and billing period (ADR-0022 item 11);
-  - **the catalogue part, which merges only after the owner confirms ADR-0022's "Pending owner confirmation" list and catalogue version 1 is published with its pinned digest:** the model catalogue generated from `docs/decisions/model-policy.json` (rates, caps, multipliers and keys for the broker and the api's checks; `ModelSelection@1` keys stay pattern-checked strings, never enums), `workspace_model_defaults` with the member ceiling, `GET /workspace/:ws/models` and `PUT /workspace/:ws/settings/model-default` (`governance.model_default.revise`, signup template v2).
+  - **the catalogue part (no longer gated: the owner confirmed ADR-0022's "Owner confirmation of the catalogue values (2026-10-19)" list, and catalogue version 1 is published with its pinned digest):** the model catalogue generated from `docs/decisions/model-policy.json` (rates, caps, multipliers and keys for the broker and the api's checks; `ModelSelection@1` keys stay pattern-checked strings, never enums), `workspace_model_defaults` with the member ceiling, `GET /workspace/:ws/models` and `PUT /workspace/:ws/settings/model-default` (`governance.model_default.revise`, signup template v2).
 - **PR-2, runs and drafting:** `runs`, `run_manifests`, `product_snapshots`, `run_drafts`; `POST /workspace/:ws/work/tasks/:taskId/runs`, `GET /workspace/:ws/work/runs/:runId`; `ListingsRunWorkflow`; broker `modelRespond` with the `ModelProvider` port, the broker-internal `AdapterResult` and its Claude adapter (official SDK, retries off), reading the selection and catalogue version from the lease's run; the agent submit definer (`morrow_work.submit_agent_proposal`, executable by `morrow_runtime_executor` under a run lease) and the `catalog.content.publish` producer; the Ask and task screens.
 
 ## Non-goals
@@ -68,8 +68,8 @@ Store writes (M4); a model-based Coordinator; other model providers, `xhigh` and
 
 1. An Anthropic Console workspace for staging with a monthly spend limit (recorded in the evidence file); a workspace-scoped API key placed with `morrow_put`.
 2. Approve the staging smoke runs.
-3. Confirm, change or reject the values under ADR-0022 "Pending owner confirmation".
+3. Done 2026-10-19: the owner confirmed the values under ADR-0022 "Owner confirmation of the catalogue values (2026-10-19)" ("Confirm all (Recommended)").
 
 ## Open questions
 
-- The owner's confirmation of ADR-0022's "Pending owner confirmation" list (catalogue, default, multipliers, token caps, margin, failed-product bounds, member ceiling) before the catalogue part of PR-1 merges.
+- None for the catalogue: the owner confirmed ADR-0022's "Owner confirmation of the catalogue values (2026-10-19)" list (catalogue, default, multipliers, token caps, margin, failed-product bounds, member ceiling) on 2026-10-19, and catalogue version 1 is active.
