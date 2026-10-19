@@ -15,6 +15,7 @@ import {
   type TaskView,
   type WorkspacePort,
 } from "@morrow/workspace-ui";
+import { challengedIn } from "./challenge";
 import { createSeed, fixtureOrganizationName, fixtureWorkspace, people } from "./seed";
 import { scenarios, uncomposedIn, type ScenarioName } from "./scenarios";
 
@@ -49,6 +50,11 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   const composed = fixtureComposedFor(scenario);
   const calls = new Map<PortMethod, number>();
   const applied = new Map<string, Outcome<unknown>>();
+  // P05.T01ab: where the scenario's build asks for a challenge, signup needs a token the
+  // api guard has never seen; a missing or spent one is the guard's 403 challenge_*,
+  // which the HTTP adapter decodes as unavailable (nothing ran).
+  const challenged = challengedIn[scenario] !== undefined;
+  const spentChallenges = new Set<string>();
   let created = 0;
   // Scripted reply first; `null` falls through to the seed behaviour.
   function reply<T>(method: PortMethod, fallback: () => Outcome<T>): Promise<Outcome<T>> {
@@ -116,8 +122,16 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
             onboarding: "unavailable" as const,
           }),
         ),
-      createOrganization: (c) =>
-        command("account.createOrganization", c, () => ok({ workspaceId: fixtureWorkspace.id })),
+      createOrganization: (c, challenge = null) => {
+        if (challenged) {
+          if (challenge === null || spentChallenges.has(challenge))
+            return Promise.resolve({ kind: "unavailable", offline: false });
+          spentChallenges.add(challenge);
+        }
+        return command("account.createOrganization", c, () =>
+          ok({ workspaceId: fixtureWorkspace.id }),
+        );
+      },
     },
     work: {
       listGoals: (id, after) =>

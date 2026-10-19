@@ -22,7 +22,11 @@ import { chromium } from "playwright";
 import { artifactPath, writeArtifact } from "./artifacts.mjs";
 import { edgeRefusals } from "./edge.mjs";
 import { edgePostgresqlJourneys, edgePostgresqlRoles } from "./edge-postgresql-lab.mjs";
-import { labChallengeActions } from "./fixtures/turnstile-siteverify.mjs";
+import {
+  labChallengeActions,
+  turnstileScriptUrl as turnstileScript,
+  turnstileStub,
+} from "./fixtures/turnstile-siteverify.mjs";
 import { accountAndWorkJourneys } from "./workspace-ui-journey-work.mjs";
 
 const held = (code) => Error("WORKSPACE_UI_JOURNEY_" + code);
@@ -30,32 +34,9 @@ const require = (condition, code) => {
   if (!condition) throw held(code);
 };
 const workosAuthorize = "https://api.workos.com/user_management/authorize";
-// P05.T01ab: the one Turnstile URL the SPA loads (its CSP and verify:workspace-web
-// allow exactly it). The lab fulfils it with a stub `window.turnstile` that hands out
-// tokens the lab issued to its synthetic siteverify, one per execute, in order.
-const turnstileScript = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-const turnstileStub = (tokens) => `(() => {
-  const tokens = ${JSON.stringify(tokens)};
-  const widgets = new Map();
-  window.turnstile = {
-    render(element, options) {
-      const id = "lab-widget-" + (widgets.size + 1);
-      widgets.set(id, { element, options });
-      return id;
-    },
-    execute(id) {
-      const widget = widgets.get(id);
-      const token = tokens.shift();
-      setTimeout(() =>
-        token ? widget.options.callback(token) : widget.options["error-callback"]("lab"),
-      );
-    },
-    reset() {},
-    remove(id) {
-      widgets.delete(id);
-    },
-  };
-})();`;
+// P05.T01ab: the one Turnstile URL the SPA loads is fulfilled with a stub
+// `window.turnstile` (scripts/fixtures/turnstile-siteverify.mjs) that hands out tokens
+// the lab issued to its synthetic siteverify, one per execute, in order.
 
 const freePort = () =>
   new Promise((done, fail) => {
@@ -158,7 +139,7 @@ export async function workspaceUiJourney(engine, createService) {
               return route.fulfill({
                 status: 200,
                 contentType: "text/javascript; charset=utf-8",
-                body: turnstileStub(stubTokens),
+                body: turnstileStub({ [labChallengeActions.login]: stubTokens }),
               });
             },
           );

@@ -187,6 +187,16 @@ function useHold(): readonly [boolean, (seconds: number) => void] {
   return [until !== null, (seconds: number) => setUntil(Date.now() + seconds * 1000)] as const;
 }
 
+/** No token at all: nothing was sent, so, as for the guard's 403, the form offers Try again. */
+const notSent = { kind: "unavailable", offline: false } as const;
+
+/**
+ * The signup form (P05.T01x §9). Every POST, including Try again and Check again,
+ * carries a fresh bot-challenge token and resets the widget afterwards (P05.T01ab,
+ * P04.T01i D5). A challenge that yields no token sends nothing; it, and a 403
+ * `challenge_*`, show the existing "Couldn't save. Nothing was changed." with Try
+ * again; a 429 is the existing hold for Retry-After.
+ */
 function CreateOrganizationForm({
   onCreated,
   onRefetch,
@@ -197,19 +207,26 @@ function CreateOrganizationForm({
   readonly footer: ReactNode;
 }) {
   const services = useServices();
+  const challenge = useChallenge("signup");
   const [organizationName, setOrganizationName] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
   const [checked, setChecked] = useState(false);
   const [held, hold] = useHold();
-  // A 403 (signup_unavailable, or the guard's refusal) is terminal: nothing this form
-  // can send will succeed, so the action stays off. Field values survive every failure.
+  // A 403 (signup_unavailable, or the request guard's request_denied) is terminal:
+  // nothing this form can send will succeed, so the action stays off. The abuse guard's
+  // 403 challenge_* is not (a fresh token may pass). Field values survive every failure.
   const [refused, setRefused] = useState(false);
   const command = useCommand<
     { organizationName: string; workspaceName: string },
     { readonly workspaceId: Id }
   >({
     marker: null,
-    send: (c) => services.port.account.createOrganization(c),
+    send: async (c) => {
+      const sent = await challenge.run((token) =>
+        services.port.account.createOrganization(c, token),
+      );
+      return sent === "challenge_failed" ? notSent : sent;
+    },
     onOutcome: (outcome) => {
       if (outcome.kind === "ok") onCreated(outcome.value.workspaceId);
       else if (outcome.kind === "conflict" && outcome.recheck) onRefetch();
@@ -274,6 +291,7 @@ function CreateOrganizationForm({
           {command.phase.phase === "sending" ? copy.account.creating : copy.account.create}
         </Button>
       </div>
+      {challenge.host}
       {footer}
     </form>
   );

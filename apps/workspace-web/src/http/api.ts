@@ -35,7 +35,7 @@ export type HttpRequest =
       readonly path: string;
       readonly body: string;
       readonly key: string | null;
-      /** P05.T01ab: the X-Morrow-Challenge token, on login start (and signup) only. */
+      /** P05.T01ab: the X-Morrow-Challenge token, on login start and signup only. */
       readonly challenge?: string;
     };
 export const byteLimits = Object.freeze({ login: 512, signup: 2048, work: 65536 });
@@ -79,15 +79,20 @@ export const requests = {
   logout: (): HttpRequest => post("/auth/logout", { schemaVersion: 1 }, null, byteLimits.login)!,
   bootstrap: (ws: string) => (isId(ws) ? get(`/workspace/${ws}/bootstrap`) : null),
   overview: () => get("/workspaces"),
-  createOrganization(c: Command<{ organizationName: string; workspaceName: string }>) {
+  createOrganization(
+    c: Command<{ organizationName: string; workspaceName: string }>,
+    challenge: string | null = null,
+  ): HttpRequest | null {
+    if (challenge !== null && !isChallengeToken(challenge)) return null;
     const { organizationName, workspaceName } = c.body;
     if (!text(organizationName, 400) || !text(workspaceName, 400)) return null;
-    return post(
+    const request = post(
       "/organizations",
       { schemaVersion: 1, organizationName, workspaceName },
       c.key,
       byteLimits.signup,
     );
+    return request && challenge !== null ? { ...request, challenge } : request;
   },
   listGoals: (ws: string, after: string | null) =>
     ids(ws) && cursor(after)
@@ -363,8 +368,11 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
       ),
       createOrganization: gated(
         "account.createOrganization",
-        async (c: Command<{ organizationName: string; workspaceName: string }>) => {
-          const request = requests.createOrganization(c);
+        async (
+          c: Command<{ organizationName: string; workspaceName: string }>,
+          challenge: string | null = null,
+        ) => {
+          const request = requests.createOrganization(c, challenge);
           return request
             ? identityOutcome(await send(request), "command", decodeOrganizationSignup)
             : refused;

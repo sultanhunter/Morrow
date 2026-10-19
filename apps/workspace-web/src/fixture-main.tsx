@@ -8,6 +8,7 @@ import "@morrow/workspace-ui/styles.css";
 import { copy } from "@morrow/workspace-ui";
 import { App, createAppRuntime } from "./app";
 import { createFixtureAdapter, fixtureCanary, fixtureComposedFor } from "./fixtures/adapter";
+import { fixtureChallengeFor } from "./fixtures/challenge";
 import {
   fixtureBootAllowed,
   readScenario,
@@ -57,6 +58,7 @@ if (!fixtureBootAllowed(import.meta.env.MODE, window.location.hostname)) {
         port={createFixtureAdapter(scenario)}
         composed={fixtureComposedFor(scenario)}
         loginBodyVersion={2}
+        challenge={fixtureChallengeFor(scenario)}
         assignLocation={(url) => {
           if (url === "/") window.location.assign(rootPath);
         }}

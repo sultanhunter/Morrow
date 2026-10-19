@@ -29,6 +29,9 @@ export const scenarioNames = [
   "account_signup_refused",
   "account_signup_denied",
   "account_already_onboarded",
+  "account_challenge_failed",
+  "account_challenge_unavailable",
+  "account_guard_rate_limited",
   "uncertain_late",
   "ready_denied",
   "question_expired",
@@ -199,6 +202,23 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
   account_already_onboarded: {
     "account.overview": (call) => (call === 0 ? accountForm : null),
     "account.createOrganization": () => ({ kind: "conflict", recheck: true, message: "" }),
+  },
+  // P05.T01ab, with a challenge widget (fixtures/challenge.ts): the api guard's 403
+  // challenge_failed (unavailable: nothing ran), then Try again with a fresh token creates.
+  account_challenge_failed: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": (call) =>
+      call === 0 ? { kind: "unavailable", offline: false } : null,
+  },
+  // The widget yields no token, so the form sends nothing (a send would be denied here).
+  account_challenge_unavailable: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": () => ({ kind: "denied", message: "", reference: null }),
+  },
+  // The api guard's per-address 429 (Retry-After: 60): the existing signup hold.
+  account_guard_rate_limited: {
+    "account.overview": () => accountForm,
+    "account.createOrganization": () => ({ kind: "rate_limited", retryAfterSeconds: 60 }),
   },
   // Mark ready by someone who may view the task but not change it: the server's 403.
   ready_denied: {

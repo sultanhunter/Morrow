@@ -13,6 +13,7 @@ import {
   scenarioNames,
   scenarioRoot,
 } from "../apps/workspace-web/src/fixtures/scenarios.ts";
+import { challengedIn, fixtureChallengeFor } from "../apps/workspace-web/src/fixtures/challenge.ts";
 import { createSeed, fixtureWorkspace } from "../apps/workspace-web/src/fixtures/seed.ts";
 import { createPending } from "../apps/workspace-web/src/pending.ts";
 import {
@@ -229,4 +230,50 @@ test("review scenarios: the signup's 400, 403 and 409 rows, a failed overview an
   assert.equal(replay.replayed, true);
   const listed = await late.work.listTasks(ws, "goal-autumn", null);
   assert.equal(listed.value.items.filter((t) => t.objective === "Size chart").length, 1);
+});
+
+test("P05.T01ab signup challenge scenarios: one token per reset, the guard's refusals and 429", async () => {
+  const signup = { key: key(40), body: { organizationName: "Linen", workspaceName: "Main" } };
+  assert.deepEqual(Object.keys(challengedIn).sort(), [
+    "account_challenge_failed",
+    "account_challenge_unavailable",
+    "account_guard_rate_limited",
+  ]);
+  for (const scenario of Object.keys(challengedIn))
+    assert.ok(scenarioNames.includes(scenario), scenario);
+  // A widget yields one token per reset, never the same one twice.
+  const widget = fixtureChallengeFor("account_challenge_failed")("signup", {});
+  const first = await widget.token();
+  assert.match(first, /^[A-Za-z0-9._-]{1,2048}$/);
+  assert.equal(await widget.token(), "failed", "no second token without a reset");
+  widget.reset();
+  const second = await widget.token();
+  assert.notEqual(second, first);
+  widget.remove();
+  assert.equal(await widget.token(), "failed");
+  // The guard needs a token it has never seen: the first is refused (scripted), a spent
+  // one is refused, and a fresh one creates.
+  const failed = createFixtureAdapter("account_challenge_failed");
+  const refused = { kind: "unavailable", offline: false };
+  assert.deepEqual(await failed.account.createOrganization(signup), refused, "no token");
+  assert.deepEqual(await failed.account.createOrganization(signup, first), refused);
+  assert.deepEqual(await failed.account.createOrganization(signup, first), refused, "spent");
+  assert.equal((await failed.account.createOrganization(signup, second)).kind, "ok");
+  assert.deepEqual(
+    await createFixtureAdapter("account_guard_rate_limited").account.createOrganization(
+      signup,
+      "fixture-challenge.1",
+    ),
+    { kind: "rate_limited", retryAfterSeconds: 60 },
+  );
+  assert.equal(
+    await fixtureChallengeFor("account_challenge_unavailable")("signup", {}).token(),
+    "failed",
+  );
+  // Every other scenario asks for no challenge, and its signup needs no token.
+  assert.equal(await fixtureChallengeFor("account_form")("signup", {}).token(), null);
+  assert.equal(
+    (await createFixtureAdapter("account_form").account.createOrganization(signup)).kind,
+    "ok",
+  );
 });

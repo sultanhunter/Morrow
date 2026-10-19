@@ -14,6 +14,38 @@ export const labChallengeActions = Object.freeze({
   signup: "organization_signup",
 });
 
+// The one Turnstile URL the SPA loads (its CSP and verify:workspace-web allow exactly
+// it). The browser labs fulfil it with `turnstileStub`, never the real script.
+export const turnstileScriptUrl =
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+// A stub `window.turnstile` for the browser labs. `tokensByAction` maps a configured
+// action to tokens the lab issued to its synthetic siteverify; each execute takes the
+// next token of its widget's action, and an empty queue is the widget's error callback.
+// Labs build a fresh stub per script request, so no two page loads share a token.
+export const turnstileStub = (tokensByAction) => `(() => {
+  const tokens = ${JSON.stringify(tokensByAction)};
+  const widgets = new Map();
+  let rendered = 0;
+  window.turnstile = {
+    render(element, options) {
+      const id = "lab-widget-" + ++rendered;
+      widgets.set(id, { element, options });
+      return id;
+    },
+    execute(id) {
+      const widget = widgets.get(id);
+      const token = (tokens[widget.options.action] || []).shift();
+      setTimeout(() =>
+        token ? widget.options.callback(token) : widget.options["error-callback"]("lab"),
+      );
+    },
+    reset() {},
+    remove(id) {
+      widgets.delete(id);
+    },
+  };
+})();`;
+
 export function createSiteverifyOracle({ hostname, now = Date.now, onIssue = () => {} }) {
   const secret = "0x" + randomBytes(24).toString("base64url");
   const siteKey = "0x" + randomBytes(16).toString("base64url");

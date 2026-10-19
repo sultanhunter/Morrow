@@ -211,11 +211,10 @@ export function useCommand<B, T>(options: {
 }
 
 /**
- * P05.T01ab: the invisible bot challenge of one guarded form (sign-in now; the
- * create-organization form in P14.T01a PR-2). Render `host` inside the form; `run`
- * asks for a fresh token, sends with it and resets the widget afterwards, so every
- * POST carries its own single-use token. No token means `"challenge_failed"` and
- * nothing is sent.
+ * P05.T01ab: the invisible bot challenge of one guarded form (sign-in and the
+ * create-organization form). Render `host` inside the form; `run` asks for a fresh
+ * token, sends with it and resets the widget afterwards, so every POST carries its own
+ * single-use token. No token means `"challenge_failed"` and nothing is sent.
  */
 export function useChallenge(action: ChallengeAction) {
   const services = useServices();

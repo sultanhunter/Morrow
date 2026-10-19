@@ -10,8 +10,16 @@
 // browser as if the reply were lost, so the change commits and the SPA must reconcile.
 // Record text carries planted markers that must never reach the console, URLs, titles,
 // storage, status regions or the report (AC32). No trace, HAR, video or screenshot.
+// P05.T01ab: the api runs its development abuse guard, so every sign-in start and signup
+// carries a fresh Turnstile token from the stub `window.turnstile`, which each person's
+// context fulfils with tokens issued to the synthetic siteverify; aborts stay at zero.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { tsImport } from "tsx/esm/api";
+import {
+  labChallengeActions,
+  turnstileScriptUrl,
+  turnstileStub,
+} from "./fixtures/turnstile-siteverify.mjs";
 
 const workosAuthorize = "https://api.workos.com/user_management/authorize";
 const T = 45000; // generous: CI is the authority, but a loaded host must not flake
@@ -34,6 +42,8 @@ const later = (promise) => {
 export async function accountAndWorkJourneys(h, { browser, observed }) {
   const tenant = await tsImport("../tests/tenant-conformance/harness.mjs", import.meta.url);
   const { origin, f } = h;
+  // Verifications before these journeys (AC20's) are not theirs.
+  const verifiedFrom = h.siteverify.requests.length;
   const O = f.organization;
   const W = f.workspace;
   const ids = {
@@ -171,7 +181,17 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       viewport: { width: 1440, height: 900 },
       serviceWorkers: "block",
     });
-    const log = { label, requests: [], console: [], urls: [], titles: [], storage: [], status: [] };
+    const log = {
+      label,
+      requests: [],
+      console: [],
+      urls: [],
+      titles: [],
+      storage: [],
+      status: [],
+      // Every token this person's stub scripts were given, by action (P05.T01ab).
+      tokens: { login: [], signup: [] },
+    };
     logs.push(log);
     context.setDefaultTimeout(T);
     await context.route(
@@ -197,6 +217,28 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
         return route.abort();
       },
     );
+    // Registered after the abort-all route, so Playwright tries it first: the allowlisted
+    // Turnstile script is the stub, built per request (routing disables the HTTP cache),
+    // so each page load gets its own fresh login and signup tokens.
+    await context.route(
+      (url) => url.href === turnstileScriptUrl,
+      (route) => {
+        observed.turnstileScript++;
+        const issue = (action) => [1, 2, 3].map(() => h.siteverify.issue(action));
+        const login = issue(labChallengeActions.login);
+        const signup = issue(labChallengeActions.signup);
+        log.tokens.login.push(...login);
+        log.tokens.signup.push(...signup);
+        return route.fulfill({
+          status: 200,
+          contentType: "text/javascript; charset=utf-8",
+          body: turnstileStub({
+            [labChallengeActions.login]: login,
+            [labChallengeActions.signup]: signup,
+          }),
+        });
+      },
+    );
     context.on("page", (page) => watch(page, log));
     return { label, context, log };
   }
@@ -209,6 +251,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
         url: request.url(),
         body: request.method() === "POST" ? (request.postData() ?? "") : null,
         key: request.headers()["idempotency-key"] ?? null,
+        challenge: request.headers()["x-morrow-challenge"] ?? null,
       }),
     );
     page.on("console", (message) => log.console.push(message.text()));
@@ -250,7 +293,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
 
   const instance = await h.instance();
   // The same api the browser talks to, for API-seeded steps and server-side checks.
-  async function api(cookie, method, path, body, key = randomUUID()) {
+  async function api(cookie, method, path, body, key = randomUUID(), extra = {}) {
     const headers = {
       Cookie: "__Host-morrow_session=" + cookie,
       "X-Morrow-Request": "1",
@@ -263,6 +306,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
         Origin: origin,
         "Content-Type": "application/json",
         "Idempotency-Key": key,
+        ...extra,
       });
     const reply = await instance.fetch(path, {
       method,
@@ -272,7 +316,7 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
     return { status: reply.status, body: h.json(reply.body) };
   }
   // AC10/AC25/AC28 fault injection: forward the first POST to the server with the same
-  // cookie, key and body, then tell the browser the reply was lost. The route stays
+  // cookie, key, body and challenge token, then tell the browser the reply was lost. The route stays
   // registered and passes every later request through: removing it from inside its own
   // handler (an earlier local run) let Chromium continue the paused request to the server.
   async function loseReplyOnce(page, url, cookie, lost) {
@@ -284,12 +328,14 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
       used = true;
       try {
         const key = request.headers()["idempotency-key"];
+        const challenge = request.headers()["x-morrow-challenge"];
         const reply = await api(
           cookie,
           "POST",
           new URL(request.url()).pathname,
           request.postData() ?? "",
           key,
+          challenge === undefined ? {} : { "X-Morrow-Challenge": challenge },
         );
         forwarded.push({ status: reply.status, key });
         await route.fulfill({
@@ -766,6 +812,16 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
           keys[2] !== keys[0] &&
           new URL(stale.url()).pathname === new URL(page.url()).pathname.replace(/\/work$/, ""),
       );
+      // P05.T01ab (P04.T01i D5): each signup POST, the Check again and the second tab's
+      // included, carried its own fresh signup token from this person's stubs.
+      const signupTokens = posts(c.log, "/organizations").map((r) => r.challenge);
+      h.check(
+        "P05T01ab-D5:each_signup_post_carries_a_fresh_signup_token",
+        lost.length === 1 &&
+          signupTokens.length === 3 &&
+          new Set(signupTokens).size === 3 &&
+          signupTokens.every((token) => c.log.tokens.signup.includes(token)),
+      );
       await sample(stale, c.log);
       await stale.close();
       const depth = await page.evaluate(() => history.length);
@@ -907,6 +963,28 @@ export async function accountAndWorkJourneys(h, { browser, observed }) {
           w2After.body?.safeMessage === w2Before.body?.safeMessage,
       );
       await sample(page, b.log);
+    });
+
+    // ---- P05.T01ab: every guarded POST carried its own token, verified once
+    await scenario("P05T01ab_guarded_posts_carry_fresh_tokens", async () => {
+      const starts = logs.flatMap((log) =>
+        posts(log, "/auth/login").map((r) => ({ token: r.challenge, issued: log.tokens.login })),
+      );
+      const signups = logs.flatMap((log) => posts(log, "/organizations"));
+      h.check(
+        "P05T01ab-D5:each_sign_in_start_carries_a_fresh_login_token",
+        starts.length === 4 &&
+          new Set(starts.map((start) => start.token)).size === starts.length &&
+          starts.every((start) => start.issued.includes(start.token)),
+      );
+      // The lab forwards the first signup itself (AC25), so every guarded POST reaches
+      // the api once, and the synthetic siteverify passed each one exactly once.
+      const verified = h.siteverify.requests.slice(verifiedFrom);
+      h.check(
+        "P05T01ab-D5:one_passed_verification_per_guarded_post",
+        verified.length === starts.length + signups.length &&
+          verified.every((row) => row.success === true && row.secretMatches),
+      );
     });
   } finally {
     // ---- AC32: planted markers never reach the console, URLs, titles, storage or status

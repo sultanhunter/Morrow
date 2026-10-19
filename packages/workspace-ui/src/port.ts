@@ -60,8 +60,10 @@ export interface WorkspacePort {
   readonly workspace: { bootstrap(ws: Id): Promise<Outcome<WorkspaceView>> };
   readonly account: {
     overview(): Promise<Outcome<AccountOverviewView>>;
+    /** `challenge` is the X-Morrow-Challenge token (P05.T01ab), or null when none is asked for. */
     createOrganization(
       c: Command<{ organizationName: string; workspaceName: string }>,
+      challenge?: string | null,
     ): Promise<Outcome<{ readonly workspaceId: Id }>>;
   };
   readonly work: {
