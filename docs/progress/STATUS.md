@@ -39,7 +39,7 @@ In progress:
 
 1. P05.T01y: open the PR when Actions minutes allow; hosted `foundation` green on the exact head (pg-core, pg-http, pg-work, workers, pgwire); then PR-3 (AC33, AC34). P03.T04e AC22: one `workflow_dispatch` run of `heavy-faults.yml` on `main`. Then P14.T01a PR-2 (account and work wiring).
 2. P01.T04a PR-B (billing route library).
-3. P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
+3. P06.T01b: PR-1 implemented on `claude/p06-t01b-approval-records` (migrations 0017–0018 after 0016; pushed, no PR while Actions minutes are exhausted; local pipeline and labs green, `docs/acceptance/P06.md`); next its PR, hosted CI and the Tier 2 AI and security reviews, merging after P05.T01y, then PR-2 (routes). Then P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
 4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11). Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.
 
 Open plan follow-ups:
