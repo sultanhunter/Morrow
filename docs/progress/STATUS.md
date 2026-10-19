@@ -38,18 +38,15 @@ In progress:
 
 ## Next actions
 
-Merge order once GitHub Pro is active (no PR opens before then):
-1. P03.T04f (`claude/p03-t04f-ci-efficiency`): its PR first, one full run; then record the hosted job times. Then dispatch `heavy-faults.yml` on `main` (P03.T04e AC22).
-2. This docs PR (`claude/docs-staging-and-design-refs`): Markdown only, so it runs light under P03.T04f.
-3. Then the other pushed branches: P04.T01j PR-B (may start now; it merges after step 2 and before any branch that adds a migration), then P05.T01y (0016 moved to the ADR-0020 helpers) and P06.T01b PR-1; P01.T02c PR-A, P01.T04a PR-B and P14.T01a PR-2 as their reviews allow. P04.T01i PR-B (tooling, no provider effect) and PR-C (P05.T01ab), then Phase B under `staging-card-1`.
-4. After those: P06.T02a (event transport), P06.T01c (OperationLedger) and P01.T02b. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11). Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.
+MVP fast track (ADR-0021; `docs/plan/mvp.md`). M1, staging live:
+1. Merge train: PR #16 (P03.T04f) first, then this docs PR (Markdown only, light run), then P14.T01a PR-2, P01.T02c PR-A, P01.T04a PR-B (with the walkthrough-count fix 86→90 from the rehearsal), P04.T01j PR-B, P05.T01y (0016 moved to the ADR-0020 helpers), P06.T01b PR-1, P05.T01ab, then the trimmed P04.T01i PR-B (deploy after green CI, migrations, roles, secrets). Each PR gets one AI review.
+2. Staging bring-up under `staging-card-1` once the owner's D9 secrets exist; owner sign-in on staging.
+3. Then M2 Shopify connect, M3 listings agent and M5 billing in parallel; M4 approve and apply; M6 beta readiness.
 
-Open plan follow-ups:
-- P06.T01a AC08 soak: a `heavy:*` script that runs `lab:work-postgresql` with `MORROW_WORK_SOAK=1` in `heavy-faults.yml` (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
+Open plan follow-ups (heavy soak and fault suites are deferred past launch, ADR-0021):
 - Work routes in production: production cannot map today (ADR-0007 item 9), so the deployed api serves them 401 with no SQL. Whoever enables production mapping must also gate the work routes on P09.T05 (packet hard ordering b).
 - Superseded banners on `docs/references/*`.
 - A forward migration (0016 or later) that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
-- The rest of P03.T04e: PR-B, the shared PostgreSQL 17 template-database harness and its `pg-suites` and `pg-stress` legs.
 - Timing fixes (routine, ADR-0002) if hosted `unit-stress` confirms them: `tests/broker-client.test.mjs` AC30 and the `tests/standalone-login-http.test.mjs` 5,000 ms entry-timeout case each flaked once under loaded-host local stress.
 
 ## Blockers

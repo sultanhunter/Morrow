@@ -24,6 +24,7 @@ Material decisions (ADR-0002) are recorded here before dependent implementation.
 | [0018](ADR-0018-proposals-without-a-task.md) | Proposals without a task: human governance proposals only | Accepted 2026-10-18 |
 | [0019](ADR-0019-staging-environment.md) | Staging environment: workers.dev origin, continuous deploy and sign-in abuse protection | Accepted 2026-10-19 |
 | [0020](ADR-0020-non-superuser-administrator.md) | Non-superuser migration administrator: one recorded administrator, a closed membership set and a one-time rebaseline of migrations 0005–0015 | Accepted 2026-10-19 |
+| [0021](ADR-0021-mvp-fast-track.md) | MVP fast track: launch one listings slice on a production-grade foundation | Accepted 2026-10-19 |
 
 ADR-0012 and ADR-0013 record how the P03.T04c overhaul implemented ADR-0002; earlier drafts of them used the numbers 0001, 0007 and 0008.
 
