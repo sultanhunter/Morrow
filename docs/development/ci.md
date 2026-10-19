@@ -120,6 +120,20 @@ For a pull request with two full runs and its merge of an up-to-date head: about
 - A failing scheduled run is not a required check, so the next session records it under Blockers in `docs/progress/STATUS.md` until it is fixed.
 - One run costs about 18 billed minutes of the private repository's included Actions quota (P03.T04e OQ-1). Moving to a nightly cadence is a one-line cron change, made only after the owner confirms the GitHub plan and quota.
 
+## Staging deploy
+
+`.github/workflows/deploy-staging.yml` (workflow "Deploy staging", P04.T01i D2, trimmed by ADR-0021) deploys the four staging Workers. It is not a required check.
+
+- **Trigger.** It runs on `workflow_run` of "Morrow foundation" (`completed`, `main`). The job runs only for a successful `push` run on `main` from this repository. It uses the `staging` environment and `concurrency: deploy-staging` without cancelling a running deploy.
+- **Steps without the token.** `node scripts/staging.mjs ci-gates` checks the card, gate 1 (the sha is still the `main` tip) and gate 2 (`STAGING_DEPLOY_ENABLED` is `1` and the workflow is enabled). A stop is a successful no-op. Gate 5 runs `npm run build && npm run edge:check && npm run edge:dry-run`.
+- **The token step.** Only this step's env holds `CLOUDFLARE_API_TOKEN`. It runs `node scripts/staging.mjs deploy --ci`, which:
+  - checks gates 3, 4 and 6;
+  - deploys broker, orchestrator, connector and api, re-reading the flag just before and just after the api deploy;
+  - checks `/healthz`, then runs the unattended smoke and the census.
+- **Permissions.** `contents: read` and `actions: read`. The workflow's token cannot read variables, so its live flag re-read is the workflow's own state, which `npm run staging:kill` disables.
+- **Reports and checkout.** The report (`staging/deploy-report.json`) is secret-scanned before upload, and the checkout must be left clean.
+- **No rollback.** Card effect E11 is suspended, so staging rolls forward from a new green `main` commit, with the kill switch as the stop.
+
 ## Running it locally
 
 With Node 24.13.0 and Docker Desktop running, every job except `pgwire` runs on macOS:
