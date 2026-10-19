@@ -17,6 +17,32 @@ for (const [name, text] of [
   test("fixture secret denies: " + name, () => assert.ok(inspectSecrets(text).length));
 test("reference/digest does not masquerade as credential", () =>
   assert.deepEqual(inspectSecrets("credentialRef: account-main; digest: " + "a".repeat(64)), []));
+// P04.T01i PR-B: Cloudflare API tokens (no prefix, so only where they are used) and
+// Turnstile secret keys (named, or at a secret's length behind the widget-key prefix).
+for (const [name, text, kind] of [
+  ["cloudflare token variable", "CLOUDFLARE_API_TOKEN=" + "E".repeat(40), "cloudflare_token"],
+  [
+    "cloudflare token json",
+    '{"CLOUDFLARE_API_TOKEN": "' + "F".repeat(40) + '"}',
+    "cloudflare_token",
+  ],
+  ["cloudflare bearer header", "Authorization: Bearer " + "G_h-".repeat(10), "cloudflare_token"],
+  [
+    "turnstile secret json",
+    '{"TURNSTILE_SECRET_KEY":"0x' + "H".repeat(33) + '"}',
+    "turnstile_secret",
+  ],
+  ["turnstile siteverify body", "secret=0x" + "J".repeat(33) + "&response=x", "turnstile_secret"],
+  ["turnstile key at secret length", "0x4" + "A".repeat(7) + "K".repeat(25), "turnstile_secret"],
+])
+  test("fixture secret denies: " + name, () => assert.ok(inspectSecrets(text).includes(kind)));
+for (const [name, text] of [
+  ["turnstile site key", '"siteKey":"0x4' + "A".repeat(7) + "L".repeat(14) + '"'],
+  ["turnstile documented dummy secret", "1x" + "0".repeat(31) + "AA"],
+  ["shorter bearer marker", "Bearer worker_management_marker_86_only"],
+  ["token variable name only", "it reads CLOUDFLARE_API_TOKEN from the step environment"],
+])
+  test("not a secret: " + name, () => assert.deepEqual(inspectSecrets(text), []));
 const file = "0001.example.sql",
   sql = "BEGIN; SELECT 1; COMMIT;";
 const manifest = {

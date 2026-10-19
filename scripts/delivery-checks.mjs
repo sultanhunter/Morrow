@@ -12,6 +12,20 @@ export function inspectSecrets(text) {
     ["aws_access_key", /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/],
     ["workos_key", /\bsk_(?:test|live)_[A-Za-z0-9]{16,}/],
     ["neon_password", /\bnpg_[A-Za-z0-9]{12,}/],
+    // Cloudflare API tokens carry no prefix (40 URL-safe characters), so they are matched
+    // where they are used: the variable wrangler reads, or a bearer header (P04.T01i).
+    [
+      "cloudflare_token",
+      /\b(?:CLOUDFLARE_API_TOKEN|CF_API_TOKEN|CLOUDFLARE_API_KEY)\b["']?\s*[:=]\s*["']?[A-Za-z0-9_-]{37,}/,
+    ],
+    ["cloudflare_token", /\bBearer\s+[A-Za-z0-9_-]{40}(?![A-Za-z0-9_-])/],
+    // Turnstile secret keys: the broker's format (^0x…, P05.T01ab) where a secret is named,
+    // or the widget-key prefix at a secret's length (site keys are shorter and committed).
+    [
+      "turnstile_secret",
+      /\b(?:TURNSTILE_SECRET_KEY|turnstile[_-]?secret|secret)\b["']?\s*[:=]\s*["']?0x[0-9A-Za-z_-]{20,}/i,
+    ],
+    ["turnstile_secret", /\b0x4AAAAAAA[0-9A-Za-z_-]{20,}/],
     [
       "credential_literal",
       /\b(?:apiSecretKey|client_secret|access_token|password)\b["']?\s*[:=]\s*["'][^"'\s]{16,}["']/i,
@@ -131,6 +145,19 @@ function verify() {
     {
       name: "neon_password_marker",
       passed: inspectSecrets("npg_" + "A".repeat(16)).includes("neon_password"),
+    },
+    {
+      name: "cloudflare_token_marker",
+      passed:
+        inspectSecrets("CLOUDFLARE_API_TOKEN=" + "A".repeat(40)).includes("cloudflare_token") &&
+        inspectSecrets("Authorization: Bearer " + "B".repeat(40)).includes("cloudflare_token"),
+    },
+    {
+      name: "turnstile_secret_marker",
+      passed:
+        inspectSecrets('{"TURNSTILE_SECRET_KEY":"0x' + "C".repeat(33) + '"}').includes(
+          "turnstile_secret",
+        ) && inspectSecrets("0x4" + "A".repeat(7) + "D".repeat(25)).includes("turnstile_secret"),
     },
     {
       name: "private_key_header",
