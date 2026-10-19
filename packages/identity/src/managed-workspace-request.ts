@@ -72,6 +72,34 @@ export function confinedCookies(
     throw held();
   return cookies;
 }
+// The managed delivery for logout and rotate: the dispatcher's one plan becomes one
+// Response whose Set-Cookie fields are exactly the confined cookies (P05.T01y §4, AC29).
+// delivered() holds unless exactly one plan arrived and the Response's Set-Cookie list
+// equals the confined one.
+export function createManagedCookieDelivery(route: "logout" | "rotate") {
+  let response: Response | undefined, cookie: string | undefined;
+  return Object.freeze({
+    sink(output: {
+      status: number;
+      headers: readonly (readonly [string, string])[];
+      cookies: readonly string[];
+      bodyText: string;
+    }): void {
+      if (response) throw held();
+      const cookies = confinedCookies(route, output.status, output.bodyText, output.cookies);
+      const headers = new Headers(
+        output.headers.map(([name, value]) => [name, value] as [string, string]),
+      );
+      for (const value of cookies) headers.append("Set-Cookie", value);
+      cookie = cookies[0];
+      response = new Response(output.bodyText, { status: output.status, headers });
+    },
+    delivered(): Response {
+      if (!response || response.headers.getSetCookie().join("\n") !== (cookie ?? "")) throw held();
+      return response;
+    },
+  });
+}
 // Only closed snapshots survive delivery. Request scopes, clients and pending
 // cleanup remain owned by the original entry, never this observation map.
 const observations = new WeakMap<Response, ResponseMetrics>();
@@ -138,28 +166,12 @@ export function createWorkersManagedWorkspaceHandler(
       pools = await attempt.wait(preparing);
       attempt.check();
       if (route === "logout" || route === "rotate") {
-        const selected = route;
         invoked = true;
-        let cookie: string | undefined;
-        const sink = (output: {
-          status: number;
-          headers: readonly (readonly [string, string])[];
-          cookies: readonly string[];
-          bodyText: string;
-        }) => {
-          if (response) throw held();
-          const cookies = confinedCookies(selected, output.status, output.bodyText, output.cookies);
-          const headers = new Headers(
-            output.headers.map(([name, value]) => [name, value] as [string, string]),
-          );
-          for (const value of cookies) headers.append("Set-Cookie", value);
-          cookie = cookies[0];
-          response = new Response(output.bodyText, { status: output.status, headers });
-        };
-        if (selected === "logout")
+        const delivery = createManagedCookieDelivery(route);
+        if (route === "logout")
           await dispatchStandaloneLogoutWithAttempt(
             request,
-            sink,
+            delivery.sink,
             attempt,
             resolved.logout,
             pools.logoutPool,
@@ -167,14 +179,12 @@ export function createWorkersManagedWorkspaceHandler(
         else
           await dispatchStandaloneRotationWithAttempt(
             request,
-            sink,
+            delivery.sink,
             attempt,
             resolved.logout,
             pools.logoutPool,
           );
-        const delivered: Response | undefined = response;
-        if (!delivered || delivered.headers.getSetCookie().join("\n") !== (cookie ?? ""))
-          throw held();
+        response = delivery.delivered();
       } else if (route === "workspaces" || route === "organizations") {
         const selected = route;
         // The configured login profile is the only profile a family may belong to.

@@ -139,12 +139,15 @@ test("P05.T01y: every new function has a fixed search path; only rotation is a d
     /current_generation BETWEEN 1 AND 1000 AND expires_at=created_at\+interval '12 hours'/,
   );
   assert.match(lifecycle, /expires_at<=created_at\+interval '30 minutes'\);/);
-  // The sign-out trigger locks the principal FOR SHARE before it reads the clock.
+  // The sign-out trigger locks the principal FOR SHARE before it takes the watermark, and
+  // the watermark is never earlier than any existing family of the principal (a backward
+  // wall-clock step cannot let a family committed before the removal escape it).
   const trigger = functionDefinition(lifecycle, "record_organization_session_signout");
-  assert.ok(
-    trigger.indexOf("WHERE id=OLD.principal_id FOR SHARE;") <
-      trigger.indexOf("instant:=clock_timestamp();"),
-  );
+  const watermark = "SELECT greatest(clock_timestamp(),max(f.created_at)) INTO instant";
+  assert.ok(trigger.indexOf("WHERE id=OLD.principal_id FOR SHARE;") > 0);
+  assert.ok(trigger.indexOf("WHERE id=OLD.principal_id FOR SHARE;") < trigger.indexOf(watermark));
+  assert.match(trigger, /WHERE sm\.principal_id=OLD\.principal_id;/);
+  assert.equal(trigger.match(/clock_timestamp\(\)/g).length, 1);
   assert.match(
     lifecycle,
     /CREATE TRIGGER membership_organization_signout AFTER UPDATE OF active,principal_id,organization_id OR DELETE ON morrow_identity\.memberships/,

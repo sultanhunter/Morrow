@@ -72,9 +72,11 @@ CREATE TRIGGER session_signout_immutable BEFORE UPDATE OR DELETE ON morrow_ident
 CREATE TRIGGER session_signout_no_truncate BEFORE TRUNCATE ON morrow_identity.organization_session_signouts
  FOR EACH STATEMENT EXECUTE FUNCTION morrow_identity.preserve_session_signout_record();
 -- Lock order organization -> membership -> principal: the principal is locked FOR SHARE
--- before the clock is read. Every family admission reads its creation instant after
--- locking the principal FOR UPDATE, so no family committed before this removal can have
--- created_at later than the watermark.
+-- before the watermark is taken. Every family admission reads its creation instant after
+-- locking the principal FOR UPDATE, so no family can commit for this principal while the
+-- share lock is held. The watermark is the later of the clock and every existing family's
+-- created_at for the principal, so no family committed before this removal has created_at
+-- later than the watermark, even if the wall clock stepped backward since its admission.
 CREATE FUNCTION morrow_identity.record_organization_session_signout() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
 DECLARE cause_value text; instant timestamptz;
@@ -85,7 +87,11 @@ BEGIN
  ELSIF NEW.active IS DISTINCT FROM true THEN cause_value:='membership_deactivated';
  ELSE RETURN NULL; END IF;
  PERFORM 1 FROM morrow_identity.principals WHERE id=OLD.principal_id FOR SHARE;
- instant:=clock_timestamp();
+ SELECT greatest(clock_timestamp(),max(f.created_at)) INTO instant
+  FROM morrow_identity.browser_session_families f
+  JOIN morrow_identity.provider_session_bindings pb ON pb.id=f.provider_binding_id
+  JOIN morrow_identity.provider_subject_mappings sm ON sm.id=pb.mapping_id
+  WHERE sm.principal_id=OLD.principal_id;
  INSERT INTO morrow_identity.organization_session_signouts(id,organization_id,principal_id,membership_id,cause,signed_out_at,recorded_by)
   VALUES(gen_random_uuid()::text,OLD.organization_id,OLD.principal_id,OLD.id,cause_value,instant,session_user);
  RETURN NULL;

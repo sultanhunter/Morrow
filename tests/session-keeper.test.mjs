@@ -4,6 +4,7 @@ import {
   bindSessionActivity,
   createSessionKeeper,
   SESSION_ROTATE_INTERVAL_MS,
+  SESSION_ROTATE_WAIT_MS,
 } from "../packages/workspace-ui/src/session-keeper.ts";
 
 // P05.T01y-AC31: the client session keeper with fake timers, locks and fetch.
@@ -257,6 +258,92 @@ test("a 401 sends one shared rotate; rotated or current → one retry; a second 
   );
   assert.equal(s.rotates().length, 1);
   assert.equal(signedOut(), 0);
+});
+
+test("a 401 for a request sent after a recent 200 rotate still rotates (reuse check)", async () => {
+  // Sign-in, then the first input: the server answers `current`. A thief who copied the
+  // generation-1 cookie rotates 60 s after it was created. The victim's next request gets 401
+  // within 60 s of the keeper's `current`: that `current` cannot explain the 401, so the
+  // keeper rotates, presents the retired generation, and the rotate 401 signs out.
+  let rotates = 0;
+  const { k, c, s, signedOut } = keeper({
+    server: server({
+      rotate: () =>
+        rotates++ === 0 ? rotated("current") : json(401, { code: "authentication_required" }),
+      api: () => json(401, { code: "authentication_required" }),
+    }),
+  });
+  k.noteActivity();
+  await tick();
+  assert.equal(s.rotates().length, 1);
+  await c.advance(56 * 1000);
+  const response = await k.request("/api/goals");
+  assert.equal(response.status, 401);
+  assert.equal(s.rotates().length, 2);
+  assert.equal(s.calls.filter((call) => call.input === "/api/goals").length, 1);
+  assert.equal(signedOut(), 1);
+});
+
+test("a 401 for a request sent before a 200 rotate settled reuses that rotate", async () => {
+  // Without a LockManager two requests are in flight; the first 401 rotates, and the second
+  // 401 arrives after that rotate settled, so it explains the 401: no second rotate.
+  const late = deferred();
+  const seen = new Map();
+  const { k, s, signedOut } = keeper({
+    locks: null,
+    server: server({
+      api: (input) => {
+        const n = (seen.get(input) ?? 0) + 1;
+        seen.set(input, n);
+        if (n > 1) return json(200, {});
+        return input === "/api/b" ? late.promise : json(401, { code: "authentication_required" });
+      },
+    }),
+  });
+  const a = k.request("/api/a");
+  const b = k.request("/api/b");
+  assert.equal((await a).status, 200);
+  assert.equal(s.rotates().length, 1);
+  late.resolve(json(401, { code: "authentication_required" }));
+  assert.equal((await b).status, 200);
+  assert.equal(s.rotates().length, 1);
+  assert.equal(signedOut(), 0);
+});
+
+test("a rotate reply that never arrives releases the lock after the bounded wait", async () => {
+  const locks = fakeLocks();
+  const never = deferred();
+  const { k, c, s, signedOut, expiries } = keeper({
+    locks,
+    server: server({
+      rotate: () => never.promise,
+      api: () => json(401, { code: "authentication_required" }),
+    }),
+  });
+  let settled = null;
+  void k.request("/api/goals").then((response) => (settled = response));
+  await tick(10);
+  assert.equal(s.rotates().length, 1);
+  assert.deepEqual(locks.held(), ["exclusive"]);
+  await c.advance(SESSION_ROTATE_WAIT_MS - 1);
+  assert.equal(settled, null);
+  await c.advance(1);
+  // Unavailable: the original 401 is returned, the lock is free, nobody is signed out.
+  assert.equal(settled?.status, 401);
+  assert.deepEqual(locks.held(), []);
+  assert.equal(signedOut(), 0);
+  // The fetch was never aborted; a late reply changes nothing and reports no expiry.
+  assert.equal(s.rotates()[0].init.signal, undefined);
+  never.resolve(rotated());
+  await tick();
+  assert.deepEqual(expiries, []);
+  // The stalled attempt counts as a failure: input retries only 60 s after it.
+  await c.advance(1000);
+  k.noteActivity();
+  await tick();
+  assert.equal(s.rotates().length, 1);
+  await c.advance(59 * 1000);
+  assert.equal(s.rotates().length, 2);
 });
 
 test("a non-replayable body is not retried after recovery", async () => {

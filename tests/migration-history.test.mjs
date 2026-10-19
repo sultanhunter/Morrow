@@ -81,7 +81,7 @@ const published = [
   [
     16,
     "0016.browser-session-lifecycle.sql",
-    "ac947dd48f0bd5d802ebd85bf5e610cafa50809458988e8c25aa7157b12d64c8",
+    "499616af5025aefe58f4172ebecdfc001caf0f9cab89c80d28956d677d3e2102",
   ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each

@@ -406,8 +406,8 @@ INSERT INTO morrow_identity.identity_verification_profiles(id,provider_id,enviro
       }
       throw Error("SESSION_LAB_ADMISSION_EVIDENCE_EXPIRED");
     }
-    async function waitUntilPast(sqlInstant) {
-      for (let i = 0; i < 400; i++) {
+    async function waitUntilPast(sqlInstant, polls = 400) {
+      for (let i = 0; i < polls; i++) {
         if (value(`SELECT clock_timestamp()>${sqlInstant};`) === "t") return true;
         await sleep(100);
       }
@@ -439,11 +439,15 @@ INSERT INTO morrow_identity.identity_verification_profiles(id,provider_id,enviro
     const body = (definition) =>
       definition.slice(definition.indexOf("$$") + 2, definition.lastIndexOf("$$"));
 
-    // Fixtures that exist before the migration: a legacy 15-minute family (L) and one
-    // expiring shortly after the migration (LX), plus the predecessor bodies and OIDs.
+    // Fixtures that exist before the migration: a legacy 15-minute family (L) and legacy
+    // families expiring 25, 60 and 150 s after seeding (LX), plus the predecessor bodies and
+    // OIDs. AC02 uses the first LX still live when it runs, so a slow migration on a loaded
+    // host cannot turn its pre-expiry check into a vacuous pass.
     const L0 = person("legacy");
     const L = seedFamily(L0, { age: 30, lifetime: "15 minutes" });
-    const LX = seedFamily(L0, { age: 900 - 25, lifetime: "15 minutes" });
+    const LXs = [25, 60, 150].map((left) =>
+      seedFamily(L0, { age: 900 - left, lifetime: "15 minutes" }),
+    );
     const legacyBytes = (f) =>
       value(
         `SELECT (SELECT to_jsonb(x)::text FROM morrow_identity.browser_session_families x WHERE x.id=${lit(f.family)})||'|'||(SELECT string_agg(to_jsonb(g)::text,',' ORDER BY g.generation) FROM morrow_identity.browser_session_generations g WHERE g.family_id=${lit(f.family)});`,
@@ -542,17 +546,29 @@ INSERT INTO morrow_identity.identity_verification_profiles(id,provider_id,enviro
         r.outcome === "denied" && writes() === before,
         r.outcome,
       );
-      // LX expires about 25 s after it was seeded; it resolves until then, never after.
-      // Eligibility is read first; if the clock is still before the expiry afterwards, the
-      // family must have resolved.
-      const live = value(
-        `WITH e AS MATERIALIZED (SELECT count(*) AS n FROM morrow_identity.session_eligibility(${lit(LX.current.digest)},'ws_a1')) SELECT e.n::text||'|'||(clock_timestamp()<f.expires_at)::text FROM e,morrow_identity.browser_session_families f WHERE f.id=${lit(LX.family)};`,
-      ).split("|");
-      check("ac02_legacy_resolves_until_expiry", live[1] !== "true" || live[0] === "1");
-      const expiry = `(SELECT expires_at FROM morrow_identity.browser_session_families WHERE id=${lit(LX.family)})`;
+      // The first LX whose expiry is still at least 1 s ahead resolves until then, never
+      // after. Eligibility is read first, then the clock: the check passes only if the read
+      // happened before the expiry and the family resolved (never vacuously).
+      const LX = LXs.find(
+        (f) =>
+          value(
+            `SELECT clock_timestamp()+interval '1 second'<expires_at FROM morrow_identity.browser_session_families WHERE id=${lit(f.family)};`,
+          ) === "t",
+      );
+      const live = LX
+        ? value(
+            `WITH e AS MATERIALIZED (SELECT count(*) AS n FROM morrow_identity.session_eligibility(${lit(LX.current.digest)},'ws_a1')) SELECT e.n::text||'|'||(clock_timestamp()<f.expires_at)::text FROM e,morrow_identity.browser_session_families f WHERE f.id=${lit(LX.family)};`,
+          ).split("|")
+        : [];
+      check("ac02_legacy_resolves_until_expiry", live[1] === "true" && live[0] === "1", live);
+      const expiry = LX
+        ? `(SELECT expires_at FROM morrow_identity.browser_session_families WHERE id=${lit(LX.family)})`
+        : "'infinity'::timestamptz";
       check(
         "ac02_legacy_expires",
-        (await waitUntilPast(expiry)) && eligible(LX.current.digest, "ws_a1") === 0,
+        LX !== undefined &&
+          (await waitUntilPast(expiry, 1800)) &&
+          eligible(LX.current.digest, "ws_a1") === 0,
       );
       check(
         "ac02_legacy_logout_ends",
@@ -881,11 +897,17 @@ ${generation(2, `(SELECT revoked_at FROM morrow_identity.browser_session_generat
     await section("AC09", async () => {
       const P = person("idle");
       // Generation 1 of a 12-hour family, created 30 min - 1.5 s ago: expires 1.5 s ahead.
-      const F = seedFamily(P, { age: 1800 - 1.5 });
-      const live = value(
-        `WITH e AS MATERIALIZED (SELECT count(*) AS n FROM morrow_identity.session_eligibility(${lit(F.current.digest)},'ws_a1')) SELECT e.n::text||'|'||(clock_timestamp()<g.expires_at)::text FROM e,morrow_identity.browser_session_generations g WHERE g.id=${lit(F.current.id)};`,
-      ).split("|");
-      check("ac09_resolves_before_idle_expiry", live[1] !== "true" || live[0] === "1", live);
+      // If a loaded host reads it only after the expiry, reseed with 5 s and then 15 s of
+      // margin: the check passes only on a read before the expiry that resolved.
+      let F, live;
+      for (const margin of [1.5, 5, 15]) {
+        F = seedFamily(P, { age: 1800 - margin });
+        live = value(
+          `WITH e AS MATERIALIZED (SELECT count(*) AS n FROM morrow_identity.session_eligibility(${lit(F.current.digest)},'ws_a1')) SELECT e.n::text||'|'||(clock_timestamp()<g.expires_at)::text FROM e,morrow_identity.browser_session_generations g WHERE g.id=${lit(F.current.id)};`,
+        ).split("|");
+        if (live[1] === "true") break;
+      }
+      check("ac09_resolves_before_idle_expiry", live[1] === "true" && live[0] === "1", live);
       const passed = await waitUntilPast(
         `(SELECT expires_at FROM morrow_identity.browser_session_generations WHERE id=${lit(F.current.id)})`,
       );
@@ -1283,22 +1305,133 @@ DELETE FROM morrow_identity.memberships WHERE id=${lit(R.memberships.org_a)};`);
         await remover.query("ROLLBACK;").catch(() => {});
         await remover.close();
       }
+      // (c) A backward wall-clock step: a family committed before the removal carries a
+      // created_at later than the clock at the removal (owner-seeded 20 s ahead). The
+      // watermark is never earlier than it, so reactivation does not revive the family.
+      const S = person("clock_step");
+      const ahead = seedFamily(S, { age: -20 });
+      admin(
+        `UPDATE morrow_identity.memberships SET active=false WHERE id=${lit(S.memberships.org_a)};\nUPDATE morrow_identity.memberships SET active=true WHERE id=${lit(S.memberships.org_a)};`,
+      );
+      check(
+        "ac14_c_watermark_not_before_an_existing_family",
+        value(
+          `SELECT (s.signed_out_at>=f.created_at)::text FROM morrow_identity.organization_session_signouts s,morrow_identity.browser_session_families f WHERE s.principal_id=${lit(S.principal)} AND s.organization_id='org_a' AND f.id=${lit(ahead.family)};`,
+        ) === "true",
+      );
+      const created = `(SELECT created_at FROM morrow_identity.browser_session_families WHERE id=${lit(ahead.family)})`;
+      check(
+        "ac14_c_family_excluded_after_reactivation",
+        (await waitUntilPast(created)) &&
+          eligible(ahead.current.digest, "ws_a1") === 0 &&
+          eligible(ahead.current.digest, "ws_b1") === 1,
+      );
     });
+
+    // A human actor X in org_a with a governance.membership.revoke grant on ws_a1 and a live
+    // family F. receipt() records a 0004 receipt bound to a session digest; execute() runs
+    // the real revoke_workspace_access as morrow_identity_lifecycle (AC15, AC21).
+    function revocationActor(label) {
+      const X = person(label + "_actor", ["org_a"]);
+      const F = seedFamily(X);
+      const grant = {
+        id: "grant_" + label + "_actor_revoke",
+        principal: {
+          kind: "human",
+          principalId: X.principal,
+          organizationId: "org_a",
+          workspaceId: "ws_a1",
+          membershipId: X.memberships.org_a,
+          installationId: null,
+          mandateId: null,
+        },
+        capabilityId: "governance.membership.revoke",
+        verbs: ["execute", "approve"],
+        scope: {
+          organizationId: "org_a",
+          workspaceId: "ws_a1",
+          storeIds: [],
+          accountIds: [],
+          resources: [
+            {
+              organizationId: "org_a",
+              workspaceId: "ws_a1",
+              storeId: null,
+              connectionId: null,
+              kind: "workspace",
+              id: "ws_a1",
+            },
+          ],
+          fields: ["membershipId", "expectedRevision", "control"],
+        },
+        issuedBy: {
+          kind: "human",
+          principalId: X.principal,
+          organizationId: "org_a",
+          workspaceId: "ws_a1",
+          membershipId: X.memberships.org_a,
+          installationId: null,
+          mandateId: null,
+        },
+        validFrom: "2026-01-01T00:00:00.000Z",
+        expiresAt: null,
+        revokedAt: null,
+        policyRevision: 1,
+      };
+      admin(
+        `INSERT INTO morrow_identity.grants(id,organization_id,workspace_id,membership_id,principal_id,payload) VALUES(${lit(grant.id)},'org_a','ws_a1',${lit(X.memberships.org_a)},${lit(X.principal)},${lit(JSON.stringify(grant))}::jsonb);`,
+      );
+      const receipt = (key, digest, target) => {
+        const policy = value(
+          "SELECT policy_revision FROM morrow_identity.organizations WHERE id='org_a';",
+        );
+        const r = {
+          id: "receipt_" + label + "_" + key,
+          command: randomUUID(),
+          request: sha(randomUUID()),
+          digest,
+          target,
+          policy,
+        };
+        admin(
+          `INSERT INTO morrow_identity.workspace_revocation_receipts(id,organization_id,workspace_id,actor_principal_id,actor_membership_id,actor_session_digest,target_membership_id,command_id,request_digest,expected_policy_revision,authorizing_grant_id,authorizing_grant_snapshot,approval_evidence_id,expires_at) VALUES(${lit(r.id)},'org_a','ws_a1',${lit(X.principal)},${lit(X.memberships.org_a)},${lit(digest)},${lit(target)},${lit(r.command)},${lit(r.request)},${policy},${lit(grant.id)},${lit(JSON.stringify(grant))}::jsonb,'approval_${label}_${key}',clock_timestamp()+interval '10 minutes');`,
+        );
+        return r;
+      };
+      const execute = (r) =>
+        value(
+          `SELECT outcome FROM morrow_identity.revoke_workspace_access(${[r.id, r.command, r.request, r.digest, "org_a", "ws_a1", r.target, r.policy].map(lit).join(",")});`,
+          "morrow_identity_lifecycle",
+        );
+      return { X, F, receipt, execute };
+    }
 
     // ------------------------------------------------------------------- AC15
     await section("AC15", async () => {
       const W = person("workspace_removal");
+      // W's family is at generation 2; the real 0004 revoke_workspace_access (as
+      // morrow_identity_lifecycle, with an owner-seeded receipt) removes W's ws_a1 membership.
       const F = seedFamily(W, { age: 600, rotations: [300] });
+      const actor = revocationActor("workspace_removal");
       const policy = () =>
         value("SELECT policy_revision FROM morrow_identity.organizations WHERE id='org_a';");
       const revision = policy();
       const signouts = value("SELECT count(*) FROM morrow_identity.organization_session_signouts;");
-      admin(`BEGIN;
-SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.identity.organization','org_a'::text)::text,0));
-SELECT 1 FROM morrow_identity.organizations WHERE id='org_a' FOR UPDATE;
-UPDATE morrow_identity.workspace_memberships SET active=false WHERE workspace_id='ws_a1' AND membership_id=${lit(W.memberships.org_a)};
-UPDATE morrow_identity.organizations SET policy_revision=policy_revision+1 WHERE id='org_a';
-COMMIT;`);
+      check(
+        "ac15_family_at_generation_two_resolves_w1",
+        family(F.family).current === 2 && eligible(F.current.digest, "ws_a1") === 1,
+      );
+      const outcome = actor.execute(
+        actor.receipt("w1", actor.F.current.digest, W.memberships.org_a),
+      );
+      check(
+        "ac15_real_revoke_workspace_access_applied",
+        outcome === "applied" &&
+          value(
+            `SELECT active FROM morrow_identity.workspace_memberships WHERE workspace_id='ws_a1' AND membership_id=${lit(W.memberships.org_a)};`,
+          ) === "f",
+        outcome,
+      );
       check(
         "ac15_one_workspace_stops",
         eligible(F.current.digest, "ws_a1") === 0 &&
@@ -1506,7 +1639,13 @@ COMMIT;`);
         "reconcile_login_flow",
         "session_eligibility",
       ];
-      const introduced = ["check_browser_generation_insert", "rotate_self_browser_generation"];
+      // The sign-out trigger reads family creation instants for its watermark (it neither
+      // compares generation and family times nor checks current_generation).
+      const introduced = [
+        "check_browser_generation_insert",
+        "record_organization_session_signout",
+        "rotate_self_browser_generation",
+      ];
       const legacyOnly = [
         "admit_browser_family",
         "reconcile_browser_admission",
@@ -1537,79 +1676,9 @@ COMMIT;`);
 
     // ------------------------------------------------------------------- AC21
     await section("AC21", async () => {
-      const X = person("digest_actor", ["org_a"]);
+      const { F, receipt, execute } = revocationActor("digest");
       const Y = person("digest_target", ["org_a"]);
       const Z = person("digest_target_two", ["org_a"]);
-      const F = seedFamily(X);
-      const grant = {
-        id: "grant_digest_actor_revoke",
-        principal: {
-          kind: "human",
-          principalId: X.principal,
-          organizationId: "org_a",
-          workspaceId: "ws_a1",
-          membershipId: X.memberships.org_a,
-          installationId: null,
-          mandateId: null,
-        },
-        capabilityId: "governance.membership.revoke",
-        verbs: ["execute", "approve"],
-        scope: {
-          organizationId: "org_a",
-          workspaceId: "ws_a1",
-          storeIds: [],
-          accountIds: [],
-          resources: [
-            {
-              organizationId: "org_a",
-              workspaceId: "ws_a1",
-              storeId: null,
-              connectionId: null,
-              kind: "workspace",
-              id: "ws_a1",
-            },
-          ],
-          fields: ["membershipId", "expectedRevision", "control"],
-        },
-        issuedBy: {
-          kind: "human",
-          principalId: X.principal,
-          organizationId: "org_a",
-          workspaceId: "ws_a1",
-          membershipId: X.memberships.org_a,
-          installationId: null,
-          mandateId: null,
-        },
-        validFrom: "2026-01-01T00:00:00.000Z",
-        expiresAt: null,
-        revokedAt: null,
-        policyRevision: 1,
-      };
-      admin(
-        `INSERT INTO morrow_identity.grants(id,organization_id,workspace_id,membership_id,principal_id,payload) VALUES(${lit(grant.id)},'org_a','ws_a1',${lit(X.memberships.org_a)},${lit(X.principal)},${lit(JSON.stringify(grant))}::jsonb);`,
-      );
-      const receipt = (key, digest, target) => {
-        const policy = value(
-          "SELECT policy_revision FROM morrow_identity.organizations WHERE id='org_a';",
-        );
-        const r = {
-          id: "receipt_" + key,
-          command: randomUUID(),
-          request: sha(randomUUID()),
-          digest,
-          target,
-          policy,
-        };
-        admin(
-          `INSERT INTO morrow_identity.workspace_revocation_receipts(id,organization_id,workspace_id,actor_principal_id,actor_membership_id,actor_session_digest,target_membership_id,command_id,request_digest,expected_policy_revision,authorizing_grant_id,authorizing_grant_snapshot,approval_evidence_id,expires_at) VALUES(${lit(r.id)},'org_a','ws_a1',${lit(X.principal)},${lit(X.memberships.org_a)},${lit(digest)},${lit(target)},${lit(r.command)},${lit(r.request)},${policy},${lit(grant.id)},${lit(JSON.stringify(grant))}::jsonb,'approval_${key}',clock_timestamp()+interval '10 minutes');`,
-        );
-        return r;
-      };
-      const execute = (r) =>
-        value(
-          `SELECT outcome FROM morrow_identity.revoke_workspace_access(${[r.id, r.command, r.request, r.digest, "org_a", "ws_a1", r.target, r.policy].map(lit).join(",")});`,
-          "morrow_identity_lifecycle",
-        );
       const stale = receipt("stale", F.current.digest, Y.memberships.org_a);
       const rotation = rotate(F.current.digest);
       const policy = value(
@@ -1632,10 +1701,34 @@ COMMIT;`);
       );
       const current = receipt("current", rotation.newDigest, Z.memberships.org_a);
       check("ac21_control_current_digest_applies", execute(current) === "applied");
+      // Static, on the live definitions after the full chain: the 0005 apply and the 0009
+      // handoff predicate authenticate through session_eligibility of the bound digest (the
+      // predicate also binds the review to the handoff's digest), and the 0009 lookup and
+      // status read only through that predicate. A retired generation therefore resolves no
+      // handoff, review, lookup or status row. The seeded linking flow stays open (P05.md).
+      const linkingSource = (name, fragment) =>
+        `(SELECT count(*)=1 AND bool_and(p.prosrc LIKE '%${fragment}%') FROM pg_proc p WHERE p.pronamespace='morrow_identity'::regnamespace AND p.proname='${name}')`;
       check(
         "ac21_linking_functions_authenticate_by_eligibility",
         value(
-          "SELECT bool_and(p.prosrc LIKE '%session_eligibility(h.session_digest%') FROM pg_proc p WHERE p.pronamespace='morrow_identity'::regnamespace AND p.proname='link_workspace_store';",
+          "SELECT " +
+            [
+              linkingSource("link_workspace_store", "session_eligibility(h.session_digest"),
+              linkingSource(
+                "bound_workspace_linking_handoff",
+                "session_eligibility(p_session,p_workspace)",
+              ),
+              linkingSource("bound_workspace_linking_handoff", "r.session_digest=h.session_digest"),
+              linkingSource(
+                "lookup_workspace_store_link",
+                "bound_workspace_linking_handoff(p_session,p_workspace,p_nonce,p_command)",
+              ),
+              linkingSource(
+                "workspace_store_link_status",
+                "bound_workspace_linking_handoff(p_session,p_workspace,p_nonce,p_command)",
+              ),
+            ].join(" AND ") +
+            ";",
         ) === "t",
       );
     });
@@ -1655,7 +1748,7 @@ const report = {
   checks,
   limitations: [
     "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, provider or merchant data.",
-    "AC15 reproduces the 0004 workspace revocation by owner maintenance with the same lock order and effects; AC21 runs the real revoke_workspace_access.",
+    "AC15 and AC21 run the real revoke_workspace_access as morrow_identity_lifecycle on owner-seeded receipts and grants; the receipt issuance path is not exercised here.",
     "AC21: the 0004 revocation records a durable 'denied' result (actor_ineligible) for a receipt bound to a retired generation; linking handoffs, reviews, the 0009 lookup and status are covered statically (they authenticate through session_eligibility of the bound digest), not by a seeded linking flow.",
   ],
 };

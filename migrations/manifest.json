@@ -141,7 +141,7 @@
     {
       "sequence": 16,
       "file": "0016.browser-session-lifecycle.sql",
-      "sha256": "ac947dd48f0bd5d802ebd85bf5e610cafa50809458988e8c25aa7157b12d64c8",
+      "sha256": "499616af5025aefe58f4172ebecdfc001caf0f9cab89c80d28956d677d3e2102",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/packets/P05.T01y.md"
     }
