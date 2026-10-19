@@ -4,72 +4,61 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active packets
 
-`main` is the trunk (ADR-0014). Merged into it:
-- PR #1 the foundation; PR #2 the P03.T04c/d overhaul; PR #3 ADR-0014.
-- PR #4: P05.T01x Part A. Migration 0012 retires plan-number identifiers: `morrow-login-v1`, `morrow-self-logout-v1`, `morrow_id_`.
-- PR #5: P04.T02a, the deployable composition root: api, broker, orchestrator and connector-placeholder Workers, `scripts/edge.mjs`, `lab:edge-workers` and `lab:edge-postgresql` (ADR-0007).
-- PR #6: P01.T02a PR-A, executor classes and human-only kill switches (ADR-0005, §2 confirmed 2026-10-18).
-- PR #7: ADR-0008 accepted (connector on Cloudflare Workers with `@shopify/shopify-api`; secret-dependent calls in the broker).
-- PR #8: P01.T02a PR-B, review policy, Proposal@2, Approval@2 and `@morrow/policy/review` (ADR-0011).
-- PR #9: the owner decisions of 2026-10-18: ADR-0015 to ADR-0018, the billing-ownership rewrite, Stripe in the provider register, the plan amendments, the resolved packets P01.T02c, P06.T01b, P14.T01a, P05.T01y and P05.T01z, and the redesigned P01.T04a packet (billing routes by origin, ADR-0015).
-- PR #10: P05.T01x Part B (ADR-0009), squash-merged as `e51e5b7`: migration 0013 (account login, enrollment, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers).
-- PR #12: P06.T01a (ADR-0010), merged as `06e4dfe`: migrations 0014 (identity bridge and organization interlock) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the `pg-work` CI group. Verified waits for the P05 exit gate.
-- PR #13: the ADR-0018 Proposal@2 edit (P01.T02a-AC27), merged as `08e5ebf`: nullable `taskId` only for human governance proposals, `TASK_REQUIRED`/`TASK_MISMATCH` and the `requestedBy` derivation in `checkProposal`. It unblocks P06.T01b PR-1.
-- PR #14: P01.T04a PR-A, merged as `bba3cec`: entitlement gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities), `inspectEntitlementWriters`, the contract v1.1 billing layer and the OQ-2 test entitlement seed branch. It applied the "Part B and P06.T01a merge first" coordination (P01.T04a §8.1, §9).
-- PR #15: P14.T01a PR-1, merged as `5ad6cc7` (provisional under ADR-0003): the option 1 shell, sign-in, workspace entry and sign-out over HTTP, the dev-only fixture mode, the a11y matrix and the CI `ui` job (`docs/acceptance/P14.md`).
-- PR #11: P03.T04e PR-A, merged as `f8314e8`: `prettier --check .` under one `.prettierignore`, concurrent unit tests through `scripts/run-tests.mjs`, required `executeAs` and pinned prerequisites on every manifest row, and `heavy-faults.yml`. Still open: one `workflow_dispatch` run of `heavy-faults.yml` on `main` (AC22).
+`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#17. The latest:
+- PR #10 P05.T01x Part B (`e51e5b7`); PR #12 P06.T01a (`06e4dfe`; Verified waits for the P05 exit gate); PR #13 the ADR-0018 Proposal@2 edit (`08e5ebf`); PR #14 P01.T04a PR-A (`bba3cec`).
+- PR #15 P14.T01a PR-1 (`5ad6cc7`, provisional under ADR-0003).
+- PR #11 P03.T04e PR-A (`f8314e8`). Still open: its AC22 `workflow_dispatch` run of `heavy-faults.yml` (about 18 billed minutes), and the AC04 hosted totals and hosted part of AC05, which P03.T04f moves to its first hosted `checks` job.
+- PR #16 P03.T04f CI cost reduction (`5806049`): light runs for Markdown-only PRs and for pushes whose tree equals the merged PR head; 9 jobs instead of 12; the pgwire hold now records its stage and frames (run 39260319338 held once at `actual_84_callback_delivery_3`, then passed on rerun).
+- PR #17 docs, merged as `8b451e8`: ADR-0019, ADR-0020 and ADR-0021 Accepted; `staging-card-1`; P04.T01i and P04.T01j PR-A packets; the ADR-0014 item 4 and 5 amendments; `docs/plan/mvp.md`; the 2026-10-19 live evidence; the Mobbin design references.
 
 In progress:
-- **P14.T01a PR-2** (branch `claude/p14-t01a-pr2-account-and-work`, from `f8314e8`; pushed, **no pull request yet** while GitHub Actions minutes are short): `composed.ts` turns on `account.*` and `work.*` (keep-alive and people stay off); AccountOverview, signup, Goal, Task, Question and answer decoders with validator parity; the signed-out entry at `/`, account rows and Sign out, the signup 429 hold, task-list refresh and inline answers, following `docs/design/mobbin-references.md` (committed here); 36 more `ui:check` state cases and 4 walks; the journey lab's PR-2 journeys (`scripts/workspace-ui-journey-work.mjs`, AC22-AC32) on the edge harness, which now applies 0014-0015 and logs in `morrow_api_worker` (`work` hook). Tier 2 review findings applied ("Address review findings for p14-t01a-2"): the AC30 hold was the synthetic WorkOS oracle listing expired sessions as active (fixed; the lab now passes locally, 12 of 12 cases); persons in records are checked against the tenant; Sign out on a failed account read; answers load on request; a late task reply after Cancel is kept; AC31 revokes on W only; 12 more state cases and 1 walk. Packet §12 and `docs/acceptance/P14.md` record what ran locally; the hosted `ui` job is the authority.
+- **P14.T01a PR-2** (`claude/p14-t01a-pr2-account-and-work`, merge train): `composed.ts` turns on `account.*` and `work.*` (keep-alive and people stay off); AccountOverview, signup, Goal, Task, Question and answer decoders with validator parity; the signed-out entry at `/`, account rows, the signup 429 hold, task-list refresh and inline answers (`docs/design/mobbin-references.md`); 48 more `ui:check` state cases and 5 walks; the journey lab's PR-2 journeys (AC22-AC32) on the edge harness, which now applies 0014-0015. Tier 2 findings applied (the AC30 hold was the synthetic WorkOS oracle listing expired sessions as active). Packet §12 and `docs/acceptance/P14.md` record local runs; the hosted `ui` job is the authority.
+- Built branches waiting for the merge train (next actions): P01.T02c PR-A, P01.T04a PR-B, P04.T01j PR-B, P05.T01y, P06.T01b PR-1, P05.T01ab, P04.T01i PR-B. `claude/mvp-briefs` holds the M2–M5 briefs and the proposed ADR-0022.
 
-## Decisions recorded 2026-10-18
+## Decisions recorded 2026-10-18 and 2026-10-19 (owner, in chat)
 
-- **ADR-0015 billing routes by origin** (supersedes ADR-0006). Website signups pay on Morrow checkout (Stripe Billing with Stripe Tax; Morrow is the seller) before linking a store. Every other paying workspace, including all Shopify-origin merchants, pays through Shopify App Pricing and never sees Morrow checkout. The route is fixed server-side at the first completed payment (plan Security invariant 24). Stripe is selected and blocked: no account, keys or provider calls until an approved packet.
-- **ADR-0016 collaboration contracts v1.1** (P01.T02c Q1-Q6): as recommended, except workspace admins (holders of `administer` on `workspace.conversation.create`) can read private Asks through audited, read-only reads.
-- **ADR-0017 membership authority** (P05.T01z Q1 and Q3): accepted as designed.
-- **ADR-0018 proposals without a task** (P06.T01b Q1): `taskId` may be null only for human-made governance proposals, with `requestedBy` = the proposer; agents always need a task (landed in PR #13).
-- **P01.T04a OQ-1 to OQ-3 (ADR-0015 follow-up decisions):** purchase permission is decided with the checkout (P18.T01a). M4 uses an owner-run test entitlement seed in development and staging. App Review gets an owner-approved review allowance. Future per-action owner approvals: the staging seed for M4, and the production review allowance before App Review submission.
-- **P03.T04e OQ-1 (routine):** the heavy CI job runs on `workflow_dispatch` plus a weekly schedule, the packet default.
+- **ADR-0021 MVP fast track:** "yes fast track but our foundation architecture should be solid so we can scale the product later without any issues."; first job "Product listings"; first merchants "Invite-only beta (Recommended)"; the record "Approve as written (Recommended)".
+- **ADR-0019 and `staging-card-1`:** "Approve both (Recommended)": staging on workers.dev, continuous deploy from `main`, Turnstile and per-IP limits before hosted login (resolves the P05.T01x §11 sign-off). Branch protection timing: "Required before production (Recommended)" (ADR-0014 item 5 amendment).
+- **ADR-0020:** "Approve ADR-0020 (Recommended)" (P04.T01i OQ-1 B: P04.T01j rebaselines 0005–0015 once and merges before any other migration). Item 7: "None that I know of".
+- **GitHub:** OQ-2 "GitHub Pro (Recommended)"; the owner bought Pro ("I'll finish it myself"); "pro is active you set the action budget" ($10 Actions budget, hard stop); "Turn it on (Recommended)" (branch protection on `main`).
+- **Third-party GitHub access:** first "i am not working with codex so it won't push anything so leave it"; then, asked again with the risk stated, "Suspend Codex + revoke old token (Recommended)". The platform GitHub Apps stay for staging as a recorded exception (ADR-0019 item 5, ADR-0014 item 5 amendment).
+- **Cloudflare:** P04.T01i OQ-3 "Use this account" (option C, census at every deploy); Wrangler OAuth "Revoke it (Recommended)".
+- **P03.T04f OQ-1:** "Allow both (Recommended)" (ADR-0014 item 4 amendment: light runs pass `foundation`).
+- **2026-10-18:** ADR-0015 billing routes by origin (supersedes ADR-0006; Stripe selected, no account or calls until an approved packet); ADR-0016 collaboration contracts v1.1 (admins read private Asks through audited reads); ADR-0017 membership authority; ADR-0018 proposals without a task; P01.T04a OQ-1 to OQ-3 (purchase permission with P18.T01a; a test entitlement seed for M4; an App Review allowance); P03.T04e OQ-1 (routine): heavy CI on dispatch plus weekly.
 
 ## Last green commit
 
-`bba3cec` on `main`, the merge of PR #14: push run 39169685269 passed. Earlier: `08e5ebf` (PR #13) push run 39168226191; `06e4dfe` (PR #12) push run 39166650248; `e51e5b7` (PR #10) push run 39160961579, all 10 jobs. The push runs on `5ad6cc7` (PR #15, run 39171677853) and `f8314e8` (PR #11) were not checked in the PR-2 session (no GitHub calls); record their results.
+`5806049` on `main` (PR #16): push run 39264458156 passed. Earlier: `f8314e8` (PR #11) push run 39173050501; `5ad6cc7` (PR #15) push run 39171677853; `bba3cec` (PR #14) push run 39169685269; `08e5ebf` (PR #13) push run 39168226191. A push that merges an unchanged PR head now runs only `checks`; record it with its push run and the PR run on the merged head.
+
+**Failed:** the scheduled heavy-faults run 39227357944 on `f8314e8` (2026-10-19). ADR-0021 defers those suites, so the proposal is to disable the weekly schedule and keep `workflow_dispatch`. That is a `ci` change for its own PR, not PR #17.
 
 ## Next actions
 
-1. P14.T01a PR-2: open the pull request when Actions minutes allow; hosted `foundation` and `ui` green on its head (the first hosted run of the PR-2 journeys), the Tier 2 AI review plus `/security-review` (request client, decoders, fixture isolation, lab artifacts), then merge. Dispatch `heavy-faults.yml` on `main` (P03.T04e AC22).
-2. P01.T04a PR-B (billing route library).
-3. P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
-4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11). Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.
+MVP fast track (ADR-0021; `docs/plan/mvp.md`). M1, staging live:
+1. Merge train: P14.T01a PR-2 (hosted `foundation` and `ui`, the first hosted run of the PR-2 journeys), then P01.T02c PR-A, P01.T04a PR-B (with the walkthrough-count fix 86→90), P04.T01j PR-B, P05.T01y (0016 on the ADR-0020 helpers), P06.T01b PR-1, P05.T01ab, then the trimmed P04.T01i PR-B. Each PR gets one AI review (separate context, same model family), with the security lens where it applies.
+2. **The trimmed P04.T01i PR-B:** deploy after green CI, migrations, roles and secrets. It keeps `staging:kill`/`unkill` with the flag re-read around the api deploy, the ADR-0019 item 4 deploy gates 1–6, and the census at every deploy. Card effect E11 (Claude's rollbacks) is suspended until the rollback refusal exists; staging rolls forward instead. AC14's hosted drill, AC15–AC17 and AC19 move past launch (`docs/acceptance/P04.md`).
+3. Staging bring-up under `staging-card-1` once its preconditions hold (below); owner sign-in on staging.
+4. Then M2, M3 and M5 in parallel, each behind the credential-custody gate; M4 (with the ADR-0005 stop controls, M3/M4); M6 (the deletion path before the real-store smoke).
+5. A separate `ci` PR: disable the weekly `heavy-faults.yml` schedule.
 
-Open plan follow-ups:
-- P06.T01a AC08 soak: a `heavy:*` script that runs `lab:work-postgresql` with `MORROW_WORK_SOAK=1` in `heavy-faults.yml` (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
-- Work routes in production: production cannot map today (ADR-0007 item 9), so the deployed api serves them 401 with no SQL. Whoever enables production mapping must also gate the work routes on P09.T05 (packet hard ordering b).
-- Superseded banners on `docs/references/*`.
-- Check against the WorkOS docs whether a user's session list can hold expired or ended sessions: `packages/identity/src/workos-session-status.ts` refuses the whole page on any such row (found while diagnosing the P14.T01a AC30 lab hold, where the synthetic oracle did this).
-- A forward migration (0016 or later) that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
-- The rest of P03.T04e: PR-B, the shared PostgreSQL 17 template-database harness and its `pg-suites` and `pg-stress` legs.
-- Timing fixes (routine, ADR-0002) if hosted `unit-stress` confirms them: `tests/broker-client.test.mjs` AC30 and the `tests/standalone-login-http.test.mjs` 5,000 ms entry-timeout case each flaked once under loaded-host local stress.
+Open plan follow-ups: work routes in production must be gated on P09.T05 when production mapping is enabled (ADR-0007 item 9; packet hard ordering b); superseded banners on `docs/references/*`; check against the WorkOS docs whether a user's session list can hold expired or ended sessions (`packages/identity/src/workos-session-status.ts` refuses the whole page on such a row; found in the P14.T01a AC30 hold); a forward migration routing the 0006, 0007, 0009 and 0011 definer guards through `executor_role_safe` (informational); timing fixes if hosted `unit-stress` confirms them (`tests/broker-client.test.mjs` AC30, the 5,000 ms entry-timeout case in `tests/standalone-login-http.test.mjs`).
 
 ## Blockers
 
-None for local work. Hosted staging (M1) waits on the owner actions below. Billing activation waits on the billing owner actions.
+None for local work. The first staging deploy waits on the trimmed P04.T01i PR-B, P04.T01j, P05.T01ab and the preconditions below. **Credential-custody gate:** no Shopify, OpenAI or Stripe credential is bound to the broker until an owner-approved ADR supersedes ADR-0007 items 3–4 (ADR-0022, proposed).
 
 ## Pending owner actions
 
-- **Sign-offs:**
-  - Plan R1 (Tier 3). The P01 contract sign-off also freezes the v1.1 billing layer, including two PR-A review choices: Shopify-route money is USD-only, and `AllocationShare@2` is a declared superset of v1.
-  - P05.T01x Part B, before hosted login (M1): account login start is anonymous, so its per-profile windows (10 per 10 s, 100 open) let anyone block every sign-in on a profile (packet §11). Decide whether Turnstile or the edge per-IP limiter gates hosted login activation in every environment, not only sign-up beyond the allowlist (ADR-0009 item 8).
-- **GitHub:** decide on GitHub Pro or an organization on GitHub Team, so `main` gets enforced branch protection requiring the `foundation` check before the first hosted deploy (ADR-0014).
-- **Codex:** confirm the previous Codex Morrow task is stopped and no longer writes to the repository or its pull requests.
-- **M1 prerequisites (P04.T01i):** register the domain; create a dedicated Cloudflare account and share its account ID (an identifier, not a secret); authenticate the Neon CLI and reset the operator password; once the domain exists, configure the WorkOS staging callback and rotate the API key; decide on spending (Workers Paid, the domain, Neon Launch for staging); approve each M1 effect individually or approve standing staging cards. No card may rely on the OperationLedger before P06.T01c lands. For the work API (P06.T01a): create the `morrow_api_worker` login and place its password as the broker secret `MORROW_DB_PASSWORD_MORROW_API_WORKER`; broker health stays false until it is set.
-- **Credential rotation:** rotate the E2B personal key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.
-- **Billing (ADR-0015):**
-  - When payments work starts: create a Stripe account in test mode (before P18.T01a).
-  - Per action, later: the hosted staging test entitlement seed for M4 (OQ-2), and the production App Review allowance before submission (OQ-3).
-  - Before live billing: a legal business entity, a bank account, a tax advisor, and tax registrations where required; then Stripe live activation. For the Shopify route: the Partner payout and tax profile.
-  - Before launch: a written answer from Shopify on whether its revenue share covers Morrow-direct revenue, and the App Review outcome for the split model.
-- **Later:** a Shopify Partner account and a fresh development store, never the live shop; an OpenAI staging project with a budget cap. **Optional console clean-up:** E2B template `pdht65h2trfuizuvmotc`, the WorkOS loopback callback `127.0.0.1:4110`, and the WorkOS staging test user.
+- **Before the first staging deploy (`staging-card-1`, "Preconditions for the first deploy"):**
+  - GitHub: suspend the ChatGPT Codex Connector app (GitHub's sudo re-authentication stopped Claude's attempt) and delete the classic token "AppForge Github Actions". The platform apps AWS Connector, Codemagic, DigitalOcean, Expo, Netlify, Render and Vercel stay (ADR-0019 item 5 exception).
+  - Cloudflare usage alerts at about 10% of each allowance (D9 5(c)), or confirm the D6 fallback: the $5 billable-usage alert (exists) plus your weekly check of Billing → Usage.
+  - D9: delete Neon `cool-butterfly-64820147` and create the project key; change the Cloudflare Global API Key and create the two tokens (TTL 2026-11-18); a new WorkOS key, revoking old ones; `gh secret set CLOUDFLARE_API_TOKEN --env staging`; `tmutil addexclusion ~/.config/morrow`.
+- **ADR-0022** (proposed on `claude/mvp-briefs`): approve it, or another ADR superseding ADR-0007 items 3–4, before M2, M3 or M5 binds a credential.
+- **Sign-off:** Plan R1 (Tier 3), which also freezes the P01 contract v1.1 billing layer (Shopify-route money is USD-only; `AllocationShare@2` is a declared superset of v1).
+- **Credential rotation:** the E2B key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.
+- **Billing (ADR-0015):** a Stripe test-mode account for M5; later, per action, the hosted staging test entitlement seed (OQ-2) and the production App Review allowance (OQ-3); before live billing, the business entity, bank, tax advisor and registrations, then Stripe live activation; before launch, Shopify's written answer on charging custom-distribution installs and on its revenue share.
+- **Later:** a Shopify Partner account and a fresh development store (never the live shop); an OpenAI staging project with a budget cap. Optional clean-up: E2B template `pdht65h2trfuizuvmotc`, the WorkOS loopback callback `127.0.0.1:4110`, the WorkOS staging test user.
+- **Done 2026-10-19** (per-action approval; `docs/evidence/live/2026-10-19-*`): Pro (owner), the $10 Actions budget, branch protection, the GitHub `staging` environment and variables; Neon `morrow-staging` (`sweet-sound-23947873`); WorkOS sign-up off; Wrangler OAuth revoked and the $5 Cloudflare alert; `~/.config/morrow/staging`.
 
 ## Open unknown-outcome provider operations
 
@@ -77,4 +66,4 @@ None. `docs/history/INDEX.md` cites the terminal state of every earlier provider
 
 ## Active approval cards
 
-None. Every earlier provider allowance is consumed.
+- `staging-card-1` (`docs/decisions/approvals/staging.md`): staging only; approved 2026-10-19, valid until 2026-11-18 or the first production resource. No effect used yet. E11 is suspended (ADR-0021). Earlier provider allowances are consumed.

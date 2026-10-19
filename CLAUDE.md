@@ -4,13 +4,13 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 
 ## Read at the start of every session
 1. `docs/progress/STATUS.md`: active packet, last green commit, next action, blockers, pending owner actions.
-2. The active packet in `docs/packets/` (when there is one), and the plan sections it cites.
-3. `docs/plan/build-plan.md` is the **plan of record** (ADR-0001). Decisions live in `docs/decisions/adr/`. `docs/references/*` is supporting detail; where it conflicts with the plan, the plan wins.
+2. The active brief in `docs/briefs/` or packet in `docs/packets/` (when present), and the plan sections it cites.
+3. `docs/plan/mvp.md` is the **launch plan** (ADR-0021, MVP fast track). `docs/plan/build-plan.md` is the long-term plan of record and structure (ADR-0001). Decisions live in `docs/decisions/adr/`. `docs/references/*` is supporting detail; where it conflicts with the plan, the plan wins.
 4. `git status` and `git log -5`. Pre-R1 history (evidence, archived plans, the old Page sequences) is in tag `codex-archive-f89ad75`. Recover a file with `git show codex-archive-f89ad75:<path>`.
 
 ## Settled product constraints (owner-decided; change only by an owner-approved ADR)
 - Name: Morrow.
-- Broad production foundation for small and large Shopify brands. No MVP scope reduction of the launch destination.
+- MVP fast track (ADR-0021): launch the invite-only product-listings beta in `docs/plan/mvp.md` first. The architecture stays production-grade so it scales without rewrites; the full plan is the post-launch roadmap.
 - Visual option 1.
 - One complete standalone Morrow workspace plus a thin Shopify read/write connector: install, link, status, reconnect, disconnect, return. No embedded domain workspace in this release.
 - Paid managed model APIs and one work-credit balance. No free merchant tier.
@@ -32,13 +32,17 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 - Applied migrations are immutable. Change the schema only with new forward migrations.
 
 ## Change classification (ADR-0002)
-- **Material** changes need an owner-approved ADR before dependent code. Material means:
-  - scope, the package/task structure, the authority model, tenancy, retention or public contracts;
-  - provider or model selection, billing, pricing or credits;
-  - gates or dependency edges, deployment boundaries;
-  - spending money, real merchant data, external messages, or creating provider resources.
+- **Material** changes need an owner-approved ADR before dependent code. ADR-0021 item 5 sets the list. Material means:
+  - authority, tenancy or security;
+  - money: billing, pricing and spend;
+  - provider selection;
+  - public contracts;
+  - data retention;
+  - deployment boundaries and credential custody (security);
+  - real merchant data, external messages, or creating provider resources (security, retention or money).
 - **Routine** changes are plain commits with tests: fixes, refactors, CI and harness work, lettered packet splits, wording.
 - Hardening budget: at most two consecutive lettered children on one subsystem without an observable product delta, unless an ADR names the threat being retired.
+- New work uses a one-page brief in `docs/briefs/` (goal, scope, interfaces touched, security notes, test checklist). Full packets only for security-heavy work. No new heavy-fault or soak labs before launch.
 
 ## Provider and live effects
 - Every provider resource creation, deployment, migration on a hosted database, sign-in test, paid action or merchant-data access needs owner approval first. Approval is per action, until a standing staging approval card is approved and recorded in `docs/decisions/approvals/`.
@@ -56,15 +60,15 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 - Keep the existing idiom: strict TypeScript, closed primitive inputs at trust boundaries, fixed parameterized SQL, no caller-supplied SQL, roles or options.
 
 ## Delivery flow
-- One short-lived branch (`claude/<task-id>-<slug>`) and one PR per bounded packet.
+- One short-lived branch (`claude/<task-id>-<slug>`) and one feature-sized PR per brief or packet.
 - PRs target `main`, the trunk (ADR-0014). Claude merges its own PR once the hosted `foundation` check is green on the exact head and the Tier 2 AI review has passed.
 - Never push to `main`, force-push, or delete tags or branches without owner approval.
 - Each PR changes observable behaviour or retires a named risk, and carries its tests.
 - Review tiers:
   - Tier 1: your own targeted tests plus the full pipeline.
-  - Tier 2: a separate-context AI review (`/code-review`, plus `/security-review` for authority, RLS, migrations, credentials, provider adapters, approvals, budgets, billing or durable execution). Label it "AI review (separate context, same model family)", never independent.
+  - Tier 2: one separate-context AI review per PR, with the security lens included for authority, RLS, migrations, credentials, provider adapters, approvals, budgets, billing or durable execution. Label it "AI review (separate context, same model family)", never independent.
   - Tier 3: the owner.
-- Definition of done: tests pass in CI, the acceptance table in `docs/acceptance/PNN.md` is updated, STATUS.md is updated, and remaining gates are stated plainly. Structural checks and AI review never make a task Verified when a human or hosted gate is still open.
+- Definition of done: tests pass in CI, the brief's checklist (or the packet's acceptance table in `docs/acceptance/PNN.md`) is updated, STATUS.md is updated, and remaining gates are stated plainly. Structural checks and AI review never make a task Verified when a human or hosted gate is still open.
 
 ## Status
 Rewrite `docs/progress/STATUS.md` (at most 80 lines) before ending a session. It records: active packet, last green commit with its CI run, next action, blockers, pending owner actions, open unknown-outcome provider operations, and active approval cards.
