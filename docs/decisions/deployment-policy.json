@@ -15,10 +15,14 @@
   },
   "staging_database": {
     "provider": "Neon",
-    "plan": "Launch",
+    "plan": "Free",
     "maximum_cu": null,
     "auto_pause": "qualify connection lifecycle",
-    "availability_slo": false
+    "availability_slo": false,
+    "history_window_hours": 6,
+    "recovery": "owner_reset_from_root_branch",
+    "amended_by": "ADR-0019 item 10, until P04.T04 decides Neon Launch",
+    "recovery_requirement": "seven_day_staging_recovery_open_in_P04.T04"
   },
   "runtime": {
     "provider": "E2B",
@@ -47,7 +51,7 @@
     "audit_content_free": 365,
     "diagnostic_logs_redacted": 14,
     "pitr_prod": 30,
-    "pitr_staging": 7,
+    "pitr_staging": null,
     "workflow_closed_prod": 30,
     "workflow_closed_staging": 7,
     "daily_recovery_prod": 35,

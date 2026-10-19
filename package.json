@@ -131,6 +131,7 @@
     "canonicalize": "5.1.0",
     "esbuild": "0.25.12",
     "miniflare": "4.20260730.0",
+    "neonctl": "8.8.0",
     "playwright": "1.63.0",
     "prettier": "3.6.2",
     "tsx": "4.20.6",

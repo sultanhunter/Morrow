@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "staging-card-1",
+  "record": "docs/decisions/approvals/staging.md",
+  "status": "proposed",
+  "approvedOn": null,
+  "expiresOn": null,
+  "productionResourceCreated": false,
+  "e7": null
+}
