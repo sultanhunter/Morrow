@@ -6,7 +6,11 @@ import {
   SESSION_ROTATE_INTERVAL_MS,
   SESSION_ROTATE_WAIT_MS,
 } from "../packages/workspace-ui/src/session-keeper.ts";
-import { probeUiEntries, sessionKeeperGzipLimit } from "../scripts/workspace-web-checks.mjs";
+import {
+  probeUiEntries,
+  sessionKeeperGzipLimit,
+  uiEntryNegativeChecks,
+} from "../scripts/workspace-web-checks.mjs";
 
 // P05.T01y-AC31: the client session keeper with fake timers, locks and fetch.
 const tick = async (n = 5) => {
@@ -474,4 +478,12 @@ test("the keeper's browser bundle carries its one validator, never the validator
     ["packages/contracts/src/generated/validators/SessionRotationResult.mjs"],
   );
   assert.ok(entry.gzip_bytes <= sessionKeeperGzipLimit, String(entry.gzip_bytes));
+});
+test("the UI entry probe catches a planted validator table, an oversized keeper and a missing keeper", async () => {
+  const checks = await uiEntryNegativeChecks();
+  assert.deepEqual(
+    checks.map((c) => c.name),
+    ["ui_entry_validator_table", "ui_entry_table_module", "ui_entry_too_large", "ui_entry_missing"],
+  );
+  for (const check of checks) assert.equal(check.passed, true, check.name);
 });

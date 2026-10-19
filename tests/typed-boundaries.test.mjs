@@ -178,8 +178,24 @@ test("UI validates only through listed per-definition validator modules", () => 
     "import {validateDefinition} from '../../contracts/src/validation.ts'",
     "import {createCapabilityClient} from '../../contracts/src/client'",
     "import {validators} from '../../contracts/src/generated/runtime-validators.mjs'",
+    // Spellings esbuild and Vite also resolve to the table.
+    "import {validateDefinition} from '../../contracts/src/validation.js'",
+    "import {validateDefinition} from '../../contracts/src/validation.mjs'",
+    "import {createCapabilityClient} from '../../contracts/src/client.js'",
+    "import {validateDefinition} from '../../contracts/src/validation.ts?x'",
+    "import {validateDefinition} from '../../contracts/src/validation.js#x'",
+    "import {createCapabilityClient} from '../../contracts/src/client?raw'",
+    "import {validateDefinition} from '../../contracts/src/Validation.ts'",
+    "export {validateDefinition} from '../../contracts/src/validation.js'",
+    "const v = import('../../contracts/src/validation.js')",
   ])
     assert.ok(inspectImports(keeper, code).includes("UI_VALIDATOR_TABLE_IMPORT"), code);
+  // Neighbouring contract sources keep their own rules.
+  for (const code of [
+    "import {routes} from '../../contracts/src/routes.ts'",
+    "import {x} from '../../contracts/src/validation-notes.ts'",
+  ])
+    assert.ok(!inspectImports(keeper, code).includes("UI_VALIDATOR_TABLE_IMPORT"), code);
   // Server packages keep the table.
   assert.deepEqual(
     inspectImports(

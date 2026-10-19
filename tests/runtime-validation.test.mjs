@@ -23,7 +23,12 @@ import {
   capabilityBodySelectors as expectedBodies,
   browserValidatorDefinitions,
 } from "../scripts/contract-sources.mjs";
-import { browserValidatorsDirectory } from "../scripts/generate-runtime-validators.mjs";
+import standaloneCode from "ajv/dist/standalone/index.js";
+import {
+  assertBrowserValidatorMatchesTable,
+  browserValidatorSelector,
+  browserValidatorsDirectory,
+} from "../scripts/generate-runtime-validators.mjs";
 
 const sources = readSchemaSources();
 const definitionCount = sources.reduce((n, s) => n + Object.keys(s.schema.$defs).length, 0);
@@ -160,6 +165,101 @@ test("per-definition browser modules agree with their table entry and the origin
   );
   for (const value of rotationAccepted) assert.equal(validateSessionRotationResult(value), true);
   for (const value of rotationRefused) assert.equal(validateSessionRotationResult(value), false);
+});
+test("a browser validator name must be an own, well-formed effective core definition", () => {
+  const current = expectedCurrent(schemas);
+  for (const name of browserValidatorDefinitions)
+    assert.equal(browserValidatorSelector(name, current), current[name]);
+  assert.equal(
+    browserValidatorSelector("SessionRotationResult", current),
+    "core-v1.1:SessionRotationResult",
+  );
+  const billingOnly = Object.keys(expectedBilling(schemas)).find(
+    (name) => !Object.hasOwn(current, name),
+  );
+  assert.ok(billingOnly, "a billing-only definition exists");
+  for (const name of [
+    "NoSuchDefinition",
+    "sessionRotationResult",
+    "Session-Rotation",
+    "",
+    billingOnly,
+    "constructor",
+    "toString",
+    "__proto__",
+    "hasOwnProperty",
+    "SessionRotationResult.input",
+    1,
+    null,
+  ])
+    assert.throws(
+      () => browserValidatorSelector(name, current),
+      { message: "RUNTIME_VALIDATOR_BROWSER_DEFINITION_UNKNOWN:" + name },
+      String(name),
+    );
+  // Inherited, well-formed names are refused, and so are own names that are not
+  // identifiers (each name becomes a file path and an export name).
+  const inherited = Object.create({ Inherited: "core:Inherited" });
+  assert.throws(() => browserValidatorSelector("Inherited", inherited), {
+    message: "RUNTIME_VALIDATOR_BROWSER_DEFINITION_UNKNOWN:Inherited",
+  });
+  const malformed = Object.fromEntries(
+    ["../Escape", "lower", "Has Space", "Dotted.input", "Trailing\n"].map((name) => [
+      name,
+      `core:${name}`,
+    ]),
+  );
+  for (const name of Object.keys(malformed))
+    assert.throws(
+      () => browserValidatorSelector(name, malformed),
+      { message: "RUNTIME_VALIDATOR_BROWSER_DEFINITION_UNKNOWN:" + name },
+      JSON.stringify(name),
+    );
+});
+test("a browser module that diverges from its table entry is refused", () => {
+  const ajv = new Ajv2020({ strict: true, allErrors: true, code: { source: true, esm: true } });
+  const $id = "https://morrow.test/browser-validator.json";
+  ajv.addSchema({
+    $id,
+    $defs: {
+      A: { type: "object", properties: { n: { type: "integer" } }, additionalProperties: false },
+      B: { type: "string", maxLength: 3 },
+    },
+  });
+  const [refA, refB] = [`${$id}#/$defs/A`, `${$id}#/$defs/B`];
+  ajv.getSchema(refA);
+  ajv.getSchema(refB);
+  const table = standaloneCode(ajv, { v0: refA, v1: refB });
+  const own = standaloneCode(ajv, { validateA: refA });
+  const source = ajv.getSchema(refA).source;
+  const matching = { table, tableExport: "v0", own, ownExport: "validateA", source };
+  assert.doesNotThrow(() => assertBrowserValidatorMatchesTable("A", matching));
+  const extra = "\nfunction validate999(data){return true;}\n";
+  // The same function name and declaration, one changed byte in its body.
+  const edited = (text) =>
+    text.replace(source.validateCode, source.validateCode.replace("errors = 0", "errors = 1"));
+  assert.notEqual(edited(table), table);
+  for (const [label, change] of [
+    ["the table exports another function under that name", { tableExport: "v1" }],
+    ["the module exports it under another name", { ownExport: "validateB" }],
+    ["the module is another definition's", { own: standaloneCode(ajv, { validateA: refB }) }],
+    ["the table carries other code for the function", { table: edited(table) }],
+    ["the module carries other code for the function", { own: edited(own) }],
+    ["the module declares a function the table does not", { own: own + extra }],
+  ])
+    assert.throws(
+      () => assertBrowserValidatorMatchesTable("A", { ...matching, ...change }),
+      { message: "RUNTIME_VALIDATOR_BROWSER_DIVERGED:A" },
+      label,
+    );
+  // A function the table declares too is not divergence.
+  assert.doesNotThrow(() =>
+    assertBrowserValidatorMatchesTable("A", {
+      ...matching,
+      table: table + extra,
+      own: own + extra,
+    }),
+  );
 });
 test("closed validator selectors cannot invoke inherited names or coerce input", () => {
   for (const name of ["constructor", "toString", "__proto__", "unknown"])

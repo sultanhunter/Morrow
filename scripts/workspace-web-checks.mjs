@@ -5,8 +5,19 @@
 // fixture, axe-core, Playwright or runtime-validator module, and must describe this dist.
 // Each JS entry of @morrow/workspace-ui is also bundled for the browser on its own and
 // held to the same module denials (P05.T01y: the session keeper, before P14.T01a wires it).
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 import { build } from "esbuild";
@@ -119,6 +130,99 @@ export async function probeUiEntries({ root = repositoryRoot } = {}) {
   if (!entries.some((e) => e.entry === sessionKeeperEntry))
     problems.push("UI_ENTRY_MISSING:" + sessionKeeperEntry);
   return { entries, problems };
+}
+
+// Deliberate failures the UI entry probe must detect, through the probe itself: planted
+// @morrow/workspace-ui roots (temporary, removed afterwards) whose entries import the
+// validator table, outgrow the keeper's cap or drop the keeper entry. Each planted root
+// must yield exactly the expected problems.
+export async function uiEntryNegativeChecks() {
+  const keeper = "@morrow/workspace-ui/session-keeper";
+  const manifest = (exports) => JSON.stringify({ name: "@morrow/workspace-ui", exports });
+  const both = manifest({
+    ".": "./src/index.ts",
+    "./session-keeper": "./src/session-keeper.ts",
+    "./styles.css": "./src/styles.css",
+  });
+  const stubs = {
+    "packages/workspace-ui/src/styles.css": "a{color:red}\n",
+    "packages/contracts/src/validation.ts":
+      "export const validateCurrentDefinition = (name: string, value: unknown) => name === String(value);\n",
+    "packages/contracts/src/generated/runtime-validators.mjs":
+      "export const validators = Object.freeze({ v0: (value) => value === 0 });\n",
+    "packages/contracts/src/generated/validators/SessionRotationResult.mjs":
+      "export const validateSessionRotationResult = (value) => value === 1;\n",
+  };
+  // Incompressible, deterministic: gzip keeps it well above the keeper's cap.
+  const blob = Array.from({ length: 1000 }, (_, i) =>
+    createHash("sha256").update(String(i)).digest("base64"),
+  ).join("");
+  const cases = [
+    [
+      "ui_entry_validator_table",
+      {
+        "packages/workspace-ui/package.json": both,
+        "packages/workspace-ui/src/index.ts": "export const ready = true;\n",
+        "packages/workspace-ui/src/session-keeper.ts":
+          'export { validateCurrentDefinition } from "../../contracts/src/validation.ts";\n',
+      },
+      [
+        `UI_ENTRY:${keeper}:MODULE_DENIED:validator_table_entry:packages/contracts/src/validation.ts`,
+      ],
+    ],
+    [
+      "ui_entry_table_module",
+      {
+        "packages/workspace-ui/package.json": both,
+        "packages/workspace-ui/src/index.ts":
+          'export { validators } from "../../contracts/src/generated/runtime-validators.mjs";\n',
+        "packages/workspace-ui/src/session-keeper.ts":
+          'export { validateSessionRotationResult } from "../../contracts/src/generated/validators/SessionRotationResult.mjs";\n',
+      },
+      [
+        "UI_ENTRY:@morrow/workspace-ui:MODULE_DENIED:runtime_validators:packages/contracts/src/generated/runtime-validators.mjs",
+      ],
+    ],
+    [
+      "ui_entry_too_large",
+      {
+        "packages/workspace-ui/package.json": both,
+        "packages/workspace-ui/src/index.ts": "export const ready = true;\n",
+        "packages/workspace-ui/src/session-keeper.ts": `export const blob = ${JSON.stringify(blob)};\n`,
+      },
+      [/^UI_ENTRY_TOO_LARGE:@morrow\/workspace-ui\/session-keeper:[0-9]+$/],
+    ],
+    [
+      "ui_entry_missing",
+      {
+        "packages/workspace-ui/package.json": manifest({ ".": "./src/index.ts" }),
+        "packages/workspace-ui/src/index.ts": "export const ready = true;\n",
+      },
+      [`UI_ENTRY_MISSING:${keeper}`],
+    ],
+  ];
+  const checks = [];
+  for (const [name, files, expected] of cases) {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "morrow-ui-entries-")));
+    try {
+      for (const [path, text] of Object.entries({ ...stubs, ...files })) {
+        mkdirSync(dirname(join(root, path)), { recursive: true });
+        writeFileSync(join(root, path), text);
+      }
+      const { problems } = await probeUiEntries({ root });
+      const passed =
+        problems.length === expected.length &&
+        expected.every((want, i) =>
+          typeof want === "string" ? problems[i] === want : want.test(problems[i]),
+        );
+      checks.push({ name, passed });
+    } catch {
+      checks.push({ name, passed: false });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  return checks;
 }
 
 function listFiles(root) {
@@ -244,7 +348,7 @@ export function negativeChecks() {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result = verifyWorkspaceDist();
   const ui = await probeUiEntries();
-  const negatives = negativeChecks();
+  const negatives = [...negativeChecks(), ...(await uiEntryNegativeChecks())];
   const failedNegatives = negatives
     .filter((n) => !n.passed)
     .map((n) => "NEGATIVE_NOT_DETECTED:" + n.name);

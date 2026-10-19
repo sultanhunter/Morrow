@@ -56,6 +56,39 @@ async function bundle(contents, sourcefile, root) {
 const declaredFunctions = (code) =>
   new Set([...code.matchAll(/\bfunction (validate\d+)\(/g)].map((match) => match[1]));
 
+/** The effective selector of a browser validator name: an own, well-formed key of `current`. */
+export function browserValidatorSelector(name, current) {
+  if (
+    typeof name !== "string" ||
+    !/^[A-Z][A-Za-z0-9]*$/.test(name) ||
+    !Object.hasOwn(current, name)
+  )
+    throw Error("RUNTIME_VALIDATOR_BROWSER_DEFINITION_UNKNOWN:" + name);
+  return current[name];
+}
+
+/**
+ * Throws unless the per-definition module source `own` exports, as `ownExport`, the
+ * function the table source exports as `tableExport` (`source` is that function's Ajv
+ * source), carries its code byte for byte as the table does, and declares no function the
+ * table does not declare.
+ */
+export function assertBrowserValidatorMatchesTable(
+  name,
+  { table, tableExport, own, ownExport, source },
+) {
+  const tableFunctions = declaredFunctions(table);
+  const { validateName, validateCode } = source;
+  if (
+    !table.includes(`export const ${tableExport} = ${validateName};`) ||
+    !own.includes(`export const ${ownExport} = ${validateName};`) ||
+    !table.includes(validateCode) ||
+    !own.includes(validateCode) ||
+    [...declaredFunctions(own)].some((fn) => !tableFunctions.has(fn))
+  )
+    throw Error("RUNTIME_VALIDATOR_BROWSER_DIVERGED:" + name);
+}
+
 // Pure: compiles every source with one Ajv instance ahead of time and returns
 // the generated files. No schema is compiled at runtime.
 export async function generateRuntimeValidators(root = repositoryRoot) {
@@ -112,25 +145,20 @@ export async function generateRuntimeValidators(root = repositoryRoot) {
   // table, emitted alone. Each must export the function the table exports for its
   // selector, carry that function's code byte for byte as the table source does, and
   // declare no function the table source does not declare.
-  const tableFunctions = declaredFunctions(table);
   const browserFiles = {},
     browser = {};
   for (const name of browserValidatorDefinitions) {
-    if (!/^[A-Z][A-Za-z0-9]*$/.test(name) || !Object.hasOwn(current, name))
-      throw Error("RUNTIME_VALIDATOR_BROWSER_DEFINITION_UNKNOWN:" + name);
-    const selector = current[name];
+    const selector = browserValidatorSelector(name, current);
     const ref = exports[selectors[selector]];
-    const { validateName, validateCode } = ajv.getSchema(ref).source;
     const exportName = `validate${name}`;
     const own = standaloneCode(ajv, { [exportName]: ref });
-    if (
-      !table.includes(`export const ${selectors[selector]} = ${validateName};`) ||
-      !own.includes(`export const ${exportName} = ${validateName};`) ||
-      !table.includes(validateCode) ||
-      !own.includes(validateCode) ||
-      [...declaredFunctions(own)].some((fn) => !tableFunctions.has(fn))
-    )
-      throw Error("RUNTIME_VALIDATOR_BROWSER_DIVERGED:" + name);
+    assertBrowserValidatorMatchesTable(name, {
+      table,
+      tableExport: selectors[selector],
+      own,
+      ownExport: exportName,
+      source: ajv.getSchema(ref).source,
+    });
     const path = `${browserValidatorsDirectory}/${name}.mjs`;
     const text =
       generatedHeader +
@@ -193,11 +221,24 @@ export function strayBrowserValidatorFiles(files, root = repositoryRoot) {
     .sort();
 }
 
+/**
+ * Removes the stray entries of the browser validators directory and returns them. Refuses,
+ * before removing anything, if one is not a regular file.
+ */
+export function removeStrayBrowserValidatorFiles(files, root = repositoryRoot) {
+  const stray = strayBrowserValidatorFiles(files, root);
+  for (const path of stray)
+    if (!statSync(resolve(root, path)).isFile())
+      throw Error("RUNTIME_VALIDATOR_STRAY_DIRECTORY: " + path);
+  for (const path of stray) unlinkSync(resolve(root, path));
+  return stray;
+}
+
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { files, manifest, bytes } = await generateRuntimeValidators();
-  const stray = strayBrowserValidatorFiles(files);
   const browser = Object.keys(manifest.browser_validators).length;
   if (process.argv.includes("--check")) {
+    const stray = strayBrowserValidatorFiles(files);
     if (stray.length) throw Error("RUNTIME_VALIDATOR_DRIFT: " + stray.join(", "));
     for (const [path, text] of Object.entries(files)) {
       const target = resolve(repositoryRoot, path);
@@ -208,11 +249,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
       `PASS: ${manifest.definitions} unchanged-schema validators and ${browser} browser modules reproduce exactly.`,
     );
   } else {
-    for (const path of stray) {
-      const target = resolve(repositoryRoot, path);
-      if (!statSync(target).isFile()) throw Error("RUNTIME_VALIDATOR_STRAY_DIRECTORY: " + path);
-      unlinkSync(target);
-    }
+    removeStrayBrowserValidatorFiles(files);
     for (const [path, text] of Object.entries(files)) {
       mkdirSync(dirname(resolve(repositoryRoot, path)), { recursive: true });
       writeFileSync(resolve(repositoryRoot, path), text);

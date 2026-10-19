@@ -168,10 +168,12 @@ export function inspectImports(file, code) {
         )
       )
         errors.push("UI_RELATIVE_ESCAPE");
+      // Every spelling a bundler resolves to the table: any script extension (Bundler
+      // resolution maps `.js` to `.ts`), a `?query` or `#hash` suffix, any letter case.
       if (
         ui &&
-        /^packages\/contracts\/src\/(?:(?:validation|client)(?:\.ts)?$|generated\/runtime-validators)/.test(
-          target,
+        /^packages\/contracts\/src\/(?:(?:validation|client)(?:\.[cm]?[jt]sx?)?$|generated\/runtime-validators)/i.test(
+          target.replace(/[?#].*$/s, ""),
         )
       )
         errors.push("UI_VALIDATOR_TABLE_IMPORT");

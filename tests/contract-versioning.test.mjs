@@ -31,6 +31,7 @@ import { generateContracts } from "../scripts/generate-contracts.mjs";
 import {
   browserValidatorsDirectory,
   generateRuntimeValidators,
+  removeStrayBrowserValidatorFiles,
   strayBrowserValidatorFiles,
 } from "../scripts/generate-runtime-validators.mjs";
 import { contractVersion } from "../packages/contracts/src/index.ts";
@@ -221,7 +222,7 @@ test("AC04: generation is ahead of time, deterministic and matches the committed
   for (const path of modules) assert.doesNotMatch(read(path), /new Function|\beval\(/, path);
   assert.deepEqual(strayBrowserValidatorFiles(validators.files), []);
 });
-test("AC04: a stray file in the browser validators directory is drift", () => {
+test("AC04: a stray file in the browser validators directory is drift and is removed", () => {
   const produced = ["SessionRotationResult.mjs", "SessionRotationResult.d.mts"];
   const files = Object.fromEntries(
     produced.map((name) => [`${browserValidatorsDirectory}/${name}`, ""]),
@@ -236,6 +237,19 @@ test("AC04: a stray file in the browser validators directory is drift", () => {
     assert.deepEqual(strayBrowserValidatorFiles(files, root), [
       `${browserValidatorsDirectory}/Proposal.mjs`,
     ]);
+    // Regeneration removes stray files, but refuses a stray directory before removing any.
+    const directory = join(root, browserValidatorsDirectory);
+    mkdirSync(join(directory, "Zeta"));
+    assert.throws(() => removeStrayBrowserValidatorFiles(files, root), {
+      message: `RUNTIME_VALIDATOR_STRAY_DIRECTORY: ${browserValidatorsDirectory}/Zeta`,
+    });
+    assert.deepEqual(readdirSync(directory).sort(), [...produced, "Proposal.mjs", "Zeta"].sort());
+    rmSync(join(directory, "Zeta"), { recursive: true });
+    assert.deepEqual(removeStrayBrowserValidatorFiles(files, root), [
+      `${browserValidatorsDirectory}/Proposal.mjs`,
+    ]);
+    assert.deepEqual(readdirSync(directory).sort(), [...produced].sort());
+    assert.deepEqual(removeStrayBrowserValidatorFiles(files, root), []);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
