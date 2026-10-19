@@ -1,3 +1,4 @@
+import { executorRoleMemberSql } from "./executor-role-preflight.js";
 import { parseWorkosSessionStatusJson } from "./workos-session-status-json.js";
 
 export interface LoginControl {
@@ -107,7 +108,7 @@ const maintenance = [
 export const loginFlowCustodySql = Object.freeze({
   begin: "BEGIN ISOLATION LEVEL READ COMMITTED",
   readOnlyBegin: "BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY",
-  role: "SELECT current_user AS role,session_user AS login,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolinherit,pg_catalog.pg_has_role(current_user,'morrow_identity_owner','MEMBER') AS owner_member,EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid) AS role_member FROM pg_catalog.pg_roles r WHERE r.rolname=current_user",
+  role: `SELECT current_user AS role,session_user AS login,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolinherit,pg_catalog.pg_has_role(current_user,'morrow_identity_owner','MEMBER') AS owner_member,${executorRoleMemberSql} FROM pg_catalog.pg_roles r WHERE r.rolname=current_user`,
   timeout: "SET LOCAL statement_timeout = '1s'",
   idleTimeout: "SET LOCAL idle_in_transaction_session_timeout = '5s'",
   // The 0010 workspace intent. Kept only to qualify the applied 0010-0012 chain: after

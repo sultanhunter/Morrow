@@ -4,10 +4,20 @@
 // migration (the P03.T04e lab fallback), owner-seeded synthetic fixtures, and a
 // psql-backed WorkSqlConnector that logs in as morrow_api_worker exactly as the
 // api Worker does. No provider, credential, host port or merchant data.
+// The chain is applied by one of two administrators (ADR-0020, P04.T01j D7): the local
+// superuser, as every other lab does, or "createrole", the hosted shape, in which a
+// Neon-shaped non-superuser CREATEROLE login runs the prerequisites and applies each
+// entry with the D4 runner protocol. Fixture seeding always uses the local superuser
+// with SET ROLE, as scaffolding.
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { localPostgresLab } from "../../scripts/local-postgres-lab.mjs";
+import {
+  applyChainAsAdministrator,
+  createAdministrator,
+  manifestChain as administratorChain,
+} from "../../scripts/fixtures/createrole-administrator.mjs";
 import { validateDefinition } from "../../packages/contracts/src/validation.ts";
 import { workPermissions } from "../../packages/contracts/src/work-permissions.ts";
 
@@ -133,7 +143,15 @@ export function psqlAsync(
   });
 }
 
-export function applyMigrationChain(id, { stopBefore = Infinity } = {}) {
+export function applyMigrationChain(
+  id,
+  { stopBefore = Infinity, administrator = "superuser" } = {},
+) {
+  if (administrator === "createrole") {
+    createAdministrator(id, { bypassrls: false });
+    return applyChainAsAdministrator(id, administratorChain(), { stopBefore });
+  }
+  if (administrator !== "superuser") throw Error("HARNESS_ADMINISTRATOR_INVALID");
   psql(id, "CREATE DATABASE morrow;", { database: "morrow_lab" });
   let workRolesApplied = false;
   const applied = [];
@@ -581,6 +599,7 @@ export async function withWorkDatabase(packet, use, options = {}) {
     const context = Object.freeze({
       ...engine,
       applied,
+      administrator: options.administrator ?? "superuser",
       sql: run,
       tryRun: (text, opts = {}) => psql(engine.id, text, { ...opts, allowFailure: true }),
       runAsync: (text, opts) => psqlAsync(engine.id, text, opts),

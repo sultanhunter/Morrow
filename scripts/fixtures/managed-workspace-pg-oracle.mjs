@@ -69,12 +69,12 @@ const linkingSql = freeze({
   readOnlyBegin: "BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY",
   readRole: `SELECT current_user AS role, session_user AS login, r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolinherit,
 pg_catalog.pg_has_role(current_user, 'morrow_identity_owner','MEMBER') AS owner_member,
-EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid) AS role_member,r.rolreplication
+(EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid) OR (SELECT count(*) FROM pg_catalog.pg_auth_members m WHERE m.roleid=r.oid)>1 OR EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles u ON u.oid=m.member WHERE m.roleid=r.oid AND NOT (m.grantor=10 AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option AND u.rolname NOT LIKE 'morrow\\_%' AND NOT u.rolsuper))) AS role_member,r.rolreplication
 FROM pg_catalog.pg_roles r WHERE r.rolname=current_user`,
   begin: "BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE",
   role: `SELECT current_user AS role, session_user AS login, r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolinherit,
 pg_catalog.pg_has_role(current_user, 'morrow_identity_owner', 'MEMBER') AS owner_member,
-EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid) AS role_member
+(EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid) OR (SELECT count(*) FROM pg_catalog.pg_auth_members m WHERE m.roleid=r.oid)>1 OR EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles u ON u.oid=m.member WHERE m.roleid=r.oid AND NOT (m.grantor=10 AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option AND u.rolname NOT LIKE 'morrow\\_%' AND NOT u.rolsuper))) AS role_member
 FROM pg_catalog.pg_roles r WHERE r.rolname=current_user`,
   timeout: "SET LOCAL statement_timeout = '5s'",
   idleTimeout: "SET LOCAL idle_in_transaction_session_timeout = '10s'",
@@ -89,7 +89,7 @@ FROM pg_catalog.pg_roles r WHERE r.rolname=current_user`,
 });
 const logoutSql = freeze({
   begin: "BEGIN ISOLATION LEVEL READ COMMITTED",
-  role: "SELECT current_user AS role,session_user AS login,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolinherit,pg_catalog.pg_has_role(current_user,'morrow_identity_owner','MEMBER') AS owner_member,EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid OR m.roleid=r.oid) AS role_member FROM pg_catalog.pg_roles r WHERE r.rolname=current_user",
+  role: "SELECT current_user AS role,session_user AS login,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolinherit,pg_catalog.pg_has_role(current_user,'morrow_identity_owner','MEMBER') AS owner_member,(EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid) OR (SELECT count(*) FROM pg_catalog.pg_auth_members m WHERE m.roleid=r.oid)>1 OR EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles u ON u.oid=m.member WHERE m.roleid=r.oid AND NOT (m.grantor=10 AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option AND u.rolname NOT LIKE 'morrow\\_%' AND NOT u.rolsuper))) AS role_member FROM pg_catalog.pg_roles r WHERE r.rolname=current_user",
   timeout: "SET LOCAL statement_timeout = '1s'",
   idleTimeout: "SET LOCAL idle_in_transaction_session_timeout = '5s'",
   end: "SELECT outcome,audit_id FROM morrow_identity.end_self_browser_family($1,$2,$3,$4,$5,$6,$7,$8)",

@@ -305,6 +305,8 @@ test("forbidden roles, memberships, aliases and malformed role rows rollback bef
       "role_member",
     ].map((key) => ({ [key]: true })),
     { owner_member: "false" },
+    // ADR-0020 (P04.T01j D5): an unknown preflight fails closed.
+    { role_member: null },
     { extra: false },
   ];
   for (const rows of [[], [{ ...role }, { ...role }], ...patches.map((p) => [{ ...role, ...p }])]) {

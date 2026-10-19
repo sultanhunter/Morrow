@@ -180,9 +180,11 @@ test("closed duplicate-free scalar input denies malformed or authority additions
   }
 });
 test("every unsafe executor flag/login/membership fails before end function", async () => {
-  for (const key of Object.keys(role())) {
+  // ADR-0020 (P04.T01j D5): an unknown preflight (role_member NULL) fails closed too.
+  for (const key of [...Object.keys(role()), null]) {
     const changed = role();
-    changed[key] = key === "role" || key === "login" ? "morrow_api" : true;
+    if (key === null) changed.role_member = null;
+    else changed[key] = key === "role" || key === "login" ? "morrow_api" : true;
     const h = harness({ role: changed });
     assert.deepEqual(await h.service.end(JSON.stringify(selected()), control()), {
       outcome: "unavailable",

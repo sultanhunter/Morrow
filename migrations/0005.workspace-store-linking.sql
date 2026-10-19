@@ -1,11 +1,81 @@
 BEGIN;
+-- ADR-0020 (P04.T01j D1-D2): the recorded migration administrator and the closed
+-- membership set. 0001-0004 stay byte-identical; 0005-0015 were rebaselined once under
+-- ADR-0020. The administrator is this session's login: a non-superuser with CREATEROLE
+-- on hosted databases (Neon's neondb_owner), or the bootstrap superuser in local labs.
+CREATE TABLE morrow_identity.migration_administrator(singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton),
+ role_oid oid NOT NULL, role_name name NOT NULL, recorded_at timestamptz NOT NULL DEFAULT statement_timestamp());
+INSERT INTO morrow_identity.migration_administrator(role_oid,role_name) SELECT r.oid,r.rolname FROM pg_catalog.pg_roles r
+ WHERE r.rolname=session_user AND r.rolcanlogin AND (r.rolsuper OR r.rolcreaterole) AND r.rolname NOT LIKE 'morrow\_%';
+-- One statement-level trigger: a row-level trigger lets UPDATE and DELETE by the owner
+-- succeed silently under FORCE RLS while affecting no row (measured in M-J0).
+CREATE FUNCTION morrow_identity.preserve_migration_administrator() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+BEGIN RAISE EXCEPTION 'MIGRATION_ADMINISTRATOR_IMMUTABLE'; END $$;
+CREATE TRIGGER migration_administrator_immutable BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON morrow_identity.migration_administrator
+ FOR EACH STATEMENT EXECUTE FUNCTION morrow_identity.preserve_migration_administrator();
+REVOKE ALL ON morrow_identity.migration_administrator FROM PUBLIC;
+ALTER TABLE morrow_identity.migration_administrator ENABLE ROW LEVEL SECURITY;
+ALTER TABLE morrow_identity.migration_administrator FORCE ROW LEVEL SECURITY;
+CREATE POLICY identity_owner ON morrow_identity.migration_administrator FOR SELECT TO morrow_identity_owner USING(true);
+-- The recorded administrator's oid, or NULL: exactly one row whose oid and name still
+-- match one live role, not a Morrow role, and no role is a member of it.
+CREATE FUNCTION morrow_identity.recorded_administrator() RETURNS oid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT r.oid FROM morrow_identity.migration_administrator a
+ JOIN pg_catalog.pg_roles r ON r.oid=a.role_oid AND r.rolname=a.role_name
+ WHERE a.singleton AND r.rolname NOT LIKE 'morrow\_%' AND (SELECT count(*) FROM morrow_identity.migration_administrator)=1
+ AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members x WHERE x.roleid=r.oid) $$;
+-- True only if every pg_auth_members row that names p_role is one of:
+-- (A) the PG16+ CREATE ROLE row: the role is p_role, the member is the recorded
+--     administrator (not a superuser), the grantor is the bootstrap superuser (oid 10),
+--     admin true, inherit false, set false;
+-- (B) one of the two reviewed work memberships, granted by the recorded administrator,
+--     admin false, inherit false, set true;
+-- (C) inside the administrator's own migration transaction only: its SET row on the
+--     executeAs owner that is current_user, granted by itself, admin false, inherit
+--     false, set true.
+-- A missing role, a missing or mismatched record, or a NULL is false.
+CREATE FUNCTION morrow_identity.memberships_closed(p_role name) RETURNS boolean
+LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT COALESCE((SELECT NOT EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m
+   JOIN pg_catalog.pg_roles g ON g.oid=m.roleid JOIN pg_catalog.pg_roles u ON u.oid=m.member
+   WHERE (m.roleid=t.oid OR m.member=t.oid) AND (
+     (m.roleid=t.oid AND m.member=a.oid AND NOT a.rolsuper AND m.grantor=10::oid
+      AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option)
+  OR ((g.rolname,u.rolname) IN (('morrow_work_api','morrow_api_worker'),('morrow_work_command','morrow_work_owner'))
+      AND m.grantor=a.oid AND NOT m.admin_option AND NOT m.inherit_option AND m.set_option)
+  OR (m.roleid=t.oid AND m.member=a.oid AND NOT a.rolsuper AND m.grantor=a.oid
+      AND NOT m.admin_option AND NOT m.inherit_option AND m.set_option
+      AND g.rolname IN ('morrow_identity_owner','morrow_work_owner')
+      AND g.rolname=current_user AND u.rolname=session_user)) IS NOT TRUE)
+  FROM pg_catalog.pg_roles t, pg_catalog.pg_roles a
+  WHERE t.rolname=p_role AND a.oid=morrow_identity.recorded_administrator()),false) $$;
+-- Apply time: a recorded administrator exists and every Morrow role is closed.
+CREATE FUNCTION morrow_identity.morrow_memberships_closed() RETURNS boolean
+LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT morrow_identity.recorded_administrator() IS NOT NULL AND NOT EXISTS(SELECT 1 FROM pg_catalog.pg_roles r
+  WHERE r.rolname LIKE 'morrow\_%' AND NOT morrow_identity.memberships_closed(r.rolname)) $$;
+-- Run time: the executor login and the identity owner are both closed. (C) never holds
+-- here, because session_user is the executor.
+CREATE FUNCTION morrow_identity.executor_memberships_closed(p_executor name) RETURNS boolean
+LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT morrow_identity.memberships_closed(p_executor) AND morrow_identity.memberships_closed('morrow_identity_owner') $$;
+REVOKE ALL ON FUNCTION morrow_identity.preserve_migration_administrator(),morrow_identity.recorded_administrator(),
+ morrow_identity.memberships_closed(name),morrow_identity.morrow_memberships_closed(),
+ morrow_identity.executor_memberships_closed(name) FROM PUBLIC;
+DO $$ BEGIN
+ IF current_user<>'morrow_identity_owner' OR morrow_identity.recorded_administrator() IS NULL
+ OR (SELECT r.rolname FROM pg_catalog.pg_roles r WHERE r.oid=morrow_identity.recorded_administrator()) IS DISTINCT FROM session_user
+ THEN RAISE EXCEPTION 'MIGRATION_ADMINISTRATOR_INVALID'; END IF;
+END $$;
 -- Controlled local linking only. No production proof/review issuer or public API.
 DO $$ BEGIN
   IF current_user<>'morrow_identity_owner'
     OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='morrow_identity_linking' AND NOT rolcanlogin AND NOT rolinherit AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb AND NOT rolcreaterole)
     OR EXISTS(SELECT 1 FROM pg_roles WHERE rolname IN ('morrow_identity_owner','morrow_api','morrow_identity_lifecycle') AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole))
     OR EXISTS(SELECT 1 FROM pg_roles WHERE rolname='morrow_identity_owner' AND rolcanlogin)
-    OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles WHERE rolname='morrow_identity_linking') OR roleid=(SELECT oid FROM pg_roles WHERE rolname='morrow_identity_linking'))
+    OR NOT morrow_identity.memberships_closed('morrow_identity_linking') OR NOT morrow_identity.morrow_memberships_closed()
     OR pg_has_role('morrow_api','morrow_identity_linking','MEMBER')
     OR pg_has_role('morrow_identity_lifecycle','morrow_identity_linking','MEMBER')
     OR pg_has_role('morrow_api','morrow_identity_owner','MEMBER') THEN
@@ -186,7 +256,7 @@ BEGIN
  IF session_user<>'morrow_identity_linking' OR NOT EXISTS(
    SELECT 1 FROM pg_roles x WHERE x.rolname=session_user AND NOT x.rolsuper
      AND NOT x.rolbypassrls AND NOT x.rolcreatedb AND NOT x.rolcreaterole AND NOT x.rolinherit
-     AND NOT EXISTS(SELECT 1 FROM pg_auth_members m WHERE m.member=x.oid OR m.roleid=x.oid)) THEN
+     AND morrow_identity.executor_memberships_closed(x.rolname)) THEN
    RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN; END IF;
  IF p_handoff IS NULL OR p_command IS NULL OR p_digest IS NULL OR p_session IS NULL OR p_nonce IS NULL OR p_org IS NULL OR p_workspace IS NULL OR p_installation IS NULL OR p_purpose IS NULL OR p_policy IS NULL OR p_ownership IS NULL
    OR p_handoff !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_command !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'

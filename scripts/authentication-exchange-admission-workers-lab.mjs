@@ -6,6 +6,7 @@ import { Miniflare, Log, LogLevel } from "miniflare";
 import { writeArtifact } from "./artifacts.mjs";
 const paths = [
   "packages/identity/src/authentication-exchange-admission.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "scripts/fixtures/authentication-exchange-admission-worker.ts",
   "scripts/authentication-exchange-admission-workers-lab.mjs",
   "packages/contracts/src/generated/runtime-validators.mjs",

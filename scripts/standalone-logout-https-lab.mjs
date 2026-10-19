@@ -63,6 +63,7 @@ const paths = [
   "apps/api/src/workspace-http.ts",
   "packages/identity/src/standalone-logout.ts",
   "packages/identity/src/self-logout-control.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/standalone-login.ts",
   "packages/identity/src/standalone-login-protocol.ts",
   "packages/identity/src/login-preauth-control.ts",

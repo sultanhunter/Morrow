@@ -26,11 +26,17 @@ const records = {};
 before(async () => {
   let ready;
   const opened = new Promise((resolve) => (ready = resolve));
-  started = withWorkDatabase("P06.T01a.conformance-probes", (context) => {
-    db = context;
-    ready();
-    return new Promise((resolve) => (release = resolve));
-  });
+  // The hosted administrator shape (ADR-0020, P04.T01j D7): a non-superuser CREATEROLE
+  // login applies the chain with the D4 runner protocol.
+  started = withWorkDatabase(
+    "P06.T01a.conformance-probes",
+    (context) => {
+      db = context;
+      ready();
+      return new Promise((resolve) => (release = resolve));
+    },
+    { administrator: "createrole" },
+  );
   await Promise.race([opened, started]);
   P = seedWorkFixtures(db);
   handler = createWorkApiHandler({

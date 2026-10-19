@@ -883,6 +883,7 @@ const sources = [
   "migrations/0006.authentication-exchange-admission.sql",
   "infra/identity-role-prerequisites.sql",
   "packages/identity/src/authentication-exchange-admission.ts",
+  "packages/identity/src/executor-role-preflight.ts",
   "scripts/local-authentication-exchange-sql.mjs",
   "scripts/authentication-exchange-admission-lab.mjs",
 ];

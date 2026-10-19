@@ -648,9 +648,13 @@ INSERT INTO morrow_identity.provider_subject_profile_bindings VALUES(${literal(f
     check(name + "_definer_denies", resolve(baseline).length === 0);
     sql(revoke);
   }
+  // ADR-0020 (P04.T01j): every run-time executor guard also requires the identity owner's
+  // memberships to be closed, so a separate role granted the owner now denies resolution
+  // too (before the rebaseline this maintenance grant was tolerated). Removing it restores.
   sql("GRANT morrow_identity_owner TO subject_membership_bridge;");
-  check("separate_admin_owner_maintenance_grant_preserved", resolve(baseline).length === 1);
+  check("separate_owner_member_denies_under_adr_0020", resolve(baseline).length === 0);
   sql("REVOKE morrow_identity_owner FROM subject_membership_bridge;");
+  check("owner_member_removed_restores_resolution", resolve(baseline).length === 1);
   const privateIds = [];
   const makeReader = (f) => {
     const handle = Object.freeze({}),
@@ -941,6 +945,7 @@ writeArtifact(
           "scripts/local-provider-subject-sql.mjs",
           "scripts/provider-subject-resolution-lab.mjs",
           "packages/identity/src/workos-workspace-selection.ts",
+          "packages/identity/src/executor-role-preflight.ts",
           "packages/identity/src/workos-authentication-evidence.ts",
           "packages/identity/src/workos-session-token.ts",
           "packages/identity/src/workos-session-status.ts",
