@@ -2,8 +2,9 @@
 // against the review library, digest vectors against an independent oracle,
 // projectApproval, the outcome→HTTP mapping, visibility through the policy
 // kernel, the vocabulary deviation marker, and the migration's catalogue,
-// defaults and transition rows against the contracts. The PostgreSQL behaviour
-// itself is qualified by lab:approval-records (pg-work group).
+// defaults and transition rows against the contracts, the migrations' static
+// rules, and that PR-1 binds no route. The PostgreSQL behaviour itself is
+// qualified by lab:approval-records (pg-core group).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -40,6 +41,10 @@ import { approvalStatements } from "../packages/work/src/approvals/sql.ts";
 import { workStatements } from "../packages/work/src/sql.ts";
 import { workRequestDigest } from "../packages/work/src/digest.ts";
 import { inspectImports } from "../scripts/boundary-checks.mjs";
+import defaultWorker from "../apps/api/src/worker.ts";
+import { workRoutes } from "../packages/work/src/http.ts";
+import * as approvalsModule from "../packages/work/src/approvals/index.ts";
+import { workGuardOrigin } from "./fixtures/work-guard-cases.mjs";
 import {
   approvalProducers,
   grantsReviseProducer,
@@ -940,4 +945,100 @@ test("boundaries: product code cannot import the test-only producers", () => {
     ),
     [],
   );
+});
+
+test("migrations 0017-0018: no direct role-membership catalog reads; the claim recheck is 0014's", () => {
+  // The proposed ADR-0020 new-migration rule (P04.T01j D6): no migration after 0015
+  // names the role-membership catalog, so a rebaseline of 0005-0015 covers every guard.
+  for (const [file, text] of [
+    ["0017.approval-identity-bridge.sql", bridge],
+    ["0018.approval-records.sql", records],
+  ])
+    assert.equal(text.includes("pg_auth_" + "members"), false, file);
+  // The exclusive variant takes the organization interlock and row FOR UPDATE, then
+  // returns the 0014 work_lock_and_recheck itself rather than re-implementing it.
+  const exclusive = bridge.slice(
+    bridge.indexOf("CREATE FUNCTION morrow_identity.work_lock_and_recheck_exclusive("),
+    bridge.indexOf("REVOKE ALL ON FUNCTION morrow_identity.work_lock_and_recheck_exclusive("),
+  );
+  const order = [
+    "pg_catalog.pg_advisory_xact_lock(",
+    "FROM morrow_identity.organizations o WHERE o.id=v_org FOR UPDATE",
+    "RETURN morrow_identity.work_lock_and_recheck(p_digest,p_workspace,p_principal,p_membership,p_revision,p_grants_digest,p_evaluated_at_us);",
+  ].map((needle) => exclusive.indexOf(needle));
+  assert.ok(
+    order.every((i) => i > 0),
+    JSON.stringify(order),
+  );
+  assert.deepEqual(
+    [...order].sort((x, y) => x - y),
+    order,
+  );
+  assert.doesNotMatch(exclusive, /work_actor_authority|pg_advisory_xact_lock_shared/);
+  // Every claim consumer reaches it through command_prelude_exclusive.
+  assert.match(records, /v_check:=morrow_identity\.work_lock_and_recheck_exclusive\(/);
+});
+
+test("migration 0018: P06.T01a rules kept: one event per revision outside approvals; no forward-dated proposal", () => {
+  // Deviation 4 relaxes outbox uniqueness for the approval aggregate only.
+  assert.match(
+    records,
+    /CREATE UNIQUE INDEX outbox_events_one_event_per_revision ON morrow_work\.outbox_events \(organization_id,workspace_id,aggregate_type,aggregate_id,aggregate_revision\)\n WHERE aggregate_type<>'approval';/,
+  );
+  const bind = records.slice(
+    records.indexOf("CREATE FUNCTION morrow_work.proposal_bind()"),
+    records.indexOf("CREATE FUNCTION morrow_work.approval_bind()"),
+  );
+  assert.match(
+    bind,
+    /IF NEW\.created_at>date_trunc\('milliseconds',clock_timestamp\(\)\) THEN RAISE EXCEPTION 'APPROVAL_RECORD_INVALID'; END IF;/,
+  );
+  // A claimed family is closed before any projection in the decide command.
+  const decideFn = records.slice(
+    records.indexOf("CREATE FUNCTION morrow_work.cmd_approval_decide("),
+  );
+  const claimed = decideFn.indexOf("IF v_has_claim THEN RETURN QUERY SELECT 'FAMILY_CONFLICT'");
+  const projected = decideFn.indexOf("morrow_work.approval_projection(");
+  assert.ok(claimed > 0 && projected > claimed);
+});
+
+test("laboratory: lab:approval-records runs once, in the pg-core group", () => {
+  const pkg = JSON.parse(read("package.json"));
+  assert.equal(
+    pkg.scripts["lab:approval-records"],
+    "node --import tsx scripts/approval-records-lab.mjs",
+  );
+  const groups = Object.entries(pkg.scripts).filter(([name]) => name.startsWith("lab:group:"));
+  const holders = groups.filter(([, chain]) =>
+    chain.split(" && ").includes("npm run lab:approval-records"),
+  );
+  assert.deepEqual(
+    holders.map(([name]) => name),
+    ["lab:group:pg-core"],
+  );
+});
+
+test("PR-1 binds no route: no approval route, and the unbound artifact answers 401 with no I/O (AC20 part)", async (t) => {
+  for (const route of workRoutes)
+    assert.doesNotMatch(route.pattern, /proposal|approval/, route.method + " " + route.pattern);
+  assert.equal("approvalRoutes" in approvalsModule, false);
+  const fetches = t.mock.method(globalThis, "fetch", () => {
+    throw Error("NO_NETWORK");
+  });
+  t.mock.method(console, "log", () => {});
+  for (const [method, path] of [
+    ["GET", "/workspace/ws_w/work/approvals?status=pending"],
+    ["GET", "/workspace/ws_w/work/proposals/p1"],
+    ["POST", "/workspace/ws_w/work/proposals/p1/decision"],
+    ["POST", "/workspace/ws_w/work/proposals/p1/withdraw"],
+  ]) {
+    const response = await defaultWorker.fetch(
+      new Request(workGuardOrigin + path, { method }),
+      undefined,
+      { waitUntil() {} },
+    );
+    assert.equal(response.status, 401, method + " " + path);
+    assert.equal(response.headers.has("set-cookie"), false);
+  }
+  assert.equal(fetches.mock.callCount(), 0);
 });

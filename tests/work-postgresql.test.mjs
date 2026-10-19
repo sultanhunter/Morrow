@@ -301,7 +301,7 @@ test("statements: one fixed prologue and parameter-only statements", () => {
   for (const source of sources) assert.doesNotMatch(source, /SET (LOCAL )?ROLE/);
 });
 
-test("laboratories: each P06 work lab (P06.T01a, P06.T01b) runs once, in the pg-work group", () => {
+test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
   assert.equal(
     pkg.scripts["lab:work-postgresql"],
     "node --import tsx scripts/work-postgresql-lab.mjs",
@@ -313,11 +313,7 @@ test("laboratories: each P06 work lab (P06.T01a, P06.T01b) runs once, in the pg-
   );
   assert.equal(
     pkg.scripts["lab:group:pg-work"],
-    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:approval-records",
-  );
-  assert.equal(
-    pkg.scripts["lab:approval-records"],
-    "node --import tsx scripts/approval-records-lab.mjs",
+    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers",
   );
   assert.match(
     read(".github/workflows/ci.yml"),
