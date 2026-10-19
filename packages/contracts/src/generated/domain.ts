@@ -452,6 +452,7 @@ export type CoreV1_1_OperationStatusChangedPayload = { "from": Core_OperationSta
 export type CoreV1_1_KillSwitchExecutedPayload = { "capabilityId": "ads.campaign.pause" | "agents.installation.disable" | "governance.membership.revoke" | "governance.connection.disconnect" | "agents.release.revoke"; "sourceProposalId": (Core_Id | null); };
 export type CoreV1_1_EventPayload = (CoreV1_1_EmptyEventPayload | CoreV1_1_GoalCreatedPayload | CoreV1_1_GoalStatusChangedPayload | CoreV1_1_TaskCreatedPayload | CoreV1_1_TaskStatusChangedPayload | CoreV1_1_TaskAssignedPayload | CoreV1_1_QuestionRequestedPayload | CoreV1_1_QuestionAnsweredPayload | CoreV1_1_ConversationCreatedPayload | CoreV1_1_MessageCreatedPayload | CoreV1_1_MessageStatusChangedPayload | CoreV1_1_ProjectCreatedPayload | CoreV1_1_ProjectPinChangedPayload | CoreV1_1_AccessRequestStatusChangedPayload | CoreV1_1_ProposalCreatedPayload | CoreV1_1_ApprovalCreatedPayload | CoreV1_1_ApprovalStatusChangedPayload | CoreV1_1_OperationStatusChangedPayload | CoreV1_1_KillSwitchExecutedPayload);
 export type CoreV1_1_EventEnvelope = (unknown & { "schemaVersion": 2; "eventId": Core_Id; "eventType": string; "organizationId": Core_Id; "workspaceId": Core_Id; "storeId": (Core_Id | null); "aggregateType": string; "aggregateId": Core_Id; "aggregateRevision": Core_Revision; "streamPosition": CoreV1_1_StreamPosition; "correlationId": Core_Id; "causationId": (Core_Id | null); "actor": Core_ActorRef; "occurredAt": Core_UtcTime; "payload": (CoreV1_1_EventPayload | null); "payloadRef": (CoreV1_1_EventPayloadRef | null); });
+export type CoreV1_1_SessionRotationResult = { "schemaVersion": 1; "outcome": "rotated" | "current"; "idleRemainingMs": number; "absoluteRemainingMs": number; };
 export type CapabilityV1_1_ads_campaign_pause_input = { "campaigns": CoreV1_1_CampaignRefs; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_agents_installation_disable_input = { "installationId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_governance_membership_revoke_input = { "membershipId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
@@ -709,6 +710,7 @@ export interface CurrentDefinitions {
   "SearchMetricList": Core_SearchMetricList;
   "SegmentList": Core_SegmentList;
   "SelectionIndexes": CoreV1_1_SelectionIndexes;
+  "SessionRotationResult": CoreV1_1_SessionRotationResult;
   "SkillRelease": Core_SkillRelease;
   "SnapshotRef": Core_SnapshotRef;
   "SoloOwnerRule": CoreV1_1_SoloOwnerRule;
@@ -942,6 +944,7 @@ export type Current_ScopeRef = Core_ScopeRef;
 export type Current_SearchMetricList = Core_SearchMetricList;
 export type Current_SegmentList = Core_SegmentList;
 export type Current_SelectionIndexes = CoreV1_1_SelectionIndexes;
+export type Current_SessionRotationResult = CoreV1_1_SessionRotationResult;
 export type Current_SkillRelease = Core_SkillRelease;
 export type Current_SnapshotRef = Core_SnapshotRef;
 export type Current_SoloOwnerRule = CoreV1_1_SoloOwnerRule;

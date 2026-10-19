@@ -929,7 +929,8 @@ function createLoginCore(context: CoreContext) {
       checkOpen();
       if (!readEvidence(verified.handle)) throw loginFailure();
       const at = attempt.check(),
-        age = Math.min(900, Math.floor((credential.expiresAtMs - at) / 1000));
+        // P05.T01y: generation 1 lives at most 30 idle minutes (ADR-0004).
+        age = Math.min(1800, Math.floor((credential.expiresAtMs - at) / 1000));
       if (age <= 0) throw loginFailure();
       return plan(
         303,

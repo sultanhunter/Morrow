@@ -81,6 +81,11 @@ const published = [
     "19de8b5be63e47a0144f1bcfdd7c5548f8a9a38269eaa1604f098bfd5087691d",
   ],
   [15, "0015.work-state.sql", "bd5d1c48dfdabceac3fdd6ce7b829b9b1a25ebd56e1d689bcbd9dbaeba7f983a"],
+  [
+    16,
+    "0016.browser-session-lifecycle.sql",
+    "db8111c78e3f6d2a56aa3724a85afdc8f6c078d087a8edd8ee750281818a7b85",
+  ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each
 // published row keeps exactly these pinned files, and a later role goes in a new file on its

@@ -137,6 +137,13 @@
       "sha256": "bd5d1c48dfdabceac3fdd6ce7b829b9b1a25ebd56e1d689bcbd9dbaeba7f983a",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/packets/P06.T01a.md"
+    },
+    {
+      "sequence": 16,
+      "file": "0016.browser-session-lifecycle.sql",
+      "sha256": "db8111c78e3f6d2a56aa3724a85afdc8f6c078d087a8edd8ee750281818a7b85",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/packets/P05.T01y.md"
     }
   ]
 }

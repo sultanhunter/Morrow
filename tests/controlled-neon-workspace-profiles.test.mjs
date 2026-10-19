@@ -18,6 +18,7 @@ import { identitySql } from "../packages/identity/src/index.ts";
 import { workspaceStoreLinkingControlSql as readSql } from "../packages/identity/src/workspace-store-linking-control.ts";
 import { workspaceStoreLinkingSql as writeSql } from "../packages/identity/src/workspace-store-linking.ts";
 import { selfLogoutSql } from "../packages/identity/src/self-logout-control.ts";
+import { selfRotationSql } from "../packages/identity/src/self-session-rotation-control.ts";
 import {
   accountOnboardingSql,
   accountOverviewSql,
@@ -83,7 +84,12 @@ test("four frozen workspace profiles retain the exact owner SQL sets and role st
       5000,
       10000,
     ],
-    logoutPool: ["morrow_identity_logout", selfLogoutSql, 1000, 5000],
+    logoutPool: [
+      "morrow_identity_logout",
+      { ...selfLogoutSql, rotate: selfRotationSql.rotate },
+      1000,
+      5000,
+    ],
     onboardingPool: ["morrow_identity_onboarding", accountOnboardingSql, 2000, 5000],
   };
   for (const [name, p] of Object.entries(profiles)) {

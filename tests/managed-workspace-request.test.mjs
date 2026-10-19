@@ -439,3 +439,177 @@ test("unchanged bootstrap SQL owner consumes the one original managed control", 
   assert.deepEqual(releases, [true]);
   assert.equal(response.headers.has("set-cookie"), false);
 });
+
+// P05.T01y-AC29: the managed sinks confine Set-Cookie per route; anything else is held.
+test("managed logout and rotate sinks pass only their one reviewed cookie", async () => {
+  const { confinedCookies } = await import("../packages/identity/src/managed-workspace-request.ts");
+  const clear = "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
+  const session = (age) =>
+    "__Host-morrow_session=" +
+    "A".repeat(43) +
+    "; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=" +
+    age;
+  const rotated =
+    '{"schemaVersion":1,"outcome":"rotated","idleRemainingMs":1800000,"absoluteRemainingMs":43000000}';
+  for (const status of [200, 403, 503])
+    assert.deepEqual(confinedCookies("logout", status, "{}", [clear]), [clear]);
+  assert.deepEqual(confinedCookies("logout", 400, "{}", []), []);
+  assert.deepEqual(confinedCookies("rotate", 200, rotated, [session(1800)]), [session(1800)]);
+  assert.deepEqual(confinedCookies("rotate", 401, '{"code":"authentication_required"}', []), []);
+  for (const [route, status, body, cookies] of [
+    ["logout", 400, "{}", [clear]],
+    ["logout", 200, "{}", [session(60)]],
+    ["logout", 200, "{}", [clear, clear]],
+    ["rotate", 200, rotated, [session(1801)]],
+    ["rotate", 200, rotated, [clear]],
+    ["rotate", 200, rotated.replace("43000000", "43200001"), [session(60)]],
+    ["rotate", 401, '{"code":"authentication_required"}', [session(60)]],
+    [
+      "rotate",
+      200,
+      '{"schemaVersion":1,"outcome":"current","idleRemainingMs":1,"absoluteRemainingMs":1}',
+      [session(60)],
+    ],
+  ])
+    assert.throws(
+      () => confinedCookies(route, status, body, cookies),
+      /MANAGED_WORKSPACE_REQUEST_HELD/,
+      route + " " + status,
+    );
+});
+
+// P05.T01y-AC22/AC26/AC29 through the managed delivery: the real dispatchers over scripted
+// pools hand their plans to the managed sink, which yields one Response whose Set-Cookie
+// list equals the confined cookie. The controlled Neon pool construction and the wire are
+// outside this test (PR-3: AC33 workerd, AC34 pgwire).
+test("managed delivery turns a scripted rotated answer into one Response with exactly the session cookie", async () => {
+  const { createManagedCookieDelivery } = await import(
+    "../packages/identity/src/managed-workspace-request.ts"
+  );
+  const { dispatchStandaloneRotationWithAttempt } = await import(
+    "../packages/identity/src/standalone-session-rotation.ts"
+  );
+  const { dispatchStandaloneLogoutWithAttempt, parseStandaloneLogoutConfiguration } = await import(
+    "../packages/identity/src/standalone-logout.ts"
+  );
+  const { createLoginAttempt } = await import(
+    "../packages/identity/src/standalone-login-protocol.ts"
+  );
+  const { validateCurrentDefinition } = await import("../packages/contracts/src/validation.ts");
+  const {
+    createStandaloneLogoutFixture,
+    logoutFixtureConfiguration,
+    logoutFixtureOrigin,
+    logoutFixtureRequest,
+  } = await import("../scripts/fixtures/standalone-logout-fixture.ts");
+  const { createRotationPool } = await import("./fixtures/session-rotation-pool.mjs");
+  const config = await parseStandaloneLogoutConfiguration(
+    JSON.stringify(logoutFixtureConfiguration),
+  );
+  const rotateRequest = () =>
+    new Request(logoutFixtureOrigin + "/auth/rotate", {
+      method: "POST",
+      headers: {
+        Origin: logoutFixtureOrigin,
+        "Content-Type": "application/json",
+        "X-Morrow-Request": "1",
+        Cookie: "__Host-morrow_session=" + "A".repeat(43),
+      },
+      body: '{"schemaVersion":1}',
+    });
+  const run = async (pool, now, dispatch, request, route) => {
+    const attempt = createLoginAttempt(now, new AbortController().signal, 5000);
+    const delivery = createManagedCookieDelivery(route);
+    try {
+      await dispatch(request, delivery.sink, attempt, config, pool);
+      return delivery.delivered();
+    } finally {
+      attempt.end();
+    }
+  };
+  const rotation = createRotationPool();
+  const response = await run(
+    rotation.pool,
+    rotation.now,
+    dispatchStandaloneRotationWithAttempt,
+    rotateRequest(),
+    "rotate",
+  );
+  assert.equal(response.status, 200);
+  const cookies = response.headers.getSetCookie();
+  assert.equal(cookies.length, 1);
+  assert.match(
+    cookies[0],
+    /^__Host-morrow_session=[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=1800$/,
+  );
+  assert.notEqual(cookies[0], "__Host-morrow_session=" + "A".repeat(43));
+  const body = await response.json();
+  assert.equal(body.outcome, "rotated");
+  assert.equal(validateCurrentDefinition("SessionRotationResult", body), true);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  // `current` and a denial deliver no cookie.
+  const current = createRotationPool({
+    row: (state) => ({
+      outcome: "current",
+      idle_expires_at_ms: String(state.now() + 1700000),
+      absolute_expires_at_ms: String(state.now() + 40000000),
+    }),
+  });
+  const kept = await run(
+    current.pool,
+    current.now,
+    dispatchStandaloneRotationWithAttempt,
+    rotateRequest(),
+    "rotate",
+  );
+  assert.equal(kept.status, 200);
+  assert.deepEqual(kept.headers.getSetCookie(), []);
+  const denied = createRotationPool({
+    row: () => ({ outcome: "denied", idle_expires_at_ms: null, absolute_expires_at_ms: null }),
+  });
+  const refused = await run(
+    denied.pool,
+    denied.now,
+    dispatchStandaloneRotationWithAttempt,
+    rotateRequest(),
+    "rotate",
+  );
+  assert.equal(refused.status, 401);
+  assert.deepEqual(refused.headers.getSetCookie(), []);
+  // Logout: the session_ended answer carries exactly the clear.
+  const logout = createStandaloneLogoutFixture();
+  await logout.register("A".repeat(43));
+  const ended = await run(
+    logout.pool,
+    logout.now,
+    dispatchStandaloneLogoutWithAttempt,
+    logoutFixtureRequest(),
+    "logout",
+  );
+  assert.equal(ended.status, 200);
+  assert.deepEqual(ended.headers.getSetCookie(), [
+    "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
+  ]);
+  // A second plan, or none, is held.
+  const twice = createManagedCookieDelivery("rotate");
+  twice.sink({
+    status: 401,
+    headers: [],
+    cookies: [],
+    bodyText: '{"code":"authentication_required"}',
+  });
+  assert.throws(
+    () =>
+      twice.sink({
+        status: 401,
+        headers: [],
+        cookies: [],
+        bodyText: '{"code":"authentication_required"}',
+      }),
+    /MANAGED_WORKSPACE_REQUEST_HELD/,
+  );
+  assert.throws(
+    () => createManagedCookieDelivery("logout").delivered(),
+    /MANAGED_WORKSPACE_REQUEST_HELD/,
+  );
+});

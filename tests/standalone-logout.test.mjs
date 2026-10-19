@@ -16,10 +16,18 @@ const setup = async (options) => {
   await fixture.register(second);
   return { fixture, handler: await createStandaloneLogout(fixture) };
 };
-async function fixed(response, status, outcome) {
+// P05.T01y-AC26: only plans produced after the SQL call was invoked carry exactly the clear:
+// 200 session_ended, the SQL 403 and the dispatcher's 503 logout_outcome_unknown.
+const clear = "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
+async function fixed(
+  response,
+  status,
+  outcome,
+  cleared = status === 200 || outcome === "logout_outcome_unknown",
+) {
   assert.equal(response.status, status);
   assert.deepEqual(await response.json(), { schemaVersion: 1, outcome });
-  assert.deepEqual(response.headers.getSetCookie(), []);
+  assert.deepEqual(response.headers.getSetCookie(), cleared ? [clear] : []);
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("referrer-policy"), "no-referrer");
   for (const name of ["location", "access-control-allow-origin"])
@@ -149,7 +157,7 @@ for (const [name, options, status] of [
     await fixed(await handler.fetch(logoutFixtureRequest(options)), status, "logout_unavailable");
     assert.equal(fixture.metrics.connections, 0);
   });
-test("normal preauth cookie may coexist, logout never clears it", async () => {
+test("normal preauth cookie may coexist, logout clears only the session cookie", async () => {
   const { handler } = await setup();
   await fixed(
     await handler.fetch(
@@ -168,6 +176,7 @@ test("unknown proof denied without mutation and safe role rejection precedes fun
       await handler.fetch(logoutFixtureRequest()),
       options.roleUnsafe ? 503 : 403,
       "logout_unavailable",
+      !options.roleUnsafe,
     );
     assert.equal(fixture.metrics.effects, 0);
     if (options.roleUnsafe) assert.equal(fixture.metrics.invocationCount, 0);
@@ -304,7 +313,7 @@ for (const mode of ["throw", "reject", "pending"])
             p.headers.every(Object.isFrozen) &&
             Object.isFrozen(p.cookies),
         );
-        assert.equal(p.cookies.length, 0);
+        assert.deepEqual(p.cookies, [clear]);
         if (mode === "reject") return Promise.reject(Error("private-marker"));
         if (mode === "pending") return new Promise(() => {});
         throw Error("private-marker");
@@ -400,7 +409,7 @@ test("body cancellation before SQL and pre-aborted Requests produce no late hand
 });
 test("completed scope denial commits no effect and awaits its bounded rollback/disposal", async () => {
   const { fixture, handler } = await setup({ denied: true });
-  await fixed(await handler.fetch(logoutFixtureRequest()), 403, "logout_unavailable");
+  await fixed(await handler.fetch(logoutFixtureRequest()), 403, "logout_unavailable", true);
   assert.equal(fixture.calls.filter((c) => c.stage !== "release").at(-1).stage, "rollback");
   assert.equal(fixture.metrics.releaseCompletions, 1);
   assert.equal(fixture.metrics.effects, 0);

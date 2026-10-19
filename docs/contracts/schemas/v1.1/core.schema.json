@@ -4983,6 +4983,39 @@
           }
         }
       ]
+    },
+    "SessionRotationResult": {
+      "description": "POST /auth/rotate 200 body (P05.T01y, ADR-0004). rotated: a new generation was committed and its cookie (Max-Age = min(1800, floor(idleRemainingMs / 1000))) is set in the same response; current: the presented generation is younger than 60 seconds, nothing was written and no cookie is set. Remaining times are milliseconds relative to the server's delivery instant, so a client needs no wall clock: idleRemainingMs until the generation's idle expiry, absoluteRemainingMs until the family's 12-hour limit. Every refusal (denied, reuse, expired, unknown, missing or malformed cookie) is 401 with the fixed {\"code\":\"authentication_required\"} body; request-proof, body, path and method failures are 403, 400, 404 or 405 rotation_unavailable; 503 is rotation_unavailable before the statement was sent and rotation_outcome_unknown after (never retried).",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "rotated",
+            "current"
+          ]
+        },
+        "idleRemainingMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 43200000
+        },
+        "absoluteRemainingMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 43200000
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "outcome",
+        "idleRemainingMs",
+        "absoluteRemainingMs"
+      ],
+      "additionalProperties": false
     }
   }
 }

@@ -2,7 +2,9 @@
 // v1.1 layer (AC11, AC29, AC30). docs/contracts/contract-versions.md.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
@@ -26,7 +28,12 @@ import {
 } from "../scripts/contract-sources.mjs";
 import { checkFixture, inspectTransition } from "../scripts/contract-checks.mjs";
 import { generateContracts } from "../scripts/generate-contracts.mjs";
-import { generateRuntimeValidators } from "../scripts/generate-runtime-validators.mjs";
+import {
+  browserValidatorsDirectory,
+  generateRuntimeValidators,
+  removeStrayBrowserValidatorFiles,
+  strayBrowserValidatorFiles,
+} from "../scripts/generate-runtime-validators.mjs";
 import { contractVersion } from "../packages/contracts/src/index.ts";
 import {
   validateCapabilityInput,
@@ -208,9 +215,45 @@ test("AC04: generation is ahead of time, deterministic and matches the committed
     encoding: "utf8",
   });
   assert.equal(check.status, 0, check.stderr);
-  // No runtime schema compiler or code generation reaches the validator bundle.
-  const bundle = read("packages/contracts/src/generated/runtime-validators.mjs");
-  assert.doesNotMatch(bundle, /new Function|\beval\(/);
+  // No runtime schema compiler or code generation reaches the validator bundle or any
+  // per-definition browser module, and the generator owns its browser directory.
+  const modules = Object.keys(validators.files).filter((path) => path.endsWith(".mjs"));
+  assert.ok(modules.includes("packages/contracts/src/generated/runtime-validators.mjs"));
+  assert.ok(modules.length > 1, "per-definition browser modules are generated");
+  for (const path of modules) assert.doesNotMatch(read(path), /new Function|\beval\(/, path);
+  assert.deepEqual(strayBrowserValidatorFiles(validators.files), []);
+});
+test("AC04: a stray file in the browser validators directory is drift and is removed", () => {
+  const produced = ["SessionRotationResult.mjs", "SessionRotationResult.d.mts"];
+  const files = Object.fromEntries(
+    produced.map((name) => [`${browserValidatorsDirectory}/${name}`, ""]),
+  );
+  const root = mkdtempSync(join(tmpdir(), "morrow-validators-"));
+  try {
+    assert.deepEqual(strayBrowserValidatorFiles(files, root), [], "no directory, no strays");
+    mkdirSync(join(root, browserValidatorsDirectory), { recursive: true });
+    for (const name of produced) writeFileSync(join(root, browserValidatorsDirectory, name), "");
+    assert.deepEqual(strayBrowserValidatorFiles(files, root), []);
+    writeFileSync(join(root, browserValidatorsDirectory, "Proposal.mjs"), "export {};\n");
+    assert.deepEqual(strayBrowserValidatorFiles(files, root), [
+      `${browserValidatorsDirectory}/Proposal.mjs`,
+    ]);
+    // Regeneration removes stray files, but refuses a stray directory before removing any.
+    const directory = join(root, browserValidatorsDirectory);
+    mkdirSync(join(directory, "Zeta"));
+    assert.throws(() => removeStrayBrowserValidatorFiles(files, root), {
+      message: `RUNTIME_VALIDATOR_STRAY_DIRECTORY: ${browserValidatorsDirectory}/Zeta`,
+    });
+    assert.deepEqual(readdirSync(directory).sort(), [...produced, "Proposal.mjs", "Zeta"].sort());
+    rmSync(join(directory, "Zeta"), { recursive: true });
+    assert.deepEqual(removeStrayBrowserValidatorFiles(files, root), [
+      `${browserValidatorsDirectory}/Proposal.mjs`,
+    ]);
+    assert.deepEqual(readdirSync(directory).sort(), [...produced].sort());
+    assert.deepEqual(removeStrayBrowserValidatorFiles(files, root), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("AC05: the effective kill-switch bodies replace the v1 bodies", () => {

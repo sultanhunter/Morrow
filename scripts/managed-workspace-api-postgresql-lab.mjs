@@ -44,6 +44,8 @@ const { validateDefinition } = await tsImport(
 );
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const held = () => Error("MANAGED_WORKSPACE_POSTGRESQL_HELD");
+// The exact logout clear (P05.T01y-AC26).
+const sessionClear = "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
 const require = (condition) => {
   if (!condition) throw held();
 };
@@ -540,8 +542,18 @@ try {
                     ? 25000
                     : 5000),
             );
+            // Workspace routes never set a cookie; logout (also kind "workspace") may carry
+            // only the exact session clear (P05.T01y-AC26), checked per case below.
             if (metric.kind === "workspace")
-              check("no_workspace_set_cookie_" + row, !response.headers.has("set-cookie"));
+              check(
+                "no_workspace_set_cookie_" + row,
+                path === "/auth/logout"
+                  ? [[], [sessionClear]].some(
+                      (allowed) =>
+                        response.headers.getSetCookie().join("\n") === allowed.join("\n"),
+                    )
+                  : !response.headers.has("set-cookie"),
+              );
             sourceMetricRows.push({
               pathKind: path.startsWith("/auth/workos/callback")
                 ? "callback"
@@ -855,8 +867,9 @@ try {
         body: JSON.stringify({ schemaVersion: 1 }),
       });
       check(
-        "self_logout_without_cookie_mutation",
-        logout.response.status === 200 && !logout.response.headers.has("set-cookie"),
+        "self_logout_clears_only_the_session_cookie",
+        logout.response.status === 200 &&
+          logout.response.headers.getSetCookie().join() === sessionClear,
       );
       check("retired_cookie_bootstrap_denied", (await bootstrap(a)).response.status === 401);
       check(
