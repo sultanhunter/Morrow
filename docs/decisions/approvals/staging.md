@@ -8,14 +8,14 @@
   - WorkOS environment `environment_01M4HG7FV7X8EFXE1J9S6GG00R`;
   - the GitHub repository `sultanhunter/Morrow` (its staging token and variables).
 - **Data class:** synthetic data, plus the owner's own WorkOS test identity. No merchant or customer data, no other people, no external messages.
-- **Valid until:** 30 days after approval, or the creation of the first production resource, whichever comes first. Only the owner can renew it.
+- **Valid until:** 30 days after approval, or the creation of the first production resource, whichever comes first. Only the owner can renew it. The `morrow-staging` root branch that Neon names `production` by default is not a production resource (ADR-0019 item 10).
 - **Who:** Claude may perform the effects under "Allowed effects". Effects under "Owner-run" are performed only by the owner. The owner may perform any effect.
 
 ## Allowed effects (Claude)
 
 | # | Effect | Cap | How the cap is enforced |
 | --- | --- | --- | --- |
-| E1 | Deploy the four `morrow-staging-*` Workers, either by continuous deploy from `main` after a green `foundation` run, or by `npm run staging:deploy` from `origin/main` with a green `foundation` check on that sha. Only the api is on workers.dev. No routes, domains or other Workers. | **Not capped.** Workers Paid includes 10M requests, 30M CPU-ms and 20M log events a month; expected use is under 1%. Overage costs $0.30 per million requests, $0.02 per million CPU-ms and $0.60 per million log events. | Usage alerts to the owner at about 10% of each allowance, plus the kill switch. Worst cases are under "Costs". |
+| E1 | Deploy the four `morrow-staging-*` Workers, either by continuous deploy from `main` after a green `foundation` run, or by `npm run staging:deploy` from `origin/main` with a green `foundation` check on that sha. Only the api is on workers.dev. No routes, domains or other Workers. | **Not capped.** Workers Paid includes 10M requests, 30M CPU-ms and 20M log events a month; expected use is under 1%. Overage costs $0.30 per million requests, $0.02 per million CPU-ms and $0.60 per million log events. | Usage alerts to the owner at about 10% of each allowance, plus the kill switch. **D6 fallback** where an allowance has no alert: the $5 billable-usage budget alert (created 2026-10-19) plus the owner's weekly check of Billing → Usage. Worst cases are under "Costs". **Precondition for the first E1 deploy:** the usage alerts exist, or the owner's acceptance of the weekly-check fallback is recorded (see "Preconditions for the first deploy"). |
 | E2 | Create or rotate staging Worker secrets with the packet's D4 commands. Values come only from owner files or are generated in-process, and are never typed, printed or put in chat. This includes deploying a keyring the owner generated (`--api-keyring`). | none (no cost) | `staging:secrets-status` and marker tests |
 | E3 | Neon, project `morrow-staging` only, using the project-scoped API key: throwaway probe branches with an expiry; `staging:migrate` on the `staging` branch; role controls; `provision-roles`; `seed-platform` (platform configuration rows only); catalog reads. Never the root branch, never another project. | Neon Free limits; no card on file | Neon cannot bill without a card. When the Free allowance runs out, compute is suspended: an outage, not a bill. |
 | E4 | Create the queues `morrow-staging-dispatch` and `morrow-staging-dispatch-dlq`. | Workers Paid includes 1M queue operations a month; expected 0 (no producer) | Dispatch stays disabled (invariant 15) |
@@ -25,8 +25,14 @@
 | E8 | Sign-in tests with the owner's own WorkOS test user. The owner is present and types the credentials; Claude never sees or stores them. | No cost | The assisted smoke stores no password and has tracing, video and HAR off |
 | E9 | Read-only reads: secret and variable names, Worker versions, the account census, Workers Logs queries, database catalog. | No cost | none needed |
 | E10 | Set the non-secret GitHub variables `STAGING_SCHEMA_HEAD`, `STAGING_LOGIN_CONFIGURATION_DIGEST` and `STAGING_DEPLOY_ENABLED`. | No cost | none needed |
-| E11 | Roll back a staging Worker within the packet's limits. Never across a password, Turnstile or keyring rotation. | No cost | The tool refuses such a rollback |
+| E11 | **Suspended (ADR-0021, trimmed P04.T01i PR-B)** until the rollback refusal exists. Then: roll back a staging Worker within the packet's limits, never across a password, Turnstile or keyring rotation. Until then staging rolls forward, through a new green `main` commit, with the kill switch as the stop. | No cost | The tool refuses such a rollback (not built yet, so the effect is suspended) |
 | E12 | Run the kill switch at any time. `unkill` is allowed only while this card is active. | No cost | none needed |
+
+## Preconditions for the first deploy (E1)
+
+- The ChatGPT Codex Connector GitHub App is suspended, and the classic token "AppForge Github Actions" is deleted (owner-run; ADR-0019 item 5 exception, 2026-10-19). The remaining platform GitHub Apps (AWS Connector, Codemagic, DigitalOcean, Expo, Netlify, Render and Vercel) are an accepted exception for staging.
+- The Cloudflare usage alerts exist, or the D6 fallback is recorded: the $5 billable-usage alert plus the owner's weekly check of Billing → Usage.
+- The trimmed P04.T01i PR-B has merged with `staging:kill`/`unkill`, the flag re-reads, deploy gates 1–6 and the census (ADR-0021).
 
 ## Owner-run under this card
 
@@ -52,9 +58,9 @@
 | Neon Free | **Hard cap** | No card is on file, so Neon cannot bill. Exhausting the monthly compute allowance suspends compute until the next month, which is an outage. Reaching the storage limit blocks writes. |
 | WorkOS | Free tier | No paid feature. A paid feature needs per-action approval. |
 | Cloudflare Turnstile | Free | One widget. |
-| GitHub Actions | **Set by your OQ-2 answer** | Measured: about 43 billed minutes per CI run, about 90 per merged PR (the PR run plus the `main` run), and about 8 per deploy. Usage from 1 to 19 October was about 2,014 minutes, while Free includes 2,000 a month. With a $0 Actions budget, CI and CD stop when the minutes run out, and merges are blocked. Choose one: GitHub Pro (about $4 a month, 3,000 minutes); a capped Actions budget, which is a per-action spend; or accepting the outage. |
+| GitHub Actions | **GitHub Pro plus a $10 Actions budget with a hard stop** | Settled 2026-10-19 by the OQ-2 answer "GitHub Pro (Recommended)". The owner bought GitHub Pro (about $4 a month, 3,000 included minutes; read active at about 18:45 IST). Claude raised the existing Actions budget from $0 to $10, with "Stop usage when budget limit is reached" on, at the owner's instruction (`docs/evidence/live/2026-10-19-github-actions-budget.md`). Measured before P03.T04f: about 43 billed minutes per CI run, about 90 per merged PR, and about 8 per deploy. When the budget is spent, CI and CD stop and merges are blocked until the next month. |
 
-**New spending beyond the existing Workers Paid subscription under this card: $0.** GitHub Pro, and any Actions budget above $0, are per-action purchases outside this card.
+**New spending beyond the existing Workers Paid subscription under this card: $0.** GitHub Pro (bought by the owner) and the $10 Actions budget (set by Claude on the owner's instruction) were per-action decisions on 2026-10-19, outside this card.
 
 ## Kill switch
 
@@ -89,7 +95,8 @@ These apply at expiry or on request, and each one is recorded.
   - run the kill switch;
   - Claude removes the WorkOS redirect and deletes the Turnstile widget;
   - the owner deletes the Workers, the queues and the Neon project.
-- The first live record also documents the verified clean-up of the previous agent's access: Cloudflare tokens and the Global API Key, GitHub apps, tokens, deploy keys and collaborators, WorkOS users, webhooks and connections, and Neon keys.
+- The first live record also documents the verified clean-up of the previous agent's access: Cloudflare tokens and the Global API Key; GitHub apps, tokens, deploy keys and collaborators; WorkOS users, webhooks and connections; and Neon keys.
+  - **GitHub, under the ADR-0019 item 5 exception:** the ChatGPT Codex Connector app is suspended and the "AppForge Github Actions" token is deleted, both by the owner and both before the first deploy. The platform GitHub Apps AWS Connector, Codemagic, DigitalOcean, Expo, Netlify, Render and Vercel stay, as an accepted exception for staging, and the record lists them.
 
 ## Records
 
@@ -122,5 +129,5 @@ Each of these needs a per-action approval:
 
 - **Owner approval:** 2026-10-19, in chat. Question: "Approve ADR-0019 (staging rules) and the 30-day staging approval card `staging-card-1`?" Answer: "Approve both (Recommended)".
 - **Valid until:** 2026-11-18 (30 days after approval), or the creation of the first production resource, whichever comes first.
-- **OQ-2 answer (GitHub plan and Actions budget):** "GitHub Pro (Recommended)". The owner buys GitHub Pro (about $4 a month) as a per-action purchase and sets a capped Actions spending limit (about $10); branch protection on `main` (requires `foundation`, no approving review) is enabled as soon as Pro is active. The purchase is pending and is outside this card.
+- **OQ-2 answer (GitHub plan and Actions budget):** "GitHub Pro (Recommended)": GitHub Pro (about $4 a month) as a per-action purchase, a capped Actions spending limit (about $10), and branch protection on `main` (requires `foundation`, no approving review) as soon as Pro is active. **Done 2026-10-19, outside this card:** the owner bought Pro; Claude set the $10 Actions budget at the owner's instruction ("pro is active you set the action budget"); and Claude enabled branch protection after the owner answered "Turn it on (Recommended)". See `docs/evidence/live/2026-10-19-github-*`.
 - **Effects used under this card:** none yet. The owner's D9 steps that Claude performed on per-action approval (2026-10-19) are recorded in `docs/evidence/live/2026-10-19-*`.
