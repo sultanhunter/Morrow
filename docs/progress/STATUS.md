@@ -12,10 +12,11 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 
 In progress:
 - **PR #17** (`claude/docs-staging-and-design-refs`, Markdown only): P04.T01i and P04.T01j PR-A; ADR-0019, ADR-0020 and ADR-0021 Accepted; `staging-card-1`; the ADR-0014 item 4 and 5 amendments and the item 5 GitHub-access exception; `docs/plan/mvp.md`; the 2026-10-19 live evidence; the Mobbin design references. The staging row of `deployment-policy.json` moves to P04.T01i PR-B.
-- Built branches waiting for the merge train (next actions): P14.T01a PR-2, P01.T02c PR-A, P01.T04a PR-B, P04.T01j PR-B, P05.T01y, P06.T01b PR-1, P05.T01ab, P04.T01i PR-B. `claude/mvp-briefs` holds the M2–M5 briefs and the proposed ADR-0022.
+- Built branches waiting for the merge train (next actions): P14.T01a PR-2, P01.T02c PR-A, P01.T04a PR-B, P04.T01j PR-B, P05.T01y, P06.T01b PR-1, P05.T01ab, P04.T01i PR-B. `claude/mvp-briefs` holds the M2–M5 briefs and ADR-0022 (Accepted): Claude behind a provider-neutral model gateway, the model catalogue with the merchant's model and effort choice, and credits weighted by selection; no PR opened yet.
 
 ## Decisions recorded 2026-10-18 and 2026-10-19 (owner, in chat)
 
+- **ADR-0022 MVP contracts:** "yes lets start buidling and we are going to use claude for the model and make sure our model module is modular so it can be switched with any LLM ..."; model choice "use should be able to select models and thinking efforts"; "$49 / 300 credits (Recommended)"; one private Shopify app per beta merchant "OK for the beta (Recommended)"; "One button (Recommended)" for Approve and apply. Open for the owner: the image provider for P17.T02e (OpenAI Images kept for now) and a monthly per-workspace AI cost cap for failed products.
 - **ADR-0021 MVP fast track:** "yes fast track but our foundation architecture should be solid so we can scale the product later without any issues."; first job "Product listings"; first merchants "Invite-only beta (Recommended)"; the record "Approve as written (Recommended)".
 - **ADR-0019 and `staging-card-1`:** "Approve both (Recommended)": staging on workers.dev, continuous deploy from `main`, Turnstile and per-IP limits before hosted login (resolves the P05.T01x §11 sign-off). Branch protection timing: "Required before production (Recommended)" (ADR-0014 item 5 amendment).
 - **ADR-0020:** "Approve ADR-0020 (Recommended)" (P04.T01i OQ-1 B: P04.T01j rebaselines 0005–0015 once and merges before any other migration). Item 7: "None that I know of".
@@ -37,14 +38,14 @@ MVP fast track (ADR-0021; `docs/plan/mvp.md`). M1, staging live:
 1. Merge train: PR #17 (light run), then P14.T01a PR-2, P01.T02c PR-A, P01.T04a PR-B (with the walkthrough-count fix 86→90), P04.T01j PR-B, P05.T01y (0016 on the ADR-0020 helpers), P06.T01b PR-1, P05.T01ab, then the trimmed P04.T01i PR-B. Each PR gets one AI review (separate context, same model family), with the security lens where it applies.
 2. **The trimmed P04.T01i PR-B:** deploy after green CI, migrations, roles and secrets. It keeps `staging:kill`/`unkill` with the flag re-read around the api deploy, the ADR-0019 item 4 deploy gates 1–6, and the census at every deploy. Card effect E11 (Claude's rollbacks) is suspended until the rollback refusal exists; staging rolls forward instead. AC14's hosted drill, AC15–AC17 and AC19 move past launch (`docs/acceptance/P04.md`).
 3. Staging bring-up under `staging-card-1` once its preconditions hold (below); owner sign-in on staging.
-4. Then M2, M3 and M5 in parallel, each behind the credential-custody gate; M4 (with the ADR-0005 stop controls, M3/M4); M6 (the deletion path before the real-store smoke).
+4. Then M2, M3 and M5 in parallel (ADR-0022 accepted, so credentials may be bound for development and staging); M4 (with the ADR-0005 stop controls, M3/M4); M6 (the deletion path before the real-store smoke).
 5. A separate `ci` PR: disable the weekly `heavy-faults.yml` schedule.
 
 Open plan follow-ups: work routes in production must be gated on P09.T05 when production mapping is enabled (ADR-0007 item 9; packet hard ordering b); superseded banners on `docs/references/*`; a forward migration routing the 0006, 0007, 0009 and 0011 definer guards through `executor_role_safe` (informational); timing fixes if hosted `unit-stress` confirms them (`tests/broker-client.test.mjs` AC30, the 5,000 ms entry-timeout case in `tests/standalone-login-http.test.mjs`).
 
 ## Blockers
 
-None for local work. The first staging deploy waits on the trimmed P04.T01i PR-B, P04.T01j, P05.T01ab and the preconditions below. **Credential-custody gate:** no Shopify, OpenAI or Stripe credential is bound to the broker until an owner-approved ADR supersedes ADR-0007 items 3–4 (ADR-0022, proposed).
+None for local work. The first staging deploy waits on the trimmed P04.T01i PR-B, P04.T01j, P05.T01ab and the preconditions below. The credential-custody gate is cleared for development and staging: ADR-0022 (accepted 2026-10-19) admits Shopify, Anthropic and Stripe credentials to the broker; production custody still needs its own ADR before M6.
 
 ## Pending owner actions
 
@@ -52,11 +53,11 @@ None for local work. The first staging deploy waits on the trimmed P04.T01i PR-B
   - GitHub: suspend the ChatGPT Codex Connector app (GitHub's sudo re-authentication stopped Claude's attempt) and delete the classic token "AppForge Github Actions". The platform apps AWS Connector, Codemagic, DigitalOcean, Expo, Netlify, Render and Vercel stay (ADR-0019 item 5 exception).
   - Cloudflare usage alerts at about 10% of each allowance (D9 5(c)), or confirm the D6 fallback: the $5 billable-usage alert (exists) plus your weekly check of Billing → Usage.
   - D9: delete Neon `cool-butterfly-64820147` and create the project key; change the Cloudflare Global API Key and create the two tokens (TTL 2026-11-18); a new WorkOS key, revoking old ones; `gh secret set CLOUDFLARE_API_TOKEN --env staging`; `tmutil addexclusion ~/.config/morrow`.
-- **ADR-0022** (proposed on `claude/mvp-briefs`): approve it, or another ADR superseding ADR-0007 items 3–4, before M2, M3 or M5 binds a credential.
+- **For M3:** an Anthropic Console workspace for staging with a monthly spend limit; its workspace-scoped API key placed with `morrow_put`.
 - **Sign-off:** Plan R1 (Tier 3), which also freezes the P01 contract v1.1 billing layer (Shopify-route money is USD-only; `AllocationShare@2` is a declared superset of v1).
 - **Credential rotation:** the E2B key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.
 - **Billing (ADR-0015):** a Stripe test-mode account for M5; later, per action, the hosted staging test entitlement seed (OQ-2) and the production App Review allowance (OQ-3); before live billing, the business entity, bank, tax advisor and registrations, then Stripe live activation; before launch, Shopify's written answer on charging custom-distribution installs and on its revenue share.
-- **Later:** a Shopify Partner account and a fresh development store (never the live shop); an OpenAI staging project with a budget cap. Optional clean-up: E2B template `pdht65h2trfuizuvmotc`, the WorkOS loopback callback `127.0.0.1:4110`, the WorkOS staging test user.
+- **Later:** a Shopify Partner account and a fresh development store (never the live shop). Optional clean-up: E2B template `pdht65h2trfuizuvmotc`, the WorkOS loopback callback `127.0.0.1:4110`, the WorkOS staging test user.
 - **Done 2026-10-19** (per-action approval; `docs/evidence/live/2026-10-19-*`): Pro (owner), the $10 Actions budget, branch protection, the GitHub `staging` environment and variables; Neon `morrow-staging` (`sweet-sound-23947873`); WorkOS sign-up off; Wrangler OAuth revoked and the $5 Cloudflare alert; `~/.config/morrow/staging`.
 
 ## Open unknown-outcome provider operations

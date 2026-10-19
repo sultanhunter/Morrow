@@ -1,6 +1,6 @@
 # M4 Approve and apply
 
-- Status: brief, 2026-10-19 (revised after critique). Spine: [mvp-architecture.md](mvp-architecture.md) §2 steps 10–14, §5, §8, §10. Material choices: ADR-0022 items 1–3, 7 and 9 (Proposed). Full packet recommended (approvals, gateway and durable execution are security-heavy; ADR-0021 item 5).
+- Status: brief, 2026-10-19 (revised after critique). Spine: [mvp-architecture.md](mvp-architecture.md) §2 steps 10–14, §5, §8, §10. Material choices: ADR-0022 items 1–3, 7 and 9 (accepted 2026-10-19). Full packet recommended (approvals, gateway and durable execution are security-heavy; ADR-0021 item 5).
 - Plan IDs: P06.T01c, P08.T03a, P11.T01a–T03a, P14.T03a; the P06.T01b PR-2 routes. Branch `claude/m4-approve-and-apply`, after M2 and M3; two PRs.
 
 ## Goal
@@ -58,9 +58,8 @@ Automatic resubmission; cancel flows (`cancel_requested`); variant, price, media
 
 ## Owner actions
 
-1. Approve ADR-0022.
-2. Approve each development-store write run (or a staging card that covers them).
+1. Approve each development-store write run (or a staging card that covers them).
 
 ## Open questions
 
-- Should "Approve" and "Apply" be one button for a solo owner? The recommendation is yes in the UI; it stays two server commands.
+- None. A solo owner gets one "Approve and apply" button that sends two server commands, the decision and then the claim ("One button", 2026-10-19; ADR-0022 item 3).

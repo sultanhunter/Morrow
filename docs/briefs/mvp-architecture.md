@@ -1,6 +1,6 @@
 # MVP architecture spine (M2–M5)
 
-- Status: draft brief, 2026-10-19, revised after two AI critiques (separate context, same model family). It is routine except where it cites ADR-0022, which holds every material choice (ADR-0021 item 5) and is Proposed.
+- Status: draft brief, 2026-10-19, revised after two AI critiques (separate context, same model family). It is routine except where it cites ADR-0022, which holds every material choice (ADR-0021 item 5) and was accepted on 2026-10-19.
 - Plan: `docs/plan/mvp.md` (ADR-0021). Milestone briefs: [M2](M2-shopify-connect.md), [M3](M3-listings-agent.md), [M4](M4-approve-and-apply.md), [M5](M5-billing.md). Each brief points here instead of repeating it.
 - Plan IDs this realises: P08.T01a, P08.T02a, P09.T01a, P09.T02a, P09.T05a (M2); P05.T04b, P11.T04a, P11.T05a, P13.T01a–T03a (M3); P06.T01c, P08.T03a, P11.T01a–T03a, P14.T03a (M4); P18.T01a (M5). Their acceptance rows stay open past launch where the MVP slice is narrower.
 
@@ -21,7 +21,7 @@
 | 4 | Install (custom link) | connector, broker | `linking_candidates` (0005) | `/shopify/a/:appKey/{launch,callback}`; broker `shopifyLaunchVerify`, `shopifyInstallComplete` | OAuth state, `store_installations`, continuation, vault |
 | 5 | Link | api | `link_workspace_store` (0005), `createStandaloneStoreLinking` (P05.T03b) | the P09.T02a issuer in the preview route; the store-link grant template | `workspace_store_links`, `shopify_bound_at`, owner store grants |
 | 6 | Enable Listings | api | `agents.installation.activate` | `POST /workspace/:ws/stores/:storeId/agents/listings` | installation, its grants, Coordinator principal |
-| 7 | Ask and admit | api | work API `POST /goals`, `POST /tasks` (P06.T01a) | `POST /workspace/:ws/work/tasks/:taskId/runs`; the code Coordinator | `runs`, child task, envelope, hop, Coordinator grant, reservations, lease, outbox |
+| 7 | Ask and admit | api | work API `POST /goals`, `POST /tasks` (P06.T01a) | `POST /workspace/:ws/work/tasks/:taskId/runs` with the model selection checked against the catalogue (§9); the code Coordinator | `runs`, child task, envelope, hop, Coordinator grant, reservations, lease, outbox |
 | 8 | Draft | orchestrator `ListingsRunWorkflow`, broker | `decideDelegation`, `validateCurrentDefinition` | broker `shopifyRead`, `modelRespond`; HTML sanitiser | `product_snapshots`, `run_drafts`, `run_manifests` |
 | 9 | Propose | orchestrator | `ProposalProducer`, `checkProposal` (P06.T01b) | the agent submit definer; the `catalog.content.publish` producer | `proposals`, `proposal_parameters`, `approvals` |
 | 10 | Approve | api | `decideApproval`, P06.T01b PR-2 routes | `/w/:ws/review/:proposalId` | `approval_decisions` |
@@ -45,7 +45,7 @@ Staging pays through Stripe test mode, so steps 2–3 run there too; the MVP has
 - `apps/workers/src/orchestrator.ts` replaces `MorrowWorkWorkflow` with the two Workflow classes, each enabled separately. `ListingsRunWorkflow` stays `dispatch_disabled` until M3 PR-1's stop, reservation and `resolve_call` tests pass. `OperationWorkflow` stays disabled until M4 PR-1's gateway tests pass (invariant 15; ADR-0022 item 10).
 - Workflow steps and Queue messages carry ids and digests only. Content is written to tenant tables inside a step, or used in memory within one step (§11).
 - `apps/shopify-connector/worker/placeholder.ts` is replaced by `worker/index.ts` on `@shopify/shopify-api` (ADR-0008).
-- `apps/api/src/environment.ts` `mapApiEnvironment` keeps rejecting provider bindings; `STRIPE_` joins its `providerPrefix` list.
+- `apps/api/src/environment.ts` `mapApiEnvironment` keeps rejecting provider bindings; `ANTHROPIC_` is in its `providerPrefix` list, and `STRIPE_` joins it in M5.
 
 ## 4 Broker trust model v1 and methods (ADR-0022 item 7)
 
@@ -63,13 +63,13 @@ The v0 rules stay for `health`, `neonLease`, `workosSessionPage` and `challengeV
 | Connector | `shopifyWebhookVerify(appKey, headersJson, rawBodyBase64)` | `{verdict, topic, shopDomain, webhookId, minimisedBody}` | M2 |
 | Connector, Api | `shopifyCredentialDestroy(installationId, reason)`: only when the row records uninstall or disconnect | `"destroyed"` | M2 |
 | Api, Runtime | `shopifyRead(leaseId, generation, queryName, variablesJson, budgetMs)` | minimised JSON for `shopIdentity`, `collectionsPage`, `productsPage`, `productContent` | M2 |
-| Runtime | `modelRespond(leaseId, generation, callJson, budgetMs)` | `ModelResult@1` | M3 |
+| Runtime | `modelRespond(leaseId, generation, callJson, budgetMs)`: the call's catalogue entry picks the `ModelProvider` adapter (§9) | `ModelResult@1` | M3 |
 | Runtime | `shopifyProductUpdate(operationId, generation, budgetMs)` | `{outcome: submitted, rejected, not_sent or uncertain, codes}` | M4 |
 | Runtime | `shopifyReconcileRead(operationId, budgetMs)` | readback verdict and field digests | M4 |
 | Api | `stripeCustomerEnsure(operationId)`, `stripeCheckoutCreate(operationId)`, `stripePortalCreate(operationId)` | ids and the Stripe-hosted URL | M5 |
 | Api | `stripeWebhookVerify(rawBody, signatureHeader, budgetMs)` | a receipt id for a verified, de-duplicated, read-back object | M5 |
 
-Broker secrets (owner-placed with `morrow_put` and `staging:put-secret`): `MORROW_VAULT_KEK_V1`, `OPENAI_API_KEY`, `STRIPE_RESTRICTED_KEY`, `STRIPE_WEBHOOK_SECRET`, the `morrow_vault_broker` password. Shopify app client secrets are vault rows (`morrow_vault.app_secrets`), written by an owner-run script. Leased role passwords: `morrow_connector_ingress`, `morrow_runtime_executor`.
+Broker secrets (owner-placed with `morrow_put` and `staging:put-secret`): `MORROW_VAULT_KEK_V1`, `ANTHROPIC_API_KEY` (scoped to the environment's Anthropic Console workspace), `STRIPE_RESTRICTED_KEY`, `STRIPE_WEBHOOK_SECRET`, the `morrow_vault_broker` password. Shopify app client secrets are vault rows (`morrow_vault.app_secrets`), written by an owner-run script. Leased role passwords: `morrow_connector_ingress`, `morrow_runtime_executor`.
 
 ## 5 Tenancy for background work (ADR-0022 item 9)
 
@@ -97,7 +97,8 @@ All follow ADR-0010 item 2 (tenant keys first, composite foreign keys, ENABLE an
 | `morrow_identity.shopify_webhook_inbox` | M2 | unique `(app, shop, webhook id)`; minimised body (§11) | 7 d |
 | `morrow_identity.privacy_requests` | M2 | topic, due time, completion evidence | 365 d content-free |
 | `morrow_work.agent_releases` (P), `agent_installations`, `work_envelopes`, `delegation_hops` | M3 | P05.T04b minimum behind `agent-authority.ts` | installation lifetime |
-| `morrow_work.runs`, `run_manifests` | M3 | `Run@1`, `RunManifest@1`; digests and usage | 365 d content-free |
+| `morrow_work.runs`, `run_manifests` | M3 | `Run@1`, `RunManifest@1`; digests, usage and the selection (catalogue version, model, effort, credits per product) | 365 d content-free |
+| `morrow_work.workspace_model_defaults` | M3 | the workspace's default selection and its catalogue version | workspace lifetime |
 | `morrow_work.product_snapshots`, `run_drafts` | M3 | product fields read, and validated drafts awaiting packing | 90 d; deleted at `shop/redact` |
 | `morrow_billing.credit_wallets`, `credit_reservations`, `vendor_cost_reservations` | M3 | P11.T04a minimum | financial period |
 | `morrow_billing.billing_accounts`, `stripe_customers`, `checkout_intents`, `stripe_event_receipts`, `verified_payment_events`, `entitlement_snapshots`, `credit_grants` | M5 | ADR-0015 persistence items 3–7 | financial period |
@@ -134,13 +135,16 @@ Forward changes to existing tables: `linking_candidates.proof_kind` and `linking
 - No automatic resubmission. An `uncertain` operation opens an exception at `/w/:ws/inbox/exceptions/:operationId`. The Workflow logs `morrow_operation_aged` (P04.T03a alert sink) once its reconciliation attempts are exhausted.
 - Store-uninstalled `authorized` operations move `authorized → conflict` (`precondition_changed_before_dispatch`) at their dispatch check.
 
-## 9 Credits (ADR-0022 item 11)
+## 9 Model gateway, selection and credits (ADR-0022 items 10, 11 and 16)
 
-- One credit per product drafted. Applying costs no credits but is paid work (`isPaidWork` for `execute` on an `external_write` capability).
-- Run admission (api, one transaction): human kernel on the store resource; entitlement directly through `workspaceBillingState` and `entitlementFor`, because `createBillingConstraintsReader` skips non-paid requests; `selectPayers` gives the single `morrow_direct` payer; `CreditReservation` for the product count and `VendorCostReservation` for the worst case (US$0.28 per product); `available → reserved` in `credit_wallets` under a row lock. The daily cap counts settled cost plus open reservations.
+- **Port.** Callers see only `ModelCall@1` and `ModelResult@1`. In the broker, `modelRespond` resolves the call's selection to a catalogue entry, which names a `ModelProvider` adapter: `respond(resolvedCall, credential, budgetMs) → ModelResult@1` and `countInput(resolvedCall)`. The Claude adapter is the only one. Another provider is one adapter, one broker credential and one catalogue entry, chosen by ADR; callers do not change. No fallback to another model or provider.
+- **Catalogue v1** (`docs/decisions/model-policy.json`, generated into the contracts and the broker): `claude_haiku_5_5`, `claude_sonnet_5_5`, `claude_opus_5_5` × efforts `low`, `medium`, `high`, mapped to `thinking: {type: "adaptive"}`, `output_config.effort` and `max_tokens` 6,000, 12,000 or 16,000. Default: Sonnet 5.5, low. `GET /workspace/:ws/models` lists the active entries with their credits per product and run product limit; `PUT /workspace/:ws/settings/model-default` takes `{model, effort}` (`governance.model_default.revise`).
+- **Selection.** Run admission accepts `{model, effort}` only as keys of the active catalogue version (closed enums), else the run's default; it records the catalogue version, model, effort and multiplier on the run. A provider model string, an unknown key or a retired entry is refused with no run.
+- **Credits.** One credit per product at the default; other selections cost 1–6 credits per product (Haiku 1/1/1, Sonnet 1/2/3, Opus 2/4/6 at low/medium/high). Applying costs no credits but is paid work (`isPaidWork` for `execute` on an `external_write` capability).
+- **Run admission** (api, one transaction): human kernel on the store resource; entitlement directly through `workspaceBillingState` and `entitlementFor`, because `createBillingConstraintsReader` skips non-paid requests; `selectPayers` gives the single `morrow_direct` payer; `CreditReservation` for products × multiplier and `VendorCostReservation` for products × the selection's worst case; `available → reserved` in `credit_wallets` under a row lock. The product count is at most 25 and at most US$7 divided by the worst case per product. The daily cap (US$25 per workspace) counts settled cost plus open reservations.
 - The agent fact reader sets `entitlementAllowed` from the same `entitlementFor` result and joins the `inspectEntitlementWriters` allowlist.
-- The broker checks each `modelRespond` against the run's remaining vendor reservation before sending and books usage in the run manifest after. A call that times out books its worst case. `incomplete`, `refusal` and `spend_limit` are explicit `ModelResult` outcomes; `spend_limit` fails the run without retry.
-- Run end: credits settle at the products drafted (never above the reservation); the rest is released; vendor cost settles from usage. `UsageLiability` is not used in the MVP.
+- **Per call:** the broker counts the input (at most 8,000 tokens), checks the run's remaining vendor reservation, sends, and books usage at catalogue rates in the run manifest. A call that times out books its worst case. `incomplete`, `refusal`, `spend_limit` and `provider_error` are explicit `ModelResult` outcomes; `spend_limit` fails the run without retry.
+- **Run end:** credits settle at products drafted × multiplier (never above the reservation); failed products are not charged; the rest is released; vendor cost settles from usage. `UsageLiability` is not used in the MVP.
 
 ## 10 Stops (P11.T05a; ADR-0022 item 15)
 
@@ -159,7 +163,7 @@ Forward changes to existing tables: `linking_candidates.proof_kind` and `linking
 | Product content proposed | `proposal_parameters` | `shop/redact`: emptied, digest kept (below) |
 | Webhook bodies | `shopify_webhook_inbox` | 7 days; `customers/*` keep only topic, shop id, webhook id, request id and a keyed digest of the customer id: no email, phone or order ids |
 | Workflow state, Queue messages | Cloudflare | ids and digests only, so nothing to delete |
-| Model prompts and raw outputs | not stored; digests in `run_manifests` | OpenAI side: `store:false` |
+| Model prompts and raw outputs | not stored; digests in `run_manifests` | Anthropic side: not used for training; deleted within 30 days, longer only if flagged (ADR-0022 item 10) |
 | Customer data | none (`read_products`, `write_products` only) | `customers/*` answered "none held", with evidence |
 | Billing records | `morrow_billing.*`, Stripe ids and amounts | financial period |
 
@@ -170,7 +174,7 @@ Forward changes to existing tables: `linking_candidates.proof_kind` and `linking
 
 | Area | MVP | Interface kept for later |
 | --- | --- | --- |
-| Model | one provider and alias, one product per call, no fallback, streaming or tools | `ModelCall@1`/`ModelResult@1` through `modelRespond` |
+| Model | one provider (Claude), a nine-entry catalogue, one product per call; no fallback, streaming or tools | the `ModelProvider` port, `ModelCall@1`/`ModelResult@1` through `modelRespond`, versioned catalogue |
 | Coordinator | deterministic code that writes `CoordinatorRoute@1` | built-in dispatcher, envelope and hop records; a model router drops in later |
 | Specialist | one first-party release | `agent_releases`, `agent_installations` |
 | Shopify tokens | non-expiring, custom distribution | vault credential versions; expiring tokens add a credential kind |
@@ -186,4 +190,4 @@ Forward changes to existing tables: `linking_candidates.proof_kind` and `linking
 2. M2 PR-1, the spine foundation: leases, stop tables, operations, the route row, the vault, the three executor logins, broker entrypoints and v1 plumbing.
 3. In parallel from M2 PR-1: M2 PR-2 and PR-3, M3 PR-1 and PR-2, M5 PR-1 and PR-2. Staging smokes that link a store or run AI wait for M5 PR-1, because staging pays in Stripe test mode.
 4. M4 after M2 and M3.
-5. Each provider effect (development store, OpenAI staging project, Stripe test mode, the connector hostname) needs per-action owner approval or a new staging card: `staging-card-1` covers only the four Workers with the api on workers.dev.
+5. Each provider effect (development store, Anthropic staging workspace, Stripe test mode, the connector hostname) needs per-action owner approval or a new staging card: `staging-card-1` covers only the four Workers with the api on workers.dev.

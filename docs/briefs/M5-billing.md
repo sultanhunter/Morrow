@@ -1,6 +1,6 @@
 # M5 Billing
 
-- Status: brief, 2026-10-19 (revised after critique). Spine: [mvp-architecture.md](mvp-architecture.md) §2 steps 1–3, §4, §9. Material choices: ADR-0022 items 2, 3, 5, 11, 12 and 13 (Proposed). Rules: ADR-0015 and its follow-ups; `docs/contracts/billing-entitlements.md` (P01.T04a).
+- Status: brief, 2026-10-19 (revised after critique). Spine: [mvp-architecture.md](mvp-architecture.md) §2 steps 1–3, §4, §9. Material choices: ADR-0022 items 2, 3, 5, 11, 12 and 13 (accepted 2026-10-19). Rules: ADR-0015 and its follow-ups; `docs/contracts/billing-entitlements.md` (P01.T04a).
 - Plan IDs: P18.T01a (Morrow-direct Stripe route, test mode), with persistence items 1 and 3–8 of `billing-entitlements.md` (items 10 and 11, held payments and reversals, at M6). Branch `claude/m5-billing`, from M2 PR-1; two PRs.
 
 ## Goal
@@ -20,7 +20,7 @@ Shopify App Pricing; top-ups, coupons, trials, proration and plan changes; dunni
 
 - **Reused (`packages/policy/src/billing-state.ts`):** `originForCreation`, `workspaceBillingState`, `purchaseDecision`, `billingCallToAction`, `stripePaymentKind`, `mapProviderStatus`, `classifyPayment`, `foldEntitlementEvidence`, `entitlementFor`, `parseBillingTerms`, `BILLING_DENIAL_ENVELOPES`. Contracts: `WorkspaceBillingRoute`, `BillingAccount@2`, `EntitlementSnapshot@2`, `CreditGrant@2`, `VerifiedPaymentEvent`, `BillingTerms`, `StripePaymentKey`, `StripeSubscriptionKey`, `StripePriceKey` (billing v1.1); `CreditWallet` (v1); `Operation@2`.
 - **Routes (under `/workspace/:ws/billing/morrow/`, as P18.T01a requires):** `GET /workspace/:ws/billing` (`view` on `governance.billing.manage` or `governance.usage.read`); `POST .../checkout` `{priceKey}` with an `Idempotency-Key` (returns the Stripe-hosted URL); `POST .../portal`. Public: `POST /api/billing/stripe/webhook` (raw body, no session; under `reservedWorkerPaths`).
-- **Terms:** one `BillingTerms` revision with the beta price key, kind `subscription_period`, USD and the credit quantity.
+- **Terms:** one `BillingTerms` revision with the beta price key, kind `subscription_period`, USD 49 and 300 credits.
 - **Field mapping on the pinned version:** the invoice's subscription and metadata from `invoice.parent.subscription_details`; the price from line-item `pricing.price_details.price`; the period end from the subscription item; cancellation from `cancel_at` as well as `cancel_at_period_end`. `mapProviderStatus` is fed accordingly.
 
 ## Flow
@@ -56,7 +56,7 @@ Shopify App Pricing; top-ups, coupons, trials, proration and plan changes; dunni
 1. A Stripe account in test mode; a restricted key with the ADR-0022 item 12 permissions (checked against the exact calls in the sandbox) and the webhook signing secret, placed with `morrow_put`.
 2. Create the beta Product and Price in test mode with Claude's exact settings (including tax code and behaviour), or approve Claude creating them per action.
 3. Save the customer portal configuration in test mode: invoice history and payment-method update on, subscription update off, cancel at period end. Repeat at live activation.
-4. Choose the beta price and included credits (ADR-0022 item 11).
+4. Done: the beta plan is US$49 a month with 300 credits (owner, 2026-10-19; ADR-0022 item 11).
 5. Before live mode (M6): business entity, bank account, tax advisor and registrations (or the Managed Payments choice), Stripe live activation, and written confirmation of Shopify's rules for charging custom-distribution installs.
 
 ## Open questions

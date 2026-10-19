@@ -9,12 +9,15 @@ import {
 } from "../scripts/delivery-checks.mjs";
 for (const [name, text] of [
   ["openai", "sk-proj-" + "A".repeat(50)],
+  ["anthropic", "sk-ant-" + "api03-" + "E".repeat(60)],
   ["github", "ghp_" + "B".repeat(40)],
   ["aws", "AKIA" + "C".repeat(16)],
   ["private", "-----BEGIN " + "PRIVATE KEY-----"],
   ["literal", 'client_secret = "' + "D".repeat(24) + '"'],
 ])
   test("fixture secret denies: " + name, () => assert.ok(inspectSecrets(text).length));
+test("an Anthropic API key is named as one", () =>
+  assert.ok(inspectSecrets("sk-ant-" + "api03-" + "F".repeat(60)).includes("anthropic_key")));
 test("reference/digest does not masquerade as credential", () =>
   assert.deepEqual(inspectSecrets("credentialRef: account-main; digest: " + "a".repeat(64)), []));
 const file = "0001.example.sql",

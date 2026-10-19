@@ -8,7 +8,7 @@ Schemas: RunManifest, PolicyDecision, RuntimeProfile. Exact field types, nullabi
 
 ## Command and query semantics
 
-Gate model/provider selection by permitted data classes regions retention modalities quality and cost. Normalize responses failures finish reasons and usage with explicit provider trace IDs. External inference runs as orchestrator activities, never deterministic workflow replay. Route high reasoning only where evaluated quality justifies cost. Required/optional capabilities are resolved before activation. Provider policy is selected in P01.T03.
+Gate model/provider selection by permitted data classes regions retention modalities quality and cost. Normalize responses failures finish reasons and usage with explicit provider trace IDs. External inference runs as orchestrator activities, never deterministic workflow replay. Route high reasoning only where evaluated quality justifies cost. Required/optional capabilities are resolved before activation. Provider policy is selected in P01.T03; for the MVP, ADR-0022 selects Anthropic Claude behind a provider-neutral `ModelProvider` port, with a versioned catalogue of models and efforts in `docs/decisions/model-policy.json` that the server validates (callers never send provider model strings).
 
 ## Failure invariant
 

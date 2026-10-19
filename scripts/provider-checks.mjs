@@ -90,6 +90,147 @@ export function validateProviders(registry, bindings, catalogue, dependencies, s
   return errors;
 }
 
+// The model catalogue (ADR-0022 items 10, 11 and 16): closed keys, adaptive
+// thinking only, a broker-held adapter for every provider, and no selection
+// whose worst case per product exceeds the revenue of the credits it costs.
+const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
+const DECIMAL = /^(0|[1-9][0-9]{0,8})(\.[0-9]{1,6})?$/;
+// A decimal string scaled to an integer number of 10^-places units.
+const scaled = (text, places) => {
+  const [whole, fraction = ""] = text.split(".");
+  return BigInt(whole) * 10n ** BigInt(places) + BigInt(fraction.padEnd(places, "0") || "0");
+};
+
+export function validateModelPolicy(policy, registry) {
+  const errors = [];
+  const fail = (message) => errors.push(message);
+  const gateway = policy.gateway ?? {};
+  const data = policy.data_policy ?? {};
+  const catalogue = policy.catalogue ?? {};
+  if (policy.schema_version !== 2) fail("model policy: unsupported schema version");
+  if (
+    gateway.automatic_fallback !== false ||
+    gateway.provider_side_fallback !== false ||
+    gateway.client_model_strings !== "refused" ||
+    gateway.credential_holder !== "broker"
+  )
+    fail("model policy: fallback, client model string or credential holder drift");
+  if (
+    data.regional_project_status !== "not_verified" ||
+    data.zero_data_retention_status !== "not_granted" ||
+    !Array.isArray(data.stateful_features) ||
+    data.stateful_features.length !== 0
+  )
+    fail("Unsupported model data/access claim");
+  const selected = new Set(
+    registry.providers.filter((p) => p.design_status === "selected").map((p) => p.id),
+  );
+  const adapters = new Set();
+  for (const adapter of gateway.adapters ?? []) {
+    if (
+      !selected.has(adapter.provider) ||
+      adapters.has(adapter.provider) ||
+      adapter.sdk_retries !== 0
+    )
+      fail(`model policy: invalid adapter ${adapter.provider}`);
+    adapters.add(adapter.provider);
+  }
+  if (!Number.isInteger(catalogue.version) || catalogue.version < 1)
+    fail("model catalogue: unversioned");
+  const efforts = new Map();
+  for (const effort of catalogue.efforts ?? []) {
+    const request = effort.request ?? {};
+    if (!EFFORT_LEVELS.includes(effort.key) || efforts.has(effort.key))
+      fail(`model catalogue: invalid effort ${effort.key}`);
+    if (
+      JSON.stringify(Object.keys(request).sort()) !== '["output_config","thinking"]' ||
+      JSON.stringify(request.thinking) !== '{"type":"adaptive"}' ||
+      JSON.stringify(request.output_config) !== JSON.stringify({ effort: effort.key }) ||
+      !Number.isInteger(effort.max_output_tokens) ||
+      effort.max_output_tokens < 1
+    )
+      fail(`model catalogue: effort ${effort.key} must map to adaptive thinking and its own level`);
+    efforts.set(effort.key, effort);
+  }
+  if (efforts.size === 0) fail("model catalogue: no effort levels");
+  const limits = catalogue.limits ?? {};
+  const inputCap = limits.max_input_tokens_per_call;
+  const attempts = limits.max_attempts_per_product;
+  if (!Number.isInteger(inputCap) || inputCap < 1 || !Number.isInteger(attempts) || attempts < 1)
+    fail("model catalogue: missing per-call limits");
+  const economics = catalogue.economics ?? {};
+  const planCredits = economics.plan_credits;
+  const amounts = [
+    economics.plan_price_usd,
+    economics.card_fee_rate,
+    economics.card_fee_fixed_usd,
+    economics.billing_fee_rate,
+  ];
+  let netRevenue = null;
+  if (
+    !Number.isInteger(planCredits) ||
+    planCredits < 1 ||
+    amounts.some((x) => !DECIMAL.test(x ?? ""))
+  )
+    fail("model catalogue: missing plan economics");
+  else {
+    // Units of 10^-12 USD; fee rates in parts per million.
+    const price = scaled(economics.plan_price_usd, 12);
+    const feePpm = scaled(economics.card_fee_rate, 6) + scaled(economics.billing_fee_rate, 6);
+    netRevenue = price - (price * feePpm) / 1_000_000n - scaled(economics.card_fee_fixed_usd, 12);
+  }
+  const models = new Map();
+  for (const model of catalogue.models ?? []) {
+    const rates = model.rates_usd_per_million_tokens ?? {};
+    const credits = model.credits_per_product ?? {};
+    if (!/^[a-z][a-z0-9_]{0,39}$/.test(model.key ?? "") || models.has(model.key))
+      fail(`model catalogue: invalid model key ${model.key}`);
+    models.set(model.key, model);
+    if (!adapters.has(model.provider))
+      fail(`model catalogue: ${model.key} has no broker adapter for ${model.provider}`);
+    if (
+      typeof model.provider_model_id !== "string" ||
+      !/^[a-z0-9][a-z0-9.-]{0,63}$/.test(model.provider_model_id) ||
+      /latest/.test(model.provider_model_id)
+    )
+      fail(`model catalogue: ${model.key} has an unpinned provider model`);
+    if (!DECIMAL.test(rates.input ?? "") || !DECIMAL.test(rates.output ?? ""))
+      fail(`model catalogue: ${model.key} has no rates`);
+    if (Object.keys(credits).some((key) => !efforts.has(key)))
+      fail(`model catalogue: ${model.key} prices an uncatalogued effort`);
+    for (const [key, effort] of efforts) {
+      const units = credits[key];
+      if (!Number.isInteger(units) || units < 1) {
+        fail(`model catalogue: ${model.key} at ${key} has no credit multiplier`);
+        continue;
+      }
+      if (
+        !Number.isInteger(model.max_output_tokens) ||
+        effort.max_output_tokens > model.max_output_tokens
+      )
+        fail(`model catalogue: ${model.key} at ${key} exceeds the model's output limit`);
+      if (
+        netRevenue === null ||
+        !DECIMAL.test(rates.input ?? "") ||
+        !DECIMAL.test(rates.output ?? "")
+      )
+        continue;
+      // Per-token prices in 10^-12 USD: a rate per million tokens scaled by 10^6.
+      const worst =
+        BigInt(attempts) *
+        (BigInt(inputCap) * scaled(rates.input, 6) +
+          BigInt(effort.max_output_tokens) * scaled(rates.output, 6));
+      if (worst * BigInt(planCredits) > BigInt(units) * netRevenue)
+        fail(`model catalogue: ${model.key} at ${key} can cost more than its credits earn`);
+    }
+  }
+  if (models.size === 0) fail("model catalogue: no models");
+  const preset = catalogue.default_selection ?? {};
+  if (models.get(preset.model)?.credits_per_product?.[preset.effort] !== 1)
+    fail("model catalogue: the default selection must exist and cost one credit");
+  return errors;
+}
+
 // A recorded design can make a local implementation task ready while live
 // activation remains blocked. This is a planning result, never an access grant.
 export function inspectReadiness(packet, decisions) {

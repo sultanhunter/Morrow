@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { read } from "../scripts/foundation.mjs";
 import {
+  validateModelPolicy,
   validateProviders,
   inspectReadiness,
   inspectSyntheticActivation,
@@ -13,6 +14,7 @@ const registry = read("docs/decisions/providers.json"),
   deps = read("docs/decisions/dependencies.json"),
   sources = read("docs/research/sources.json");
 const validate = (r, b) => validateProviders(r, b, catalogue, deps, sources);
+const modelPolicy = read("docs/decisions/model-policy.json");
 test("every advertised capability has a gated provider/implementation route", () =>
   assert.deepEqual(validate(registry, bindings), []));
 for (const [name, change, expected] of [
@@ -85,6 +87,106 @@ for (const [name, change, expected] of [
       b = structuredClone(bindings);
     change(r, b);
     assert.match(validate(r, b).join("\n"), expected);
+  });
+
+test("the model catalogue is closed, adapter-backed and never loses money on a selection", () =>
+  assert.deepEqual(validateModelPolicy(modelPolicy, registry), []));
+const model = (p, key) => p.catalogue.models.find((m) => m.key === key);
+for (const [name, change, expected] of [
+  ["automatic fallback", (p) => (p.gateway.automatic_fallback = true), /fallback/],
+  ["client model strings", (p) => (p.gateway.client_model_strings = "accepted"), /client model/],
+  [
+    "a zero-retention claim",
+    (p) => (p.data_policy.zero_data_retention_status = "granted"),
+    /data\/access/,
+  ],
+  [
+    "a stateful provider feature",
+    (p) => p.data_policy.stateful_features.push("files"),
+    /data\/access/,
+  ],
+  [
+    "an adapter for an unselected provider",
+    (p) => (p.gateway.adapters[0].provider = "invented"),
+    /invalid adapter/,
+  ],
+  ["SDK retries", (p) => (p.gateway.adapters[0].sdk_retries = 2), /invalid adapter/],
+  [
+    "a model without an adapter",
+    (p) => (model(p, "claude_opus_5_5").provider = "openai"),
+    /no broker adapter/,
+  ],
+  [
+    "an unpinned model",
+    (p) => (model(p, "claude_opus_5_5").provider_model_id = "claude-latest"),
+    /unpinned/,
+  ],
+  [
+    "a duplicate model key",
+    (p) => p.catalogue.models.push(structuredClone(p.catalogue.models[0])),
+    /invalid model key/,
+  ],
+  [
+    "a free-form model key",
+    (p) => (model(p, "claude_haiku_5_5").key = "Claude Haiku"),
+    /invalid model key/,
+  ],
+  [
+    "a thinking budget",
+    (p) => (p.catalogue.efforts[0].request.thinking = { type: "enabled", budget_tokens: 2048 }),
+    /adaptive thinking/,
+  ],
+  [
+    "disabled thinking",
+    (p) => (p.catalogue.efforts[0].request.thinking = { type: "disabled" }),
+    /adaptive thinking/,
+  ],
+  [
+    "an effort mapped to another level",
+    (p) => (p.catalogue.efforts[0].request.output_config.effort = "high"),
+    /its own level/,
+  ],
+  ["an unknown effort", (p) => (p.catalogue.efforts[0].key = "turbo"), /invalid effort/],
+  [
+    "an output cap above the model's limit",
+    (p) => (p.catalogue.efforts[2].max_output_tokens = 200000),
+    /output limit/,
+  ],
+  [
+    "a missing multiplier",
+    (p) => delete model(p, "claude_sonnet_5_5").credits_per_product.high,
+    /no credit multiplier/,
+  ],
+  [
+    "Opus at high effort for one credit",
+    (p) => (model(p, "claude_opus_5_5").credits_per_product.high = 1),
+    /cost more than its credits earn/,
+  ],
+  [
+    "a cheaper plan",
+    (p) => (p.catalogue.economics.plan_price_usd = "29"),
+    /claude_sonnet_5_5 at low can cost more/,
+  ],
+  [
+    "a larger input cap",
+    (p) => (p.catalogue.limits.max_input_tokens_per_call = 20000),
+    /cost more than its credits earn/,
+  ],
+  [
+    "a default that costs two credits",
+    (p) => (p.catalogue.default_selection.effort = "medium"),
+    /default selection/,
+  ],
+  [
+    "a default outside the catalogue",
+    (p) => (p.catalogue.default_selection.model = "gpt_6_1_sol"),
+    /default selection/,
+  ],
+])
+  test(`model catalogue rejects ${name}`, () => {
+    const p = structuredClone(modelPolicy);
+    change(p);
+    assert.match(validateModelPolicy(p, registry).join("\n"), expected);
   });
 
 const decisions = [

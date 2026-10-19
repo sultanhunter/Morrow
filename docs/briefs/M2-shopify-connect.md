@@ -1,6 +1,6 @@
 # M2 Shopify connect
 
-- Status: brief, 2026-10-19 (revised after critique). Spine: [mvp-architecture.md](mvp-architecture.md) §3–§6, §10–§11. Material choices: ADR-0022 items 2–9, 13–15 (Proposed).
+- Status: brief, 2026-10-19 (revised after critique). Spine: [mvp-architecture.md](mvp-architecture.md) §3–§6, §10–§11. Material choices: ADR-0022 items 2–9, 13–15 (accepted 2026-10-19).
 - Plan IDs: P08.T01a, P08.T02a, P09.T01a, P09.T02a, P09.T05a, closing the P05.T03 linking path. Branch `claude/m2-shopify-connect`; three PRs.
 
 ## Goal
@@ -58,11 +58,10 @@ Install-first and Shopify-route workspaces (refused, ADR-0022 item 5); public di
 ## Owner actions
 
 1. A Shopify Partner organisation and a fresh development store (never the live shop).
-2. Approve ADR-0022.
-3. Per-action approval, or a new staging card, for the connector's workers.dev hostname, each app deploy and the development-store install.
-4. Generate the vault KEK with the provided script, keep the offline copy, and place it with `morrow_put`; store each app's client secret with the vault script.
-5. For the smoke: pay for the staging workspace in Stripe test mode (after M5 PR-1).
+2. Per-action approval, or a new staging card, for the connector's workers.dev hostname, each app deploy and the development-store install.
+3. Generate the vault KEK with the provided script, keep the offline copy, and place it with `morrow_put`; store each app's client secret with the vault script.
+4. For the smoke: pay for the staging workspace in Stripe test mode (after M5 PR-1).
 
 ## Open questions
 
-- Is one custom-distribution app per beta store acceptable operationally (about 15 minutes of owner time per merchant)?
+- None. The owner accepted one custom-distribution app per beta store ("OK for the beta", 2026-10-19; ADR-0022 item 4).
