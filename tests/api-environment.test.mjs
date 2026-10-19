@@ -130,6 +130,8 @@ test("AC07: any provider or credential-like binding keeps the api unbound", () =
     "SHOPIFY_API_SECRET",
     "X_TOKEN",
     "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
     "E2B_API_KEY",
     "workos_client",
     "DEPLOY_SECRET",

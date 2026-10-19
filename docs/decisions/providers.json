@@ -121,19 +121,20 @@
       "qualification_evidence": []
     },
     {
-      "id": "openai",
-      "name": "OpenAI",
-      "version": "responses:v1/images:v1",
+      "id": "anthropic",
+      "name": "Anthropic (Claude API)",
+      "version": "messages:2023-06-01",
       "decision_ids": [
         "D05",
-        "D06",
         "D15"
       ],
       "sources": [
-        "S65",
-        "S66",
-        "S67",
-        "S68"
+        "S149",
+        "S150",
+        "S151",
+        "S153",
+        "S156",
+        "S160"
       ],
       "owner": "Morrow platform owner",
       "design_status": "selected",
@@ -146,8 +147,32 @@
         "P13",
         "P17"
       ],
-      "test_account_plan": "Separate US-configured project, synthetic products and capped test budgets; no request issued.",
-      "restrictions": "Account/model/region/retention eligibility and held-out quality/cost evaluation.",
+      "test_account_plan": "Separate Anthropic Console workspaces for staging and production, each with a monthly spend limit and one workspace-scoped key held by the broker; synthetic products and recorded fixtures; no request issued.",
+      "restrictions": "Catalogue models and efforts only (ADR-0022 items 10 and 16), no fallback; no zero-data-retention agreement; retention and training terms per S153-S155; held-out quality and cost evaluation before production.",
+      "qualification_evidence": []
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "version": "images:v1",
+      "decision_ids": [
+        "D06"
+      ],
+      "sources": [
+        "S65",
+        "S68"
+      ],
+      "owner": "Morrow platform owner",
+      "design_status": "selected",
+      "controlled_test_status": "not_run",
+      "engineering_status": "not_implemented",
+      "production_review_status": "pending",
+      "activation": "blocked",
+      "blocking_packages": [
+        "P17"
+      ],
+      "test_account_plan": "Images only, after launch (P17.T02e): separate US-configured project, synthetic products and capped test budgets; no request issued and no credential bound for the MVP.",
+      "restrictions": "Image generation and editing only. Text models moved to Anthropic (ADR-0022 item 10); the image provider stays open to an owner ADR before P17.T02e. Account, region and retention eligibility and held-out quality and cost evaluation.",
       "qualification_evidence": []
     },
     {

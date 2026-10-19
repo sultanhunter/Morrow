@@ -53,7 +53,7 @@ export const apiEnvironmentValueBindings = Object.freeze([
   ["LOGIN_CAPSULE_KEYRING", "keyring", 4096],
 ] as const);
 const environments: readonly string[] = ["development", "staging", "production"];
-const providerPrefix = /^(WORKOS_|MORROW_DB_PASSWORD_|SHOPIFY_|OPENAI_|E2B_|NEON_|PG)/i;
+const providerPrefix = /^(WORKOS_|MORROW_DB_PASSWORD_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG)/i;
 const credentialWord = /KEY|SECRET|PASSWORD|TOKEN/i;
 const encoder = new TextEncoder();
 const fail = (code: ApiEnvironmentCode): ApiEnvironmentMapping =>
