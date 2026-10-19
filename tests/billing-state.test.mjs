@@ -1821,6 +1821,22 @@ test("AC24: tenant binding, input bounds and retained work", async () => {
       ),
     inputError,
   );
+  for (const [reason, key] of [
+    ["INSTALLATION_NOT_ASSOCIATED", "stripe_period"],
+    ["CUSTOMER_NOT_MAPPED", "shopify_period_c"],
+    ["NOT_MORROW_INITIATED", "shopify_period_c"],
+  ])
+    assert.throws(
+      () =>
+        classifyPayment(
+          { kind: "unattributed", reason, environment: "staging" },
+          ev(key, { organizationId: null, workspaceId: null }),
+          L.terms,
+          new Set(),
+        ),
+      inputError,
+      reason,
+    );
   assert.throws(
     () =>
       classifyPayment(
@@ -1982,6 +1998,19 @@ test("AC32: the library is pure: repeatable, frozen and isolated from its inputs
     parseBillingTerms(L.terms),
   ])
     assert.ok(frozenDeep(value));
+  // An input is copied once and the copy is what is validated and read, so a
+  // value that changes between reads cannot slip past validation.
+  let reads = 0;
+  const shifting = new Proxy(ev("stripe_period"), {
+    get(target, key) {
+      if (key === "paymentKey" && reads++ > 0) return "stripe:invoice:in_FORGED000001";
+      return target[key];
+    },
+  });
+  assert.equal(
+    classify(billingState(openFacts()), shifting).paymentKey,
+    "stripe:invoice:in_TESTW00000001",
+  );
   // A state this module did not issue is never trusted.
   const forged = structuredClone(s1);
   assert.equal(entitlementFor(forged, routeRequest("creative.image.generate", "execute")), false);

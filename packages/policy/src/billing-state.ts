@@ -165,10 +165,10 @@ export function evaluateTestEntitlementSeed(
       environment: env,
     });
   if (!utcTime(now)) throw inputInvalid();
-  if (!plainJson(seed) || !validateCurrentBillingDefinition("TestEntitlementSeed", seed))
-    throw factsInvalid();
-  // Isolate the caller's object before reading it.
+  if (!plainJson(seed)) throw factsInvalid();
+  // Isolate the caller's object, then validate the copy that is read.
   const record = clone<CurrentBilling_TestEntitlementSeed>(seed);
+  if (!validateCurrentBillingDefinition("TestEntitlementSeed", record)) throw factsInvalid();
   const from = Date.parse(record.validFrom),
     until = Date.parse(record.validUntil),
     at = Date.parse(now);
@@ -1183,9 +1183,10 @@ export type BillingTerms = CurrentBilling_BillingTerms;
  * repeated, and no plan change to its own price. Throws `BILLING_INPUT_INVALID`.
  */
 export function parseBillingTerms(value: unknown): BillingTerms {
-  if (!plainJson(value) || !validateCurrentBillingDefinition("BillingTerms", value))
-    throw inputInvalid();
+  // Isolate first, then validate the copy that is used.
+  if (!plainJson(value)) throw inputInvalid();
   const terms = clone<BillingTerms>(value);
+  if (!validateCurrentBillingDefinition("BillingTerms", terms)) throw inputInvalid();
   const entryKeys = terms.entries.map((e) => `${e.route}|${e.mode}|${e.priceKey}`);
   const changeKeys = terms.planChanges.map(
     (c) => `${c.route}|${c.mode}|${c.fromPriceKey}|${c.toPriceKey}`,
@@ -1317,14 +1318,18 @@ export function classifyPayment(
   grantedKeys: ReadonlySet<string>,
 ): PaymentOutcome {
   const t = parseTarget(target);
-  if (!plainJson(event) || !validateCurrentBillingDefinition("VerifiedPaymentEvent", event))
-    throw inputInvalid();
+  if (!plainJson(event)) throw inputInvalid();
   const e = clone<CurrentBilling_VerifiedPaymentEvent>(event);
+  if (!validateCurrentBillingDefinition("VerifiedPaymentEvent", e)) throw inputInvalid();
   const table = parseBillingTerms(terms);
   if (!(grantedKeys instanceof Set) || Object.getPrototypeOf(grantedKeys) !== Set.prototype)
     throw inputInvalid();
   const environment = t.kind === "workspace" ? t.state.environment : t.environment;
   const stripe = e.route === "morrow_direct";
+  // An unattributed reason belongs to one provider: a Stripe customer or object,
+  // or an App Pricing installation.
+  if (t.kind === "unattributed" && (t.reason === "INSTALLATION_NOT_ASSOCIATED") === stripe)
+    throw inputInvalid();
   const s = t.kind === "workspace" ? t.state : null;
   let association: AssociationView | undefined;
   if (s !== null) {
@@ -1527,17 +1532,17 @@ const restriction: Readonly<Record<EntitlementStatus, number>> = Object.freeze({
  * restrictive status in any arrival order. Throws `BILLING_INPUT_INVALID`.
  */
 export function foldEntitlementEvidence(
-  current: CurrentBilling_EntitlementSnapshot | null,
+  currentSnapshot: CurrentBilling_EntitlementSnapshot | null,
   observed: unknown,
 ): EntitlementFold {
-  if (
-    current !== null &&
-    (!plainJson(current) || !validateCurrentBillingDefinition("EntitlementSnapshot", current))
-  )
+  if (currentSnapshot !== null && !plainJson(currentSnapshot)) throw inputInvalid();
+  const current =
+    currentSnapshot === null ? null : clone<CurrentBilling_EntitlementSnapshot>(currentSnapshot);
+  if (current !== null && !validateCurrentBillingDefinition("EntitlementSnapshot", current))
     throw inputInvalid();
-  if (!plainJson(observed) || !closed(observed, observationKeys) || !utcTime(observed.observedAt))
-    throw inputInvalid();
+  if (!plainJson(observed)) throw inputInvalid();
   const o = clone<EntitlementObservation>(observed);
+  if (!closed(o, observationKeys) || !utcTime(o.observedAt)) throw inputInvalid();
   const { observedAt, ...fields } = o;
   const snapshot = {
     schemaVersion: 2,
@@ -1605,19 +1610,23 @@ const permissionVerbs: readonly string[] = [
  * narrow it. Throws `BILLING_INPUT_INVALID`.
  */
 export function spendingScope(
-  grants: readonly Core_Grant[],
-  actor: Core_ActorRef,
-  request: PermissionRequest,
+  grantList: readonly Core_Grant[],
+  actorRef: Core_ActorRef,
+  permissionRequest: PermissionRequest,
   policyRevision: number,
   now: string,
 ): SpendingScope {
+  if (!plainJson(grantList) || !plainJson(actorRef) || !plainJson(permissionRequest))
+    throw inputInvalid();
+  // Isolate first, then validate the copies that are used.
+  const grants = clone<Core_Grant[]>(grantList);
+  const actor = clone<Core_ActorRef>(actorRef);
+  const request = clone<PermissionRequest>(permissionRequest);
   if (
-    !plainJson(grants) ||
     !Array.isArray(grants) ||
     grants.length > 1000 ||
     !grants.every((g) => validateDefinition("core", "Grant", g)) ||
     !validateDefinition("core", "ActorRef", actor) ||
-    !plainJson(request) ||
     !closed(request, ["capabilityId", "verb", "resource", "accountId", "fields"]) ||
     !validateDefinition("core", "CapabilityId", request.capabilityId) ||
     !permissionVerbs.includes(request.verb as string) ||
@@ -1691,16 +1700,17 @@ const uniqueIds = (value: unknown, max: number): value is string[] =>
  */
 export function selectPayers(
   state: WorkspaceBillingState,
-  input: PayerSelectionInput,
+  selectionInput: PayerSelectionInput,
 ): PayerSelection {
   const s = issuedState(state);
+  if (!plainJson(selectionInput)) throw inputInvalid();
+  // Isolate first, then validate the copy that is used.
+  const input = clone<PayerSelectionInput>(selectionInput);
   if (
-    !plainJson(input) ||
     !closed(input, ["organizationId", "workspaceId", "workStoreIds", "spending", "allocation"]) ||
     !id(input.organizationId) ||
     !id(input.workspaceId) ||
     !uniqueIds(input.workStoreIds, 100) ||
-    !plainJson(input.spending) ||
     !closed(input.spending, ["workspace", "storeIds"]) ||
     typeof input.spending.workspace !== "boolean" ||
     !uniqueIds(input.spending.storeIds, 100) ||
@@ -1712,8 +1722,7 @@ export function selectPayers(
     Object.freeze({ ok: false, code, envelope: BILLING_DENIAL_ENVELOPES[code] });
   const succeed = (selection: "implicit" | "explicit", shares: PayerShare[]): PayerSelection =>
     freezeJson({ ok: true, selection, shares }) as PayerSelection;
-  const allocation =
-    input.allocation === null ? null : clone<CurrentBilling_CostAllocation>(input.allocation);
+  const allocation = input.allocation;
   const work = [...input.workStoreIds];
   // 0.
   if (
@@ -1818,9 +1827,11 @@ export function createBillingConstraintsReader(
   const env = parseEnvironment(environment);
   return Object.freeze({
     async readCurrent(request: PermissionRequest, actor: Core_ActorRef) {
-      const base: unknown = await provider.readCurrent(request, actor);
+      const result: unknown = await provider.readCurrent(request, actor);
+      if (!plainJson(result)) throw factsInvalid();
+      // Read the provider pair once, as a copy, before checking it.
+      const base = clone<Record<string, unknown>>(result);
       if (
-        !plainJson(base) ||
         !closed(base, ["providerAllowed", "entitlementAllowed"]) ||
         typeof base.providerAllowed !== "boolean" ||
         typeof base.entitlementAllowed !== "boolean"
