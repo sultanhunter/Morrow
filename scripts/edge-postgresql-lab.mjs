@@ -186,7 +186,11 @@ export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
   const passwords = { ...engine.passwordByRole };
   secret(keyMarker, workLoginPassword, ...Object.values(passwords));
   const databaseBinding = { ...controlledNeonWireBinding, environment: "development" };
-  const siteverify = createSiteverifyOracle({ hostname: new URL(origin).hostname });
+  // Every issued Turnstile token is a credential marker, like the secret.
+  const siteverify = createSiteverifyOracle({
+    hostname: new URL(origin).hostname,
+    onIssue: (token) => secret(token),
+  });
   secret(siteverify.secret);
   const apiBindings = (change = {}) => ({
     MORROW_ENVIRONMENT: "development",

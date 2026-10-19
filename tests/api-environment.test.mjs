@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
-import { apiEnvironmentValueBindings, mapApiEnvironment } from "../apps/api/src/environment.ts";
+import {
+  apiEnvironmentValueBindings,
+  mapAbuseGuard,
+  mapApiEnvironment,
+} from "../apps/api/src/environment.ts";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
 import { appliedLegacyLoginControllerProtocol } from "../scripts/fixtures/standalone-login-fixture.mjs";
 
@@ -365,6 +369,31 @@ test("P05.T01ab-AC07: production never maps; step 7 fails it with or without the
     code(env("production", { bindingEnvironment: "staging", retentionTier: "production" })),
     "API_ENV_CROSS_BINDING_MISMATCH",
   );
+});
+
+test("P05.T01ab-AC07: step 10 itself needs the whole guard in staging and production", () => {
+  // Production fails at step 7 first (ADR-0007 item 9), so step 10's rule for it is
+  // tested here directly: it is the staging rule, whatever step 7 later allows.
+  for (const environment of ["staging", "production"]) {
+    const full = mapAbuseGuard(guard(), environment);
+    assert.ok(full && Object.isFrozen(full), environment);
+    assert.equal(full.challenge.siteKey, siteKey);
+    assert.deepEqual(Object.keys(full.limiters), ["loginStart", "loginCallback", "signup"]);
+    for (const missing of [
+      ["LOGIN_CHALLENGE_JSON"],
+      limiterNames,
+      ...limiterNames.map((name) => [name]),
+      ["LOGIN_CHALLENGE_JSON", ...limiterNames],
+    ])
+      assert.equal(
+        mapAbuseGuard(without(guard(), ...missing), environment),
+        null,
+        environment + " " + missing.join(),
+      );
+    assert.equal(mapAbuseGuard({}, environment), null, environment);
+  }
+  assert.deepEqual(mapAbuseGuard({}, "development"), { challenge: null, limiters: null });
+  assert.equal(mapAbuseGuard(without(guard(), "SIGNUP_LIMITER"), "development"), null);
 });
 
 test("P05.T01ab-AC07: development maps with no guard, limiters only, or the full guard", () => {

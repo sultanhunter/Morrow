@@ -110,7 +110,11 @@ const origin = "https://workspace.example.test";
 const keyMarker = ["sk", "test", randomBytes(16).toString("hex")].join("_");
 privateMarkers.push(keyMarker);
 const provider = createPlatformWorkosProviderOracle({ origin, managementMarker: keyMarker });
-const siteverify = createSiteverifyOracle({ hostname: new URL(origin).hostname });
+// Every issued Turnstile token is a private marker, like the secret.
+const siteverify = createSiteverifyOracle({
+  hostname: new URL(origin).hostname,
+  onIssue: (token) => privateMarkers.push(token),
+});
 privateMarkers.push(siteverify.secret);
 const login = JSON.parse(provider.configurationJson);
 const auth = JSON.parse(login.authenticationBindingJson);
@@ -390,6 +394,14 @@ async function instance(name, { api = {}, broker = {}, extra = [], assets } = {}
   } finally {
     await mf.dispose();
   }
+  // P04.T01i D6 lab redaction: no Worker log line of any instance holds a private
+  // marker (the WorkOS key, passwords, keyring material, the Turnstile secret and
+  // every token the lab issued or made up).
+  const logged = JSON.stringify(observed.logs);
+  check(
+    name + ":no_private_marker_in_logs",
+    privateMarkers.every((marker) => !logged.includes(marker)),
+  );
   const own = checks.slice(startedChecks);
   cases.push({
     name,
@@ -1122,6 +1134,7 @@ await instance(
         mode === "bogus"
           ? "lab.bogus." + randomUUID()
           : siteverify.issue(labChallengeActions.login, mode);
+      if (mode === "bogus") privateMarkers.push(token);
       const before = observed.siteverify;
       const failed = await startWith(fetchApi, { "X-Morrow-Challenge": token });
       check(
@@ -1129,6 +1142,12 @@ await instance(
         failed.status === 403 &&
           failed.body === guardOutcome("challenge_failed") &&
           observed.siteverify === before + 1,
+      );
+      // Siteverify said success for the three solved-but-wrong tokens, so the broker's
+      // own action, hostname and challenge_ts checks are what refused them.
+      check(
+        "P05T01ab-AC03:" + mode + "_siteverify_success_" + String(mode !== "bogus"),
+        siteverify.requests.at(-1)?.success === (mode !== "bogus"),
       );
     }
     // No rejected start reached the login handler, so no login flow and no database.
@@ -1242,7 +1261,45 @@ await instance(
   async ({ fetchApi, events, observed }) => {
     const from = (address) => ({ "CF-Connecting-IP": address });
     const required = (r) => r.status === 403 && r.body === guardOutcome("challenge_required");
+    // What a third-party page can make a visitor's browser send without a preflight: a
+    // simple cross-site POST (no X-Morrow-Request), and another method or a preflight.
+    const crossSitePost = (path, address) =>
+      fetchApi(path, {
+        method: "POST",
+        headers: {
+          ...from(address),
+          "Content-Type": "text/plain",
+          "Sec-Fetch-Site": "cross-site",
+          "MF-Sec-Fetch-Mode": "no-cors",
+        },
+        body: "{}",
+      });
+    const otherMethod = (path, address, method) =>
+      fetchApi(path, {
+        method,
+        headers: {
+          ...from(address),
+          Origin: "https://elsewhere.example.test",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "x-morrow-request",
+        },
+      });
     await freshWindow();
+    // P05.T01ab-AC01 step 0: twelve uncounted requests first, then the full ten starts.
+    const uncounted = [];
+    for (let i = 0; i < 4; i++) {
+      uncounted.push(["post", await crossSitePost("/auth/login", "198.51.100.10")]);
+      uncounted.push(["get", await otherMethod("/auth/login", "198.51.100.10", "GET")]);
+      uncounted.push(["options", await otherMethod("/auth/login", "198.51.100.10", "OPTIONS")]);
+    }
+    check(
+      "P05T01ab-AC01:cross_site_start_requests_refused_uncounted",
+      uncounted.every(([kind, r]) =>
+        kind === "post"
+          ? r.status === 403 && r.body === loginUnavailable
+          : r.status === 405 && r.body === loginUnavailable,
+      ),
+    );
     const starts = [];
     for (let i = 0; i < 11; i++) starts.push(await startWith(fetchApi, from("198.51.100.10")));
     check(
@@ -1272,20 +1329,57 @@ await instance(
       "P05T01ab-AC01:query_string_is_login_start",
       query.slice(0, 10).every(required) && noStore429(query[10]),
     );
+    // The callback counts only top-level document navigations. HEAD (the router's
+    // 405), an <img> load and a fetch come first, uncounted; the image and the fetch
+    // get the handler's 303 from the guard. (MF-Sec-Fetch-Mode is how Miniflare sets
+    // the Sec-Fetch-Mode its own client would otherwise overwrite.)
     await freshWindow();
-    const heads = [];
-    for (let i = 0; i < 21; i++)
-      heads.push(
+    const callbackAt = (headers) =>
+      fetchApi("/auth/workos/callback", {
+        redirect: "manual",
+        headers: { ...from("203.0.113.22"), ...headers },
+      });
+    const quiet = [];
+    for (let i = 0; i < 7; i++) {
+      quiet.push(
         await fetchApi("/auth/workos/callback", { method: "HEAD", headers: from("203.0.113.22") }),
       );
+      quiet.push(await callbackAt({ "MF-Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "image" }));
+      quiet.push(await callbackAt({ "MF-Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty" }));
+    }
     check(
-      "P05T01ab-AC01:head_callback_limited_at_21",
-      heads.slice(0, 20).every((r) => r.status !== 429) &&
-        heads[20].status === 429 &&
-        heads[20].body === "" &&
-        heads[20].headers.get("retry-after") === "60",
+      "P05T01ab-AC01:head_image_and_fetch_callbacks_uncounted",
+      quiet.every((r, i) =>
+        i % 3 === 0
+          ? r.status === 405
+          : r.status === 303 && r.headers.get("location") === "/auth/result" && r.body === "",
+      ),
+    );
+    const navigations = [];
+    for (let i = 0; i < 21; i++)
+      navigations.push(
+        await callbackAt({ "MF-Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document" }),
+      );
+    check(
+      "P05T01ab-AC05:navigation_callback_limited_at_21",
+      navigations.slice(0, 20).every((r) => r.status !== 429) && noStore429(navigations[20]),
     );
     await freshWindow();
+    const quietSignups = [];
+    for (let i = 0; i < 3; i++) {
+      quietSignups.push(["post", await crossSitePost("/organizations", "203.0.113.23")]);
+      quietSignups.push([
+        "options",
+        await otherMethod("/organizations", "203.0.113.23", "OPTIONS"),
+      ]);
+    }
+    check(
+      "P05T01ab-AC01:cross_site_signup_requests_refused_uncounted",
+      quietSignups.every(
+        ([kind, r]) =>
+          r.status === (kind === "post" ? 403 : 405) && r.body === '{"code":"request_denied"}',
+      ),
+    );
     const signups = [];
     for (let i = 0; i < 6; i++) signups.push(await signupWith(fetchApi, from("203.0.113.23")));
     check(
@@ -1293,6 +1387,7 @@ await instance(
       signups.slice(0, 5).every(required) && noStore429(signups[5]),
     );
     check("P05T01ab-AC05:limited_and_rejected_reach_no_broker", observed.siteverify === 0);
+    check("P05T01ab-AC01:uncounted_and_limited_reach_no_database", observed.neon === 0);
     // A trailing slash or an encoded letter is another path: never limited, and the
     // router answers its own 404.
     const loose = [];

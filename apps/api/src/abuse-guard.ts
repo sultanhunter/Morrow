@@ -14,9 +14,11 @@ import { loginJson } from "../../../packages/identity/src/standalone-login-proto
 
 // P05.T01ab hosted sign-in abuse protection (ADR-0019 items 6-8; P04.T01i D5). It runs
 // in the api Worker before the router, so before any SQL, and selects requests with
-// the router's own matcher (`managedApiRoute`): login start, the callback and signup,
-// for every method the router dispatches to them. Step 1 is a per-address Workers rate
-// limit; step 2, on POST to login start and signup only, is one Turnstile verification
+// the router's own matcher (`managedApiRoute`): login start, the callback and signup.
+// Step 0 counts only a request its handler could accept on headers alone, so no
+// third-party page can spend a visitor's (or their NAT's) budget with requests a
+// browser sends cross-site without a CORS preflight. Step 1 is a per-address Workers
+// rate limit; step 2, on login start and signup, is one Turnstile verification
 // through the broker. A passed request loses only its X-Morrow-Challenge header; its
 // body is never read. Rejections (429, 403) log nothing; only fail-closed causes log
 // one fixed-code `morrow_edge_guard` line. The client address is hashed for the key
@@ -135,41 +137,65 @@ export async function limiterKey(route: string, subject: string): Promise<string
 }
 
 const loginUnavailable = '{"schemaVersion":1,"outcome":"login_unavailable"}';
-const signupUnavailable = '{"code":"unavailable"}';
 interface GuardedRoute {
   readonly key: "login" | "callback" | "signup";
   readonly limiter: keyof AbuseGuardLimiters;
+  // The only method the route's handler accepts; the router answers any other 405.
+  readonly method: "POST" | "GET";
+  // The challenge action of a POST route; the callback has none.
   readonly action: ChallengeActionName | null;
-  // The route's existing 503 body.
+  // The route's existing 503 body, and its 403 body for a missing X-Morrow-Request.
   readonly unavailable: string;
+  readonly denied: string;
 }
 const guardedRoutes: Readonly<Partial<Record<ManagedApiRoute, GuardedRoute>>> = Object.freeze({
   login_start: {
     key: "login",
     limiter: "loginStart",
+    method: "POST",
     action: "login",
     unavailable: loginUnavailable,
+    denied: loginUnavailable,
   },
   login_callback: {
     key: "callback",
     limiter: "loginCallback",
+    method: "GET",
     action: null,
     unavailable: loginUnavailable,
+    denied: loginUnavailable,
   },
-  signup: { key: "signup", limiter: "signup", action: "signup", unavailable: signupUnavailable },
+  signup: {
+    key: "signup",
+    limiter: "signup",
+    method: "POST",
+    action: "signup",
+    unavailable: '{"code":"unavailable"}',
+    denied: '{"code":"request_denied"}',
+  },
 });
 
-function reply(status: number, body: string, head: boolean, extra: Record<string, string> = {}) {
+const baseHeaders = {
+  "cache-control": "no-store",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
+} as const;
+function reply(status: number, body: string, head = false, extra: Record<string, string> = {}) {
   return new Response(head ? null : body, {
     status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-      "referrer-policy": "no-referrer",
-      ...extra,
-    },
+    headers: { "content-type": "application/json; charset=utf-8", ...baseHeaders, ...extra },
   });
+}
+// The callback handler's own failure: 303 to the result page, no body.
+const failedCallback = () =>
+  new Response(null, { status: 303, headers: { location: "/auth/result", ...baseHeaders } });
+// The callback handler's Fetch Metadata rule: a top-level document navigation, or a
+// client that sends no Fetch Metadata. An <img>, a no-cors or cors fetch, a frame or a
+// prefetch is not one.
+function topLevelNavigation(request: Request): boolean {
+  const mode = request.headers.get("sec-fetch-mode");
+  const dest = request.headers.get("sec-fetch-dest");
+  return (mode === null || mode === "navigate") && (dest === null || dest === "document");
 }
 const outcome = (value: string) => JSON.stringify({ schemaVersion: 1, outcome: value });
 const logGuard = (code: EdgeGuardCode) =>
@@ -214,19 +240,29 @@ export function createAbuseGuard(
       return next(request);
     }
     const route = guardedRoutes[managedApiRoute(pathname)];
-    if (!route) return next(request);
-    const head = request.method === "HEAD";
-    // Step 1: the per-address limit, on every method of the route.
+    if (!route || (!limiters && !challenge)) return next(request);
+    // Step 0, uncounted and before any broker call. Another method is the router's own
+    // 405, as before (no SQL; the challenge never applied to it). A POST without
+    // X-Morrow-Request, a custom header that a cross-site page can send only after a
+    // preflight the router refuses, is the route's own 403. A callback GET that Fetch
+    // Metadata marks as no top-level navigation is the handler's own failed-callback
+    // redirect. The guard answers the last two itself, so they reach neither the
+    // broker nor the router, whatever the handlers later accept.
+    if (request.method !== route.method) return next(request);
+    if (route.action !== null) {
+      if (request.headers.get("x-morrow-request") !== "1") return reply(403, route.denied);
+    } else if (!topLevelNavigation(request)) return failedCallback();
+    // Step 1: the per-address limit.
     if (limiters) {
       const address = request.headers.get("cf-connecting-ip");
       if (address === null) {
         logGuard("ADDRESS_MISSING");
-        return reply(503, route.unavailable, head);
+        return reply(503, route.unavailable);
       }
       const subject = limiterSubject(address);
       if (subject === null) {
         logGuard("ADDRESS_INVALID");
-        return reply(503, route.unavailable, head);
+        return reply(503, route.unavailable);
       }
       let allowed: boolean;
       try {
@@ -241,14 +277,14 @@ export function createAbuseGuard(
         allowed = success;
       } catch {
         logGuard("LIMITER_FAILED");
-        return reply(503, route.unavailable, head);
+        return reply(503, route.unavailable);
       }
-      if (!allowed) return reply(429, outcome("rate_limited"), head, { "retry-after": "60" });
+      if (!allowed) return reply(429, outcome("rate_limited"), false, { "retry-after": "60" });
     }
-    // Step 2: one challenge verification, on POST to login start and signup only.
-    if (challenge && route.action && request.method === "POST") {
+    // Step 2: one challenge verification, on login start and signup (POST, after step 0).
+    if (challenge && route.action !== null) {
       const token = request.headers.get(challengeHeader);
-      if (!challengeTokenValid(token)) return reply(403, outcome("challenge_required"), false);
+      if (!challengeTokenValid(token)) return reply(403, outcome("challenge_required"));
       let verdict: unknown;
       try {
         verdict = await verify(
@@ -260,11 +296,11 @@ export function createAbuseGuard(
       } catch {
         verdict = undefined;
       }
-      if (verdict === "failed") return reply(403, outcome("challenge_failed"), false);
+      if (verdict === "failed") return reply(403, outcome("challenge_failed"));
       // Held, timed out or anything but a verdict: the route's existing 503.
       if (verdict !== "passed") {
         logGuard("CHALLENGE_HELD");
-        return reply(503, route.unavailable, false);
+        return reply(503, route.unavailable);
       }
       return next(withoutChallenge(request));
     }

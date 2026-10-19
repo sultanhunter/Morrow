@@ -196,10 +196,22 @@ export function mapApiEnvironment(env: unknown): ApiEnvironmentMapping {
   } catch {
     return fail("API_ENV_BROKER_BINDING_INVALID");
   }
-  // 10. The abuse guard (P05.T01ab, ADR-0019 items 6-8): LOGIN_CHALLENGE_JSON and the
-  // three limiter bindings are required in staging and production. In development
-  // each part is optional (the committed development config binds only the limiters),
-  // but a present part must be valid, and the limiters come all three or none.
+  // 10. The abuse guard (P05.T01ab, ADR-0019 items 6-8).
+  const guard = mapAbuseGuard(record, environment);
+  if (!guard) return fail("API_ENV_ABUSE_GUARD_MISSING");
+  return Object.freeze({ ok: true, environment, values: mapped, broker, guard });
+}
+
+// Step 10 as a pure function of the record and the environment, so its rule is tested
+// for every environment: production too, which fails earlier, at step 7, while
+// ADR-0007 item 9 stands. LOGIN_CHALLENGE_JSON and the three limiter bindings are
+// required in staging and production. In development each part is optional (the
+// committed development config binds only the limiters), but a present part must be
+// valid, and the limiters come all three or none. null is API_ENV_ABUSE_GUARD_MISSING.
+export function mapAbuseGuard(
+  record: object,
+  environment: ApiEnvironmentName,
+): Readonly<AbuseGuardConfiguration> | null {
   try {
     const challengePresent = Object.hasOwn(record, "LOGIN_CHALLENGE_JSON");
     const limiterCount = abuseGuardLimiterBindings.filter(([name]) =>
@@ -209,7 +221,7 @@ export function mapApiEnvironment(env: unknown): ApiEnvironmentMapping {
       (environment !== "development" && (!challengePresent || limiterCount === 0)) ||
       (limiterCount !== 0 && limiterCount !== abuseGuardLimiterBindings.length)
     )
-      return fail("API_ENV_ABUSE_GUARD_MISSING");
+      return null;
     const challenge = challengePresent
       ? parseLoginChallengeConfiguration(dataProperty(record, "LOGIN_CHALLENGE_JSON").value)
       : null;
@@ -223,19 +235,13 @@ export function mapApiEnvironment(env: unknown): ApiEnvironmentMapping {
           (typeof value !== "object" && typeof value !== "function") ||
           typeof (value as { limit?: unknown }).limit !== "function"
         )
-          return fail("API_ENV_ABUSE_GUARD_MISSING");
+          return null;
         bound[key] = value as RateLimiter;
       }
       limiters = Object.freeze(bound as AbuseGuardLimiters);
     }
-    return Object.freeze({
-      ok: true,
-      environment,
-      values: mapped,
-      broker,
-      guard: Object.freeze({ challenge, limiters }),
-    });
+    return Object.freeze({ challenge, limiters });
   } catch {
-    return fail("API_ENV_ABUSE_GUARD_MISSING");
+    return null;
   }
 }

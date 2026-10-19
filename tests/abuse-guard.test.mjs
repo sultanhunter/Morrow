@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import test from "node:test";
+import test, { mock } from "node:test";
 import {
   challengeBudgetMs,
   createAbuseGuard,
@@ -65,10 +65,15 @@ function harness({ limiters = "allow", verifier = "passed", configured = true } 
   return { guard, calls, forwarded, send };
 }
 const token = () => "tok." + randomBytes(32).toString("base64url");
-const request = (path, { method = "POST", headers = {}, body } = {}) =>
+// A POST carries X-Morrow-Request: 1, as the SPA's does, unless `morrowRequest` is false.
+const request = (path, { method = "POST", headers = {}, body, morrowRequest = true } = {}) =>
   new Request(origin + path, {
     method,
-    headers: { "CF-Connecting-IP": "198.51.100.7", ...headers },
+    headers: {
+      "CF-Connecting-IP": "198.51.100.7",
+      ...(method === "POST" && morrowRequest ? { "X-Morrow-Request": "1" } : {}),
+      ...headers,
+    },
     ...(body !== undefined ? { body } : method === "POST" ? { body: "{}" } : {}),
     ...(body instanceof ReadableStream ? { duplex: "half" } : {}),
   });
@@ -157,6 +162,7 @@ test("P05.T01ab-AC01: limiter, then challenge, then the router; the guard reads 
 test("P05.T01ab-AC01: a rejected request's body is never pulled", async () => {
   for (const [options, status] of [
     [{}, 403],
+    [{ morrowRequest: false }, 403],
     [{ limiters: "deny" }, 429],
     [{ verifier: "failed" }, 403],
     [{ verifier: () => Promise.reject(Error("held")) }, 503],
@@ -165,6 +171,7 @@ test("P05.T01ab-AC01: a rejected request's body is never pulled", async () => {
     const sent = request("/organizations", {
       headers: options.limiters || options.verifier ? { "X-Morrow-Challenge": token() } : {},
       body: stream,
+      morrowRequest: options.morrowRequest ?? true,
     });
     const { calls, send } = harness(options);
     assert.equal((await send(sent)).status, status);
@@ -186,9 +193,11 @@ test("P05.T01ab-AC01: the guard and the router agree on the edge paths", async (
     ["/auth/%6Cogin", "POST", "auth", null],
     ["/auth/LOGIN", "POST", "auth", null],
     ["/auth//login", "POST", "auth", null],
-    ["/auth/login", "GET", "login_start", "loginStart"],
+    // Another method is the route's, but never counted: the router's own 405.
+    ["/auth/login", "GET", "login_start", null],
     ["/auth/workos/callback?code=a&state=b", "GET", "login_callback", "loginCallback"],
-    ["/auth/workos/callback", "HEAD", "login_callback", "loginCallback"],
+    ["/auth/workos/callback", "HEAD", "login_callback", null],
+    ["/organizations", "OPTIONS", "signup", null],
     ["/auth/workos/callback/", "GET", "auth", null],
     ["/auth/workos/%63allback", "GET", "auth", null],
     ["/organizations", "POST", "signup", "signup"],
@@ -202,6 +211,7 @@ test("P05.T01ab-AC01: the guard and the router agree on the edge paths", async (
     ["/healthz", "GET", "not_found", null],
   ];
   // The unconfigured router's answer by family: 503 auth, 401 workspace, 404 other.
+  // Every POST carries X-Morrow-Request, so only the path and method decide.
   const router = createWorkersManagedWorkspaceApi();
   const family = { 503: "auth", 401: "workspace", 404: "not_found" };
   for (const [path, method, route, limiter] of cases) {
@@ -225,24 +235,118 @@ test("P05.T01ab-AC01: the guard and the router agree on the edge paths", async (
   }
 });
 
-test("P05.T01ab-AC01: the callback is only rate-limited; non-POST starts are not challenged", async () => {
-  for (const [path, method] of [
-    ["/auth/workos/callback?code=a&state=b", "GET"],
-    ["/auth/workos/callback", "HEAD"],
-    ["/auth/workos/callback", "POST"],
-    ["/auth/login", "GET"],
-    ["/organizations", "PUT"],
+test("P05.T01ab-AC01: the callback is only rate-limited; another method is neither counted nor challenged", async () => {
+  for (const [path, method, expected] of [
+    ["/auth/workos/callback?code=a&state=b", "GET", ["limit", "next"]],
+    ["/auth/workos/callback", "HEAD", ["next"]],
+    ["/auth/workos/callback", "POST", ["next"]],
+    ["/auth/workos/callback", "OPTIONS", ["next"]],
+    ["/auth/login", "GET", ["next"]],
+    ["/auth/login", "HEAD", ["next"]],
+    ["/auth/login", "OPTIONS", ["next"]],
+    ["/organizations", "PUT", ["next"]],
+    ["/organizations", "OPTIONS", ["next"]],
   ]) {
-    const { calls, send } = harness({ verifier: "failed" });
+    // Even with every bucket empty, another method reaches the router's own 405.
+    for (const limiters of ["allow", "deny"]) {
+      const { calls, send } = harness({ verifier: "failed", limiters });
+      const response = await send(
+        request(path, {
+          method,
+          ...(["GET", "HEAD", "OPTIONS"].includes(method) ? { body: undefined } : {}),
+        }),
+      );
+      const want = expected[0] === "limit" && limiters === "deny" ? ["limit"] : expected;
+      assert.equal(response.status, want.at(-1) === "next" ? 299 : 429, path + " " + method);
+      assert.deepEqual(
+        calls.map((call) => call[0]),
+        want,
+        path + " " + method,
+      );
+    }
+  }
+});
+
+test("P05.T01ab-AC01: a request a cross-site page can send without a preflight is never counted", async () => {
+  logs.length = 0;
+  // A simple cross-site POST (no X-Morrow-Request, which needs a preflight): the
+  // route's own 403, with no limit, verification, router or body read.
+  for (const [path, body] of [
+    ["/auth/login", '{"schemaVersion":1,"outcome":"login_unavailable"}'],
+    ["/organizations", '{"code":"request_denied"}'],
+  ])
+    for (const headers of [
+      { "Content-Type": "text/plain", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors" },
+      { "Content-Type": "application/x-www-form-urlencoded", "Sec-Fetch-Mode": "navigate" },
+      { "X-Morrow-Request": "0", "X-Morrow-Challenge": token() },
+      { "X-Morrow-Challenge": token() },
+    ])
+      for (const limiters of ["allow", "deny"]) {
+        const { counter, stream } = countedBody();
+        const { calls, send } = harness({ limiters });
+        const reply = await bodyOf(
+          await send(request(path, { headers, body: stream, morrowRequest: false })),
+        );
+        assert.equal(reply.status, 403, path + " " + JSON.stringify(headers));
+        assert.equal(reply.body, body);
+        assert.deepEqual(reply.headers, standardHeaders);
+        assert.deepEqual(calls, [], "no limit, verification or router");
+        assert.equal(counter.pulls, 0);
+      }
+  // A callback GET that is no top-level document navigation (an <img>, a fetch, a
+  // frame, a prefetch): the handler's own 303 to the result page, never counted.
+  for (const headers of [
+    { "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "image" },
+    { "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty" },
+    { "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "iframe" },
+    { "Sec-Fetch-Mode": "no-cors" },
+    { "Sec-Fetch-Dest": "script" },
+  ])
+    for (const limiters of ["allow", "deny"]) {
+      const { calls, send } = harness({ limiters });
+      const reply = await bodyOf(
+        await send(
+          request("/auth/workos/callback?code=a&state=b", {
+            method: "GET",
+            headers,
+            body: undefined,
+          }),
+        ),
+      );
+      assert.equal(reply.status, 303, JSON.stringify(headers));
+      assert.equal(reply.body, "");
+      assert.deepEqual(reply.headers, {
+        location: "/auth/result",
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+      });
+      assert.deepEqual(calls, []);
+    }
+  // A top-level navigation, or a client without Fetch Metadata, is counted.
+  for (const headers of [
+    { "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document", "Sec-Fetch-Site": "cross-site" },
+    { "Sec-Fetch-Mode": "navigate" },
+    { "Sec-Fetch-Dest": "document" },
+    {},
+  ]) {
+    const { calls, send } = harness({ limiters: "deny" });
     const response = await send(
-      request(path, { method, ...(["GET", "HEAD"].includes(method) ? { body: undefined } : {}) }),
+      request("/auth/workos/callback?code=a&state=b", { method: "GET", headers, body: undefined }),
     );
-    assert.equal(response.status, 299, path + " " + method);
+    assert.equal(response.status, 429, JSON.stringify(headers));
     assert.deepEqual(
       calls.map((call) => call[0]),
-      ["limit", "next"],
+      ["limit"],
     );
   }
+  // None of these needs the address, so none fails closed or logs.
+  const { calls, send } = harness();
+  const bare = request("/auth/login", { morrowRequest: false });
+  bare.headers.delete("cf-connecting-ip");
+  assert.equal((await send(bare)).status, 403);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(logs, [], "uncounted refusals log nothing");
 });
 
 test("P05.T01ab-AC02: a missing or malformed header is 403 challenge_required with no verification", async () => {
@@ -261,13 +365,9 @@ test("P05.T01ab-AC02: a missing or malformed header is 403 challenge_required wi
     ]) {
       const { calls, send } = harness();
       const headers = value === undefined ? {} : { "X-Morrow-Challenge": value };
-      let response;
-      try {
-        response = await send(request(path, { headers }));
-      } catch {
-        continue; // a header value the Request constructor itself refuses
-      }
-      const reply = await bodyOf(response);
+      // Node refuses only NUL, CR and LF in a header value, so every value here builds;
+      // anything the guard throws fails the test.
+      const reply = await bodyOf(await send(request(path, { headers })));
       assert.equal(reply.status, 403, path + " " + String(value).slice(0, 10));
       assert.equal(reply.body, '{"schemaVersion":1,"outcome":"challenge_required"}');
       assert.deepEqual(reply.headers, standardHeaders);
@@ -331,13 +431,26 @@ test("P05.T01ab-AC04: through the broker adapter, a silent broker is held within
   let rpcs = 0;
   const silent = { challengeVerify: () => (rpcs++, new Promise(() => {})) };
   const verify = createBrokerChallengeVerifier(silent);
-  const started = performance.now();
-  await assert.rejects(
-    verify(actions.login, token(), 100, new AbortController().signal),
-    /API_BROKER_HELD/,
-  );
-  const elapsed = performance.now() - started;
-  assert.ok(elapsed >= 90 && elapsed < 1500, String(elapsed));
+  // Mocked timers, so the bound is exact on any host load: held at the budget plus the
+  // 250 ms RPC allowance, not one millisecond before.
+  mock.timers.enable({ apis: ["setTimeout"] });
+  let settled = false;
+  let pending;
+  try {
+    pending = verify(actions.login, token(), 100, new AbortController().signal);
+    void pending.then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    mock.timers.tick(349);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, false, "still waiting at 349 ms");
+    mock.timers.tick(1);
+  } finally {
+    mock.timers.reset();
+  }
+  await assert.rejects(pending, /API_BROKER_HELD/);
   assert.equal(rpcs, 1, "exactly one RPC, no retry");
   for (const answer of ["passed", "failed"])
     assert.equal(
@@ -387,7 +500,6 @@ test("P05.T01ab-AC05: over the limit is 429 rate_limited with Retry-After: 60 on
   for (const [path, method] of [
     ["/auth/login", "POST"],
     ["/auth/workos/callback", "GET"],
-    ["/auth/workos/callback", "HEAD"],
     ["/organizations", "POST"],
   ]) {
     const { calls, send } = harness({ limiters: "deny" });
@@ -401,10 +513,7 @@ test("P05.T01ab-AC05: over the limit is 429 rate_limited with Retry-After: 60 on
       ),
     );
     assert.equal(reply.status, 429, path + " " + method);
-    assert.equal(
-      reply.body,
-      method === "HEAD" ? "" : '{"schemaVersion":1,"outcome":"rate_limited"}',
-    );
+    assert.equal(reply.body, '{"schemaVersion":1,"outcome":"rate_limited"}');
     assert.deepEqual(reply.headers, { ...standardHeaders, "retry-after": "60" });
     assert.deepEqual(
       calls.map((call) => call[0]),

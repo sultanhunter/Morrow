@@ -5,7 +5,8 @@ import { randomBytes } from "node:crypto";
 // service; nothing leaves the machine). The secret and the site key are random `0x`
 // values made per run, never Cloudflare's published dummy keys, which the broker's
 // `^0x` rule refuses by construction. Tokens are issued by the lab and single-use,
-// like Turnstile's own (a second use answers timeout-or-duplicate).
+// like Turnstile's own (a second use answers timeout-or-duplicate). `onIssue` sees
+// every issued token, so a lab can register each one as a private marker.
 export const siteverifyOrigin = "https://challenges.cloudflare.com";
 export const siteverifyPath = "/turnstile/v0/siteverify";
 export const labChallengeActions = Object.freeze({
@@ -13,7 +14,7 @@ export const labChallengeActions = Object.freeze({
   signup: "organization_signup",
 });
 
-export function createSiteverifyOracle({ hostname, now = Date.now }) {
+export function createSiteverifyOracle({ hostname, now = Date.now, onIssue = () => {} }) {
   const secret = "0x" + randomBytes(24).toString("base64url");
   const siteKey = "0x" + randomBytes(16).toString("base64url");
   const tokens = new Map();
@@ -22,19 +23,23 @@ export function createSiteverifyOracle({ hostname, now = Date.now }) {
   const issue = (action, mode = "pass") => {
     const token = "lab." + randomBytes(48).toString("base64url");
     tokens.set(token, { action, mode, used: false });
+    onIssue(token);
     return token;
   };
   async function handleRequest(request) {
     const url = new URL(request.url);
     const text = await request.text();
     const form = new URLSearchParams(text);
-    requests.push({
+    const row = {
       method: request.method,
       path: url.pathname,
       contentType: request.headers.get("content-type"),
       fields: [...form.keys()],
       secretMatches: form.get("secret") === secret,
-    });
+      // The `success` this oracle answered (null when it answered no verdict).
+      success: null,
+    };
+    requests.push(row);
     if (url.pathname !== siteverifyPath || request.method !== "POST")
       return new Response(null, { status: 404 });
     switch (state.fault) {
@@ -51,7 +56,12 @@ export function createSiteverifyOracle({ hostname, now = Date.now }) {
     const entry = tokens.get(form.get("response") ?? "");
     const fresh = entry !== undefined && !entry.used;
     if (entry) entry.used = true;
-    const success = fresh && form.get("secret") === secret && entry.mode === "pass";
+    // Every issued, unused token is a solved challenge, so siteverify says success for
+    // every mode. `other_action`, `other_host` and `stale` differ from a pass only in
+    // the field they name, so the broker's own action, hostname and challenge_ts checks
+    // are what refuse them.
+    const success = fresh && row.secretMatches;
+    row.success = success;
     return Response.json({
       success,
       challenge_ts: new Date(entry?.mode === "stale" ? now() - 400000 : now()).toISOString(),

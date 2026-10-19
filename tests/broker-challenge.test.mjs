@@ -7,7 +7,11 @@ import {
   challengeLimits,
 } from "../packages/identity/src/broker-protocol.ts";
 import { brokerCapabilities, brokerHealth } from "../apps/broker/src/capabilities.ts";
-import { brokerChallengeVerify, siteverifyUrl } from "../apps/broker/src/challenge.ts";
+import {
+  brokerChallengeVerify,
+  challengePassed,
+  siteverifyUrl,
+} from "../apps/broker/src/challenge.ts";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
 
 // P05.T01ab-AC03 (and the broker half of AC04 and AC10): challengeVerify against a
@@ -116,16 +120,52 @@ test("P05.T01ab-AC03: passed needs success, the hostname, the action and a fresh
   assert.deepEqual(logs, [], "a pass logs nothing");
   reply = () => Response.json(verdict({ action: actions.signup }));
   assert.equal(await brokerChallengeVerify(env, actions.signup, token(), 3000), "passed");
-  const now = Date.now();
-  for (const at of [now - 329000, now + 29000]) {
-    reply = () => Response.json(verdict({ challenge_ts: new Date(at).toISOString() }));
+  // Through the broker the clock is its own, so these stay 20 s inside the window;
+  // the exact boundaries are tested on challengePassed below.
+  for (const offset of [-310000, 10000]) {
+    reply = () =>
+      Response.json(verdict({ challenge_ts: new Date(Date.now() + offset).toISOString() }));
     assert.equal(await brokerChallengeVerify(env, actions.login, token(), 3000), "passed");
   }
 });
 
+test("P05.T01ab-AC03: the freshness window is 300 s plus 30 s of skew, both boundaries exact", () => {
+  assert.equal(challengeLimits.freshnessMs + challengeLimits.skewMs, 330000);
+  assert.equal(challengeLimits.skewMs, 30000);
+  const now = Date.parse("2026-10-19T12:00:00.000Z");
+  const at = (offset) => verdict({ challenge_ts: new Date(now + offset).toISOString() });
+  for (const [offset, passed] of [
+    [0, true],
+    [-330000, true],
+    [-330001, false],
+    [30000, true],
+    [30001, false],
+  ])
+    assert.equal(challengePassed(at(offset), hostname, actions.login, now), passed, String(offset));
+  // An offset timestamp is the same instant.
+  assert.equal(
+    challengePassed(
+      verdict({ challenge_ts: "2026-10-19T13:00:30+01:00" }),
+      hostname,
+      actions.login,
+      now,
+    ),
+    true,
+  );
+  for (const change of [
+    { hostname: "other.example.test" },
+    { action: actions.signup },
+    { success: false },
+  ])
+    assert.equal(challengePassed(verdict(change), hostname, actions.login, now), false);
+  assert.equal(challengePassed(at(0), hostname, actions.login, now), true);
+});
+
 test("P05.T01ab-AC03: each mismatch is failed, with one fixed morrow_challenge line", async () => {
   const env = await ready(brokerEnv());
-  const now = Date.now();
+  // Timestamps are taken when the stub replies, 60 s outside the window, so a slow
+  // host cannot move them inside it (the exact boundaries are tested above).
+  const ago = (ms) => () => new Date(Date.now() - ms).toISOString();
   const mismatches = [
     { success: false, "error-codes": ["invalid-input-response"] },
     { success: "true" },
@@ -134,15 +174,22 @@ test("P05.T01ab-AC03: each mismatch is failed, with one fixed morrow_challenge l
     { hostname: hostname.toUpperCase() },
     { action: actions.signup },
     { action: undefined },
-    { challenge_ts: new Date(now - 331000).toISOString() },
-    { challenge_ts: new Date(now + 31000).toISOString() },
+    { challenge_ts: ago(390000) },
+    { challenge_ts: ago(-90000) },
     { challenge_ts: "yesterday" },
-    { challenge_ts: String(now) },
+    { challenge_ts: String(Date.now()) },
     { challenge_ts: undefined },
   ];
   for (const change of mismatches) {
     reset();
-    reply = () => Response.json(verdict(change));
+    reply = () =>
+      Response.json(
+        verdict(
+          typeof change.challenge_ts === "function"
+            ? { challenge_ts: change.challenge_ts() }
+            : change,
+        ),
+      );
     assert.equal(
       await brokerChallengeVerify(env, actions.login, token(), 3000),
       "failed",
