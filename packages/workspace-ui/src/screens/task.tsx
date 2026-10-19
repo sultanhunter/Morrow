@@ -1,15 +1,16 @@
 // Task detail (P14.T01a §4.10): Brief and Questions tabs. The conversation and activity
 // panes are not in this build (P14.T01b, P06.T02a); below a 1120 px content width they
 // sit behind an aria-pressed pane switch. Assign and Ask stay hidden without people.list.
-import { useCallback, useState } from "react";
+import { useCallback, useId, useState } from "react";
 import { copy } from "../copy";
 import type { Id, QuestionView, TaskView, WorkspaceView } from "../model";
 import { useCommand, useRead, useServices } from "../services";
 import { Button, RouteLink } from "../components/controls";
-import { PersonLabel, RecordText, StatusTag } from "../components/display";
+import { Icon, PersonLabel, RecordText, StatusTag } from "../components/display";
 import { StateView, outcomeState } from "../components/feedback";
 import { PaneSwitch, Tabs } from "../components/shell";
 import { CommandFeedback } from "./entry";
+import { Answer } from "./inbox";
 import { usePaged } from "./work";
 
 function MarkReady({
@@ -63,6 +64,9 @@ function QuestionRow({
   readonly onChanged: () => void;
 }) {
   const services = useServices();
+  // An answer is read only when asked: one read per disclosure, never one per row.
+  const [showAnswer, setShowAnswer] = useState(false);
+  const answerPanel = useId();
   const command = useCommand<{ expectedRevision: number }, { readonly revision: number }>({
     marker: { workspaceId: ws, kind: "cancel" },
     send: (c) => services.port.work.cancelQuestion(ws, question.id, c),
@@ -85,6 +89,17 @@ function QuestionRow({
         >
           {copy.task.openQuestion}
         </RouteLink>
+        {question.status === "answered" ? (
+          <Button
+            variant="quiet"
+            aria-expanded={showAnswer}
+            aria-controls={answerPanel}
+            onClick={() => setShowAnswer((open) => !open)}
+          >
+            <Icon name="chevron" size={16} />
+            {showAnswer ? copy.task.hideAnswer : copy.task.showAnswer}
+          </Button>
+        ) : null}
         {question.status === "open" ? (
           <Button
             disabled={command.busy}
@@ -94,6 +109,11 @@ function QuestionRow({
           </Button>
         ) : null}
       </div>
+      {question.status === "answered" ? (
+        <div id={answerPanel} hidden={!showAnswer}>
+          {showAnswer ? <Answer ws={ws} questionId={question.id} compact /> : null}
+        </div>
+      ) : null}
       <CommandFeedback
         phase={command.phase}
         onCheckAgain={command.checkAgain}

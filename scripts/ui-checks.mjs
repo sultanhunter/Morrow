@@ -238,8 +238,15 @@ const fillGoal = async (page) => {
   await dialog.getByLabel("Criterion 1").fill("Range agreed");
   await dialog.getByRole("button", { name: "Create goal" }).click();
 };
+const fillSignup = async (page) => {
+  await page.getByLabel("Organization name").fill("Linen and Form Ltd");
+  await page.getByLabel("Workspace name").fill("Main");
+  await page.getByRole("button", { name: "Create organization" }).click();
+};
 export const fixtureCases = [
   fixtureCase("entry", "sign_in", `/w/${ws}`, { scenario: "session_expired" }),
+  // PR-2: the first account read at `/` is a 401 with nothing private shown.
+  fixtureCase("entry", "sign_in_landing", "/", { scenario: "session_expired" }),
   fixtureCase("entry", "signed_out", `/w/${ws}`, {
     setup: async (page) => {
       await signOut(page);
@@ -278,11 +285,117 @@ export const fixtureCases = [
   fixtureCase("account", "form", "/", { scenario: "account_form" }),
   fixtureCase("account", "chooser", "/", { scenario: "account_chooser" }),
   fixtureCase("account", "invite", "/", { scenario: "account_invite" }),
+  fixtureCase("account", "rate_limited", "/", {
+    scenario: "account_rate_limited",
+    setup: async (page) => {
+      await fillSignup(page);
+      await page.getByText("Too many attempts. Nothing was created.").waitFor();
+    },
+  }),
+  fixtureCase("account", "uncertain", "/", {
+    scenario: "account_uncertain",
+    setup: async (page) => {
+      await fillSignup(page);
+      await page.getByRole("button", { name: "Check again" }).waitFor();
+    },
+  }),
+  // Review rows (AC25, §4.10): each setup asserts the behaviour, then the state is checked.
+  // A failed account read still offers Sign out.
+  fixtureCase("account", "unavailable", "/", {
+    scenario: "account_unavailable",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Retry" }).waitFor();
+      expect(await page.getByRole("button", { name: "Sign out" }).isVisible(), "sign_out_shown");
+    },
+  }),
+  // 400 invalid_name marks both name fields.
+  fixtureCase("account", "invalid_name", "/", {
+    scenario: "account_invalid_name",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await fillSignup(page);
+      await page.getByText("Check the highlighted fields and try again.").waitFor();
+      expect((await page.getByText("Check this name and try again.").count()) === 2, "marked");
+    },
+  }),
+  // The guard's 400 names no field: nothing is marked, and the copy says so.
+  fixtureCase("account", "signup_refused", "/", {
+    scenario: "account_signup_refused",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await fillSignup(page);
+      await page.getByText("This request was refused.", { exact: false }).waitFor();
+      expect((await page.getByText("Check this name and try again.").count()) === 0, "unmarked");
+      expect((await page.getByText("Check the highlighted fields").count()) === 0, "no_pointer");
+    },
+  }),
+  // 403: "Creating…" while in flight, then the action stays off and the values stay.
+  fixtureCase("account", "signup_denied", "/", {
+    scenario: "account_signup_denied",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await fillSignup(page);
+      const creating = page.getByRole("button", { name: "Creating…" });
+      await creating.waitFor();
+      expect(await creating.isDisabled(), "disabled_in_flight");
+      await page.getByText("Creating an organization isn't available for this account.").waitFor();
+      expect(await page.getByRole("button", { name: "Create organization" }).isDisabled(), "held");
+      expect(
+        (await page.getByLabel("Organization name").inputValue()) === "Linen and Form Ltd" &&
+          (await page.getByLabel("Workspace name").inputValue()) === "Main",
+        "values_kept",
+      );
+    },
+  }),
+  // 409 already_onboarded: the account is read again and opens the one workspace.
+  fixtureCase("account", "already_onboarded", "/", {
+    scenario: "account_already_onboarded",
+    widths: [1440, 390],
+    setup: async (page) => {
+      await fillSignup(page);
+      await page.waitForURL(`**/w/${ws}`);
+      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+    },
+  }),
   fixtureCase("home", "ready", `/w/${ws}`),
   fixtureCase("home", "partial_denied", `/w/${ws}`, { scenario: "home_partial_denied" }),
+  fixtureCase("home", "loading", `/w/${ws}`, { scenario: "loading" }),
   fixtureCase("task", "brief", `/w/${ws}/work/task-titles`),
   fixtureCase("task", "questions", `/w/${ws}/work/task-titles`, {
     setup: (page) => page.getByRole("tab", { name: "Questions" }).click(),
+  }),
+  // An answered question's answer, shown on request (no landmark, no skipped heading).
+  fixtureCase("task", "questions_answer", `/w/${ws}/work/task-titles`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("tab", { name: "Questions" }).click();
+      await page.getByRole("button", { name: "Show answer" }).click();
+      await page.getByText("Yes, after the product type").waitFor();
+      expect(
+        (await page.getByRole("button", { name: "Hide answer" }).getAttribute("aria-expanded")) ===
+          "true",
+        "expanded",
+      );
+      expect(
+        (await page.locator("ul.item-list :is(section, h2, h3, h4)").count()) === 0,
+        "no_region_or_heading",
+      );
+    },
+  }),
+  fixtureCase("task", "ready_uncertain", `/w/${ws}/work/task-titles`, {
+    scenario: "uncertain",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Mark ready" }).click();
+      await page.getByRole("button", { name: "Check again" }).waitFor();
+    },
+  }),
+  fixtureCase("task", "ready_denied", `/w/${ws}/work/task-titles`, {
+    scenario: "ready_denied",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Mark ready" }).click();
+      await page.getByText("This operation is not permitted.").waitFor();
+    },
   }),
   ...["ready", "empty", "denied", "offline", "reentry"].map((scenario) =>
     fixtureCase("work", scenario, `/w/${ws}/work`, { scenario }),
@@ -292,6 +405,11 @@ export const fixtureCases = [
   fixtureCase("inbox", "inbox", `/w/${ws}/inbox`),
   fixtureCase("inbox", "question_open", `/w/${ws}/inbox/questions/q-source`),
   fixtureCase("inbox", "question_answered", `/w/${ws}/inbox/questions/q-titles`),
+  fixtureCase("inbox", "empty", `/w/${ws}/inbox`, { scenario: "empty" }),
+  fixtureCase("inbox", "question_expired", `/w/${ws}/inbox/questions/q-source`, {
+    scenario: "question_expired",
+  }),
+  fixtureCase("inbox", "question_cancelled", `/w/${ws}/inbox/questions/q-returns`),
   fixtureCase("overlay", "drawer", `/w/${ws}`, {
     widths: [390, 320],
     setup: (page) => page.getByRole("button", { name: "Open navigation" }).click(),
@@ -528,6 +646,124 @@ export const keyboardWalks = [
       await tabTo(page, (a) => a.text === "Create organization");
       await page.keyboard.press("Enter");
       await page.waitForURL(`**/w/${ws}`);
+    },
+  },
+  {
+    // PR-2 account landing: Up and Down move between workspace rows; Enter opens one.
+    name: "account_chooser",
+    path: "/",
+    scenario: "account_chooser",
+    run: async (page) => {
+      await tabTo(page, (a) => a.tag === "A" && a.text.includes("Sample workspace 1"));
+      await page.keyboard.press("ArrowDown");
+      expect((await active(page)).text.includes("Sample workspace 2"), "arrow_down");
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("ArrowDown");
+      expect((await active(page)).text.includes("Sample workspace 3"), "stays_on_last");
+      await page.keyboard.press("ArrowUp");
+      expect((await active(page)).text.includes("Sample workspace 2"), "arrow_up");
+      await page.keyboard.press("Enter");
+      await page.waitForURL("**/w/ws-sample-2");
+    },
+  },
+  {
+    // AC25: a 429 holds Create organization for Retry-After (2 s here); then it creates.
+    name: "signup_rate_limited",
+    path: "/",
+    scenario: "account_rate_limited_brief",
+    run: async (page) => {
+      await tabTo(page, (a) => a.tag === "INPUT");
+      await page.keyboard.type("Linen and Form Ltd");
+      await page.keyboard.press("Tab");
+      await page.keyboard.type("Main");
+      await tabTo(page, (a) => a.text === "Create organization");
+      await page.keyboard.press("Enter");
+      await page.getByText("Too many attempts. Nothing was created.").waitFor();
+      const create = page.getByRole("button", { name: "Create organization" });
+      expect(await create.isDisabled(), "held");
+      await page.waitForFunction(
+        () =>
+          [...document.querySelectorAll("button")].some(
+            (b) => b.textContent === "Create organization" && !b.disabled,
+          ),
+        null,
+        { timeout: 10000 },
+      );
+      expect((await page.getByText("Too many attempts").count()) === 0, "stale_copy_cleared");
+      await create.focus();
+      await page.keyboard.press("Enter");
+      await page.waitForURL(`**/w/${ws}`);
+    },
+  },
+  {
+    // AC25: an unknown signup outcome keeps the form filled and disabled; Check again
+    // resends the same key, and the replay opens the workspace once.
+    name: "signup_uncertain",
+    path: "/",
+    scenario: "account_uncertain",
+    run: async (page) => {
+      await tabTo(page, (a) => a.tag === "INPUT");
+      await page.keyboard.type("Linen and Form Ltd");
+      await page.keyboard.press("Tab");
+      await page.keyboard.type("Main");
+      await tabTo(page, (a) => a.text === "Create organization");
+      await page.keyboard.press("Enter");
+      await page.getByRole("button", { name: "Check again" }).waitFor();
+      expect(await page.getByLabel("Organization name").isDisabled(), "form_disabled");
+      expect(
+        (await page.getByLabel("Organization name").inputValue()) === "Linen and Form Ltd",
+        "form_kept",
+      );
+      await page.getByRole("button", { name: "Check again" }).focus();
+      await page.keyboard.press("Enter");
+      await page.waitForURL(`**/w/${ws}`);
+      await page.getByRole("heading", { name: "Linen & Form" }).waitFor();
+    },
+  },
+  {
+    // The account landing's Sign out (no identity is shown: no "You").
+    name: "account_sign_out",
+    path: "/",
+    scenario: "account_invite",
+    run: async (page) => {
+      await tabTo(page, (a) => a.text === "Sign out");
+      await page.keyboard.press("Enter");
+      await page.getByRole("heading", { name: "You're signed out" }).waitFor();
+      expect((await morrowKeys(page)).length === 0, "storage_cleared");
+    },
+  },
+  {
+    // A Check again whose replay lands after Cancel still confirms the task under its own
+    // goal; the dialog, reopened on another goal meanwhile, keeps its draft.
+    name: "task_reply_after_cancel",
+    path: `/w/${ws}/work`,
+    scenario: "uncertain_late",
+    run: async (page) => {
+      await page.getByRole("button", { name: "Create task" }).first().click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("Objective").fill("Check the size chart");
+      await dialog.getByRole("button", { name: "Create task" }).click();
+      await dialog.getByRole("button", { name: "Check again" }).click();
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await dialog.waitFor({ state: "hidden" });
+      await page.getByRole("button", { name: "Create task" }).nth(1).click();
+      await dialog.getByLabel("Objective").fill("Draft kept");
+      await page.getByText("Task created.").waitFor({ timeout: 5000 });
+      expect(await dialog.isVisible(), "reopened_dialog_kept");
+      expect((await dialog.getByLabel("Objective").inputValue()) === "Draft kept", "draft_kept");
+      expect(
+        await dialog.getByText("Publish clear care instructions for every linen item").isVisible(),
+        "other_goal",
+      );
+      await dialog.getByRole("button", { name: "Cancel" }).focus();
+      await page.keyboard.press("Enter");
+      await dialog.waitFor({ state: "hidden" });
+      await page.getByRole("link", { name: "Check the size chart" }).waitFor();
+      const tasks = page.locator("li.goal").first();
+      expect(
+        (await tasks.getByRole("link", { name: "Check the size chart" }).count()) === 1,
+        "listed_under_its_goal",
+      );
     },
   },
   {

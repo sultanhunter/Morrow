@@ -42,7 +42,11 @@ function docker(args, { input, allowFailure = false, timeout = 60000 } = {}) {
   return { code: result.status, stdout: (result.stdout ?? "").trim() };
 }
 
-export async function localEngine(use) {
+// `roles` defaults to the seven edge roles; the P14.T01a browser lab adds the api
+// Worker's work login (`morrow_api_worker`), whose role its migrations create.
+export async function localEngine(use, { roles = edgePostgresqlRoles } = {}) {
+  require(Array.isArray(roles) &&
+    roles.every((role) => typeof role === "string" && /^morrow_[a-z_]{1,48}$/.test(role)), "ROLES");
   const config = JSON.parse(readFileSync("infra/local-engine.json", "utf8"));
   require(/^postgres@sha256:[a-f0-9]{64}$/.test(config.image) && config.major === 17, "IMAGE_PIN");
   require(docker(["image", "inspect", config.image], { allowFailure: true }).code ===
@@ -54,7 +58,6 @@ export async function localEngine(use) {
     "", "LEFTOVER_CONTAINER");
   const nonce = randomUUID().replaceAll("-", "");
   const name = "morrow-edge-local-pg-" + nonce;
-  const roles = edgePostgresqlRoles;
   const passwordByRole = Object.fromEntries(
     roles.map((role) => [role, randomBytes(32).toString("hex")]),
   );

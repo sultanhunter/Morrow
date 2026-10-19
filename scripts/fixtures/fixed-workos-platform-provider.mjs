@@ -4,6 +4,7 @@ import { createFixedWorkosProviderOracle } from "./fixed-workos-provider.mjs";
 
 // Native HTTP boundary oracle. Reuse independent RSA/configuration/issuance only;
 // never call the86 synthetic Fetch or manufacture Response URL attributes.
+const sessionLifetimeMs = 60000;
 export function createPlatformWorkosProviderOracle(options = {}) {
   const crypto = createFixedWorkosProviderOracle(options);
   const configuration = JSON.parse(crypto.configurationJson);
@@ -33,11 +34,17 @@ export function createPlatformWorkosProviderOracle(options = {}) {
     return issued;
   };
   const issueAuthorization = (input) => register(crypto.issueCode(input), input.challenge);
-  const arm = (url) => {
+  // `input` may name another synthetic subject and provider session (P14.T01a PR-2: a
+  // second person and a fresh signup sign in through the same oracle).
+  const arm = (url, input = {}) => {
     const authorization = new URL(url);
     assert.equal(authorization.username + authorization.password + authorization.hash, "");
+    assert.deepEqual(
+      Object.keys(input).filter((key) => !["subjectId", "sessionId"].includes(key)),
+      [],
+    );
     // arm independently validates the seven authorization fields and client/callback.
-    return register(crypto.arm(url), authorization.searchParams.get("code_challenge"));
+    return register(crypto.arm(url, input), authorization.searchParams.get("code_challenge"));
   };
   const activate = (issued) => {
     sessions.set(issued.claims.sid, { claims: issued.claims, at: crypto.now() });
@@ -117,8 +124,14 @@ export function createPlatformWorkosProviderOracle(options = {}) {
           !url.searchParams.has("after") ||
             /^session_[A-Z0-9]{26}$/.test(url.searchParams.get("after")),
         );
-        const rows = [...sessions.values()]
-          .filter((entry) => entry.claims.sub === match[1])
+        const known = [...sessions.values()].filter((entry) => entry.claims.sub === match[1]);
+        assert.ok(known.length > 0, "independent active catalogue");
+        // Each synthetic session lives 60 s. A provider never lists a session past its
+        // expiry as active, and the reader refuses a page with such a row, so a subject
+        // that signs in again later (P14.T01a AC30, A's re-entry minutes after its first
+        // sign-in) reads only its live sessions. 5 s of margin covers the reader's clock.
+        const rows = known
+          .filter((entry) => entry.at + sessionLifetimeMs > crypto.now() + 5000)
           .map((entry) => ({
             object: "session",
             id: entry.claims.sid,
@@ -128,9 +141,8 @@ export function createPlatformWorkosProviderOracle(options = {}) {
             ended_at: null,
             created_at: new Date(entry.at - 60000).toISOString(),
             updated_at: new Date(entry.at - 1000).toISOString(),
-            expires_at: new Date(entry.at + 60000).toISOString(),
+            expires_at: new Date(entry.at + sessionLifetimeMs).toISOString(),
           }));
-        assert.ok(rows.length > 0, "independent active catalogue");
         text = JSON.stringify({
           object: "list",
           data: rows,

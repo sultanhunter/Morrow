@@ -155,6 +155,14 @@
 .switcher-item[aria-checked="true"] {
   background: var(--color-accent-surface);
 }
+.switcher-item-text {
+  display: grid;
+  min-width: 0;
+}
+.switcher-item-org {
+  color: var(--color-subdued);
+  font-size: var(--type-caption-size);
+}
 .switcher-note {
   padding: var(--space-2) var(--space-3);
 }
