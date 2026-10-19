@@ -20,6 +20,8 @@ type Case = {
 };
 const first = "A".repeat(43),
   second = "B".repeat(42) + "A";
+// P05.T01y-AC26: plans produced after the SQL call was invoked carry exactly this clear.
+const clear = "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
 export default {
   async fetch(request: Request) {
     if (request.method !== "POST" || new URL(request.url).pathname !== "/synthetic-logout")
@@ -74,6 +76,8 @@ export default {
           signal: abort.signal,
         });
       let response: Response;
+      // A response this fixture synthesizes (no dispatcher plan) carries no cookie.
+      let synthesized = false;
       if (c.mode === "heldRelease" || c.mode === "lateConnection" || c.mode === "race") {
         const original = make(),
           replay = original.clone();
@@ -105,6 +109,7 @@ export default {
             await Promise.resolve();
           check(c.name + ":late_connection_disposed", fixture.metrics.releaseCompletions === 1);
           check(c.name + ":no_function", fixture.metrics.invocationCount === 0);
+          synthesized = true;
           response = new Response(
             JSON.stringify({ schemaVersion: 1, outcome: "logout_unavailable" }),
             { status: 503 },
@@ -116,7 +121,7 @@ export default {
             c.name + ":replay_old_only",
             same.status === 200 && fixture.metrics.effects === 1 && !(await fixture.ended(second)),
           );
-          check(c.name + ":no_cookie_replay", same.headers.getSetCookie().length === 0);
+          check(c.name + ":clear_replay", same.headers.getSetCookie().join() === clear);
           const fresh = await handler.fetch(
             logoutFixtureRequest({ cookie: "__Host-morrow_session=" + second }),
           );
@@ -137,7 +142,7 @@ export default {
                 output.headers.every(Object.isFrozen) &&
                 Object.isFrozen(output.cookies),
             );
-            check(c.name + ":no_cookie_snapshot", output.cookies.length === 0);
+            check(c.name + ":clear_snapshot", output.cookies.join() === clear);
             if (c.mode === "sinkReject") return Promise.reject(Error("SYNTHETIC_PRIVATE_FAULT"));
             if (c.mode === "sinkPending") return new Promise<void>(() => {});
             throw Error("SYNTHETIC_PRIVATE_FAULT");
@@ -146,6 +151,7 @@ export default {
           failed = true;
         }
         check(c.name + ":single_unknown_transport", failed && sinkInvocations === 1);
+        synthesized = true;
         response = new Response(
           JSON.stringify({ schemaVersion: 1, outcome: "logout_outcome_unknown" }),
           { status: 503 },
@@ -154,6 +160,7 @@ export default {
         try {
           response = await handler.fetch(make());
         } catch {
+          synthesized = true;
           response = new Response(
             JSON.stringify({ schemaVersion: 1, outcome: "logout_outcome_unknown" }),
             { status: 503 },
@@ -166,7 +173,14 @@ export default {
         c.name + ":fixed_body",
         text === JSON.stringify({ schemaVersion: 1, outcome: c.outcome }),
       );
-      check(c.name + ":zero_cookie", response.headers.getSetCookie().length === 0);
+      // The clear only after SQL: 200, the SQL 403 (foreign family) and an unknown outcome.
+      const cleared =
+        !synthesized &&
+        (response.status === 200 || c.mode === "foreign" || c.outcome === "logout_outcome_unknown");
+      check(
+        c.name + ":cookie_policy",
+        response.headers.getSetCookie().join() === (cleared ? clear : ""),
+      );
       check(
         c.name + ":no_redirect_or_CORS",
         !response.headers.has("location") && !response.headers.has("access-control-allow-origin"),

@@ -192,8 +192,27 @@ try {
       !r.headers.has("access-control-allow-origin");
     const noCookie = (r) =>
       r.headers.getSetCookie().length === 0 && !r.headers.has("location") && safe(r);
+    // P05.T01y-AC26: plans produced after the SQL call carry exactly the session clear.
+    const sessionClear =
+      "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
+    const cleared = (r) =>
+      r.headers.getSetCookie().join() === sessionClear && !r.headers.has("location") && safe(r);
     const ended = (r) =>
-      r.status === 200 && r.text === '{"schemaVersion":1,"outcome":"session_ended"}' && noCookie(r);
+      r.status === 200 && r.text === '{"schemaVersion":1,"outcome":"session_ended"}' && cleared(r);
+    // After the clear the jar keeps every other cookie it held (the login cookie the callback
+    // never clears may remain, or may have reached its own Max-Age) and no session cookie.
+    const withoutSession = (header) =>
+      header
+        .split("; ")
+        .filter((pair) => !pair.startsWith("__Host-morrow_session="))
+        .join("; ");
+    const sessionGone = (jar, before) => {
+      const after = jar.header(origin + "/");
+      return (
+        !jar.names().includes("__Host-morrow_session") &&
+        (after === undefined || after === withoutSession(before))
+      );
+    };
     const allPools = () => [...h.rolePools, ...h.logoutRolePools, ...readPools];
     const sqlCount = () => allPools().reduce((n, p) => n + p.metrics.connections, 0);
     const identityCount = () =>
@@ -419,7 +438,7 @@ try {
       check(
         "foreign_trusted_namespace_cannot_retire_captured_credential",
         foreignReply.status === 403 &&
-          noCookie(foreignReply) &&
+          cleared(foreignReply) &&
           auditCount(original.family_id) === 0,
       );
       c.activate();
@@ -436,9 +455,10 @@ try {
       const result = await logout(original.header);
       check("real_https_captured_cookie_ends_derived_family", ended(result));
       check(
-        "logout_keeps_cookie_jar_exactly_unchanged",
-        c.jar.ingest(origin + "/auth/logout", result.headers).accepted === 0 &&
-          c.jar.header(origin + "/") === original.header,
+        "logout_clear_removes_the_session_cookie_from_the_jar",
+        c.jar.header(origin + "/") === original.header &&
+          c.jar.ingest(origin + "/auth/logout", result.headers).accepted === 1 &&
+          sessionGone(c.jar, original.header),
       );
       check(
         "logout_exactly_one_revocation_audit_revision",
@@ -574,12 +594,18 @@ try {
       gate.resolve();
       const delayed = await pending;
       armed = false;
+      // P05.T01y-AC28, the documented fixed-name limitation: the delayed clear for the old
+      // family names the same cookie, so the jar drops the newer session cookie. The server
+      // still ends only the old family; the newer one stays live and bootstraps when presented.
       check(
-        "delayed_old_response_cannot_clear_new_login_cookie",
+        "delayed_old_response_clears_newer_session_cookie_fixed_name_limitation",
         ended(delayed) &&
-          newerJar.ingest(origin + "/auth/logout", delayed.headers).accepted === 0 &&
           newerJar.header(origin + "/") === newer.header &&
-          newer.secret !== old.secret,
+          newerJar.ingest(origin + "/auth/logout", delayed.headers).accepted === 1 &&
+          sessionGone(newerJar, newer.header) &&
+          newer.secret !== old.secret &&
+          auditCount(old.family_id) === 1 &&
+          auditCount(newer.family_id) === 0,
       );
       check(
         "same_provider_binding_other_family_preserved",
@@ -677,10 +703,10 @@ try {
           issued = await issue(x);
         const r = await logout(issued.header);
         check(
-          "actual_" + fault + "_ack_loss_unknown_no_cookie",
+          "actual_" + fault + "_ack_loss_unknown_clears_cookie",
           r.status === 503 &&
             r.text === '{"schemaVersion":1,"outcome":"logout_outcome_unknown"}' &&
-            noCookie(r),
+            cleared(r),
         );
         check(
           "actual_" + fault + "_ack_loss_one_effect_no_followup_sql",
@@ -824,6 +850,7 @@ const report = {
   limitations: [
     "Private synthetic independently signed provider; no native provider calls/keys, hosted driver/custody or merchant activation.",
     "Bounded HTTP cookie jar using locked standard parser is not a browser engine.",
+    "The logout clear names the fixed session cookie: a delayed logout response for an older family drops a newer session cookie from the jar while the server keeps the newer family live (P05.T01y-AC28 limitation).",
     "One expired-family case is explicitly owner-seeded at past valid fixed15minute times, not a15minute waited live issuance.",
     "Lost actual COMMIT/release/HTTP acknowledgement withholds response;200acknowledges server state, not delivery or all-device/provider logout.",
   ],

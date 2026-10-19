@@ -22,8 +22,13 @@ const secret = (value) =>
   typeof value === "string" && /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/.test(value);
 const caps = new Map([
   ["__Host-morrow_login", 300],
-  ["__Host-morrow_session", 900],
+  // P05.T01y: a session generation lives at most 30 idle minutes (ADR-0004).
+  ["__Host-morrow_session", 1800],
 ]);
+// The exact logout clear (P05.T01y). RFC 6265bis: a cookie whose Max-Age is zero replaces
+// the stored cookie of the same name, host and path and is then removed, so the jar
+// deletes the session cookie. No other Max-Age=0 field is accepted.
+const sessionClear = "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
 
 /** An intentionally bounded two-cookie qualification jar, not a browser engine. */
 export function createBoundedLoginCookieJar({ now = Date.now } = {}) {
@@ -64,6 +69,17 @@ export function createBoundedLoginCookieJar({ now = Date.now } = {}) {
       for (let i = 0; i < raw.length; i++) {
         const text = raw[i],
           cookie = parsed[i];
+        if (
+          text === sessionClear &&
+          url.protocol === "https:" &&
+          url.hostname === "127.0.0.1" &&
+          !seen.has("__Host-morrow_session")
+        ) {
+          seen.add("__Host-morrow_session");
+          prepared.push(["__Host-morrow_session", null]);
+          accepted++;
+          continue;
+        }
         const pieces = typeof text === "string" ? text.split(";") : [];
         const pair = pieces[0];
         const attributes = pieces
@@ -74,7 +90,7 @@ export function createBoundedLoginCookieJar({ now = Date.now } = {}) {
         const attributeProfile = pieces
           .slice(1)
           .every((part) =>
-            /^(?:Path=\/|Secure|HttpOnly|SameSite=Lax|Max-Age=[1-9][0-9]{0,2})$/i.test(part.trim()),
+            /^(?:Path=\/|Secure|HttpOnly|SameSite=Lax|Max-Age=[1-9][0-9]{0,3})$/i.test(part.trim()),
           );
         if (
           !cookie ||
@@ -120,7 +136,9 @@ export function createBoundedLoginCookieJar({ now = Date.now } = {}) {
       }
       // A malformed/combined/duplicated field never partially updates the jar.
       if (rejected) return Object.freeze({ accepted: 0, rejected: raw.length });
-      for (const [name, cookie] of prepared) stored.set(name, cookie);
+      for (const [name, cookie] of prepared)
+        if (cookie === null) stored.delete(name);
+        else stored.set(name, cookie);
       return Object.freeze({ accepted, rejected });
     },
     header(value) {

@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./validation": "./src/validation.ts",
+    "./validators/*": "./src/generated/validators/*.mjs",
     "./client": "./src/client.ts",
+    "./routes": "./src/routes.ts",
     "./work-permissions": "./src/work-permissions.ts"
   },
   "scripts": {

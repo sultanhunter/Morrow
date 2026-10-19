@@ -2,11 +2,7 @@
   "schema_version": 1,
   "plan_sequence": 43,
   "scope": "Unbound operational dashboard/alert inventory, not deployed alarms or paging qualification",
-  "metric_dimensions": [
-    "Environment",
-    "Service",
-    "Code"
-  ],
+  "metric_dimensions": ["Environment", "Service", "Code"],
   "excluded_dimensions": [
     "correlation_id",
     "store",

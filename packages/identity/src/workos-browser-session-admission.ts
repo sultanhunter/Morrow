@@ -256,7 +256,8 @@ function decode(
   if (
     !time(expiry) ||
     (generated && (v.family_id !== generated[0] || v.generation_id !== generated[1])) ||
-    (outcome === "newly_admitted" && (expiry <= at || expiry > at + 900000))
+    // P05.T01y: a new generation expires at most 30 minutes after admission (ADR-0004).
+    (outcome === "newly_admitted" && (expiry <= at || expiry > at + 1800000))
   )
     throw fail();
   return {

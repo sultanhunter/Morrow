@@ -1,4 +1,5 @@
 import { parseWorkosSessionStatusJson } from "./workos-session-status-json.js";
+import { LoginInputError, loginJson, type LoginAttempt } from "./standalone-login-protocol.js";
 
 // Additive request primitives (P06.T01a §4.9) shared by the P05 standalone guard
 // and the P06 work guard, so both derive the session digest identically. Pure:
@@ -57,3 +58,97 @@ export async function sessionCookieDigest(header: string | null): Promise<string
 /** Strict JSON text: duplicate member names and lone surrogates are rejected. */
 export const parseStrictJson: (value: unknown, maxBytes: number) => unknown =
   parseWorkosSessionStatusJson;
+
+// Session cookie primitives (P05.T01y, ADR-0004). One cookie name, one profile.
+
+/**
+ * The exact logout clear. A fixed-name clear also drops a newer cookie of the same name
+ * in that browser: a delayed logout from an old tab ends only its own family on the
+ * server, but signs the browser out of a newer family too (documented limitation).
+ */
+export const SESSION_COOKIE_CLEAR =
+  "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0";
+
+/**
+ * The session cookie for a generation with `idleRemainingMs` left:
+ * Max-Age = min(1800, floor(idleRemainingMs / 1000)); null when under one second or invalid.
+ */
+export function sessionCookie(secret: string, idleRemainingMs: number): string | null {
+  if (!canonicalSessionSecret(secret) || !Number.isSafeInteger(idleRemainingMs)) return null;
+  const age = Math.min(1800, Math.floor(idleRemainingMs / 1000));
+  if (age < 1) return null;
+  return `__Host-morrow_session=${secret}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${age}`;
+}
+
+/**
+ * Same-origin browser proof for a session mutation (logout, rotate): the exact Origin,
+ * JSON, X-Morrow-Request: 1, no Idempotency-Key, and Fetch Metadata same-origin or absent.
+ * Throws LoginInputError(403) otherwise.
+ */
+export function assertSessionBrowserProof(request: Request, origin: string): void {
+  if (
+    request.headers.get("origin") !== origin ||
+    request.headers.get("content-type") !== "application/json" ||
+    request.headers.get("x-morrow-request") !== "1" ||
+    request.headers.has("idempotency-key")
+  )
+    throw new LoginInputError(403);
+  const site = request.headers.get("sec-fetch-site"),
+    mode = request.headers.get("sec-fetch-mode"),
+    dest = request.headers.get("sec-fetch-dest");
+  if (
+    (site !== null && site !== "same-origin") ||
+    (mode !== null && mode !== "cors" && mode !== "same-origin") ||
+    (dest !== null && dest !== "empty")
+  )
+    throw new LoginInputError(403);
+}
+
+/**
+ * Reads the body under the attempt: at most 256 bytes of exactly {"schemaVersion":1}.
+ * Throws LoginInputError(400) otherwise.
+ */
+export async function readSchemaVersionBody(
+  request: Request,
+  attempt: Pick<LoginAttempt, "wait">,
+): Promise<void> {
+  const length = request.headers.get("content-length"),
+    encoding = request.headers.get("transfer-encoding");
+  if (
+    (length !== null && (!/^(0|[1-9][0-9]{0,2})$/.test(length) || Number(length) > 256)) ||
+    (encoding !== null && (encoding !== "chunked" || length !== null))
+  )
+    throw new LoginInputError(400);
+  const reader = request.body?.getReader();
+  if (!reader) throw new LoginInputError(400);
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  try {
+    for (;;) {
+      const next = await attempt.wait(reader.read());
+      if (next.done) break;
+      bytes += next.value.byteLength;
+      if (bytes > 256) throw new LoginInputError(400);
+      chunks.push(new Uint8Array(next.value));
+    }
+    if (length !== null && Number(length) !== bytes) throw new LoginInputError(400);
+    const all = new Uint8Array(bytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      all.set(chunk, offset);
+      offset += chunk.length;
+    }
+    let value: Readonly<Record<string, unknown>>;
+    try {
+      value = loginJson(new TextDecoder("utf-8", { fatal: true }).decode(all), 256, [
+        "schemaVersion",
+      ]);
+    } catch {
+      throw new LoginInputError(400);
+    }
+    if (value.schemaVersion !== 1) throw new LoginInputError(400);
+  } finally {
+    void reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}

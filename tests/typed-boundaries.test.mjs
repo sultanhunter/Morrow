@@ -148,14 +148,113 @@ for (const code of [
   test("deny UI crossing: " + code, () =>
     assert.ok(inspectImports("apps/workspace-web/src/test.tsx", code).length > 0),
   );
-test("ordinary shared UI imports allowed", () =>
+test("ordinary shared UI imports allowed", () => {
+  for (const code of [
+    "import {AppShell} from '@morrow/workspace-ui'",
+    "import '@morrow/workspace-ui/styles.css'",
+    "import {matchWorkspacePath} from '@morrow/contracts/routes'",
+  ])
+    assert.deepEqual(inspectImports("apps/workspace-web/src/test.tsx", code), [], code);
+});
+// P05.T01y: browser code validates through the per-definition modules of the closed list,
+// never through the validator table or the capability client that imports it.
+test("UI validates only through listed per-definition validator modules", () => {
+  const keeper = "packages/workspace-ui/src/session-keeper.ts";
   assert.deepEqual(
     inspectImports(
-      "apps/workspace-web/src/test.tsx",
-      "import {FoundationNotice} from '@morrow/workspace-ui'",
+      keeper,
+      "import {validateSessionRotationResult} from '@morrow/contracts/validators/SessionRotationResult'",
     ),
     [],
-  ));
+  );
+  for (const code of [
+    "import {validateCurrentDefinition} from '@morrow/contracts/validation'",
+    "import {createCapabilityClient} from '@morrow/contracts/client'",
+    "import {validateProposal} from '@morrow/contracts/validators/Proposal'",
+  ])
+    assert.ok(inspectImports(keeper, code).includes("UI_UNREVIEWED_DEPENDENCY"), code);
+  for (const code of [
+    "import {validateDefinition} from '../../contracts/src/validation'",
+    "import {validateDefinition} from '../../contracts/src/validation.ts'",
+    "import {createCapabilityClient} from '../../contracts/src/client'",
+    "import {validators} from '../../contracts/src/generated/runtime-validators.mjs'",
+    // Spellings esbuild and Vite also resolve to the table.
+    "import {validateDefinition} from '../../contracts/src/validation.js'",
+    "import {validateDefinition} from '../../contracts/src/validation.mjs'",
+    "import {createCapabilityClient} from '../../contracts/src/client.js'",
+    "import {validateDefinition} from '../../contracts/src/validation.ts?x'",
+    "import {validateDefinition} from '../../contracts/src/validation.js#x'",
+    "import {createCapabilityClient} from '../../contracts/src/client?raw'",
+    "import {validateDefinition} from '../../contracts/src/Validation.ts'",
+    "export {validateDefinition} from '../../contracts/src/validation.js'",
+    "const v = import('../../contracts/src/validation.js')",
+  ])
+    assert.ok(inspectImports(keeper, code).includes("UI_VALIDATOR_TABLE_IMPORT"), code);
+  // Neighbouring contract sources keep their own rules.
+  for (const code of [
+    "import {routes} from '../../contracts/src/routes.ts'",
+    "import {x} from '../../contracts/src/validation-notes.ts'",
+  ])
+    assert.ok(!inspectImports(keeper, code).includes("UI_VALIDATOR_TABLE_IMPORT"), code);
+  // Server packages keep the table.
+  assert.deepEqual(
+    inspectImports(
+      "packages/identity/src/x.ts",
+      "import {validateDefinition} from '@morrow/contracts/validation'",
+    ),
+    [],
+  );
+});
+// P14.T01a §4.11 (a) and AC13: fixture code is reachable only from fixture-main.tsx.
+test("only the fixture entry, the fixtures themselves and tests import src/fixtures", () => {
+  const code = "import {createFixtureAdapter} from './fixtures/adapter';";
+  assert.ok(inspectImports("apps/workspace-web/src/app.tsx", code).includes("UI_FIXTURE_IMPORT"));
+  assert.ok(inspectImports("apps/workspace-web/src/main.tsx", code).includes("UI_FIXTURE_IMPORT"));
+  assert.deepEqual(inspectImports("apps/workspace-web/src/fixture-main.tsx", code), []);
+  assert.deepEqual(
+    inspectImports(
+      "apps/workspace-web/src/fixtures/adapter.ts",
+      "import {createSeed} from './seed';",
+    ),
+    [],
+  );
+  assert.ok(
+    !inspectImports(
+      "tests/workspace-web-fixture.test.mjs",
+      "import {createFixtureAdapter} from '../apps/workspace-web/src/fixtures/adapter.ts';",
+    ).includes("UI_FIXTURE_IMPORT"),
+  );
+});
+// P14.T01a §5: no HTML sinks, cookies, dynamic code or localStorage in UI source, and
+// sessionStorage only in the intended-route and pending modules.
+for (const [code, expected] of [
+  ["const a = <p dangerouslySetInnerHTML={{ __html: x }} />;", "UI_HTML_SINK"],
+  ["el.outerHTML = x;", "UI_HTML_SINK"],
+  ["el.insertAdjacentHTML('beforeend', x);", "UI_HTML_SINK"],
+  ["el['innerHTML'] = x;", "UI_HTML_SINK"],
+  ["document.writeln(x);", "UI_HTML_SINK"],
+  ["const c = document['cookie'];", "UI_COOKIE_ACCESS"],
+  ["const f = Function('return 1');", "UI_DYNAMIC_CODE"],
+  ["const v = window.localStorage;", "UI_LOCAL_STORAGE"],
+  ["const s = globalThis.sessionStorage;", "UI_SESSION_STORAGE_OUTSIDE_OWNER"],
+])
+  test("UI source sink denied: " + code, () =>
+    assert.ok(inspectImports("packages/workspace-ui/src/x.tsx", code).includes(expected)),
+  );
+test("sessionStorage is allowed in the two owners only", () => {
+  const code = "const s = globalThis.sessionStorage;";
+  for (const owner of [
+    "apps/workspace-web/src/intended-route.ts",
+    "apps/workspace-web/src/pending.ts",
+  ])
+    assert.deepEqual(inspectImports(owner, code), [], owner);
+  assert.ok(
+    inspectImports("apps/workspace-web/src/router.ts", code).includes(
+      "UI_SESSION_STORAGE_OUTSIDE_OWNER",
+    ),
+  );
+  assert.deepEqual(inspectImports("scripts/ui-checks.mjs", "localStorage.clear();"), []);
+});
 test("neutral contracts cannot depend on app implementations", () =>
   assert.ok(
     inspectImports(

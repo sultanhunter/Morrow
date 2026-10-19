@@ -294,6 +294,25 @@ test("safe executor and both membership directions are mandatory", async () => {
     assert.deepEqual(s.releases, [true]);
   }
 });
+test("P05.T01y-AC30: a generation expiring 30 minutes after admission is accepted, one ms more is not", async () => {
+  for (const [offset, accepted] of [
+    [900000, true],
+    [1800000, true],
+    [1800001, false],
+  ]) {
+    const s = await setup({
+      result: (stage, standard, state) =>
+        stage === "admit"
+          ? { rows: [{ ...standard.rows[0], expires_at_ms: String(state.now + offset) }] }
+          : standard,
+    });
+    const r = await s.service.admit(s.proof.handle, selector());
+    if (accepted) {
+      assert.equal(r.outcome, "newly_admitted");
+      assert.equal(r.credential.expiresAtMs, s.f.at + offset);
+    } else isHeld(r);
+  }
+});
 test("closed sixTEXTrow, nullable matrix, echoed IDs and exact expiry reject malformed replies", async () => {
   const changes = [
     { outcome: "unknown" },
@@ -305,7 +324,8 @@ test("closed sixTEXTrow, nullable matrix, echoed IDs and exact expiry reject mal
     { audit_id: null },
     { expires_at_ms: "1e12" },
     { expires_at_ms: "8640000000000001" },
-    { expires_at_ms: "1800000900001" },
+    // P05.T01y-AC30: more than 30 minutes after admission.
+    { expires_at_ms: "1800001800001" },
     { extra: true },
   ];
   for (const change of changes) {

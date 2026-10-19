@@ -358,6 +358,7 @@ export type CoreV1_1_ReviewDecisionInput = (unknown & { "decision": "approve" | 
 export type CoreV1_1_AccountOverview = { "schemaVersion": 1; "workspaces": Array<{ "organizationId": Core_Id; "organizationName": string; "workspaceId": Core_Id; "workspaceName": string; }>; "truncated": boolean; "onboarding": "available" | "unavailable"; };
 export type CoreV1_1_OrganizationSignupRequest = { "schemaVersion": 1; "organizationName": string; "workspaceName": string; };
 export type CoreV1_1_OrganizationSignupResult = ({ "schemaVersion": 1; "outcome": "created" | "replayed"; "organizationId": Core_Id; "workspaceId": Core_Id; } | { "schemaVersion": 1; "outcome": "invalid_name" | "signup_unavailable" | "already_onboarded" | "idempotency_conflict" | "rate_limited" | "outcome_unknown"; });
+export type CoreV1_1_SessionRotationResult = { "schemaVersion": 1; "outcome": "rotated" | "current"; "idleRemainingMs": number; "absoluteRemainingMs": number; };
 export type CapabilityV1_1_ads_campaign_pause_input = { "campaigns": CoreV1_1_CampaignRefs; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_agents_installation_disable_input = { "installationId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_governance_membership_revoke_input = { "membershipId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
@@ -516,6 +517,7 @@ export interface CurrentDefinitions {
   "SearchMetricList": Core_SearchMetricList;
   "SegmentList": Core_SegmentList;
   "SelectionIndexes": CoreV1_1_SelectionIndexes;
+  "SessionRotationResult": CoreV1_1_SessionRotationResult;
   "SkillRelease": Core_SkillRelease;
   "SnapshotRef": Core_SnapshotRef;
   "SoloOwnerRule": CoreV1_1_SoloOwnerRule;
@@ -656,6 +658,7 @@ export type Current_ScopeRef = Core_ScopeRef;
 export type Current_SearchMetricList = Core_SearchMetricList;
 export type Current_SegmentList = Core_SegmentList;
 export type Current_SelectionIndexes = CoreV1_1_SelectionIndexes;
+export type Current_SessionRotationResult = CoreV1_1_SessionRotationResult;
 export type Current_SkillRelease = Core_SkillRelease;
 export type Current_SnapshotRef = Core_SnapshotRef;
 export type Current_SoloOwnerRule = CoreV1_1_SoloOwnerRule;

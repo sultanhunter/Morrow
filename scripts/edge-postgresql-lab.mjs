@@ -82,7 +82,10 @@ function fixtureAdministratorSql(engineId, sql) {
 }
 
 // The journeys, given an owned engine and the matching WSS->TCP service factory.
-export async function edgePostgresqlJourneys(engine, createService) {
+// `hook` (P14.T01a) lets the browser lab reuse this setup unchanged: `origin` and
+// `listen` give the api a real HTTPS listener on an ephemeral port, and `journeys`
+// replaces the P04 scenarios; the cleanup and marker checks stay shared.
+export async function edgePostgresqlJourneys(engine, createService, hook = {}) {
   const checks = [];
   const cases = [];
   // privateMarkers: never in the report, logs or results. credentialMarkers (a
@@ -133,7 +136,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
     },
     { accountOnboarding: true },
   );
-  const origin = "https://127.0.0.1";
+  const origin = hook.origin ?? "https://127.0.0.1";
   const configuration = harness.configured({ origin });
   const f = configuration.f;
   const keyMarker = ["sk", "test", randomBytes(16).toString("hex")].join("_");
@@ -310,6 +313,7 @@ export async function edgePostgresqlJourneys(engine, createService) {
   ];
   async function instance(api = apiBindings(), broker = brokerBindings()) {
     const mf = new Miniflare({
+      ...hook.listen,
       workers: workersFor(api, broker),
       upstream: origin,
       cf: { colo: "LAB", country: "US", asn: 0 },
@@ -342,8 +346,10 @@ export async function edgePostgresqlJourneys(engine, createService) {
     };
     return {
       fetch,
+      url: async () => mf.ready,
       setBroker: (bindings) =>
         mf.setOptions({
+          ...hook.listen,
           workers: workersFor(api, bindings),
           upstream: origin,
           cf: { colo: "LAB", country: "US", asn: 0 },
@@ -591,7 +597,9 @@ export async function edgePostgresqlJourneys(engine, createService) {
       name("5_logout"),
       ended.status === 200 &&
         ended.body === '{"schemaVersion":1,"outcome":"session_ended"}' &&
-        !ended.headers.has("set-cookie") &&
+        // P05.T01y-AC26: exactly the session clear.
+        ended.headers.getSetCookie().join() ===
+          "__Host-morrow_session=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0" &&
         jsonHeaders(ended),
     );
     check(name("5_bootstrap_after_logout_401"), (await bootstrap(owner, cookie)).status === 401);
@@ -620,6 +628,23 @@ export async function edgePostgresqlJourneys(engine, createService) {
       name("AC19_no_unexpected_outbound"),
       outbound.unexpected === 0 && oracle.metrics.oracleFailures === 0,
     );
+  }
+
+  if (hook.journeys) {
+    await hook.journeys({
+      check,
+      scenario,
+      instance,
+      oracle,
+      f,
+      origin,
+      secret,
+      privateMarkers,
+      outbound,
+      bootstrap,
+      json,
+    });
+    return finish(null);
   }
 
   let session = null;
@@ -906,39 +931,44 @@ export async function edgePostgresqlJourneys(engine, createService) {
     }
   });
 
-  stage = "cleanup";
-  await Promise.allSettled([...instances].map((mf) => mf.dispose()));
-  for (const owned of services) await owned.close?.();
-  engine.revokeEndpoint();
-  const final = await engine.observeFinalNamespace();
-  const evidence = JSON.stringify({ checks, cases, logs, outbound, wrongSecretMatrix });
-  check(
-    "AC13:no_marker_in_logs_or_results",
-    privateMarkers.every((marker) => !marker || !evidence.includes(marker)),
-  );
-  // Every response the Workers returned: bodies, Set-Cookie and Location headers.
-  const returned = JSON.stringify(responses);
-  check(
-    "AC13:no_credential_marker_in_any_response",
-    responses.length > 0 &&
-      credentialMarkers.every((marker) => !marker || !returned.includes(marker)),
-  );
-  responses.length = 0;
-  return {
-    checks,
-    cases,
-    wrongSecretMatrix,
-    responsesScanned: JSON.parse(returned).length,
-    appliedMigrations,
-    final,
-    stage,
-    privateMarkers,
-    outbound: {
-      api: outbound.api.length,
-      broker: outbound.broker.length,
-      unexpected: outbound.unexpected,
-    },
-  };
+  return finish(wrongSecretMatrix);
+
+  // Shared cleanup: dispose every instance and bridge, then the marker checks.
+  async function finish(wrongSecretMatrix) {
+    stage = "cleanup";
+    await Promise.allSettled([...instances].map((mf) => mf.dispose()));
+    for (const owned of services) await owned.close?.();
+    engine.revokeEndpoint();
+    const final = await engine.observeFinalNamespace();
+    const evidence = JSON.stringify({ checks, cases, logs, outbound, wrongSecretMatrix });
+    check(
+      "AC13:no_marker_in_logs_or_results",
+      privateMarkers.every((marker) => !marker || !evidence.includes(marker)),
+    );
+    // Every response the Workers returned: bodies, Set-Cookie and Location headers.
+    const returned = JSON.stringify(responses);
+    check(
+      "AC13:no_credential_marker_in_any_response",
+      responses.length > 0 &&
+        credentialMarkers.every((marker) => !marker || !returned.includes(marker)),
+    );
+    responses.length = 0;
+    return {
+      checks,
+      cases,
+      wrongSecretMatrix,
+      responsesScanned: JSON.parse(returned).length,
+      appliedMigrations,
+      final,
+      stage,
+      privateMarkers,
+      outbound: {
+        api: outbound.api.length,
+        broker: outbound.broker.length,
+        unexpected: outbound.unexpected,
+      },
+    };
+  }
 }
 
 async function main() {

@@ -15,11 +15,12 @@ Updated 2026-10-19. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #10: P05.T01x Part B (ADR-0009), squash-merged as `e51e5b7`: migration 0013 (account login, enrollment, first-owner signup, `GET /workspaces`, `POST /organizations`), the `morrow_identity_onboarding` executor, `lab:account-onboarding` (pg-linking) and `lab:account-workers` (workers).
 - PR #12: P06.T01a (ADR-0010), merged as `06e4dfe`: migrations 0014 (identity bridge and organization interlock) and 0015 (`morrow_work`), `@morrow/work`, `/workspace/:ws/work/*`, `@morrow/contracts/work-permissions`, the `tests/tenant-conformance/` harness and three labs in the `pg-work` CI group. Verified waits for the P05 exit gate.
 - PR #13: the ADR-0018 Proposal@2 edit (P01.T02a-AC27), merged as `08e5ebf`: nullable `taskId` only for human governance proposals, `TASK_REQUIRED`/`TASK_MISMATCH` and the `requestedBy` derivation in `checkProposal`. It unblocks P06.T01b PR-1.
+- PR #14: P01.T04a PR-A, merged as `bba3cec`: entitlement gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities), `inspectEntitlementWriters`, the contract v1.1 billing layer and the OQ-2 test entitlement seed branch. It applied the "Part B and P06.T01a merge first" coordination (P01.T04a §8.1, §9).
+- PR #15: P14.T01a PR-1, merged as `5ad6cc7` (provisional under ADR-0003): the option 1 shell, sign-in, workspace entry and sign-out over HTTP, the dev-only fixture mode, the a11y matrix and the CI `ui` job (`docs/acceptance/P14.md`). PR-2 (account and work wiring) follows.
+- PR #11: P03.T04e PR-A, merged as `f8314e8`: `prettier --check .` under one `.prettierignore`, concurrent unit tests (`scripts/run-tests.mjs`), required `executeAs` and pinned prerequisites in `migrations/manifest.json`, and `heavy-faults.yml`.
 
 In progress:
-- **P01.T04a PR-A** (PR #14, branch `claude/p01-t04a-a-paid-work-gate`): entitlement gates only paid work (`isPaidWork`, `docs/contracts/paid-work.json`, 27 capabilities), `inspectEntitlementWriters`, the contract v1.1 billing layer (five declared replacements) and the OQ-2 test entitlement seed branch. Merged with `main` at `08e5ebf` on 2026-10-19: `changes.json` entries appended after main's, baseline hashes recomputed, contracts regenerated (392 validators, 2,202,717 bytes). Part B and P06.T01a merged first, so this PR applies the "merges first" coordination (P01.T04a §8.1, §9): `!isPaidWork` for every template v1 row in `tests/account-onboarding.test.mjs`, `entitlementAllowed: false` in `packages/work/src/permissions.ts`, and the billing route row goes to the first billing child, not `create_first_organization`. AC05 now expects connect `approve` allowed under Part B's connect rule. Local format, typecheck, verify and unit tests pass on the merged head; hosted CI, the Tier 2 AI review (separate context, same model family) and `/security-review` on the merged head are open. PR-B (billing route library) follows.
-- **P03.T04e PR-A** (PR #11): one formatting config, concurrent unit tests, manifest `executeAs`, heavy-faults workflow. The rest of P03.T04e ships in later PRs.
-- **P14.T01a PR-1** (PR #15, provisional under ADR-0003): workspace UI shell, sign-in and navigation.
+- **P05.T01y** (ADR-0004; branch `claude/p05-t01y-session-lifecycle`, pushed; no PR yet because GitHub Actions minutes are nearly exhausted). `350425f` = PR-1 (migration 0016, `lab:session-lifecycle-sql` in pg-core); `6923e5f` = PR-2 (`POST /auth/rotate`, the logout clear, `SessionRotationResult`, the client keeper, `lab:standalone-rotate-https` in pg-http); then a merge of `main` (#11, #15) and "Address review findings for p05-t01y": keeper reuse-check and bounded-wait fixes, the clock-independent sign-out watermark (0016 bytes and pin changed; it is unapplied anywhere), the stale logout-clear expectations in `lab:standalone-logout-https`, `lab:fixed-workos-login-https` and the pgwire `lab:workspace-api-postgresql`, the stale 15-minute reply in `lab:browser-session-admission-workers`, AC15 on the real `revoke_workspace_access`, non-vacuous AC02/AC09, AC21's static check widened, and the keeper moved to the `@morrow/workspace-ui/session-keeper` entry; then "Per-definition validator exports for the session keeper": the keeper imports only the generated `@morrow/contracts/validators/SessionRotationResult`, never the validator table (wired into the web entry it would add 1.8 KB gzip instead of 138 KB), then its review fixes (relative-import spellings, generator guard tests, UI entry probe negatives). Local evidence on the final head is in `docs/acceptance/P05.md`. Open: PR-3 (AC33 workerd rotate transcript, AC34 pgwire on the full chain), AC21's seeded linking-flow case, the PR and hosted CI (including the first `pgwire` run of the changed labs).
 
 ## Decisions recorded 2026-10-18
 
@@ -32,20 +33,23 @@ In progress:
 
 ## Last green commit
 
-`06e4dfe` on `main`, the merge of PR #12: push run 39166650248 passed. Earlier: `e51e5b7` (PR #10) push run 39160961579 passed all 10 jobs; `400aa44` (PR #9) push run 39131819189 passed. The push run 39168226191 on `08e5ebf` (PR #13) was still running when this file was written; record its result.
+`f8314e8` on `main`, the merge of PR #11: push run 39173050501 passed. Earlier: `5ad6cc7` (PR #15) push run 39171677853; `bba3cec` (PR #14) push run 39169685269; `08e5ebf` (PR #13) push run 39168226191; `06e4dfe` (PR #12) push run 39166650248.
 
 ## Next actions
 
-1. P01.T04a PR-A (PR #14): hosted CI green on the merged head (including `lab:permissions` for AC31 and `lab:workers` for the billing selectors), the Tier 2 AI review and `/security-review` (authority and billing), then merge. Then PR-B (billing route library).
-2. P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
-3. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
+1. P05.T01y: open the PR when Actions minutes allow; hosted `foundation` green on the exact head (pg-core, pg-http, pg-work, workers, pgwire); then PR-3 (AC33, AC34). P03.T04e AC22: one `workflow_dispatch` run of `heavy-faults.yml` on `main`. Then P14.T01a PR-2 (account and work wiring).
+2. P01.T04a PR-B (billing route library).
+3. P06.T01b, P06.T02a (event transport), P06.T01c (OperationLedger), P01.T02c (ADR-0016) and P01.T02b.
+4. M1 hosted staging (P04.T01i), once the owner sign-ins below are done. Self-service stays disabled until an owner-approved revision on a staging profile with allowlisted WorkOS sign-up (ADR-0009 items 10 and 11). Input from P03.T04e §3.1: row 1's prerequisite file is cumulative (roles for rows 1-8) and valid only on a fresh database.
 
 Open plan follow-ups:
-- P06.T01a AC08 soak: set `MORROW_WORK_SOAK=1` for `lab:work-postgresql` in the P03.T04e heavy job (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
+- P06.T01a AC08 soak: a `heavy:*` script that runs `lab:work-postgresql` with `MORROW_WORK_SOAK=1` in `heavy-faults.yml` (`workflow_dispatch` plus weekly); AC08 stays not evidenced until a soak artifact exists.
 - Work routes in production: production cannot map today (ADR-0007 item 9), so the deployed api serves them 401 with no SQL. Whoever enables production mapping must also gate the work routes on P09.T05 (packet hard ordering b).
 - Superseded banners on `docs/references/*`.
-- A forward migration (0016 or later) that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
-- The rest of P03.T04e: formatting ignore file, unit-test concurrency, shared PostgreSQL 17 template-database harness, heavy-fault job.
+- P05.T01y follow-ups: rebind linking handoffs, reviews and status to the family (P09.T01a/T02a) and the revocation receipt (P05.T01z); the production custody ADR (ADR-0007 item 9) weighs the two R1 widenings in `docs/contracts/identity-authority.md` (the logout role can mint a bearer from a live digest older than 60 s, and its password is now leased on every keeper rotation).
+- A later forward migration (0016 is P05.T01y; P06.T01b takes 0017–0018) that routes the 0006, 0007, 0009 and 0011 security-definer guards through `morrow_identity.executor_role_safe`, so every definer checks all ten executor roles (P05.T01x Part B security review, informational).
+- The rest of P03.T04e: PR-B, the shared PostgreSQL 17 template-database harness and its `pg-suites` and `pg-stress` legs.
+- Timing fixes (routine, ADR-0002) if hosted `unit-stress` confirms them: `tests/broker-client.test.mjs` AC30 and the `tests/standalone-login-http.test.mjs` 5,000 ms entry-timeout case each flaked once under loaded-host local stress.
 
 ## Blockers
 
