@@ -4,7 +4,7 @@
 // without values, and exits non-zero on a missing or extra secret or a wrong mode).
 // Every secret here is a synthetic marker in a temporary HOME; nothing reads the
 // operator's ~/.config/morrow or reaches a provider.
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -455,6 +455,11 @@ test("AC07: tool children get the token or Neon key in their environment only, n
     chmodSync(join(bin, "gh"), 0o755);
     process.env.PATH = bin + ":" + savedPath;
     process.env.WORKOS_API_KEY = markers.envWorkos;
+    const savedGh = process.env.GH_TOKEN;
+    process.env.GH_TOKEN = "ghs_" + markers.tool;
+    after(() =>
+      savedGh === undefined ? delete process.env.GH_TOKEN : (process.env.GH_TOKEN = savedGh),
+    );
     const token = markers.operator;
     const tools = createTools({
       root,
@@ -513,10 +518,14 @@ test("AC07: tool children get the token or Neon key in their environment only, n
     // gh: neither credential, and no inherited provider variable.
     for (const name of ["CLOUDFLARE_API_TOKEN", "NEON_API_KEY", "WORKOS_API_KEY"])
       assert.equal(dumps.gh.env[name], undefined);
+    // The workflow's GH_TOKEN reaches gh only.
+    assert.equal(dumps.gh.env.GH_TOKEN, "ghs_" + markers.tool);
+    assert.equal(dumps.wrangler.env.GH_TOKEN, undefined);
+    assert.equal(dumps.cli.env.GH_TOKEN, undefined);
     assert.deepEqual(
       Object.keys(dumps.gh.env).filter(
         (k) =>
-          !/^(PATH|HOME|LANG|GH_PROMPT_DISABLED|GH_NO_UPDATE_NOTIFIER|NO_COLOR|GH_CONFIG_DIR|__CF_USER_TEXT_ENCODING)$/.test(
+          !/^(PATH|HOME|LANG|GH_PROMPT_DISABLED|GH_NO_UPDATE_NOTIFIER|NO_COLOR|GH_CONFIG_DIR|GH_TOKEN|__CF_USER_TEXT_ENCODING)$/.test(
             k,
           ),
       ),

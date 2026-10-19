@@ -115,6 +115,9 @@ export function createTools({
           GH_NO_UPDATE_NOTIFIER: "1",
           NO_COLOR: "1",
           ...(process.env.GH_CONFIG_DIR ? { GH_CONFIG_DIR: process.env.GH_CONFIG_DIR } : {}),
+          // In the CI deploy step gh authenticates with the workflow's own GH_TOKEN
+          // (contents: read); it reaches gh only, never wrangler, neonctl or git.
+          ...(process.env.GH_TOKEN ? { GH_TOKEN: process.env.GH_TOKEN } : {}),
         },
         input,
       });
