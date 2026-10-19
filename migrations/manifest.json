@@ -40,42 +40,42 @@
     {
       "sequence": 5,
       "file": "0005.workspace-store-linking.sql",
-      "sha256": "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+      "sha256": "ef8bf098ba9343b939f1f100c152bb0654a673d0cdcf14c4d8966f5f3db0aa0c",
       "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T03/workspace-store-linking-review.json",
       "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 6,
       "file": "0006.authentication-exchange-admission.sql",
-      "sha256": "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+      "sha256": "02714ef64cb6c4d441d8cc1aab9bae83bdf085397302dec4fdbc5ef65e00b7df",
       "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01d/review.json",
       "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 7,
       "file": "0007.provider-subject-resolution.sql",
-      "sha256": "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+      "sha256": "0b2b4cdba87d695ff028c6a10de1e81716f7bf151dd11b41c7055f27545fc863",
       "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01j/review.json",
       "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 8,
       "file": "0008.browser-session-admission.sql",
-      "sha256": "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
+      "sha256": "5f3260819280540bfba1ac8a4df11b9514fac88f5e935cf43a46df2d49942cf1",
       "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01m/review.json",
       "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 9,
       "file": "0009.workspace-linking-read-boundaries.sql",
-      "sha256": "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2",
+      "sha256": "deb34bdd227ba4f4b027c53319581336a2f2923fc0016895f35acba72b8ac994",
       "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T03b/review.json",
       "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 10,
       "file": "0010.login-flow-custody.sql",
-      "sha256": "51c6d7ca9e31a897352c4a8b2e85824eb4a7b58506629246bce63c9d92070475",
+      "sha256": "b993a9f8fc265700b3ef42ca6ac22379c145702bd922a31cf2230500814ccf99",
       "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01p/review.json",
       "executeAs": "morrow_identity_owner",
       "prerequisites": [
@@ -88,7 +88,7 @@
     {
       "sequence": 11,
       "file": "0011.self-browser-family-logout.sql",
-      "sha256": "089ff5487030df8f085045f37f523522540759752b7fde25abf91629396f28c4",
+      "sha256": "61200c4c931355ec2ebbd8fb7841bcc17a45699807f8de2c61c62b7c562be02f",
       "reviewRef": "codex-archive-f89ad75:docs/evidence/P05.T01q/review.json",
       "executeAs": "morrow_identity_owner",
       "prerequisites": [
@@ -101,14 +101,14 @@
     {
       "sequence": 12,
       "file": "0012.login-protocol-v1.sql",
-      "sha256": "52e9f699956ec8932056b22b2dc5294e540225562730666e0a87d00dfe857579",
+      "sha256": "138c453a303eadc57f0fd0c1faf44d560d38cfce72888c056897bfbd028df886",
       "reviewRef": "docs/packets/P05.T01x.md",
       "executeAs": "morrow_identity_owner"
     },
     {
       "sequence": 13,
       "file": "0013.account-onboarding.sql",
-      "sha256": "df215e288e6dda31fb62cb70b86354507d054a6e9f1df481891a4a5552e5d763",
+      "sha256": "dbc05d0ca507d672c0f4a18591ee59a56aad685dde47a695e2fdbdf2f5873b00",
       "reviewRef": "docs/decisions/adr/ADR-0009-self-serve-signup.md",
       "executeAs": "morrow_identity_owner",
       "prerequisites": [
@@ -121,7 +121,7 @@
     {
       "sequence": 14,
       "file": "0014.work-identity-bridge.sql",
-      "sha256": "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
+      "sha256": "19de8b5be63e47a0144f1bcfdd7c5548f8a9a38269eaa1604f098bfd5087691d",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/packets/P06.T01a.md",
       "prerequisites": [
@@ -134,7 +134,7 @@
     {
       "sequence": 15,
       "file": "0015.work-state.sql",
-      "sha256": "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9",
+      "sha256": "bd5d1c48dfdabceac3fdd6ce7b829b9b1a25ebd56e1d689bcbd9dbaeba7f983a",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/packets/P06.T01a.md"
     }

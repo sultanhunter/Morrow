@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 // Applied migrations are immutable. This frozen list pins every published migration
 // independently of migrations/manifest.json, so a coordinated edit of a migration file
 // and its manifest row still fails. Append a row here when a new migration is published.
+// Rows 5-15 carry their ADR-0020 rebaseline digests; the digests they replaced are in
+// the one `rebaselines` record below and may never come back.
 const published = [
   [
     1,
@@ -30,54 +32,54 @@ const published = [
   [
     5,
     "0005.workspace-store-linking.sql",
-    "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+    "ef8bf098ba9343b939f1f100c152bb0654a673d0cdcf14c4d8966f5f3db0aa0c",
   ],
   [
     6,
     "0006.authentication-exchange-admission.sql",
-    "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+    "02714ef64cb6c4d441d8cc1aab9bae83bdf085397302dec4fdbc5ef65e00b7df",
   ],
   [
     7,
     "0007.provider-subject-resolution.sql",
-    "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+    "0b2b4cdba87d695ff028c6a10de1e81716f7bf151dd11b41c7055f27545fc863",
   ],
   [
     8,
     "0008.browser-session-admission.sql",
-    "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
+    "5f3260819280540bfba1ac8a4df11b9514fac88f5e935cf43a46df2d49942cf1",
   ],
   [
     9,
     "0009.workspace-linking-read-boundaries.sql",
-    "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2",
+    "deb34bdd227ba4f4b027c53319581336a2f2923fc0016895f35acba72b8ac994",
   ],
   [
     10,
     "0010.login-flow-custody.sql",
-    "51c6d7ca9e31a897352c4a8b2e85824eb4a7b58506629246bce63c9d92070475",
+    "b993a9f8fc265700b3ef42ca6ac22379c145702bd922a31cf2230500814ccf99",
   ],
   [
     11,
     "0011.self-browser-family-logout.sql",
-    "089ff5487030df8f085045f37f523522540759752b7fde25abf91629396f28c4",
+    "61200c4c931355ec2ebbd8fb7841bcc17a45699807f8de2c61c62b7c562be02f",
   ],
   [
     12,
     "0012.login-protocol-v1.sql",
-    "52e9f699956ec8932056b22b2dc5294e540225562730666e0a87d00dfe857579",
+    "138c453a303eadc57f0fd0c1faf44d560d38cfce72888c056897bfbd028df886",
   ],
   [
     13,
     "0013.account-onboarding.sql",
-    "df215e288e6dda31fb62cb70b86354507d054a6e9f1df481891a4a5552e5d763",
+    "dbc05d0ca507d672c0f4a18591ee59a56aad685dde47a695e2fdbdf2f5873b00",
   ],
   [
     14,
     "0014.work-identity-bridge.sql",
-    "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
+    "19de8b5be63e47a0144f1bcfdd7c5548f8a9a38269eaa1604f098bfd5087691d",
   ],
-  [15, "0015.work-state.sql", "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9"],
+  [15, "0015.work-state.sql", "bd5d1c48dfdabceac3fdd6ce7b829b9b1a25ebd56e1d689bcbd9dbaeba7f983a"],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each
 // published row keeps exactly these pinned files, and a later role goes in a new file on its
@@ -177,4 +179,267 @@ test("migrations after the published prefix continue the sequence", () => {
     assert.equal(row.sequence, index + 1);
     assert.equal(row.file.startsWith(String(index + 1).padStart(4, "0") + "."), true);
   }
+});
+
+// ---------------------------------------------------------------------------
+// ADR-0020 item 7 (P04.T01j D6): the one-time rebaseline of 0005-0015, so that a
+// non-superuser CREATEROLE administrator can apply the chain. Exactly one record exists;
+// a second needs a new owner-approved ADR. `closedBy` stays null until a persistent
+// database first applies any of 0005-0015, and then names that live record (P04.T01i
+// PR-D part 2). After closure every fix is a forward migration. The superseded digests
+// are the bytes of `main` f8314e8.
+const rebaselines = Object.freeze([
+  Object.freeze({
+    adr: "ADR-0020",
+    sequences: Object.freeze([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
+    superseded: Object.freeze({
+      5: "e42e91b7cbb2de9c59591346212fb250aed0c8cdba6edb6bd787dcceda78de92",
+      6: "1f67f961c778ec6c67b9050b7c6290fe8a3c0072f1bc8126e974ee243fae6d87",
+      7: "f176659d8b9eac84df4f4f427949f3edd2b878091c94e8b1918e6d5f41e4e103",
+      8: "a4325cb7bf8b90fc0084f95de2e1317c344e3b6187ccd91f3a431cacb1243fa0",
+      9: "9ab7fbaba7629c88034b1002b880601c322b405396e8fa824a585b6a2e9f37a2",
+      10: "51c6d7ca9e31a897352c4a8b2e85824eb4a7b58506629246bce63c9d92070475",
+      11: "089ff5487030df8f085045f37f523522540759752b7fde25abf91629396f28c4",
+      12: "52e9f699956ec8932056b22b2dc5294e540225562730666e0a87d00dfe857579",
+      13: "df215e288e6dda31fb62cb70b86354507d054a6e9f1df481891a4a5552e5d763",
+      14: "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
+      15: "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9",
+    }),
+    closedBy: null,
+  }),
+]);
+const supersededDigests = new Set(rebaselines.flatMap((r) => Object.values(r.superseded)));
+const publishedText = (sequence) =>
+  readFileSync("migrations/" + published[sequence - 1].file, "utf8");
+
+// The bounded diff (P04.T01j D3). Each "no membership row" conjunct the rebaseline
+// replaced, in file order: [apply or run time, row alias, catalog-qualified]. Apply-time
+// sites became memberships_closed(alias.rolname); run-time executor guards became
+// executor_memberships_closed(alias.rolname). Every other byte of each guard is unchanged.
+const genericSites = Object.freeze({
+  5: [["run", "x", false]],
+  6: [
+    ["apply", "r", false],
+    ["run", "r", false],
+  ],
+  7: [
+    ["apply", "r", true],
+    ["run", "r", true],
+  ],
+  8: [
+    ["apply", "r", true],
+    ["run", "r", true],
+    ["run", "x", false],
+  ],
+  9: [
+    ["apply", "r", true],
+    ["run", "x", true],
+  ],
+  10: [
+    ["apply", "r", false],
+    ["run", "r", false],
+  ],
+  11: [
+    ["apply", "r", false],
+    ["run", "r", false],
+    ["run", "r", false],
+    ["run", "r", false],
+  ],
+  12: [["apply", "r", false]],
+  13: [
+    ["apply", "r", false],
+    ["run", "r", false],
+  ],
+  14: [["run", "x", false]],
+  15: [],
+});
+const oldConjunct = (alias, qualified) =>
+  `NOT EXISTS(SELECT 1 FROM ${qualified ? "pg_catalog." : ""}pg_auth_members m WHERE m.member=${alias}.oid OR m.roleid=${alias}.oid)`;
+// The other exact changes, as [rebaselined bytes, superseded bytes]: the 0005 apply-time
+// check, the comment lines that cited the immutability rule (0012, 0013) or that the new
+// grant made inaccurate (0014), the 0014 check and grant, and the 0015 block.
+const exactChanges = Object.freeze({
+  5: [
+    [
+      "    OR NOT morrow_identity.memberships_closed('morrow_identity_linking') OR NOT morrow_identity.morrow_memberships_closed()\n",
+      "    OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles WHERE rolname='morrow_identity_linking') OR roleid=(SELECT oid FROM pg_roles WHERE rolname='morrow_identity_linking'))\n",
+    ],
+  ],
+  12: [
+    [
+      "-- 0001-0004 stay byte-identical; 0005-0015 were rebaselined once under ADR-0020. Legacy\n-- configuration rows stay readable and\n",
+      "-- Applied 0001-0011 bytes stay unchanged. Legacy configuration rows stay readable and\n",
+    ],
+  ],
+  13: [
+    [
+      "-- Part B, ADR-0009). 0001-0004 stay byte-identical; 0005-0015 were rebaselined once\n-- under ADR-0020. Enrollment confers no tenant\n",
+      "-- Part B, ADR-0009). Applied 0001-0012 bytes stay unchanged. Enrollment confers no tenant\n",
+    ],
+  ],
+  14: [
+    [
+      "-- It changes no identity table. It adds four definer functions that only\n-- morrow_work_command may execute, plus the schema usage and column REFERENCES the\n-- work tables' composite foreign keys need; it lets morrow_work_owner execute three\n-- read-only ADR-0020 membership helpers, which 0015 checks; and it gives the three identity\n",
+      "-- It changes no identity table or grant. It adds four definer functions that only\n-- morrow_work_command may execute, plus the schema usage and column REFERENCES the\n-- work tables' composite foreign keys need, and it gives the three identity\n",
+    ],
+    [
+      " OR NOT morrow_identity.morrow_memberships_closed()\n OR to_regprocedure(",
+      " OR to_regprocedure(",
+    ],
+    [
+      "-- ADR-0020: 0015 checks the closed membership set while it runs as the work owner.\nGRANT EXECUTE ON FUNCTION morrow_identity.recorded_administrator(),morrow_identity.memberships_closed(name),morrow_identity.morrow_memberships_closed() TO morrow_work_owner;\n",
+      "",
+    ],
+  ],
+  15: [
+    [
+      " -- true), and every membership row naming a Morrow role is in the ADR-0020 closed set.\n",
+      " -- true), plus at most one PG16+ CREATEROLE provisioning row per role whose\n -- member is not a Morrow role (admin true, inherit false, set false).\n",
+    ],
+    [
+      " OR NOT morrow_identity.morrow_memberships_closed()\n OR EXISTS(SELECT 1 FROM pg_catalog.pg_roles w,pg_catalog.pg_roles i\n",
+      " OR EXISTS(SELECT 1 FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles g ON g.oid=m.roleid JOIN pg_catalog.pg_roles u ON u.oid=m.member\n" +
+        "   WHERE (g.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker') OR u.rolname IN ('morrow_work_owner','morrow_work_command','morrow_work_api','morrow_api_worker'))\n" +
+        "   AND (g.rolname,u.rolname) NOT IN (('morrow_work_api','morrow_api_worker'),('morrow_work_command','morrow_work_owner'))\n" +
+        "   AND NOT (u.rolname NOT LIKE 'morrow\\_%' AND m.admin_option AND NOT m.inherit_option AND NOT m.set_option))\n" +
+        " OR EXISTS(SELECT 1 FROM pg_catalog.pg_roles w,pg_catalog.pg_roles i\n",
+    ],
+  ],
+});
+// The D1-D2 preamble of 0005, right after its BEGIN: one table, its policy and trigger,
+// five functions and the administrator check; no GRANT.
+const preambleStart = "BEGIN;\n-- ADR-0020 (P04.T01j D1-D2): ";
+const preambleEnd = "END $$;\n-- Controlled local linking only.";
+function splitPreamble(text) {
+  assert.ok(text.startsWith(preambleStart));
+  assert.equal(text.split(preambleEnd).length, 2);
+  const end = text.indexOf(preambleEnd) + "END $$;\n".length;
+  return { preamble: text.slice("BEGIN;\n".length, end), rest: "BEGIN;\n" + text.slice(end) };
+}
+const helperCall = /morrow_identity\.(executor_)?memberships_closed\(([rx])\.rolname\)/g;
+// Undoes the D3 substitutions with function replacements: in a JavaScript replacement
+// string "$$" collapses to "$" (measured in M-J0), and these bytes are full of "$$".
+function undoRebaseline(sequence, text) {
+  if (sequence === 5) text = splitPreamble(text).rest;
+  for (const [now, before] of exactChanges[sequence] ?? []) {
+    assert.equal(text.split(now).length, 2, `${sequence}: ${now.slice(0, 40)}`);
+    text = text.replace(now, () => before);
+  }
+  const sites = genericSites[sequence];
+  const found = [...text.matchAll(helperCall)].map((m) => [m[1] ? "run" : "apply", m[2]]);
+  assert.deepEqual(
+    found,
+    sites.map(([time, alias]) => [time, alias]),
+    `${sequence}: helper call sites`,
+  );
+  let index = 0;
+  return text.replace(helperCall, () => {
+    const [, alias, qualified] = sites[index++];
+    return oldConjunct(alias, qualified);
+  });
+}
+
+test("ADR-0020: exactly one rebaseline record, and only while its ADR is Accepted", () => {
+  assert.equal(rebaselines.length, 1);
+  const index = readFileSync("docs/decisions/adr/README.md", "utf8").split("\n");
+  for (const record of rebaselines) {
+    const number = /^ADR-([0-9]{4})$/.exec(record.adr)?.[1];
+    assert.ok(number, record.adr);
+    const rows = index.filter((line) => line.startsWith(`| [${number}](ADR-${number}-`));
+    assert.equal(rows.length, 1, record.adr);
+    const cells = rows[0].split("|").map((cell) => cell.trim());
+    assert.match(cells.at(-2), /^Accepted /, record.adr + " must be Accepted in the index");
+    assert.deepEqual(
+      Object.keys(record.superseded).map(Number),
+      [...record.sequences],
+      "superseded digests cover exactly the rebaselined sequences",
+    );
+    for (const sequence of record.sequences) {
+      assert.ok(sequence >= 5 && sequence <= published.length, String(sequence));
+      assert.match(record.superseded[sequence], /^[a-f0-9]{64}$/);
+      assert.notEqual(record.superseded[sequence], published[sequence - 1].sha256);
+    }
+    if (record.closedBy !== null) {
+      assert.match(
+        record.closedBy,
+        /^docs\/evidence\/live\/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+\.md$/,
+      );
+      assert.ok(existsSync(record.closedBy), record.closedBy);
+    }
+  }
+});
+
+test("ADR-0020: no superseded digest appears in the manifest or in any migration file", () => {
+  for (const row of manifest.migrations)
+    assert.ok(!supersededDigests.has(row.sha256), row.file + " manifest row");
+  for (const file of readdirSync("migrations").filter((f) => f.endsWith(".sql")))
+    assert.ok(!supersededDigests.has(sha(readFileSync("migrations/" + file))), file);
+});
+
+test("ADR-0020: undoing the D3 substitutions reproduces every superseded digest", () => {
+  const [record] = rebaselines;
+  let generic = 0;
+  for (const sequence of record.sequences) {
+    const restored = undoRebaseline(sequence, publishedText(sequence));
+    assert.equal(sha(restored), record.superseded[sequence], published[sequence - 1].file);
+    generic += genericSites[sequence].length;
+  }
+  // 20 generic substitutions, plus 0005:8 and the 0015 block (P04.T01j D3 "Totals").
+  assert.equal(generic, 20);
+  assert.deepEqual(
+    record.sequences.map((s) => genericSites[s].length),
+    [1, 2, 2, 3, 2, 2, 4, 1, 2, 1, 0],
+  );
+});
+
+test("ADR-0020: the 0005 preamble defines only the D1 and D2 objects", () => {
+  const { preamble } = splitPreamble(publishedText(5));
+  const created = [
+    ...preamble.matchAll(/^CREATE (TABLE|FUNCTION|TRIGGER|POLICY) ([a-z_.]+)/gm),
+  ].map((m) => m[1] + " " + m[2]);
+  assert.deepEqual(created, [
+    "TABLE morrow_identity.migration_administrator",
+    "FUNCTION morrow_identity.preserve_migration_administrator",
+    "TRIGGER migration_administrator_immutable",
+    "POLICY identity_owner",
+    "FUNCTION morrow_identity.recorded_administrator",
+    "FUNCTION morrow_identity.memberships_closed",
+    "FUNCTION morrow_identity.morrow_memberships_closed",
+    "FUNCTION morrow_identity.executor_memberships_closed",
+  ]);
+  assert.ok(!/^\s*GRANT /m.test(preamble), "the preamble grants nothing");
+  assert.match(
+    preamble,
+    /FOR EACH STATEMENT EXECUTE FUNCTION morrow_identity\.preserve_migration_administrator\(\)/,
+  );
+  assert.match(preamble, /FOR SELECT TO morrow_identity_owner USING\(true\);/);
+  assert.equal((preamble.match(/SECURITY DEFINER/g) ?? []).length, 1);
+  assert.match(preamble, /RAISE EXCEPTION 'MIGRATION_ADMINISTRATOR_INVALID'/);
+});
+
+// ADR-0020 item 6: migrations after 0015 call the helpers and carry no catalog membership
+// text of their own. In 0005-0015 the only occurrences are the two D1-D2 helpers that
+// read pg_auth_members, the unchanged 0006 owner check and 0015's reviewed-pair count.
+test("ADR-0020: pg_auth_members appears only in the helpers and two reviewed checks", () => {
+  for (const row of manifest.migrations.filter((r) => r.sequence > 15))
+    assert.ok(
+      !readFileSync("migrations/" + row.file, "utf8").includes("pg_auth_members"),
+      row.file + " must use the ADR-0020 helpers",
+    );
+  const lines = (sequence) =>
+    publishedText(sequence)
+      .split("\n")
+      .filter((l) => l.includes("pg_auth_members"));
+  const { preamble } = splitPreamble(publishedText(5));
+  // Two helper bodies (recorded_administrator, memberships_closed) and one comment line.
+  assert.equal(lines(5).filter((l) => !l.startsWith("--")).length, 2);
+  assert.equal(lines(5).length, 3);
+  assert.ok(lines(5).every((l) => preamble.includes(l)));
+  assert.deepEqual(lines(6), [
+    " OR EXISTS(SELECT 1 FROM pg_auth_members WHERE roleid=(SELECT oid FROM pg_roles WHERE rolname='morrow_identity_owner') AND member IN (SELECT oid FROM pg_roles WHERE rolname IN ('morrow_api','morrow_identity_lifecycle','morrow_identity_linking','morrow_identity_preauth')))",
+  ]);
+  assert.deepEqual(lines(15), [
+    " OR (SELECT count(*) FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles g ON g.oid=m.roleid JOIN pg_catalog.pg_roles u ON u.oid=m.member",
+  ]);
+  for (const sequence of [7, 8, 9, 10, 11, 12, 13, 14]) assert.deepEqual(lines(sequence), []);
 });
