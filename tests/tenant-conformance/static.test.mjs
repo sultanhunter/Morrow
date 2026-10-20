@@ -679,8 +679,11 @@ test("S7: the billing and vault schemas, and what each executor login may execut
         spec.commandPrivileges.map((privilege) => workRoles.command + ":" + privilege).sort(),
         table,
       );
+      // Every column with an ACL, system columns included (a grant on ctid or xmin, or to
+      // PUBLIC, shows up as an unexpected grantee or column); a dropped column's ACL is
+      // cleared, so it never appears.
       const columns = rows(
-        `SELECT a.grantee::regrole::text AS grantee, a.privilege_type, t.attname FROM pg_attribute t, aclexplode(t.attacl) a WHERE t.attrelid='${schema}.${table}'::regclass AND t.attacl IS NOT NULL AND NOT t.attisdropped AND t.attnum>0`,
+        `SELECT a.grantee::regrole::text AS grantee, a.privilege_type, t.attname FROM pg_attribute t, aclexplode(t.attacl) a WHERE t.attrelid='${schema}.${table}'::regclass AND t.attacl IS NOT NULL`,
       );
       const granted = {};
       for (const c of columns) (granted[c.grantee + ":" + c.privilege_type] ??= []).push(c.attname);
