@@ -5,7 +5,7 @@
   - At 2026-10-20T02:22:13Z Claude ran `npm run staging:neon-probe` from the identifiers branch.
   - It used the project-scoped API key, read by the tool and never printed.
   - It created branch `morrow-probe-8c3e0d96` (`br-spring-boat-b71bm6dq`), a child of the root `br-noisy-wind-b7cxr2a1`, created 02:22:21Z, `expires_at` 04:22:17Z, `--no-secrets`.
-- **Unknown outcome, reconciled.** The tool exited with code 13 (unsettled top-level await) before printing a result. A read-only branch list (Neon API, HTTP 200) confirmed the branch exists with its expiry. No other branch was created. Nothing touched the root branch.
+- **Unknown outcome, reconciled.** The tool exited with code 13 (unsettled top-level await) before printing a result. A read-only branch list at 02:22:33Z (Neon API, HTTP 200) confirmed the branch exists with its expiry. No other branch was created. Nothing touched the root branch.
 - **Cause.**
   - The guarded Neon connector never settled `connect()`, and then `end()`, against an unreachable endpoint. Fixed in PR #29: deadlines, fail closed.
   - The endpoint was unreachable because this Claude session's network sandbox doesn't allow `*.aws.neon.tech`. HTTPS to the endpoint host timed out; Neon's API and other hosts were reachable.

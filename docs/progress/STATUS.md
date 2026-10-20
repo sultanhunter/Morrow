@@ -20,11 +20,13 @@ Updated 2026-10-20. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #30 M2 PR-1 (`6d744ae`; PR run on head `39542d8` green): migrations 0019–0024 (three spine executor logins, leases, stops, operations, the vault, the billing route, member-lease revocation); `ConnectorBroker`/`RuntimeBroker` (trust model v1) with vault envelopes; 14 broker secret names with `MORROW_VAULT_KEK_V1` (production 12). Two AI reviews (security lens) passed; four advisories are follow-ups below.
 
 In progress:
+- **PR #31** (docs): the four 2026-10-20 owner decisions as ADR-0008 item 1 and ADR-0022 items 3, 9 and 11 amendments, with this STATUS. **MVP build wave** (local worktrees, one workflow): M2-PR2a (`claude/m2-pr2a-store-resource`: v1.1 `ResourceRef` kind `store`, kernels on current definitions), then in parallel M2-PR2 (`claude/m2-shopify-connect`), M5-PR1 (`claude/m5-billing`) and M3-PR1 (`claude/m3-listings-agent`). Merge order PR2a, M2-PR2, M5-PR1, M3-PR1; migrations numbered at each final rebase.
 - **PR-D part 1** (`claude/p04-t01i-d1-identifiers`, local): the Cloudflare and Neon identifiers known so far; the census treats Cloudflare code 10121 (no Workers for Platforms) as zero dispatch namespaces; tests no longer assume null identifiers; AC03 records `actions: read` (owner, 2026-10-20). Still to add: `neon.branch_id`, the database binding, the two challenge vars (Turnstile site key), the api's `workers_dev` and the observability blocks.
 
 ## Decisions recorded 2026-10-18 to 2026-10-20 (owner, in chat)
 
 - **2026-10-20:** "Allow actions: read (Recommended)" (P04.T01i AC03 amended); "Allow *.neon.tech (Recommended)" (this session's sandbox network allowlist, `.claude/settings.local.json`, git-ignored).
+- **2026-10-20, MVP build questions:** "Confirm screen (Recommended)" (ADR-0022 item 3 amendment: Enable binds a server-built installation document); "Receipt-only path (Recommended)" (item 9: Stripe webhook ingress definers, no session, tenant from the verified receipt); "Roll over in beta (Recommended)" (item 11: unused credits roll over while subscribed; revisit at M6); "Hand-written checks (Recommended)" (ADR-0008 item 1 amendment: no Shopify library in deployed code).
 - **ADR-0022 MVP contracts:** "yes lets start buidling and we are going to use claude for the model and make sure our model module is modular so it can be switched with any LLM ..."; model choice "use should be able to select models and thinking efforts"; "$49 / 300 credits (Recommended)"; one private Shopify app per beta merchant "OK for the beta (Recommended)"; "One button (Recommended)" for Approve and apply; asked "Confirm these model, credit and safety values for the beta?" (ADR-0022 "Owner confirmation of the catalogue values (2026-10-19)"), "Confirm all (Recommended)", so catalogue v1 is published. Open for the owner: the image provider for P17.T02e (OpenAI Images kept for now).
 - **ADR-0021 MVP fast track:** "yes fast track but our foundation architecture should be solid so we can scale the product later without any issues."; first job "Product listings"; first merchants "Invite-only beta (Recommended)"; the record "Approve as written (Recommended)".
 - **ADR-0019 and `staging-card-1`:** "Approve both (Recommended)": staging on workers.dev, continuous deploy from `main`, Turnstile and per-IP limits before hosted login (resolves the P05.T01x §11 sign-off). Branch protection timing: "Required before production (Recommended)" (ADR-0014 item 5 amendment).
@@ -38,7 +40,7 @@ In progress:
 
 ## Last green commit
 
-`1a2e189` on `main` (PR #29): push run 39364192383 (light) and the PR run 39360110276 on the merged head `aca2654`. `bb882ad` (PR #28): push run 39358246728, PR run 39351095356 on `287647f`. `38b4347` (PR #26) push run 39340711606. A push that merges an unchanged PR head runs only `checks`; record it with its push run and the PR run on the merged head.
+`6d744ae` on `main` (PR #30): push run 39415246591 and the PR run 39412768305 on the merged head `39542d8`. `1a2e189` (PR #29): push run 39364192383, PR run 39360110276. `bb882ad` (PR #28): push run 39358246728, PR run 39351095356. A push that merges an unchanged PR head runs only `checks`; record it with its push run and the PR run on the merged head.
 
 **Failed:** the scheduled heavy-faults run 39227357944 on `f8314e8` (2026-10-19). ADR-0021 defers those suites, so the proposal is to disable the weekly schedule and keep `workflow_dispatch`. That is a `ci` change for its own PR, not PR #17.
 
@@ -75,4 +77,4 @@ None. The 2026-10-20 Neon probe branch (`br-spring-boat-b71bm6dq`, exit 13 befor
 
 ## Active approval cards
 
-- `staging-card-1` (`docs/decisions/approvals/staging.md`): staging only; approved 2026-10-19, valid until 2026-11-18 or the first production resource. Effects used: E3 once (the probe branch above), E9 reads. E11 is suspended (ADR-0021).
+- `staging-card-1` (`docs/decisions/approvals/staging.md`): staging only; approved 2026-10-19, valid until 2026-11-18 or the first production resource. Effects used: E3 once (the probe branch above, with its read-only branch lists); E9 census reads (refused so far: Pages Read missing). E11 is suspended (ADR-0021).
