@@ -14,6 +14,13 @@ import catalogue from "../../../docs/contracts/capabilities.json";
 import { plainJson, closed, freezeJson } from "./json-boundary";
 import { isPaidWork } from "./paid-work";
 export { isPaidWork } from "./paid-work";
+export {
+  isStoreResource,
+  listingFieldPaths,
+  storeResource,
+  StoreResourceError,
+} from "./store-resource";
+export type { ListingFieldPath, StoreResource } from "./store-resource";
 export type PermissionVerb = Current_Grant["verbs"][number];
 export interface PermissionRequest {
   readonly capabilityId: CapabilityId;
