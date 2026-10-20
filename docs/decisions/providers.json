@@ -67,8 +67,8 @@
         "P11",
         "P17"
       ],
-      "test_account_plan": "Create a separate Morrow development store and public app; do not mutate the observed live or unrelated development stores.",
-      "restrictions": "Public app review, protected data, historical orders, theme exemption and field/staff eligibility. Standalone workspace with thin connector controls only; connector classification/UI review and specific billing eligibility remain unqualified.",
+      "test_account_plan": "ADR-0022 item 4: one custom-distribution app per beta store, each on a fresh Morrow development store in a Shopify Partner organization; never the owner's live shop or an unrelated store. The owner deploys each app's TOML (npm run shopify-app -- toml), stores its client secret in the broker vault and registers it (npm run shopify-app -- register) under per-action approval; the first install is recorded in docs/evidence/live/. CI uses only the synthetic Shopify oracle.",
+      "restrictions": "MVP (ADR-0022 items 4-6; ADR-0008 as amended 2026-10-20): custom distribution only, read_products and write_products only, non-expiring offline tokens held as broker-vault envelopes, development stores only until M6, and no public app, App Store review or Shopify App Pricing. The broker hand-writes the query and webhook HMAC, the code exchange and one fixed Admin GraphQL document; the connector binds no secret and uses no Shopify library. Standalone workspace with thin connector controls only; protected data, historical orders, theme exemption, connector classification/UI review and specific billing eligibility remain unqualified.",
       "qualification_evidence": []
     },
     {

@@ -58,8 +58,8 @@ The v0 rules stay for `health`, `neonLease`, `workosSessionPage` and `challengeV
 
 | Entrypoint | Method | Returns | Milestone |
 | --- | --- | --- | --- |
-| Connector | `shopifyLaunchVerify(appKey, rawQuery)` | `{verdict, shop, installationActive}` | M2 |
-| Connector | `shopifyInstallComplete(appKey, rawCallbackQuery, stateDigest, budgetMs)` | `{shopId, shopDomain, scopes (expanded), credentialRef, credentialVersion, developmentStore}`; never the token | M2 |
+| Connector | `shopifyLaunchVerify(appKey, rawQuery)` | `{verdict, shop, installation (none, unlinked, linked, suspended or uninstalled), workspaceId}` (as built in M2 PR-2) | M2 |
+| Connector | `shopifyInstallComplete(appKey, rawCallbackQuery, stateDigest, budgetMs)` | `{outcome, workspaceId, continuationToken}`; never the token (as built in M2 PR-2, see the note below) | M2 |
 | Connector | `shopifyWebhookVerify(appKey, headersJson, rawBodyBase64)` | `{verdict, topic, shopDomain, webhookId, minimisedBody}` | M2 |
 | Connector, Api | `shopifyCredentialDestroy(installationId, reason)`: only when the row records uninstall or disconnect | `"destroyed"` | M2 |
 | Api, Runtime | `shopifyRead(leaseId, generation, queryName, variablesJson, budgetMs)` | minimised JSON for `shopIdentity`, `collectionsPage`, `productsPage`, `productContent` | M2 |
@@ -68,6 +68,8 @@ The v0 rules stay for `health`, `neonLease`, `workosSessionPage` and `challengeV
 | Runtime | `shopifyReconcileRead(operationId, budgetMs)` | readback verdict and field digests | M4 |
 | Api | `stripeCustomerEnsure(operationId)`, `stripeCheckoutCreate(operationId)`, `stripePortalCreate(operationId)` | ids and the Stripe-hosted URL | M5 |
 | Api | `stripeWebhookVerify(rawBody, signatureHeader, budgetMs)` | a receipt id for a verified, de-duplicated, read-back object | M5 |
+
+Note (M2 PR-2, a deviation from the first table row for `shopifyInstallComplete`): the broker records the install itself, so the connector never writes an installation from ids it was handed. In one transaction on its own `morrow_vault_broker` login it seals the token, stores the credential version and, through identity bridges (`work_shopify_install_prepare`, `work_shopify_install_record`), writes the installation, the `shopify_oauth` candidate and the install continuation. The vault row and the install record therefore commit together (no orphaned live token), and the method returns only `{outcome, workspaceId, continuationToken}`. This widens the vault login's definers beyond pure vault functions; `resolve_call` (M3 PR-1) and the send fence (M4) widen them anyway.
 
 Broker secrets (owner-placed with `morrow_put` and `staging:put-secret`): `MORROW_VAULT_KEK_V1`, `ANTHROPIC_API_KEY` (scoped to the environment's Anthropic Console workspace), `STRIPE_RESTRICTED_KEY`, `STRIPE_WEBHOOK_SECRET`, the `morrow_vault_broker` password. Shopify app client secrets are vault rows (`morrow_vault.app_secrets`), written by an owner-run script. Leased role passwords: `morrow_connector_ingress`, `morrow_runtime_executor`.
 
