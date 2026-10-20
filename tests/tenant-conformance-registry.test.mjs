@@ -40,7 +40,15 @@ function s7SpecProblems(schema, table, spec) {
   const classes =
     schema === "morrow_vault"
       ? ["vault_platform", "vault_tenant"]
-      : ["tenant_readable", "tenant_internal", "platform", "tenant_or_platform"];
+      : [
+          "tenant_readable",
+          "tenant_internal",
+          "platform",
+          "tenant_or_platform",
+          // M5 PR-1: the terms table and the ingress receipts.
+          "platform_readable",
+          "ingress",
+        ];
   if (!classes.includes(spec.class)) problems.push(at + ":class");
   if (!["none", "workspace", "store"].includes(spec.content)) problems.push(at + ":content");
   if (!Array.isArray(spec.parents) || !spec.parents.every((p) => typeof p === "string"))
@@ -56,7 +64,9 @@ function s7SpecProblems(schema, table, spec) {
   )
     problems.push(at + ":commandColumnUpdates");
   // The api role reads tenant-readable rows only, column by column; never the vault.
-  const readable = spec.class === "tenant_readable" || spec.class === "tenant_or_platform";
+  const readable = ["tenant_readable", "tenant_or_platform", "platform_readable"].includes(
+    spec.class,
+  );
   if (!sortedUnique(spec.apiColumns, column) || (!readable && spec.apiColumns.length > 0))
     problems.push(at + ":apiColumns");
   return problems;

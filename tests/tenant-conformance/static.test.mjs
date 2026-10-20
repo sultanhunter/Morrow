@@ -106,6 +106,52 @@ const extraPolicies = {
     "(SESSION_USER = 'morrow_vault_broker'::name)",
     "(SESSION_USER = 'morrow_vault_broker'::name)",
   ],
+  // M5 PR-1 (0027): the broker's own login, through its own definers only.
+  broker_billing: [
+    "ALL",
+    "{morrow_work_command}",
+    "(SESSION_USER = 'morrow_vault_broker'::name)",
+    "(SESSION_USER = 'morrow_vault_broker'::name)",
+  ],
+  broker_stripe: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND (kind = 'stripe_write'::text))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND (kind = 'stripe_write'::text))",
+  ],
+  broker_stripe_transition: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND (EXISTS ( SELECT 1\n   FROM morrow_work.operations o\n  WHERE (((o.organization_id)::text = (operation_transitions.organization_id)::text) AND ((o.workspace_id)::text = (operation_transitions.workspace_id)::text) AND ((o.id)::text = (operation_transitions.operation_id)::text) AND (o.kind = 'stripe_write'::text)))))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND (EXISTS ( SELECT 1\n   FROM morrow_work.operations o\n  WHERE (((o.organization_id)::text = (operation_transitions.organization_id)::text) AND ((o.workspace_id)::text = (operation_transitions.workspace_id)::text) AND ((o.id)::text = (operation_transitions.operation_id)::text) AND (o.kind = 'stripe_write'::text)))))",
+  ],
+  // The receipt-only ingress: the receipt's own tenant, through the entry proof.
+  receipt_apply: [
+    "ALL",
+    "{morrow_work_command}",
+    "morrow_billing.receipt_tenant((organization_id)::text, (workspace_id)::text)",
+    "morrow_billing.receipt_tenant((organization_id)::text, (workspace_id)::text)",
+  ],
+  receipt_ingress_read: [
+    "SELECT",
+    "{morrow_work_command}",
+    "morrow_billing.receipt_ingress()",
+    null,
+  ],
+  receipt_ingress_apply: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "morrow_billing.receipt_entered((receipt_id)::text)",
+  ],
+  receipt_entry: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_api_worker'::name) AND (backend_pid = pg_backend_pid()))",
+    "((SESSION_USER = 'morrow_api_worker'::name) AND (backend_pid = pg_backend_pid()))",
+  ],
+  platform_command_read: ["SELECT", "{morrow_work_command}", "true", null],
+  platform_api_read: ["SELECT", "{morrow_work_api}", "true", null],
 };
 // One table's policies against the template of its class and its registry extras.
 function checkPolicies(schema, table, spec) {
@@ -114,8 +160,11 @@ function checkPolicies(schema, table, spec) {
   );
   const mixed = spec.class === "tenant_or_platform";
   const vault = spec.class === "vault_platform" || spec.class === "vault_tenant";
+  // M5 PR-1: platform tables of morrow_billing, and the ingress receipts, carry only the
+  // owner's maintenance policy and their registered extras (no session template).
+  const ownOnly = ["platform", "platform_readable", "ingress"].includes(spec.class);
   const expected = ["work_owner"]
-    .concat(vault ? ["vault_broker"] : ["tenant_command"])
+    .concat(vault ? ["vault_broker"] : ownOnly ? [] : ["tenant_command"])
     .concat(spec.class === "tenant_readable" || mixed ? ["tenant_read"] : [])
     .concat(spec.lease || mixed ? ["tenant_lease"] : [])
     .concat(spec.policies ?? []);
@@ -307,7 +356,9 @@ test("S4: the api role reads readable tables column by column; no runtime DELETE
 // Definer kinds: the api functions, the resolvers, and (M2 PR-1) the runtime, vault and
 // signup-bridge definers. Every definer is owned by the command role; operator functions
 // are INVOKER and owned by the owner, like triggers and checks.
-const definerKinds = ["api", "resolver", "runtime", "vault", "bridge_in"];
+// M5 PR-1 adds the broker's own billing definers ("broker") and the receipt-only ingress
+// ("ingress").
+const definerKinds = ["api", "resolver", "runtime", "vault", "bridge_in", "broker", "ingress"];
 
 test("S5: definers, owners, search paths, grants, parameters, roles and memberships", () => {
   const functions = rows(
@@ -602,7 +653,7 @@ test("S7: the billing and vault schemas, and what each executor login may execut
       );
       assert.ok(t.relrowsecurity && t.relforcerowsecurity && t.owner === workRoles.owner, table);
       checkPolicies(schema, table, spec);
-      if (spec.class !== "vault_platform") {
+      if (!["vault_platform", "platform", "platform_readable"].includes(spec.class)) {
         const fks = rows(
           `SELECT c.confrelid::regclass::text AS parent,(SELECT array_agg(a.attname ORDER BY k.ord) FROM unnest(c.conkey) WITH ORDINALITY k(attnum,ord) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum) AS columns FROM pg_constraint c WHERE c.conrelid='${schema}.${table}'::regclass AND c.contype='f'`,
         );

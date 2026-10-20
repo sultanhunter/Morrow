@@ -80,12 +80,15 @@ export const workTables = Object.freeze({
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
     lease: true,
+    // M5 PR-1 (0027): the broker's own login settles its stripe_write operations.
+    policies: ["broker_stripe"],
     content: "none",
   },
   operation_transitions: {
     class: "tenant_readable",
     parents: ["operations"],
     lease: true,
+    policies: ["broker_stripe_transition"],
     content: "none",
   },
 });
@@ -280,6 +283,9 @@ export const bridgeFunctions = Object.freeze([
   "work_lease_member_current(text,text,text,text)",
   // M2 PR-1 review (0022): the website-signup fact behind route_signup.
   "work_signup_workspace(text,text)",
+  // M5 PR-1 (0025, BRANCH-LOCAL STUB of M2 PR-2's bridge, same signature): the store
+  // associations behind the billing phase and the checkout precondition.
+  "work_store_installations(text,text)",
 ]);
 // M2 PR-1 (0020): the two schemas the work owner creates beside morrow_work. The billing
 // route is tenant-readable with one extra insert policy for the signup bridge; the vault
@@ -300,15 +306,20 @@ const aclSpec = (commandPrivileges, commandColumnUpdates = [], apiColumns = []) 
   commandColumnUpdates,
   apiColumns,
 });
+// Billing classes beside the shared ones: platform_readable (no tenant columns, read by both
+// runtime roles, written only by the owner) and ingress (the broker-recorded receipts and
+// their applications: nullable tenant keys, reached only through the broker's and the
+// receipt ingress's own policies, never the session template).
 export const billingTables = Object.freeze({
   workspace_billing_routes: {
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
-    policies: ["route_signup"],
+    // M5 PR-1 (0027): receipt_apply fixes the route from a verified receipt.
+    policies: ["receipt_apply", "route_signup"],
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
-      [],
+      ["fixing_payment_key", "mode", "revision", "route", "route_fixed_at", "updated_at"],
       [
         "created_at",
         "fixing_payment_key",
@@ -324,6 +335,208 @@ export const billingTables = Object.freeze({
       ],
     ),
   },
+  // M5 PR-1 (0027): the M5 billing records.
+  billing_terms: {
+    class: "platform_readable",
+    parents: [],
+    policies: ["platform_api_read", "platform_command_read"],
+    content: "none",
+    ...aclSpec(["SELECT"], [], ["digest", "offers", "recorded_at", "terms", "terms_revision"]),
+  },
+  stripe_customers: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces", "morrow_work.operations"],
+    policies: ["broker_billing"],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"]),
+  },
+  checkout_intents: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces", "morrow_work.operations"],
+    policies: ["broker_billing", "receipt_apply"],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["revision", "status", "stripe_session_id", "updated_at"],
+      [
+        "actor_membership_id",
+        "actor_principal_id",
+        "checkout_operation_id",
+        "created_at",
+        "customer_operation_id",
+        "expires_at",
+        "id",
+        "mode",
+        "organization_id",
+        "price_key",
+        "revision",
+        "route_revision",
+        "status",
+        "terms_revision",
+        "updated_at",
+        "workspace_id",
+      ],
+    ),
+  },
+  stripe_operations: {
+    class: "tenant_internal",
+    parents: ["morrow_billing.checkout_intents", "morrow_work.operations"],
+    policies: ["broker_billing", "receipt_apply"],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"], ["provider_object_id"]),
+  },
+  stripe_event_receipts: {
+    class: "ingress",
+    parents: ["morrow_identity.workspaces"],
+    policies: ["broker_billing", "receipt_ingress_read"],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"]),
+  },
+  receipt_applications: {
+    class: "ingress",
+    parents: ["morrow_billing.stripe_event_receipts"],
+    policies: ["receipt_ingress_apply", "receipt_ingress_read"],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"]),
+  },
+  // The entry proof of receipt_begin: one row per backend, the api login's own only.
+  receipt_entries: {
+    class: "platform",
+    parents: [],
+    policies: ["receipt_entry"],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["nonce", "receipt_id", "receipt_organization_id", "receipt_workspace_id", "xact_id"],
+    ),
+  },
+  billing_accounts: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces"],
+    policies: ["receipt_apply"],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["revision", "status", "updated_at"],
+      [
+        "created_at",
+        "currency",
+        "id",
+        "mode",
+        "organization_id",
+        "revision",
+        "route",
+        "status",
+        "updated_at",
+        "workspace_id",
+      ],
+    ),
+  },
+  entitlement_snapshots: {
+    class: "tenant_readable",
+    parents: ["morrow_billing.billing_accounts", "morrow_billing.stripe_event_receipts"],
+    policies: ["receipt_apply"],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      [],
+      [
+        "billing_account_id",
+        "mode",
+        "organization_id",
+        "provider_evidence_ref",
+        "recorded_at",
+        "revision",
+        "route",
+        "status",
+        "subscription_key",
+        "valid_until",
+        "verified_at",
+        "workspace_id",
+      ],
+    ),
+  },
+  verified_payment_events: {
+    class: "tenant_readable",
+    parents: ["morrow_billing.stripe_event_receipts", "morrow_identity.workspaces"],
+    policies: ["receipt_apply"],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      [],
+      [
+        "amount",
+        "currency",
+        "id",
+        "kind",
+        "mode",
+        "operation_id",
+        "organization_id",
+        "outcome",
+        "outcome_code",
+        "payment_key",
+        "period_end",
+        "period_start",
+        "price_key",
+        "provider_evidence_ref",
+        "recorded_at",
+        "route",
+        "subscription_key",
+        "verified_at",
+        "workspace_id",
+      ],
+    ),
+  },
+  credit_grants: {
+    class: "tenant_readable",
+    parents: ["morrow_billing.billing_accounts"],
+    policies: ["receipt_apply"],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      [],
+      [
+        "billing_account_id",
+        "credit_units",
+        "effective_at",
+        "expires_at",
+        "funded_wallet_revision",
+        "id",
+        "kind",
+        "mode",
+        "organization_id",
+        "payment_key",
+        "purchase_evidence_ref",
+        "recorded_at",
+        "route",
+        "terms_revision",
+        "workspace_id",
+      ],
+    ),
+  },
+  credit_wallets: {
+    class: "tenant_readable",
+    parents: ["morrow_billing.billing_accounts"],
+    policies: ["receipt_apply"],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["available", "consumed", "reserved", "revision", "updated_at"],
+      [
+        "available",
+        "billing_account_id",
+        "consumed",
+        "created_at",
+        "organization_id",
+        "rate_revision",
+        "reserved",
+        "revision",
+        "terms_revision",
+        "updated_at",
+        "workspace_id",
+      ],
+    ),
+  },
 });
 export const billingFunctions = Object.freeze({
   // The signup bridge: the identity owner calls it from 0021's trigger and backfill,
@@ -334,6 +547,39 @@ export const billingFunctions = Object.freeze({
     tenantParameters: ["p_organization_id", "p_workspace_id"],
   },
   "route_guard()": { kind: "trigger", grantees: [] },
+  // M5 PR-1 (0027). Session definers for the api role (tenant from current_tenant()).
+  "workspace_associations()": { kind: "api", grantees: ["morrow_work_api"] },
+  "cmd_checkout_open(text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+  },
+  "cmd_portal_open(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
+  // The receipt-only ingress (ADR-0022 item 9 amendment): the api login with no session
+  // context; the tenant only from the broker-recorded receipt.
+  "receipt_begin(text,text)": { kind: "ingress", grantees: ["morrow_work_api"] },
+  "receipt_apply(text,text,text)": { kind: "ingress", grantees: ["morrow_work_api"] },
+  "receipt_status(text)": { kind: "ingress", grantees: ["morrow_work_api"] },
+  // The broker's own login (work_executor_safe): ids only.
+  "stripe_op_begin(text)": { kind: "broker", grantees: ["morrow_vault_broker"] },
+  "stripe_op_settle(text,text,text,text)": { kind: "broker", grantees: ["morrow_vault_broker"] },
+  "stripe_receipt_record(text,text,text,text,text,text,text,text,text)": {
+    kind: "broker",
+    grantees: ["morrow_vault_broker"],
+  },
+  // INVOKER helpers the policies and definers evaluate as the command role.
+  "receipt_ingress()": { kind: "check", grantees: ["morrow_work_command"] },
+  "receipt_entered(text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "receipt_tenant(text,text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "receipt_object_valid(text,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "terms_guard()": { kind: "trigger", grantees: [] },
+  "intent_guard()": { kind: "trigger", grantees: [] },
+  "stripe_operation_guard()": { kind: "trigger", grantees: [] },
+  "account_guard()": { kind: "trigger", grantees: [] },
+  "snapshot_guard()": { kind: "trigger", grantees: [] },
+  "wallet_guard()": { kind: "trigger", grantees: [] },
+  "grant_guard()": { kind: "trigger", grantees: [] },
+  "application_guard()": { kind: "trigger", grantees: [] },
+  "route_fix_guard()": { kind: "trigger", grantees: [] },
 });
 export const vaultTables = Object.freeze({
   app_secrets: {
@@ -354,7 +600,13 @@ export const vaultTables = Object.freeze({
 // S7 (M2 PR-2a): the roles granted USAGE on each schema S7 covers, besides its owner.
 // An executor login's USAGE must also equal the schemas of the functions it executes.
 export const schemaUsage = Object.freeze({
-  morrow_billing: ["morrow_identity_owner", "morrow_work_api", "morrow_work_command"],
+  // M5 PR-1: the broker's own login runs its three billing definers.
+  morrow_billing: [
+    "morrow_identity_owner",
+    "morrow_vault_broker",
+    "morrow_work_api",
+    "morrow_work_command",
+  ],
   morrow_vault: ["morrow_vault_broker", "morrow_work_command"],
 });
 export const vaultFunctions = Object.freeze({
@@ -424,7 +676,13 @@ export const executorLogins = Object.freeze({
     "morrow_work.lease_release()",
     "morrow_work.pending_starts()",
   ],
-  morrow_vault_broker: ["morrow_vault.app_secret_get(text)"],
+  morrow_vault_broker: [
+    // M5 PR-1 (0027).
+    "morrow_billing.stripe_op_begin(text)",
+    "morrow_billing.stripe_op_settle(text,text,text,text)",
+    "morrow_billing.stripe_receipt_record(text,text,text,text,text,text,text,text,text)",
+    "morrow_vault.app_secret_get(text)",
+  ],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);
 // Non-tenant schemas outside the manifest. The staging runner's ledger (ADR-0019 item 12)
