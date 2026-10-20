@@ -60,7 +60,7 @@ export async function preflight(ctx, p) {
     regionId: neon.region_id !== null,
     binding: p.bindingSet,
     // P05.T01ab: the api's LOGIN_CHALLENGE_JSON and the broker's
-    // TURNSTILE_CONFIGURATION_JSON (PR-D identifiers; gate 4 checks them).
+    // TURNSTILE_CONFIGURATION_JSON (PR-D part 1 identifiers; gate 4 checks them).
     challenge: p.challengeSet,
   };
   for (const [name, set] of Object.entries(identifiers))
@@ -405,7 +405,7 @@ export async function createTurnstile(ctx, p) {
         body: { name: turnstileWidget, domains: [hostname], mode: "invisible", region: "world" },
       })
     )?.result;
-  } catch {
+  } catch (error) {
     handle.abandon();
     let existing;
     try {
@@ -414,7 +414,12 @@ export async function createTurnstile(ctx, p) {
       throw new StagingError("STAGING_TURNSTILE_OUTCOME_UNKNOWN");
     }
     if (existing.length) throw new StagingError("STAGING_TURNSTILE_SECRET_LOST");
-    throw new StagingError("STAGING_TURNSTILE_CREATE_FAILED");
+    // A refused create names Cloudflare's status and numeric codes only (never its messages).
+    const refused = error?.code === "STAGING_CLOUDFLARE_REQUEST_FAILED" ? error.details : null;
+    throw new StagingError("STAGING_TURNSTILE_CREATE_FAILED", {
+      status: refused?.status ?? null,
+      codes: Array.isArray(refused?.codes) ? refused.codes : [],
+    });
   }
   const siteKey = result?.sitekey;
   const secret = result?.secret;

@@ -76,7 +76,8 @@ export { githubVariables };
 
 // ---------------------------------------------------------------------------
 // Configuration: staging.json, the card record, and the resolved staging vars of the api
-// (the database binding and the login configuration; identifiers arrive in PR-D).
+// and the broker (the database binding, the login configuration and the two challenge
+// vars: the reviewed identifiers of P04.T01i PR-D part 1, held by verify-config).
 export const workerConfigs = Object.freeze({
   api: "apps/api/wrangler.jsonc",
   broker: "apps/broker/wrangler.jsonc",
@@ -130,8 +131,8 @@ export async function loadStagingConfiguration(root) {
     bindingJson: text(vars, "MORROW_DATABASE_BINDING_JSON"),
     loginConfigurationJson: text(vars, "LOGIN_CONFIGURATION_JSON"),
     // P05.T01ab (D1, D5): the api's challenge configuration and the broker's own vars.
-    // Both JSON vars name reviewed identifiers (the site key, the workers.dev host), so
-    // they arrive with PR-D; until then they are null and a deploy stops before upload.
+    // Both JSON vars name reviewed identifiers (the site key, the workers.dev host),
+    // committed by PR-D part 1; a missing one is null and a deploy stops before upload.
     challengeJson: text(vars, "LOGIN_CHALLENGE_JSON"),
     broker: Object.freeze({
       turnstileJson: text(brokerVars, "TURNSTILE_CONFIGURATION_JSON"),
@@ -152,7 +153,8 @@ export const stagingChallengeActions = Object.freeze({
 // false, so a deploy would only fail later, at the health gate. The checks are the
 // runtimes' own parsers (parseLoginChallengeConfiguration; parseTurnstileConfiguration,
 // which the broker itself uses, so a duplicate member or more than 1024 bytes stops here)
-// plus D1's cross-Worker rules: the same actions (D1's values, in the same order), the
+// plus D1's cross-Worker rules: the site key equal to staging.json's widget's
+// (`cloudflare.turnstile.site_key`), the same actions (D1's values, in the same order), the
 // Turnstile hostname equal to the origin's, and the broker's login configuration and
 // database binding present and byte-equal to the api's. The broker compares the hostname
 // with its own login configuration's origin; that text is byte-equal to the api's, whose
@@ -191,6 +193,8 @@ export async function checkChallengeConfiguration(loaded) {
   } catch {
     throw invalid("api");
   }
+  const siteKey = loaded.staging?.cloudflare?.turnstile?.site_key;
+  if (typeof siteKey !== "string" || challenge.siteKey !== siteKey) throw invalid("site_key");
   const origin = loaded.staging?.cloudflare?.origin;
   let turnstile;
   try {
@@ -258,6 +262,10 @@ const githubTarget = (staging) => ({
   repository: repositoryOf(staging),
   environment: githubScope(staging).length ? "staging" : null,
 });
+// The committed binding, held to staging.json: the `staging` branch of the project, through
+// that branch's direct endpoint (`neon.endpoint_host`). The parser already refuses a
+// `-pooler` host; any other well-formed `ep-` host (the root branch's, say) fails here, so
+// the owner URL check below cannot follow a binding to another endpoint.
 async function stagingBinding(ctx, config) {
   if (config.bindingJson === null) throw new StagingError("STAGING_IDENTIFIERS_UNSET");
   const constants = await ctx.constants();
@@ -272,8 +280,11 @@ async function stagingBinding(ctx, config) {
     binding.environment !== "staging" ||
     neon.project_id === null ||
     neon.branch_id === null ||
+    typeof neon.endpoint_host !== "string" ||
     binding.projectId !== neon.project_id ||
-    binding.branchId !== neon.branch_id
+    binding.branchId !== neon.branch_id ||
+    binding.hostname !== neon.endpoint_host ||
+    binding.hostname.split(".")[0].includes("-pooler")
   )
     throw new StagingError("STAGING_BINDING_INVALID");
   return binding;
