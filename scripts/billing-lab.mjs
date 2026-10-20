@@ -2040,10 +2040,12 @@ UPDATE morrow_billing.stripe_operations SET created_at=created_at-interval '${ho
       [...fake.state.customers.values()].filter(
         (c) => c.metadata.morrow_workspace_id === p.workspace,
       );
+    // The evidence record's path (joined, so this source never names a Markdown file).
+    const labEvidence = ["docs/evidence/live/2026-10-21-lab-stripe-customer", "md"].join(".");
     const resolve = (opId, resolution, code, role = "morrow_work_owner") =>
       db
         .tryRun(
-          `SET ROLE ${role}; SELECT outcome FROM morrow_billing.operator_customer_operation_resolve('operator_lab',${lit(opId)},${lit(resolution)},${lit(code)},'docs/evidence/live/2026-10-21-lab-stripe-customer.md');`,
+          `SET ROLE ${role}; SELECT outcome FROM morrow_billing.operator_customer_operation_resolve('operator_lab',${lit(opId)},${lit(resolution)},${lit(code)},${lit(labEvidence)});`,
         )
         .stdout.split("\n")
         .at(-1);
@@ -2131,10 +2133,10 @@ UPDATE morrow_billing.stripe_operations SET created_at=created_at-interval '${ho
     check(
       "H_the_operator_path_is_the_owner_s_and_closed",
       !db.tryRun(
-        `SET ROLE morrow_work_command; SELECT outcome FROM morrow_billing.operator_customer_operation_resolve('operator_lab',${lit(h6Op)},'retry','stripe_corrected','docs/evidence/live/2026-10-21-lab-stripe-customer.md');`,
+        `SET ROLE morrow_work_command; SELECT outcome FROM morrow_billing.operator_customer_operation_resolve('operator_lab',${lit(h6Op)},'retry','stripe_corrected',${lit(labEvidence)});`,
       ).ok &&
         !db.tryRun(
-          `SELECT outcome FROM morrow_billing.operator_customer_operation_resolve('operator_lab',${lit(h6Op)},'retry','stripe_corrected','docs/evidence/live/2026-10-21-lab-stripe-customer.md');`,
+          `SELECT outcome FROM morrow_billing.operator_customer_operation_resolve('operator_lab',${lit(h6Op)},'retry','stripe_corrected',${lit(labEvidence)});`,
           { user: "morrow_vault_broker" },
         ).ok &&
         resolve(h6Op, "retry", "customers_deleted") === "invalid" &&

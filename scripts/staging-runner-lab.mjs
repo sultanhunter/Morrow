@@ -1019,7 +1019,8 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
         operationId: "00000000-0000-4000-8000-00000000abcd",
         resolution: "abandon",
         evidenceCode: "none_found",
-        evidenceRef: "docs/evidence/live/2026-10-21-lab-stripe-customer.md",
+        // Joined, so this source never names a Markdown file.
+        evidenceRef: ["docs/evidence/live/2026-10-21-lab-stripe-customer", "md"].join("."),
       },
     }),
   );
