@@ -1,9 +1,14 @@
 // M2 PR-2: the ConnectorBroker's Shopify methods over a faked vault database and a faked
 // Shopify (no network, no database), and the vault login's transport over a faked driver.
 // The order of the install is checked by the events it causes: the claim commits before
-// any provider call, a refusal stops everything after it, a non-development store or a
-// scope mismatch stores nothing, an exchange lost after sending is never retried, a lost
-// COMMIT acknowledgement is outcome_unknown, and the token is never in a verdict or a log.
+// any provider call and only after Shopify's signature verified (an unsigned or stale
+// callback consumes no state), a refusal stops everything after it, a non-development
+// store or a scope mismatch stores nothing, an exchange lost after sending is never
+// retried, a lost COMMIT acknowledgement is outcome_unknown, and the token is never in a
+// verdict or a log. Ingress (the PR-2 review's layers 2 and 3): unsigned-shaped requests
+// open no vault transaction; with the app's secret held by the isolate, a forged launch,
+// callback or webhook opens none either; and at most shopifyIngressLimits transactions
+// (unverified, total) run at once, the install store never counted.
 import assert from "node:assert/strict";
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import test from "node:test";
@@ -12,7 +17,11 @@ import {
   decodeShopifyLaunchVerdict,
   decodeShopifyWebhookVerdict,
 } from "../packages/identity/src/broker-protocol.ts";
-import { createShopifyBroker } from "../apps/broker/src/shopify-install.ts";
+import {
+  createShopifyBroker,
+  shopifyIngressLimits,
+  shopifySecretCacheMs,
+} from "../apps/broker/src/shopify-install.ts";
 import {
   VaultError,
   createVaultKeyring,
@@ -79,6 +88,7 @@ async function fakeVault(options = {}) {
     credentials: [],
     continuations: [],
     registered: options.registered ?? true,
+    transactions: 0,
   };
   const handlers = {
     [vaultStatements.appSecretGet]: ([key]) =>
@@ -101,7 +111,9 @@ async function fakeVault(options = {}) {
               sealed_value: null,
             },
           ],
-    [vaultStatements.shopifyLaunchContext]: ([key, domain]) => {
+    [vaultStatements.shopifyLaunchContext]: async ([key, domain]) => {
+      // Holds the launch's transaction open (its ingress slot taken) when gated.
+      if (options.launchGate) await options.launchGate();
       const found = key === appKey && domain === shop && db.registered;
       const installation = [...db.installations.values()].find((i) => i.domain === domain);
       return [
@@ -222,6 +234,7 @@ async function fakeVault(options = {}) {
   let transactions = 0;
   const transaction = async (vault, budgetMs, body) => {
     const index = transactions++;
+    db.transactions++;
     assert.ok(vault.keyring && vault.databasePassword && vault.binding, "the vault capability");
     assert.ok(Number.isSafeInteger(budgetMs) && budgetMs >= 1 && budgetMs <= 10000);
     const value = await body(async (text, values) => {
@@ -241,6 +254,7 @@ function shopifyFake(db, options = {}) {
     calls.push(url);
     if (url.endsWith("/admin/oauth/access_token")) {
       db.events.push("exchange");
+      if (options.onExchange) await options.onExchange();
       if (options.exchangeLost) throw new Error("socket closed after send");
       return Response.json({ access_token: token, scope: options.scope ?? "write_products" });
     }
@@ -260,10 +274,11 @@ function shopifyFake(db, options = {}) {
 async function harness(options = {}) {
   const vault = await fakeVault(options);
   const shopify = shopifyFake(vault.db, options);
+  const clock = options.clock ?? { ms: nowSeconds * 1000 };
   const broker = createShopifyBroker({
     transaction: vault.transaction,
     fetch: shopify.fetcher,
-    now: () => nowSeconds * 1000,
+    now: () => clock.ms,
   });
   return { ...vault, shopify, broker, env: env() };
 }
@@ -313,6 +328,214 @@ test("launch: a verified query of the registered shop returns the installation s
       "refused",
     );
   assert.equal(h.shopify.calls.length, 0);
+  // Not shaped like a signed query: refused before any vault transaction (no hmac, a
+  // malformed or uppercase hmac, a stale or missing timestamp, a signature parameter).
+  const valid = signed({ shop, timestamp: String(nowSeconds) });
+  h.db.transactions = 0;
+  for (const query of [
+    "shop=" + shop + "&timestamp=" + nowSeconds,
+    valid.replace(/hmac=[a-f0-9]+/, "hmac=" + "0".repeat(63)),
+    valid.replace(/hmac=([a-f0-9]+)/, (_, x) => "hmac=" + x.toUpperCase()),
+    signed({ shop, timestamp: String(nowSeconds - 91) }),
+    signed({ shop }),
+    signed({ shop, signature: "x", timestamp: String(nowSeconds) }),
+  ])
+    assert.equal(
+      decodeShopifyLaunchVerdict(await h.broker.launchVerify(h.env, appKey, query)).verdict,
+      "refused",
+      query,
+    );
+  assert.equal(h.db.transactions, 0);
+});
+
+// A gate that holds every gated transaction until opened, then can be closed again.
+function gate() {
+  let open,
+    waiting = 0,
+    opened = new Promise((resolve) => (open = resolve));
+  return {
+    wait: async () => {
+      waiting++;
+      try {
+        await opened;
+      } finally {
+        waiting--;
+      }
+    },
+    held: () => waiting,
+    open: () => open(),
+    close: () => (opened = new Promise((resolve) => (open = resolve))),
+  };
+}
+// Waits (up to 5 s on a loaded machine) until exactly `count` transactions wait at the gate.
+async function holding(g, count) {
+  for (const started = Date.now(); Date.now() - started < 5000; )
+    if (g.held() === count) break;
+    else await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(g.held(), count);
+}
+const busy = (error) => error.code === "INGRESS_BUSY";
+const forgedWebhook = (body = '{"shop_id":987}') =>
+  JSON.stringify({
+    "x-shopify-api-version": "2026-10",
+    "x-shopify-hmac-sha256": createHmac("sha256", "x").update(body).digest("base64"),
+    "x-shopify-shop-domain": shop,
+    "x-shopify-topic": "shop/redact",
+    "x-shopify-webhook-id": "b54557e4-bdd9-4b37-8a5f-bf7d70bcd043",
+  });
+
+test("ingress layer 2: with the app's secret held, forged launches, callbacks and webhooks open no transaction", async () => {
+  const clock = { ms: nowSeconds * 1000 };
+  const h = await harness({ clock });
+  // Queries are signed at the moving clock, so only the cache's age changes below.
+  const at = () => String(Math.trunc(clock.ms / 1000));
+  const launch = (key = appKey, query = signed({ shop, timestamp: at() })) =>
+    h.broker.launchVerify(h.env, key, query).then((v) => decodeShopifyLaunchVerdict(v).verdict);
+  const forgedQuery = () =>
+    signed({ shop, timestamp: at() }).replace(/hmac=[a-f0-9]+/, "hmac=" + "0".repeat(64));
+  // Cold: the first request reads the vault, whatever its signature.
+  assert.equal(await launch(appKey, forgedQuery()), "refused");
+  assert.equal(h.db.transactions, 1);
+  // Held: forged requests of the known app are refused in memory.
+  assert.equal(await launch(appKey, forgedQuery()), "refused");
+  assert.equal(
+    decodeShopifyWebhookVerdict(
+      await h.broker.webhookVerify(
+        h.env,
+        appKey,
+        forgedWebhook(),
+        Buffer.from('{"shop_id":987}').toString("base64"),
+      ),
+    ).verdict,
+    "refused",
+  );
+  const state = newState();
+  openState(h.db, state);
+  const forgedCallback = callback(state).replace(/hmac=[a-f0-9]+/, "hmac=" + "f".repeat(64));
+  assert.equal(
+    decodeShopifyInstallResult(
+      await h.broker.installComplete(h.env, appKey, forgedCallback, sha(state), 9000),
+    ).outcome,
+    "refused",
+  );
+  assert.equal(h.db.transactions, 1);
+  assert.equal(h.db.states.get(sha(state)).claimed, false);
+  assert.deepEqual(h.db.events, []);
+  // A signed request still reads the registry; an unknown app key is never held.
+  assert.equal(await launch(), "verified");
+  assert.equal(await launch("unknown-app"), "refused");
+  assert.equal(await launch("unknown-app"), "refused");
+  assert.equal(h.db.transactions, 4);
+  // Another isolate (another broker) holds nothing yet.
+  const other = createShopifyBroker({
+    transaction: h.transaction,
+    fetch: h.shopify.fetcher,
+    now: () => clock.ms,
+  });
+  assert.equal(
+    decodeShopifyLaunchVerdict(await other.launchVerify(h.env, appKey, forgedQuery())).verdict,
+    "refused",
+  );
+  assert.equal(h.db.transactions, 5);
+  // A held secret lasts shopifySecretCacheMs from the read that returned it.
+  clock.ms += shopifySecretCacheMs + 1;
+  assert.equal(await launch(appKey, forgedQuery()), "refused");
+  assert.equal(h.db.transactions, 6);
+  assert.equal(await launch(appKey, forgedQuery()), "refused");
+  assert.equal(h.db.transactions, 6);
+  // A vault read that finds no secret clears the entry (a removed app): the next forged
+  // request reads the vault again.
+  clock.ms += shopifySecretCacheMs + 1;
+  h.db.registered = false;
+  assert.equal(await launch(), "refused");
+  assert.equal(await launch(appKey, forgedQuery()), "refused");
+  assert.equal(h.db.transactions, 8);
+});
+
+test("ingress layer 3: one unverified and three ingress transactions at once per isolate; the install store is not counted", async () => {
+  const g = gate();
+  const h = await harness({ launchGate: g.wait });
+  const query = signed({ host: "aG9zdA", shop, timestamp: String(nowSeconds) });
+  const launch = (key = appKey) => h.broker.launchVerify(h.env, key, query);
+  const webhookBody = Buffer.from('{"shop_id":987}').toString("base64");
+  // Cold: one unverified transaction; a second unverified request is held without one.
+  const first = launch();
+  await holding(g, 1);
+  await assert.rejects(() => launch(), busy);
+  await assert.rejects(
+    () => h.broker.webhookVerify(h.env, appKey, forgedWebhook(), webhookBody),
+    busy,
+  );
+  assert.equal(h.db.transactions, 1);
+  g.open();
+  assert.equal(decodeShopifyLaunchVerdict(await first).verdict, "verified");
+  // Warm: verified requests take the remaining slots, up to shopifyIngressLimits.total.
+  g.close();
+  assert.equal(shopifyIngressLimits.unverified, 1);
+  assert.equal(shopifyIngressLimits.total, 3);
+  const held = [launch(), launch(), launch()];
+  await holding(g, 3);
+  await assert.rejects(() => launch(), busy);
+  await assert.rejects(() => launch("unknown-app"), busy);
+  const state = newState();
+  openState(h.db, state);
+  await assert.rejects(
+    () => h.broker.installComplete(h.env, appKey, callback(state), sha(state), 9000),
+    busy,
+  );
+  // A forged request is refused before it asks for a slot.
+  assert.equal(
+    decodeShopifyLaunchVerdict(
+      await h.broker.launchVerify(
+        h.env,
+        appKey,
+        query.replace(/hmac=[a-f0-9]+/, "hmac=" + "0".repeat(64)),
+      ),
+    ).verdict,
+    "refused",
+  );
+  assert.equal(h.db.transactions, 4);
+  assert.equal(h.db.states.get(sha(state)).claimed, false);
+  g.open();
+  for (const verdict of await Promise.all(held))
+    assert.equal(decodeShopifyLaunchVerdict(verdict).verdict, "verified");
+  // An unverified request (an unknown app) takes the one unverified slot; verified ones
+  // still have two.
+  g.close();
+  const unknownApp = launch("unknown-app");
+  await holding(g, 1);
+  await assert.rejects(() => launch("other-app"), busy);
+  const two = [launch(), launch()];
+  await holding(g, 3);
+  await assert.rejects(() => launch(), busy);
+  g.open();
+  assert.equal(decodeShopifyLaunchVerdict(await unknownApp).verdict, "refused");
+  await Promise.all(two);
+  // The install's store follows the exchange and is not ingress: it runs while every
+  // ingress slot is held.
+  g.close();
+  const during = [];
+  const install = await harness({
+    launchGate: g.wait,
+    onExchange: async () => {
+      for (let i = 0; i < shopifyIngressLimits.total; i++)
+        during.push(install.broker.launchVerify(install.env, appKey, query));
+      await holding(g, shopifyIngressLimits.total);
+    },
+  });
+  // Warm the secret first, so the held launches are verified ones.
+  g.open();
+  await install.broker.launchVerify(install.env, appKey, query);
+  g.close();
+  const second = newState();
+  openState(install.db, second);
+  const result = decodeShopifyInstallResult(
+    await install.broker.installComplete(install.env, appKey, callback(second), sha(second), 9000),
+  );
+  assert.equal(result.outcome, "installed");
+  assert.deepEqual(install.db.events, ["claim", "exchange", "identity", "prepare", "store"]);
+  g.open();
+  await Promise.all(during);
 });
 
 test("install: claim, verify, exchange once, exact scopes, identity, then one sealed store", async () => {
@@ -391,10 +614,17 @@ test("install refusals stop before the exchange, or store nothing after it", asy
     { name: "cookie", query: (s) => callback(newState()), events: [], outcome: "state_invalid" },
     { name: "expired", open: { expired: true }, events: ["claim"], outcome: "state_invalid" },
     { name: "unknown state", open: null, events: ["claim"], outcome: "state_invalid" },
+    // Unverified: no claim statement at all, so the state stays open.
     {
       name: "bad hmac",
       query: (s) => callback(s).replace(/hmac=[a-f0-9]+/, "hmac=" + "f".repeat(64)),
-      events: ["claim"],
+      events: [],
+      outcome: "refused",
+    },
+    {
+      name: "unsigned",
+      query: (s) => `code=c&shop=${shop}&state=${s}&timestamp=${nowSeconds}`,
+      events: [],
       outcome: "refused",
     },
     {
@@ -406,7 +636,7 @@ test("install refusals stop before the exchange, or store nothing after it", asy
     {
       name: "stale",
       query: (s) => callback(s, { timestamp: String(nowSeconds - 120) }),
-      events: ["claim"],
+      events: [],
       outcome: "refused",
     },
     {
@@ -436,7 +666,7 @@ test("install refusals stop before the exchange, or store nothing after it", asy
     {
       name: "unregistered",
       options: { registered: false },
-      events: ["claim"],
+      events: [],
       outcome: "state_invalid",
     },
   ];
@@ -454,6 +684,31 @@ test("install refusals stop before the exchange, or store nothing after it", asy
     assert.equal(result.workspaceId, null, c.name);
     assert.equal(result.continuationToken, null, c.name);
   }
+});
+
+test("install: an unsigned or stale callback cannot burn the merchant's state", async () => {
+  const h = await harness();
+  const state = newState();
+  openState(h.db, state);
+  for (const query of [
+    `code=forged&shop=${shop}&state=${state}&timestamp=${nowSeconds}&hmac=${"0".repeat(64)}`,
+    callback(state, { timestamp: String(nowSeconds - 120) }),
+  ])
+    assert.equal(
+      decodeShopifyInstallResult(
+        await h.broker.installComplete(h.env, appKey, query, sha(state), 9000),
+      ).outcome,
+      "refused",
+    );
+  assert.equal(h.db.states.get(sha(state)).claimed, false);
+  assert.deepEqual(h.db.events, []);
+  // The merchant's own signed callback still installs.
+  assert.equal(
+    decodeShopifyInstallResult(
+      await h.broker.installComplete(h.env, appKey, callback(state), sha(state), 9000),
+    ).outcome,
+    "installed",
+  );
 });
 
 test("install: a lost COMMIT acknowledgement is outcome_unknown, a lost claim is state_invalid", async () => {
@@ -537,6 +792,21 @@ test("webhooks: raw-body HMAC before any parse; topic allowlist; minimised body"
       decodeShopifyWebhookVerdict(await h.broker.webhookVerify(h.env, appKey, h2, b2)).verdict,
       "refused",
     );
+  // A signature header that is not base64 of 32 bytes opens no vault transaction.
+  h.db.transactions = 0;
+  for (const value of ["x".repeat(44), "a".repeat(64), "=" + "A".repeat(43)])
+    assert.equal(
+      decodeShopifyWebhookVerdict(
+        await h.broker.webhookVerify(
+          h.env,
+          appKey,
+          headers({ "x-shopify-hmac-sha256": value }),
+          raw,
+        ),
+      ).verdict,
+      "refused",
+    );
+  assert.equal(h.db.transactions, 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -576,6 +846,7 @@ function fakeDriver(options = {}) {
       },
       async end() {
         sent.push("end");
+        if (options.endHangs) await new Promise(() => {});
       },
       on() {},
     };
@@ -673,4 +944,22 @@ test("transport: refusals are fixed VaultError codes; a lost COMMIT is VAULT_OUT
   assert.ok(
     f.sent.includes(vaultTransactionSql.rollback) && !f.sent.includes(vaultTransactionSql.commit),
   );
+});
+
+test("transport: a committed value is returned by the deadline even when the close hangs", async () => {
+  const vault = await vaultCapability();
+  const f = fakeDriver({ endHangs: true });
+  const started = Date.now();
+  const value = await runVaultTransactionWithDriver(
+    f.driver,
+    vault,
+    300,
+    async (query) => (await query(vaultStatements.appSecretGet, ["app-1"]))[0].values,
+    Date.now,
+    f.Socket,
+  );
+  assert.deepEqual(value, ["app-1"]);
+  assert.ok(f.sent.includes(vaultTransactionSql.commit) && f.sent.includes("end"));
+  // Bounded by the 300 ms budget, not by the 1 s close allowance.
+  assert.ok(Date.now() - started < 800, "returned within the budget");
 });

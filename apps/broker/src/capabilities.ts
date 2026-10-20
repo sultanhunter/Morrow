@@ -44,7 +44,9 @@ export type BrokerFailureCode =
   | "NAMESPACE_DENIED"
   | "CAPABILITY_UNAVAILABLE"
   | "BUDGET_INVALID"
-  | "PROVIDER_HELD";
+  | "PROVIDER_HELD"
+  // M2 PR-2 review: the isolate's Shopify ingress slots on the vault login are all in use.
+  | "INGRESS_BUSY";
 export class BrokerHold extends Error {
   constructor(readonly code: BrokerFailureCode) {
     super("BROKER_HELD");

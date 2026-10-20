@@ -233,10 +233,13 @@ export async function runVaultTransactionWithDriver<T>(
       }
     throw error instanceof VaultError ? error : fail("VAULT_DATABASE_UNAVAILABLE");
   } finally {
+    // The orderly close waits at most 1 s and never past the caller's deadline, so a
+    // committed value is returned within the budget rather than after it (M2 PR-2 review:
+    // a commit acknowledged near the deadline must not reach the caller as a timeout).
     try {
       await within(
         Promise.resolve().then(() => client.end()),
-        now() + 1000,
+        Math.min(now() + 1000, deadline),
         now,
       );
     } catch {

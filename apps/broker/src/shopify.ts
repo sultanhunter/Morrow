@@ -100,19 +100,20 @@ export function parseShopifyQuery(raw: unknown, maxBytes = 2048): ShopifyQuery |
 }
 
 /**
- * Verifies a Shopify-signed admin query (launch, status, callback): hmac is 64 lowercase
+ * The checks of a Shopify-signed admin query that need no secret: hmac is 64 lowercase
  * hex, the timestamp is an integer within the tolerance, the shop is a *.myshopify.com
- * domain, and the HMAC of the canonical message under the app secret matches in constant
- * time. Returns the parameters, or null.
+ * domain, and there is no signature parameter. The broker runs this before it opens any
+ * vault transaction, so an unsigned or stale request costs no database work (an attacker
+ * can still forge the shape; the edge limiter bounds that). Returns the parsed query, or
+ * null.
  */
-export async function verifyShopifyQuery(
-  secret: string,
+export function shopifyQueryShape(
   raw: unknown,
   nowSeconds: number,
   toleranceSeconds = 90,
-): Promise<ReadonlyMap<string, string> | null> {
+): ShopifyQuery | null {
   const query = parseShopifyQuery(raw);
-  if (!query || typeof secret !== "string" || secret.length === 0) return null;
+  if (!query) return null;
   const hmac = query.params.get("hmac");
   const timestamp = query.params.get("timestamp");
   const shop = query.params.get("shop");
@@ -127,9 +128,27 @@ export async function verifyShopifyQuery(
     query.params.has("signature")
   )
     return null;
-  const expected = await shopifyHmacHex(secret, query.message);
-  return constantTimeEqual(expected, hmac) ? query.params : null;
+  return query;
 }
+
+/**
+ * Verifies a Shopify-signed admin query (launch, status, callback): the shape above, and
+ * the HMAC of the canonical message under the app secret matches in constant time.
+ * Returns the parameters, or null.
+ */
+export async function verifyShopifyQuery(
+  secret: string,
+  raw: unknown,
+  nowSeconds: number,
+  toleranceSeconds = 90,
+): Promise<ReadonlyMap<string, string> | null> {
+  const query = shopifyQueryShape(raw, nowSeconds, toleranceSeconds);
+  if (!query || typeof secret !== "string" || secret.length === 0) return null;
+  const expected = await shopifyHmacHex(secret, query.message);
+  return constantTimeEqual(expected, query.params.get("hmac")!) ? query.params : null;
+}
+/** The shape of the X-Shopify-Hmac-Sha256 header: base64 of 32 bytes. */
+export const shopifyWebhookHmacPattern = /^[A-Za-z0-9+/]{43}=$/;
 
 /**
  * Expands a scope list the way Shopify grants it: write_X implies read_X (and
@@ -335,7 +354,7 @@ export async function verifyShopifyWebhookHmac(
   body: Uint8Array,
   received: unknown,
 ): Promise<boolean> {
-  if (typeof received !== "string" || !/^[A-Za-z0-9+/]{43}=$/.test(received)) return false;
+  if (typeof received !== "string" || !shopifyWebhookHmacPattern.test(received)) return false;
   return constantTimeEqual(await shopifyHmacBase64(secret, body), received);
 }
 
