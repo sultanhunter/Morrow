@@ -161,10 +161,8 @@ test("S7 registry: the reviewed 0020 column grants", () => {
     "updated_at",
     "workspace_id",
   ]);
-  for (const [tables, table] of [
-    [billingTables, "workspace_billing_routes"],
-    [vaultTables, "app_secrets"],
-    [vaultTables, "credentials"],
-  ])
-    assert.deepEqual(tables[table].commandColumnUpdates, [], table);
+  // One line per table, so a PR that widens one table changes only its line.
+  assert.deepEqual(billingTables.workspace_billing_routes.commandColumnUpdates, []);
+  assert.deepEqual(vaultTables.app_secrets.commandColumnUpdates, []);
+  assert.deepEqual(vaultTables.credentials.commandColumnUpdates, []);
 });
