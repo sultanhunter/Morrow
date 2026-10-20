@@ -11,5 +11,5 @@
     Result: controls verified; `passwordStorage` SCRAM-SHA-256; `statementStats {recording: true, wiped: true, entriesRemaining: 0}`. The passwords were generated in memory, sent once each over TLS and written only to the owner file `~/.config/morrow/staging/tmp/broker-secrets.json` (mode 600) for the first deploy. Nothing was printed.
   - **21:28:32Z to 21:28:45Z.** `npm run staging:seed-platform` (without `--self-service`), exit 0: `configurationDigest` `229ebbfed0dcde05a64790b06c30f876410dbe41b7dd6daed6c5fdae5ca2b1ba`, profile `workos_staging_profile`, `selfService` unchanged, origin `https://morrow-staging-api.sultanibneusman0.workers.dev`.
 - **Cap and observed cost.** Neon Free, no card: $0.
-- **Cleanup.** The first deploy consumes `tmp/broker-secrets.json`, which then goes away.
+- **Cleanup.** The first deploy consumes `tmp/broker-secrets.json`. **Correction (2026-10-21):** this line said the file "then goes away". The deploy's `afterFirst` unlinks it by design but ignores a failed unlink, so its removal is not verified (`2026-10-20-cloudflare-first-deploy.md`, Secrets; the metadata-only check is in STATUS).
 - **Unknown outcomes.** None.
