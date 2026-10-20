@@ -11,9 +11,10 @@
 //   createrole-administrator.mjs), the hosted-shape provisioning, then the last entry
 //   through a kill before COMMIT and a lost acknowledgement, a superseded digest, and a
 //   planted SET row; zero Morrow SET rows and closed memberships at rest.
-// The chain runs through its head (M2 PR-1: 0019-0024), so provisioning covers the eleven
-// broker logins, the vault login included, and the first-deploy file the fourteen broker
-// names, with the owner's vault KEK read from its planted file (`vault-kek-v1`).
+// The chain runs through its head, so provisioning covers the eleven broker logins, the
+// vault login included, and the first-deploy file the sixteen broker names, with the
+// owner's vault KEK and M5 PR-1's two Stripe secrets read from their planted files. In
+// createrole mode the lab also runs M5 PR-1's billing terms seed (idempotent, drift).
 // No provider, credential, host port or merchant data; every secret is a synthetic marker.
 import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -31,8 +32,13 @@ import { join } from "node:path";
 import { repositoryRoot, writeArtifact } from "./artifacts.mjs";
 import { localPostgresLab } from "./local-postgres-lab.mjs";
 import { loadMigrationChain, schemaHead } from "./migration-chain.mjs";
-import { identityConstants, main } from "./staging.mjs";
-import { runMigrations, runnerSetRows, scramVerifier } from "./staging-runner.mjs";
+import { identityConstants, main, stagingBillingTermsRows } from "./staging.mjs";
+import {
+  runMigrations,
+  runnerSetRows,
+  scramVerifier,
+  seedBillingTerms,
+} from "./staging-runner.mjs";
 import { psqlConnector } from "./fixtures/staging-psql-connection.mjs";
 import {
   createAdministrator,
@@ -63,6 +69,9 @@ const markers = {
   turnstile: "0x4AAAAAAA" + hex(14),
   // M2 PR-1: the owner's vault KEK file holds 64 lowercase hex characters.
   kek: hex(32),
+  // M5 PR-1: the owner's Stripe restricted test key and webhook signing secret files.
+  stripeKey: "rk_test_" + hex(16) + "LAB",
+  stripeWebhook: "whsec_" + hex(16) + "LAB",
 };
 const ownerUrl = (user, { host = labBinding.hostname, database = "morrow" } = {}) =>
   `postgresql://${user}:${markers.ownerPassword}@${host}/${database}?sslmode=require`;
@@ -202,6 +211,8 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
     "workos-api-key": markers.workos,
     "turnstile-secret": markers.turnstile,
     "vault-kek-v1": markers.kek,
+    "stripe-restricted-key": markers.stripeKey,
+    "stripe-webhook-secret": markers.stripeWebhook,
   });
   const connector = psqlConnector(id, { user: "postgres", database: "morrow" });
   const fakes = fakeTools();
@@ -419,9 +430,15 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
   check(
     "first_deploy_file_holds_exactly_the_broker_secrets",
     Object.keys(secrets).sort().join() === constants.brokerSecrets.join() &&
-      constants.brokerSecrets.length === 14 &&
+      constants.brokerSecrets.length === 16 &&
       secrets.WORKOS_API_KEY === markers.workos &&
       secrets.TURNSTILE_SECRET_KEY === markers.turnstile,
+  );
+  // M5 PR-1: both Stripe secrets are the owner's files, byte for byte.
+  check(
+    "first_deploy_file_carries_the_owner_stripe_secrets",
+    secrets.STRIPE_RESTRICTED_KEY === markers.stripeKey &&
+      secrets.STRIPE_WEBHOOK_SECRET === markers.stripeWebhook,
   );
   // M2 PR-1: the KEK is the owner's file, byte for byte; the tool never generates one.
   check("first_deploy_file_carries_the_owner_kek", secrets.MORROW_VAULT_KEK_V1 === markers.kek);
@@ -744,6 +761,8 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
     markers.workos,
     markers.turnstile,
     markers.kek,
+    markers.stripeKey,
+    markers.stripeWebhook,
     ...passwords,
   ];
   check(
@@ -789,6 +808,8 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
     "workos-api-key": markers.workos,
     "turnstile-secret": markers.turnstile,
     "vault-kek-v1": markers.kek,
+    "stripe-restricted-key": markers.stripeKey,
+    "stripe-webhook-secret": markers.stripeWebhook,
   });
   const connector = psqlConnector(id, { user: "neondb_owner", database: "morrow" });
   const fakes = fakeTools();
@@ -951,7 +972,47 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
     "createrole_at_rest_census_is_creation_rows_and_reviewed_rows",
     morrowSetRows(id) === 0 && closed() && census().length === morrowRoles.length + 2,
   );
-  const secretsSeen = [markers.ownerPassword, markers.workos, markers.turnstile, markers.kek];
+  // M5 PR-1: the billing terms seed (seed-platform) as the work owner under D4. Staging
+  // has no published revision yet, so the lab seeds the development fixture's: inserted
+  // once, a rerun is a no-op, a drifted file is refused, and no SET row persists.
+  const termsRows = await stagingBillingTermsRows(repositoryRoot, "development");
+  const seed = (rows) =>
+    seedBillingTerms({
+      connect: psqlConnector(id, { user: "neondb_owner", database: "morrow" }).connect,
+      binding: labBinding,
+      administrator: neon,
+      rows,
+    });
+  const seeded = await seed(termsRows);
+  const reseeded = await seed(termsRows);
+  const drifted = termsRows.map((row) => [
+    row[0],
+    row[1].replace('"creditUnits":"300"', '"creditUnits":"301"'),
+    row[2],
+    row[3],
+  ]);
+  const refused = await rejection(seed(drifted));
+  check(
+    "createrole_terms_seed_is_idempotent_and_refused_on_drift",
+    seeded.termsInserted === termsRows.length &&
+      reseeded.termsInserted === 0 &&
+      refused?.code === "STAGING_SEED_DRIFT" &&
+      refused.details.table === "billing_terms" &&
+      db("SELECT count(*) FROM morrow_billing.billing_terms;") === String(termsRows.length) &&
+      db(
+        "SELECT string_agg(digest::text, ',' ORDER BY terms_revision) FROM morrow_billing.billing_terms;",
+      ) === termsRows.map((row) => row[3]).join(",") &&
+      morrowSetRows(id) === 0 &&
+      closed(),
+  );
+  const secretsSeen = [
+    markers.ownerPassword,
+    markers.workos,
+    markers.turnstile,
+    markers.kek,
+    markers.stripeKey,
+    markers.stripeWebhook,
+  ];
   check(
     "createrole_no_marker_in_statements_or_output",
     secretsSeen.every(

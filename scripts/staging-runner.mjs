@@ -781,6 +781,96 @@ export async function seedPlatform({ connect, binding, administrator, rows, self
 }
 
 // ---------------------------------------------------------------------------
+// M5 PR-1: the billing terms seed (`seed-platform`). docs/decisions/billing-terms.json
+// publishes each environment's BillingTerms@1 revisions with their display offers and
+// digests (npm run verify:billing checks the file; staging.mjs parses it again with the
+// billing module before calling this). Written as morrow_work_owner, in revision order, in
+// one transaction under the D4 SET-row protocol, idempotent, and refused on drift: a
+// stored revision that differs from the file, or one the file does not have. The table's
+// own guard (0027 terms_guard) also refuses a gap or any change.
+const termsStatements = Object.freeze({
+  lock: "LOCK TABLE morrow_billing.billing_terms IN SHARE ROW EXCLUSIVE MODE",
+  count: "SELECT count(*)::int AS n FROM morrow_billing.billing_terms",
+  same: "SELECT (terms = $2::jsonb AND offers = $3::jsonb AND digest = $4::text)::text AS same FROM morrow_billing.billing_terms WHERE terms_revision = $1::bigint",
+  insert:
+    "INSERT INTO morrow_billing.billing_terms(terms_revision, terms, offers, digest, recorded_at) VALUES ($1::bigint, $2::jsonb, $3::jsonb, $4::text, date_trunc('milliseconds', clock_timestamp()))",
+});
+/** One row per revision, in order: [revision, terms JSON, offers JSON, digest], all text. */
+export function billingTermsSeedRows(revisions) {
+  if (!Array.isArray(revisions) || revisions.length > 1000)
+    throw new StagingError("STAGING_TERMS_INVALID");
+  return Object.freeze(
+    revisions.map((r, index) => {
+      if (
+        !r ||
+        typeof r !== "object" ||
+        Object.keys(r).sort().join() !== "digest,offers,terms" ||
+        !/^[a-f0-9]{64}$/.test(r.digest ?? "") ||
+        r.terms?.termsRevision !== index + 1
+      )
+        throw new StagingError("STAGING_TERMS_INVALID");
+      return Object.freeze([
+        String(index + 1),
+        JSON.stringify(r.terms),
+        JSON.stringify(r.offers),
+        r.digest,
+      ]);
+    }),
+  );
+}
+export async function seedBillingTerms({ connect, binding, administrator, rows }) {
+  checkAdministrator(administrator);
+  if (
+    !Array.isArray(rows) ||
+    !rows.every(
+      (row, index) =>
+        Array.isArray(row) &&
+        row.length === 4 &&
+        row.every((v) => typeof v === "string") &&
+        row[0] === String(index + 1),
+    )
+  )
+    throw new StagingError("STAGING_TERMS_INVALID");
+  const connection = await connectChecked(connect, binding, administrator);
+  const admin = administrator.name;
+  const written = { termsRevisions: rows.length, termsInserted: 0 };
+  try {
+    try {
+      await connection.exec("BEGIN");
+      if (administrator.mode === "createrole")
+        await connection.exec(
+          `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+        );
+      await connection.exec("SET LOCAL ROLE morrow_work_owner");
+      await connection.exec(termsStatements.lock);
+      const [{ n } = {}] = await connection.query(termsStatements.count);
+      const stored = Number.isSafeInteger(n) ? n : 0;
+      if (stored > rows.length)
+        throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
+      for (const row of rows.slice(0, stored)) {
+        const [same] = await connection.query(termsStatements.same, row);
+        if (same?.same !== "true")
+          throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
+      }
+      for (const row of rows.slice(stored)) {
+        await connection.query(termsStatements.insert, row);
+        written.termsInserted++;
+      }
+      await connection.exec("RESET ROLE");
+      if (administrator.mode === "createrole")
+        await connection.exec(`REVOKE morrow_work_owner FROM ${admin} GRANTED BY ${admin}`);
+      await connection.exec("COMMIT");
+    } catch (error) {
+      throw sqlFailure("STAGING_SEED_FAILED", error);
+    }
+    await assertNoSetRows(connection);
+    return written;
+  } finally {
+    await connection.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Connections (D6): counts by role and by application_name class. Raw application names
 // are client-chosen text and are never printed; unknown ones are only counted.
 export const applicationClasses = Object.freeze([

@@ -26,6 +26,7 @@ import {
   topLevelStatements,
 } from "../scripts/migration-chain.mjs";
 import {
+  billingTermsSeedRows,
   checkAdministrator,
   checkIdentity,
   ledgerDrift,
@@ -35,6 +36,7 @@ import {
   provisioningSql,
   runMigrations,
   scramVerifier,
+  seedBillingTerms,
 } from "../scripts/staging-runner.mjs";
 import {
   d4Transaction,
@@ -48,6 +50,7 @@ import {
   commands,
   main,
   mainPreconditions,
+  stagingBillingTermsRows,
 } from "../scripts/staging.mjs";
 import { parseOwnerUrl } from "../scripts/staging-files.mjs";
 import {
@@ -1506,4 +1509,126 @@ test("provision-roles --first: the Stripe secrets are read from the owner's file
       planted.cleanup();
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// M5 PR-1: the billing terms seed of `seed-platform` (docs/decisions/billing-terms.json).
+test("billing terms seed: the published revisions, parsed and digest-checked before any effect", async () => {
+  const development = await stagingBillingTermsRows(process.cwd(), "development");
+  const file = JSON.parse(read("docs/decisions/billing-terms.json"));
+  assert.equal(development.length, file.environments.development.length);
+  assert.deepEqual(development[0], [
+    "1",
+    JSON.stringify(file.environments.development[0].terms),
+    JSON.stringify(file.environments.development[0].offers),
+    file.environments.development[0].digest,
+  ]);
+  // Staging has no revision until the owner's test-mode Price exists.
+  assert.deepEqual(await stagingBillingTermsRows(process.cwd(), "staging"), []);
+  const root = mkdtempSync(join(tmpdir(), "morrow-terms-"));
+  try {
+    mkdirSync(join(root, "docs/decisions"), { recursive: true });
+    const write = (document) =>
+      writeFileSync(join(root, "docs/decisions/billing-terms.json"), JSON.stringify(document));
+    for (const change of [
+      (d) => (d.environments.staging = [structuredClone(d.environments.development[0])]),
+      (d) => (d.environments.staging = "none"),
+      (d) => {
+        const r = structuredClone(d.environments.development[0]);
+        r.terms.entries[0].creditUnits = "400";
+        d.environments.staging = [r];
+      },
+      (d) => {
+        const r = structuredClone(d.environments.development[0]);
+        r.offers[0].interval = "year";
+        d.environments.staging = [r];
+      },
+    ]) {
+      const document = structuredClone(file);
+      change(document);
+      write(document);
+      const outcome = await stagingBillingTermsRows(root, "staging").then(
+        (rows) => rows,
+        (error) => error.code,
+      );
+      // The first change is a valid copy (same digest): only the others are refused.
+      if (Array.isArray(outcome)) assert.equal(outcome.length, 1);
+      else assert.equal(outcome, "STAGING_TERMS_INVALID");
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  for (const bad of [
+    "x",
+    [{ terms: { termsRevision: 2 }, offers: [], digest: "a".repeat(64) }],
+    [{ terms: { termsRevision: 1 }, offers: [], digest: "A".repeat(64) }],
+    [{ terms: { termsRevision: 1 }, offers: [], digest: "a".repeat(64), extra: 1 }],
+  ])
+    assert.equal(
+      codeOf(() => billingTermsSeedRows(bad)),
+      "STAGING_TERMS_INVALID",
+    );
+});
+
+test("billing terms seed: as the work owner, idempotent, refused on drift, D4 in createrole mode", async () => {
+  const rows = await stagingBillingTermsRows(process.cwd(), "development");
+  const administrator = Object.freeze({ name: "neondb_owner", mode: "createrole" });
+  const run = async (rules) => {
+    const db = fakeDatabase({ rules });
+    const outcome = await seedBillingTerms({
+      connect: db.connector().connect,
+      binding: labBinding,
+      administrator,
+      rows,
+    }).then(
+      (written) => written,
+      (error) => error,
+    );
+    return { outcome, texts: db.statements.map((s) => s.text), statements: db.statements };
+  };
+  const fresh = await run([[/FROM morrow_billing\.billing_terms$/, [{ n: 0 }]]]);
+  assert.deepEqual(fresh.outcome, { termsRevisions: 1, termsInserted: 1 });
+  const after = fresh.texts.slice(fresh.texts.indexOf("BEGIN"));
+  assert.deepEqual(after.slice(0, 4), [
+    "BEGIN",
+    "GRANT morrow_work_owner TO neondb_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE",
+    "SET LOCAL ROLE morrow_work_owner",
+    "LOCK TABLE morrow_billing.billing_terms IN SHARE ROW EXCLUSIVE MODE",
+  ]);
+  const insert = fresh.statements.find((s) => s.text.startsWith("INSERT INTO morrow_billing"));
+  assert.deepEqual(insert.params, [...rows[0]]);
+  assert.ok(
+    after.indexOf("REVOKE morrow_work_owner FROM neondb_owner GRANTED BY neondb_owner") <
+      after.indexOf("COMMIT"),
+  );
+  // Stored and equal: nothing written.
+  const same = await run([
+    [/FROM morrow_billing\.billing_terms$/, [{ n: 1 }]],
+    [/AS same FROM morrow_billing/, [{ same: "true" }]],
+  ]);
+  assert.deepEqual(same.outcome, { termsRevisions: 1, termsInserted: 0 });
+  assert.ok(!same.texts.some((t) => t.startsWith("INSERT INTO morrow_billing")));
+  // A stored revision that differs, or one the file lacks: drift, no COMMIT.
+  for (const rules of [
+    [
+      [/FROM morrow_billing\.billing_terms$/, [{ n: 1 }]],
+      [/AS same FROM morrow_billing/, [{ same: "false" }]],
+    ],
+    [[/FROM morrow_billing\.billing_terms$/, [{ n: 2 }]]],
+  ]) {
+    const drift = await run(rules);
+    assert.equal(drift.outcome.code, "STAGING_SEED_DRIFT");
+    assert.deepEqual(drift.outcome.details, { table: "billing_terms" });
+    assert.ok(!drift.texts.includes("COMMIT"));
+    assert.ok(!drift.texts.some((t) => t.startsWith("INSERT INTO morrow_billing")));
+  }
+  await assert.rejects(
+    seedBillingTerms({
+      connect: fakeDatabase().connector().connect,
+      binding: labBinding,
+      administrator,
+      rows: [["2", "{}", "[]", "a".repeat(64)]],
+    }),
+    { code: "STAGING_TERMS_INVALID" },
+  );
 });

@@ -686,6 +686,8 @@ export async function fakeContext({
     },
     challengeConfiguration: (loaded) => checkChallengeConfiguration(loaded),
     async checkKeyring() {},
+    // M5 PR-1: staging's published billing terms (none until the owner's Price exists).
+    billingTerms: async () => [],
     ...overrides,
   };
   return { ctx, out, err, constants, reports, outputs, sleeps, notices };

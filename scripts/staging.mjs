@@ -31,12 +31,14 @@ import {
   vaultKekFile,
 } from "./staging-files.mjs";
 import {
+  billingTermsSeedRows,
   connectionCensus,
   neonConnector,
   platformSeedRows,
   provisionRoles,
   roleControlFacts,
   runMigrations,
+  seedBillingTerms,
   seedPlatform,
   sessionIdentity,
   checkIdentity,
@@ -242,6 +244,35 @@ export async function checkStripeConfiguration(loaded) {
   } catch {
     throw new StagingError("STAGING_STRIPE_CONFIGURATION_INVALID");
   }
+}
+
+// M5 PR-1: one environment's published billing terms (docs/decisions/billing-terms.json),
+// parsed again with the billing module (parseTermsDocument, the published digest) before
+// any database effect. staging has no revision until the owner's test-mode Price exists.
+export async function stagingBillingTermsRows(root, environment = "staging") {
+  let revisions;
+  try {
+    revisions = JSON.parse(readFileSync(join(root, "docs/decisions/billing-terms.json"), "utf8"))
+      .environments[environment];
+  } catch {
+    throw new StagingError("STAGING_TERMS_INVALID");
+  }
+  const { tsImport } = await import("tsx/esm/api");
+  const { parseTermsDocument, termsDocumentDigest } = await tsImport(
+    "../packages/work/src/billing/terms.ts",
+    import.meta.url,
+  );
+  if (!Array.isArray(revisions)) throw new StagingError("STAGING_TERMS_INVALID");
+  for (const revision of revisions) {
+    try {
+      parseTermsDocument(revision?.terms, revision?.offers);
+    } catch {
+      throw new StagingError("STAGING_TERMS_INVALID");
+    }
+    if ((await termsDocumentDigest(revision.terms, revision.offers)) !== revision.digest)
+      throw new StagingError("STAGING_TERMS_INVALID");
+  }
+  return billingTermsSeedRows(revisions);
 }
 
 // The card is active only when the record says approved, 30 days have not passed, and no
@@ -620,6 +651,8 @@ command("seed-platform", {
     await mainPreconditions(ctx, repositoryOf(config.staging));
     const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
     const rows = platformSeedRows(configuration, JSON.parse(configuration.verificationProfileJson));
+    // M5 PR-1: the billing terms, checked before any effect.
+    const terms = await ctx.billingTerms();
     const written = await seedPlatform({
       connect: ctx.database({ ownerUrl, binding }).connect,
       binding,
@@ -627,7 +660,13 @@ command("seed-platform", {
       rows,
       selfService,
     });
-    return { ...written, origin: configuration.origin };
+    const billing = await seedBillingTerms({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      rows: terms,
+    });
+    return { ...written, ...billing, origin: configuration.origin };
   },
 });
 
@@ -1223,6 +1262,7 @@ export function defaultContext() {
       return cloudflareApi({ credential: await ctx.credential(), accountId });
     },
     database: ({ ownerUrl, binding }) => neonConnector({ ownerUrl, binding }),
+    billingTerms: () => stagingBillingTermsRows(root, "staging"),
     async loginConfiguration(loaded) {
       if (loaded.loginConfigurationJson === null)
         throw new StagingError("STAGING_LOGIN_CONFIGURATION_MISSING");
