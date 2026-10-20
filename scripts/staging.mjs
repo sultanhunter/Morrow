@@ -34,6 +34,8 @@ import {
   connectionCensus,
   neonConnector,
   platformSeedRows,
+  platformStop,
+  checkPlatformStopInput,
   provisionRoles,
   roleControlFacts,
   runMigrations,
@@ -935,6 +937,38 @@ command("unkill", {
     requireActiveCard(config.card, ctx.now());
     identifiersSet(config.staging);
     return runUnkill(ctx, { github: githubTarget(config.staging), staging: config.staging });
+  },
+});
+
+// M3 PR-1 (ADR-0022 item 15; ADR-0005): the owner-run platform stop. `set` needs no card,
+// like `kill`: a person may always stop AI work and Shopify effects platform-wide. `lift`
+// needs the active card. Neither needs main or the foundation check, so a stop is never
+// held behind a deploy gate. The reason is a person's text: a parameter, never echoed.
+// Any hosted run is an administrator effect outside staging-card-1, so it needs the
+// owner's per-action approval and a docs/evidence/live/ record.
+command("platform-stop", {
+  usage: "platform-stop set|lift --operator <id> --reason <text>",
+  parse(args) {
+    if (
+      args.length !== 5 ||
+      (args[0] !== "set" && args[0] !== "lift") ||
+      args[1] !== "--operator" ||
+      args[3] !== "--reason"
+    )
+      throw new StagingError("STAGING_USAGE");
+    return checkPlatformStopInput({ action: args[0], operatorId: args[2], reason: args[4] });
+  },
+  async run(ctx, options) {
+    const config = await ctx.config();
+    if (options.action === "lift") requireActiveCard(config.card, ctx.now());
+    const binding = await stagingBinding(ctx, config);
+    const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
+    return platformStop({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      ...options,
+    });
   },
 });
 
