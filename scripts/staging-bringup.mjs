@@ -60,7 +60,7 @@ export async function preflight(ctx, p) {
     regionId: neon.region_id !== null,
     binding: p.bindingSet,
     // P05.T01ab: the api's LOGIN_CHALLENGE_JSON and the broker's
-    // TURNSTILE_CONFIGURATION_JSON (PR-D identifiers; gate 4 checks them).
+    // TURNSTILE_CONFIGURATION_JSON (PR-D part 1 identifiers; gate 4 checks them).
     challenge: p.challengeSet,
   };
   for (const [name, set] of Object.entries(identifiers))

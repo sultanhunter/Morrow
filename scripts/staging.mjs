@@ -76,7 +76,8 @@ export { githubVariables };
 
 // ---------------------------------------------------------------------------
 // Configuration: staging.json, the card record, and the resolved staging vars of the api
-// (the database binding and the login configuration; identifiers arrive in PR-D).
+// and the broker (the database binding, the login configuration and the two challenge
+// vars: the reviewed identifiers of P04.T01i PR-D part 1, held by verify-config).
 export const workerConfigs = Object.freeze({
   api: "apps/api/wrangler.jsonc",
   broker: "apps/broker/wrangler.jsonc",
@@ -130,8 +131,8 @@ export async function loadStagingConfiguration(root) {
     bindingJson: text(vars, "MORROW_DATABASE_BINDING_JSON"),
     loginConfigurationJson: text(vars, "LOGIN_CONFIGURATION_JSON"),
     // P05.T01ab (D1, D5): the api's challenge configuration and the broker's own vars.
-    // Both JSON vars name reviewed identifiers (the site key, the workers.dev host), so
-    // they arrive with PR-D; until then they are null and a deploy stops before upload.
+    // Both JSON vars name reviewed identifiers (the site key, the workers.dev host),
+    // committed by PR-D part 1; a missing one is null and a deploy stops before upload.
     challengeJson: text(vars, "LOGIN_CHALLENGE_JSON"),
     broker: Object.freeze({
       turnstileJson: text(brokerVars, "TURNSTILE_CONFIGURATION_JSON"),

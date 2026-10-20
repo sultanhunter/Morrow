@@ -310,7 +310,7 @@ test("AC04: a mismatched schema head, digest or broker secret name, or a failed 
 // P05.T01ab reconciliation (D1, D5; ADR-0019 items 6-8): gate 4 also requires the api's
 // LOGIN_CHALLENGE_JSON and the broker's TURNSTILE_CONFIGURATION_JSON, in agreement, so no
 // api is uploaded that would map to API_ENV_ABUSE_GUARD_MISSING and no broker whose health
-// is false. Both carry PR-D identifiers, so today's committed staging config stops here.
+// is false. Both carry PR-D part 1 identifiers; the committed staging config passes.
 test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and deploys nothing", async () => {
   const host = new URL(origin).hostname;
   const apiVar = (patch = {}) =>
@@ -481,15 +481,41 @@ test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and
   } finally {
     ok.planted.cleanup();
   }
-  // The committed staging configuration has no challenge vars until PR-D.
+  // P04.T01i PR-D part 1: the committed staging configuration passes gate 4's challenge
+  // check (D1's actions, the origin's hostname, the broker's shared vars byte-equal).
   const committed = await import("../scripts/staging.mjs").then((m) =>
     m.loadStagingConfiguration(process.cwd()),
   );
-  assert.equal(committed.challengeJson, null);
-  assert.equal(committed.broker.turnstileJson, null);
-  await assert.rejects(checkChallengeConfiguration(committed), {
-    code: "STAGING_CHALLENGE_CONFIGURATION_MISSING",
+  assert.deepEqual(await checkChallengeConfiguration(committed), {
+    provider: "turnstile",
+    hostname: "morrow-staging-api.sultanibneusman0.workers.dev",
+    actions: stagingChallengeActions,
   });
+});
+
+// P04.T01i PR-D part 1: gate 4's digest step reads the committed login configuration with
+// the runtime's parser (the real context, no fake): a staging tier and the staging origin.
+// Its configurationDigest is what `staging:keyring` binds and the deploy compares with
+// STAGING_LOGIN_CONFIGURATION_DIGEST.
+test("AC04: the committed login configuration passes gate 4's digest step", async () => {
+  const { defaultContext, loadStagingConfiguration } = await import("../scripts/staging.mjs");
+  const committed = await loadStagingConfiguration(process.cwd());
+  const parsed = await defaultContext().loginConfiguration(committed);
+  assert.equal(parsed.retentionTier, "staging");
+  assert.equal(parsed.origin, committed.staging.cloudflare.origin);
+  assert.equal(parsed.binding.redirectUri, parsed.origin + "/auth/workos/callback");
+  assert.match(parsed.configurationDigest, /^[0-9a-f]{64}$/);
+  // Another origin in staging.json than the committed configuration's fails closed.
+  await assert.rejects(
+    defaultContext().loginConfiguration({
+      ...committed,
+      staging: {
+        ...committed.staging,
+        cloudflare: { ...committed.staging.cloudflare, origin: "https://other.example" },
+      },
+    }),
+    { code: "STAGING_LOGIN_CONFIGURATION_INVALID" },
+  );
 });
 
 test("AC04: a local deploy refuses a HEAD that is not origin/main, a missing or failed foundation, a dirty tree", async () => {
@@ -1458,6 +1484,37 @@ test("preflight: reports pending owner steps without values and blocks on the ca
     assert.ok(result.pending.includes("identifier:challenge"));
   } finally {
     unset.planted.cleanup();
+  }
+  // P04.T01i PR-D part 1: with the committed configuration every identifier is set,
+  // the binding and the challenge included, so none is pending.
+  const committed = await world({
+    files: files(),
+    overrides: {
+      config: async () =>
+        (await import("../scripts/staging.mjs")).loadStagingConfiguration(process.cwd()),
+    },
+  });
+  try {
+    const { code, result } = await committed.run(["preflight"]);
+    assert.equal(code, 0, JSON.stringify(result));
+    assert.ok(
+      Object.values(result.identifiers).every((set) => set === true),
+      result.identifiers,
+    );
+    assert.deepEqual(Object.keys(result.identifiers).sort(), [
+      "accountId",
+      "binding",
+      "branchId",
+      "challenge",
+      "origin",
+      "projectId",
+      "regionId",
+      "rootBranchId",
+      "workersDevSubdomain",
+    ]);
+    assert.ok(!result.pending.some((p) => p.startsWith("identifier:")));
+  } finally {
+    committed.planted.cleanup();
   }
   // M2 PR-1: until the owner writes the vault KEK file, it is a pending owner step.
   const { "vault-kek-v1": _kek, ...withoutKek } = files();
