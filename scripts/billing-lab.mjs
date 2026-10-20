@@ -15,10 +15,15 @@
 //   E  isolation probes: the ingress refuses a session context, a forged receipt context
 //      reads nothing, cross-tenant reads are empty, other logins cannot run the definers.
 //   F  the P01.T04a decision tables, row by row, against the persisted path (the Stripe
-//      subscription-period rows M5 persists; reversals and App Pricing are M6/P18.T01b).
-// The broker's Stripe calls are not exercised here (lab:billing-workers runs the real
-// broker against the fake Stripe origin); a fake broker port drives the broker definers
-// directly with synthetic provider results. Owner-seeded synthetic fixtures only.
+//      subscription-period rows M5 persists; reversals and App Pricing are M6/P18.T01b),
+//      and the purchase-decision rows of the two purchase routes.
+//   G  the real broker code (apps/broker/src/stripe.ts) against the fake Stripe origin
+//      (scripts/fixtures/stripe-fake.mjs), with M2 PR-2's vault transport signature over
+//      this engine's broker login: checkout end to end, signed webhooks (bad signature,
+//      a held readback, redelivery, a lost commit read back), the portal, an unknown
+//      Stripe outcome read back and never resent, and zero unexpected outbound requests.
+// Sections B-F drive the broker definers through a fake broker port with synthetic
+// provider results; G runs the real broker. Owner-seeded synthetic fixtures only.
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
@@ -42,6 +47,29 @@ import {
   stripeObjectDigest,
 } from "../packages/work/src/billing/index.ts";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
+import { BILLING_DENIAL_ENVELOPES } from "../packages/policy/src/billing-state.ts";
+import {
+  stripeCheckoutCreate,
+  stripeCustomerEnsure,
+  stripePortalCreate,
+  stripeWebhookVerify,
+} from "../apps/broker/src/stripe.ts";
+import { vaultStatements } from "../apps/broker/src/vault.ts";
+import {
+  decodeStripeCheckoutResult,
+  decodeStripeCustomerResult,
+  decodeStripePortalResult,
+  decodeStripeWebhookResult,
+  encodeStripeCheckoutResult,
+  encodeStripeCustomerResult,
+  encodeStripePortalResult,
+  encodeStripeWebhookResult,
+} from "../packages/identity/src/broker-protocol.ts";
+import {
+  createStripeFake,
+  fakeStripeKey,
+  fakeStripeWebhookSecret,
+} from "./fixtures/stripe-fake.mjs";
 import { writeArtifact } from "./artifacts.mjs";
 
 const checks = [];
@@ -1132,6 +1160,495 @@ UPDATE morrow_billing.workspace_billing_routes SET route='morrow_direct',mode='t
     check(
       "E_the_command_role_cannot_fix_a_route_outside_a_receipt_context",
       !sessionFix.ok && /BILLING_ROUTE_FIX_DENIED/.test(sessionFix.stderr),
+    );
+
+    // -----------------------------------------------------------------------------
+    // F. The P01.T04a decision tables, row by row, against the persisted path.
+    // classify-payment: every Stripe subscription-period row of the environment's mode that
+    // M5 can persist (phases open, shopify_bound and morrow_direct; payers none, active and
+    // suspended). Each row gets a fresh tenant built through the real checkout, receipt and
+    // fold paths (owner SQL only for a suspended account, for an account without a recorded
+    // subscription, and for the store link), then one invoice.paid through the webhook; the
+    // persisted application, payment event, grant and route must match the row. Reversed
+    // payers (M6 payment_reversals), App Pricing (P18.T01b), plan changes and top-ups (not
+    // sold in M5) are outside the persisted path.
+    const tsv = (name) => {
+      const [head, ...lines] = readFileSync(`docs/contracts/decision-tables/${name}.tsv`, "utf8")
+        .trim()
+        .split("\n");
+      const columns = head.split("\t");
+      return lines.map((line) =>
+        Object.fromEntries(line.split("\t").map((value, i) => [columns[i], value])),
+      );
+    };
+    const classifyRows = tsv("classify-payment").filter(
+      (r) =>
+        r.provider === "stripe" &&
+        r.kind === "subscription_period" &&
+        r.mode === "matches" &&
+        r.outcome !== "input_invalid" &&
+        ["open", "shopify_bound", "morrow_direct"].includes(r.phase) &&
+        ["none", "active", "suspended"].includes(r.payer),
+    );
+    const grantFor = (paymentKey) =>
+      count(`SELECT 1 FROM morrow_billing.credit_grants WHERE payment_key=${lit(paymentKey)}`);
+    const linkStore = (p, n) =>
+      db.admin(
+        `INSERT INTO morrow_identity.linking_candidates VALUES(${lit("candidate_" + p.key)},'shopify','synthetic_app','synthetic_env',${lit(String(2000 + n))},${lit("lab-" + n + ".myshopify.com")},${lit("installation_" + p.key)},1,true,1,'controlled_fixture',${lit("proof_" + p.key)},1,repeat('a',64),${lit(p.principal)},clock_timestamp()-interval '1 minute',clock_timestamp()+interval '1 minute',NULL);
+INSERT INTO morrow_identity.workspace_store_links VALUES(${lit("link_" + p.key)},${lit("candidate_" + p.key)},${lit(p.org)},${lit(p.workspace)},${lit("installation_" + p.key)},1,1,${lit(p.principal)},clock_timestamp());`,
+      );
+    const suspend = (p) =>
+      db.workOwner(
+        `UPDATE morrow_billing.billing_accounts SET status='suspended',revision=revision+1,updated_at=greatest(updated_at,date_trunc('milliseconds',clock_timestamp())) WHERE workspace_id=${lit(p.workspace)};`,
+      );
+    const classifyMismatches = [];
+    let fRow = 0;
+    for (const row of classifyRows) {
+      const n = ++fRow;
+      const p = tenant("billing_fc" + n);
+      await call(p, "POST", "/morrow/checkout", { priceKey: PRICE });
+      const base = ids(p, { invoice: `in_LabFc${String(n).padStart(3, "0")}Base01` });
+      if (row.phase === "shopify_bound") linkStore(p, n);
+      if (row.phase === "morrow_direct") {
+        if (row.relation === "none") {
+          // An account without a recorded subscription (owner maintenance fixture).
+          db.workOwner(
+            `UPDATE morrow_billing.workspace_billing_routes SET route='morrow_direct',mode='test',route_fixed_at=date_trunc('milliseconds',clock_timestamp()),fixing_payment_key=${lit("stripe:invoice:in_LabFc" + n + "Owner01")},revision=revision+1,updated_at=greatest(updated_at,date_trunc('milliseconds',clock_timestamp())) WHERE workspace_id=${lit(p.workspace)};
+INSERT INTO morrow_billing.billing_accounts VALUES(${lit(p.org)},${lit(p.workspace)},${lit(randomUUID())},'morrow_direct','test','USD','active',1,date_trunc('milliseconds',clock_timestamp()),date_trunc('milliseconds',clock_timestamp()));`,
+          );
+        } else {
+          await deliver(
+            "invoice.paid",
+            invoiceFor("invoice.paid.subscription_create", base),
+            subscriptionFor("subscription.active", base),
+          );
+          if (["current_terminal", "new_after_terminal"].includes(row.relation))
+            await deliver(
+              "customer.subscription.deleted",
+              subscriptionFor("subscription.deleted", base),
+            );
+        }
+        if (row.payer === "suspended") suspend(p);
+      }
+      // The event: the current subscription's next period, another subscription, or an
+      // unmapped customer's invoice.
+      const other = ["other_live", "new_after_terminal"].includes(row.relation);
+      const eventIds =
+        row.attribution === "unattributed"
+          ? {
+              customer: "cus_LabUnmappedFc" + n,
+              invoice: `in_LabFc${String(n).padStart(3, "0")}Event1`,
+            }
+          : {
+              ...base,
+              invoice: `in_LabFc${String(n).padStart(3, "0")}Event1`,
+              subscription: other
+                ? base.subscription.replace("Subscr01", "Subscr02")
+                : base.subscription,
+            };
+      const zero = row.amount === "zero";
+      const nextPeriod = { start: periodNow.end, end: periodNow.end + 30 * 86400 };
+      const cycle = row.phase === "morrow_direct" && !other && row.relation !== "none";
+      const event = await deliver(
+        "invoice.paid",
+        invoiceFor(
+          cycle ? "invoice.paid.subscription_cycle" : "invoice.paid.subscription_create",
+          eventIds,
+          cycle ? nextPeriod : periodNow,
+          (o) => {
+            if (zero) {
+              o.amount_paid = 0;
+              o.amount_due = 0;
+            }
+          },
+        ),
+        subscriptionFor(
+          row.relation === "current_terminal" ? "subscription.deleted" : "subscription.active",
+          eventIds,
+          cycle ? nextPeriod : periodNow,
+        ),
+      );
+      const applied = applicationOf(event.eventId);
+      const paymentKey = "stripe:invoice:" + eventIds.invoice;
+      const [kind, code] = row.outcome.split(":");
+      const route = routeOf(p);
+      const ok =
+        event.status === 200 &&
+        (kind === "fix_route_and_grant"
+          ? applied?.outcome === "applied" &&
+            route.route === "morrow_direct" &&
+            route.fixing_payment_key === paymentKey &&
+            grantFor(paymentKey) === 1
+          : kind === "grant"
+            ? applied?.outcome === "applied" && grantFor(paymentKey) === 1
+            : kind === "no_charge"
+              ? applied?.outcome === "no_charge" && grantFor(paymentKey) === 0
+              : applied?.outcome === kind &&
+                applied?.outcome_code === code &&
+                grantFor(paymentKey) === 0) &&
+        (row.phase !== "morrow_direct" && kind !== "fix_route_and_grant"
+          ? route.route === null
+          : true);
+      if (!ok)
+        classifyMismatches.push({
+          row: Object.values(row).join(" "),
+          status: event.status,
+          applied,
+          route: route?.route,
+        });
+    }
+    check(
+      "F_classify_payment_rows_hold_on_the_persisted_path",
+      classifyRows.length === 30 && classifyMismatches.length === 0,
+    );
+    if (classifyMismatches.length) console.log(JSON.stringify({ classifyMismatches }));
+
+    // purchase-decision: the two purchase actions M5 serves (subscribe = POST /checkout,
+    // billing_portal = POST /portal) in the three persisted phases. The link dimension does
+    // not change these actions; the payer and subscription dimensions are built as an
+    // active, a suspended and a cancelled account. One stricter persisted outcome is
+    // deliberate: subscribe in morrow_direct after a terminal subscription (the library
+    // allows a resubscription) is refused by cmd_checkout_open's fixed-route recheck
+    // (route_conflict, 403) until M6's held-payment re-classification exists.
+    const purchaseRows = tsv("purchase-decision").filter(
+      (r) =>
+        ["subscribe", "billing_portal"].includes(r.action) &&
+        ["open", "shopify_bound", "morrow_direct"].includes(r.phase),
+    );
+    const states = new Map();
+    const stateFor = async (row) => {
+      const key =
+        row.phase === "morrow_direct"
+          ? row.subscription === "terminal"
+            ? "md_terminal"
+            : row.payer === "billable"
+              ? "md_live"
+              : "md_suspended"
+          : row.phase;
+      if (states.has(key)) return states.get(key);
+      const p = tenant("billing_fp_" + key);
+      if (row.phase === "shopify_bound") linkStore(p, 900 + states.size);
+      if (row.phase === "morrow_direct") {
+        await call(p, "POST", "/morrow/checkout", { priceKey: PRICE });
+        const base = ids(p, { invoice: "in_LabFp" + key.replace("_", "") + "Base1" });
+        await deliver(
+          "invoice.paid",
+          invoiceFor("invoice.paid.subscription_create", base),
+          subscriptionFor("subscription.active", base),
+        );
+        if (key === "md_terminal")
+          await deliver(
+            "customer.subscription.deleted",
+            subscriptionFor("subscription.deleted", base),
+          );
+        if (key === "md_suspended") suspend(p);
+      }
+      states.set(key, p);
+      return p;
+    };
+    const purchaseMismatches = [];
+    for (const row of purchaseRows) {
+      const p = await stateFor(row);
+      const response =
+        row.action === "subscribe"
+          ? await call(p, "POST", "/morrow/checkout", { priceKey: PRICE })
+          : await call(p, "POST", "/morrow/portal", {});
+      const denial = BILLING_DENIAL_ENVELOPES[row.outcome];
+      const stricter =
+        row.phase === "morrow_direct" && row.action === "subscribe" && row.outcome === "allowed";
+      const ok =
+        row.outcome === "allowed" && !stricter
+          ? [200, 201].includes(response.status) &&
+            (row.action === "subscribe"
+              ? response.body.checkoutUrl?.startsWith("https://checkout.stripe.com/")
+              : response.body.portalUrl?.startsWith("https://billing.stripe.com/"))
+          : stricter
+            ? response.status === 403 && response.body.code === "denied"
+            : response.body.code === denial.code &&
+              response.body.retryClass === denial.retryClass &&
+              response.body.safeMessage === denial.safeMessage;
+      if (!ok)
+        purchaseMismatches.push({
+          row: Object.values(row).join(" "),
+          status: response.status,
+          body: response.body,
+        });
+    }
+    check(
+      "F_purchase_decision_rows_hold_on_the_persisted_path",
+      purchaseRows.length === 48 && purchaseMismatches.length === 0,
+    );
+    if (purchaseMismatches.length) console.log(JSON.stringify({ purchaseMismatches }));
+
+    // -----------------------------------------------------------------------------
+    // G. The real broker code (apps/broker/src/stripe.ts) against the fake Stripe origin,
+    // with M2 PR-2's vault transport signature implemented over this engine's broker login
+    // (registry-checked statements, text values, one transaction per call). The api's
+    // billing and webhook handlers call it through the same closed result codecs the RPC
+    // uses. The workerd pair (lab:billing-workers) waits for M2 PR-2's transport.
+    const fake = createStripeFake();
+    const registered = new Set(Object.values(vaultStatements));
+    async function vaultTransaction(budgetMs, body) {
+      if (!Number.isSafeInteger(budgetMs) || budgetMs < 1 || budgetMs > 10000)
+        throw Error("VAULT_INPUT_INVALID");
+      const signal = new AbortController().signal;
+      const c = await vaultConnector.open({
+        signal,
+        deadlineMs: Date.now() + budgetMs + 20000,
+        waitUntil() {},
+      });
+      try {
+        await c.query("BEGIN", [], signal);
+        const out = await body(async (text, values) => {
+          if (!registered.has(text) || !values.every((v) => typeof v === "string"))
+            throw Error("VAULT_STATEMENT_DENIED");
+          return (await c.query(text, values, signal)).rows;
+        });
+        await c.query("COMMIT", [], signal);
+        return out;
+      } catch (error) {
+        await c.query("ROLLBACK", [], signal).catch(() => {});
+        throw error;
+      } finally {
+        await c.close();
+      }
+    }
+    const stripeDeps = {
+      stripe: {
+        environment: "development",
+        restrictedKey: fakeStripeKey,
+        webhookSecret: fakeStripeWebhookSecret,
+        configuration: {
+          portalConfigurationId: "bpc_" + "LabPortal".padEnd(24, "0"),
+          automaticTax: false,
+          billingAddressCollection: "auto",
+        },
+        returnOrigin: workFixtureOrigin,
+      },
+      fetch: fake.fetch,
+      transaction: vaultTransaction,
+      now: () => Date.now(),
+    };
+    const realBroker = {
+      customerEnsure: async (id) =>
+        decodeStripeCustomerResult(
+          encodeStripeCustomerResult(await stripeCustomerEnsure(stripeDeps, id, 8000)),
+        ),
+      checkoutCreate: async (id) =>
+        decodeStripeCheckoutResult(
+          encodeStripeCheckoutResult(await stripeCheckoutCreate(stripeDeps, id, 8000)),
+        ),
+      portalCreate: async (id) =>
+        decodeStripePortalResult(
+          encodeStripePortalResult(await stripePortalCreate(stripeDeps, id, 8000)),
+        ),
+      webhookVerify: async (raw, signature) =>
+        decodeStripeWebhookResult(
+          encodeStripeWebhookResult(await stripeWebhookVerify(stripeDeps, raw, signature, 8000)),
+        ),
+    };
+    const realApi = createBillingApiHandler({
+      origin: workFixtureOrigin,
+      connector: db.connector(),
+      environment: "development",
+      broker: realBroker,
+      now: () => Date.now(),
+    });
+    let loseCommit = false;
+    const realWebhook = createStripeWebhookHandler({
+      connector: db.connector({
+        async afterQuery(record, connection) {
+          if (loseCommit && record.text === "COMMIT") {
+            loseCommit = false;
+            await connection.loseReply();
+          }
+        },
+      }),
+      environment: "development",
+      broker: realBroker,
+      now: () => Date.now(),
+    });
+    const realCall = async (p, method, path, body, key = randomUUID()) => {
+      const response = await realApi.fetch(
+        new Request(workFixtureOrigin + "/workspace/" + p.workspace + "/billing" + path, {
+          method,
+          headers: {
+            Cookie: "__Host-morrow_session=" + p.secret,
+            "Sec-Fetch-Site": "same-origin",
+            ...(method === "POST"
+              ? {
+                  Origin: workFixtureOrigin,
+                  "Content-Type": "application/json",
+                  "X-Morrow-Request": "1",
+                  "Idempotency-Key": key,
+                }
+              : {}),
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        }),
+        {},
+        ctx,
+      );
+      return { status: response.status, body: await response.json() };
+    };
+    const post = async (delivery, signature = delivery.signature) =>
+      (
+        await realWebhook.fetch(
+          new Request(workFixtureOrigin + "/api/billing/stripe/webhook", {
+            method: "POST",
+            headers: { "stripe-signature": signature, "content-type": "application/json" },
+            body: delivery.body,
+          }),
+          {},
+          ctx,
+        )
+      ).status;
+    const receipts = () => count("SELECT 1 FROM morrow_billing.stripe_event_receipts");
+
+    // G1. Checkout end to end: the customer and the session through the real broker.
+    const g = tenant("billing_g");
+    const gCheckout = await realCall(g, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const gIntent = intents(g)[0];
+    const gCustomer = one(
+      `SELECT stripe_customer_id FROM morrow_billing.stripe_customers WHERE workspace_id=${lit(g.workspace)}`,
+    )?.stripe_customer_id;
+    const gPosts = fake.requests.filter((r) => r.method === "POST");
+    check(
+      "G_checkout_end_to_end_through_the_real_broker_and_the_fake_origin",
+      gCheckout.status === 201 &&
+        gCheckout.body.checkoutUrl ===
+          "https://checkout.stripe.com/c/pay/" + gIntent.stripe_session_id &&
+        fake.state.customers.has(gCustomer) &&
+        fake.state.sessions.get(gIntent.stripe_session_id)?.customer === gCustomer &&
+        JSON.stringify(gPosts.map((r) => [r.path, r.idempotencyKey])) ===
+          JSON.stringify([
+            ["/v1/customers", "morrow-development-" + gIntent.customer_op],
+            ["/v1/checkout/sessions", "morrow-development-" + gIntent.checkout_op],
+          ]) &&
+        gPosts[1].form["line_items[0][price]"] === PRICE.slice("stripe:price:".length) &&
+        gPosts[1].form["metadata[morrow_operation_id]"] === gIntent.checkout_op &&
+        gPosts[1].form["subscription_data[metadata][morrow_workspace_id]"] === g.workspace &&
+        !Object.keys(gPosts[0].form).some((k) => /email/.test(k)),
+    );
+    // G2. The customer pays; Stripe signs and delivers; the api applies after the commit.
+    const paidG = fake.complete(gIntent.stripe_session_id, {
+      periodStart: periodNow.start,
+      periodEnd: periodNow.end,
+    });
+    const receiptsBefore = receipts();
+    const badSignature = await post(
+      fake.signedEvent("invoice.paid", paidG.invoice, {
+        secret: "whsec_" + "Wrong".padEnd(32, "0"),
+      }),
+    );
+    check(
+      "G_a_bad_signature_is_400_with_no_row",
+      badSignature === 400 && receipts() === receiptsBefore,
+    );
+    // A held readback (500) is 503 with no row; Stripe's retry then applies.
+    fake.faults.push({
+      method: "GET",
+      path: "/v1/invoices/" + paidG.invoice.id,
+      kind: "500_before",
+    });
+    const invoiceEvent = fake.signedEvent("invoice.paid", paidG.invoice);
+    const held = await post(invoiceEvent);
+    check(
+      "G_a_held_broker_is_503_and_writes_nothing",
+      held === 503 && receipts() === receiptsBefore,
+    );
+    const paidStatus = await post(invoiceEvent);
+    const gRoute = routeOf(g);
+    check(
+      "G_the_retry_applies_route_wallet_and_grant_after_the_commit",
+      paidStatus === 200 &&
+        gRoute.route === "morrow_direct" &&
+        gRoute.fixing_payment_key === "stripe:invoice:" + paidG.invoice.id &&
+        walletOf(g).available === "300" &&
+        grantFor("stripe:invoice:" + paidG.invoice.id) === 1,
+    );
+    const replayed = await post(invoiceEvent);
+    const completed = await post(fake.signedEvent("checkout.session.completed", paidG.session));
+    check(
+      "G_redelivery_and_the_completed_session_change_nothing",
+      replayed === 200 &&
+        completed === 200 &&
+        grantFor("stripe:invoice:" + paidG.invoice.id) === 1 &&
+        walletOf(g).available === "300" &&
+        intents(g).every((i) => i.status === "verified"),
+    );
+    // G3. A lost commit acknowledgement is read back before the answer.
+    const cycleG = fake.cycle(paidG.subscription.id, {
+      periodStart: periodNow.end,
+      periodEnd: periodNow.end + 30 * 86400,
+    });
+    loseCommit = true;
+    const lostAck = await post(fake.signedEvent("invoice.paid", cycleG));
+    check(
+      "G_an_unknown_commit_is_read_back_before_the_acknowledgement",
+      lostAck === 200 &&
+        loseCommit === false &&
+        grantFor("stripe:invoice:" + cycleG.id) === 1 &&
+        walletOf(g).available === "600",
+    );
+    // G4. The portal through the saved configuration.
+    const portal = await realCall(g, "POST", "/morrow/portal", {});
+    const portalPost = fake.requests.filter((r) => r.path === "/v1/billing_portal/sessions").at(-1);
+    check(
+      "G_the_portal_session_uses_the_mapped_customer_and_the_saved_configuration",
+      portal.status === 201 &&
+        portal.body.portalUrl.startsWith("https://billing.stripe.com/p/session/") &&
+        portalPost.form.customer === gCustomer &&
+        portalPost.form.configuration === stripeDeps.stripe.configuration.portalConfigurationId &&
+        portalPost.form.return_url === `${workFixtureOrigin}/w/${g.workspace}/settings/billing` &&
+        portalPost.idempotencyKey === "morrow-development-" + portal.body.operationId,
+    );
+    // G5. An unknown Stripe outcome: readback before replay, never a new key.
+    const h = tenant("billing_h");
+    fake.faults.push({ method: "POST", path: "/v1/checkout/sessions", kind: "lost_after" });
+    const hKey = randomUUID();
+    const lostCheckout = await realCall(h, "POST", "/morrow/checkout", { priceKey: PRICE }, hKey);
+    const hSessions = () =>
+      [...fake.state.sessions.values()].filter(
+        (s) => s.metadata.morrow_workspace_id === h.workspace,
+      ).length;
+    const hOp = lostCheckout.body.operationId;
+    const opRow = () =>
+      one(
+        `SELECT status,attempt::text AS attempt FROM morrow_work.operations WHERE id=${lit(hOp)}`,
+      );
+    const sendsBefore = fake.requests.filter(
+      (r) => r.path === "/v1/checkout/sessions" && r.method === "POST",
+    ).length;
+    const uncertainState = opRow();
+    const retried = await realCall(h, "POST", "/morrow/checkout", { priceKey: PRICE }, hKey);
+    const sendsAfter = fake.requests.filter(
+      (r) => r.path === "/v1/checkout/sessions" && r.method === "POST",
+    ).length;
+    check(
+      "G_an_unknown_outcome_is_read_back_and_never_resent_with_a_new_key",
+      lostCheckout.status === 503 &&
+        lostCheckout.body.code === "uncertain" &&
+        uncertainState.status === "uncertain" &&
+        retried.status === 200 &&
+        retried.body.operationId === hOp &&
+        retried.body.checkoutUrl?.startsWith("https://checkout.stripe.com/") &&
+        sendsAfter === sendsBefore &&
+        hSessions() === 1 &&
+        opRow().status === "verified" &&
+        opRow().attempt === "1",
+    );
+    // G6. Only the fake Stripe origin was called, always with the broker's key.
+    check(
+      "G_zero_unexpected_outbound_requests",
+      fake.requests.length > 0 &&
+        fake.requests.every(
+          (r) =>
+            r.authorised &&
+            /^\/v1\/(customers|checkout\/sessions|billing_portal\/sessions|invoices|subscriptions)(\/|$)/.test(
+              r.path,
+            ),
+        ),
     );
   },
   { stopBefore: firstBilling.sequence },
