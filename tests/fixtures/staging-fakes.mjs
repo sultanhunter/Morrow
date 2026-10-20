@@ -6,7 +6,15 @@
 // on stdout and stderr, and `fail` makes it exit non-zero, so tests can show that tool
 // output never reaches the staging tool's own output.
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { StagingError } from "../../scripts/staging-common.mjs";
@@ -277,7 +285,11 @@ export function fakeCloudflare(options = {}) {
               })),
             };
       }
-      if (path === "workers/dispatch/namespaces") return options.namespaces ?? [];
+      if (path === "workers/dispatch/namespaces") {
+        if (options.namespacesError)
+          throw new StagingError("STAGING_CLOUDFLARE_REQUEST_FAILED", options.namespacesError);
+        return options.namespaces ?? [];
+      }
       if (path === "queues") {
         if (options.queueListFails) throw notFound();
         return queues;
@@ -317,6 +329,14 @@ export function fakeCloudflare(options = {}) {
           sitekey: "0x4AAAAAAA" + "S".repeat(14),
           secret: "0x4AAAAAAA" + "s".repeat(24),
         };
+        // `refuse`: Cloudflare's answer to a token without Turnstile Edit (403, code 10000),
+        // as staging-tools.mjs reports it, plus a detail the tool must not relay.
+        if (options.widgetCreate === "refuse")
+          throw new StagingError("STAGING_CLOUDFLARE_REQUEST_FAILED", {
+            status: 403,
+            codes: [10000],
+            reason: "relayed_detail",
+          });
         if (options.widgetCreate !== "fail")
           widgets.push({ name: body.name, sitekey: reply.sitekey, domains: body.domains });
         if (options.widgetCreate === "lost" || options.widgetCreate === "fail")
@@ -531,6 +551,31 @@ export const labLoginConfigurationJson = JSON.stringify({
   retentionTier: "staging",
 });
 
+// The committed staging file with every identifier unset, independent of the values
+// PR-D commits.
+export function unsetStaging() {
+  const root = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+  const base = JSON.parse(readFileSync(join(root, "infra/environments/staging.json"), "utf8"));
+  return {
+    ...base,
+    cloudflare: {
+      ...base.cloudflare,
+      account_id: null,
+      workers_dev_subdomain: null,
+      origin: null,
+      turnstile: { ...base.cloudflare.turnstile, site_key: null },
+    },
+    neon: {
+      ...base.neon,
+      project_id: null,
+      root_branch_id: null,
+      branch_id: null,
+      region_id: null,
+      endpoint_host: null,
+    },
+  };
+}
+
 // A context for scripts/staging.mjs over fakes. Every seam is replaceable through
 // `overrides`; nothing reaches a real tool, provider or the operator's HOME.
 export async function fakeContext({
@@ -560,7 +605,6 @@ export async function fakeContext({
   );
   const { stagingFileSpecs, credentialDirectory } = await import("../../scripts/staging-files.mjs");
   const { loadMigrationChain } = await import("../../scripts/migration-chain.mjs");
-  const { readFileSync } = await import("node:fs");
   const constants = await identityConstants();
   const realRoot = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
   const repoRoot = root ?? realRoot;
@@ -574,11 +618,19 @@ export async function fakeContext({
       account_id: "0".repeat(31) + "1",
       workers_dev_subdomain: "lab",
       origin: "https://morrow-staging-api.lab.workers.dev",
+      // The challenge vars below carry the synthetic site key; gate 4 holds them to this.
+      turnstile: { ...baseStaging.cloudflare.turnstile, site_key: labSiteKey },
     },
     neon: {
       ...baseStaging.neon,
       project_id: binding?.projectId ?? null,
+      // The committed file carries real identifiers (PR-D part 1); the default world keeps
+      // the root and region unset so the pending-identifier paths stay exercised.
+      root_branch_id: null,
+      region_id: null,
       branch_id: binding?.branchId ?? null,
+      // The binding resolves only through staging.json's endpoint (stagingBinding).
+      endpoint_host: binding?.hostname ?? null,
     },
   };
   const bindingJson = binding === null ? null : JSON.stringify(binding);
