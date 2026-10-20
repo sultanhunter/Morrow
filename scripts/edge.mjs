@@ -852,8 +852,11 @@ export async function verifyEdgeConfig({
       resolved[where] = { name: config.name, bindings: names, services: config.services ?? [] };
     }
   }
-  // P04.T01i D1: the staging values, then the committed text. A file may name an identifier
-  // only if it is the api's or the broker's and the identifier is a reviewed staging one.
+  // P04.T01i D1: the staging values, then the committed text. A reviewed staging identifier
+  // may appear only inside the api's or the broker's own env.staging.vars values. Each
+  // file's matches are counted as a multiset, the reviewed matches inside that Worker's
+  // resolved staging values are taken away, and any remainder (a comment, another block,
+  // a second copy) is refused; the other Workers' files name none.
   const staging = readJson(stagingPath);
   const workos = readJson(workosPath);
   if (staging === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "staging.json");
@@ -866,13 +869,18 @@ export async function verifyEdgeConfig({
   });
   problems.push(...checked.problems);
   for (const worker of edgeWorkers)
-    for (const [kind, pattern] of committedIdentifierPatterns)
-      if (
-        matchesOf(pattern, texts[worker.key]).some(
-          (match) => !["api", "broker"].includes(worker.key) || !checked.allowed.has(match),
-        )
-      )
+    for (const [kind, pattern] of committedIdentifierPatterns) {
+      const remaining = new Map();
+      for (const match of matchesOf(pattern, texts[worker.key]))
+        remaining.set(match, (remaining.get(match) ?? 0) + 1);
+      if (["api", "broker"].includes(worker.key))
+        for (const value of Object.values(stagingVars[worker.key] ?? {}))
+          if (typeof value === "string")
+            for (const match of matchesOf(pattern, value))
+              if (checked.allowed.has(match)) remaining.set(match, (remaining.get(match) ?? 0) - 1);
+      if ([...remaining.values()].some((count) => count > 0))
         problem("EDGE_COMMITTED_IDENTIFIER_" + kind.toUpperCase(), worker.key);
+    }
   // No SPA route may fall under a Worker-reserved prefix (AC22).
   const routes = JSON.parse(readFileSync(routesPath, "utf8")).routes;
   const bases = [...new Set(reservedWorkerPaths.map((path) => path.replace(/\/\*$/, "")))];

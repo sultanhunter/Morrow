@@ -928,18 +928,43 @@ test("P04.T01i AC01 (P04.T02a AC24 narrowed): staging vars name only the reviewe
     "EDGE_COMMITTED_IDENTIFIER_WORKOS_CLIENT",
   ])
     assert.ok(issuer.includes(code), code + " not in " + issuer.join(","));
-  // The committed text: a reviewed identifier only in the api's or the broker's file.
+  // The committed text: a reviewed identifier only inside the api's or the broker's own
+  // env.staging.vars values. A comment, another block or a second copy is a remainder.
   const appended = (worker, line) => {
     const root = tree();
     const path = join(root, worker.dir, "wrangler.jsonc");
     writeFileSync(path, readFileSync(path, "utf8") + "\n// " + line + "\n");
     return root;
   };
-  const [api, , , connector] = edgeWorkers;
-  assert.deepEqual((await verify(appended(api, committedStaging.neon.branch_id))).problems, []);
+  const [api, broker, , connector] = edgeWorkers;
+  assert.deepEqual((await verify(appended(api, committedStaging.neon.branch_id))).problems, [
+    "EDGE_COMMITTED_IDENTIFIER_NEON_BRANCH:api",
+  ]);
+  assert.deepEqual((await verify(appended(broker, committedStaging.neon.endpoint_host))).problems, [
+    "EDGE_COMMITTED_IDENTIFIER_NEON_ENDPOINT:broker",
+  ]);
+  assert.deepEqual((await verify(appended(api, reviewedClient))).problems, [
+    "EDGE_COMMITTED_IDENTIFIER_WORKOS_CLIENT:api",
+  ]);
   assert.deepEqual((await verify(appended(connector, committedStaging.neon.branch_id))).problems, [
     "EDGE_COMMITTED_IDENTIFIER_NEON_BRANCH:connector",
   ]);
+  // Another block of the same file: the staging binding copied into production's vars.
+  const elsewhere = codes(
+    await verify(
+      tree({
+        broker: (c) =>
+          (c.env.production.vars.MORROW_DATABASE_BINDING_JSON =
+            c.env.staging.vars.MORROW_DATABASE_BINDING_JSON),
+      }),
+    ),
+  );
+  for (const code of [
+    "EDGE_VARS",
+    "EDGE_COMMITTED_IDENTIFIER_NEON_BRANCH",
+    "EDGE_COMMITTED_IDENTIFIER_NEON_ENDPOINT",
+  ])
+    assert.ok(elsewhere.includes(code), code + " not in " + elsewhere.join(","));
   assert.deepEqual((await verify(appended(api, "environment_" + "F".repeat(26)))).problems, [
     "EDGE_COMMITTED_IDENTIFIER_WORKOS_ENVIRONMENT:api",
   ]);
