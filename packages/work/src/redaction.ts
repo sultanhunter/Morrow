@@ -62,7 +62,11 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       trigger: "shop_redact",
       action: "empty_keep_digest",
       storeKey: "proposals.store_id through proposals.parameters_id",
-      executor: null,
+      // The revisable owner helper of the M3 PR-1 agent-proposals migration: it empties the
+      // canonical text and sets redacted_at, keeping the digest; decision_bind and the
+      // approval_claims trigger refuse a redacted proposal. M2 PR-3's shop/redact definer
+      // calls it for the store.
+      executor: "morrow_work.parameters_redact_for_store",
       executable: "M3 PR-1",
     },
   ].map((handler) => Object.freeze(handler as StoreContentHandler)),

@@ -62,9 +62,10 @@ test("manifest: rows 19-24, their executeAs roles, digests and the one prerequis
     entry.prerequisites.map((p) => [p.file, p.sha256, [...p.roles]]),
     [["infra/spine-executor-role-prerequisites.sql", sha(prerequisites), logins]],
   );
+  // Later PRs append their own rows after 0024 (each under its own reviewRef).
   assert.deepEqual(
     loadMigrationChain()
-      .filter((e) => e.sequence >= 19)
+      .filter((e) => rows.some((m) => m.sequence === e.sequence))
       .map((e) => e.executeAs),
     rows.map((m) => m.executeAs),
   );

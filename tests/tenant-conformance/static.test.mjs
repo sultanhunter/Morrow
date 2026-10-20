@@ -106,6 +106,27 @@ const extraPolicies = {
     "(SESSION_USER = 'morrow_vault_broker'::name)",
     "(SESSION_USER = 'morrow_vault_broker'::name)",
   ],
+  // M3 PR-1: morrow_vault.resolve_call reads, as the broker's login only, the one lease it
+  // names, that lease's tenant's stops and the platform's, and that lease's installation,
+  // through transaction-local settings it writes itself.
+  lease_broker_resolve: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((id)::text = current_setting('morrow.vault_resolve_lease'::text, true)))",
+    null,
+  ],
+  stop_broker_resolve: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((organization_id IS NULL) OR ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.vault_resolve_tenant'::text, true))))",
+    null,
+  ],
+  installation_broker_resolve: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_resolve_installation'::text, true)))",
+    null,
+  ],
 };
 // One table's policies against the template of its class and its registry extras.
 function checkPolicies(schema, table, spec) {

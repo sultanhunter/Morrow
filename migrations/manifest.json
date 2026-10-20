@@ -206,6 +206,48 @@
       "sha256": "00c64ae0bbb21fc245cf5e3521bdedbd7cbfeb33aec442b1b684426b06b6902b",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 25,
+      "file": "0025.m2-store-installations-stub.sql",
+      "sha256": "3fc0a98d88becaa8595b8857373d7cb3f128d14bbe385d827480fb129f45b8e1",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md#branch-local-stubs"
+    },
+    {
+      "sequence": 26,
+      "file": "0026.m5-credit-wallets-stub.sql",
+      "sha256": "c9f0abbfb973671ef46c4e2a9cce1ccf97ba8d5ce8d7c81cbf03a0a90c4a1f8a",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md#branch-local-stubs"
+    },
+    {
+      "sequence": 27,
+      "file": "0027.listings-identity-bridge.sql",
+      "sha256": "f12209ff45461fd469712c080d990d4096fc492f89d06a55a8ac88ad8024572d",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 28,
+      "file": "0028.listings-authority.sql",
+      "sha256": "f28164b6488bc5c0caf4d56d70aff5822f514b6224d890f0723b8a0bd8bb5d31",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 29,
+      "file": "0029.agent-proposals.sql",
+      "sha256": "58391ed8d281bdff9afe75dddc76b8142ebf36b9d6010c1b95228d789d616e65",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 30,
+      "file": "0030.run-credits.sql",
+      "sha256": "4d1a7efe5066515b04a6b711231ec7a63299da7ab47d16c3dcb07ff9f1edc9a8",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md"
     }
   ]
 }

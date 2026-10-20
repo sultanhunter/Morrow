@@ -22,13 +22,21 @@ test("every registered table is classified, and every store table has exactly on
     ],
   );
   assert.ok(Object.isFrozen(storeContentHandlers) && storeContentHandlers.every(Object.isFrozen));
+  // M3 PR-1 lands the proposal_parameters executor: the revisable owner helper that
+  // empties a store's parameters and keeps each digest (M2 PR-3's shop/redact calls it).
+  assert.deepEqual(
+    storeContentHandlers.map((h) => h.executor),
+    [null, null, "morrow_work.parameters_redact_for_store"],
+  );
 });
 
 // M2 PR-1 review: the identity schema, which holds the shop identity now and M2's store
 // tables later (spine §6 and §11), is classified table by table like the others.
 test("every morrow_identity table is classified; the shop identity is store content", () => {
   const identity = registeredTables().filter(([name]) => name.startsWith("morrow_identity."));
-  assert.equal(identity.length, 39);
+  // 39 through M2 PR-1, plus M3 PR-1's agent_principals (ids only).
+  assert.equal(identity.length, 40);
+  assert.equal(identityTables.agent_principals.content, "none");
   assert.deepEqual(
     identity.filter(([, spec]) => spec.content === "store").map(([name]) => name),
     ["morrow_identity.linking_candidates"],
