@@ -88,6 +88,21 @@ Stripe `billing_reason` `subscription_create` or `subscription_cycle` is a `subs
 10. **Held payments.** Append-only by `paymentKey`, never deleted or refunded automatically. Every writer that folds a payer's entitlement (P18.T01a, P18.T01b, P18.T01c reconciliation) re-classifies that payer's held `SUBSCRIPTION_NOT_CURRENT` payments in the same transaction.
 11. **Reversals.** `charge.refunded`, `charge.dispute.created` and `charge.dispute.closed` trigger a readback; rows are append-only by revision.
 
+### As built in M5 PR-1 (Morrow-direct, test mode)
+
+Migration `billing-records` (work owner) and `billing-identity-bridge` (identity owner) realise items 3-8 for the Stripe route; `docs/contracts/billing-api.md` is the route and webhook contract.
+
+- **Item 1** was delivered by M2 PR-1 (the signup route-row trigger); `create_first_organization` is replaced to issue owner template v2 and the trigger still fires.
+- **Item 3.** `billing_accounts` (BillingAccount@2, one `morrow_direct` account per workspace, created in the route-fixing commit); `stripe_customers` (one per workspace, unique customer id, recorded only when the broker settles the customer operation, never an email).
+- **Item 4.** `credit_grants` (CreditGrant@2, unique per route, mode and payment key, funding exactly one wallet revision in the same commit) and `credit_wallets` (CreditWallet@1 per account; `wallet_guard` admits a grant-funded increase or a move that keeps available + reserved + consumed). Credit units come only from `billing_terms`. Grants carry no expiry: unused credits roll over while the subscription is active (ADR-0022 item 11 amendment).
+- **Item 5.** `stripe_event_receipts`: the broker's own login records each verified event with the closed normalised object (ids, amounts, statuses and times only) and its digest; the tenant comes only from the customer mapping of that mode. The api applies a receipt only through the receipt-only ingress definers (ADR-0022 item 9 amendment): `receipt_begin`, `receipt_apply` and `receipt_status`, which refuse any session or lease context and re-derive the payment key, mode, amount, price, period, operation and credit units in SQL. `receipt_applications` keeps each receipt's one outcome; `verified_payment_events` (VerifiedPaymentEvent@1) keeps attributed subscription-period payments with their outcome, including held and conflict outcomes.
+- **Item 6.** `stripe_operations` names the purpose of each `stripe_write` operation; `stripe_op_begin` sets the send fence before any call and `stripe_op_settle` never promotes an uncertain operation without a provider result. Reconciliation is on the client's retry with the same `Idempotency-Key` (no background reconciler in M5); uncertain operations stay visible.
+- **Item 7.** `checkout_intents`, one open or completed intent per workspace (partial unique index), recorded under the route row's lock; an open intent past its Stripe expiry plus five minutes is closed lazily by the next checkout, and `checkout.session.expired` closes it.
+- **Item 8.** `createBillingFactsReader` reads the tenant's own rows in the session transaction under FORCE RLS, with no tenant parameter, and also returns the billing period, the wallet and the open intent.
+- **Item 9** is derived: open conflicts are the `ROUTE_MISMATCH` and `DUPLICATE_SUBSCRIPTION` outcomes recorded on `verified_payment_events`; remediation (P18.T01c) is later.
+- **Items 10 and 11** are M6: a held `SUBSCRIPTION_NOT_CURRENT` payment (a resubscription after cancellation, for example) stays held and logged, and checkout in `morrow_direct` stays refused until re-classification exists; reversals are not ingested.
+- **Terms.** `billing_terms` holds `BillingTerms@1` revisions with display offers and the published digest of `docs/decisions/billing-terms.json`; revisions are contiguous and immutable.
+
 ## Denials, surfaces and obligations
 
 Billing denials use frozen ErrorEnvelope rows (`BILLING_DENIAL_ENVELOPES`, P01.T04a PR-B). No message names a provider, price or checkout, so a denial cannot expose Morrow checkout to a Shopify-origin merchant, and every payer denial shares one envelope.

@@ -178,6 +178,67 @@ INSERT INTO morrow_identity.organization_signups(principal_id,command_id,request
     check("A_signup_template_check_admits_v2", checkAttempt("owner-bootstrap-v2"));
     check("A_signup_template_check_refuses_v3", !checkAttempt("owner-bootstrap-v3"));
 
+    // A real first-owner signup on the full chain: the replaced create_first_organization,
+    // called as the onboarding executor with a seeded browser session family, issues and
+    // records owner-bootstrap-v2 (the eight v1 rows plus the two Governance controls) and
+    // the 0021 trigger still writes the website route row in the same transaction.
+    {
+      const env = "environment_" + "C".repeat(26),
+        client = "client_" + "C".repeat(26);
+      const sp = "profile_signup_v2",
+        person = "person_signup_v2",
+        mapping = "mapping_signup_v2";
+      const secret = createHash("sha256").update(randomUUID()).digest().toString("base64url");
+      const sessionDigest = createHash("sha256").update(secret).digest("hex");
+      db.admin(`INSERT INTO morrow_identity.identity_verification_profiles(id,provider_id,environment_id,application_id,client_id,issuer,token_profile_revision,token_profile_digest,record_revision,state)
+ VALUES(${lit(sp)},'workos',${lit(env)},'app_'||repeat('C',26),${lit(client)},'https://api.workos.com/user_management/'||${lit(client)},1,repeat('c',64),1,'active');
+INSERT INTO morrow_identity.principals VALUES(${lit(person)},'human',true);
+INSERT INTO morrow_identity.provider_subject_mappings(id,provider_id,environment_id,subject_id,principal_id,record_revision,state) VALUES(${lit(mapping)},'workos',${lit(env)},'user_'||repeat('C',26),${lit(person)},1,'active');
+INSERT INTO morrow_identity.provider_subject_profile_bindings(mapping_id,profile_id,provider_id,environment_id,record_revision,state) VALUES(${lit(mapping)},${lit(sp)},'workos',${lit(env)},1,'active');
+INSERT INTO morrow_identity.provider_session_bindings(id,provider_id,environment_id,client_id,provider_session_id,mapping_id,profile_id,created_at) VALUES('binding_signup_v2','workos',${lit(env)},${lit(client)},'session_'||repeat('C',26),${lit(mapping)},${lit(sp)},clock_timestamp()-interval '1 minute');
+INSERT INTO morrow_identity.browser_session_families(id,provider_binding_id,profile_record_revision,mapping_revision,binding_revision,created_at,expires_at) SELECT 'family_signup_v2','binding_signup_v2',1,1,1,t,t+interval '15 minutes' FROM (SELECT date_trunc('milliseconds',clock_timestamp())-interval '1 minute' t) x;
+INSERT INTO morrow_identity.browser_session_generations(id,family_id,secret_digest,created_at,expires_at) SELECT 'generation_signup_v2',id,${lit(sessionDigest)},created_at,expires_at FROM morrow_identity.browser_session_families WHERE id='family_signup_v2';
+INSERT INTO morrow_identity.account_enrollments(principal_id,mapping_id,profile_id,command_id,recorded_at) VALUES(${lit(person)},${lit(mapping)},${lit(sp)},gen_random_uuid()::text,clock_timestamp());
+INSERT INTO morrow_identity.self_service_revisions(profile_id,revision,enrollment,organization_signup,reason,approval_ref,recorded_by,recorded_at) VALUES(${lit(sp)},1,'enabled','enabled','lab signup','lab_signup_ref',session_user,clock_timestamp());`);
+      // The lab's executor login (hosted executors have LOGIN through provisioning).
+      db.sql("ALTER ROLE morrow_identity_onboarding LOGIN;");
+      const created = db
+        .sql(
+          `SELECT outcome||'|'||coalesce(organization_id,'')||'|'||coalesce(workspace_id,'') FROM morrow_identity.create_first_organization(${lit(sessionDigest)},${lit(randomUUID())},${lit(sp)},'Signup Org','Main');`,
+          { user: "morrow_identity_onboarding" },
+        )
+        .split("\n")
+        .at(-1)
+        .split("|");
+      const issued = db
+        .rows(
+          `SELECT payload::text AS payload FROM morrow_identity.grants WHERE principal_id=${lit(person)} ORDER BY payload->>'capabilityId'`,
+        )
+        .map((r) => JSON.parse(r.payload));
+      const signupRow = db.rows(
+        `SELECT s.grant_template,r.origin,r.route FROM morrow_identity.organization_signups s JOIN morrow_billing.workspace_billing_routes r ON r.organization_id=s.organization_id AND r.workspace_id=s.workspace_id WHERE s.principal_id=${lit(person)}`,
+      );
+      check(
+        "A_a_real_signup_issues_and_records_owner_bootstrap_v2_with_its_route_row",
+        created[0] === "created" &&
+          signupRow.length === 1 &&
+          signupRow[0].grant_template === "owner-bootstrap-v2" &&
+          signupRow[0].origin === "website" &&
+          signupRow[0].route === null &&
+          issued.length === 10 &&
+          issued.some((g) => g.capabilityId === "governance.billing.manage") &&
+          issued.some((g) => g.capabilityId === "governance.model_default.revise") &&
+          issued.every(
+            (g) =>
+              g.scope.workspaceId === created[2] &&
+              g.issuedBy.principalId === "morrow.onboarding" &&
+              g.policyRevision === 1 &&
+              validateCurrentDefinition("Grant", g),
+          ),
+      );
+      db.sql("ALTER ROLE morrow_identity_onboarding NOLOGIN;");
+    }
+
     // -----------------------------------------------------------------------------
     // B. Tenants, grants, routes and terms.
     const P = seedWorkFixtures(db);

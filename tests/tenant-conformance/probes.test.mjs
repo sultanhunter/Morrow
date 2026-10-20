@@ -654,3 +654,79 @@ test("P8: a lease context calling a session definer is refused, and a session ne
   assert.equal(db.sql(asCommandRole(P.A, enter)).split("\n").at(-1), "denied");
   recordConformance("P8", true);
 });
+
+// M5 PR-1 (ADR-0022 item 9 amendment): the receipt-only ingress. The api login can set any
+// setting, but only receipt_begin writes the entry proof (receipt_entries), so a forged
+// receipt context reads and writes nothing; the ingress definers refuse a session context
+// and every other login; the broker definers run only as the vault login. lab:billing E
+// probes the same edges with recorded receipts.
+test("P9: a forged receipt context confers nothing; ingress and broker definers refuse every other caller", () => {
+  const receipt = randomUUID();
+  const digest = "a".repeat(64);
+  const plan = JSON.stringify({
+    schemaVersion: 1,
+    outcome: "applied",
+    code: null,
+    payment: { action: "fix_route_and_grant", outcome: "granted", code: null, termsRevision: 1 },
+    snapshot: { revision: 1 },
+    intent: null,
+  });
+  const forge = `SELECT set_config('morrow.billing_receipt_entered',${literal(randomUUID())},true) IS NOT NULL;`;
+  // A forged context, then the api role's own reads: nothing, as with no context.
+  const reads = db
+    .sql(
+      `BEGIN; SET LOCAL ROLE morrow_work_api; ${forge}
+SELECT (SELECT count(*) FROM morrow_billing.workspace_billing_routes)+(SELECT count(*) FROM morrow_billing.billing_accounts)+(SELECT count(*) FROM morrow_billing.credit_wallets)+(SELECT count(*) FROM morrow_billing.credit_grants); ROLLBACK;`,
+      { user: "morrow_api_worker" },
+    )
+    .split("\n")
+    .at(-1);
+  assert.equal(reads, "0");
+  // The forged context reaching receipt_apply directly (no receipt_begin): refused.
+  const applied = db
+    .sql(
+      `BEGIN; SET LOCAL ROLE morrow_work_api; ${forge}
+SELECT outcome FROM morrow_billing.receipt_apply(${literal(receipt)},${literal(digest)},${literal(plan)}); ROLLBACK;`,
+      { user: "morrow_api_worker" },
+    )
+    .split("\n")
+    .at(-1);
+  assert.ok(["denied", "not_found"].includes(applied), applied);
+  // Under a session context every ingress definer refuses.
+  for (const call of [
+    `SELECT outcome FROM morrow_billing.receipt_begin(${literal(receipt)},${literal(digest)})`,
+    `SELECT outcome FROM morrow_billing.receipt_status(${literal(receipt)})`,
+  ])
+    assert.equal(
+      db.sql(asApi(P.A, call), { user: "morrow_api_worker" }).split("\n").at(-1),
+      "denied",
+      call,
+    );
+  // No other login executes an ingress definer, and only the vault login a broker definer.
+  for (const login of [
+    "morrow_runtime_executor",
+    "morrow_connector_ingress",
+    "morrow_vault_broker",
+  ]) {
+    const r = db.tryRun(`SELECT * FROM morrow_billing.receipt_status(${literal(receipt)});`, {
+      user: login,
+    });
+    assert.equal(r.ok, false, login);
+    assert.match(r.stderr, /permission denied/, login);
+  }
+  for (const login of ["morrow_api_worker", "morrow_runtime_executor", "morrow_connector_ingress"])
+    for (const call of [
+      `SELECT * FROM morrow_billing.stripe_op_begin(${literal(randomUUID())})`,
+      `SELECT morrow_billing.stripe_op_settle(${literal(randomUUID())},'uncertain',NULL,NULL)`,
+    ]) {
+      const r = db.tryRun(call + ";", { user: login });
+      assert.equal(r.ok, false, login + " " + call);
+      assert.match(r.stderr, /permission denied/, login);
+    }
+  // Nothing was written by any of it.
+  assert.equal(
+    db.rows("SELECT count(*)::text AS n FROM morrow_billing.receipt_applications")[0].n,
+    "0",
+  );
+  recordConformance("P9", true);
+});

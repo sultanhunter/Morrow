@@ -11,6 +11,8 @@
 // broker's fixed URL (AC01, AC02, AC03, AC04, AC05, AC09, AC10 and the fourth method).
 // M2 PR-1 adds the trust model v1 entrypoints (ConnectorBroker, RuntimeBroker): each
 // serves only its own role lease and health, and a bad vault KEK disables the vault only.
+// M5 PR-1 adds the four ApiBroker Stripe methods (held without the capability, and by the
+// branch's stub vault transport with it) and the unbound api's billing and webhook paths.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -494,6 +496,21 @@ await instance("AC06_unbound_api_spa_and_denials", {}, async ({ fetchApi, observ
   check(
     "AC06:reserved_unknown_worker_404",
     api.status === 404 && api.body === '{"code":"not_found"}',
+  );
+  // M5 PR-1: the unbound api answers billing 401 and the Stripe webhook 404, with no
+  // network, database or broker call (checked below with the rest of AC06).
+  const billing = await fetchApi("/workspace/workspace_a/billing");
+  const webhook = await fetchApi("/api/billing/stripe/webhook", {
+    method: "POST",
+    headers: { "stripe-signature": "t=1,v1=" + "a".repeat(64) },
+    body: "{}",
+  });
+  check(
+    "M5:unbound_billing_401_and_webhook_404",
+    billing.status === 401 &&
+      json(billing.body)?.code === "denied" &&
+      webhook.status === 404 &&
+      webhook.body === '{"code":"not_found"}',
   );
   const loginResponse = await fetchApi("/auth/login", { method: "POST" });
   check(
@@ -1030,6 +1047,83 @@ await instance(
         init.connector === true &&
         init.runtime === true &&
         init.database === true,
+    );
+  },
+);
+
+// M5 PR-1 (ADR-0022 items 7 and 12): the four ApiBroker Stripe methods over the real RPC
+// binding. Without the Stripe secrets the capability is held (init stripe:false) and every
+// method answers BROKER_HELD; malformed arguments are refused first. With them the
+// capability initialises, and in this branch the vault transport stub (M2 PR-2 owns the
+// real one) holds every call before any network: no Stripe request leaves the broker.
+const stripeOperation = "00000000-0000-4000-8000-0000000000a5";
+const stripeCalls = [
+  ["stripeCustomerEnsure", [stripeOperation, 1000]],
+  ["stripeCheckoutCreate", [stripeOperation, 1000]],
+  ["stripePortalCreate", [stripeOperation, 1000]],
+  ["stripeWebhookVerify", ["e30=", "t=1,v1=" + "a".repeat(64), 1000]],
+  ["stripeCustomerEnsure", ["not-an-operation", 1000]],
+  ["stripeCheckoutCreate", [stripeOperation, 10001]],
+  ["stripeWebhookVerify", ["", "t=1", 1000]],
+];
+await instance(
+  "M5_stripe_methods_without_the_capability",
+  {},
+  async ({ probe, events, observed }) => {
+    const replies = [];
+    for (const [op, args] of stripeCalls) replies.push((await probe({ op, args }))[0]);
+    check(
+      "M5:stripe_methods_held_without_the_capability",
+      replies.every((r) => r.ok === false && r.message === "BROKER_HELD" && remoteOnly(r.keys)),
+    );
+    check("M5:init_reports_stripe_held", events("morrow_broker_init")[0]?.stripe === false);
+    check(
+      "M5:refusals_are_fixed_codes",
+      JSON.stringify(
+        events("morrow_broker")
+          .filter((row) => row.method.startsWith("stripe"))
+          .map((row) => row.code),
+      ) ===
+        JSON.stringify([
+          "CAPABILITY_UNAVAILABLE",
+          "CAPABILITY_UNAVAILABLE",
+          "CAPABILITY_UNAVAILABLE",
+          "CAPABILITY_UNAVAILABLE",
+          "INPUT_INVALID",
+          "BUDGET_INVALID",
+          "INPUT_INVALID",
+        ]),
+    );
+    check("M5:no_outbound_without_the_capability", observed.unexpected === 0);
+  },
+);
+const stripeKey = "rk_test_" + randomBytes(16).toString("hex");
+const stripeWebhookSecret = "whsec_" + randomBytes(16).toString("hex");
+privateMarkers.push(stripeKey, stripeWebhookSecret);
+await instance(
+  "M5_stripe_capability_with_the_stub_transport",
+  {
+    broker: {
+      bindings: brokerBindings({
+        STRIPE_RESTRICTED_KEY: stripeKey,
+        STRIPE_WEBHOOK_SECRET: stripeWebhookSecret,
+        STRIPE_CONFIGURATION_JSON: JSON.stringify({
+          schemaVersion: 1,
+          portalConfigurationId: "bpc_" + "Lab".padEnd(24, "0"),
+          automaticTax: false,
+          billingAddressCollection: "auto",
+        }),
+      }),
+    },
+  },
+  async ({ probe, events, observed }) => {
+    const replies = [];
+    for (const [op, args] of stripeCalls.slice(0, 3)) replies.push((await probe({ op, args }))[0]);
+    check("M5:init_reports_stripe_ready", events("morrow_broker_init")[0]?.stripe === true);
+    check(
+      "M5:the_stub_vault_transport_holds_every_write_before_any_network",
+      replies.every((r) => r.ok === false && r.message === "BROKER_HELD") &&
+        observed.unexpected === 0,
     );
   },
 );
