@@ -1110,8 +1110,10 @@ test("census: findings for anything that is not exactly Morrow's staging", async
       JSON.parse(second.out.at(-1)).findings.map((f) => f.code),
       ["PAGES_PROJECT", "BROKER_BOUND_ELSEWHERE"],
     );
-    // An account without Workers for Platforms: 403 with Cloudflare error 10121 reads as
-    // zero dispatch namespaces (2026-10-20, the staging account). Any other refusal fails.
+    // An account without Workers for Platforms: 403 with Cloudflare error 10121 alone is
+    // reported as `unavailable_10121`, no namespace (2026-10-20, the staging account; the
+    // packet's PR-B notes, deviation 17). Any other status or code, or 10121 beside
+    // another code, fails the census.
     const noWfp = await fakeContext({
       home: planted.home,
       tools: fakeTools().tools,
@@ -1119,12 +1121,42 @@ test("census: findings for anything that is not exactly Morrow's staging", async
     });
     assert.equal(await main(["census"], noWfp.ctx), 0);
     assert.deepEqual(JSON.parse(noWfp.out.at(-1)).findings, []);
-    const refused = await fakeContext({
-      home: planted.home,
-      tools: fakeTools().tools,
-      cloudflare: fakeCloudflare({ namespacesError: { status: 403, codes: [10000] } }).api,
-    });
-    assert.notEqual(await main(["census"], refused.ctx), 0);
+    assert.equal(JSON.parse(noWfp.out.at(-1)).dispatchNamespaces, "unavailable_10121");
+    assert.equal(JSON.parse(out.at(-1)).dispatchNamespaces, 0);
+    for (const namespacesError of [
+      { status: 403, codes: [10000] },
+      { status: 403, codes: [10000, 10121] },
+      { status: 403, codes: [10121, 10121] },
+      { status: 403, codes: [] },
+      { status: 403 },
+      { status: 401, codes: [10121] },
+      { status: 500, codes: [10121] },
+    ]) {
+      const refused = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+        cloudflare: fakeCloudflare({ namespacesError }).api,
+      });
+      assert.notEqual(await main(["census"], refused.ctx), 0, JSON.stringify(namespacesError));
+      assert.equal(
+        JSON.parse(refused.err.at(-1)).code,
+        "STAGING_CLOUDFLARE_REQUEST_FAILED",
+        JSON.stringify(namespacesError),
+      );
+    }
+    // Any other count is a finding; so is a reply that is not a list.
+    for (const namespaces of [[{ id: "ns" }], { result: [] }]) {
+      const listed = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+        cloudflare: fakeCloudflare({ namespaces }).api,
+      });
+      assert.equal(await main(["census"], listed.ctx), 1);
+      assert.deepEqual(
+        JSON.parse(listed.out.at(-1)).findings.map((f) => f.code),
+        ["DISPATCH_NAMESPACES"],
+      );
+    }
   } finally {
     planted.cleanup();
   }
