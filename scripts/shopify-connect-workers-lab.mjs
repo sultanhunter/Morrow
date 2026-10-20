@@ -459,6 +459,12 @@ await withWorkDatabase(
           owner(
             `SELECT superseded_at IS NOT NULL AS superseded FROM morrow_identity.install_continuations WHERE token_digest=${literal(sha(token ?? ""))}`,
           )[0]?.superseded === true,
+        {
+          launch: second.launch.status,
+          callback: reauthorised.status,
+          title: /<title>([^<]*)<\/title>/.exec(reauthorised.text ?? "")?.[1],
+          vault: vaultRows(),
+        },
       );
 
       // ---- L: connections read, preview (issuer), apply and status over the api guard.
@@ -503,6 +509,7 @@ await withWorkDatabase(
           preview.body.link.installationId === installation[0].id &&
           preview.body.link.purpose === "workspace_first" &&
           /^[A-Za-z0-9_-]{43}$/.test(csrf ?? ""),
+        { status: preview.status, code: preview.body?.code ?? preview.body?.outcome ?? null },
       );
       const forged = await linkPost("F", "store-links", token2, key, "A".repeat(43));
       const applied = await linkPost("F", "store-links", token2, key, csrf);

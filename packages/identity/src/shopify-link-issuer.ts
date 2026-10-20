@@ -2,7 +2,9 @@
 // mvp-architecture §2 step 5). Private server composition: the api's managed workspace
 // handler calls these after its request guard, on the linking login's pool.
 //
-// Issuer (in POST /workspace/:ws/store-links/preview, before the unchanged lookup):
+// Issuer (in POST /workspace/:ws/store-links/preview, before the unchanged lookup), in one
+// READ WRITE transaction on the linking login (one lifecycle, so a Shopify preview runs two
+// within the managed attempt's 5 s: this and the lookup; PR-2 review):
 //   1. the linking login reads the actor and its grants (session and workspace from the
 //      guard; no client value);
 //   2. the injected connection kernel (the TypeScript human kernel, wired by the api from
@@ -72,17 +74,6 @@ export async function runShopifyLinkIssuer(
 ): Promise<IssuerVerdict> {
   if (context.nonceDigest === null || context.commandId === null) return "proceed";
   const service = createControlledWorkspaceStoreLinking({ pool, now });
-  const selector = JSON.stringify({
-    sessionDigest: context.sessionDigest,
-    workspaceId: context.workspaceId,
-  });
-  const facts = await context.wait(service.authority(selector, context.control));
-  context.check();
-  if (!facts) return standaloneJson(404, { code: "linking_not_found" });
-  const decision = await decide(kernel, facts);
-  context.check();
-  if (!decision.allowed || decision.grantId === null)
-    return standaloneJson(404, { code: "linking_not_found" });
   const outcome = await context.wait(
     service.issue(
       JSON.stringify({
@@ -90,8 +81,12 @@ export async function runShopifyLinkIssuer(
         workspaceId: context.workspaceId,
         nonceDigest: context.nonceDigest,
         commandId: context.commandId,
-        grantId: decision.grantId,
       }),
+      async (facts) => {
+        const decision = await decide(kernel, facts);
+        context.check();
+        return decision.allowed ? decision.grantId : null;
+      },
       context.control,
     ),
   );

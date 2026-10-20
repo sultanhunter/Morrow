@@ -138,24 +138,6 @@ function sessionSelector(text: unknown) {
   if (!digest(v.sessionDigest) || !id(v.workspaceId)) throw invalid();
   return v as Readonly<{ sessionDigest: string; workspaceId: string }>;
 }
-function issueInput(text: unknown) {
-  const v = parse(text, ["sessionDigest", "workspaceId", "nonceDigest", "commandId", "grantId"]);
-  if (
-    !digest(v.sessionDigest) ||
-    !digest(v.nonceDigest) ||
-    !id(v.workspaceId) ||
-    !uuid(v.commandId) ||
-    !id(v.grantId)
-  )
-    throw invalid();
-  return v as Readonly<{
-    sessionDigest: string;
-    workspaceId: string;
-    nonceDigest: string;
-    commandId: string;
-    grantId: string;
-  }>;
-}
 // A JSON array that PostgreSQL rendered from jsonb (jsonb::text: no duplicate member names
 // can exist), bounded in bytes; its items are validated by their consumers.
 const utf8 = new TextEncoder();
@@ -563,25 +545,44 @@ export function createControlledWorkspaceStoreLinking({
         return facts === "overflow" ? null : facts;
       });
     },
-    // M2 PR-2: the P09.T02a issuer, one READ WRITE transaction. A lost COMMIT
-    // acknowledgement is WORKSPACE_LINKING_OUTCOME_UNKNOWN; a retry with the same
-    // command answers exists.
+    // M2 PR-2: the P09.T02a issuer in ONE READ WRITE transaction (one lifecycle; the PR-2
+    // review): the actor's authority, the TypeScript kernel's decision (`decide` returns the
+    // grant it rests on, or null), then the issue statement, which rechecks everything
+    // under locks. no_actor (not session-eligible, or more than 1000 grants) and
+    // kernel_denied send no issue statement. A lost COMMIT acknowledgement is
+    // WORKSPACE_LINKING_OUTCOME_UNKNOWN; a retry with the same command answers exists.
     async issue(
       text: unknown,
+      decide: (facts: Readonly<LinkingAuthorityFacts>) => Promise<string | null>,
       control: StandaloneWorkspaceSqlControl,
-    ): Promise<ShopifyIssueOutcome> {
-      const input = issueInput(text);
+    ): Promise<ShopifyIssueOutcome | "no_actor" | "kernel_denied"> {
+      const input = selector(text);
       return own(control, async (query) => {
         await prologue(query, workspaceStoreLinkingSql.begin);
-        const outcome = issueRow(
-          await query(workspaceStoreLinkingControlSql.issue, [
+        const facts = authorityRow(
+          await query(workspaceStoreLinkingControlSql.authority, [
             input.sessionDigest,
             input.workspaceId,
-            input.nonceDigest,
-            input.commandId,
-            input.grantId,
           ]),
+          input,
         );
+        let outcome: ShopifyIssueOutcome | "no_actor" | "kernel_denied";
+        if (facts === null || facts === "overflow") outcome = "no_actor";
+        else {
+          const grantId = await decide(facts);
+          outcome =
+            grantId === null || !id(grantId)
+              ? "kernel_denied"
+              : issueRow(
+                  await query(workspaceStoreLinkingControlSql.issue, [
+                    input.sessionDigest,
+                    input.workspaceId,
+                    input.nonceDigest,
+                    input.commandId,
+                    grantId,
+                  ]),
+                );
+        }
         await query(workspaceStoreLinkingControlSql.commit);
         return outcome;
       });
