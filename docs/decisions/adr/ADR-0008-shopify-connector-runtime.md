@@ -1,6 +1,7 @@
 # ADR-0008 Shopify connector runtime: Cloudflare Workers with the `@shopify/shopify-api` web adapter
 
 - Status: Accepted 2026-10-18
+- Amended: item 1, 2026-10-20 (M2 PR-2: no Shopify library in deployed code). See Amendments.
 - Date: 2026-10-17 (drafted)
 - Affects: P04.T02a §D8 (connector placeholder), P08.T02, P09.T01, P09.T02, P09.T04, P09.T05, `docs/contracts/shopify-sync.md`, `apps/shopify-connector`
 
@@ -46,6 +47,23 @@
 - **A Node host for the React Router app.** Not selected on 2026-10-14. It would add a hosting provider and a second runtime.
 - **The connector binds the HMAC secret.** This places a provider secret outside the broker, contrary to invariant 11. It is allowed only by a separate owner-signed deviation.
 - **React Router on Workers through an unofficial adapter.** Rejected: 3.0.1 ships no Workers adapter, and an unofficial one would be unsupported security-critical code.
+
+## Amendments
+
+### 2026-10-20: item 1, no Shopify library in deployed code (M2 PR-2)
+
+Item 1's second bullet now reads:
+
+> Deployed code uses no Shopify library. The broker implements by hand, behind the item 2 boundary:
+> - the query HMAC and webhook `X-Shopify-Hmac-Sha256` checks (WebCrypto, constant time, over the raw bytes);
+> - the authorization-code exchange;
+> - one fixed Admin GraphQL document per read.
+>
+> The connector Worker holds no secret and imports no Shopify package. `@shopify/shopify-api` may remain a development dependency for fixtures and contract checks only.
+
+Reason: in the locked `@shopify/shopify-api` 15.0.0, `shopifyApi()` will not initialise without `apiSecretKey` (Consequences). The secret stays in the broker (item 2), and the broker bundle is capped at 256 KiB, so the library would have to run inside the broker. The broker must also leave room for the Neon driver, Stripe (M5) and the Claude adapter (M3 PR-2). The hand-written surface is small and pinned by tests against Shopify's documented HMAC and OAuth examples. Items 2–6 are unchanged.
+
+Owner decision, 2026-10-20, in chat. The question was: "Your earlier decision (ADR-0008 item 1) says deployed code uses the official @shopify/shopify-api library. The library needs the app secret wherever it runs, the secret must stay in the broker, and the broker's bundle is capped at 256 KiB. What should we do?" The owner answered: "Hand-written checks (Recommended)".
 
 ## Approval
 

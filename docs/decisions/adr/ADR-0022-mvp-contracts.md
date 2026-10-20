@@ -3,6 +3,7 @@
 - Status: Accepted 2026-10-19 (owner decisions in chat; see Approval), including the model catalogue values, which the owner confirmed the same day ("Owner confirmation of the catalogue values (2026-10-19)")
 - Date: 2026-10-19 (revised after two AI critiques, same day; model provider, model choice and credit weighting revised on acceptance; gateway, outcome, catalogue and failed-product rules revised after a third AI critique, same day; catalogue values confirmed by the owner, same day)
 - Amends: ADR-0007 items 1 and 4 (connector hostname; Shopify, Anthropic and Stripe credentials in the broker under trust model v1, development and staging only); ADR-0019 item 2 (a second public Worker); ADR-0010 item 2 (a lease context for background work, beside the unchanged session context); contract v1.1 (`ResourceRef` gains kind `store`; `Operation@2` allows a taskless billing operation); the Shopify row of `docs/decisions/providers.json` (custom distribution for the beta); the model provider of the 2026-10-14 stack selection (the plan's "Hosting decision" and "Merchant model gateway", `docs/decisions/model-selection.md`, `model-policy.json`, `providers.json` and `provider-bindings.json`): Anthropic Claude replaces OpenAI for text models (item 10), and OpenAI keeps only the post-launch image capabilities.
+- Amended: items 3, 9 and 11, 2026-10-20 (enabling the Listings agent; Stripe webhook ingress; credit rollover in the beta). See Amendments.
 - Does not change: ADR-0007 item 9 (production custody needs its own ADR before M6); ADR-0020 (no new membership pair or owner role); ADR-0015 (both routes stay; the MVP uses only Morrow-direct); ADR-0005 (kill switches stay human-only).
 - Affects: `docs/briefs/mvp-architecture.md` (the spine) and the M2–M5 briefs; `docs/plan/mvp.md` and `docs/plan/build-plan.md`; `docs/contracts/capabilities.json`; contract v1.1 (or v1.2 if frozen first); `migrations/`; `apps/broker`, `apps/shopify-connector`, `apps/workers`, `apps/api`; `docs/decisions/{providers.json, provider-bindings.json, model-policy.json, model-selection.md, data-lifecycle.md}`; `docs/research/sources.json`.
 
@@ -217,6 +218,37 @@ These values were Claude's proposals within the owner's answers under Approval, 
 7. The member ceiling: members without `governance.model_default.revise` limited to one credit per product until the owner raises it (item 16).
 
 Catalogue version 1 is published: `active` in `model-policy.json`, effective 2026-10-19, with its digest pinned in `catalogue.published_digests`, so the M3 PR-1 catalogue part no longer waits (Consequences). This section was titled "Pending owner confirmation" before the owner's answer; the `change_policy` of `model-policy.json` still cites it by that title.
+
+## Amendments
+
+### 2026-10-20: item 3, enabling the Listings agent (M3 PR-1)
+
+`agents.installation.activate` is `review_required` in the capability catalogue, so the kernel attaches `exact_approval` to its execute. For a solo owner, the "Enable Listings agent" command meets that obligation as follows:
+- The server builds an installation document: the release digest, the store resource and the exact grant set.
+- The owner's confirm command binds that document's digest and a single-use nonce.
+- Any change to the release, the store or the grants invalidates the confirmation.
+- A stopped installation resumes the same way, with a fresh document and digest.
+
+This follows the precedent P05.T03a set for the `review_required` `governance.connection.connect` (the linking review bound to the handoff). No Proposal@2 or Approval@2 record is created for enablement.
+
+Owner decision, 2026-10-20, in chat. The question was: "How should turning on the Listings agent be approved? Its permission is marked 'needs review', and ADR-0022 doesn't say how a solo owner meets that." The owner answered: "Confirm screen (Recommended)".
+
+### 2026-10-20: item 9, Stripe webhook ingress (M5 PR-1)
+
+A verified Stripe payment has no browser session, so it is applied through api-login definers that refuse any session context. The definers are `receipt_begin`, `receipt_apply` and `receipt_status`:
+- They accept only a receipt the broker recorded after verifying Stripe's signature, with a matching digest.
+- They take the tenant from that receipt, through the Stripe customer mapping.
+- They re-derive the payment key, mode and credit units in SQL from `billing_terms`.
+
+The vault login is not widened into billing writes. Every session definer stays session-only. This is the second cross-tenant definer family after the item 9 sweep; it writes only the tenant its verified receipt names.
+
+Owner decision, 2026-10-20, in chat. The question was: "How should a verified Stripe payment be written into a workspace? Stripe webhooks arrive with no signed-in user." The owner answered: "Receipt-only path (Recommended)".
+
+### 2026-10-20: item 11, credit rollover in the beta (M5 PR-1)
+
+Unused monthly credits roll over. Each paid period grants 300 credits with no expiry (`CreditGrant.expiresAt` null), and credits are spendable only while the subscription is active. This is revisited before live money (M6).
+
+Owner decision, 2026-10-20, in chat. The question was: "During the beta, do unused monthly credits roll over?" The owner answered: "Roll over in beta (Recommended)".
 
 ## Approval
 
