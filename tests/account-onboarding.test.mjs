@@ -417,6 +417,100 @@ test("grant template v1 is never paid work and matches the P01.T04a template lis
   const fixture = JSON.parse(readFileSync("docs/contracts/fixtures/P01.T04a.json", "utf8"));
   assert.deepEqual(normalize(rows), normalize(fixture.templates["owner-bootstrap-v1"]));
 });
+// M5 PR-1 (ADR-0022 item 3): owner-bootstrap-v2 in the billing identity bridge migration
+// (located by slug, never by number). v2 is exactly v1 plus governance.billing.manage
+// {view, execute} and governance.model_default.revise {execute}, with fields equal to
+// their v1.1 input property names; no row is paid work; it equals the P01.T04a list; and
+// create_first_organization is replaced with 0013's body changed only in the template
+// function and the recorded literal.
+const manifestRows = JSON.parse(readFileSync("migrations/manifest.json", "utf8")).migrations;
+const bridgeFile = manifestRows.find((m) => m.file.endsWith(".billing-identity-bridge.sql")).file;
+const bridge = readFileSync("migrations/" + bridgeFile, "utf8");
+function v2Additions() {
+  const block = /owner_bootstrap_grants_v2\(\)[\s\S]*?FROM \(VALUES([\s\S]*?)\) t\(c,v,f\)/.exec(
+    bridge,
+  )[1];
+  return [...block.matchAll(/\('([a-z_.]+)','(\[[^\]]*\])','(\[[^\]]*\])'\)/g)].map((m) => ({
+    capabilityId: m[1],
+    verbs: JSON.parse(m[2]),
+    fields: JSON.parse(m[3]),
+  }));
+}
+test("grant template v2 is v1 plus the two Governance controls, never paid work, equal to P01.T04a", () => {
+  const additions = v2Additions();
+  assert.deepEqual(additions, [
+    {
+      capabilityId: "governance.billing.manage",
+      verbs: ["view", "execute"],
+      fields: ["action", "priceKey"],
+    },
+    {
+      capabilityId: "governance.model_default.revise",
+      verbs: ["execute"],
+      fields: ["effort", "expectedRevision", "maxCreditsPerProduct", "model"],
+    },
+  ]);
+  // v2 reads v1 itself (BEGIN ATOMIC), so v2 ⊇ v1 by construction.
+  assert.match(
+    bridge,
+    /SELECT v\.capability_id,v\.verbs,v\.fields FROM morrow_identity\.owner_bootstrap_grants_v1\(\) v\s+UNION ALL/,
+  );
+  const rows = [...templateRows(), ...additions];
+  const capabilities = new Map(catalogue.capabilities.map((c) => [c.id, c]));
+  for (const row of additions) {
+    const c = capabilities.get(row.capabilityId);
+    assert.equal(c.domain, "Governance");
+    assert.equal(c.effect, "control");
+    assert.equal(c.executor, "human_only");
+    assert.equal(c.review_required, false);
+    assert.deepEqual(
+      [...row.fields].sort(),
+      Object.keys(v11Bodies[row.capabilityId + ".input"].properties).sort(),
+      row.capabilityId,
+    );
+    for (const field of row.fields) assert.ok(validateDefinition("core", "FieldPath", field));
+  }
+  for (const row of rows)
+    for (const verb of row.verbs)
+      assert.equal(isPaidWork(row.capabilityId, verb), false, `${row.capabilityId} ${verb}`);
+  const normalize = (list) =>
+    list
+      .map((r) => ({
+        capabilityId: r.capabilityId,
+        verbs: [...r.verbs].sort(),
+        fields: [...r.fields].sort(),
+      }))
+      .sort((a, b) => a.capabilityId.localeCompare(b.capabilityId));
+  const fixture = JSON.parse(readFileSync("docs/contracts/fixtures/P01.T04a.json", "utf8"));
+  assert.deepEqual(normalize(rows), normalize(fixture.templates["owner-bootstrap-v2"]));
+  // The signup CHECK admits exactly the two template ids.
+  assert.match(bridge, /CHECK \(grant_template IN \('owner-bootstrap-v1','owner-bootstrap-v2'\)\)/);
+});
+test("create_first_organization is 0013's body with only the template function and literal changed", () => {
+  const body = (text, create) => {
+    const start = text.indexOf(create + " FUNCTION morrow_identity.create_first_organization(");
+    assert.ok(start >= 0, create);
+    const end = text.indexOf("END $$;", start);
+    return text.slice(start + create.length, end + "END $$;".length);
+  };
+  const original = body(migration, "CREATE");
+  const replaced = body(bridge, "CREATE OR REPLACE");
+  assert.equal(
+    replaced,
+    original
+      .replace(
+        "morrow_identity.owner_bootstrap_grants_v1() t",
+        "morrow_identity.owner_bootstrap_grants_v2() t",
+      )
+      .replace("'owner-bootstrap-v1',instant", "'owner-bootstrap-v2',instant"),
+  );
+  assert.notEqual(replaced, original);
+  // The replacement keeps the function's owner and ACL (no GRANT or REVOKE of it here), and
+  // writes no route row itself: the 0021 trigger on organization_signups still does.
+  assert.doesNotMatch(bridge, /(GRANT|REVOKE)[^;]*create_first_organization/);
+  assert.doesNotMatch(replaced, /workspace_billing_routes/);
+  assert.equal(bridge.includes("pg_auth_" + "members"), false);
+});
 test("every template payload passes Grant and the 0002 CHECK", () => {
   const O = "0f1d5a5e-7d0c-4b6a-9bb6-6f3d2c3e1a10",
     W = "8b4f6f62-0b0e-4a4f-8a6e-4f1e6f3a2b11",
