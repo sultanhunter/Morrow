@@ -241,10 +241,11 @@ test("migrations after the published prefix continue the sequence", () => {
 // ---------------------------------------------------------------------------
 // ADR-0020 item 7 (P04.T01j D6): the one-time rebaseline of 0005-0015, so that a
 // non-superuser CREATEROLE administrator can apply the chain. Exactly one record exists;
-// a second needs a new owner-approved ADR. `closedBy` stays null until a persistent
-// database first applies any of 0005-0015, and then names that live record (P04.T01i
-// PR-D part 2). After closure every fix is a forward migration. The superseded digests
-// are the bytes of `main` f8314e8.
+// a second needs a new owner-approved ADR. `closedBy` names the live record of the first
+// persistent apply of any of 0005-0015 (P04.T01i PR-D part 2): `staging:migrate` on the
+// Neon `staging` branch, 2026-10-20, from `main` 3744c96 (migrations 1-24). The exception
+// is closed: every fix is a forward migration. The superseded digests are the bytes of
+// `main` f8314e8.
 const rebaselines = Object.freeze([
   Object.freeze({
     adr: "ADR-0020",
@@ -262,7 +263,7 @@ const rebaselines = Object.freeze([
       14: "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
       15: "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9",
     }),
-    closedBy: null,
+    closedBy: "docs/evidence/live/2026-10-20-neon-staging-migrate.md",
   }),
 ]);
 const supersededDigests = new Set(rebaselines.flatMap((r) => Object.values(r.superseded)));
