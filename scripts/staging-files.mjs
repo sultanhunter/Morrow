@@ -87,8 +87,18 @@ const jsonKeys = (text, keys) => {
   }
 };
 
+// M2 PR-1 (ADR-0022 item 7): the owner file of one vault KEK version, `vault-kek-v<n>` for
+// MORROW_VAULT_KEK_V<n>, or null for any other name. The owner writes it with
+// `npm run vault -- kek --out ~/.config/morrow/staging/vault-kek-v<n>` (64 lowercase hex
+// characters in a new 0600 file) and keeps an offline copy; the tools only read it.
+export function vaultKekFile(name) {
+  const match = /^MORROW_VAULT_KEK_V([1-9][0-9]{0,2})$/.exec(String(name));
+  return match ? "vault-kek-v" + match[1] : null;
+}
+
 // The closed set of files the tools know. `required` files must exist for
-// secrets-status to pass; transient ones are reported and expected to be removed.
+// secrets-status to pass; transient ones are reported and expected to be removed. Every
+// vault KEK among the broker's names has its own required owner file.
 export function stagingFileSpecs({ brokerSecretNames }) {
   return Object.freeze({
     "workos-api-key": {
@@ -101,6 +111,14 @@ export function stagingFileSpecs({ brokerSecretNames }) {
       secret: "TURNSTILE_SECRET_KEY",
       format: (v) => /^0x[0-9A-Za-z_-]{20,128}$/.test(v),
     },
+    ...Object.fromEntries(
+      brokerSecretNames
+        .filter((name) => vaultKekFile(name) !== null)
+        .map((name) => [
+          vaultKekFile(name),
+          { required: true, secret: name, format: (v) => /^[0-9a-f]{64}$/.test(v) },
+        ]),
+    ),
     "neon-owner-url": {
       required: true,
       // The user is checked against the administrator where the URL is used.

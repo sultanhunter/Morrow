@@ -14,33 +14,89 @@ export const workRoles = Object.freeze({
 
 // Table classes: tenant_readable (api role reads, column SELECT), tenant_internal
 // (only the command role, through definer functions), platform (no tenant columns,
-// no api grants).
+// no api grants), tenant_or_platform (tenant rows, plus platform rows whose tenant keys
+// are both null; readable like tenant_readable, platform rows visible to every tenant).
+// `lease: true` adds the lease-context twin of the command policy (tenant_lease, through
+// current_lease()); `policies` names a table's extra, exactly-checked policies.
+// `content` classifies what a row may hold (P09.T05a, spine §11): "none" (ids, digests,
+// codes and times only), "workspace" (text people write, members in their workspace or
+// the operator in platform audit rows; never a store's content) or "store" (a store's
+// content, identity or credential): every "store" table, in every schema the registry
+// covers (identityTables included), has exactly one cleanup handler in
+// packages/work/src/redaction.ts (S8).
 export const workTables = Object.freeze({
-  goals: { class: "tenant_readable", parents: ["workspace_streams"] },
-  tasks: { class: "tenant_readable", parents: ["goals"] },
-  questions: { class: "tenant_readable", parents: ["tasks"] },
-  question_answers: { class: "tenant_readable", parents: ["questions"] },
-  workspace_streams: { class: "tenant_internal", parents: ["morrow_identity.workspaces"] },
-  task_assignments: { class: "tenant_internal", parents: ["tasks"] },
-  commands: { class: "tenant_internal", parents: ["workspace_streams"] },
-  outbox_events: { class: "tenant_internal", parents: ["workspace_streams"] },
-  transition_rules: { class: "platform", parents: [] },
+  goals: { class: "tenant_readable", parents: ["workspace_streams"], content: "workspace" },
+  tasks: { class: "tenant_readable", parents: ["goals"], content: "workspace" },
+  questions: { class: "tenant_readable", parents: ["tasks"], content: "workspace" },
+  question_answers: { class: "tenant_readable", parents: ["questions"], content: "workspace" },
+  workspace_streams: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    content: "none",
+  },
+  task_assignments: { class: "tenant_internal", parents: ["tasks"], content: "none" },
+  commands: { class: "tenant_internal", parents: ["workspace_streams"], content: "none" },
+  outbox_events: { class: "tenant_internal", parents: ["workspace_streams"], content: "none" },
+  transition_rules: { class: "platform", parents: [], content: "none" },
   // P06.T01b approval records (migration 0018).
-  review_policies: { class: "tenant_readable", parents: ["workspace_streams"] },
-  proposal_parameters: { class: "tenant_readable", parents: ["workspace_streams"] },
-  proposals: { class: "tenant_readable", parents: ["proposal_parameters", "review_policies"] },
-  approvals: { class: "tenant_readable", parents: ["proposals"] },
-  approval_decisions: { class: "tenant_readable", parents: ["approvals"] },
-  approval_claims: { class: "tenant_internal", parents: ["approvals"] },
-  review_capabilities: { class: "platform", parents: [] },
-  review_risk_by_effect: { class: "platform", parents: [] },
-  review_policy_defaults: { class: "platform", parents: [] },
+  review_policies: {
+    class: "tenant_readable",
+    parents: ["workspace_streams"],
+    content: "workspace",
+  },
+  proposal_parameters: {
+    class: "tenant_readable",
+    parents: ["workspace_streams"],
+    content: "store",
+  },
+  proposals: {
+    class: "tenant_readable",
+    parents: ["proposal_parameters", "review_policies"],
+    content: "workspace",
+  },
+  approvals: { class: "tenant_readable", parents: ["proposals"], content: "none" },
+  approval_decisions: { class: "tenant_readable", parents: ["approvals"], content: "workspace" },
+  approval_claims: { class: "tenant_internal", parents: ["approvals"], content: "none" },
+  review_capabilities: { class: "platform", parents: [], content: "none" },
+  review_risk_by_effect: { class: "platform", parents: [], content: "none" },
+  review_policy_defaults: { class: "platform", parents: [], content: "none" },
+  // M2 PR-1 spine foundation (migration 0020; lease_member_revoke from 0023).
+  work_leases: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    policies: ["lease_member_revoke", "lease_pending", "lease_self"],
+    content: "none",
+  },
+  // The entry proof of enter_lease (0020): one row per backend, no tenant keys, reached
+  // only by the runtime login's own definers (lease_entry).
+  lease_entries: { class: "platform", parents: [], policies: ["lease_entry"], content: "none" },
+  stop_controls: {
+    class: "tenant_or_platform",
+    parents: ["morrow_identity.workspaces"],
+    content: "workspace",
+  },
+  stop_records: { class: "tenant_or_platform", parents: ["stop_controls"], content: "none" },
+  operations: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces"],
+    lease: true,
+    content: "none",
+  },
+  operation_transitions: {
+    class: "tenant_readable",
+    parents: ["operations"],
+    lease: true,
+    content: "none",
+  },
 });
 
 // API functions: SECURITY DEFINER, owned by the command role, EXECUTE for the api
 // role only, no organization/workspace/actor parameter (enter_context's digest
-// and workspace are resolved through session_eligibility()). current_tenant() is
-// the one non-API definer: the read and write policies call it.
+// and workspace are resolved through session_eligibility()). current_tenant() and
+// current_lease() are the resolvers: the policies call them. Runtime functions (M2
+// PR-1) are the same shape for morrow_runtime_executor and take ids only; operator
+// functions are INVOKER, owned by the owner and granted to nobody (the owner's
+// audited scripts only).
 export const workFunctions = Object.freeze({
   "current_tenant()": { kind: "resolver", grantees: ["morrow_work_api"] },
   "enter_context(text,text)": {
@@ -147,6 +203,39 @@ export const workFunctions = Object.freeze({
   "approval_bind()": { kind: "trigger", grantees: [] },
   "approval_enforce_status()": { kind: "trigger", grantees: [] },
   "decision_bind()": { kind: "trigger", grantees: [] },
+  // M2 PR-1 spine foundation (migration 0020). current_lease() is called only by the
+  // command role's policies and definers, so no role is granted it. pending_starts() is
+  // the one cross-tenant read: content-free, ids only.
+  "current_lease()": { kind: "resolver", grantees: [] },
+  "enter_lease(text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "pending_starts()": {
+    kind: "runtime",
+    grantees: ["morrow_runtime_executor"],
+    crossTenant: true,
+    columns: ["kind", "subject_id", "lease_id", "generation"],
+  },
+  "lease_mark_started()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  // 0023: the membership-removal revocation, called by 0024's identity triggers with the
+  // tenant of the membership row they handle.
+  "revoke_member_leases(text,text,text)": {
+    kind: "bridge_in",
+    grantees: ["morrow_identity_owner"],
+    tenantParameters: ["p_organization_id", "p_workspace_id", "p_membership_id"],
+  },
+  "lease_release()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  "stop_active(text,text,text,text,text)": { kind: "helper", grantees: [] },
+  "lease_open(text,text,text,text,text)": { kind: "helper", grantees: [] },
+  "operation_transition(text,text,text,bigint,text,text,text,text,text,text)": {
+    kind: "helper",
+    grantees: [],
+  },
+  "lease_guard()": { kind: "trigger", grantees: [] },
+  "stop_guard()": { kind: "trigger", grantees: [] },
+  "stop_record_bind()": { kind: "trigger", grantees: [] },
+  "operation_guard()": { kind: "trigger", grantees: [] },
+  "operation_transition_bind()": { kind: "trigger", grantees: [] },
+  "platform_stop_set(text,text)": { kind: "operator", grantees: [] },
+  "platform_stop_lift(text,text)": { kind: "operator", grantees: [] },
   // Pure functions used by CHECK constraints and INVOKER triggers (the writer's
   // privileges), so only the command role holds EXECUTE (the valid_scope pattern).
   "sha256_text(text)": { kind: "check", grantees: ["morrow_work_command"] },
@@ -186,7 +275,106 @@ export const bridgeFunctions = Object.freeze([
   "work_review_candidates(text,text,text,text[],text,integer)",
   "work_reviewer_grants(text,text,text,text[])",
   "work_lock_and_recheck_exclusive(text,text,text,text,text,text,text)",
+  // M2 PR-1 (0019).
+  "work_executor_safe(text)",
+  "work_lease_member_current(text,text,text,text)",
+  // M2 PR-1 review (0022): the website-signup fact behind route_signup.
+  "work_signup_workspace(text,text)",
 ]);
+// M2 PR-1 (0020): the two schemas the work owner creates beside morrow_work. The billing
+// route is tenant-readable with one extra insert policy for the signup bridge; the vault
+// is readable only while the session user is the broker's login (vault_broker).
+export const billingTables = Object.freeze({
+  workspace_billing_routes: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces"],
+    policies: ["route_signup"],
+    content: "none",
+  },
+});
+export const billingFunctions = Object.freeze({
+  // The signup bridge: the identity owner calls it from 0021's trigger and backfill,
+  // with the tenant of the identity row it is handling.
+  "record_signup_route(text,text,timestamp with time zone)": {
+    kind: "bridge_in",
+    grantees: ["morrow_identity_owner"],
+    tenantParameters: ["p_organization_id", "p_workspace_id"],
+  },
+  "route_guard()": { kind: "trigger", grantees: [] },
+});
+export const vaultTables = Object.freeze({
+  app_secrets: { class: "vault_platform", parents: [], content: "none" },
+  credentials: { class: "vault_tenant", parents: ["morrow_identity.workspaces"], content: "store" },
+});
+export const vaultFunctions = Object.freeze({
+  "app_secret_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "app_secret_put(text,text,text,text)": { kind: "operator", grantees: [] },
+  "vault_guard()": { kind: "trigger", grantees: [] },
+});
+// M2 PR-1 review (P09.T05a; spine §11): the content class of every morrow_identity table,
+// so the store-content cleanup contract (S8, tests/redaction-handlers.test.mjs) covers the
+// schema that holds the shop identity and, from M2 PR-2, the store tables of spine §6
+// (store_installations, shopify_webhook_inbox, install_continuations, privacy_requests),
+// each registered here as it lands. Identity tables keep their P05 RLS shape; only their
+// content is classified here. Account identifiers (principals, provider subjects, sessions)
+// are "none": they are ids, and the account deletion path (P09.T05, data-lifecycle.md)
+// covers them.
+export const identityTables = Object.freeze({
+  account_enrollments: { content: "none" },
+  account_session_commands: { content: "none" },
+  authentication_bindings: { content: "none" },
+  authentication_challenges: { content: "none" },
+  authentication_exchange_admissions: { content: "none" },
+  authentication_exchange_bindings: { content: "none" },
+  authentication_pkce_challenges: { content: "none" },
+  browser_session_audits: { content: "none" },
+  browser_session_commands: { content: "none" },
+  browser_session_families: { content: "none" },
+  browser_session_generations: { content: "none" },
+  grants: { content: "none" },
+  identity_verification_profiles: { content: "none" },
+  // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
+  linking_candidates: { content: "store" },
+  linking_handoffs: { content: "none" },
+  linking_reviews: { content: "none" },
+  login_command_guards: { content: "none" },
+  login_controller_configurations: { content: "none" },
+  login_flow_events: { content: "none" },
+  login_flow_quotas: { content: "none" },
+  login_flow_tombstones: { content: "none" },
+  login_flows: { content: "none" },
+  memberships: { content: "none" },
+  migration_administrator: { content: "none" },
+  organization_session_signouts: { content: "none" },
+  organization_signups: { content: "none" },
+  // display names people write
+  organizations: { content: "workspace" },
+  principals: { content: "none" },
+  provider_session_bindings: { content: "none" },
+  provider_subject_mappings: { content: "none" },
+  provider_subject_profile_bindings: { content: "none" },
+  // the operator's reason for an enrollment switch
+  self_service_revisions: { content: "workspace" },
+  sessions: { content: "none" },
+  workspace_link_results: { content: "none" },
+  workspace_memberships: { content: "none" },
+  workspace_revocation_receipts: { content: "none" },
+  workspace_revocation_results: { content: "none" },
+  workspace_store_links: { content: "none" },
+  workspaces: { content: "workspace" },
+});
+// The three membership-free executor logins (ADR-0022 item 8) and the functions each
+// may execute, across every schema.
+export const executorLogins = Object.freeze({
+  morrow_connector_ingress: [],
+  morrow_runtime_executor: [
+    "morrow_work.enter_lease(text,text)",
+    "morrow_work.lease_mark_started()",
+    "morrow_work.lease_release()",
+    "morrow_work.pending_starts()",
+  ],
+  morrow_vault_broker: ["morrow_vault.app_secret_get(text)"],
+});
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);
 // Non-tenant schemas outside the manifest. The staging runner's ledger (ADR-0019 item 12)
 // is tooling metadata owned by the migration administrator, with no access for PUBLIC or

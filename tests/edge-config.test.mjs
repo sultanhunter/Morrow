@@ -66,8 +66,15 @@ test("AC01/AC04: the committed configuration resolves cleanly for 4 Workers x 3 
     ]);
     assert.deepEqual(verdict.resolved["connector:" + environment].bindings, ["MORROW_ENVIRONMENT"]);
     // MORROW_ENVIRONMENT, WORKOS_API_KEY, TURNSTILE_SECRET_KEY (P05.T01ab) and the eight
-    // role passwords (P06.T01a adds morrow_api_worker).
-    assert.equal(verdict.resolved["broker:" + environment].bindings.length, 11);
+    // role passwords (P06.T01a adds morrow_api_worker); M2 PR-1 adds the connector's and
+    // the orchestrator's role passwords, the vault login's password and the vault KEK
+    // (ADR-0022 items 7-8). The vault is held in production until the ADR-0007 item 9
+    // custody ADR, so production binds neither vault secret.
+    assert.equal(
+      verdict.resolved["broker:" + environment].bindings.length,
+      environment === "production" ? 13 : 15,
+      environment,
+    );
     assert.ok(verdict.resolved["broker:" + environment].bindings.includes("TURNSTILE_SECRET_KEY"));
   }
   assert.deepEqual(verdict.reservedWorkerPaths, [...reservedWorkerPaths]);
@@ -125,6 +132,35 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
       "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
     ],
     [{ api: (c) => (c.vars.ANTHROPIC_BASE_URL = "x") }, "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER"],
+    // M2 PR-1: the vault KEK is broker-only (ADR-0022 item 7).
+    [
+      { connector: (c) => c.env.staging.secrets.required.push("MORROW_VAULT_KEK_V1") },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    [
+      { orchestrator: (c) => (c.secrets.required = ["MORROW_VAULT_KEK_V1"]) },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    [
+      {
+        broker: (c) =>
+          c.secrets.required.splice(c.secrets.required.indexOf("MORROW_VAULT_KEK_V1"), 1),
+      },
+      "EDGE_BROKER_SECRETS",
+    ],
+    // Production holds the vault until the production custody ADR: requiring a KEK or the
+    // vault login's password there fails the check.
+    [
+      { broker: (c) => c.env.production.secrets.required.push("MORROW_VAULT_KEK_V1") },
+      "EDGE_BROKER_SECRETS",
+    ],
+    [
+      {
+        broker: (c) =>
+          c.env.production.secrets.required.push("MORROW_DB_PASSWORD_MORROW_VAULT_BROKER"),
+      },
+      "EDGE_BROKER_SECRETS",
+    ],
     [{ api: (c) => (c.workers_dev = true) }, "EDGE_FLAG_WORKERS_DEV"],
     [{ connector: (c) => (c.env.production.preview_urls = true) }, "EDGE_FLAG_PREVIEW_URLS"],
     [{ broker: (c) => (c.observability.enabled = true) }, "EDGE_FLAG_OBSERVABILITY"],

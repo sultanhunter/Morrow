@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  brokerCallerRoles,
   brokerLimits,
   brokerNeonRoleNames,
   brokerNeonRoles,
   brokerPasswordSecret,
   brokerPasswordValid,
   brokerRequiredSecrets,
+  brokerRequiredSecretsFor,
   decodeNeonLeaseGrant,
   encodeNeonLeaseGrant,
   neonLeaseNamespace,
@@ -40,10 +42,11 @@ const provider = createPlatformWorkosProviderOracle({ origin: "https://workspace
 const control = () =>
   Object.freeze({ deadlineMs: Date.now() + 5000, signal: new AbortController().signal });
 
-test("one role table drives the eight role secrets and the broker's required secrets", () => {
+test("one role table drives the ten role secrets and the broker's required secrets", () => {
   assert.ok(Object.isFrozen(brokerNeonRoles) && Object.isFrozen(brokerRequiredSecrets));
   // P05.T01x (ADR-0009 item 4): the login selection role left; the signup executor joined.
   // P06.T01a (ADR-0010 item 2): the api Worker's work login joined.
+  // M2 PR-1 (ADR-0022 items 7-8): the connector's and the orchestrator's executor logins.
   assert.deepEqual(brokerNeonRoleNames, [
     "morrow_identity_login",
     "morrow_identity_preauth",
@@ -53,17 +56,42 @@ test("one role table drives the eight role secrets and the broker's required sec
     "morrow_identity_logout",
     "morrow_identity_onboarding",
     "morrow_api_worker",
+    "morrow_connector_ingress",
+    "morrow_runtime_executor",
   ]);
   assert.equal(brokerNeonRoles.morrow_api_worker, "work_request_transaction");
+  assert.equal(brokerNeonRoles.morrow_connector_ingress, "connector_request_transaction");
+  assert.equal(brokerNeonRoles.morrow_runtime_executor, "runtime_step_transaction");
   assert.equal(brokerPasswordSecret("morrow_api_worker"), "MORROW_DB_PASSWORD_MORROW_API_WORKER");
   assert.equal(brokerPasswordSecret("morrow_api"), "MORROW_DB_PASSWORD_MORROW_API");
+  // Each caller's roles partition the table; the api keeps the eight of v0.
+  assert.ok(Object.isFrozen(brokerCallerRoles));
+  assert.deepEqual(
+    [...brokerCallerRoles.api, ...brokerCallerRoles.connector, ...brokerCallerRoles.runtime],
+    brokerNeonRoleNames,
+  );
+  assert.deepEqual(brokerCallerRoles.connector, ["morrow_connector_ingress"]);
+  assert.deepEqual(brokerCallerRoles.runtime, ["morrow_runtime_executor"]);
+  // The broker's own vault login is never leased, so it is not in the table.
+  assert.equal(Object.hasOwn(brokerNeonRoles, "morrow_vault_broker"), false);
   // P05.T01ab (ADR-0019 item 6): the Turnstile secret is the one provider credential
-  // admitted beside WorkOS; ten names in all.
+  // admitted beside WorkOS under v0.
   assert.deepEqual(brokerRequiredSecrets, [
     "WORKOS_API_KEY",
     "TURNSTILE_SECRET_KEY",
     ...brokerNeonRoleNames.map((role) => "MORROW_DB_PASSWORD_" + role.toUpperCase()),
+    "MORROW_DB_PASSWORD_MORROW_VAULT_BROKER",
+    "MORROW_VAULT_KEK_V1",
   ]);
+  // Production holds the vault (ADR-0022 item 7; ADR-0007 item 9): a production deploy
+  // requires neither the vault login's password nor a KEK.
+  assert.equal(brokerRequiredSecretsFor("development"), brokerRequiredSecrets);
+  assert.equal(brokerRequiredSecretsFor("staging"), brokerRequiredSecrets);
+  assert.deepEqual(
+    brokerRequiredSecretsFor("production"),
+    brokerRequiredSecrets.filter((name) => !/VAULT/.test(name)),
+  );
+  assert.equal(brokerRequiredSecretsFor("production").length, brokerRequiredSecrets.length - 2);
   assert.deepEqual(brokerLimits, {
     namespaceMaxBytes: 1024,
     selectorMaxBytes: 2048,
@@ -108,7 +136,7 @@ test("neonLeaseNamespace is byte-equal to the namespace every pool and the work 
   const parsed = parseBrokerDatabaseBinding(JSON.stringify(binding));
   assert.deepEqual(
     [...borrowed].sort(),
-    brokerNeonRoleNames.map((role) => neonLeaseNamespace(parsed, role)).sort(),
+    brokerCallerRoles.api.map((role) => neonLeaseNamespace(parsed, role)).sort(),
   );
   assert.equal(borrowed.length, 8);
 });

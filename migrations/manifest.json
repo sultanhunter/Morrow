@@ -158,6 +158,54 @@
       "sha256": "6ca433edded2bc8590623bb30a6a51fe30b62215ad57dc0e4f7abdb7fecbadea",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/packets/P06.T01b.md"
+    },
+    {
+      "sequence": 19,
+      "file": "0019.spine-identity-bridge.sql",
+      "sha256": "e7e8a0ac95b1f85adbebfd78242e90310ea8a01c0e926355330ee0b8585f376e",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M2-shopify-connect.md",
+      "prerequisites": [
+        {
+          "file": "infra/spine-executor-role-prerequisites.sql",
+          "sha256": "9de904e5d954da5c48506f961d5c6f3884909276af5a022eedfcc9118e77a90b"
+        }
+      ]
+    },
+    {
+      "sequence": 20,
+      "file": "0020.spine-foundation.sql",
+      "sha256": "dad347120c5d1a1c8c329c66f079a6982cb50b326e66a75a65d8e893e2da6459",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 21,
+      "file": "0021.signup-billing-route.sql",
+      "sha256": "5ea67667a852d03caecced11c73f6a6ad3caeef19d4c211c3f5609ab52ea7d7b",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 22,
+      "file": "0022.signup-route-identity-check.sql",
+      "sha256": "c4821e3980a67144f567f9c70d1560b55ca06c6cd3d86496615e21a14f450220",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 23,
+      "file": "0023.member-lease-revocation.sql",
+      "sha256": "0cacc1326ad0283c7fcc92de4e3a9c9cc01fab66bc06809cc4a05f8f08856686",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 24,
+      "file": "0024.membership-lease-revocation.sql",
+      "sha256": "00c64ae0bbb21fc245cf5e3521bdedbd7cbfeb33aec442b1b684426b06b6902b",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M2-shopify-connect.md"
     }
   ]
 }

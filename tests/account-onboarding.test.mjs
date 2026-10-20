@@ -834,20 +834,23 @@ test("workspace pools: overview on morrow_api, and the onboarding create paramet
     ]),
   );
 });
-test("broker role table: eight roles, onboarding added and the selection role dropped", () => {
-  // Seven identity roles plus the P06.T01a work login (ADR-0010 item 2).
-  assert.equal(Object.keys(brokerNeonRoles).length, 8);
+test("broker role table: onboarding added and the selection role dropped", () => {
+  // Seven identity roles plus the P06.T01a work login (ADR-0010 item 2) and the two
+  // M2 PR-1 executor logins (ADR-0022 item 8).
+  assert.equal(Object.keys(brokerNeonRoles).length, 10);
   assert.equal(
     brokerNeonRoles.morrow_identity_onboarding,
     "workspace_primary_and_one_same_role_observer",
   );
   assert.equal(Object.hasOwn(brokerNeonRoles, "morrow_identity_resolution"), false);
-  // WORKOS_API_KEY, TURNSTILE_SECRET_KEY (P05.T01ab) and the eight role passwords.
-  assert.equal(brokerRequiredSecrets.length, 10);
+  // WorkOS, Turnstile (P05.T01ab), ten role passwords, the vault login's password and the
+  // vault KEK.
+  assert.equal(brokerRequiredSecrets.length, 14);
   assert.ok(brokerRequiredSecrets.includes("MORROW_DB_PASSWORD_MORROW_IDENTITY_ONBOARDING"));
   assert.equal(brokerNeonRoles.morrow_api_worker, "work_request_transaction");
   for (const [role, purpose] of Object.entries(brokerNeonRoles)) {
-    if (role === "morrow_api_worker") continue;
+    if (["morrow_api_worker", "morrow_connector_ingress", "morrow_runtime_executor"].includes(role))
+      continue;
     assert.equal(
       purpose,
       Object.values(controlledNeonWorkspaceProfiles).some((p) => p.role === role)

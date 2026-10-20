@@ -11,13 +11,14 @@ import {
   createAdministrator,
   d4Transaction,
   identityExecutors,
-  manifestChain,
   migrationBody,
   morrowMembershipCensusSql,
   morrowRoles,
   morrowSetRowsSql,
   psqlAs,
+  spineExecutors,
 } from "./fixtures/createrole-administrator.mjs";
+import { loadMigrationChain } from "./migration-chain.mjs";
 
 // P04.T01j D8 (ADR-0020): the non-superuser migration administrator. Three throwaway
 // network-none PostgreSQL 17 containers, one at a time:
@@ -41,8 +42,17 @@ const check = (name, passed) => {
   checks.push({ name, passed: true });
   console.log(JSON.stringify({ check: name, passed: true }));
 };
-const chain = manifestChain();
-if (chain.length < 15 || chain[14].file !== "0015.work-state.sql")
+// The one verified chain (scripts/migration-chain.mjs, P04.T01i D3): every migration and
+// pinned prerequisite digest, the runner contract and `executeAs`, checked before any SQL.
+const chain = loadMigrationChain();
+// The chain through its head, including the M2 PR-1 spine migrations (0019-0024), which
+// add the three membership-free executor logins this lab also qualifies.
+if (
+  chain.length < 21 ||
+  chain[14].file !== "0015.work-state.sql" ||
+  chain[18].file !== "0019.spine-identity-bridge.sql" ||
+  chain[20].file !== "0021.signup-billing-route.sql"
+)
   throw Error("CREATEROLE_ADMINISTRATOR_LAB_CHAIN_REQUIRED");
 const sourcePaths = [
   "scripts/createrole-administrator-lab.mjs",
@@ -84,6 +94,8 @@ const helperCallsAtHead = {
   preauth_role_safe: 1,
   resolve_provider_subject_selection: 1,
   self_session_role_safe: 1,
+  // 0019 (M2 PR-1): the guard of the three spine executor logins.
+  work_executor_safe: 1,
 };
 const linkCall =
   "BEGIN;\nSELECT outcome FROM morrow_identity.link_workspace_store('h1','c1',repeat('a',64),repeat('b',64),repeat('c',64),'o1','w1','i1','install_first','1','1');\n" +
@@ -113,6 +125,14 @@ const entryCalls = Object.freeze({
   // 0016: self rotation on the logout executor, through self_session_role_safe(), with a
   // request digest that matches its inputs.
   rotate_self_browser_generation: `SELECT f.outcome FROM (VALUES(${command},repeat('a',64),${environment},${application},${client},'p1',repeat('b',64),repeat('c',64),'00000000-0000-4000-8000-000000000002')) v(c,cfg,env,app,cl,prof,pres,nd,ng), LATERAL morrow_identity.rotate_self_browser_generation(v.c,encode(sha256(convert_to(array_to_json(ARRAY['morrow.browser.self_rotate','1',v.c,v.cfg,'workos',v.env,v.app,v.cl,v.prof,v.pres,v.nd,v.ng])::text,'UTF8')),'hex'),v.cfg,v.env,v.app,v.cl,v.prof,v.pres,v.nd,v.ng) f;`,
+});
+// M2 PR-1: the real entry point of each spine executor that has one, with fixed inputs
+// that match no row. Past its guard each returns not_found; a denied guard returns denied.
+// The connector login has no definer yet (M2 PR-2), so only its guard is probed.
+const spineEntryCalls = Object.freeze({
+  morrow_runtime_executor:
+    "SELECT outcome FROM morrow_work.enter_lease('00000000-0000-4000-8000-000000000001','1');",
+  morrow_vault_broker: "SELECT outcome FROM morrow_vault.app_secret_get('lab-app');",
 });
 // An entry point keyed by its function name runs as this executor; every other key is the
 // executor itself.
@@ -158,11 +178,29 @@ function session(id) {
         "  CASE WHEN session_user='morrow_identity_preauth' THEN COALESCE(morrow_identity.preauth_role_safe()::text,'null') ELSE '-' END,\n" +
         "  COALESCE(morrow_identity.executor_memberships_closed(session_user)::text,'null')) $$;\n" +
         "REVOKE ALL ON FUNCTION lab_probe.guards() FROM PUBLIC;\n" +
-        `GRANT USAGE ON SCHEMA lab_probe TO ${identityExecutors.join(",")};\n` +
+        "CREATE FUNCTION lab_probe.spine_guards() RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$\n" +
+        " SELECT concat_ws('|',COALESCE(morrow_identity.work_executor_safe(session_user::text)::text,'null'),\n" +
+        "  COALESCE(morrow_identity.executor_memberships_closed(session_user)::text,'null')) $$;\n" +
+        "REVOKE ALL ON FUNCTION lab_probe.spine_guards() FROM PUBLIC;\n" +
+        `GRANT USAGE ON SCHEMA lab_probe TO ${[...identityExecutors, ...spineExecutors].join(",")};\n` +
         `GRANT EXECUTE ON FUNCTION lab_probe.guards() TO ${identityExecutors.join(",")};\n` +
+        `GRANT EXECUTE ON FUNCTION lab_probe.spine_guards() TO ${spineExecutors.join(",")};\n` +
         "GRANT EXECUTE ON FUNCTION morrow_identity.resolve_provider_subject_selection(text,text,text,text,text,text,text,text,text) TO morrow_identity_resolution;",
     );
   const guards = (executor) => q("SELECT lab_probe.guards();", executor);
+  // The spine executors (0019): work_executor_safe and executor_memberships_closed of the
+  // session user, and the outcome of each one's real entry point.
+  const spineGuards = (executor) => q("SELECT lab_probe.spine_guards();", executor);
+  const spineEntries = () =>
+    Object.fromEntries(
+      Object.entries(spineEntryCalls).map(([executor, call]) => [
+        executor,
+        q(`BEGIN;\n${call}\nROLLBACK;`, executor).split("\n").at(-1),
+      ]),
+    );
+  const spinePass = () =>
+    spineExecutors.every((e) => spineGuards(e) === "true|true") &&
+    Object.values(spineEntries()).every((o) => o === "not_found");
   const guardsPass = (executor) =>
     guards(executor) ===
     (executor === "morrow_identity_preauth" ? "true|true|true" : "true|-|true");
@@ -194,6 +232,9 @@ function session(id) {
     setupProbe,
     guards,
     guardsPass,
+    spineGuards,
+    spineEntries,
+    spinePass,
     preflight,
     linkLocks,
     entryReads,
@@ -213,7 +254,7 @@ const createroleCensus = (admin) => [
 function positives(s, v) {
   check(`${v}_no_morrow_set_row_at_rest`, s.setRows() === 0);
   check(
-    `${v}_census_is_15_creation_rows_and_2_reviewed_rows`,
+    `${v}_census_is_18_creation_rows_and_2_reviewed_rows`,
     sameRows(s.census(), createroleCensus(A)),
   );
   const record = s.asOwner(
@@ -237,6 +278,13 @@ function positives(s, v) {
     link.outcome === "denied" && link.locks === 1,
   );
   check(`${v}_inline_guard_entry_points_pass_their_guards`, s.entriesPass());
+  // M2 PR-1: the three spine executor logins pass their 0019 guard, their entry points get
+  // past it, and the application preflight sees only their creation rows.
+  check(`${v}_three_spine_executors_pass_their_guard`, s.spinePass());
+  check(
+    `${v}_preflight_false_for_three_spine_executors`,
+    spineExecutors.every((e) => s.preflight(e) === "f"),
+  );
 }
 
 // The shapes of the negative matrix (D8). setup and undo are [user, SQL]; "sim" marks a
@@ -569,7 +617,7 @@ const negativeMatrix = await localPostgresLab("P04.T01j.createrole-b", async (en
   }
   check(
     "b_executors_denied_every_helper",
-    [...identityExecutors, "morrow_api_worker"].every(
+    [...identityExecutors, ...spineExecutors, "morrow_api_worker"].every(
       (e) => s.q(helperProbe, e) === "42501,42501,42501,42501,",
     ),
   );
@@ -626,6 +674,8 @@ const negativeMatrix = await localPostgresLab("P04.T01j.createrole-b", async (en
     const link = s.linkLocks();
     const entries = s.entryReads();
     const preflight = s.preflight("morrow_identity_linking");
+    const spineGuardsNow = spineExecutors.map((e) => s.spineGuards(e));
+    const spineEntriesNow = s.spineEntries();
     const reviewedExact =
       s
         .census()
@@ -638,6 +688,7 @@ const negativeMatrix = await localPostgresLab("P04.T01j.createrole-b", async (en
       s.guardsPass("morrow_identity_linking") &&
       s.linkLocks().locks === 1 &&
       s.entriesPass() &&
+      s.spinePass() &&
       s.setRows() === 0;
     matrix.push({
       shape: shape.n,
@@ -645,6 +696,8 @@ const negativeMatrix = await localPostgresLab("P04.T01j.createrole-b", async (en
       guard,
       locks: link.locks,
       entry_reads: entries,
+      spine_guards: spineGuardsNow,
+      spine_entries: spineEntriesNow,
       preflight,
       reviewedExact,
       restored,
@@ -658,11 +711,19 @@ const negativeMatrix = await localPostgresLab("P04.T01j.createrole-b", async (en
           link.locks === 0 &&
           entries.morrow_identity_linking === 0,
       );
-    if (shape.everyone)
+    if (shape.everyone) {
       check(
         `b_${shape.n}_every_inline_guard_entry_point_denies`,
         Object.values(entries).every((n) => n === 0),
       );
+      // A shape that breaks the identity owner's closure denies every spine executor too
+      // (executor_memberships_closed requires both).
+      check(
+        `b_${shape.n}_every_spine_executor_denies`,
+        spineGuardsNow.every((g) => g.startsWith("false|")) &&
+          Object.values(spineEntriesNow).every((o) => o === "denied"),
+      );
+    }
     check(`b_${shape.n}_preflight_${shape.preflight}`, preflight === (shape.preflight ? "t" : "f"));
     if (shape.n.startsWith("n12_") || shape.n.startsWith("n15_"))
       check(`b_${shape.n}_reviewed_rows_not_exact`, reviewedExact === false);
@@ -732,6 +793,7 @@ await localPostgresLab("P04.T01j.superuser", async (engine) => {
   const link = s.linkLocks();
   check("s_link_workspace_store_passes_its_guard", link.outcome === "denied" && link.locks === 1);
   check("s_inline_guard_entry_points_pass_their_guards", s.entriesPass());
+  check("s_three_spine_executors_pass_their_guard", s.spinePass());
 });
 
 check(
@@ -771,6 +833,7 @@ const report = {
     "Shapes marked sim were produced by the local superuser; they are impossible for the hosted administrator.",
     "resolve_provider_subject_selection is retired at the chain head (0013 revoked it from the resolution executor); the lab grants it back to that executor to run its real guard.",
     "The runner ledger (morrow_migrations.applied) and its unknown-outcome handling belong to P04.T01i PR-B; this lab applies D4 without a ledger row.",
+    "The three M2 PR-1 executor logins (ADR-0022 item 8) are qualified by their 0019 guard and their real entry points; morrow_connector_ingress has no definer until M2 PR-2, so only its guard is probed.",
   ],
 };
 writeArtifact("labs/createrole-administrator.json", JSON.stringify(report, null, 2) + "\n");
