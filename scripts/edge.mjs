@@ -349,6 +349,28 @@ export function edgeTypecheck({ root = repositoryRoot } = {}) {
     );
     if (work.status !== 0)
       throw Error("EDGE_WORK_DECLARATIONS_FAILED\n" + work.stdout + work.stderr);
+    // M2 PR-2: the api composes the policy package's connection kernel
+    // (packages/policy/src/connection-authority.ts), consumed the same way: through its
+    // emitted declarations, at their repository-relative paths.
+    const policy = spawnSync(
+      process.execPath,
+      [
+        tscBin,
+        "-p",
+        "packages/policy/tsconfig.json",
+        "--noEmit",
+        "false",
+        "--declaration",
+        "--emitDeclarationOnly",
+        "--rootDir",
+        ".",
+        "--outDir",
+        staging,
+      ],
+      { cwd: root, encoding: "utf8" },
+    );
+    if (policy.status !== 0)
+      throw Error("EDGE_POLICY_DECLARATIONS_FAILED\n" + policy.stdout + policy.stderr);
     cpSync(join(root, "tsconfig.base.json"), join(staging, "tsconfig.base.json"));
     symlinkSync(join(root, "node_modules"), join(staging, "node_modules"), "dir");
     const results = [];
