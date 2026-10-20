@@ -18,12 +18,14 @@ test("every registered table is classified, and every store table has exactly on
     [
       ["morrow_vault.credentials", "uninstall_or_disconnect", "destroy_credential", "M2 PR-3"],
       ["morrow_identity.linking_candidates", "shop_redact", "pseudonymise", "M2 PR-3"],
-      ["morrow_work.proposal_parameters", "shop_redact", "empty_keep_digest", "M3 PR-1"],
+      ["morrow_work.proposal_parameters", "shop_redact", "empty_keep_digest", "M2 PR-3"],
     ],
   );
   assert.ok(Object.isFrozen(storeContentHandlers) && storeContentHandlers.every(Object.isFrozen));
   // M3 PR-1 lands the proposal_parameters executor: the revisable owner helper that
-  // empties a store's parameters and keeps each digest (M2 PR-3's shop/redact calls it).
+  // empties a store's parameters and keeps each digest. It needs the tenant's session
+  // context, which shop/redact has not, so the handler is executable once M2 PR-3 lands
+  // its caller and policy (M3 PR-1 review).
   assert.deepEqual(
     storeContentHandlers.map((h) => h.executor),
     [null, null, "morrow_work.parameters_redact_for_store"],

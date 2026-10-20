@@ -4,7 +4,7 @@
 
 const utc = (column: string) =>
   `to_char(${column} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
-const installationColumns = `i.id::text AS id,i.revision::text AS revision,i.store_id::text AS store_id,i.connection_id::text AS connection_id,i.agent_principal_id::text AS agent_principal_id,i.owner_principal_id::text AS owner_principal_id,i.owner_membership_id::text AS owner_membership_id,i.status,i.release_id,i.release_revision::text AS release_revision,i.release_digest::text AS release_digest,${utc("i.updated_at")} AS updated_at`;
+const installationColumns = `i.id::text AS id,i.revision::text AS revision,i.store_id::text AS store_id,i.connection_id::text AS connection_id,i.agent_principal_id::text AS agent_principal_id,i.owner_principal_id::text AS owner_principal_id,i.owner_membership_id::text AS owner_membership_id,i.status,i.release_id,i.release_revision::text AS release_revision,i.release_digest::text AS release_digest,i.scope::text AS scope,${utc("i.updated_at")} AS updated_at`;
 
 export const agentStatements = Object.freeze({
   beginAgentCommand:
@@ -22,8 +22,11 @@ export const agentStatements = Object.freeze({
     "SELECT outcome,result FROM morrow_work.cmd_model_default_revise($1,$2,$3,$4,$5,$6,$7,$8)",
   // The store's Listings installation that is not uninstalled (tenant_read), if any.
   listingsInstallation: `SELECT ${installationColumns} FROM morrow_work.agent_installations i WHERE i.store_id=$1::text AND i.release_id='morrow.listings' AND i.status<>'uninstalled'`,
-  // The installation's open stop (tenant_read), if any: who set it and when.
-  installationStop: `SELECT s.id::text AS id,s.set_by_kind,s.kill_switch_record_id::text AS kill_switch_record_id,${utc("s.created_at")} AS created_at FROM morrow_work.stop_controls s WHERE s.scope='installation' AND s.target_id=$1::text AND s.lifted_at IS NULL`,
+  // The installation's open stop (tenant_read), if any: who set it, why and when.
+  installationStop: `SELECT s.id::text AS id,s.set_by_kind,s.reason_code,s.kill_switch_record_id::text AS kill_switch_record_id,${utc("s.created_at")} AS created_at FROM morrow_work.stop_controls s WHERE s.scope='installation' AND s.target_id=$1::text AND s.lifted_at IS NULL`,
+  // The open platform stop and the connection's open stop (tenant_read shows platform rows
+  // in every tenant): whether a stop outside the installation blocks its AI work.
+  storeStops: `SELECT s.scope FROM morrow_work.stop_controls s WHERE s.lifted_at IS NULL AND (s.scope='platform' OR (s.scope='connection' AND s.target_id=$1::text))`,
   // The workspace's model default (tenant_read), if any.
   workspaceModelDefault: `SELECT d.catalogue_version::text AS catalogue_version,d.model_key,d.effort_key,d.max_credits_per_product::text AS max_credits_per_product,d.revision::text AS revision,${utc("d.updated_at")} AS updated_at FROM morrow_work.workspace_model_defaults d`,
 } as const);

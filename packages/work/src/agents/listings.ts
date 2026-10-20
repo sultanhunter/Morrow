@@ -232,6 +232,55 @@ export function parseInstallationDocument(canonical: unknown): InstallationDocum
     throw invalid();
   return d;
 }
+/**
+ * The installation a resume reactivates, as the agents read returns it. Its release, store,
+ * connection and scope (the scope of each of its grants, by the migration's
+ * agent_installations_scope CHECK) never change after it is created.
+ */
+export interface PinnedInstallation {
+  readonly id: string;
+  readonly storeId: string;
+  readonly connectionId: string;
+  readonly release: { readonly id: string; readonly revision: number; readonly digest: string };
+  readonly scope: unknown;
+}
+/**
+ * The ADR-0022 item 3 amendment for a resume: the confirmed document must be exactly the
+ * installation it reactivates. Its installation id, its release (id, revision and digest),
+ * its store resource with the connection, and its grant set (the release's capabilities and
+ * verbs, each on the installation's own scope) are compared; any difference is false. The
+ * definers prove the same against the stored grants (work_agent_grant_set_current).
+ */
+export function resumeDocumentMatches(
+  installation: PinnedInstallation,
+  document: InstallationDocument,
+): boolean {
+  if (document.purpose !== "resume" || document.installationId !== installation.id) return false;
+  try {
+    const store = storeResource(
+      document.organizationId,
+      document.workspaceId,
+      installation.storeId,
+      installation.connectionId,
+    );
+    const scope = canonicalJson(installation.scope);
+    return (
+      canonicalJson(JSON.parse(JSON.stringify(document.store))) === canonicalJson(store) &&
+      canonicalJson(JSON.parse(JSON.stringify(document.release))) ===
+        canonicalJson({ ...installation.release }) &&
+      canonicalJson(JSON.parse(JSON.stringify(listingsScope(store)))) === scope &&
+      document.grants.length === listingsGrantSet.length &&
+      document.grants.every(
+        (g, i) =>
+          g.capabilityId === listingsGrantSet[i]!.capabilityId &&
+          canonicalJson([...g.verbs]) === canonicalJson([...listingsGrantSet[i]!.verbs]) &&
+          canonicalJson(JSON.parse(JSON.stringify(g.scope))) === scope,
+      )
+    );
+  } catch {
+    return false;
+  }
+}
 const documentKeys = [
   "actor",
   "createdAt",

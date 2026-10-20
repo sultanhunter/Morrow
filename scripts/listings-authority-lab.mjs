@@ -10,15 +10,19 @@
 //      creates the installation, its principals and grants; replay, reuse, expiry,
 //      another actor or session, lost authority and stops all refuse;
 //   S  "Stop AI work": the KillSwitchRecord commits with the stop and its event, revokes
-//      the installation's run leases, and a later lease_open is stopped; resume only
-//      after the owner's own stop, with a fresh document;
+//      the installation's run leases, and a later lease_open is stopped; a stale prior
+//      state is a conflict; resume only after the owner's own stop, with a fresh document
+//      that is exactly the installation (release, connection, grants) and lifts only the
+//      stop it named; a confirmation under a connection stop changes nothing;
 //   R  morrow_vault.resolve_call as the broker's login: every refusal, and nothing for
 //      any other login;
 //   D  delegation_facts as morrow_runtime_executor feeding the real agent kernel through
-//      createLeaseDelegationReader (allow, and the P05.A02/A03 deny cases);
+//      createLeaseDelegationReader (allow, and the P05.A02/A03 deny cases); an envelope with
+//      several children gives each executor its own chain, and two chains are ambiguous;
 //   P  catalog proposals (the agent-proposals migration) and parameter redaction;
 //   M  workspace_model_defaults through GET /models and PUT /settings/model-default;
-//   T  the owner-run platform stop through the staging runner's admin transaction.
+//   T  the owner-run platform stop through the staging runner's admin transaction, and a
+//      resume confirmed under it changes nothing.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Runs in
 // the CI pg-work group. The local superuser is used only for fixtures and the shapes
 // marked "sim".
@@ -1163,6 +1167,58 @@ INSERT INTO morrow_work.delegation_hops VALUES(${literal(O)},${literal(W)},${lit
           "morrow_vault_broker",
         ),
     );
+    // D10: an envelope with two children (M3 PR-1 review). The first hop goes to another
+    // installation (owner-inserted on another store, sim), the second to this one: this
+    // executor's facts are its own chain and the kernel allows; the oldest hop is not
+    // taken. Two chains ending at the same installation are ambiguous: no facts at all.
+    const other = db.rows(
+      `SELECT principal_id FROM morrow_identity.agent_principals WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND installation_id='installation_g'`,
+    )[0]?.principal_id;
+    const otherInstallation = (id, store, principal) =>
+      `INSERT INTO morrow_work.agent_installations(organization_id,workspace_id,id,revision,release_id,release_revision,release_digest,store_id,connection_id,agent_principal_id,owner_principal_id,owner_membership_id,status,scope,grant_refs,configuration_digest,created_at,updated_at)
+SELECT ${literal(O)},${literal(W)},${literal(id)},1,r.id,r.revision,r.digest,${literal(store)},${literal(store)},${literal(principal)},${literal(P.A.principal)},${literal(P.A.membership)},'active',morrow_work.listings_scope(${literal(O)},${literal(W)},${literal(store)},${literal(store)}),(SELECT jsonb_agg(jsonb_build_object('organizationId',${literal(O)},'workspaceId',${literal(W)},'storeId',${literal(store)},'kind','grant','id','g_ref_'||n,'revision',1,'digest',repeat('a',64))) FROM generate_series(1,3) n),repeat('b',64),${tx},${tx} FROM morrow_work.agent_releases r WHERE r.id='morrow.listings' AND r.revision=1;`;
+    db.workOwner(`BEGIN; ${otherInstallation("installation_g", "store_g", other)} COMMIT;`);
+    const twoChildren = (id, firstRecipient) =>
+      db.workOwner(`BEGIN; INSERT INTO morrow_work.work_envelopes VALUES(${literal(O)},${literal(W)},${literal(id)},1,${literal(root)},1,${literal(P.A1.principal)},${literal(P.A1.membership)},${literal(S)},${literal(installationId)},${caps},${verbs},morrow_work.listings_scope(${literal(O)},${literal(W)},${literal(S)},${literal(C)}),${tx},${tx}+interval '2 hours',NULL,1,2,${tx});
+INSERT INTO morrow_work.delegation_hops VALUES(${literal(O)},${literal(W)},${literal("hop_a_" + id)},1,${literal(root)},1,${literal(child)},1,${literal(id)},1,${literal("child_a_" + id)},1,'builtin_coordinator',${literal(coordinatorPrincipal)},NULL,${literal(firstRecipient.principal)},${literal(firstRecipient.installation)},${caps},${verbs},morrow_work.listings_scope(${literal(O)},${literal(W)},${literal(S)},${literal(C)}),${tx},${tx}+interval '2 hours',NULL,0,${tx}-interval '1 second');
+INSERT INTO morrow_work.delegation_hops VALUES(${literal(O)},${literal(W)},${literal("hop_b_" + id)},1,${literal(root)},1,${literal(child)},1,${literal(id)},1,${literal("child_b_" + id)},1,'builtin_coordinator',${literal(coordinatorPrincipal)},NULL,${literal(agentPrincipal)},${literal(installationId)},${caps},${verbs},morrow_work.listings_scope(${literal(O)},${literal(W)},${literal(S)},${literal(C)}),${tx},${tx}+interval '2 hours',NULL,1,${tx}); COMMIT;`);
+    twoChildren("envelope_two", { principal: other, installation: "installation_g" });
+    twoChildren("envelope_twice", { principal: agentPrincipal, installation: installationId });
+    const factsOf = (envelopeId) =>
+      last(
+        as("morrow_runtime_executor")(
+          `BEGIN; SELECT outcome FROM morrow_work.enter_lease(${literal(run.id)},'1'); SELECT coalesce((SELECT hops FROM morrow_work.delegation_facts(${literal(envelopeId)},${literal(installationId)},'catalog.products.read')),'none'); ROLLBACK;`,
+        ),
+      );
+    const twoHops = factsOf("envelope_two");
+    const twiceHops = factsOf("envelope_twice");
+    const twoDecision = await decide("envelope_two");
+    const twiceDecision = await decide("envelope_twice");
+    check(
+      "D10:several_children_one_chain_per_executor",
+      typeof other === "string" &&
+        twoHops !== "none" &&
+        JSON.parse(twoHops)
+          .map((h) => h.id)
+          .join(",") === "hop_b_envelope_two" &&
+        twoDecision === "allowed" &&
+        twiceHops === "none" &&
+        twiceDecision !== "allowed",
+      { other, twoHops, twiceHops, twoDecision, twiceDecision },
+    );
+    // A hop or an installation naming another installation's agent principal is refused
+    // by the agent-principal keys.
+    check(
+      "D10:hops_and_installations_name_their_own_principals",
+      refused(
+        `SET ROLE morrow_work_owner; INSERT INTO morrow_work.delegation_hops SELECT organization_id,workspace_id,'hop_wrong_principal',revision,parent_task_id,parent_task_revision,child_task_id,child_task_revision,parent_envelope_id,parent_envelope_revision,'child_wrong_principal',child_envelope_revision,dispatcher_kind,dispatcher_principal_id,dispatcher_installation_id,${literal(other)},recipient_installation_id,capability_ids,verbs,scope,valid_from,expires_at,revoked_at,parent_child_count,created_at FROM morrow_work.delegation_hops WHERE id='hop_envelope_ok';`,
+        "delegation_hops_organization_id_workspace_id_recipient_princ|violates foreign key",
+      ) &&
+        refused(
+          `SET ROLE morrow_work_owner; ${otherInstallation("installation_h", "store_h", coordinatorPrincipal)}`,
+          "violates foreign key",
+        ),
+    );
     // Keep the run lease for the stop section.
     delegationRun = run;
   }
@@ -1366,6 +1422,29 @@ INSERT INTO morrow_work.proposals(organization_id,workspace_id,id,revision,famil
       "P4:derived_proposal_cannot_name_a_membership",
       refused(derived(P.A.membership), "APPROVAL_RECORD_INVALID|violates"),
     );
+    // Without the tenant's own session context (no session, as shop/redact's connector
+    // definer runs today, or another tenant's session) the helper refuses instead of
+    // reporting an empty redaction as done, and nothing is redacted.
+    const noContext = last(
+      db.sql(
+        `BEGIN; SET LOCAL ROLE morrow_work_command; SELECT outcome||'|'||coalesce(redacted::text,'') FROM morrow_work.parameters_redact_for_store(${literal(O)},${literal(W)},${literal(S)}); ROLLBACK;`,
+      ),
+    );
+    const otherTenant = last(
+      cmd(
+        P.Y,
+        `SELECT outcome||'|'||coalesce(redacted::text,'') FROM morrow_work.parameters_redact_for_store(${literal(O)},${literal(W)},${literal(S)});`,
+      ),
+    );
+    check(
+      "P5:redaction_needs_the_tenants_context",
+      noContext === "context_unavailable|" &&
+        otherTenant === "context_unavailable|" &&
+        count(
+          `SELECT count(*) FROM morrow_work.proposal_parameters WHERE id=${literal(accepted.parametersId)} AND redacted_at IS NULL`,
+        ) === 1,
+      { noContext, otherTenant },
+    );
     // Parameter redaction: the store's parameters are emptied (digest kept) by the
     // revisable helper under the command role's own policies; a redacted proposal can
     // never be decided or claimed, and the redaction cannot be undone.
@@ -1493,33 +1572,229 @@ INSERT INTO morrow_work.proposals(organization_id,workspace_id,id,revision,famil
           "kill_switch_records_document",
         ),
     );
-    // Resume: only after the owner's own stop, through a fresh document and its nonce.
-    const status = await send(P.A, "GET", listings);
-    const doc = await send(P.A, "POST", listings + "/document", {});
-    const resumed = await send(P.A, "POST", listings, {
-      documentDigest: doc.body.documentDigest,
-      nonce: doc.body.nonce,
+    // S7: a stale prior state (another stop committed between the Worker's read and the
+    // definer's lock) is a state conflict to reread, never an invalid request; the fresh
+    // record applies (rolled back here). The record is the S1 record re-dated in SQL.
+    const stopDefiner = (prior) => {
+      const command = randomUUID();
+      return last(
+        db.sql(
+          asApi(
+            P.A,
+            `WITH r AS (SELECT (k.canonical::jsonb||jsonb_build_object('id',${literal(randomUUID())},'createdAt',${utc("date_trunc('milliseconds',transaction_timestamp())")},'commandId',${literal(command)},'requestDigest',${literal(sha(command))},'priorStateObserved',${literal(prior)}))::text AS t FROM morrow_work.kill_switch_records k WHERE k.id=${literal(record.id)}) SELECT x.outcome FROM r,morrow_work.cmd_stop_ai_work(${literal(command)},${literal(sha(command))},'corr',${literal(S)},${literal(installationId)},r.t,encode(sha256(convert_to(r.t,'UTF8')),'hex')) x;`,
+          ),
+          { user: "morrow_api_worker" },
+        ),
+      );
+    };
+    const records = () =>
+      count(
+        `SELECT count(*) FROM morrow_work.kill_switch_records WHERE target_id=${literal(installationId)}`,
+      );
+    const recordsBefore = records();
+    const stale = stopDefiner("active");
+    const fresh = stopDefiner("already_stopped");
+    check(
+      "S7:stale_prior_state_is_a_conflict",
+      stale === "state_conflict" && fresh === "applied" && records() === recordsBefore,
+      { stale, fresh },
+    );
+
+    // S8 (the ADR-0022 item 3 amendment; M3 PR-1 review): a resume document must be exactly
+    // the installation it reactivates. A difference in the connection, the release or the
+    // grants is refused at the document and at the confirmation, in TypeScript and in SQL,
+    // and leaves the installation disabled, the owner's stop open and the document unused.
+    const ownerStop = (id) =>
+      count(
+        `SELECT count(*) FROM morrow_work.stop_controls WHERE id=${literal(id)} AND lifted_at IS NULL AND set_by_kind='human'`,
+      ) === 1;
+    const openHumanStop = () =>
+      db.rows(
+        `SELECT id FROM morrow_work.stop_controls WHERE scope='installation' AND target_id=${literal(installationId)} AND lifted_at IS NULL AND set_by_kind='human'`,
+      )[0]?.id;
+    const disabled = () =>
+      count(
+        `SELECT count(*) FROM morrow_work.agent_installations WHERE id=${literal(installationId)} AND status='disabled'`,
+      ) === 1;
+    const unconsumed = (digest) =>
+      count(
+        `SELECT count(*) FROM morrow_work.agent_enable_documents WHERE digest=${literal(digest ?? "")} AND consumed_at IS NULL`,
+      ) === 1;
+    const confirmOf = (reply) => ({
+      documentDigest: reply.body.documentDigest,
+      nonce: reply.body.nonce,
     });
+    const unchanged = (stopId, reply) =>
+      disabled() && ownerStop(stopId) && unconsumed(reply.body.documentDigest);
+    // SQL alone (TypeScript bypassed): the document definer with a resume document of the
+    // store's current resource, dated inside its own transaction.
+    const template = (
+      await buildInstallationDocument({
+        id: randomUUID(),
+        purpose: "resume",
+        store,
+        installationId,
+        actor: actorOf(P.A),
+        createdAtMs: Date.parse("2026-01-01T00:00:00.000Z"),
+      })
+    ).canonical;
+    const placeholders = template
+      .replace('"createdAt":"2026-01-01T00:00:00.000Z"', '"createdAt":"__CREATED__"')
+      .replace('"expiresAt":"2026-01-01T00:05:00.000Z"', '"expiresAt":"__EXPIRES__"');
+    const documentDefiner = () => {
+      const command = randomUUID();
+      const at = "date_trunc('milliseconds',transaction_timestamp())";
+      return last(
+        db.sql(
+          asApi(
+            P.A,
+            `WITH t AS (SELECT replace(replace(${literal(placeholders)},'__CREATED__',${utc(at)}),'__EXPIRES__',${utc(at + "+interval '5 minutes'")}) AS c) SELECT x.outcome FROM t,morrow_work.cmd_listings_enable_document(${literal(command)},${literal(sha(command))},'corr',${literal(S)},'resume',${literal(installationId)},${literal(JSON.parse(template).id)},t.c,encode(sha256(convert_to(t.c,'UTF8')),'hex'),${literal(sha(randomUUID()))}) x;`,
+          ),
+          { user: "morrow_api_worker" },
+        ),
+      );
+    };
+    const confirmDefiner = (reply) =>
+      last(
+        db.sql(
+          asApi(
+            P.A,
+            `SELECT outcome FROM morrow_work.cmd_listings_enable(${literal(randomUUID())},${literal("a".repeat(64))},'corr',${literal(S)},${literal(reply.body.documentDigest)},${literal(reply.body.nonce)},NULL,NULL,NULL,NULL);`,
+          ),
+          { user: "morrow_api_worker" },
+        ),
+      );
+    const h1 = openHumanStop();
+    const sqlControl = documentDefiner();
+    // (a) The installation pinned to another connection of the store (sim: the guard that
+    // keeps an installation's connection fixed is disabled for the edit, and restored).
+    const pin = (connection) =>
+      db.sql(`BEGIN; ALTER TABLE morrow_work.agent_installations DISABLE TRIGGER agent_installation_guard;
+UPDATE morrow_work.agent_installations SET connection_id=${literal(connection)},scope=morrow_work.listings_scope(${literal(O)},${literal(W)},${literal(S)},${literal(connection)}) WHERE id=${literal(installationId)};
+ALTER TABLE morrow_work.agent_installations ENABLE TRIGGER agent_installation_guard; COMMIT;`);
+    const pending = await send(P.A, "POST", listings + "/document", {});
+    pin("connection_old");
+    const movedStatus = await send(P.A, "GET", listings);
+    const movedDocument = await send(P.A, "POST", listings + "/document", {});
+    const movedDefiner = documentDefiner();
+    const movedConfirm = await send(P.A, "POST", listings, confirmOf(pending));
+    const movedConfirmDefiner = confirmDefiner(pending);
+    const movedUnchanged = unchanged(h1, pending);
+    pin(C);
+    check(
+      "S8:resume_refused_on_another_connection",
+      pending.status === 201 &&
+        sqlControl === "applied" &&
+        movedStatus.body.actions?.resume === false &&
+        is(movedDocument, "state_conflict") &&
+        movedDefiner === "state_conflict" &&
+        is(movedConfirm, "state_conflict") &&
+        movedConfirmDefiner === "state_conflict" &&
+        movedUnchanged,
+      {
+        sqlControl,
+        movedStatus: movedStatus.body,
+        movedDocument: movedDocument.body,
+        movedDefiner,
+        movedConfirm: movedConfirm.body,
+        movedConfirmDefiner,
+      },
+    );
+    // (b) A newer release published (sim: the shape of a future release migration; removed
+    // afterwards): the installation stays on version 1, so SQL refuses both steps.
+    const pendingRelease = await send(P.A, "POST", listings + "/document", {});
+    db.workOwner(
+      `INSERT INTO morrow_work.agent_releases(id,revision,status,manifest,digest,published_at) SELECT 'morrow.listings',2,'published',m,morrow_work.sha256_text(m),${ms} FROM (VALUES ('{"id":"morrow.listings","kind":"specialist","revision":2}')) v(m);`,
+    );
+    const releaseDocument = await send(P.A, "POST", listings + "/document", {});
+    const releaseConfirm = await send(P.A, "POST", listings, confirmOf(pendingRelease));
+    const releaseUnchanged = unchanged(h1, pendingRelease);
+    db.sql(`BEGIN; ALTER TABLE morrow_work.agent_releases DISABLE TRIGGER append_only;
+DELETE FROM morrow_work.agent_releases WHERE id='morrow.listings' AND revision=2;
+ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
+    check(
+      "S8:resume_refused_after_a_newer_release",
+      pendingRelease.status === 201 &&
+        is(releaseDocument, "state_conflict") &&
+        is(releaseConfirm, "state_conflict") &&
+        releaseUnchanged,
+      { releaseDocument: releaseDocument.body, releaseConfirm: releaseConfirm.body },
+    );
+    // (c) The agent's grants no longer the document's set (one revoked, sim; the exact
+    // stored payload is restored afterwards): the identity bridge refuses both steps.
+    const pendingGrants = await send(P.A, "POST", listings + "/document", {});
+    const agentGrant = db.rows(
+      `SELECT id,payload::text AS payload FROM morrow_identity.grants WHERE principal_id=${literal(agentPrincipal)} AND payload->>'capabilityId'='catalog.content.propose'`,
+    )[0];
+    db.admin(
+      `UPDATE morrow_identity.grants SET payload=jsonb_set(payload,'{revokedAt}',to_jsonb(${utc(ms)})) WHERE id=${literal(agentGrant.id)};`,
+    );
+    const grantsDocument = await send(P.A, "POST", listings + "/document", {});
+    const grantsConfirm = await send(P.A, "POST", listings, confirmOf(pendingGrants));
+    const grantsUnchanged = unchanged(h1, pendingGrants);
+    db.admin(
+      `UPDATE morrow_identity.grants SET payload=${literal(agentGrant.payload)}::jsonb WHERE id=${literal(agentGrant.id)};`,
+    );
+    check(
+      "S8:resume_refused_when_the_grants_differ",
+      pendingGrants.status === 201 &&
+        is(grantsDocument, "state_conflict") &&
+        is(grantsConfirm, "state_conflict") &&
+        grantsUnchanged &&
+        documentDefiner() === "applied",
+      { grantsDocument: grantsDocument.body, grantsConfirm: grantsConfirm.body },
+    );
+
+    // S5: resume only after the owner's own stop, through a fresh document and its nonce.
+    // Two documents are built for the same stop; the second resumes.
+    const status = await send(P.A, "GET", listings);
+    const early = await send(P.A, "POST", listings + "/document", {});
+    const doc = await send(P.A, "POST", listings + "/document", {});
+    const resumed = await send(P.A, "POST", listings, confirmOf(doc));
     const lifted = db.rows(
-      `SELECT lifted_by_kind,lifted_by_principal_id FROM morrow_work.stop_controls WHERE scope='installation' AND target_id=${literal(installationId)} ORDER BY created_at DESC LIMIT 1`,
+      `SELECT id,lifted_by_kind,lifted_by_principal_id FROM morrow_work.stop_controls WHERE scope='installation' AND target_id=${literal(installationId)} ORDER BY created_at DESC LIMIT 1`,
     )[0];
     check(
       "S5:resume_after_the_owners_stop",
       status.body.installation?.stopped === true &&
         status.body.actions.resume === true &&
+        status.body.blocked === false &&
         doc.status === 201 &&
         doc.body.purpose === "resume" &&
         doc.body.installationId === installationId &&
         resumed.status === 200 &&
         resumed.body.status === "active" &&
         resumed.body.purpose === "resume" &&
-        lifted?.lifted_by_kind === "human" &&
+        lifted?.id === h1 &&
+        lifted.lifted_by_kind === "human" &&
         lifted.lifted_by_principal_id === P.A.principal &&
         openLease(P.A, "run", "run_s3").outcome === "opened",
       { status: status.body, doc: doc.body?.purpose, resumed: resumed.body, lifted },
     );
-    // A connection stop (system, sim through stop_guard) is lifted only through its own
-    // path: with it active, no document is issued and enable stays refused.
+    // A document names the stop it lifts: after a later stop, the earlier document (built
+    // for the lifted stop, still unexpired and unconsumed) is refused and the later stop
+    // stays.
+    const restopped = await send(P.A, "POST", listings + "/stop", {
+      control: { reason: "Stopping again after the resume", sourceProposalRef: null },
+    });
+    const h2 = openHumanStop();
+    const lateConfirm = await send(P.A, "POST", listings, confirmOf(early));
+    check(
+      "S5:a_document_lifts_only_the_stop_it_named",
+      restopped.status === 200 &&
+        restopped.body.priorStateObserved === "active" &&
+        typeof h2 === "string" &&
+        h2 !== h1 &&
+        is(lateConfirm, "state_conflict") &&
+        unchanged(h2, early),
+      { restopped: restopped.body, lateConfirm: lateConfirm.body },
+    );
+    // S6: a connection stop (system, owner-inserted, sim) is lifted only through its own
+    // path. A resume document built before it, confirmed under it, changes nothing: the
+    // connection stop and the owner's stop stay, the installation stays disabled, the
+    // document stays unused. No new document is issued under it. After its own lift, the
+    // same document resumes.
+    const beforeConnection = await send(P.A, "POST", listings + "/document", {});
     const connectionStop = randomUUID();
     db.workOwner(
       `INSERT INTO morrow_work.stop_controls(organization_id,workspace_id,id,scope,store_id,target_id,set_by_kind,reason_code,reason,created_at) VALUES(${literal(O)},${literal(W)},${literal(connectionStop)},'connection',${literal(S)},${literal(C)},'system','lab_connection_stop','Laboratory connection stop',${ms});`,
@@ -1528,27 +1803,40 @@ INSERT INTO morrow_work.proposals(organization_id,workspace_id,id,revision,famil
       control: { reason: "Pause during the disconnect", sourceProposalRef: null },
     });
     const underConnection = await send(P.A, "POST", listings + "/document", {});
+    const confirmUnder = await send(P.A, "POST", listings, confirmOf(beforeConnection));
+    const blockedStatus = await send(P.A, "GET", listings);
+    const connectionOpen =
+      count(
+        `SELECT count(*) FROM morrow_work.stop_controls WHERE id=${literal(connectionStop)} AND lifted_at IS NULL`,
+      ) === 1;
+    const underUnchanged = unchanged(h2, beforeConnection);
     db.workOwner(
       `UPDATE morrow_work.stop_controls SET lifted_at=greatest(${ms},created_at),lifted_by_kind='operator',lifted_by_operator_id='lab_operator' WHERE id=${literal(connectionStop)};`,
     );
     check(
       "S6:connection_stop_not_lifted_by_resume",
-      stoppedAgain.status === 200 &&
+      beforeConnection.status === 201 &&
+        stoppedAgain.status === 200 &&
+        stoppedAgain.body.priorStateObserved === "already_stopped" &&
         is(underConnection, "state_conflict") &&
-        count(
-          `SELECT count(*) FROM morrow_work.stop_controls WHERE id=${literal(connectionStop)} AND lifted_by_kind='operator'`,
-        ) === 1,
-      { underConnection: underConnection.body },
+        is(confirmUnder, "state_conflict") &&
+        blockedStatus.body.blocked === true &&
+        connectionOpen &&
+        underUnchanged,
+      {
+        underConnection: underConnection.body,
+        confirmUnder: confirmUnder.body,
+        blocked: blockedStatus.body.blocked,
+        connectionOpen,
+        underUnchanged,
+      },
     );
-    // Resume again to leave the agent active for the platform stop section.
-    const doc2 = await send(P.A, "POST", listings + "/document", {});
-    const resumed2 = await send(P.A, "POST", listings, {
-      documentDigest: doc2.body.documentDigest,
-      nonce: doc2.body.nonce,
-    });
+    // After the connection stop's own lift, the same document resumes (leaving the agent
+    // active for the platform stop section).
+    const resumed2 = await send(P.A, "POST", listings, confirmOf(beforeConnection));
     check(
       "S6:resume_after_connection_lift",
-      resumed2.status === 200 && resumed2.body.status === "active",
+      resumed2.status === 200 && resumed2.body.status === "active" && !ownerStop(h2),
       resumed2.body,
     );
   }
@@ -1601,6 +1889,68 @@ INSERT INTO morrow_work.proposals(organization_id,workspace_id,id,revision,famil
           ),
         ) === 0,
       { set, again, blocked, resolveRun, doc: doc.body, lift, liftAgain },
+    );
+    // T2: a resume confirmed under the platform stop changes nothing. The owner stops the
+    // agent and builds the resume document; the platform stop is set; the confirmation is a
+    // conflict and leaves the platform stop, the owner's stop, the disabled installation and
+    // the document; after the platform stop's own lift the same document resumes.
+    const ownStopped = await send(P.A, "POST", listings + "/stop", {
+      control: { reason: "Pause before the platform stop", sourceProposalRef: null },
+    });
+    const humanStop = db.rows(
+      `SELECT id FROM morrow_work.stop_controls WHERE scope='installation' AND target_id=${literal(installationId)} AND lifted_at IS NULL AND set_by_kind='human'`,
+    )[0]?.id;
+    const resumeDoc = await send(P.A, "POST", listings + "/document", {});
+    const set2 = await within(runner("set"), 120000, "platform_set_2");
+    const docUnder = await send(P.A, "POST", listings + "/document", {});
+    const confirmUnder = await send(P.A, "POST", listings, {
+      documentDigest: resumeDoc.body.documentDigest,
+      nonce: resumeDoc.body.nonce,
+    });
+    const blockedStatus = await send(P.A, "GET", listings);
+    const held = {
+      platform: count(
+        `SELECT count(*) FROM morrow_work.stop_controls WHERE id=${literal(set2.stopId ?? "")} AND lifted_at IS NULL`,
+      ),
+      human: count(
+        `SELECT count(*) FROM morrow_work.stop_controls WHERE id=${literal(humanStop ?? "")} AND lifted_at IS NULL`,
+      ),
+      disabled: count(
+        `SELECT count(*) FROM morrow_work.agent_installations WHERE id=${literal(installationId)} AND status='disabled'`,
+      ),
+      unconsumed: count(
+        `SELECT count(*) FROM morrow_work.agent_enable_documents WHERE digest=${literal(resumeDoc.body.documentDigest ?? "")} AND consumed_at IS NULL`,
+      ),
+    };
+    const lift2 = await within(runner("lift", "Laboratory lift"), 120000, "platform_lift_2");
+    const resumedAfter = await send(P.A, "POST", listings, {
+      documentDigest: resumeDoc.body.documentDigest,
+      nonce: resumeDoc.body.nonce,
+    });
+    check(
+      "T2:resume_under_the_platform_stop_changes_nothing",
+      ownStopped.status === 200 &&
+        resumeDoc.status === 201 &&
+        set2.outcome === "applied" &&
+        is(docUnder, "state_conflict") &&
+        is(confirmUnder, "state_conflict") &&
+        blockedStatus.body.blocked === true &&
+        held.platform === 1 &&
+        held.human === 1 &&
+        held.disabled === 1 &&
+        held.unconsumed === 1 &&
+        lift2.outcome === "applied" &&
+        resumedAfter.status === 200 &&
+        resumedAfter.body.status === "active",
+      {
+        set2,
+        docUnder: docUnder.body,
+        confirmUnder: confirmUnder.body,
+        blocked: blockedStatus.body.blocked,
+        held,
+        lift2,
+        resumedAfter: resumedAfter.body,
+      },
     );
   }
 

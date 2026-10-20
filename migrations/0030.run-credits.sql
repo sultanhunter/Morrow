@@ -9,6 +9,9 @@ BEGIN;
 --   * vendor_cost_reservations: one per run, products x the selection's worst case, at the
 --     run's catalogue version; booked cost never exceeds it; the run's billing period and
 --     UTC day are recorded for the caps.
+--   * run_cost_bookings: one append-only row per booking, keyed by its entry id (an attempt
+--     or product of the run), written before any total changes, so a retried run step
+--     replays its recorded result instead of booking twice.
 --   * unrecovered_costs and unrecovered_cost_entries: the AI cost of products that earned
 --     no credit, `uncertain` bookings included, per workspace and billing period (M5 PR-1's
 --     billingPeriod start); append-only entries and a monotone total.
@@ -87,6 +90,22 @@ CREATE TABLE morrow_billing.vendor_cost_reservations (
  CONSTRAINT vendor_cost_reservations_times CHECK (updated_at>=created_at AND created_day=(created_at AT TIME ZONE 'UTC')::date)
 );
 CREATE INDEX vendor_cost_reservations_day ON morrow_billing.vendor_cost_reservations (organization_id,workspace_id,created_day);
+-- One booking of a run's vendor cost (run_book_cost), by its entry id: what was booked and
+-- the reservation's booked and unrecovered totals after it, so a repeat returns exactly that.
+CREATE TABLE morrow_billing.run_cost_bookings (
+ organization_id morrow_work.record_id NOT NULL,
+ workspace_id morrow_work.record_id NOT NULL,
+ id morrow_work.record_id NOT NULL,
+ root_run_id morrow_work.record_id NOT NULL,
+ vendor_reservation_id morrow_work.record_id NOT NULL,
+ kind text NOT NULL CHECK (kind IN ('drafted','failed_product','uncertain_attempt')),
+ amount_usd numeric(20,8) NOT NULL CHECK (amount_usd>=0),
+ booked_usd numeric(20,8) NOT NULL CHECK (booked_usd>=amount_usd),
+ unrecovered_usd numeric(20,8) NOT NULL CHECK (unrecovered_usd>=0 AND unrecovered_usd<=booked_usd),
+ recorded_at timestamptz NOT NULL CHECK (recorded_at=date_trunc('milliseconds',recorded_at) AND isfinite(recorded_at)),
+ PRIMARY KEY (organization_id,workspace_id,id),
+ FOREIGN KEY (organization_id,workspace_id,vendor_reservation_id) REFERENCES morrow_billing.vendor_cost_reservations(organization_id,workspace_id,id)
+);
 CREATE TABLE morrow_billing.unrecovered_costs (
  organization_id morrow_work.record_id NOT NULL,
  workspace_id morrow_work.record_id NOT NULL,
@@ -109,14 +128,15 @@ CREATE TABLE morrow_billing.unrecovered_cost_entries (
  recorded_at timestamptz NOT NULL CHECK (recorded_at=date_trunc('milliseconds',recorded_at) AND isfinite(recorded_at)),
  PRIMARY KEY (organization_id,workspace_id,id),
  FOREIGN KEY (organization_id,workspace_id,period_start) REFERENCES morrow_billing.unrecovered_costs(organization_id,workspace_id,period_start),
- FOREIGN KEY (organization_id,workspace_id,vendor_reservation_id) REFERENCES morrow_billing.vendor_cost_reservations(organization_id,workspace_id,id)
+ FOREIGN KEY (organization_id,workspace_id,vendor_reservation_id) REFERENCES morrow_billing.vendor_cost_reservations(organization_id,workspace_id,id),
+ FOREIGN KEY (organization_id,workspace_id,id) REFERENCES morrow_billing.run_cost_bookings(organization_id,workspace_id,id)
 );
 
 -- Row security: ENABLE + FORCE, the owner's maintenance policy, the session's
 -- tenant_command and the lease twin tenant_lease (M3 PR-2's run steps settle under a run
 -- lease); the api reads the reservations column by column.
 DO $$ DECLARE t text; BEGIN
- FOREACH t IN ARRAY ARRAY['credit_reservations','vendor_cost_reservations','unrecovered_costs','unrecovered_cost_entries'] LOOP
+ FOREACH t IN ARRAY ARRAY['credit_reservations','vendor_cost_reservations','run_cost_bookings','unrecovered_costs','unrecovered_cost_entries'] LOOP
   EXECUTE format('ALTER TABLE morrow_billing.%I ENABLE ROW LEVEL SECURITY',t);
   EXECUTE format('ALTER TABLE morrow_billing.%I FORCE ROW LEVEL SECURITY',t);
   EXECUTE format('CREATE POLICY work_owner ON morrow_billing.%I TO morrow_work_owner USING (true) WITH CHECK (true)',t);
@@ -208,11 +228,12 @@ CREATE TRIGGER credit_reservation_guard BEFORE INSERT OR UPDATE ON morrow_billin
 CREATE TRIGGER vendor_reservation_guard BEFORE INSERT OR UPDATE ON morrow_billing.vendor_cost_reservations FOR EACH ROW EXECUTE FUNCTION morrow_billing.vendor_reservation_guard();
 CREATE TRIGGER unrecovered_guard BEFORE INSERT OR UPDATE ON morrow_billing.unrecovered_costs FOR EACH ROW EXECUTE FUNCTION morrow_billing.unrecovered_guard();
 CREATE TRIGGER append_only BEFORE UPDATE OR DELETE ON morrow_billing.unrecovered_cost_entries FOR EACH ROW EXECUTE FUNCTION morrow_billing.billing_append_only();
+CREATE TRIGGER append_only BEFORE UPDATE OR DELETE ON morrow_billing.run_cost_bookings FOR EACH ROW EXECUTE FUNCTION morrow_billing.billing_append_only();
 DO $$ DECLARE t text; BEGIN
  FOREACH t IN ARRAY ARRAY['credit_reservations','vendor_cost_reservations','unrecovered_costs'] LOOP
   EXECUTE format('CREATE TRIGGER append_only BEFORE DELETE ON morrow_billing.%I FOR EACH ROW EXECUTE FUNCTION morrow_billing.billing_append_only()',t);
  END LOOP;
- FOREACH t IN ARRAY ARRAY['credit_reservations','vendor_cost_reservations','unrecovered_costs','unrecovered_cost_entries'] LOOP
+ FOREACH t IN ARRAY ARRAY['credit_reservations','vendor_cost_reservations','run_cost_bookings','unrecovered_costs','unrecovered_cost_entries'] LOOP
   EXECUTE format('CREATE TRIGGER no_truncate BEFORE TRUNCATE ON morrow_billing.%I FOR EACH STATEMENT EXECUTE FUNCTION morrow_billing.billing_append_only()',t);
  END LOOP;
 END $$;
@@ -243,7 +264,7 @@ CREATE FUNCTION morrow_billing.run_reserve(p_org text,p_ws text,p_billing_accoun
 RETURNS TABLE(outcome text,credits_reserved text,vendor_maximum_usd text)
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
 #variable_conflict use_column
-DECLARE e record; v record; w record; v_now timestamptz; v_credits bigint; v_vendor numeric(20,8); v_day date; v_today numeric;
+DECLARE e record; v record; w record; v_now timestamptz; v_credits bigint; v_vendor numeric(20,8); v_day date; v_today numeric; n integer;
 BEGIN
  IF p_org IS NULL OR p_org !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_ws IS NULL OR p_ws !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_billing_account_id IS NULL OR p_billing_account_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
@@ -286,6 +307,8 @@ BEGIN
   UPDATE morrow_billing.credit_wallets x SET available=x.available-v_credits,reserved=x.reserved+v_credits,revision=x.revision+1,
    updated_at=greatest(v_now,x.updated_at)
    WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.billing_account_id=p_billing_account_id;
+  GET DIAGNOSTICS n=ROW_COUNT;
+  IF n<>1 THEN RAISE EXCEPTION 'CREDIT_WALLET_INVALID'; END IF;
   INSERT INTO morrow_billing.credit_reservations(organization_id,workspace_id,id,revision,billing_account_id,root_run_id,allocation_id,
    allocation_digest,catalogue_version,model_key,effort_key,credits_per_product,product_count,credits_reserved,credits_settled,status,created_at,settled_at)
   VALUES (p_org,p_ws,p_reservation_id,1,p_billing_account_id,p_run_id,p_allocation_id,p_allocation_digest,p_catalogue_version,p_model,p_effort,
@@ -302,53 +325,78 @@ BEGIN
 END $$;
 -- Books one attempt's cost against the run's vendor reservation, at the run's catalogue
 -- version (the caller computed it from usage at that version's rates, or its worst case
--- when uncertain). A failed product's or uncertain attempt's cost is also unrecovered: it
--- accrues to the run's billing period. The booked total never exceeds the reservation.
--- Outcomes: booked, invalid, not_found, reservation_exceeded, ended.
+-- when uncertain). Every booking names its entry id (the attempt or product) and is recorded
+-- in run_cost_bookings before any total changes: a repeat of the same entry, run, kind and
+-- amount returns the recorded result and books nothing (a retried step learns the earlier
+-- outcome), and the same entry id with anything else is a conflict. A failed product's or
+-- uncertain attempt's cost is also unrecovered: it accrues to the run's billing period. The
+-- booked total never exceeds the reservation. Outcomes: booked, invalid, not_found,
+-- reservation_exceeded, ended, conflict.
 CREATE FUNCTION morrow_billing.run_book_cost(p_org text,p_ws text,p_run_id text,p_entry_id text,p_amount_usd numeric,p_kind text)
 RETURNS TABLE(outcome text,booked_usd text,unrecovered_usd text)
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
 #variable_conflict use_column
-DECLARE r record; v_now timestamptz; v_unrecovered boolean; n integer;
+DECLARE r record; b record; v_now timestamptz; v_unrecovered boolean; n integer; v_booked numeric(20,8); v_lost numeric(20,8);
 BEGIN
  IF p_org IS NULL OR p_ws IS NULL OR p_run_id IS NULL OR p_amount_usd IS NULL OR p_amount_usd<0 OR p_amount_usd<>round(p_amount_usd,8)
   OR p_kind IS NULL OR p_kind NOT IN ('drafted','failed_product','uncertain_attempt')
-  OR (p_kind<>'drafted' AND (p_entry_id IS NULL OR p_entry_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$')) THEN
+  OR p_entry_id IS NULL OR p_entry_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text; RETURN;
  END IF;
+ -- The run's reservation row lock serializes its bookings; the entry is then looked up.
  SELECT x.id::text AS id,x.status,x.maximum_cost_usd,x.booked_cost_usd,x.unrecovered_cost_usd,x.period_start,x.revision::bigint AS revision,x.updated_at
   INTO r FROM morrow_billing.vendor_cost_reservations x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.root_run_id=p_run_id FOR UPDATE;
  IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text; RETURN; END IF;
+ SELECT x.root_run_id::text AS root_run_id,x.kind,x.amount_usd,x.booked_usd,x.unrecovered_usd INTO b FROM morrow_billing.run_cost_bookings x
+  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=p_entry_id;
+ IF FOUND THEN
+  IF b.root_run_id=p_run_id AND b.kind=p_kind AND b.amount_usd=p_amount_usd THEN
+   RETURN QUERY SELECT 'booked'::text,to_char(b.booked_usd,'FM999999999990.00000000'),to_char(b.unrecovered_usd,'FM999999999990.00000000');
+  ELSE
+   RETURN QUERY SELECT 'conflict'::text,NULL::text,NULL::text;
+  END IF;
+  RETURN;
+ END IF;
  IF r.status<>'reserved' THEN RETURN QUERY SELECT 'ended'::text,NULL::text,NULL::text; RETURN; END IF;
  IF r.booked_cost_usd+p_amount_usd>r.maximum_cost_usd THEN RETURN QUERY SELECT 'reservation_exceeded'::text,NULL::text,NULL::text; RETURN; END IF;
  v_now:=date_trunc('milliseconds',clock_timestamp());
  v_unrecovered:=p_kind<>'drafted' AND p_amount_usd>0;
- UPDATE morrow_billing.vendor_cost_reservations x SET booked_cost_usd=x.booked_cost_usd+p_amount_usd,
-  unrecovered_cost_usd=x.unrecovered_cost_usd+CASE WHEN v_unrecovered THEN p_amount_usd ELSE 0 END,revision=r.revision+1,
-  updated_at=greatest(v_now,x.updated_at)
-  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=r.id;
- IF v_unrecovered THEN
-  INSERT INTO morrow_billing.unrecovered_costs(organization_id,workspace_id,period_start,amount_usd,revision,updated_at)
-  VALUES (p_org,p_ws,r.period_start,0,1,v_now) ON CONFLICT DO NOTHING;
-  UPDATE morrow_billing.unrecovered_costs u SET amount_usd=u.amount_usd+p_amount_usd,revision=u.revision+1,updated_at=greatest(v_now,u.updated_at)
-   WHERE u.organization_id=p_org AND u.workspace_id=p_ws AND u.period_start=r.period_start;
+ v_booked:=r.booked_cost_usd+p_amount_usd;
+ v_lost:=r.unrecovered_cost_usd+CASE WHEN v_unrecovered THEN p_amount_usd ELSE 0 END;
+ BEGIN
+  INSERT INTO morrow_billing.run_cost_bookings(organization_id,workspace_id,id,root_run_id,vendor_reservation_id,kind,amount_usd,booked_usd,
+   unrecovered_usd,recorded_at)
+  VALUES (p_org,p_ws,p_entry_id,p_run_id,r.id,p_kind,p_amount_usd,v_booked,v_lost,v_now);
+  UPDATE morrow_billing.vendor_cost_reservations x SET booked_cost_usd=v_booked,unrecovered_cost_usd=v_lost,revision=r.revision+1,
+   updated_at=greatest(v_now,x.updated_at)
+   WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=r.id;
   GET DIAGNOSTICS n=ROW_COUNT;
-  IF n<>1 THEN RAISE EXCEPTION 'UNRECOVERED_COST_INVALID'; END IF;
-  INSERT INTO morrow_billing.unrecovered_cost_entries(organization_id,workspace_id,id,period_start,root_run_id,vendor_reservation_id,kind,amount_usd,recorded_at)
-  VALUES (p_org,p_ws,p_entry_id,r.period_start,p_run_id,r.id,p_kind,p_amount_usd,v_now);
- END IF;
- RETURN QUERY SELECT 'booked'::text,to_char(r.booked_cost_usd+p_amount_usd,'FM999999999990.00000000'),
-  to_char(r.unrecovered_cost_usd+CASE WHEN v_unrecovered THEN p_amount_usd ELSE 0 END,'FM999999999990.00000000');
+  IF n<>1 THEN RAISE EXCEPTION 'VENDOR_RESERVATION_INVALID'; END IF;
+  IF v_unrecovered THEN
+   INSERT INTO morrow_billing.unrecovered_costs(organization_id,workspace_id,period_start,amount_usd,revision,updated_at)
+   VALUES (p_org,p_ws,r.period_start,0,1,v_now) ON CONFLICT DO NOTHING;
+   UPDATE morrow_billing.unrecovered_costs u SET amount_usd=u.amount_usd+p_amount_usd,revision=u.revision+1,updated_at=greatest(v_now,u.updated_at)
+    WHERE u.organization_id=p_org AND u.workspace_id=p_ws AND u.period_start=r.period_start;
+   GET DIAGNOSTICS n=ROW_COUNT;
+   IF n<>1 THEN RAISE EXCEPTION 'UNRECOVERED_COST_INVALID'; END IF;
+   INSERT INTO morrow_billing.unrecovered_cost_entries(organization_id,workspace_id,id,period_start,root_run_id,vendor_reservation_id,kind,amount_usd,recorded_at)
+   VALUES (p_org,p_ws,p_entry_id,r.period_start,p_run_id,r.id,p_kind,p_amount_usd,v_now);
+  END IF;
+ EXCEPTION WHEN unique_violation THEN
+  -- The same entry id booked concurrently for another run (this run's are serialized above).
+  RETURN QUERY SELECT 'conflict'::text,NULL::text,NULL::text; RETURN;
+ END;
+ RETURN QUERY SELECT 'booked'::text,to_char(v_booked,'FM999999999990.00000000'),to_char(v_lost,'FM999999999990.00000000');
 END $$;
 -- Settles one run: credits at the products drafted x the multiplier, never above the
 -- reservation; the rest returns to available; the vendor reservation ends with what it
 -- booked. The wallet moves reserved -> consumed and reserved -> available. Outcomes:
--- settled, released (nothing drafted), invalid, not_found, ended.
+-- settled, released (nothing drafted), invalid, not_found, ended, wallet_not_found.
 CREATE FUNCTION morrow_billing.run_settle(p_org text,p_ws text,p_run_id text,p_products_drafted integer)
 RETURNS TABLE(outcome text,credits_settled text)
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
 #variable_conflict use_column
-DECLARE c record; v_now timestamptz; v_settled bigint; v_status text;
+DECLARE c record; v_now timestamptz; v_settled bigint; v_status text; n integer;
 BEGIN
  IF p_org IS NULL OR p_ws IS NULL OR p_run_id IS NULL OR p_products_drafted IS NULL OR p_products_drafted<0 THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
@@ -356,8 +404,10 @@ BEGIN
  SELECT x.id::text AS id,x.billing_account_id::text AS billing_account_id,x.status,x.credits_reserved,x.credits_per_product,x.revision::bigint AS revision
   INTO c FROM morrow_billing.credit_reservations x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.root_run_id=p_run_id;
  IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
- -- The lock order of run_reserve: the wallet row first, then the reservation.
+ -- The lock order of run_reserve: the wallet row first, then the reservation. A wallet this
+ -- context cannot see is a refusal, never a settlement that strands the reserved credits.
  PERFORM 1 FROM morrow_billing.credit_wallets x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.billing_account_id=c.billing_account_id FOR UPDATE;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'wallet_not_found'::text,NULL::text; RETURN; END IF;
  SELECT x.status,x.revision::bigint AS revision INTO c.status,c.revision FROM morrow_billing.credit_reservations x
   WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=c.id FOR UPDATE;
  IF c.status<>'reserved' THEN RETURN QUERY SELECT 'ended'::text,NULL::text; RETURN; END IF;
@@ -367,6 +417,8 @@ BEGIN
  UPDATE morrow_billing.credit_wallets x SET reserved=x.reserved-c.credits_reserved,consumed=x.consumed+v_settled,
   available=x.available+(c.credits_reserved-v_settled),revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
   WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.billing_account_id=c.billing_account_id;
+ GET DIAGNOSTICS n=ROW_COUNT;
+ IF n<>1 THEN RAISE EXCEPTION 'CREDIT_WALLET_INVALID'; END IF;
  UPDATE morrow_billing.credit_reservations x SET status=v_status,credits_settled=v_settled,settled_at=greatest(v_now,x.created_at),revision=c.revision+1
   WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=c.id;
  UPDATE morrow_billing.vendor_cost_reservations x SET status=v_status,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)

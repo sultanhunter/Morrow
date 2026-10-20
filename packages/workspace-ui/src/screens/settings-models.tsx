@@ -134,9 +134,16 @@ export function ModelDefaultScreen({ workspace }: { readonly workspace: Workspac
                   {entryKey(e) === entryKey(models.value.workspaceDefault) ? (
                     <Tag tone="accent">{copy.models.default}</Tag>
                   ) : null}
-                  <Tag tone={e.allowedForMember ? "success" : "neutral"}>
-                    {e.allowedForMember ? copy.models.withinCeiling : copy.models.aboveCeiling}
+                  {/* The ceiling tag compares the entry with the member ceiling itself; what this
+                      person may pick (a reviser may pick above it) shows separately. */}
+                  <Tag tone={e.creditsPerProduct <= models.value.ceiling ? "success" : "neutral"}>
+                    {e.creditsPerProduct <= models.value.ceiling
+                      ? copy.models.withinCeiling
+                      : copy.models.aboveCeiling}
                   </Tag>
+                  {e.allowedForMember && e.creditsPerProduct > models.value.ceiling ? (
+                    <Tag tone="accent">{copy.models.youCanPick}</Tag>
+                  ) : null}
                 </p>
               </li>
             ))}

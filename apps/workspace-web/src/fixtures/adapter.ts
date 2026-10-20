@@ -120,6 +120,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   const listingsView = (): ListingsAgentView => ({
     storeId: fixtureStore.id,
     linked: true,
+    blocked: false,
     installation:
       listings.installationId === null
         ? null

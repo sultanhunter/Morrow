@@ -19,7 +19,9 @@ BEGIN;
 --     and the kill_switch.executed event (each the union of every value at this head).
 --   * Definers: the api's begin_agent_command, store_association,
 --     cmd_listings_enable_document, cmd_listings_enable (create, or resume after the
---     owner's own "Stop AI work"), cmd_stop_ai_work and cmd_model_default_revise; the
+--     owner's own "Stop AI work": only an installation that is exactly the confirmed
+--     document, its release, store connection and grant set, and only the stop the
+--     document named), cmd_stop_ai_work and cmd_model_default_revise; the
 --     runtime's delegation_facts (the agent kernel's facts under a run lease); the broker's
 --     morrow_vault.resolve_call (lease, generation, purpose, subject, member, stops,
 --     installation, connection and credential, or one refusal code).
@@ -45,6 +47,8 @@ DO $$ BEGIN
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_agent_principal_ensure(text,text,text,text,text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_agent_grants_issue(text,text,jsonb)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_owner_disable_grant_issue(text,text,jsonb)','EXECUTE')
+ OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_agent_grant_set_current(text,text,text,text,jsonb,jsonb)','EXECUTE')
+ OR NOT pg_catalog.has_column_privilege('morrow_work_owner','morrow_identity.agent_principals','installation_id','REFERENCES')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_delegation_actor_facts(text,text,jsonb)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_store_installations(text,text)','EXECUTE')
  OR NOT pg_catalog.has_function_privilege('morrow_work_command','morrow_identity.work_lease_member_current(text,text,text,text)','EXECUTE')
@@ -256,6 +260,9 @@ CREATE TABLE morrow_work.agent_installations (
  FOREIGN KEY (release_id,release_revision,release_digest) REFERENCES morrow_work.agent_releases(id,revision,digest),
  FOREIGN KEY (organization_id,owner_membership_id,owner_principal_id) REFERENCES morrow_identity.memberships(organization_id,id,principal_id),
  FOREIGN KEY (workspace_id,owner_membership_id) REFERENCES morrow_identity.workspace_memberships(workspace_id,membership_id),
+ -- The installation's agent principal is its own (the identity bridge's installation role).
+ FOREIGN KEY (organization_id,workspace_id,agent_principal_id,id)
+  REFERENCES morrow_identity.agent_principals(organization_id,workspace_id,principal_id,installation_id),
  CONSTRAINT agent_installations_scope CHECK (scope=morrow_work.listings_scope(organization_id,workspace_id,store_id,connection_id)),
  CONSTRAINT agent_installations_grant_refs CHECK (morrow_work.valid_grant_refs(grant_refs,organization_id,workspace_id,store_id)),
  CONSTRAINT agent_installations_times CHECK (updated_at>=created_at)
@@ -286,6 +293,9 @@ CREATE TABLE morrow_work.agent_enable_documents (
  expires_at timestamptz NOT NULL,
  consumed_at timestamptz CHECK (consumed_at=date_trunc('milliseconds',consumed_at) AND isfinite(consumed_at)),
  consumed_command_id morrow_work.record_id,
+ -- A resume document names the one stop it lifts: the person's installation stop open
+ -- when the document was built. A later stop needs a later document.
+ stop_id morrow_work.record_id,
  PRIMARY KEY (organization_id,workspace_id,id),
  UNIQUE (organization_id,workspace_id,digest),
  UNIQUE (nonce_digest),
@@ -293,6 +303,8 @@ CREATE TABLE morrow_work.agent_enable_documents (
  FOREIGN KEY (release_id,release_revision,release_digest) REFERENCES morrow_work.agent_releases(id,revision,digest),
  FOREIGN KEY (organization_id,actor_membership_id,actor_principal_id) REFERENCES morrow_identity.memberships(organization_id,id,principal_id),
  FOREIGN KEY (workspace_id,actor_membership_id) REFERENCES morrow_identity.workspace_memberships(workspace_id,membership_id),
+ FOREIGN KEY (organization_id,workspace_id,stop_id) REFERENCES morrow_work.stop_controls(organization_id,workspace_id,id),
+ CONSTRAINT agent_enable_documents_stop CHECK ((purpose='resume')=(stop_id IS NOT NULL)),
  CONSTRAINT agent_enable_documents_window CHECK (expires_at=created_at+interval '5 minutes'),
  CONSTRAINT agent_enable_documents_consumed CHECK ((consumed_at IS NULL)=(consumed_command_id IS NULL)
   AND (consumed_at IS NULL OR consumed_at>=created_at)),
@@ -367,6 +379,12 @@ CREATE TABLE morrow_work.delegation_hops (
  FOREIGN KEY (organization_id,workspace_id,parent_envelope_id) REFERENCES morrow_work.work_envelopes(organization_id,workspace_id,id),
  FOREIGN KEY (organization_id,workspace_id,recipient_installation_id) REFERENCES morrow_work.agent_installations(organization_id,workspace_id,id),
  FOREIGN KEY (organization_id,workspace_id,dispatcher_installation_id) REFERENCES morrow_work.agent_installations(organization_id,workspace_id,id),
+ -- The recipient, and an installed dispatcher, are named with their own agent principals
+ -- (a Coordinator dispatcher has no installation, so its key is not checked here).
+ FOREIGN KEY (organization_id,workspace_id,recipient_principal_id,recipient_installation_id)
+  REFERENCES morrow_identity.agent_principals(organization_id,workspace_id,principal_id,installation_id),
+ FOREIGN KEY (organization_id,workspace_id,dispatcher_principal_id,dispatcher_installation_id)
+  REFERENCES morrow_identity.agent_principals(organization_id,workspace_id,principal_id,installation_id),
  CONSTRAINT delegation_hops_dispatcher CHECK ((dispatcher_kind='installed_agent')=(dispatcher_installation_id IS NOT NULL)),
  CONSTRAINT delegation_hops_window CHECK (expires_at>valid_from AND expires_at<=valid_from+interval '24 hours'
   AND (revoked_at IS NULL OR revoked_at>=created_at) AND child_task_id::text<>parent_task_id::text)
@@ -704,16 +722,22 @@ END $$;
 -- published release, the current store resource, the installation (new for `enable`; the
 -- owner-stopped one for `resume`), the exact grant set and the owner's disable grant; it is
 -- bound to the actor, this session, five minutes and the nonce's digest (the Worker returns
--- the nonce once). At most ten open documents per actor and store. Outcomes: applied,
--- invalid, ineligible, stale_authority, command_conflict, not_found (no current store),
--- stopped (a platform or connection stop), state_conflict (enable: an installation exists;
--- resume: none is stopped by a person), limit_reached.
+-- the nonce once). A resume reactivates the installation as it stands (its release,
+-- connection and grants never change), so the document is built only when that
+-- installation is exactly what it names: the current published release, the store's
+-- current connection and the exact grant set (work_agent_grant_set_current). It records
+-- the person's open "Stop AI work" on the installation, the one stop it may lift. At most
+-- ten open documents per actor and store. Outcomes: applied, invalid, ineligible,
+-- stale_authority, command_conflict, not_found (no current store), stopped (a platform or
+-- connection stop), state_conflict (enable: an installation exists; resume: none is
+-- stopped by a person's "Stop AI work", or it differs from the document), limit_reached.
 CREATE FUNCTION morrow_work.cmd_listings_enable_document(p_command_id text,p_request_digest text,p_correlation_id text,p_store_id text,
  p_purpose text,p_installation_id text,p_document_id text,p_canonical text,p_digest text,p_nonce_digest text)
 RETURNS TABLE(outcome text,result text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE p record; s record; r record; i record; d jsonb; v_created timestamptz; v_now timestamptz; v_result jsonb; v_revision bigint;
+ v_stop text; v_grants text;
 BEGIN
  IF p_correlation_id IS NULL OR p_correlation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_store_id IS NULL OR p_store_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
@@ -739,7 +763,9 @@ BEGIN
  SELECT x.id,x.revision::bigint AS revision,x.digest::text AS digest INTO r FROM morrow_work.agent_releases x
   WHERE x.id='morrow.listings' AND x.status='published' ORDER BY x.revision DESC LIMIT 1;
  IF NOT FOUND THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;
- SELECT x.id::text AS id,x.status,x.revision::bigint AS revision INTO i FROM morrow_work.agent_installations x
+ SELECT x.id::text AS id,x.status,x.revision::bigint AS revision,x.connection_id::text AS connection_id,x.release_id,
+  x.release_revision::bigint AS release_revision,x.release_digest::text AS release_digest,x.agent_principal_id::text AS agent_principal_id,
+  x.grant_refs INTO i FROM morrow_work.agent_installations x
   WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.store_id=p_store_id AND x.release_id='morrow.listings'
    AND x.status<>'uninstalled';
  IF p_purpose='enable' THEN
@@ -749,11 +775,24 @@ BEGIN
   END IF;
   v_revision:=1;
  ELSE
-  IF NOT FOUND OR i.id<>p_installation_id OR i.status<>'disabled' OR NOT EXISTS(SELECT 1 FROM morrow_work.stop_controls x
-    WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.scope='installation' AND x.target_id=p_installation_id
-    AND x.lifted_at IS NULL AND x.set_by_kind='human') THEN
+  -- The installation the document will name, exactly: its release, store connection and
+  -- grant set are the document's (the item 3 amendment; any difference refuses).
+  IF NOT FOUND OR i.id<>p_installation_id OR i.status<>'disabled' OR i.connection_id<>s.connection_id::text
+   OR (i.release_id,i.release_revision,i.release_digest)<>(r.id::text,r.revision,r.digest) THEN
    RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN;
   END IF;
+  SELECT g.outcome INTO v_grants FROM morrow_identity.work_agent_grant_set_current(p.organization_id,p.workspace_id,i.id,i.agent_principal_id,
+   i.grant_refs,morrow_work.listings_grant_set(p.organization_id,p.workspace_id,p_store_id,s.connection_id)) g;
+  IF v_grants IS DISTINCT FROM 'exact' THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;
+  -- The person's own "Stop AI work" on this installation (its KillSwitchRecord), never a
+  -- platform, connection, system or operator stop.
+  SELECT x.id::text INTO v_stop FROM morrow_work.stop_controls x
+   WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.scope='installation' AND x.target_id=p_installation_id
+    AND x.lifted_at IS NULL AND x.set_by_kind='human' AND x.reason_code='human_stop_ai_work'
+    AND EXISTS(SELECT 1 FROM morrow_work.kill_switch_records k WHERE k.organization_id=x.organization_id AND k.workspace_id=x.workspace_id
+     AND k.id=x.kill_switch_record_id AND k.capability_id='agents.installation.disable' AND k.target_kind='installation'
+     AND k.target_id=x.target_id);
+  IF NOT FOUND THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;
   v_revision:=i.revision;
  END IF;
  IF (SELECT count(*) FROM morrow_work.agent_enable_documents x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
@@ -763,10 +802,10 @@ BEGIN
  BEGIN
   INSERT INTO morrow_work.agent_enable_documents(organization_id,workspace_id,id,purpose,store_id,connection_id,installation_id,release_id,
    release_revision,release_digest,actor_principal_id,actor_membership_id,session_digest,nonce_digest,canonical,digest,command_id,created_at,
-   expires_at,consumed_at,consumed_command_id)
+   expires_at,consumed_at,consumed_command_id,stop_id)
   VALUES (p.organization_id,p.workspace_id,p_document_id,p_purpose,p_store_id,s.connection_id,p_installation_id,r.id,r.revision,r.digest,
    p.principal_id,p.membership_id,pg_catalog.current_setting('morrow.work_session_digest',true),p_nonce_digest,p_canonical,p_digest,p_command_id,
-   v_created,v_created+interval '5 minutes',NULL,NULL);
+   v_created,v_created+interval '5 minutes',NULL,NULL,v_stop);
  EXCEPTION WHEN check_violation OR raise_exception OR unique_violation OR foreign_key_violation OR not_null_violation THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END;
@@ -785,11 +824,13 @@ END $$;
 -- rechecked against the document. `enable` creates the agent principals (the
 -- installation's, and the workspace Coordinator's on first use), issues the installation's
 -- three grants (the identity bridge's allowlist; each one exactly the document's) and the
--- owner's disable grant, and records the installation with its GrantRefs. `resume` lifts the
--- owner's installation stop (a person's lift) and reactivates the installation; its grants
--- are unchanged. The document is consumed with the command. Outcomes: applied, invalid,
--- ineligible, stale_authority, command_conflict, not_found, guard_failed (the document or
--- nonce does not hold), stopped, state_conflict.
+-- owner's disable grant, and records the installation with its GrantRefs. `resume` needs the
+-- installation to be exactly the document (its release, store connection and grant set),
+-- lifts only the stop the document recorded (a person's lift; a stop set after the
+-- document was built stays) and reactivates the installation; its grants are unchanged.
+-- The document is consumed with the command. Outcomes: applied, invalid, ineligible,
+-- stale_authority, command_conflict, not_found, guard_failed (the document or nonce does
+-- not hold), stopped, state_conflict.
 CREATE FUNCTION morrow_work.cmd_listings_enable(p_command_id text,p_request_digest text,p_correlation_id text,p_store_id text,
  p_document_digest text,p_nonce text,p_agent_principal_id text,p_coordinator_principal_id text,p_grants text,p_owner_grant text)
 RETURNS TABLE(outcome text,result text)
@@ -798,7 +839,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp
 DECLARE
  p record; doc record; r record; i record; e record; c record; v_now timestamptz; v_texts jsonb; v_payloads jsonb:='[]'::jsonb;
  v_refs jsonb:='[]'::jsonb; v_set jsonb; v_owner jsonb; v_text text; v_payload jsonb; v_index integer:=0; v_revision bigint; v_result jsonb;
- v_count integer;
+ v_count integer; v_grants text;
 BEGIN
  IF p_correlation_id IS NULL OR p_correlation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_store_id IS NULL OR p_store_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
@@ -831,7 +872,9 @@ BEGIN
  IF NOT FOUND OR (r.id,r.revision,r.digest)<>(doc.release_id::text,doc.release_revision::bigint,doc.release_digest::text) THEN
   RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN;
  END IF;
- SELECT x.id::text AS id,x.status,x.revision::bigint AS revision,x.agent_principal_id::text AS agent_principal_id INTO i
+ SELECT x.id::text AS id,x.status,x.revision::bigint AS revision,x.agent_principal_id::text AS agent_principal_id,
+  x.connection_id::text AS connection_id,x.release_id,x.release_revision::bigint AS release_revision,x.release_digest::text AS release_digest,
+  x.grant_refs INTO i
   FROM morrow_work.agent_installations x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
    AND x.store_id=doc.store_id AND x.release_id='morrow.listings' AND x.status<>'uninstalled' FOR UPDATE;
  IF doc.purpose='enable' THEN
@@ -887,14 +930,21 @@ BEGIN
   END;
   v_revision:=1;
  ELSE
-  IF NOT FOUND OR i.id<>doc.installation_id OR i.status<>'disabled' OR p_grants IS NOT NULL OR p_owner_grant IS NOT NULL
+  IF NOT FOUND OR i.id<>doc.installation_id OR i.status<>'disabled' OR i.connection_id<>doc.connection_id::text
+   OR (i.release_id,i.release_revision,i.release_digest)<>(doc.release_id::text,doc.release_revision::bigint,doc.release_digest::text)
+   OR doc.stop_id IS NULL OR p_grants IS NOT NULL OR p_owner_grant IS NOT NULL
    OR p_agent_principal_id IS NOT NULL OR p_coordinator_principal_id IS NOT NULL THEN
    RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN;
   END IF;
-  -- A person lifts the owner's own stop (only a person lifts a stop; ADR-0022 item 15).
+  -- The grants the installation resumes with are still exactly the document's grant set.
+  SELECT g.outcome INTO v_grants FROM morrow_identity.work_agent_grant_set_current(p.organization_id,p.workspace_id,i.id,i.agent_principal_id,
+   i.grant_refs,morrow_work.listings_grant_set(p.organization_id,p.workspace_id,doc.store_id,doc.connection_id)) g;
+  IF v_grants IS DISTINCT FROM 'exact' THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;
+  -- A person lifts the owner's own stop that the document named (only a person lifts a
+  -- stop; ADR-0022 item 15). Any other stop, or this one already lifted, is a conflict.
   UPDATE morrow_work.stop_controls x SET lifted_at=greatest(v_now,x.created_at),lifted_by_kind='human',lifted_by_principal_id=p.principal_id,
    lifted_by_membership_id=p.membership_id
-   WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.scope='installation' AND x.target_id=doc.installation_id
+   WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id AND x.id=doc.stop_id AND x.scope='installation' AND x.target_id=doc.installation_id
     AND x.lifted_at IS NULL AND x.set_by_kind='human';
   GET DIAGNOSTICS v_count=ROW_COUNT;
   IF v_count<>1 THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;
@@ -916,8 +966,11 @@ END $$;
 -- checkKillSwitchTarget accepted the target, the KillSwitchRecord commits with its effect:
 -- the installation stop (which revokes its run and operation leases through stop_guard) and
 -- the installation's status disabled. Already stopped: the record (priorStateObserved
--- already_stopped) and its event only. It never reads entitlement or credits (ADR-0011
--- Q8). Outcomes: applied, invalid, ineligible, stale_authority, command_conflict, not_found.
+-- already_stopped) and its event only. The record's priorStateObserved is the Worker's read
+-- before this lock: a concurrent stop that committed in between makes it stale, which is a
+-- state_conflict (reread, then a retry records already_stopped), never a refusal. It never
+-- reads entitlement or credits (ADR-0011 Q8). Outcomes: applied, invalid, ineligible,
+-- stale_authority, command_conflict, not_found, state_conflict.
 CREATE FUNCTION morrow_work.cmd_stop_ai_work(p_command_id text,p_request_digest text,p_correlation_id text,p_store_id text,
  p_installation_id text,p_record_canonical text,p_record_digest text)
 RETURNS TABLE(outcome text,result text)
@@ -947,6 +1000,7 @@ BEGIN
  SELECT x.id::text INTO v_stop FROM morrow_work.stop_controls x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
   AND x.scope='installation' AND x.target_id=p_installation_id AND x.lifted_at IS NULL;
  v_prior:=CASE WHEN FOUND THEN 'already_stopped' ELSE 'active' END;
+ IF d->'priorStateObserved' IS DISTINCT FROM to_jsonb(v_prior) THEN RETURN QUERY SELECT 'state_conflict'::text,NULL::text; RETURN; END IF;
  v_revision:=i.revision;
  BEGIN
   INSERT INTO morrow_work.kill_switch_records(organization_id,workspace_id,id,store_id,connection_id,capability_id,target_kind,target_id,
@@ -1017,7 +1071,8 @@ BEGIN
    WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id;
   v_revision:=m.revision+1;
  END IF;
- v_result:=jsonb_build_object('revision',v_revision);
+ -- The result records what was set, so a replay returns the same body.
+ v_result:=jsonb_build_object('revision',v_revision,'model',p_model,'effort',p_effort,'maxCreditsPerProduct',p_max_credits::integer);
  PERFORM morrow_work.record_command(p.organization_id,p.workspace_id,p.principal_id,p.membership_id,p_command_id,p_request_digest,
   'model_default.revise',p.workspace_id,v_revision,v_result,p_correlation_id,v_now);
  RETURN QUERY SELECT 'applied'::text,v_result::text;
@@ -1026,18 +1081,21 @@ END $$;
 -- ---------------------------------------------------------------------------
 -- The runtime definer: SECURITY DEFINER, owned by the command role, EXECUTE for
 -- morrow_runtime_executor only; the tenant comes only from the entered run lease.
--- The agent kernel's facts for one step (decideDelegation): the envelope, its hops (at
--- most eight, in order), the installations they and the executor name, the store's
--- currency, and the identity facts of every actor (origin, executor, owners and
--- dispatchers) with their grants filtered to the capabilities the kernel reads. Returns
+-- The agent kernel's facts for one step (decideDelegation): the envelope, the one chain of
+-- hops (at most eight, in order) from the envelope to this executor's installation, the
+-- installations they and the executor name, the store's currency, and the identity facts
+-- of every actor (origin, executor, owners and dispatchers) with their grants filtered to
+-- the capabilities the kernel reads. An envelope may have several children: the chain is
+-- the path whose last recipient is this installation, and two or more such paths are
+-- ambiguous (the step's task cannot be told apart), so nothing is returned. Returns
 -- nothing unless the entered lease is a run lease of exactly this installation. The
 -- kernel in the Worker decides; nothing here interprets a grant.
 CREATE FUNCTION morrow_work.delegation_facts(p_envelope_id text,p_installation_id text,p_capability_id text)
 RETURNS TABLE(lease text,envelope text,hops text,installations text,actors text,store_current text)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
-DECLARE l record; v_envelope jsonb; v_hops jsonb:='[]'::jsonb; v_hop jsonb; v_parent text; v_installations jsonb; v_actors jsonb:='[]'::jsonb;
- v_facts jsonb; v_caps jsonb; v_depth integer:=0; v_ids text[];
+DECLARE l record; v_envelope jsonb; v_hops jsonb:='[]'::jsonb; v_hop jsonb; v_installations jsonb; v_actors jsonb:='[]'::jsonb;
+ v_facts jsonb; v_caps jsonb; v_ids text[]; v_path text[]; v_chain text[]; v_paths integer:=0;
 BEGIN
  IF p_envelope_id IS NULL OR p_envelope_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_installation_id IS NULL OR p_installation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
@@ -1051,11 +1109,24 @@ BEGIN
    morrow_work.utc_text(e.expires_at) AS expires_at,morrow_work.utc_text(e.revoked_at) AS revoked_at,e.maximum_depth,e.maximum_children
   FROM morrow_work.work_envelopes e WHERE e.organization_id=l.organization_id AND e.workspace_id=l.workspace_id AND e.id=p_envelope_id) x;
  IF v_envelope IS NULL THEN RETURN; END IF;
- v_parent:=p_envelope_id;
- v_ids:=ARRAY[p_installation_id];
- LOOP
-  EXIT WHEN v_depth>=8;
-  SELECT to_jsonb(x) INTO v_hop FROM (SELECT h.id::text AS id,h.revision::bigint AS revision,h.parent_task_id::text AS parent_task_id,
+ -- Every path of hops from the envelope (at most eight deep) whose last recipient is this
+ -- installation; at most two are read, and a second one is ambiguity.
+ FOR v_path IN WITH RECURSIVE walk(depth,path,child_envelope_id,recipient_installation_id) AS (
+   SELECT 1,ARRAY[h.id::text],h.child_envelope_id::text,h.recipient_installation_id::text FROM morrow_work.delegation_hops h
+    WHERE h.organization_id=l.organization_id AND h.workspace_id=l.workspace_id AND h.parent_envelope_id=p_envelope_id
+   UNION ALL
+   SELECT w.depth+1,w.path||h.id::text,h.child_envelope_id::text,h.recipient_installation_id::text FROM walk w
+    JOIN morrow_work.delegation_hops h ON h.organization_id=l.organization_id AND h.workspace_id=l.workspace_id
+     AND h.parent_envelope_id=w.child_envelope_id
+    WHERE w.depth<8)
+  SELECT w.path FROM walk w WHERE w.recipient_installation_id=p_installation_id LIMIT 2 LOOP
+  v_paths:=v_paths+1;
+  v_chain:=v_path;
+ END LOOP;
+ IF v_paths>1 THEN RETURN; END IF;
+ IF v_chain IS NOT NULL THEN
+  SELECT COALESCE(jsonb_agg(to_jsonb(x)-'ordinal' ORDER BY x.ordinal),'[]'::jsonb) INTO v_hops FROM (SELECT u.ordinal,h.id::text AS id,
+    h.revision::bigint AS revision,h.parent_task_id::text AS parent_task_id,
     h.parent_task_revision::bigint AS parent_task_revision,h.child_task_id::text AS child_task_id,h.child_task_revision::bigint AS child_task_revision,
     h.parent_envelope_id::text AS parent_envelope_id,h.parent_envelope_revision::bigint AS parent_envelope_revision,
     h.child_envelope_id::text AS child_envelope_id,h.child_envelope_revision::bigint AS child_envelope_revision,h.dispatcher_kind,
@@ -1063,15 +1134,13 @@ BEGIN
     h.recipient_principal_id::text AS recipient_principal_id,h.recipient_installation_id::text AS recipient_installation_id,
     to_jsonb(h.capability_ids) AS capability_ids,to_jsonb(h.verbs) AS verbs,h.scope,morrow_work.utc_text(h.valid_from) AS valid_from,
     morrow_work.utc_text(h.expires_at) AS expires_at,morrow_work.utc_text(h.revoked_at) AS revoked_at,h.parent_child_count
-   FROM morrow_work.delegation_hops h WHERE h.organization_id=l.organization_id AND h.workspace_id=l.workspace_id AND h.parent_envelope_id=v_parent
-   ORDER BY h.created_at,h.id LIMIT 1) x;
-  EXIT WHEN v_hop IS NULL;
-  v_hops:=v_hops||jsonb_build_array(v_hop);
+   FROM unnest(v_chain) WITH ORDINALITY u(hop_id,ordinal) JOIN morrow_work.delegation_hops h ON h.organization_id=l.organization_id
+    AND h.workspace_id=l.workspace_id AND h.id=u.hop_id) x;
+ END IF;
+ v_ids:=ARRAY[p_installation_id];
+ FOR v_hop IN SELECT x FROM jsonb_array_elements(v_hops) x LOOP
   IF v_hop->>'dispatcher_installation_id' IS NOT NULL THEN v_ids:=v_ids||(v_hop->>'dispatcher_installation_id'); END IF;
   v_ids:=v_ids||(v_hop->>'recipient_installation_id');
-  v_parent:=v_hop->>'child_envelope_id';
-  v_hop:=NULL;
-  v_depth:=v_depth+1;
  END LOOP;
  SELECT COALESCE(jsonb_agg(to_jsonb(x) ORDER BY x.id),'[]'::jsonb) INTO v_installations FROM (SELECT DISTINCT i.id::text AS id,i.revision::bigint AS revision,
    i.release_id,i.release_revision::bigint AS release_revision,i.release_digest::text AS release_digest,i.store_id::text AS store_id,

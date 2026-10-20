@@ -13,7 +13,12 @@
 //   C5 Opus high reserves 6 credits per product and admits at most 9 products;
 //   C6 a reservation keeps its catalogue version after a newer one is active;
 //   C7 refusals: duplicate, no wallet, no billing period, another tenant;
-//   C8 the lease context: a run step books and settles its own run only.
+//   C8 the lease context: a run step books and settles its own run only;
+//   C9 a booking is recorded by its entry id before any total changes: a repeat replays
+//      its recorded result (also after settlement), anything else under the id conflicts,
+//      and every booking needs an id;
+//   C10 a wallet the settling context cannot see is a refusal that leaves the reservation
+//      open, never a settlement that strands the reserved credits.
 // Owner-seeded synthetic fixtures only (the wallet is funded as the owner; M5 PR-1 funds
 // it from verified payments). No provider, credential or merchant data. CI pg-linking.
 import { randomUUID } from "node:crypto";
@@ -302,7 +307,7 @@ export async function runCreditsLab(db) {
     const two = reserve("account_daily", "run_daily_2", "claude_opus_5_5", "high", 9);
     const three = reserve("account_daily", "run_daily_3", "claude_opus_5_5", "high", 9);
     const four = reserve("account_daily", "run_daily_4", "claude_opus_5_5", "high", 9);
-    const booked = book("run_opus_9", "0.50000000", "drafted", null);
+    const booked = book("run_opus_9", "0.50000000", "drafted");
     const settled = settle("run_opus_9", 1);
     const fourAgain = reserve("account_daily", "run_daily_4b", "claude_opus_5_5", "high", 9);
     // Small runs still fit under the cap while it has room.
@@ -332,7 +337,7 @@ export async function runCreditsLab(db) {
     const failed = [];
     for (let i = 0; i < 5; i++) failed.push(book(run, "0.70400000", "failed_product"));
     const uncertain = book(run, "0.35200000", "uncertain_attempt");
-    const drafted = book(run, "0.10000000", "drafted", null);
+    const drafted = book(run, "0.10000000", "drafted");
     const tooMuch = book(run, "5.00000000", "failed_product");
     const total = db.rows(
       `SELECT amount_usd::text,revision::int FROM morrow_billing.unrecovered_costs WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND period_start=${period}`,
@@ -447,7 +452,7 @@ COMMIT;`);
       period: laterPeriod,
       version: 2,
     });
-    const bookOld = book("run_v1", "0.13200000", "drafted", null);
+    const bookOld = book("run_v1", "0.13200000", "drafted");
     const settleOld = settle("run_v1", 2);
     check(
       "C6:booked_at_the_runs_recorded_version",
@@ -585,6 +590,136 @@ COMMIT;`);
         foreign === "not_found" &&
         reservation("run_lease_y").status === "reserved",
       { opened, booked, settled, noLease, foreign },
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  phase("replay");
+  {
+    // C9: a retried run step repeats its booking: the recorded result comes back and the
+    // totals move once; the same entry id with another amount or kind, or on another run,
+    // is a conflict; a booking without an id is invalid. After settlement, a repeat still
+    // learns the earlier outcome (never `ended`).
+    fund("account_replay", 100);
+    reserve("account_replay", "run_replay", "claude_sonnet_5_5", "low", 2, { period: laterPeriod });
+    reserve("account_replay", "run_replay_b", "claude_sonnet_5_5", "low", 2, {
+      period: laterPeriod,
+    });
+    const first = book("run_replay", "0.05000000", "failed_product", "entry_replay_1");
+    const repeat = book("run_replay", "0.05000000", "failed_product", "entry_replay_1");
+    const drafted = book("run_replay", "0.02000000", "drafted", "entry_replay_2");
+    const draftedRepeat = book("run_replay", "0.02000000", "drafted", "entry_replay_2");
+    const otherAmount = book("run_replay", "0.06000000", "failed_product", "entry_replay_1");
+    const otherKind = book("run_replay", "0.05000000", "uncertain_attempt", "entry_replay_1");
+    const otherRun = book("run_replay_b", "0.05000000", "failed_product", "entry_replay_1");
+    const noEntry = last(
+      cmd(
+        P.A,
+        `SELECT outcome FROM morrow_billing.run_book_cost(${literal(O)},${literal(W)},'run_replay',NULL,0.01000000::numeric,'drafted');`,
+      ),
+    );
+    const r = reservation("run_replay");
+    const entries = db.rows(
+      `SELECT id,kind,amount_usd::text FROM morrow_billing.run_cost_bookings WHERE root_run_id='run_replay' ORDER BY id`,
+    );
+    const lost = db.rows(
+      `SELECT count(*)::int AS n FROM morrow_billing.unrecovered_cost_entries WHERE root_run_id='run_replay'`,
+    )[0].n;
+    const settled = settle("run_replay", 1);
+    const afterSettle = book("run_replay", "0.02000000", "drafted", "entry_replay_2");
+    const lateNew = book("run_replay", "0.01000000", "drafted", "entry_replay_3");
+    check(
+      "C9:bookings_replay_by_entry_id",
+      first === "booked|0.05000000|0.05000000" &&
+        repeat === first &&
+        drafted === "booked|0.07000000|0.05000000" &&
+        draftedRepeat === drafted &&
+        otherAmount === "conflict||" &&
+        otherKind === "conflict||" &&
+        otherRun === "conflict||" &&
+        noEntry === "invalid" &&
+        r.booked_cost_usd === "0.07000000" &&
+        r.unrecovered_cost_usd === "0.05000000" &&
+        entries.length === 2 &&
+        lost === 1 &&
+        settled === "settled|1" &&
+        afterSettle === drafted &&
+        lateNew === "ended||",
+      {
+        first,
+        repeat,
+        drafted,
+        draftedRepeat,
+        otherAmount,
+        otherKind,
+        otherRun,
+        noEntry,
+        r,
+        entries,
+        lost,
+        settled,
+        afterSettle,
+        lateNew,
+      },
+    );
+    check(
+      "C9:bookings_append_only",
+      refused(
+        `SET ROLE morrow_work_owner; UPDATE morrow_billing.run_cost_bookings SET amount_usd=0;`,
+        "BILLING_RECORD_IMMUTABLE",
+      ) &&
+        refused(
+          asCommandRole(P.A, `DELETE FROM morrow_billing.run_cost_bookings;`),
+          "permission denied",
+        ),
+    );
+    release("run_replay_b");
+  }
+
+  // -------------------------------------------------------------------------
+  phase("hidden_wallet");
+  {
+    // C10: the wallet hidden from the settling context (sim: the wallet's lease policy
+    // admits nothing, the shape of a missing policy at the M5 rebase; restored after):
+    // run_settle refuses with wallet_not_found, and the reservation and the wallet keep
+    // their state, so the credits are never stranded.
+    fund("account_hidden", 100);
+    reserve("account_hidden", "run_hidden", "claude_sonnet_5_5", "low", 2, { period: laterPeriod });
+    const [line] = cmd(
+      P.A,
+      "SELECT concat_ws('|',outcome,lease_id,generation) FROM morrow_work.lease_open('run','run_hidden','store_1','connection_1','installation_1');",
+    );
+    const [opened, leaseId] = line.split("|");
+    const before = wallet("account_hidden");
+    const policy =
+      "(organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_lease() c)";
+    db.sql(
+      "ALTER POLICY tenant_lease ON morrow_billing.credit_wallets USING (false) WITH CHECK (false);",
+    );
+    let hidden;
+    try {
+      hidden = last(
+        db.sql(
+          `BEGIN; SELECT outcome FROM morrow_work.enter_lease(${literal(leaseId)},'1'); SELECT lab_credits.settle('run_hidden',1); COMMIT;`,
+          { user: "morrow_runtime_executor" },
+        ),
+      );
+    } finally {
+      db.sql(
+        `ALTER POLICY tenant_lease ON morrow_billing.credit_wallets USING (${policy}) WITH CHECK (${policy});`,
+      );
+    }
+    const after = wallet("account_hidden");
+    check(
+      "C10:hidden_wallet_refuses_settlement",
+      opened === "opened" &&
+        hidden === "wallet_not_found|" &&
+        reservation("run_hidden").status === "reserved" &&
+        after.reserved === before.reserved &&
+        after.available === before.available &&
+        after.revision === before.revision &&
+        release("run_hidden") === "released|0",
+      { opened, hidden, before, after },
     );
   }
   return { checks, failures };

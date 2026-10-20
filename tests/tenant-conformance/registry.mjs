@@ -97,7 +97,7 @@ export const workTables = Object.freeze({
   model_catalogue_entries: { class: "platform", parents: [], content: "none" },
   agent_installations: {
     class: "tenant_readable",
-    parents: ["morrow_identity.workspaces"],
+    parents: ["morrow_identity.workspaces", "morrow_identity.agent_principals"],
     lease: true,
     policies: ["installation_broker_resolve"],
     content: "none",
@@ -115,7 +115,7 @@ export const workTables = Object.freeze({
   },
   delegation_hops: {
     class: "tenant_internal",
-    parents: ["tasks", "work_envelopes", "agent_installations"],
+    parents: ["tasks", "work_envelopes", "agent_installations", "morrow_identity.agent_principals"],
     lease: true,
     content: "none",
   },
@@ -389,6 +389,7 @@ export const bridgeFunctions = Object.freeze([
   "work_agent_principal_ensure(text,text,text,text,text)",
   "work_agent_grants_issue(text,text,jsonb)",
   "work_owner_disable_grant_issue(text,text,jsonb)",
+  "work_agent_grant_set_current(text,text,text,text,jsonb,jsonb)",
   "work_delegation_actor_facts(text,text,jsonb)",
 ]);
 // M2 PR-1 (0020): the two schemas the work owner creates beside morrow_work. The billing
@@ -521,6 +522,15 @@ export const billingTables = Object.freeze({
       ],
     ),
   },
+  // One append-only row per vendor-cost booking, keyed by its entry id (replay, M3 PR-1
+  // review).
+  run_cost_bookings: {
+    class: "tenant_internal",
+    parents: ["morrow_billing.vendor_cost_reservations"],
+    policies: ["tenant_lease"],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"]),
+  },
   unrecovered_costs: {
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
@@ -530,7 +540,11 @@ export const billingTables = Object.freeze({
   },
   unrecovered_cost_entries: {
     class: "tenant_internal",
-    parents: ["morrow_billing.unrecovered_costs", "morrow_billing.vendor_cost_reservations"],
+    parents: [
+      "morrow_billing.unrecovered_costs",
+      "morrow_billing.vendor_cost_reservations",
+      "morrow_billing.run_cost_bookings",
+    ],
     policies: ["tenant_lease"],
     content: "none",
     ...aclSpec(["INSERT", "SELECT"]),

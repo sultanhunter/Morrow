@@ -221,7 +221,11 @@ export const copy = {
     active: "Active",
     stopped: "Stopped. No AI work runs for this store until you resume it.",
     disabled: "Off",
-    notLinked: "This store isn't connected, so the agent can't be enabled.",
+    blocked: "Paused",
+    blockedDetail:
+      "A platform or connection stop is in effect, so no AI work runs for this store. It resumes when that stop is lifted.",
+    notLinked: "This store isn't connected, so the agent can't be enabled or resumed.",
+    startAgain: "Start again",
     enable: "Enable Listings agent",
     resume: "Resume Listings agent",
     preparing: "Preparing…",
@@ -246,7 +250,8 @@ export const copy = {
     reasonHint: "Required. Up to 1,024 characters. Recorded with the stop.",
     confirmStop: "Stop AI work",
     stoppedDone: "AI work stopped for this store.",
-    expired: "This review expired or was already used. Start again.",
+    expired:
+      "This review expired, was already used, or no longer matches the agent. Nothing changed. Start again.",
     capabilities: {
       "catalog.products.read": "Read products",
       "catalog.content.propose": "Draft listing changes",
@@ -274,6 +279,7 @@ export const copy = {
     default: "Default",
     withinCeiling: "Within the ceiling",
     aboveCeiling: "Above the ceiling",
+    youCanPick: "You can pick it",
     save: "Save default",
     saved: "Model default saved.",
     readOnly: "You can view the default but not change it.",

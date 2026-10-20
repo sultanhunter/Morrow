@@ -7,6 +7,9 @@
 //     single-use nonce. Nothing the browser holds can widen what the agent gets.
 //   * "Stop AI work" needs a reason the person writes; it is recorded with the stop.
 //   * Every button shows only when the server's kernel said this person may use it.
+//   * A review that expired or was already used stays open with that message and a
+//     "Start again" action; it never closes silently.
+//   * A platform or connection stop shows as Paused (only its own path lifts it).
 import { useState } from "react";
 import { copy } from "../copy";
 import type { Id, ListingsChangeView, ListingsDocumentView, WorkspaceView } from "../model";
@@ -34,34 +37,43 @@ function DocumentReview({
     marker: { workspaceId: ws, kind: "agent" },
     send: (c) => services.port.agents.listingsEnable(ws, storeId, c),
     onOutcome: (outcome) => {
-      if (outcome.kind === "ok" || outcome.kind === "conflict") onDone();
+      // A conflict (the review expired, was used, or no longer matches) keeps the dialog
+      // open with its message until the person starts again.
+      if (outcome.kind === "ok") onDone();
     },
   });
   const enable = document.purpose === "enable";
+  const stale = confirm.phase.phase === "settled" && confirm.phase.outcome.kind === "conflict";
   return (
     <Dialog
       open
       title={copy.agents.reviewTitle(document.purpose)}
-      onClose={onCancel}
+      onClose={stale ? onDone : onCancel}
       footer={
-        <>
-          <Button onClick={onCancel} disabled={confirm.busy}>
-            {copy.agents.cancel}
+        stale ? (
+          <Button variant="primary" data-initial-focus onClick={onDone}>
+            {copy.agents.startAgain}
           </Button>
-          <Button
-            variant="primary"
-            data-initial-focus
-            disabled={confirm.busy}
-            onClick={() =>
-              void confirm.submit({
-                documentDigest: document.documentDigest,
-                nonce: document.nonce,
-              })
-            }
-          >
-            {enable ? copy.agents.confirmEnable : copy.agents.confirmResume}
-          </Button>
-        </>
+        ) : (
+          <>
+            <Button onClick={onCancel} disabled={confirm.busy}>
+              {copy.agents.cancel}
+            </Button>
+            <Button
+              variant="primary"
+              data-initial-focus
+              disabled={confirm.busy}
+              onClick={() =>
+                void confirm.submit({
+                  documentDigest: document.documentDigest,
+                  nonce: document.nonce,
+                })
+              }
+            >
+              {enable ? copy.agents.confirmEnable : copy.agents.confirmResume}
+            </Button>
+          </>
+        )
       }
     >
       <p>{copy.agents.reviewIntro}</p>
@@ -191,6 +203,8 @@ export function ListingsAgentCard({
             <Tag tone="neutral">{copy.agents.disabled}</Tag>
           ) : installation.stopped ? (
             <Tag tone="warning">{copy.agents.stopped}</Tag>
+          ) : view.blocked ? (
+            <Tag tone="warning">{copy.agents.blocked}</Tag>
           ) : installation.status === "active" ? (
             <Tag tone="success">{copy.agents.active}</Tag>
           ) : (
@@ -198,9 +212,10 @@ export function ListingsAgentCard({
           )}
         </p>
         {installation === null ? <p>{copy.agents.notEnabled}</p> : null}
-        {!view.linked && installation === null ? (
-          <p className="muted">{copy.agents.notLinked}</p>
+        {view.blocked && installation !== null ? (
+          <p className="muted">{copy.agents.blockedDetail}</p>
         ) : null}
+        {!view.linked ? <p className="muted">{copy.agents.notLinked}</p> : null}
         <div className="item-actions">
           {view.actions.enable || view.actions.resume ? (
             <Button

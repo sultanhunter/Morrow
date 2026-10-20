@@ -21,7 +21,8 @@ BEGIN;
 --     admits only (unredacted and the digest of the text) or (redacted and '{}', the digest
 --     kept); parameters_guard replaces the append-only trigger and admits only that one
 --     change; the revisable owner helper parameters_redact_for_store empties every
---     parameter row a store's proposals name (M2 PR-3's shop/redact definer calls it);
+--     parameter row a store's proposals name, under the tenant's own session context only
+--     (M2 PR-3 revises it with the policy its shop/redact definer needs, and calls it);
 --     decision_bind is replaced and approval_claims gains claim_parameters_bind, so a
 --     redacted proposal can never be decided or claimed.
 DO $$ BEGIN
@@ -300,8 +301,12 @@ CREATE TRIGGER claim_parameters_bind BEFORE INSERT ON morrow_work.approval_claim
 
 -- The redaction helper (revisable, owned by the owner, INVOKER, EXECUTE for the command role
 -- only): empties every unredacted parameter row that a proposal on the store names, keeping
--- each digest, under the caller's own policies (M2 PR-3's shop/redact definer). Outcomes:
--- applied (with the number redacted), invalid.
+-- each digest, under the caller's own policies. Those policies show the rows only to the
+-- tenant's own session context (tenant_command), so without that context the helper
+-- refuses (context_unavailable) instead of reporting an empty redaction as done. M2 PR-3's
+-- shop/redact definer runs with no session: it revises this helper together with the
+-- policy that lets its verified context see the tenant's rows. Outcomes: applied (with the
+-- number redacted), invalid, context_unavailable.
 CREATE FUNCTION morrow_work.parameters_redact_for_store(p_org text,p_ws text,p_store_id text)
 RETURNS TABLE(outcome text,redacted integer)
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
@@ -311,6 +316,9 @@ BEGIN
  IF p_org IS NULL OR p_org !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_ws IS NULL OR p_ws !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_store_id IS NULL OR p_store_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::integer; RETURN;
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM morrow_work.current_tenant() c WHERE c.organization_id=p_org AND c.workspace_id=p_ws) THEN
+  RETURN QUERY SELECT 'context_unavailable'::text,NULL::integer; RETURN;
  END IF;
  UPDATE morrow_work.proposal_parameters q SET canonical='{}',redacted_at=greatest(v_at,q.created_at)
   WHERE q.organization_id=p_org AND q.workspace_id=p_ws AND q.redacted_at IS NULL

@@ -172,9 +172,17 @@ test("decoders accept the server's own bodies exactly", async () => {
   assert.deepEqual(decodeListingsStatus({ schemaVersion: 1, ...status.body }, S), {
     storeId: S,
     linked: true,
+    blocked: false,
     installation: null,
     actions: { enable: false, resume: false, stop: false },
   });
+  // A platform or connection stop reads as blocked.
+  const blocked = await serverRead("listings.status", {
+    enterContext: [contextRow],
+    storeAssociation: [{ store_id: S, connection_id: "c", database_now: "x" }],
+    storeStops: [{ scope: "connection" }],
+  });
+  assert.equal(decodeListingsStatus({ schemaVersion: 1, ...blocked.body }, S)?.blocked, true);
   // The document the server builds (step 1 reply shape).
   const built = await buildInstallationDocument({
     id: randomUUID(),
@@ -243,6 +251,8 @@ test("decoders accept the server's own bodies exactly", async () => {
     { ...status.body, schemaVersion: 1, storeId: "store_b" },
     { schemaVersion: 1, ...status.body, actions: { enable: true, resume: false, stop: true } },
     { schemaVersion: 1, ...status.body, extra: true },
+    { schemaVersion: 1, ...status.body, blocked: "no" },
+    { schemaVersion: 1, ...status.body, blocked: undefined },
   ])
     assert.equal(decodeListingsStatus(bad, S), null);
   assert.deepEqual(
@@ -279,6 +289,7 @@ test("the HTTP port: reads, PUT under the POST rules, and the outcome mapping", 
       schemaVersion: 1,
       storeId: store,
       linked: true,
+      blocked: false,
       installation: null,
       actions: { enable: true, resume: false, stop: false },
     }),

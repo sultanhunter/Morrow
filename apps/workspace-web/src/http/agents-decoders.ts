@@ -37,10 +37,15 @@ const installationStatuses = ["active", "disabled"];
 export function decodeListingsStatus(body: unknown, storeId: string): ListingsAgentView | null {
   if (
     !record(body) ||
-    !keysOf(body, ["schemaVersion", "storeId", "linked", "installation", "actions"])
+    !keysOf(body, ["schemaVersion", "storeId", "linked", "blocked", "installation", "actions"])
   )
     return null;
-  if (body.schemaVersion !== 1 || body.storeId !== storeId || typeof body.linked !== "boolean")
+  if (
+    body.schemaVersion !== 1 ||
+    body.storeId !== storeId ||
+    typeof body.linked !== "boolean" ||
+    typeof body.blocked !== "boolean"
+  )
     return null;
   const a = body.actions;
   if (!record(a) || !keysOf(a, ["enable", "resume", "stop"])) return null;
@@ -73,6 +78,7 @@ export function decodeListingsStatus(body: unknown, storeId: string): ListingsAg
   return {
     storeId,
     linked: body.linked,
+    blocked: body.blocked,
     installation,
     actions: { enable: a.enable as boolean, resume: a.resume as boolean, stop: a.stop as boolean },
   };

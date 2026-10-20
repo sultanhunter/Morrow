@@ -19,9 +19,13 @@ BEGIN;
 --     approve or execute on catalog.content.publish; the Coordinator's
 --     workspace.task.delegate {delegate} on one task, expiring within 24 hours; issued by
 --     the session's own human), work_owner_disable_grant_issue (agents.installation.disable
---     {execute} for the session's human on one installation) and
+--     {execute} for the session's human on one installation),
+--     work_agent_grant_set_current (whether a stopped installation's grants are still
+--     exactly its document's grant set, for the resume of the item 3 amendment) and
 --     work_delegation_actor_facts (liveness and capability-filtered grants for the agent
 --     kernel, for the runtime login only).
+--   * agent_principals has a (tenant, principal, installation) key the work tables'
+--     composite foreign keys reference (REFERENCES for the work owner, the 0014 pattern).
 -- Role checks use the ADR-0020 helpers; no membership catalog text appears here.
 DO $$ BEGIN
  IF current_user<>'morrow_identity_owner'
@@ -59,6 +63,9 @@ CREATE TABLE morrow_identity.agent_principals (
  FOREIGN KEY (organization_id,workspace_id) REFERENCES morrow_identity.workspaces(organization_id,id),
  UNIQUE (organization_id,workspace_id,principal_id),
  UNIQUE (organization_id,workspace_id,installation_id),
+ -- The work tables bind an installation (and a delegation hop's agent) to its own agent
+ -- principal through this key (the 0014 REFERENCES pattern, below).
+ UNIQUE (organization_id,workspace_id,principal_id,installation_id),
  CONSTRAINT agent_principals_role CHECK ((role='coordinator')=(installation_id IS NULL))
 );
 CREATE UNIQUE INDEX agent_principals_one_coordinator ON morrow_identity.agent_principals (organization_id,workspace_id) WHERE role='coordinator';
@@ -66,6 +73,7 @@ ALTER TABLE morrow_identity.agent_principals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE morrow_identity.agent_principals FORCE ROW LEVEL SECURITY;
 CREATE POLICY identity_owner ON morrow_identity.agent_principals TO morrow_identity_owner USING (true) WITH CHECK (true);
 REVOKE ALL ON morrow_identity.agent_principals FROM PUBLIC;
+GRANT REFERENCES (organization_id,workspace_id,principal_id,installation_id) ON morrow_identity.agent_principals TO morrow_work_owner;
 
 -- The grants forward change. New columns go last, so 6-value inserts keep working.
 ALTER TABLE morrow_identity.grants ALTER COLUMN membership_id DROP NOT NULL,
@@ -365,11 +373,60 @@ BEGIN
  END LOOP;
 END $$;
 
+-- Whether one installation's grants are still exactly a confirmed document's grant set (the
+-- ADR-0022 item 3 amendment: a resume reactivates the installation with the grants it
+-- holds, so any change to them invalidates the confirmation). Exact means: the principal is
+-- this tenant's active agent principal of that installation; it holds exactly three grants;
+-- the i-th GrantRef names one of them, for that principal and installation, unrevoked and
+-- without expiry, whose capability, verbs and scope are the i-th entry of p_expected. The
+-- caller's session context must resolve to this tenant. Outcomes: exact, differs, invalid,
+-- denied.
+CREATE FUNCTION morrow_identity.work_agent_grant_set_current(p_org text,p_ws text,p_installation_id text,p_principal_id text,
+ p_refs jsonb,p_expected jsonb)
+RETURNS TABLE(outcome text)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+#variable_conflict use_column
+DECLARE s record; v_index integer;
+BEGIN
+ IF p_org IS NULL OR p_org !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_ws IS NULL OR p_ws !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_installation_id IS NULL OR p_installation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_principal_id IS NULL OR p_principal_id !~ '^agent_[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
+  OR p_refs IS NULL OR jsonb_typeof(p_refs)<>'array' OR jsonb_array_length(p_refs)<>3
+  OR p_expected IS NULL OR jsonb_typeof(p_expected)<>'array' OR jsonb_array_length(p_expected)<>3
+  OR EXISTS(SELECT 1 FROM jsonb_array_elements(p_refs) r WHERE jsonb_typeof(r)<>'object' OR jsonb_typeof(r->'id')<>'string')
+  OR EXISTS(SELECT 1 FROM jsonb_array_elements(p_expected) e WHERE jsonb_typeof(e)<>'object') THEN
+  RETURN QUERY SELECT 'invalid'::text; RETURN;
+ END IF;
+ SELECT c.principal_id INTO s FROM morrow_identity.work_session_context(
+  pg_catalog.current_setting('morrow.work_session_digest',true),pg_catalog.current_setting('morrow.work_workspace',true)) c
+  WHERE c.organization_id=p_org AND c.workspace_id=p_ws;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'denied'::text; RETURN; END IF;
+ IF NOT EXISTS(SELECT 1 FROM morrow_identity.agent_principals a JOIN morrow_identity.principals x ON x.id=a.principal_id
+   WHERE a.organization_id=p_org AND a.workspace_id=p_ws AND a.principal_id=p_principal_id AND a.role='installation'
+    AND a.installation_id=p_installation_id AND x.kind='agent' AND x.active)
+  OR (SELECT count(*) FROM morrow_identity.grants x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.principal_id=p_principal_id)<>3 THEN
+  RETURN QUERY SELECT 'differs'::text; RETURN;
+ END IF;
+ FOR v_index IN 0..2 LOOP
+  IF NOT EXISTS(SELECT 1 FROM morrow_identity.grants x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=p_refs->v_index->>'id'
+    AND x.principal_kind='agent' AND x.membership_id IS NULL AND x.agent_principal_id=p_principal_id AND x.principal_id=p_principal_id
+    AND x.payload->'principal'=jsonb_build_object('kind','agent','principalId',p_principal_id,'organizationId',p_org,'workspaceId',p_ws,
+     'membershipId',NULL,'installationId',p_installation_id,'mandateId',NULL)
+    AND x.payload->'revokedAt'='null'::jsonb AND x.payload->'expiresAt'='null'::jsonb
+    AND jsonb_build_object('capabilityId',x.payload->'capabilityId','verbs',x.payload->'verbs','scope',x.payload->'scope')=p_expected->v_index) THEN
+   RETURN QUERY SELECT 'differs'::text; RETURN;
+  END IF;
+ END LOOP;
+ RETURN QUERY SELECT 'exact'::text;
+END $$;
+
 REVOKE ALL ON FUNCTION morrow_identity.work_agent_principal_ensure(text,text,text,text,text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_identity.work_agent_grants_issue(text,text,jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_identity.work_owner_disable_grant_issue(text,text,jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION morrow_identity.work_agent_grant_set_current(text,text,text,text,jsonb,jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION morrow_identity.work_delegation_actor_facts(text,text,jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_identity.work_agent_principal_ensure(text,text,text,text,text),
  morrow_identity.work_agent_grants_issue(text,text,jsonb),morrow_identity.work_owner_disable_grant_issue(text,text,jsonb),
+ morrow_identity.work_agent_grant_set_current(text,text,text,text,jsonb,jsonb),
  morrow_identity.work_delegation_actor_facts(text,text,jsonb) TO morrow_work_command;
 COMMIT;

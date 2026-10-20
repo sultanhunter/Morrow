@@ -66,6 +66,11 @@ export interface ListingsAgentView {
   readonly storeId: Id;
   /** The store's association is current (enable and resume need it; a stop never does). */
   readonly linked: boolean;
+  /**
+   * A platform stop, or a stop on the store's connection, is in effect: no AI work runs
+   * although the installation may be active. Only those stops' own paths lift them.
+   */
+  readonly blocked: boolean;
   readonly installation: {
     readonly installationId: Id;
     readonly status: string;

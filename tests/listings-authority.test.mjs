@@ -553,7 +553,7 @@ function contextRow(grants, who = owner) {
     database_now_us: String(nowMs * 1000),
   };
 }
-const installationRow = (status = "active") => ({
+const installationRow = (status = "active", change = {}) => ({
   id: I,
   revision: "1",
   store_id: S,
@@ -565,7 +565,18 @@ const installationRow = (status = "active") => ({
   release_id: "morrow.listings",
   release_revision: "1",
   release_digest: sha(listingsReleaseManifest),
+  scope: JSON.stringify(listingsScope(storeResource(O, W, S, change.connection_id ?? C))),
   updated_at: "2026-10-20T11:00:00.000Z",
+  ...change,
+});
+// A person's own "Stop AI work" (its KillSwitchRecord), the only stop a resume lifts.
+const ownStop = (change = {}) => ({
+  id: "stop_1",
+  set_by_kind: "human",
+  reason_code: "human_stop_ai_work",
+  kill_switch_record_id: "r1",
+  created_at: "x",
+  ...change,
 });
 const reviewContextRow = {
   policy_revision: "1",
@@ -670,9 +681,7 @@ test("Stop AI work: kernel, kill-switch target check, then the record commits wi
       ],
       listingsInstallation: [installationRow("disabled")],
       reviewContext: [reviewContextRow],
-      installationStop: [
-        { id: "stop_1", set_by_kind: "human", kill_switch_record_id: "r1", created_at: "x" },
-      ],
+      installationStop: [ownStop()],
       cmdStopAiWork: applied({ status: "disabled" }),
     },
   });
@@ -753,15 +762,44 @@ test("Enable step 1 builds the document server-side; only a person's stop resume
   assert.equal(values[9], sha(result.body.nonce));
   assert.deepEqual(result.body.document, document);
   // Resume: the owner's own stop (a person's) on a disabled installation.
-  const resume = scriptedTx(
-    replies(
-      [installationRow("disabled")],
-      [{ id: "stop_1", set_by_kind: "human", kill_switch_record_id: "r1", created_at: "x" }],
-    ),
-  );
+  const resume = scriptedTx(replies([installationRow("disabled")], [ownStop()]));
   await runAgentCommand(resume, g, prepared, "corr");
   assert.equal(resume.sent.at(-1)[1][4], "resume");
   assert.equal(resume.sent.at(-1)[1][5], I);
+  // The resume document is exactly the installation it reactivates: its store resource
+  // with the installation's connection, its release digest and its grant set.
+  const resumed = parseInstallationDocument(resume.sent.at(-1)[1][7]);
+  assert.deepEqual(resumed.store, store());
+  assert.deepEqual(resumed.release, {
+    id: "morrow.listings",
+    revision: 1,
+    digest: sha(listingsReleaseManifest),
+  });
+  for (const g of resumed.grants)
+    assert.deepEqual(g.scope, JSON.parse(installationRow("disabled").scope));
+  // The ADR-0022 item 3 amendment: an installation that differs from the document the
+  // owner would confirm is refused, with no definer: pinned to another connection of the
+  // store, to another release or release digest, or with another scope.
+  const old = "connection_old";
+  for (const change of [
+    {
+      connection_id: old,
+      scope: JSON.stringify(listingsScope(storeResource(O, W, S, old))),
+    },
+    { connection_id: old },
+    { release_revision: "2" },
+    { release_digest: "f".repeat(64) },
+    { release_id: "morrow.other" },
+    { scope: JSON.stringify(listingsScope(storeResource(O, W, S, old))) },
+  ]) {
+    const differs = scriptedTx(replies([installationRow("disabled", change)], [ownStop()]));
+    await assert.rejects(
+      runAgentCommand(differs, g, prepared, "corr"),
+      (e) => e instanceof WorkReject && e.reason === "state_conflict",
+      JSON.stringify(change),
+    );
+    assert.equal(differs.submitted, false, JSON.stringify(change));
+  }
   // An active installation, or a disabled one with no stop or a system or operator stop
   // (those lift only through their own paths), is a state conflict with no definer.
   for (const [installation, stop] of [
@@ -769,12 +807,21 @@ test("Enable step 1 builds the document server-side; only a person's stop resume
     [[installationRow("disabled")], []],
     [
       [installationRow("disabled")],
-      [{ id: "s", set_by_kind: "system", kill_switch_record_id: null, created_at: "x" }],
+      [
+        ownStop({
+          set_by_kind: "system",
+          reason_code: "app_uninstalled",
+          kill_switch_record_id: null,
+        }),
+      ],
     ],
     [
       [installationRow("disabled")],
-      [{ id: "s", set_by_kind: "operator", kill_switch_record_id: null, created_at: "x" }],
+      [ownStop({ set_by_kind: "operator", reason_code: "lab_stop", kill_switch_record_id: null })],
     ],
+    // A person's stop that is not "Stop AI work" with its record does not resume this way.
+    [[installationRow("disabled")], [ownStop({ reason_code: "human_other" })]],
+    [[installationRow("disabled")], [ownStop({ kill_switch_record_id: null })]],
   ]) {
     const conflict = scriptedTx(replies(installation, stop));
     await assert.rejects(
@@ -891,9 +938,31 @@ test("Enable step 2 reruns the kernel and sends grants the definer checks agains
     actor: owner,
     createdAtMs: nowMs,
   });
-  const resume = scriptedTx(replies(ownerGrants(), resumeDoc.canonical));
+  const resumeReplies = (installation) => ({
+    ...replies(ownerGrants(), resumeDoc.canonical),
+    listingsInstallation: installation,
+  });
+  const resume = scriptedTx(resumeReplies([installationRow("disabled")]));
   await runAgentCommand(resume, g, prepared, "corr");
   assert.deepEqual(resume.sent.at(-1)[1].slice(6), [null, null, null, null]);
+  assert.ok(names(resume).includes("listingsInstallation"));
+  // At confirmation too: the installation must still be the document (disabled, on the
+  // document's connection and release, with its scope), or no definer is sent.
+  for (const installation of [
+    [],
+    [installationRow("active")],
+    [installationRow("disabled", { connection_id: "connection_old" })],
+    [installationRow("disabled", { release_digest: "f".repeat(64) })],
+    [installationRow("disabled", { id: "installation_other" })],
+  ]) {
+    const differs = scriptedTx(resumeReplies(installation));
+    await assert.rejects(
+      runAgentCommand(differs, g, prepared, "corr"),
+      (e) => e instanceof WorkReject && e.reason === "state_conflict",
+      JSON.stringify(installation),
+    );
+    assert.equal(differs.submitted, false);
+  }
   // A refusal from the definer is the mapped rejection, after a rollback.
   for (const [outcome, reason] of [
     ["guard_failed", "guard_failed"],
@@ -923,10 +992,16 @@ test("the model default: revise only, keys of the active catalogue, a ceiling th
   const replies = (grants) => ({
     enterContext: [contextRow(grants)],
     beginAgentCommand: [{ outcome: "new", aggregate_type: null, aggregate_id: null, result: null }],
-    cmdModelDefaultRevise: applied({ revision: 1 }),
+    cmdModelDefaultRevise: applied({
+      revision: 1,
+      model: "claude_opus_5_5",
+      effort: "high",
+      maxCreditsPerProduct: 6,
+    }),
   });
   const tx = scriptedTx(replies(ownerGrants()));
   const result = await runAgentCommand(tx, g, prepared, "corr");
+  // The body is the definer's recorded result, so a replay returns the same body.
   assert.deepEqual(result.body, {
     revision: 1,
     model: "claude_opus_5_5",
@@ -962,6 +1037,59 @@ test("the model default: revise only, keys of the active catalogue, a ceiling th
     ),
     (e) => e instanceof WorkReject && e.reason === "invalid",
   );
+});
+
+test("the Listings status: blocked by a platform or connection stop; resume only when it matches", async () => {
+  const read = async (replies) => {
+    const tx = scriptedTx({
+      enterContext: [contextRow(ownerGrants())],
+      storeAssociation: [{ store_id: S, connection_id: C, database_now: "x" }],
+      ...replies,
+    });
+    const body = (
+      await runAgentRead(
+        tx,
+        guarded("GET", "/stores/:storeId/agents/listings", null),
+        "listings.status",
+      )
+    ).body;
+    return { body, tx };
+  };
+  const active = await read({ listingsInstallation: [installationRow()] });
+  assert.equal(active.body.blocked, false);
+  assert.deepEqual(
+    active.tx.sent.find(([name]) => name === "storeStops"),
+    ["storeStops", [C]],
+  );
+  // An open platform or connection stop: blocked, although the installation is active.
+  const blocked = await read({
+    listingsInstallation: [installationRow()],
+    storeStops: [{ scope: "platform" }],
+  });
+  assert.equal(blocked.body.blocked, true);
+  assert.equal(blocked.body.installation.status, "active");
+  // Resume is offered after the owner's own stop only when the installation is the store's
+  // current connection on the current release.
+  const stopped = await read({
+    listingsInstallation: [installationRow("disabled")],
+    installationStop: [ownStop()],
+  });
+  assert.equal(stopped.body.actions.resume, true);
+  for (const change of [{ connection_id: "connection_old" }, { release_digest: "f".repeat(64) }]) {
+    const differs = await read({
+      listingsInstallation: [installationRow("disabled", change)],
+      installationStop: [ownStop()],
+    });
+    assert.equal(differs.body.actions.resume, false, JSON.stringify(change));
+  }
+  // An installation whose store is no longer linked still reads, with linked false.
+  const unlinked = await read({
+    storeAssociation: [],
+    listingsInstallation: [installationRow("disabled")],
+    installationStop: [ownStop()],
+  });
+  assert.equal(unlinked.body.linked, false);
+  assert.equal(unlinked.body.actions.resume, false);
 });
 
 test("GET /models: the active catalogue, the member ceiling, no provider strings", async () => {

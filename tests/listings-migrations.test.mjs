@@ -66,7 +66,12 @@ test("manifest: contiguous rows after the published head, executeAs, digests, no
     assert.equal(chain.find((e) => e.sequence === row.sequence).executeAs, row.executeAs);
 });
 
+// The one REFERENCES grant of this PR (the 0014 pattern): the work tables' composite keys
+// binding an installation, and a delegation hop's agent, to its own agent principal.
+const principalReferences =
+  "GRANT REFERENCES (organization_id,workspace_id,principal_id,installation_id) ON morrow_identity.agent_principals TO morrow_work_owner;";
 test("the runner contract: one transaction, no role switch, no membership catalog, fixed paths", () => {
+  assert.equal(texts["listings-identity-bridge"].split(principalReferences).length, 2);
   for (const [slug, text] of Object.entries(texts)) {
     assert.deepEqual(migrationSqlViolations(text), [], slug);
     assert.equal(text.includes("pg_auth_" + "members"), false, slug);
@@ -84,7 +89,7 @@ test("the runner contract: one transaction, no role switch, no membership catalo
     }
     assert.doesNotMatch(code(text), /\bEXECUTE\s+(?!format\(|FUNCTION\b|ON\b)/, slug);
     assert.doesNotMatch(
-      code(text),
+      code(text).replace(principalReferences, ""),
       /GRANT[^;]*\b(DELETE|TRUNCATE|REFERENCES|TRIGGER)\b[^;]*ON/,
       slug,
     );
@@ -212,6 +217,7 @@ test("definers: command-owned and final in the work files; identity bridges for 
     "work_agent_principal_ensure",
     "work_agent_grants_issue",
     "work_owner_disable_grant_issue",
+    "work_agent_grant_set_current",
     "work_delegation_actor_facts",
   ]) {
     assert.match(bridges, new RegExp(`morrow_identity\\.${name}\\([^]*?SECURITY DEFINER`), name);
@@ -222,7 +228,7 @@ test("definers: command-owned and final in the work files; identity bridges for 
   }
   assert.match(
     code(bridges),
-    /GRANT EXECUTE ON FUNCTION morrow_identity\.work_agent_principal_ensure\(text,text,text,text,text\),\n morrow_identity\.work_agent_grants_issue\(text,text,jsonb\),morrow_identity\.work_owner_disable_grant_issue\(text,text,jsonb\),\n morrow_identity\.work_delegation_actor_facts\(text,text,jsonb\) TO morrow_work_command;/,
+    /GRANT EXECUTE ON FUNCTION morrow_identity\.work_agent_principal_ensure\(text,text,text,text,text\),\n morrow_identity\.work_agent_grants_issue\(text,text,jsonb\),morrow_identity\.work_owner_disable_grant_issue\(text,text,jsonb\),\n morrow_identity\.work_agent_grant_set_current\(text,text,text,text,jsonb,jsonb\),\n morrow_identity\.work_delegation_actor_facts\(text,text,jsonb\) TO morrow_work_command;/,
   );
   // The session bridges re-derive the actor from the session; the facts bridge serves only
   // the runtime login's lease steps.
@@ -230,6 +236,7 @@ test("definers: command-owned and final in the work files; identity bridges for 
     "work_agent_principal_ensure",
     "work_agent_grants_issue",
     "work_owner_disable_grant_issue",
+    "work_agent_grant_set_current",
   ]) {
     const body = bridges.slice(bridges.indexOf("FUNCTION morrow_identity." + name + "("));
     assert.match(body.slice(0, body.indexOf("END $$")), /work_session_context\(/, name);
@@ -318,6 +325,59 @@ test("enable: the confirm-screen document of the ADR-0022 item 3 amendment, fina
     /UPDATE morrow_work\.stop_controls x SET lifted_at=greatest\(v_now,x\.created_at\),lifted_by_kind='human'[^;]*x\.scope='installation' AND x\.target_id=doc\.installation_id\n\s+AND x\.lifted_at IS NULL AND x\.set_by_kind='human';/,
   );
   assert.doesNotMatch(enable, /scope='platform'|scope='connection'/);
+  // Resume (the amendment's last bullet, M3 PR-1 review): both steps compare the document
+  // with the installation it reactivates (release digest, store connection, exact grant
+  // set) and refuse any difference; the confirmation lifts only the stop its document named.
+  const document = authority.slice(
+    authority.indexOf("CREATE FUNCTION morrow_work.cmd_listings_enable_document("),
+    authority.indexOf("CREATE FUNCTION morrow_work.cmd_listings_enable("),
+  );
+  for (const needle of [
+    "i.connection_id<>s.connection_id::text",
+    "(i.release_id,i.release_revision,i.release_digest)<>(r.id::text,r.revision,r.digest)",
+    "morrow_identity.work_agent_grant_set_current(p.organization_id,p.workspace_id,i.id,i.agent_principal_id,\n   i.grant_refs,morrow_work.listings_grant_set(p.organization_id,p.workspace_id,p_store_id,s.connection_id))",
+    "IF v_grants IS DISTINCT FROM 'exact' THEN RETURN QUERY SELECT 'state_conflict'",
+    "x.set_by_kind='human' AND x.reason_code='human_stop_ai_work'",
+    "k.capability_id='agents.installation.disable' AND k.target_kind='installation'",
+    "v_created,v_created+interval '5 minutes',NULL,NULL,v_stop)",
+  ])
+    assert.ok(document.includes(needle.replaceAll("\\n", "\n")), needle);
+  for (const needle of [
+    "i.connection_id<>doc.connection_id::text",
+    "(i.release_id,i.release_revision,i.release_digest)<>(doc.release_id::text,doc.release_revision::bigint,doc.release_digest::text)",
+    "doc.stop_id IS NULL",
+    "morrow_work.listings_grant_set(p.organization_id,p.workspace_id,doc.store_id,doc.connection_id)) g;",
+    "IF v_grants IS DISTINCT FROM 'exact' THEN RETURN QUERY SELECT 'state_conflict'",
+    "x.id=doc.stop_id AND x.scope='installation'",
+  ])
+    assert.ok(enable.includes(needle), needle);
+  // The grant check comes before the stop is lifted, and both before the reactivation.
+  assert.ok(
+    enable.indexOf("work_agent_grant_set_current(") <
+      enable.indexOf("UPDATE morrow_work.stop_controls"),
+  );
+  assert.ok(
+    enable.indexOf("UPDATE morrow_work.stop_controls") <
+      enable.indexOf("UPDATE morrow_work.agent_installations x SET status='active'"),
+  );
+  assert.match(
+    authority,
+    /CONSTRAINT agent_enable_documents_stop CHECK \(\(purpose='resume'\)=\(stop_id IS NOT NULL\)\)/,
+  );
+  // The bridge: exactly three grants of that principal, each named by its GrantRef,
+  // unrevoked, unexpired and equal to the document's set at its position.
+  const bridges = texts["listings-identity-bridge"];
+  const set = bridges.slice(
+    bridges.indexOf("CREATE FUNCTION morrow_identity.work_agent_grant_set_current("),
+    bridges.indexOf("REVOKE ALL ON FUNCTION morrow_identity.work_agent_principal_ensure("),
+  );
+  for (const needle of [
+    "x.principal_id=p_principal_id)<>3",
+    "x.id=p_refs->v_index->>'id'",
+    "x.payload->'revokedAt'='null'::jsonb AND x.payload->'expiresAt'='null'::jsonb",
+    "jsonb_build_object('capabilityId',x.payload->'capabilityId','verbs',x.payload->'verbs','scope',x.payload->'scope')=p_expected->v_index",
+  ])
+    assert.ok(set.includes(needle), needle);
   // The command never reads billing or credits; nor does Stop AI work.
   const stop = authority.slice(
     authority.indexOf("CREATE FUNCTION morrow_work.cmd_stop_ai_work("),
@@ -334,6 +394,83 @@ test("enable: the confirm-screen document of the ADR-0022 item 3 amendment, fina
     authority,
     /CONSTRAINT stop_controls_human_record CHECK \(\(set_by_kind='human'\)=\(kill_switch_record_id IS NOT NULL\)\)/,
   );
+});
+
+test("review fixes: stale prior state, one delegation chain, agent principal keys, redaction context, credit replays", () => {
+  const authority = texts["listings-authority"];
+  // A concurrent "Stop AI work" whose read went stale is a state conflict (409, reread),
+  // never an invalid request.
+  const stop = authority.slice(
+    authority.indexOf("CREATE FUNCTION morrow_work.cmd_stop_ai_work("),
+    authority.indexOf("CREATE FUNCTION morrow_work.cmd_model_default_revise("),
+  );
+  assert.ok(
+    stop.indexOf(
+      "IF d->'priorStateObserved' IS DISTINCT FROM to_jsonb(v_prior) THEN RETURN QUERY SELECT 'state_conflict'",
+    ) < stop.indexOf("INSERT INTO morrow_work.kill_switch_records"),
+  );
+  // delegation_facts follows the one chain that ends at this executor; two are ambiguous.
+  const facts = authority.slice(
+    authority.indexOf("CREATE FUNCTION morrow_work.delegation_facts("),
+    authority.indexOf("CREATE FUNCTION morrow_vault.resolve_call("),
+  );
+  assert.match(
+    facts,
+    /WITH RECURSIVE walk\(depth,path,child_envelope_id,recipient_installation_id\)/,
+  );
+  assert.match(facts, /WHERE w\.recipient_installation_id=p_installation_id LIMIT 2 LOOP/);
+  assert.match(facts, /IF v_paths>1 THEN RETURN; END IF;/);
+  assert.doesNotMatch(facts, /ORDER BY h\.created_at,h\.id LIMIT 1/);
+  // An installation and a hop's agents name their own agent principals.
+  assert.match(
+    authority,
+    /FOREIGN KEY \(organization_id,workspace_id,agent_principal_id,id\)\n  REFERENCES morrow_identity\.agent_principals\(organization_id,workspace_id,principal_id,installation_id\)/,
+  );
+  assert.match(
+    authority,
+    /FOREIGN KEY \(organization_id,workspace_id,recipient_principal_id,recipient_installation_id\)\n  REFERENCES morrow_identity\.agent_principals/,
+  );
+  assert.match(
+    texts["listings-identity-bridge"],
+    /UNIQUE \(organization_id,workspace_id,principal_id,installation_id\)/,
+  );
+  // The model default's recorded result names what was set, so a replay matches.
+  assert.match(
+    authority,
+    /v_result:=jsonb_build_object\('revision',v_revision,'model',p_model,'effort',p_effort,'maxCreditsPerProduct',p_max_credits::integer\);/,
+  );
+  // Redaction refuses without the tenant's own session context instead of an empty success.
+  const redact = texts["agent-proposals"].slice(
+    texts["agent-proposals"].indexOf("CREATE FUNCTION morrow_work.parameters_redact_for_store("),
+  );
+  assert.ok(
+    redact.indexOf("'context_unavailable'") > 0 &&
+      redact.indexOf("'context_unavailable'") <
+        redact.indexOf("UPDATE morrow_work.proposal_parameters"),
+  );
+  // Credits: every booking has an entry id and is recorded before totals change; a repeat
+  // replays it; a wallet the context cannot see or update is a refusal or an error.
+  const credits = texts["run-credits"];
+  const book = credits.slice(
+    credits.indexOf("CREATE FUNCTION morrow_billing.run_book_cost("),
+    credits.indexOf("CREATE FUNCTION morrow_billing.run_settle("),
+  );
+  assert.match(book, /OR p_entry_id IS NULL OR p_entry_id !~/);
+  assert.ok(
+    book.indexOf("FROM morrow_billing.run_cost_bookings x") <
+      book.indexOf("IF r.status<>'reserved'"),
+  );
+  assert.ok(
+    book.indexOf("INSERT INTO morrow_billing.run_cost_bookings") <
+      book.indexOf("UPDATE morrow_billing.vendor_cost_reservations"),
+  );
+  assert.match(book, /RETURN QUERY SELECT 'conflict'::text/);
+  const settle = credits.slice(credits.indexOf("CREATE FUNCTION morrow_billing.run_settle("));
+  assert.match(
+    settle,
+    /FOR UPDATE;\n IF NOT FOUND THEN RETURN QUERY SELECT 'wallet_not_found'::text,NULL::text; RETURN; END IF;/,
+  );
+  assert.equal((credits.match(/RAISE EXCEPTION 'CREDIT_WALLET_INVALID'/g) ?? []).length, 2);
 });
 
 test("resolve_call: broker only, one refusal code on any doubt, its settings cleared", () => {
@@ -429,6 +566,7 @@ test("registry: every new table and function is registered with its class", () =
   for (const table of [
     "credit_reservations",
     "vendor_cost_reservations",
+    "run_cost_bookings",
     "unrecovered_costs",
     "unrecovered_cost_entries",
   ]) {

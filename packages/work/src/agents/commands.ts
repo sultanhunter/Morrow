@@ -41,8 +41,12 @@ import {
   enableRequestFields,
   installationGrants,
   installationResource,
+  listingsRelease,
+  listingsReleaseDigest,
   ownerDisableGrant,
   parseInstallationDocument,
+  resumeDocumentMatches,
+  type PinnedInstallation,
 } from "./listings.js";
 import type { GuardedWorkspaceRequest } from "./workspace-guard-stub.js";
 
@@ -57,7 +61,10 @@ import type { GuardedWorkspaceRequest } from "./workspace-guard-stub.js";
 //     actor, the session, five minutes and a single-use nonce; the owner's confirmation of
 //     that document's digest and nonce creates (or, after the owner's own "Stop AI work",
 //     resumes) the installation. agents.installation.activate is review_required: the
-//     confirmed document is the exact approval its kernel obligation names.
+//     confirmed document is the exact approval its kernel obligation names. A resume
+//     document must be exactly the installation it reactivates (its release digest, its
+//     store resource with the connection, its grant set), at both steps; any difference is
+//     a state conflict (the installation is then uninstalled and enabled afresh).
 //   * "Stop AI work" is the human-only kill switch agents.installation.disable: kernel,
 //     then checkKillSwitchTarget (planStopAiWork), then the KillSwitchRecord commits with
 //     the stop. It never reads entitlement or credits.
@@ -201,11 +208,8 @@ const one = (rows: readonly Record<string, unknown>[]) => {
   if (rows.length !== 1 || !rows[0]) throw new WorkContextUnavailable();
   return rows[0];
 };
-export interface InstallationRow {
-  readonly id: string;
+export interface InstallationRow extends PinnedInstallation {
   readonly revision: number;
-  readonly storeId: string;
-  readonly connectionId: string;
   readonly agentPrincipalId: string;
   readonly status: "active" | "disabled";
   readonly updatedAt: string;
@@ -237,9 +241,20 @@ async function installationOf(tx: WorkTx, storeId: string): Promise<Installation
   if (!row) return null;
   const status = text(row, "status");
   const revision = Number(text(row, "revision"));
-  if ((status !== "active" && status !== "disabled") || !Number.isSafeInteger(revision))
+  const releaseRevision = Number(text(row, "release_revision"));
+  if (
+    (status !== "active" && status !== "disabled") ||
+    !Number.isSafeInteger(revision) ||
+    !Number.isSafeInteger(releaseRevision)
+  )
     throw new WorkContextUnavailable();
   if (text(row, "store_id") !== storeId) throw new WorkContextUnavailable();
+  let scope: unknown;
+  try {
+    scope = JSON.parse(text(row, "scope"));
+  } catch {
+    throw new WorkContextUnavailable();
+  }
   return Object.freeze({
     id: text(row, "id"),
     revision,
@@ -247,8 +262,27 @@ async function installationOf(tx: WorkTx, storeId: string): Promise<Installation
     connectionId: text(row, "connection_id"),
     agentPrincipalId: text(row, "agent_principal_id"),
     status,
+    release: Object.freeze({
+      id: text(row, "release_id"),
+      revision: releaseRevision,
+      digest: text(row, "release_digest"),
+    }),
+    scope,
     updatedAt: text(row, "updated_at"),
   });
+}
+/**
+ * Whether this installation could resume on this store: its connection is the store's
+ * current one and its release is the current Listings release (a document names both).
+ */
+async function resumable(installation: InstallationRow, store: StoreResource | null) {
+  return (
+    store !== null &&
+    installation.connectionId === store.connectionId &&
+    installation.release.id === listingsRelease.id &&
+    installation.release.revision === listingsRelease.revision &&
+    installation.release.digest === (await listingsReleaseDigest())
+  );
 }
 async function openStopOf(tx: WorkTx, installationId: string) {
   const row = one(await tx.run("installationStop", [installationId]));
@@ -256,8 +290,19 @@ async function openStopOf(tx: WorkTx, installationId: string) {
   const kind = text(row, "set_by_kind");
   if (kind !== "human" && kind !== "system" && kind !== "operator")
     throw new WorkContextUnavailable();
-  return { id: text(row, "id"), setByKind: kind, recordId: optional(row, "kill_switch_record_id") };
+  return {
+    id: text(row, "id"),
+    setByKind: kind,
+    reasonCode: text(row, "reason_code"),
+    recordId: optional(row, "kill_switch_record_id"),
+  };
 }
+/** A person's own "Stop AI work" (with its KillSwitchRecord): the only stop a resume lifts. */
+const ownStop = (stop: Awaited<ReturnType<typeof openStopOf>>) =>
+  stop !== null &&
+  stop.setByKind === "human" &&
+  stop.reasonCode === "human_stop_ai_work" &&
+  stop.recordId !== null;
 
 // ---------------------------------------------------------------------------
 // Command plumbing.
@@ -363,7 +408,7 @@ async function enableDocument(
   } else {
     const stop = installation.status === "disabled" ? await openStopOf(tx, installation.id) : null;
     // Only the owner's own "Stop AI work" (a person's installation stop) resumes this way.
-    if (!stop || stop.setByKind !== "human") throw new WorkReject("state_conflict");
+    if (!ownStop(stop)) throw new WorkReject("state_conflict");
     purpose = "resume";
     installationId = installation.id;
   }
@@ -376,6 +421,11 @@ async function enableDocument(
     actor: a.actor,
     createdAtMs: a.databaseNowMs,
   });
+  // A resume document names the store's current resource and the current release; the
+  // installation it reactivates must be exactly that (its own release, connection and
+  // grant scope), or the owner would confirm something other than what resumes.
+  if (installation && !resumeDocumentMatches(installation, built.document))
+    throw new WorkReject("state_conflict");
   const result = await submit(tx, "cmdListingsEnableDocument", [
     g.commandId,
     prepared.digest,
@@ -450,7 +500,17 @@ async function enable(
       JSON.stringify(grants.map((grant) => canonicalJson(grant))),
       canonicalJson(owner),
     ];
-  } else values = [null, null, null, null];
+  } else {
+    // The installation the confirmation reactivates is still exactly the document.
+    const installation = await installationOf(tx, storeId);
+    if (
+      !installation ||
+      installation.status !== "disabled" ||
+      !resumeDocumentMatches(installation, document)
+    )
+      throw new WorkReject("state_conflict");
+    values = [null, null, null, null];
+  }
   const result = await submit(tx, "cmdListingsEnable", [
     g.commandId,
     prepared.digest,
@@ -591,16 +651,9 @@ async function reviseModelDefault(
     String(body.maxCreditsPerProduct),
     body.expectedRevision === null ? null : String(body.expectedRevision),
   ]);
-  return {
-    status: 200,
-    body: {
-      ...result,
-      model: body.model,
-      effort: body.effort,
-      maxCreditsPerProduct: body.maxCreditsPerProduct,
-    },
-    outcome: "applied",
-  };
+  // The definer's recorded result names the revision and what was set, so a replay
+  // returns this same body.
+  return { status: 200, body: result, outcome: "applied" };
 }
 
 const commands: Readonly<
@@ -639,6 +692,10 @@ async function listingsStatus(tx: WorkTx, g: GuardedWorkspaceRequest): Promise<A
   if (!store && !installation) throw new WorkReject("not_found");
   const open = installation ? await openStopOf(tx, installation.id) : null;
   const may = store ? await enableAllowed(a, store) : false;
+  // A platform stop, or a stop on the store's connection, blocks AI work although the
+  // installation itself is active: only their own paths lift them.
+  const connectionId = installation?.connectionId ?? store?.connectionId ?? null;
+  const blocked = connectionId !== null && (await tx.run("storeStops", [connectionId])).length > 0;
   const target = installation
     ? installationResource(
         storeResource(
@@ -656,6 +713,7 @@ async function listingsStatus(tx: WorkTx, g: GuardedWorkspaceRequest): Promise<A
     body: {
       storeId,
       linked: store !== null,
+      blocked,
       installation: installation
         ? {
             installationId: installation.id,
@@ -667,7 +725,11 @@ async function listingsStatus(tx: WorkTx, g: GuardedWorkspaceRequest): Promise<A
         : null,
       actions: {
         enable: may && installation === null,
-        resume: may && installation?.status === "disabled" && open?.setByKind === "human",
+        resume:
+          may &&
+          installation?.status === "disabled" &&
+          ownStop(open) &&
+          (await resumable(installation, store)),
         stop: canStop && installation !== null,
       },
     },
