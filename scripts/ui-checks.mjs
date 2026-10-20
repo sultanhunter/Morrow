@@ -472,6 +472,75 @@ export const fixtureCases = [
     setup: (page) => page.getByRole("button", { name: /Switch workspace/ }).click(),
   }),
 ];
+// M2 PR-2: the connections screens. The fixture continuation rides in the fragment, as the
+// connector's redirect sends it; the app reads it once and replaces the address.
+const handoffPath = `/w/${ws}/connections#handoff=Hx${"1".repeat(40)}A`;
+const linkButton = (page) => page.getByRole("button", { name: "Link store" });
+fixtureCases.push(
+  fixtureCase("connections", "linked", `/w/${ws}/connections`),
+  fixtureCase("connections", "offered", `/w/${ws}/connections`, {
+    widths: [1440, 390, 320],
+    scenario: "connections_offered",
+    setup: async (page) => {
+      const link = page.getByRole("link", { name: "Open the install link" });
+      await link.waitFor();
+      expect((await link.getAttribute("target")) === "_blank", "new_tab");
+      expect((await link.getAttribute("rel")) === "noopener noreferrer", "no_opener");
+    },
+  }),
+  fixtureCase("connections", "not_permitted", `/w/${ws}/connections`, {
+    widths: [1440, 390],
+    scenario: "connections_not_permitted",
+  }),
+  fixtureCase("connections", "route_not_ready", `/w/${ws}/connections`, {
+    widths: [1440, 390],
+    scenario: "connections_route_not_ready",
+  }),
+  fixtureCase("connections", "unlinked", `/w/${ws}/connections`, {
+    widths: [1440, 390],
+    scenario: "connections_unlinked",
+    setup: (page) =>
+      page.getByText("Sign in, then reopen Morrow from your Shopify admin").waitFor(),
+  }),
+  fixtureCase("connections", "detail", `/w/${ws}/connections/conn-sample-1`, {
+    widths: [1440, 390],
+  }),
+  fixtureCase("connections", "handoff_confirm", handoffPath, {
+    scenario: "connections_handoff",
+    setup: async (page) => {
+      await linkButton(page).waitFor();
+      // The token left the address before anything rendered.
+      expect(new URL(page.url()).hash === "", "fragment_replaced");
+    },
+  }),
+  fixtureCase("connections", "handoff_linked", handoffPath, {
+    widths: [1440, 390],
+    scenario: "connections_handoff",
+    setup: async (page) => {
+      await linkButton(page).click();
+      await page.getByText("Store linked.").waitFor();
+      await page.getByText("Connected").waitFor();
+    },
+  }),
+  fixtureCase("connections", "handoff_route", handoffPath, {
+    widths: [1440, 390],
+    scenario: "connections_handoff_route",
+    setup: (page) => page.getByText("Subscribe before connecting a store.").first().waitFor(),
+  }),
+  fixtureCase("connections", "handoff_expired", handoffPath, {
+    widths: [1440, 390],
+    scenario: "connections_handoff_expired",
+    setup: (page) => page.getByText("This connection link expired").waitFor(),
+  }),
+  fixtureCase("connections", "link_uncertain", handoffPath, {
+    widths: [1440, 390],
+    scenario: "connections_link_uncertain",
+    setup: async (page) => {
+      await linkButton(page).click();
+      await page.getByRole("button", { name: "Check again" }).waitFor();
+    },
+  }),
+);
 export const edgeCases = [
   fixtureCase("edge", "landing", "/"),
   fixtureCase("edge", "sign_in", "/w/ws-edge-lab"),
@@ -941,6 +1010,27 @@ export const keyboardWalks = [
     },
   },
   {
+    // M2 PR-2: the link step by keyboard: Link store, then the lost reply's Check again
+    // (status with the same key) confirms the link.
+    name: "connections_link",
+    path: `/w/${ws}/connections#handoff=Hx${"1".repeat(40)}A`,
+    scenario: "connections_link_uncertain",
+    run: async (page) => {
+      await page.getByRole("button", { name: "Link store" }).waitFor();
+      await tabTo(page, (a) => a.text === "Link store");
+      await page.keyboard.press("Enter");
+      await page.getByRole("button", { name: "Check again" }).waitFor();
+      await tabTo(page, (a) => a.text === "Check again");
+      await page.keyboard.press("Enter");
+      await page.getByText("Store linked.").waitFor();
+      expect(new URL(page.url()).hash === "", "fragment_replaced");
+      expect(
+        (await morrowKeys(page)).every((k) => k !== "morrow.intended.v1"),
+        "no_intended",
+      );
+    },
+  },
+  {
     // AC12: a 401 that arrives while "Leave this page?" is open ends the session view;
     // the dialog closes and no beforeunload handler stays registered (§4.6, §4.9).
     name: "expire_during_leave",
@@ -1015,7 +1105,11 @@ async function runCase(browser, origin, item, width, { fixture, failures: allFai
   const failures = [];
   try {
     const query = item.scenario ? `?scenario=${item.scenario}` : "";
-    await page.goto(origin + item.path + query, { waitUntil: "load" });
+    // A fragment (M2 PR-2's install continuation) follows the query.
+    const [pathOnly, fragment] = item.path.split("#");
+    await page.goto(origin + pathOnly + query + (fragment ? "#" + fragment : ""), {
+      waitUntil: "load",
+    });
     await settle(page);
     if (item.setup) await item.setup(page, width);
     await page.waitForTimeout(50);

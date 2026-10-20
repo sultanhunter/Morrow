@@ -40,6 +40,14 @@ export const scenarioNames = [
   "sign_out_unavailable",
   "sign_out_unknown",
   "expire_during_leave",
+  "connections_offered",
+  "connections_not_permitted",
+  "connections_route_not_ready",
+  "connections_unlinked",
+  "connections_handoff",
+  "connections_handoff_route",
+  "connections_handoff_expired",
+  "connections_link_uncertain",
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
 export type Reply =
@@ -79,6 +87,12 @@ const sample = (n: number) => ({
   workspaceId: `ws-sample-${n}`,
   displayName: `Sample workspace ${n}`,
   organizationName: n === 3 ? "Sample organization B" : "Sample organization A",
+});
+// M2 PR-2: a workspace with no store yet, and each install-link offer.
+const noStore = (installLink: Readonly<Record<string, unknown>>): Outcome<unknown> => ({
+  kind: "ok",
+  value: { installations: [], installLink },
+  replayed: false,
 });
 const accountForm: Outcome<unknown> = {
   kind: "ok",
@@ -266,7 +280,45 @@ export const scenarios: Readonly<Record<ScenarioName, Script>> = {
     "work.answer": () => ({ delayMs: 2500, outcome: { kind: "unauthenticated" } }),
     "account.overview": (call) => (call === 0 ? null : { kind: "unauthenticated" }),
   },
+  // M2 PR-2 connections. No store yet: the install link offered, not permitted, or waiting
+  // on the subscription.
+  connections_offered: {
+    "connections.list": () =>
+      noStore({
+        offered: true,
+        url: "https://admin.shopify.com/oauth/install_custom_app?client_id=sample&signature=sample",
+        reason: "offered",
+      }),
+  },
+  connections_not_permitted: {
+    "connections.list": () => noStore({ offered: false, url: null, reason: "not_permitted" }),
+  },
+  connections_route_not_ready: {
+    "connections.list": () => noStore({ offered: false, url: null, reason: "route_not_ready" }),
+  },
+  // Installed on Shopify, not linked, and no continuation in memory (a sign-in lost it).
+  connections_unlinked: {},
+  // Opened from the connector's redirect: preview, then Link store applies (the seed).
+  connections_handoff: {},
+  // The preview's 409 billing_route_required.
+  connections_handoff_route: {
+    "storeLinks.preview": () => ({ kind: "conflict", recheck: false, message: "" }),
+  },
+  // The preview's 404 linking_not_found (expired or already used).
+  connections_handoff_expired: { "storeLinks.preview": () => ({ kind: "not_found" }) },
+  // The apply is applied but its reply is lost; Check again asks status, which answers it.
+  connections_link_uncertain: {
+    "storeLinks.apply": (call) => (call === 0 ? { kind: "uncertain" } : null),
+  },
 };
+/** M2 PR-2: these scenarios start with the sample store installed but not linked. */
+export const unlinkedStoreIn: readonly ScenarioName[] = [
+  "connections_unlinked",
+  "connections_handoff",
+  "connections_handoff_route",
+  "connections_handoff_expired",
+  "connections_link_uncertain",
+];
 
 /**
  * Scenarios that model a build's composition rather than one reply: these methods are

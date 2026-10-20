@@ -1,7 +1,7 @@
 // The fixture entry (P14.T01a §4.11): the only path to src/fixtures. It boots only in a
 // `--mode fixture` build and only on 127.0.0.1 or localhost. No environment variable,
 // query, storage key or header selects fixtures; `?scenario=` only picks a script, is
-// read once and is stripped.
+// read once and is stripped (a fragment is kept for the app's own reading).
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@morrow/workspace-ui/styles.css";
@@ -24,7 +24,9 @@ if (!fixtureBootAllowed(import.meta.env.MODE, window.location.hostname)) {
   root.textContent = "Fixture mode runs only in a fixture build on 127.0.0.1 or localhost.";
 } else {
   const scenario = readScenario(window.location.search);
-  if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
+  // The fragment stays: an install continuation (M2 PR-2) is read by createAppRuntime.
+  if (window.location.search)
+    window.history.replaceState(null, "", window.location.pathname + window.location.hash);
   // `/`, keeping a scenario that models the build's composition (a sign-in doesn't change it).
   const rootPath = scenarioRoot(scenario);
   // The re-entry scenario plants one text-free marker, as an earlier page load would have.
