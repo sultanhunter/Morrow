@@ -217,7 +217,7 @@
     {
       "sequence": 26,
       "file": "0026.shopify-install-identity.sql",
-      "sha256": "cc48dc40de2b69a340aea3a3a51338993ff96816eb57bfb2a99d2559d4006a13",
+      "sha256": "b93538595f502d6cc7e3ce1ecfcf4c5c9c7986a80578c555db1afd7b20e40957",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/M2-shopify-connect.md"
     },

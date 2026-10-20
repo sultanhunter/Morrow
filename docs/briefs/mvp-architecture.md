@@ -92,7 +92,7 @@ All follow ADR-0010 item 2 (tenant keys first, composite foreign keys, ENABLE an
 | `morrow_work.operations`, `operation_transitions` | M2 PR-1 | `Operation@2`, kinds `catalog_write` and `stripe_write`; claim columns nullable (§8) | 365 d |
 | `morrow_billing.workspace_billing_routes` | M2 PR-1 | ADR-0015 persistence item 1 | workspace lifetime |
 | `morrow_vault.credentials`, `morrow_vault.app_secrets` (P) | M2 PR-1 | encrypted tokens and app client secrets; broker-only definers | destroyed at uninstall or disconnect; app secrets until rotated |
-| `morrow_identity.shopify_apps` (P) | M2 | app key, client id, intended shop domain, invited workspace, status | platform |
+| `morrow_identity.shopify_apps` (P) | M2 | app key, client id, intended shop domain (as a digest, M2 PR-2), invited workspace, install link, status | platform; the install link names the shop, so retirement and `shop/redact` clear it (M2 PR-2 review) |
 | `morrow_identity.shopify_oauth_states` | M2 | single-use state digest, 10 min | 7 d |
 | `morrow_identity.store_installations` | M2 | `StoreInstallation@1`: shop, app, generation, expanded scopes, credential ref and version, status | installation lifetime |
 | `morrow_identity.install_continuations` | M2 | ADR-0015 persistence item 2; 5-min single-use token digest | 365 d |

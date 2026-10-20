@@ -5,14 +5,16 @@ BEGIN;
 --   * the platform app registry (shopify_apps), the single-use OAuth states, the store
 --     installations (StoreInstallation@1) and the install continuations (ADR-0015
 --     persistence item 2), each ENABLE and FORCE RLS with the identity_owner policy only
---     and an immutability guard;
+--     and an immutability guard; tenant-keyed references are composite foreign keys, and
+--     one shop has at most one installation that is not uninstalled, under any app;
 --   * shopify_oauth as a linking proof and review evidence kind, and the two new link
 --     result reasons, by forward CHECK replacement;
 --   * the store-link grant template (ADR-0022 item 3) and link_workspace_store replaced
 --     with the same signature, owner and ACL: the route must be fixed to morrow_direct
 --     (ADR-0022 item 5, every candidate kind; shopify_bound_at is never set), a
---     shopify_oauth link marks its installation linked and issues the template's grants
---     to the linking owner on the store resource;
+--     shopify_oauth link needs the organization's owner (its founding principal) as the
+--     actor and an active app, marks its installation linked and issues the template's
+--     grants to that owner on the store resource;
 --   * the connector login's one definer (the OAuth state), the vault login's identity
 --     bridges (EXECUTE to morrow_work_command only; 0027's vault definers call them), the
 --     shared store-installation read bridge for the work and billing definers, and the
@@ -43,6 +45,7 @@ DO $$ BEGIN
  OR (SELECT pg_catalog.pg_get_constraintdef(c.oid) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_identity.workspace_link_results'::regclass
    AND c.conname='workspace_link_results_reason_check') IS DISTINCT FROM
    'CHECK ((reason = ANY (ARRAY[''applied''::text, ''actor_ineligible''::text, ''grant_changed''::text, ''handoff_expired''::text, ''review_invalid''::text, ''proof_invalid''::text, ''purpose_denied''::text, ''policy_conflict''::text, ''ownership_conflict''::text, ''revision_exhausted''::text])))'
+ OR EXISTS(SELECT 1 FROM pg_catalog.pg_constraint c WHERE c.conname IN ('workspace_store_links_tenant_id_key','linking_handoffs_tenant_id_key'))
  OR to_regclass('morrow_identity.shopify_apps') IS NOT NULL OR to_regclass('morrow_identity.store_installations') IS NOT NULL
  OR to_regprocedure('morrow_identity.work_store_installations(text,text)') IS NOT NULL
  THEN RAISE EXCEPTION 'SHOPIFY_INSTALL_IDENTITY_PREREQUISITES_INVALID'; END IF;
@@ -50,11 +53,20 @@ END $$;
 
 -- The connector login executes exactly one identity definer (connector_oauth_state_open).
 GRANT USAGE ON SCHEMA morrow_identity TO morrow_connector_ingress;
+-- Tenant-keyed targets for the composite foreign keys below: a link or handoff id names
+-- one tenant's row, so the database refuses a pointer across tenants (0005 rows unchanged).
+ALTER TABLE morrow_identity.workspace_store_links
+ ADD CONSTRAINT workspace_store_links_tenant_id_key UNIQUE (organization_id,workspace_id,id);
+ALTER TABLE morrow_identity.linking_handoffs
+ ADD CONSTRAINT linking_handoffs_tenant_id_key UNIQUE (organization_id,workspace_id,id);
 
 -- ---------------------------------------------------------------------------
 -- The platform registry: one custom-distribution app per beta store (ADR-0022 item 4).
--- No shop identity is stored: the intended shop is its sha256 digest. The client id is
--- public; the client secret is a morrow_vault.app_secrets row (0020), never here.
+-- The intended shop is stored as its sha256 digest. The install link names the shop (a
+-- *.myshopify.com host, or the shop in a custom-distribution link's signed parameter), so
+-- the registry is store content: retirement clears the link, and shop/redact clears it
+-- (M2 PR-3; packages/work/src/redaction.ts). The client id is public; the client secret is
+-- a morrow_vault.app_secrets row (0020), never here.
 CREATE TABLE morrow_identity.shopify_apps (
  app_key text PRIMARY KEY CHECK (app_key ~ '^[a-z0-9][a-z0-9-]{2,62}$'),
  client_id text NOT NULL UNIQUE CHECK (client_id ~ '^[a-f0-9]{32}$'),
@@ -64,12 +76,13 @@ CREATE TABLE morrow_identity.shopify_apps (
  invited_workspace_id morrow_identity.record_id NOT NULL,
  scopes text NOT NULL CHECK (scopes='read_products,write_products'),
  api_version text NOT NULL CHECK (api_version='2026-10'),
- install_url text NOT NULL CHECK (length(install_url)<=2048
-  AND install_url ~ '^https://(admin\.shopify\.com|[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com)/[!-~]+$'),
+ install_url text CHECK (install_url IS NULL OR (length(install_url)<=2048
+  AND install_url ~ '^https://(admin\.shopify\.com|[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com)/[!-~]+$')),
  status text NOT NULL CHECK (status IN ('active','retired')),
  revision morrow_identity.revision NOT NULL,
  created_at timestamptz NOT NULL CHECK (created_at=date_trunc('milliseconds',created_at) AND isfinite(created_at)),
  retired_at timestamptz CHECK (retired_at=date_trunc('milliseconds',retired_at) AND isfinite(retired_at)),
+ UNIQUE (app_key,invited_organization_id,invited_workspace_id),
  FOREIGN KEY (invited_organization_id,invited_workspace_id) REFERENCES morrow_identity.workspaces(organization_id,id),
  CHECK ((status='active')=(retired_at IS NULL) AND (retired_at IS NULL OR retired_at>=created_at))
 );
@@ -95,12 +108,14 @@ CREATE INDEX shopify_oauth_states_open ON morrow_identity.shopify_oauth_states (
 -- link's installation id. store_id and connection_id are allocated at the first install
 -- and make the store resource {kind: store, id: store_id, storeId, connectionId}.
 -- granted_scopes are expanded and sorted. shop_domain is shop identity (spine §11):
--- shop/redact pseudonymises it in M2 PR-3.
+-- shop/redact pseudonymises it in M2 PR-3. The tenant is the app's invited workspace and
+-- the link is the tenant's own (composite foreign keys); one shop (by id or domain) has at
+-- most one installation that is not uninstalled, whichever app installed it.
 CREATE TABLE morrow_identity.store_installations (
  organization_id morrow_identity.record_id NOT NULL,
  workspace_id morrow_identity.record_id NOT NULL,
  id morrow_identity.record_id NOT NULL UNIQUE,
- app_key text NOT NULL REFERENCES morrow_identity.shopify_apps(app_key),
+ app_key text NOT NULL,
  shop_id text NOT NULL CHECK (shop_id ~ '^[1-9][0-9]{0,19}$'),
  shop_domain text NOT NULL CHECK (shop_domain ~ '^[a-z0-9][a-z0-9-]*\.myshopify\.com$' AND length(shop_domain)<=255),
  store_id morrow_identity.record_id NOT NULL UNIQUE,
@@ -111,7 +126,7 @@ CREATE TABLE morrow_identity.store_installations (
  credential_id morrow_identity.record_id NOT NULL UNIQUE,
  credential_version morrow_identity.revision NOT NULL,
  development_store boolean NOT NULL,
- link_id morrow_identity.record_id UNIQUE REFERENCES morrow_identity.workspace_store_links(id),
+ link_id morrow_identity.record_id UNIQUE,
  revision morrow_identity.revision NOT NULL,
  created_at timestamptz NOT NULL CHECK (created_at=date_trunc('milliseconds',created_at) AND isfinite(created_at)),
  updated_at timestamptz NOT NULL CHECK (updated_at=date_trunc('milliseconds',updated_at) AND isfinite(updated_at)),
@@ -120,9 +135,17 @@ CREATE TABLE morrow_identity.store_installations (
  PRIMARY KEY (organization_id,workspace_id,id),
  UNIQUE (app_key,shop_id),
  FOREIGN KEY (organization_id,workspace_id) REFERENCES morrow_identity.workspaces(organization_id,id),
+ FOREIGN KEY (app_key,organization_id,workspace_id)
+  REFERENCES morrow_identity.shopify_apps(app_key,invited_organization_id,invited_workspace_id),
+ FOREIGN KEY (organization_id,workspace_id,link_id) REFERENCES morrow_identity.workspace_store_links(organization_id,workspace_id,id),
  CHECK ((link_id IS NULL)=(linked_at IS NULL) AND (status<>'linked' OR link_id IS NOT NULL) AND (status<>'unlinked' OR link_id IS NULL)),
  CHECK (updated_at>=created_at AND (linked_at IS NULL OR linked_at>=created_at) AND (reauthorised_at IS NULL OR reauthorised_at>=created_at))
 );
+CREATE UNIQUE INDEX store_installations_one_live_shop_id ON morrow_identity.store_installations (shop_id) WHERE status<>'uninstalled';
+CREATE UNIQUE INDEX store_installations_one_live_shop_domain ON morrow_identity.store_installations (shop_domain) WHERE status<>'uninstalled';
+-- An OAuth state records the installation it led to.
+ALTER TABLE morrow_identity.shopify_oauth_states
+ ADD FOREIGN KEY (installation_id) REFERENCES morrow_identity.store_installations(id);
 -- The continuation of a first-party install (ADR-0015 persistence item 2): the digest of a
 -- 32-byte token the broker hands the connector for the browser fragment, 5 minutes, single
 -- use, superseded by a later install of the same store. Content-free; 365 days.
@@ -137,10 +160,11 @@ CREATE TABLE morrow_identity.install_continuations (
  expires_at timestamptz NOT NULL,
  consumed_at timestamptz CHECK (consumed_at=date_trunc('milliseconds',consumed_at) AND isfinite(consumed_at)),
  consumed_principal_id morrow_identity.record_id REFERENCES morrow_identity.principals(id),
- consumed_handoff_id morrow_identity.record_id UNIQUE REFERENCES morrow_identity.linking_handoffs(id),
+ consumed_handoff_id morrow_identity.record_id UNIQUE,
  superseded_at timestamptz CHECK (superseded_at=date_trunc('milliseconds',superseded_at) AND isfinite(superseded_at)),
  PRIMARY KEY (organization_id,workspace_id,id),
  FOREIGN KEY (organization_id,workspace_id,installation_id) REFERENCES morrow_identity.store_installations(organization_id,workspace_id,id),
+ FOREIGN KEY (organization_id,workspace_id,consumed_handoff_id) REFERENCES morrow_identity.linking_handoffs(organization_id,workspace_id,id),
  CHECK (expires_at=created_at+interval '5 minutes'),
  CHECK ((consumed_at IS NULL)=(consumed_principal_id IS NULL) AND (consumed_at IS NULL)=(consumed_handoff_id IS NULL)
   AND (consumed_at IS NULL OR superseded_at IS NULL)
@@ -158,7 +182,9 @@ DO $$ DECLARE t text; BEGIN
 END $$;
 
 -- The guard of the four tables (INVOKER, owned by the identity owner, granted to nobody):
--- shopify_apps: born active at revision 1; the only change is active -> retired.
+-- shopify_apps: born active at revision 1 with its install link; the changes are active ->
+--   retired (which may clear the link) and clearing the link (shop/redact, M2 PR-3), each
+--   one revision.
 -- shopify_oauth_states: claimed once, then recorded once; no delete (the P09.T05 prune
 --   replaces this function in a later forward migration).
 -- store_installations: born unlinked at revision 1; identity and tenant never change;
@@ -172,7 +198,7 @@ BEGIN
  -- One branch per table: PL/pgSQL resolves every NEW field an expression names.
  IF TG_OP='INSERT' THEN
   IF TG_TABLE_NAME='shopify_apps' THEN
-   IF NEW.status='active' AND NEW.revision=1 AND NEW.retired_at IS NULL THEN RETURN NEW; END IF;
+   IF NEW.status='active' AND NEW.revision=1 AND NEW.retired_at IS NULL AND NEW.install_url IS NOT NULL THEN RETURN NEW; END IF;
   ELSIF TG_TABLE_NAME='shopify_oauth_states' THEN
    IF NEW.claimed_at IS NULL AND NEW.installation_id IS NULL THEN RETURN NEW; END IF;
   ELSIF TG_TABLE_NAME='store_installations' THEN
@@ -186,7 +212,10 @@ BEGIN
  IF TG_OP='UPDATE' THEN
   IF TG_TABLE_NAME='shopify_apps' THEN
    IF OLD.status='active' AND NEW.status='retired' AND NEW.revision=OLD.revision+1 AND NEW.retired_at IS NOT NULL
-    AND (to_jsonb(NEW)-ARRAY['status','revision','retired_at'])=(to_jsonb(OLD)-ARRAY['status','revision','retired_at']) THEN RETURN NEW; END IF;
+    AND (NEW.install_url IS NULL OR NEW.install_url=OLD.install_url)
+    AND (to_jsonb(NEW)-ARRAY['status','revision','retired_at','install_url'])=(to_jsonb(OLD)-ARRAY['status','revision','retired_at','install_url']) THEN RETURN NEW; END IF;
+   IF OLD.install_url IS NOT NULL AND NEW.install_url IS NULL AND NEW.revision=OLD.revision+1
+    AND (to_jsonb(NEW)-ARRAY['install_url','revision'])=(to_jsonb(OLD)-ARRAY['install_url','revision']) THEN RETURN NEW; END IF;
   ELSIF TG_TABLE_NAME='shopify_oauth_states' THEN
    IF OLD.claimed_at IS NULL AND NEW.claimed_at IS NOT NULL AND NEW.installation_id IS NULL
     AND (to_jsonb(NEW)-'claimed_at')=(to_jsonb(OLD)-'claimed_at') THEN RETURN NEW; END IF;
@@ -258,7 +287,9 @@ REVOKE ALL ON FUNCTION morrow_identity.store_link_grants_v1() FROM PUBLIC;
 -- own transaction (the ADR-0020 runner shape).
 -- Registers one app for one beta store: its key, public client id, environment, the
 -- digest of the intended *.myshopify.com domain, the invited workspace (which must be
--- active) and the custom-distribution install link. Outcomes: registered, exists, invalid,
+-- active) and the custom-distribution install link. A shop that already has an installation
+-- that is not uninstalled (under any app, retired or not) cannot be registered again, so
+-- one store is never linked into two workspaces. Outcomes: registered, exists, invalid,
 -- denied.
 CREATE FUNCTION morrow_identity.shopify_app_register(p_app_key text,p_client_id text,p_environment text,
  p_intended_shop_digest text,p_org text,p_ws text,p_install_url text)
@@ -279,7 +310,9 @@ BEGIN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END IF;
  IF EXISTS(SELECT 1 FROM morrow_identity.shopify_apps a WHERE a.app_key=p_app_key OR a.client_id=p_client_id
-   OR (a.status='active' AND a.intended_shop_digest=p_intended_shop_digest)) THEN
+   OR (a.status='active' AND a.intended_shop_digest=p_intended_shop_digest))
+  OR EXISTS(SELECT 1 FROM morrow_identity.store_installations i WHERE i.status<>'uninstalled'
+   AND encode(sha256(convert_to(i.shop_domain,'UTF8')),'hex')=p_intended_shop_digest) THEN
   RETURN QUERY SELECT 'exists'::text,NULL::text; RETURN;
  END IF;
  INSERT INTO morrow_identity.shopify_apps(app_key,client_id,environment_id,intended_shop_digest,invited_organization_id,
@@ -289,8 +322,9 @@ BEGIN
  GET DIAGNOSTICS n=ROW_COUNT;
  RETURN QUERY SELECT CASE WHEN n=1 THEN 'registered' ELSE 'invalid' END,p_app_key;
 END $$;
--- Retires one app: no new launch, state, install or offer. Existing rows are kept.
--- Outcomes: retired, not_found, invalid, denied.
+-- Retires one app: no new launch, state, install, offer or link. Its install link, which
+-- names the shop, is cleared; the other rows are kept. Outcomes: retired, not_found,
+-- invalid, denied.
 CREATE FUNCTION morrow_identity.shopify_app_retire(p_app_key text)
 RETURNS TABLE(outcome text,app_key text)
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
@@ -299,7 +333,7 @@ DECLARE n integer;
 BEGIN
  IF current_user<>'morrow_identity_owner' THEN RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN; END IF;
  IF p_app_key IS NULL OR p_app_key !~ '^[a-z0-9][a-z0-9-]{2,62}$' THEN RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN; END IF;
- UPDATE morrow_identity.shopify_apps a SET status='retired',revision=a.revision+1,
+ UPDATE morrow_identity.shopify_apps a SET status='retired',revision=a.revision+1,install_url=NULL,
   retired_at=greatest(date_trunc('milliseconds',clock_timestamp()),a.created_at)
   WHERE a.app_key=p_app_key AND a.status='active';
  GET DIAGNOSTICS n=ROW_COUNT;
@@ -394,8 +428,9 @@ BEGIN
 END $$;
 -- The common checks of prepare and record: the app is active, the shop is its intended
 -- shop, and the state of this app and shop was claimed within 10 minutes and has led to no
--- install yet. Takes the per-store install lock. Returns the app row, or NULL. INVOKER,
--- granted to nobody: only the two identity definers below call it, as the owner.
+-- install yet. Takes the per-shop install lock (across apps, so the one-live-installation
+-- rule below is decided serially). Returns the app row, or NULL. INVOKER, granted to
+-- nobody: only the two identity definers below call it, as the owner.
 CREATE FUNCTION morrow_identity.shopify_install_state(p_app_key text,p_state_digest text,p_shop_id text,p_shop_domain text)
 RETURNS morrow_identity.shopify_apps
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
@@ -409,16 +444,25 @@ BEGIN
  v_digest:=encode(sha256(convert_to(p_shop_domain,'UTF8')),'hex');
  SELECT * INTO a FROM morrow_identity.shopify_apps x WHERE x.app_key=p_app_key AND x.status='active';
  IF NOT FOUND OR a.intended_shop_digest<>v_digest THEN RETURN NULL; END IF;
- PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.identity.shopify_install',p_app_key,p_shop_id)::text,0));
+ PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.identity.shopify_install',p_shop_id)::text,0));
  SELECT * INTO s FROM morrow_identity.shopify_oauth_states x WHERE x.state_digest=p_state_digest AND x.app_key=p_app_key FOR UPDATE;
  IF NOT FOUND OR s.claimed_at IS NULL OR s.installation_id IS NOT NULL OR s.shop_digest<>v_digest
   OR s.claimed_at<=clock_timestamp()-interval '10 minutes' THEN RETURN NULL; END IF;
  RETURN a;
 END $$;
+-- Whether another app's installation that is not uninstalled holds this shop (by id or
+-- domain). INVOKER, granted to nobody, called under the per-shop install lock.
+CREATE FUNCTION morrow_identity.shopify_shop_held_elsewhere(p_app_key text,p_shop_id text,p_shop_domain text)
+RETURNS boolean
+LANGUAGE sql STABLE SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
+ SELECT EXISTS(SELECT 1 FROM morrow_identity.store_installations x WHERE x.app_key<>p_app_key
+  AND x.status<>'uninstalled' AND (x.shop_id=p_shop_id OR x.shop_domain=p_shop_domain))
+$$;
 -- Before sealing: the ids the broker binds into the envelope's additional data. An
 -- existing installation of this app and shop is re-authorised (the next credential
 -- version of its one credential); otherwise every id is allocated here. An installation
--- that is suspended or uninstalled is ineligible (reinstall semantics are M2 PR-3).
+-- that is suspended or uninstalled is ineligible (reinstall semantics are M2 PR-3), and so
+-- is a shop that another app's installation (not uninstalled) holds.
 -- Outcomes: install, reauthorise, state_invalid, ineligible.
 CREATE FUNCTION morrow_identity.work_shopify_install_prepare(p_app_key text,p_state_digest text,p_shop_id text,p_shop_domain text)
 RETURNS TABLE(outcome text,organization_id text,workspace_id text,installation_id text,store_id text,connection_id text,
@@ -430,6 +474,9 @@ BEGIN
  a:=morrow_identity.shopify_install_state(p_app_key,p_state_digest,p_shop_id,p_shop_domain);
  IF a.app_key IS NULL THEN
   RETURN QUERY SELECT 'state_invalid'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ IF morrow_identity.shopify_shop_held_elsewhere(p_app_key,p_shop_id,p_shop_domain) THEN
+  RETURN QUERY SELECT 'ineligible'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
  END IF;
  SELECT * INTO i FROM morrow_identity.store_installations x WHERE x.app_key=p_app_key AND x.shop_id=p_shop_id FOR UPDATE;
  IF FOUND THEN
@@ -481,6 +528,9 @@ BEGIN
  v_scopes:=string_to_array(p_scopes,',');
  a:=morrow_identity.shopify_install_state(p_app_key,p_state_digest,p_shop_id,p_shop_domain);
  IF a.app_key IS NULL THEN RETURN QUERY SELECT 'state_invalid'::text,NULL::text,NULL::text,NULL::text; RETURN; END IF;
+ IF morrow_identity.shopify_shop_held_elsewhere(p_app_key,p_shop_id,p_shop_domain) THEN
+  RETURN QUERY SELECT 'ineligible'::text,NULL::text,NULL::text,NULL::text; RETURN;
+ END IF;
  v_at:=date_trunc('milliseconds',clock_timestamp());
  SELECT * INTO i FROM morrow_identity.store_installations x WHERE x.app_key=p_app_key AND x.shop_id=p_shop_id FOR UPDATE;
  v_reauthorise:=FOUND;
@@ -538,7 +588,7 @@ BEGIN
  RETURN QUERY SELECT CASE WHEN v_reauthorise THEN 'reauthorised' ELSE 'installed' END,i.organization_id::text,i.workspace_id::text,v_continuation;
 END $$;
 REVOKE ALL ON FUNCTION morrow_identity.work_shopify_launch(text,text),morrow_identity.work_shopify_state_claim(text,text),
- morrow_identity.shopify_install_state(text,text,text,text),morrow_identity.work_shopify_install_prepare(text,text,text,text),
+ morrow_identity.shopify_install_state(text,text,text,text),morrow_identity.shopify_shop_held_elsewhere(text,text,text),morrow_identity.work_shopify_install_prepare(text,text,text,text),
  morrow_identity.work_shopify_install_record(text,text,text,text,text,text,text,text,text,text,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_identity.work_shopify_launch(text,text),morrow_identity.work_shopify_state_claim(text,text),
  morrow_identity.work_shopify_install_prepare(text,text,text,text),
@@ -591,21 +641,24 @@ BEGIN
 END $$;
 -- The connections of one workspace for any session-eligible member: its installations as
 -- StoreInstallation@1 objects (at most 51, oldest first; the caller refuses more than 50)
--- and the install-offer facts: whether an active app invites this workspace and its
--- install link, the route (link_route_current) and whether a store is linked. The offer
--- itself also needs the TypeScript kernel's connect/administer decision.
+-- and the install-offer facts: whether an active app with an install link invites this
+-- workspace and that link, the route (link_route_current), whether a store is linked, and
+-- whether the reader is the organization's owner (its founding principal), the only actor
+-- a Shopify link admits (ADR-0022 item 3). The offer itself also needs the TypeScript
+-- kernel's connect/administer decision.
 CREATE FUNCTION morrow_identity.workspace_connections(p_session text,p_workspace text)
-RETURNS TABLE(installations jsonb,app_registered boolean,install_url text,route text,linked boolean)
+RETURNS TABLE(installations jsonb,app_registered boolean,install_url text,route text,linked boolean,owner boolean)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
 #variable_conflict use_column
 DECLARE e record; v_url text; v_rows jsonb;
 BEGIN
  IF NOT morrow_identity.executor_role_safe('morrow_identity_linking') THEN RETURN; END IF;
  IF p_session IS NULL OR p_session !~ '^[a-f0-9]{64}$' OR p_workspace IS NULL OR p_workspace !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' THEN RETURN; END IF;
- SELECT x.organization_id,x.workspace_id INTO e FROM morrow_identity.session_eligibility(p_session,p_workspace) x WHERE x.workspace_id=p_workspace;
+ SELECT x.principal_id,x.organization_id,x.workspace_id INTO e FROM morrow_identity.session_eligibility(p_session,p_workspace) x WHERE x.workspace_id=p_workspace;
  IF NOT FOUND THEN RETURN; END IF;
  SELECT a.install_url INTO v_url FROM morrow_identity.shopify_apps a
   WHERE a.invited_organization_id=e.organization_id AND a.invited_workspace_id=e.workspace_id AND a.status='active'
+   AND a.install_url IS NOT NULL
   ORDER BY a.created_at,a.app_key LIMIT 1;
  SELECT COALESCE(jsonb_agg(r.o ORDER BY r.created_at,r.id),'[]'::jsonb) INTO v_rows FROM (
   SELECT i.created_at,i.id::text AS id,jsonb_build_object('schemaVersion',1,'id',i.id::text,'organizationId',i.organization_id::text,
@@ -620,7 +673,9 @@ BEGIN
   ORDER BY i.created_at,i.id LIMIT 51) r;
  RETURN QUERY SELECT v_rows,v_url IS NOT NULL,v_url,morrow_billing.link_route_current(e.organization_id::text,e.workspace_id::text),
   EXISTS(SELECT 1 FROM morrow_identity.store_installations i WHERE i.organization_id=e.organization_id
-   AND i.workspace_id=e.workspace_id AND i.status='linked');
+   AND i.workspace_id=e.workspace_id AND i.status='linked'),
+  EXISTS(SELECT 1 FROM morrow_identity.organization_signups s WHERE s.organization_id=e.organization_id
+   AND s.principal_id=e.principal_id);
 END $$;
 -- The P09.T02a issuer, in the store-link preview: turns one install continuation into the
 -- P05.T03a linking review and handoff, bound to the actor's session, the command
@@ -629,9 +684,11 @@ END $$;
 -- everything under locks (organization interlock, installation, candidate, continuation,
 -- the session's eligibility chain and the grant): the continuation is open, unexpired and
 -- for this workspace, which is the installation's tenant; the installation is unlinked, a
--- development store, and its app is active; the grant is current, the actor's own,
--- connect/administer on the workspace resource with the connect input fields. Only after
--- the session and grant pass does it read the route, which must be morrow_direct. It then
+-- development store, and its app is active; the actor is the organization's owner (its
+-- founding principal: the store-link template goes to the linking owner, ADR-0022 item 3);
+-- the grant is current, the actor's own, connect/administer on the workspace resource with
+-- the connect input fields. Only after the session, owner and grant pass does it read the
+-- route, which must be morrow_direct. It then
 -- rebinds the candidate's eligible principal to the actor with a fresh proof revision
 -- (invalidating any earlier handoff), writes the review (evidence shopify_oauth) and the
 -- 5-minute handoff, and consumes the continuation. A replay with the same session,
@@ -690,6 +747,10 @@ BEGIN
  SELECT x.principal_id,x.membership_id INTO e2 FROM morrow_identity.session_eligibility(p_session,p_workspace) x
   WHERE x.workspace_id=p_workspace AND x.organization_id=v_org;
  IF NOT FOUND OR e2.principal_id<>e.principal_id OR e2.membership_id<>e.membership_id OR NOT o.active THEN RETURN 'denied'; END IF;
+ -- The owner: only the organization's founding principal links a Shopify store.
+ IF NOT EXISTS(SELECT 1 FROM morrow_identity.organization_signups s WHERE s.organization_id=v_org AND s.principal_id=e.principal_id) THEN
+  RETURN 'denied';
+ END IF;
  -- The grant: the actor's own current connect/administer grant on the workspace resource.
  v_at:=clock_timestamp();
  v_resource:=jsonb_build_object('organizationId',v_org,'workspaceId',p_workspace,'storeId',NULL,'connectionId',NULL,'kind','workspace','id',p_workspace);
@@ -770,11 +831,12 @@ GRANT EXECUTE ON FUNCTION morrow_identity.linking_actor_authority(text,text),mor
 --     installation, then candidate);
 --   * the route must be fixed to morrow_direct (ADR-0022 item 5, every candidate kind):
 --     else the result is billing_route_required; shopify_bound_at is never set;
---   * a shopify_oauth candidate needs its installation unlinked, a development store and
---     the handoff's tenant (else installation_ineligible); when applied, the installation
---     becomes linked with the new link, and the linking owner receives the store-link
---     template's grants on the store resource, issued by the service morrow.linking at
---     the new policy revision. A denied link issues nothing.
+--   * a shopify_oauth candidate needs the organization's owner (its founding principal) as
+--     the actor (else actor_ineligible), and its installation unlinked, a development
+--     store, the handoff's tenant and its app active (else installation_ineligible); when
+--     applied, the installation becomes linked with the new link, and the linking owner
+--     receives the store-link template's grants on the store resource, issued by the
+--     service morrow.linking at the new policy revision. A denied link issues nothing.
 CREATE OR REPLACE FUNCTION morrow_identity.link_workspace_store(
  p_handoff text,p_command text,p_digest text,p_session text,p_nonce text,p_org text,p_workspace text,p_installation text,p_purpose text,p_policy text,p_ownership text)
 RETURNS TABLE(outcome text,link_id text,ownership_revision text,policy_revision text,audit_id text)
@@ -786,7 +848,7 @@ DECLARE
  inst morrow_identity.store_installations%ROWTYPE;
  actor_ok boolean; grant_ok boolean; proof_ok boolean; review_ok boolean; at_time timestamptz;
  grant_start timestamptz; grant_end timestamptz; reason_code text; result_id text; created_link text;
- route_now text; installation_ok boolean;
+ route_now text; installation_ok boolean; owner_ok boolean;
 BEGIN
  -- The definer owner is not the calling identity. Neither SET ROLE nor a
  -- subsequently unsafe executor configuration may substitute for this login.
@@ -869,8 +931,13 @@ BEGIN
  route_now:=morrow_billing.link_route_current(h.organization_id::text,h.workspace_id::text);
  installation_ok:=c.proof_kind<>'shopify_oauth' OR (inst.id IS NOT NULL AND inst.organization_id=h.organization_id
    AND inst.workspace_id=h.workspace_id AND inst.id=c.installation_id AND inst.generation=h.generation
-   AND inst.status='unlinked' AND inst.link_id IS NULL AND inst.development_store);
- reason_code:=CASE WHEN NOT actor_ok THEN 'actor_ineligible' WHEN grant_ok IS NOT TRUE THEN 'grant_changed'
+   AND inst.status='unlinked' AND inst.link_id IS NULL AND inst.development_store
+   AND EXISTS(SELECT 1 FROM morrow_identity.shopify_apps a WHERE a.app_key=inst.app_key AND a.status='active'
+    AND a.invited_organization_id=inst.organization_id AND a.invited_workspace_id=inst.workspace_id));
+ -- ADR-0022 item 3: the store-link template goes to the linking owner.
+ owner_ok:=c.proof_kind<>'shopify_oauth' OR EXISTS(SELECT 1 FROM morrow_identity.organization_signups s
+   WHERE s.organization_id=h.organization_id AND s.principal_id=h.actor_principal_id);
+ reason_code:=CASE WHEN NOT actor_ok OR owner_ok IS NOT TRUE THEN 'actor_ineligible' WHEN grant_ok IS NOT TRUE THEN 'grant_changed'
    WHEN h.created_at>at_time OR h.expires_at<=at_time THEN 'handoff_expired'
    WHEN proof_ok IS NOT TRUE THEN 'proof_invalid' WHEN review_ok IS NOT TRUE OR r.expires_at<=at_time THEN 'review_invalid'
    WHEN h.purpose='cross_host_resume' THEN 'purpose_denied'

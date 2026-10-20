@@ -286,6 +286,7 @@ const connectionsRow = (overrides = {}) => [
     install_url: url,
     route: "morrow_direct",
     linked: false,
+    owner: true,
     ...overrides,
   },
 ];
@@ -299,7 +300,7 @@ async function read(answers, kernel = createConnectionKernel()) {
   return { status: response.status, body: await response.json() };
 }
 
-test("connections: any member reads; the link is offered only to a connect holder of a paid, registered, unlinked workspace", async () => {
+test("connections: any member reads; the link is offered only to the owner holding connect, in a paid, registered, unlinked workspace", async () => {
   const offered = await read({
     [workspaceStoreLinkingControlSql.authority]: () => authorityRow(),
     [workspaceStoreLinkingControlSql.connections]: () => connectionsRow(),
@@ -309,6 +310,8 @@ test("connections: any member reads; the link is offered only to a connect holde
   assert.deepEqual(offered.body.installations, [installation]);
   for (const [authority, row, reason] of [
     [authorityRow([]), connectionsRow(), "not_permitted"],
+    // A connect holder who is not the organization's owner (ADR-0022 item 3).
+    [authorityRow(), connectionsRow({ owner: false }), "not_permitted"],
     [authorityRow(), connectionsRow({ linked: true }), "linked"],
     [authorityRow([]), connectionsRow({ linked: true }), "linked"],
     [
@@ -337,6 +340,33 @@ test("connections: any member reads; the link is offered only to a connect holde
   assert.equal(unconfigured.body.installLink.reason, "not_permitted");
   // Not session-eligible: 401. Another tenant's or a malformed installation: 503.
   assert.equal((await read({})).status, 401);
+  // More than 1000 grants is unavailable (503), never a signed-out 401 that would end the
+  // SPA's session view; the issuer still refuses it as not found.
+  const many = Array.from({ length: 1001 }, (_, i) => grant({ id: `grant_${i}` }));
+  const overflow = await read({
+    [workspaceStoreLinkingControlSql.authority]: () => authorityRow(many),
+    [workspaceStoreLinkingControlSql.connections]: () => connectionsRow(),
+  });
+  assert.deepEqual(overflow, { status: 503, body: { code: "unavailable" } });
+  const issuerPool = pool({
+    [workspaceStoreLinkingControlSql.authority]: () => authorityRow(many),
+  });
+  assert.equal(
+    (await runShopifyLinkIssuer(issuerPool, Date.now, createConnectionKernel(), context())).status,
+    404,
+  );
+  assert.ok(!issuerPool.sent.some(([text]) => text === workspaceStoreLinkingControlSql.issue));
+  // A row without the owner flag is malformed: 503.
+  const { owner: _owner, ...noOwner } = connectionsRow()[0];
+  assert.equal(
+    (
+      await read({
+        [workspaceStoreLinkingControlSql.authority]: () => authorityRow(),
+        [workspaceStoreLinkingControlSql.connections]: () => [noOwner],
+      })
+    ).status,
+    503,
+  );
   for (const bad of [
     { ...installation, workspaceId: "workspace_b" },
     { ...installation, providerCredentialVersion: 0 },

@@ -9,17 +9,20 @@
 //      @morrow/policy) decides governance.connection.connect administer on the workspace
 //      resource with the connect input fields, and picks the grant;
 //   3. issue_shopify_link_handoff rechecks everything under locks (the continuation is the
-//      handoff nonce, which is the digest of the fragment token the browser posted) and
-//      writes the P05.T03a review and handoff. The SQL recheck is the authority; the
-//      kernel is the extra in-code check.
+//      handoff nonce, which is the digest of the fragment token the browser posted; the
+//      actor must be the organization's owner, to whom the store-link template goes,
+//      ADR-0022 item 3) and writes the P05.T03a review and handoff. The SQL recheck is the
+//      authority; the kernel is the extra in-code check.
 // issued, exists and not_found (no continuation: a P05.T03a controlled-fixture handoff)
 // continue to the lookup; a kernel denial or denied is linking_not_found; route_not_ready
 // is billing_route_required, reachable only after the session and grant passed.
 //
 // Connections (GET /workspace/:ws/connections): any session-eligible member reads the
-// workspace's installations; the install link is offered only when the kernel allows
+// workspace's installations; the install link is offered only to the organization's owner
+// (the only actor the issuer admits, ADR-0022 item 3) when the kernel allows
 // connect/administer, an active app invites the workspace, the route is morrow_direct and
-// no store is linked (WorkspaceConnections@1, validated before it is sent).
+// no store is linked (WorkspaceConnections@1, validated before it is sent). A reader with
+// more than 1000 grants gets 503, never a signed-out answer.
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import { standaloneJson, type GuardedStandaloneRequest } from "./standalone-request-guard.js";
 import type { StandaloneWorkspaceSqlPool } from "./standalone-workspace-bootstrap.js";
@@ -109,7 +112,7 @@ function offer(
   allowed: boolean,
 ): { offered: boolean; url: string | null; reason: InstallLinkReason } {
   if (connections.linked) return { offered: false, url: null, reason: "linked" };
-  if (!allowed) return { offered: false, url: null, reason: "not_permitted" };
+  if (!allowed || !connections.owner) return { offered: false, url: null, reason: "not_permitted" };
   if (!connections.appRegistered || connections.installUrl === null)
     return { offered: false, url: null, reason: "not_registered" };
   if (connections.route !== "morrow_direct")

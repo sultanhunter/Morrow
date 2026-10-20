@@ -30,7 +30,7 @@ FROM pg_catalog.pg_roles r WHERE r.rolname=current_user`,
     "SELECT principal_id,organization_id,workspace_id,membership_id,policy_revision,grants::text AS grants,grant_count,database_now_ms FROM morrow_identity.linking_actor_authority($1,$2)",
   issue: "SELECT morrow_identity.issue_shopify_link_handoff($1,$2,$3,$4,$5) AS outcome",
   connections:
-    "SELECT installations::text AS installations,app_registered,install_url,route,linked FROM morrow_identity.workspace_connections($1,$2)",
+    "SELECT installations::text AS installations,app_registered,install_url,route,linked,owner FROM morrow_identity.workspace_connections($1,$2)",
   commit: workspaceStoreLinkingSql.commit,
 });
 // M2 PR-2: the actor facts the connection kernel decides on (governance.connection.connect
@@ -66,6 +66,8 @@ export interface WorkspaceConnectionFacts {
   readonly installUrl: string | null;
   readonly route: "morrow_direct" | "shopify_app_pricing" | "unfixed" | "missing" | "invalid";
   readonly linked: boolean;
+  /** The reader is the organization's owner, the only actor a Shopify link admits. */
+  readonly owner: boolean;
 }
 const routes: readonly string[] = [
   "morrow_direct",
@@ -169,10 +171,12 @@ function jsonArray(text: unknown, limit: number): readonly unknown[] {
   if (!Array.isArray(value)) throw unknown();
   return Object.freeze(value);
 }
+// The authority read: the facts, null (no session-eligible actor), or "overflow" (more
+// than 1000 grants, which the kernel refuses to read, as the work kernel does).
 function authorityRow(
   value: unknown,
   selected: { workspaceId: string },
-): LinkingAuthorityFacts | null {
+): LinkingAuthorityFacts | null | "overflow" {
   const row = rows(value);
   if (row === null) return null;
   const v = closed(row, [
@@ -196,8 +200,7 @@ function authorityRow(
     !time(Number(v.database_now_ms))
   )
     throw unknown();
-  // More than 1000 grants is refused, as the work kernel does.
-  if (v.grant_count > 1000) return null;
+  if (v.grant_count > 1000) return "overflow";
   const grants = jsonArray(v.grants, 4 * 1024 * 1024);
   if (grants.length !== v.grant_count) throw unknown();
   return Object.freeze({
@@ -218,10 +221,18 @@ function issueRow(value: unknown): ShopifyIssueOutcome {
 function connectionsRow(value: unknown): WorkspaceConnectionFacts | null {
   const row = rows(value);
   if (row === null) return null;
-  const v = closed(row, ["installations", "app_registered", "install_url", "route", "linked"]);
+  const v = closed(row, [
+    "installations",
+    "app_registered",
+    "install_url",
+    "route",
+    "linked",
+    "owner",
+  ]);
   if (
     typeof v.app_registered !== "boolean" ||
     typeof v.linked !== "boolean" ||
+    typeof v.owner !== "boolean" ||
     typeof v.route !== "string" ||
     !routes.includes(v.route) ||
     (v.app_registered
@@ -237,6 +248,7 @@ function connectionsRow(value: unknown): WorkspaceConnectionFacts | null {
     installUrl: v.install_url as string | null,
     route: v.route as WorkspaceConnectionFacts["route"],
     linked: v.linked,
+    owner: v.owner,
   });
 }
 function selector(text: unknown) {
@@ -534,7 +546,8 @@ export function createControlledWorkspaceStoreLinking({
     await query(workspaceStoreLinkingControlSql.idleTimeout);
   };
   return Object.freeze({
-    // M2 PR-2: the actor and its grants, for the kernel (READ ONLY).
+    // M2 PR-2: the actor and its grants, for the kernel (READ ONLY). More than 1000
+    // grants is no actor here (the issuer's denial).
     async authority(text: unknown, control: StandaloneWorkspaceSqlControl) {
       const selected = sessionSelector(text);
       return own(control, async (query) => {
@@ -547,7 +560,7 @@ export function createControlledWorkspaceStoreLinking({
           selected,
         );
         await query(workspaceStoreLinkingControlSql.commit);
-        return facts;
+        return facts === "overflow" ? null : facts;
       });
     },
     // M2 PR-2: the P09.T02a issuer, one READ WRITE transaction. A lost COMMIT
@@ -574,7 +587,8 @@ export function createControlledWorkspaceStoreLinking({
       });
     },
     // M2 PR-2: the connections screen's facts and the actor's authority, one READ ONLY
-    // transaction (one snapshot).
+    // transaction (one snapshot). More than 1000 grants is unavailable, never "signed out"
+    // (WORKSPACE_LINKING_OUTCOME_UNKNOWN; the route answers 503).
     async connections(text: unknown, control: StandaloneWorkspaceSqlControl) {
       const selected = sessionSelector(text);
       return own(control, async (query) => {
@@ -584,6 +598,7 @@ export function createControlledWorkspaceStoreLinking({
           await query(workspaceStoreLinkingControlSql.authority, values),
           selected,
         );
+        if (facts === "overflow") throw unknown();
         const connections = connectionsRow(
           await query(workspaceStoreLinkingControlSql.connections, values),
         );

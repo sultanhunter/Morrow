@@ -416,8 +416,9 @@ export const identityTables = Object.freeze({
   browser_session_generations: { content: "none" },
   grants: { content: "none" },
   identity_verification_profiles: { content: "none" },
-  // M2 PR-2 (0026): continuation and state digests, the app registry (the intended shop
-  // only as a digest) and the installations, whose shop domain and id are shop identity.
+  // M2 PR-2 (0026): continuation and state digests, the app registry (the intended shop as
+  // a digest; its install link names the shop) and the installations, whose shop domain
+  // and id are shop identity.
   install_continuations: { content: "none" },
   // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
   linking_candidates: { content: "store" },
@@ -442,7 +443,8 @@ export const identityTables = Object.freeze({
   // the operator's reason for an enrollment switch
   self_service_revisions: { content: "workspace" },
   sessions: { content: "none" },
-  shopify_apps: { content: "none" },
+  // the install link names the shop (M2 PR-2 review; retirement and shop/redact clear it)
+  shopify_apps: { content: "store" },
   shopify_oauth_states: { content: "none" },
   // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
   store_installations: { content: "store" },

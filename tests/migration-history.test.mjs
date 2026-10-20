@@ -135,7 +135,7 @@ const published = [
   [
     26,
     "0026.shopify-install-identity.sql",
-    "cc48dc40de2b69a340aea3a3a51338993ff96816eb57bfb2a99d2559d4006a13",
+    "b93538595f502d6cc7e3ce1ecfcf4c5c9c7986a80578c555db1afd7b20e40957",
   ],
   [
     27,

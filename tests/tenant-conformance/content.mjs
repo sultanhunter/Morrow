@@ -22,7 +22,14 @@ export const registeredTables = (tables = defaultTables) => [
   ...Object.entries(tables.identityTables).map(([name, spec]) => ["morrow_identity." + name, spec]),
 ];
 const triggers = ["shop_redact", "uninstall_or_disconnect"];
-const actions = ["destroy_credential", "empty_keep_digest", "delete_rows", "pseudonymise"];
+const actions = [
+  "destroy_credential",
+  "empty_keep_digest",
+  "delete_rows",
+  "pseudonymise",
+  // M2 PR-2 review: the app registry's install link (packages/work/src/redaction.ts).
+  "clear_install_link",
+];
 const keys = "action,dataClass,executable,executor,storeKey,table,trigger";
 
 export function contentProblems(handlers = storeContentHandlers, tables = defaultTables) {

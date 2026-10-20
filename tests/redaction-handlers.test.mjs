@@ -18,6 +18,7 @@ test("every registered table is classified, and every store table has exactly on
     [
       ["morrow_vault.credentials", "uninstall_or_disconnect", "destroy_credential", "M2 PR-3"],
       ["morrow_identity.linking_candidates", "shop_redact", "pseudonymise", "M2 PR-3"],
+      ["morrow_identity.shopify_apps", "shop_redact", "clear_install_link", "M2 PR-3"],
       ["morrow_identity.store_installations", "shop_redact", "pseudonymise", "M2 PR-3"],
       ["morrow_work.proposal_parameters", "shop_redact", "empty_keep_digest", "M3 PR-1"],
     ],
@@ -32,10 +33,15 @@ test("every morrow_identity table is classified; the shop identity is store cont
   assert.equal(identity.length, 43);
   assert.deepEqual(
     identity.filter(([, spec]) => spec.content === "store").map(([name]) => name),
-    ["morrow_identity.linking_candidates", "morrow_identity.store_installations"],
+    [
+      "morrow_identity.linking_candidates",
+      "morrow_identity.shopify_apps",
+      "morrow_identity.store_installations",
+    ],
   );
-  // M2 PR-2: the other three new identity tables hold digests, ids and the app registry.
-  for (const name of ["install_continuations", "shopify_apps", "shopify_oauth_states"])
+  // M2 PR-2: the other two new identity tables hold digests and ids; the app registry's
+  // install link names the shop (the PR-2 review), so it is store content.
+  for (const name of ["install_continuations", "shopify_oauth_states"])
     assert.equal(identityTables[name].content, "none", name);
   // The linking records that only point at a candidate hold no shop content of their own.
   for (const name of ["linking_reviews", "linking_handoffs", "workspace_store_links"])
