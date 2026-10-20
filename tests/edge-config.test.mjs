@@ -18,6 +18,8 @@ import {
   edgeEnvironments,
   devBindingTables,
   edgeObservability,
+  edgePlacementRegion,
+  edgePlacementWorkers,
   edgeRateLimits,
   edgeRefusals,
   edgeVarNames,
@@ -971,4 +973,175 @@ test("P04.T01i AC01 (P04.T02a AC24 narrowed): staging vars name only the reviewe
   assert.deepEqual((await verify(appended(api, "79ff672d013b8f0956437af6eea3c213"))).problems, [
     "EDGE_COMMITTED_IDENTIFIER_CLOUDFLARE_ACCOUNT:api",
   ]);
+});
+
+// ---------------------------------------------------------------------------
+// P04.T01i D1 (placement, 2026-10-21): the staging api and broker run in the region of the
+// committed Neon endpoint; no other Worker or environment has placement.
+const targeted = (region) => ({ mode: "targeted", region });
+
+test("P04.T01i D1: placement is targeted at staging.json's Neon region on the staging api and broker only", async () => {
+  assert.equal(committedStaging.neon.region_id, "aws-us-east-1");
+  assert.equal(edgePlacementRegion(committedStaging.neon.region_id), "aws:us-east-1");
+  assert.ok(committedStaging.neon.endpoint_host.endsWith(".us-east-1.aws.neon.tech"));
+  assert.deepEqual([...edgePlacementWorkers], ["api", "broker"]);
+  const verdict = await verify(resolve("."));
+  assert.deepEqual(verdict.problems, []);
+  for (const worker of edgeWorkers)
+    for (const environment of edgeEnvironments) {
+      const expected =
+        environment === "staging" && edgePlacementWorkers.includes(worker.key)
+          ? targeted("aws:us-east-1")
+          : undefined;
+      assert.deepEqual(
+        (await resolvedEdgeConfig(worker.key, environment)).placement,
+        expected,
+        worker.key + ":" + environment,
+      );
+      assert.deepEqual(
+        verdict.resolved[worker.key + ":" + environment].placement,
+        expected ?? null,
+      );
+    }
+  // Neon's AWS region ids map to Cloudflare's; every other shape is refused.
+  assert.equal(edgePlacementRegion("aws-eu-central-1"), "aws:eu-central-1");
+  assert.equal(edgePlacementRegion("aws-ap-southeast-2"), "aws:ap-southeast-2");
+  for (const other of [
+    "azure-eastus2",
+    "aws:us-east-1",
+    "us-east-1",
+    "aws-us-east-1 ",
+    "AWS-US-EAST-1",
+    "aws-us-east-0",
+    "",
+    null,
+    undefined,
+    1,
+  ])
+    assert.equal(edgePlacementRegion(other), null, String(other));
+});
+
+test("P04.T01i D1: a staging placement that is missing, not targeted or not exact fails", async () => {
+  const cases = [
+    { api: (c) => delete c.env.staging.placement },
+    { broker: (c) => delete c.env.staging.placement },
+    { api: (c) => (c.env.staging.placement = { mode: "smart" }) },
+    { broker: (c) => (c.env.staging.placement = { mode: "smart", hint: "aws:us-east-1" }) },
+    { api: (c) => (c.env.staging.placement = { mode: "off" }) },
+    // wrangler accepts a targeted region without `mode`; the committed text names it.
+    { api: (c) => (c.env.staging.placement = { region: "aws:us-east-1" }) },
+    {
+      broker: (c) => (c.env.staging.placement = { mode: "targeted", host: "db.example.test:5432" }),
+    },
+    {
+      api: (c) => (c.env.staging.placement = { mode: "targeted", hostname: "db.example.test" }),
+    },
+  ];
+  for (const [index, mutate] of cases.entries()) {
+    const found = codes(await verify(tree(mutate)));
+    assert.ok(found.includes("EDGE_PLACEMENT_STAGING"), index + ": " + found.join(","));
+  }
+  // Inherited from the top level when the staging block names none.
+  const inherited = await verify(
+    tree({
+      api: (c) => {
+        delete c.env.staging.placement;
+        c.placement = targeted("aws:us-east-1");
+      },
+    }),
+  );
+  assert.deepEqual(inherited.problems.sort(), [
+    "EDGE_PLACEMENT_ENVIRONMENT:api:development",
+    "EDGE_PLACEMENT_ENVIRONMENT:api:production",
+  ]);
+});
+
+test("P04.T01i D1: the staging placement region is staging.json's neon.region_id, mapped", async () => {
+  for (const region of ["aws:us-east-2", "aws:eu-central-1", "gcp:us-east4", "aws-us-east-1"]) {
+    for (const worker of ["api", "broker"]) {
+      const verdict = await verify(
+        tree({ [worker]: (c) => (c.env.staging.placement = targeted(region)) }),
+      );
+      assert.deepEqual(verdict.problems, ["EDGE_PLACEMENT_REGION:" + worker + ":staging"], region);
+    }
+  }
+  // staging.json names another region, another cloud or none: the committed placements and
+  // the committed endpoint no longer match it.
+  for (const patch of [
+    (s) => (s.neon.region_id = "aws-eu-central-1"),
+    (s) => (s.neon.region_id = "azure-eastus2"),
+    (s) => (s.neon.region_id = "aws:us-east-1"),
+    (s) => (s.neon.region_id = null),
+    (s) => delete s.neon.region_id,
+  ]) {
+    const verdict = await verify(tree(), undefined, records({ staging: patch }));
+    assert.deepEqual(verdict.problems.sort(), [
+      "EDGE_PLACEMENT_REGION:api:staging",
+      "EDGE_PLACEMENT_REGION:broker:staging",
+      "EDGE_PLACEMENT_REGION:staging.json",
+    ]);
+  }
+  // Placements and region_id moved together, the endpoint left in us-east-1: the endpoint
+  // must lie in the region too.
+  const moved = {
+    api: (c) => (c.env.staging.placement = targeted("aws:eu-central-1")),
+    broker: (c) => (c.env.staging.placement = targeted("aws:eu-central-1")),
+  };
+  const stranded = await verify(
+    tree(moved),
+    undefined,
+    records({ staging: (s) => (s.neon.region_id = "aws-eu-central-1") }),
+  );
+  assert.deepEqual(stranded.problems, ["EDGE_PLACEMENT_REGION:staging.json"]);
+  // The rule follows staging.json, not a fixed region: the placements, region_id, the
+  // endpoint and both bindings moved together verify cleanly.
+  const host = "ep-hidden-mouse-b7e6ff6l.c-13.eu-central-1.aws.neon.tech";
+  const all = { ...moved };
+  for (const worker of ["api", "broker"])
+    all[worker] = (c) => {
+      moved[worker](c);
+      patchVar(c.env.staging.vars, "MORROW_DATABASE_BINDING_JSON", { hostname: host });
+    };
+  const relocated = await verify(
+    tree(all),
+    undefined,
+    records({
+      staging: (s) => {
+        s.neon.region_id = "aws-eu-central-1";
+        s.neon.endpoint_host = host;
+      },
+    }),
+  );
+  assert.deepEqual(relocated.problems, []);
+});
+
+test("P04.T01i D1: no placement outside the staging api and broker, an explicit off included", async () => {
+  const cases = [
+    [{ api: (c) => (c.placement = { mode: "smart" }) }, "EDGE_PLACEMENT_ENVIRONMENT"],
+    [
+      { api: (c) => (c.env.production.placement = targeted("aws:us-east-1")) },
+      "EDGE_PLACEMENT_ENVIRONMENT",
+    ],
+    [{ api: (c) => (c.env.production.placement = { mode: "off" }) }, "EDGE_PLACEMENT_ENVIRONMENT"],
+    [{ broker: (c) => (c.placement = targeted("aws:us-east-1")) }, "EDGE_PLACEMENT_ENVIRONMENT"],
+    [
+      { broker: (c) => (c.env.production.placement = { mode: "smart" }) },
+      "EDGE_PLACEMENT_ENVIRONMENT",
+    ],
+    [
+      { connector: (c) => (c.env.staging.placement = targeted("aws:us-east-1")) },
+      "EDGE_PLACEMENT_WORKER",
+    ],
+    [
+      { orchestrator: (c) => (c.env.staging.placement = targeted("aws:us-east-1")) },
+      "EDGE_PLACEMENT_WORKER",
+    ],
+    [{ orchestrator: (c) => (c.placement = { mode: "smart" }) }, "EDGE_PLACEMENT_WORKER"],
+    [{ connector: (c) => (c.env.production.placement = { mode: "off" }) }, "EDGE_PLACEMENT_WORKER"],
+  ];
+  for (const [index, [mutate, expected]] of cases.entries()) {
+    const found = codes(await verify(tree(mutate)));
+    assert.ok(found.includes(expected), index + ": " + expected + " not in " + found.join(","));
+    assert.ok(!found.includes("EDGE_UNEXPECTED_BINDING_PLACEMENT"), index + ": " + found.join(","));
+  }
 });

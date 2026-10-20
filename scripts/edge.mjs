@@ -407,6 +407,8 @@ const settingKeys = new Set([
   "logpush",
   "upload_source_maps",
   "observability",
+  // Checked exactly below (EDGE_PLACEMENT_*).
+  "placement",
   "python_modules",
   "dev",
   "no_bundle",
@@ -477,6 +479,23 @@ export const edgeObservability = (environment) =>
   environment === "staging" ? edgeStagingObservability : Object.freeze({ enabled: false });
 export const edgeWorkersDev = (worker, environment) =>
   worker === "api" && environment === "staging";
+// P04.T01i D1 (placement, 2026-10-21): the staging api and broker run in the region of the
+// committed Neon endpoint, so the api's sequential database round trips stay inside that
+// region instead of crossing from the edge nearest the caller (the first deploy's
+// SMOKE_DATABASE_PATH). It is a performance setting and changes no binding, route, secret
+// or trust boundary. Development has no hosted database and production waits for its own,
+// so neither has placement; the orchestrator and the connector never have it.
+export const edgePlacementWorkers = Object.freeze(["api", "broker"]);
+// Neon's AWS region id ("aws-us-east-1") and its Cloudflare targeted-placement region
+// ("aws:us-east-1"). Any other shape, another cloud included, is null and fails the check.
+const neonAwsRegion = (regionId) =>
+  typeof regionId === "string"
+    ? (/^aws-([a-z]{2}-[a-z]+-[1-9])$/.exec(regionId)?.[1] ?? null)
+    : null;
+export function edgePlacementRegion(regionId) {
+  const region = neonAwsRegion(regionId);
+  return region === null ? null : "aws:" + region;
+}
 // P04.T01i D1 (AC01): each Worker's var names, exactly, per environment. Only the staging
 // api and broker carry configuration; the orchestrator has no vars at all.
 export function edgeVarNames(worker, environment) {
@@ -725,6 +744,7 @@ export async function verifyEdgeConfig({
   const resolved = {};
   const texts = {};
   const stagingVars = {};
+  const stagingPlacements = {};
   let apiStagingName = null;
   const problem = (code, where) => problems.push(code + ":" + where);
   for (const worker of edgeWorkers) {
@@ -767,6 +787,23 @@ export async function verifyEdgeConfig({
       if (canonicalJson(config.observability) !== canonicalJson(edgeObservability(environment)))
         problem("EDGE_FLAG_OBSERVABILITY", where);
       if (!emptyValue(config.routes) || !emptyValue(config.route)) problem("EDGE_ROUTES", where);
+      // Placement (P04.T01i D1): exactly {mode: "targeted", region} on the staging api and
+      // broker, its region checked against staging.json below; absent everywhere else, an
+      // explicit `{mode: "off"}` included.
+      const placement = config.placement;
+      if (!edgePlacementWorkers.includes(worker.key)) {
+        if (placement !== undefined) problem("EDGE_PLACEMENT_WORKER", where);
+      } else if (environment !== "staging") {
+        if (placement !== undefined) problem("EDGE_PLACEMENT_ENVIRONMENT", where);
+      } else if (
+        placement === null ||
+        typeof placement !== "object" ||
+        !same(Object.keys(placement).sort(), ["mode", "region"]) ||
+        placement.mode !== "targeted" ||
+        typeof placement.region !== "string"
+      )
+        problem("EDGE_PLACEMENT_STAGING", where);
+      else stagingPlacements[worker.key] = placement.region;
       const allowed = allowedBindings[worker.key];
       for (const [key, value] of Object.entries(config))
         if (!settingKeys.has(key) && !allowed.includes(key) && !emptyValue(value))
@@ -849,7 +886,12 @@ export async function verifyEdgeConfig({
         )
           problem("EDGE_ORCHESTRATOR_BINDINGS", where);
       }
-      resolved[where] = { name: config.name, bindings: names, services: config.services ?? [] };
+      resolved[where] = {
+        name: config.name,
+        bindings: names,
+        services: config.services ?? [],
+        placement: placement ?? null,
+      };
     }
   }
   // P04.T01i D1: the staging values, then the committed text. A reviewed staging identifier
@@ -868,6 +910,20 @@ export async function verifyEdgeConfig({
     workos,
   });
   problems.push(...checked.problems);
+  // The placement region is the region of staging.json's Neon project (`neon.region_id`,
+  // Neon's `aws-<region>`), and the committed endpoint lies in that region, so the staging
+  // api and broker run beside the database the binding names.
+  const placementRegion = edgePlacementRegion(staging?.neon?.region_id);
+  const endpointHost = staging?.neon?.endpoint_host;
+  if (
+    placementRegion === null ||
+    typeof endpointHost !== "string" ||
+    !endpointHost.endsWith("." + neonAwsRegion(staging.neon.region_id) + ".aws.neon.tech")
+  )
+    problem("EDGE_PLACEMENT_REGION", "staging.json");
+  for (const [worker, region] of Object.entries(stagingPlacements))
+    if (placementRegion === null || region !== placementRegion)
+      problem("EDGE_PLACEMENT_REGION", worker + ":staging");
   for (const worker of edgeWorkers)
     for (const [kind, pattern] of committedIdentifierPatterns) {
       const remaining = new Map();
