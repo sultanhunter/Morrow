@@ -809,6 +809,9 @@ export async function openStatementStatsScratch(connection, { binding, administr
     throw scratchRefusal("unavailable");
   }
   try {
+    // A bound on every scratch statement: a stalled verification fails closed as a residue
+    // (stage "verify") instead of hanging the run.
+    await session.exec("SET statement_timeout = '60s'");
     const logging = statementLoggingRefusal(await readStatementStats(session));
     if (logging)
       throw new StagingError("STAGING_STATEMENT_LOGGING", { reason: logging, database: "scratch" });
