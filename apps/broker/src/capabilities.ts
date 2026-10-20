@@ -10,7 +10,7 @@ import {
   brokerPasswordValid,
   neonLeaseNamespace,
   parseBrokerDatabaseBinding,
-  parseChallengeActions,
+  parseTurnstileConfiguration,
   turnstileKeyPattern,
   workosSessionNamespace,
 } from "../../../packages/identity/src/broker-protocol.js";
@@ -131,17 +131,11 @@ function database(env: object, environment: string): Readonly<BrokerDatabase> | 
 
 // TURNSTILE_CONFIGURATION_JSON {schemaVersion:1, hostname, actions} and the 0x secret.
 // The hostname must be the login origin's: Turnstile reports where it was solved.
-const hostnamePattern =
-  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+// parseTurnstileConfiguration is shared with the staging deploy's gate 4.
 function challenge(env: object): Readonly<BrokerChallenge> | null {
   try {
     const secret = own(env, "TURNSTILE_SECRET_KEY");
     if (typeof secret !== "string" || turnstileKeyPattern.exec(secret)?.[0] !== secret) return null;
-    const configuration = loginJson(own(env, "TURNSTILE_CONFIGURATION_JSON"), 1024, [
-      "schemaVersion",
-      "hostname",
-      "actions",
-    ]);
     const login = loginJson(own(env, "LOGIN_CONFIGURATION_JSON"), 32768, [
       "schemaVersion",
       "controllerProtocol",
@@ -152,16 +146,10 @@ function challenge(env: object): Readonly<BrokerChallenge> | null {
       "profileId",
       "profileRecordRevision",
     ]);
-    const hostname = configuration.hostname;
-    if (
-      configuration.schemaVersion !== 1 ||
-      typeof hostname !== "string" ||
-      hostnamePattern.exec(hostname)?.[0] !== hostname ||
-      typeof login.origin !== "string" ||
-      new URL(login.origin).hostname !== hostname
-    )
-      return null;
-    const actions = parseChallengeActions(configuration.actions);
+    const { hostname, actions } = parseTurnstileConfiguration(
+      own(env, "TURNSTILE_CONFIGURATION_JSON"),
+      login.origin,
+    );
     return Object.freeze({
       secret,
       hostname,

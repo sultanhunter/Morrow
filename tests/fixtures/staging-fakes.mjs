@@ -522,6 +522,14 @@ export const labBinding = Object.freeze({
 
 // A synthetic Turnstile site key in the broker's `^0x` format (never a real or dummy key).
 export const labSiteKey = "0x" + "labsitekey".repeat(2);
+// A synthetic LOGIN_CONFIGURATION_JSON text. Gate 4 needs the api's and the broker's copies
+// present and byte-equal; its content is checked by ctx.loginConfiguration, which the
+// fakes replace.
+export const labLoginConfigurationJson = JSON.stringify({
+  schemaVersion: 1,
+  origin: "https://morrow-staging-api.lab.workers.dev",
+  retentionTier: "staging",
+});
 
 // A context for scripts/staging.mjs over fakes. Every seam is replaceable through
 // `overrides`; nothing reaches a real tool, provider or the operator's HOME.
@@ -534,11 +542,12 @@ export async function fakeContext({
   card = approvedCard(),
   staging,
   binding = labBinding,
-  loginConfiguration = null,
+  loginConfiguration = labLoginConfigurationJson,
   // P05.T01ab's two challenge vars (D1): a valid pair for the fake origin by default.
   // Each key replaces one value; null removes it. `api` is LOGIN_CHALLENGE_JSON; `broker`
   // is TURNSTILE_CONFIGURATION_JSON; `brokerLogin` and `brokerBinding` are the broker's
-  // copies of the api's LOGIN_CONFIGURATION_JSON and MORROW_DATABASE_BINDING_JSON.
+  // copies of the api's LOGIN_CONFIGURATION_JSON and MORROW_DATABASE_BINDING_JSON, and
+  // `apiLogin` and `apiBinding` replace the api's own two (gate 4 only reads them).
   challengeVars = {},
   administrator = { name: "neondb_owner", mode: "createrole" },
   now = Date.parse("2026-10-20T12:00:00Z"),
@@ -652,8 +661,8 @@ export async function fakeContext({
     config: async () => ({
       staging: stagingValue,
       card,
-      bindingJson,
-      loginConfigurationJson: loginConfiguration,
+      bindingJson: pick("apiBinding", bindingJson),
+      loginConfigurationJson: pick("apiLogin", loginConfiguration),
       challengeJson,
       broker: brokerVars,
     }),

@@ -1291,6 +1291,7 @@ test("fake database: provisioning through the CLI sends only verifiers", async (
       readFileSync(join(planted.directory, "tmp/broker-secrets.json"), "utf8"),
     );
     assert.equal(statSync(join(planted.directory, "tmp/broker-secrets.json")).mode & 0o777, 0o600);
+    assert.deepEqual(Object.keys(secrets).sort(), constants.brokerSecrets);
     const passwords = constants.roles.map((r) => secrets[constants.passwordSecret(r)]);
     assert.ok(passwords.every((p) => /^[A-Za-z0-9_-]{43}$/.test(p)));
     const sent = JSON.stringify(db.statements);
@@ -1301,6 +1302,37 @@ test("fake database: provisioning through the CLI sends only verifiers", async (
     const before = db.statements.length;
     assert.equal(await main(["provision-roles", "--first"], ctx), 1);
     assert.equal(db.statements.length, before);
+  } finally {
+    planted.cleanup();
+  }
+});
+
+// One source of names: the first-deploy broker file must hold brokerRequiredSecrets
+// exactly. A list that disagrees with the names the command would write stops before any
+// credential file is read, the broker file is created or a role is touched.
+test("provision-roles --first: broker file names other than brokerRequiredSecrets fail closed", async () => {
+  const planted = plantedHome({
+    "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
+    "workos-api-key": "sk_test_" + "W".repeat(24),
+    "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
+  });
+  try {
+    const base = await fakeContext({ home: planted.home, tools: fakeTools().tools });
+    const { ctx, err, constants } = base;
+    const db = fakeDatabase({ roles: constants.roles });
+    ctx.database = db.connector;
+    for (const brokerSecrets of [
+      [...constants.brokerSecrets, "EXTRA_SECRET"].sort(),
+      constants.brokerSecrets.filter((name) => name !== "TURNSTILE_SECRET_KEY"),
+      constants.brokerSecrets.filter((name) => name !== constants.passwordSecret("morrow_api")),
+      [...constants.brokerSecrets.slice(1), constants.brokerSecrets[1]],
+    ]) {
+      ctx.constants = async () => Object.freeze({ ...constants, brokerSecrets });
+      assert.equal(await main(["provision-roles", "--first"], ctx), 1);
+      assert.equal(JSON.parse(err.at(-1)).code, "STAGING_BROKER_FILE_NAMES_INVALID");
+      assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false);
+      assert.deepEqual(db.statements, []);
+    }
   } finally {
     planted.cleanup();
   }

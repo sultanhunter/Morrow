@@ -137,22 +137,33 @@ export const stagingChallengeActions = Object.freeze({
   login: "account_login",
   signup: "organization_signup",
 });
-const plainRecord = (value) =>
-  value !== null &&
-  typeof value === "object" &&
-  !Array.isArray(value) &&
-  Object.getPrototypeOf(value) === Object.prototype;
 // P05.T01ab (D1, D5; ADR-0019 items 6-8): the api's LOGIN_CHALLENGE_JSON and the broker's
 // TURNSTILE_CONFIGURATION_JSON must both be present and agree before anything is uploaded.
 // Without them the api maps to API_ENV_ABUSE_GUARD_MISSING and the broker's health is
 // false, so a deploy would only fail later, at the health gate. The checks are the
-// runtime's own parsers plus D1's cross-Worker rules: the same actions (D1's values, in
-// the same order), the Turnstile hostname equal to the origin's, and the broker's login
-// configuration and database binding byte-equal to the api's. Fixed codes only.
+// runtimes' own parsers (parseLoginChallengeConfiguration; parseTurnstileConfiguration,
+// which the broker itself uses, so a duplicate member or more than 1024 bytes stops here)
+// plus D1's cross-Worker rules: the same actions (D1's values, in the same order), the
+// Turnstile hostname equal to the origin's, and the broker's login configuration and
+// database binding present and byte-equal to the api's. The broker compares the hostname
+// with its own login configuration's origin; that text is byte-equal to the api's, whose
+// origin the digest step of gate 4 (ctx.loginConfiguration) holds to the staging origin.
+// Fixed codes only.
+const presentText = (value) => typeof value === "string" && value.length > 0;
 export async function checkChallengeConfiguration(loaded) {
   const broker = loaded?.broker ?? {};
-  if (typeof loaded?.challengeJson !== "string" || typeof broker.turnstileJson !== "string")
+  if (!presentText(loaded?.challengeJson) || !presentText(broker.turnstileJson))
     throw new StagingError("STAGING_CHALLENGE_CONFIGURATION_MISSING");
+  // Absent on both sides would otherwise compare equal below.
+  if (
+    ![
+      loaded.loginConfigurationJson,
+      loaded.bindingJson,
+      broker.loginConfigurationJson,
+      broker.bindingJson,
+    ].every(presentText)
+  )
+    throw new StagingError("STAGING_CHALLENGE_CONFIGURATION_MISSING", { reason: "shared_vars" });
   const invalid = (reason) =>
     new StagingError("STAGING_CHALLENGE_CONFIGURATION_INVALID", { reason });
   const { tsImport } = await import("tsx/esm/api");
@@ -160,39 +171,33 @@ export async function checkChallengeConfiguration(loaded) {
     "../apps/api/src/abuse-guard.ts",
     import.meta.url,
   );
-  const { parseChallengeActions } = await tsImport(
+  const { parseTurnstileConfiguration, turnstileHostnameMismatch } = await tsImport(
     "../packages/identity/src/broker-protocol.ts",
     import.meta.url,
   );
-  let challenge, apiActions, turnstile, brokerActions;
+  let challenge, apiActions, brokerActions;
   try {
     challenge = parseLoginChallengeConfiguration(loaded.challengeJson);
     apiActions = JSON.stringify(JSON.parse(loaded.challengeJson).actions);
   } catch {
     throw invalid("api");
   }
+  const origin = loaded.staging?.cloudflare?.origin;
+  let turnstile;
   try {
-    turnstile = JSON.parse(broker.turnstileJson);
-    if (
-      !plainRecord(turnstile) ||
-      Object.keys(turnstile).sort().join() !== "actions,hostname,schemaVersion" ||
-      turnstile.schemaVersion !== 1
-    )
-      throw Error("shape");
-    parseChallengeActions(turnstile.actions);
-    brokerActions = JSON.stringify(turnstile.actions);
+    turnstile = parseTurnstileConfiguration(broker.turnstileJson, origin);
+  } catch (error) {
+    throw invalid(error?.message === turnstileHostnameMismatch ? "hostname" : "broker");
+  }
+  // The strict parse passed (no duplicate members), so JSON.parse reads the same members;
+  // it keeps their order, which D1 fixes.
+  try {
+    brokerActions = JSON.stringify(JSON.parse(broker.turnstileJson).actions);
   } catch {
     throw invalid("broker");
   }
   if (apiActions !== brokerActions || apiActions !== JSON.stringify(stagingChallengeActions))
     throw invalid("actions");
-  let host = null;
-  try {
-    host = new URL(loaded.staging?.cloudflare?.origin).hostname;
-  } catch {
-    host = null;
-  }
-  if (host === null || turnstile.hostname !== host) throw invalid("hostname");
   if (
     broker.loginConfigurationJson !== loaded.loginConfigurationJson ||
     broker.bindingJson !== loaded.bindingJson
@@ -200,7 +205,7 @@ export async function checkChallengeConfiguration(loaded) {
     throw invalid("shared_vars");
   return Object.freeze({
     provider: challenge.provider,
-    hostname: host,
+    hostname: turnstile.hostname,
     actions: challenge.actions,
   });
 }
@@ -409,6 +414,18 @@ command("provision-roles", {
     const roles = constants.roles;
     const connect = ctx.database({ ownerUrl, binding }).connect;
     if (options.mode === "first") {
+      // One source of names: the file holds brokerRequiredSecrets exactly (the list gate 6
+      // and the first deploy's file check use). The names are checked before any file is
+      // read or created and before any role is touched, and the written keys again.
+      const fileNames = (names) => [...names].sort().join("\n");
+      const expected = fileNames(constants.brokerSecrets);
+      const planned = [
+        "WORKOS_API_KEY",
+        "TURNSTILE_SECRET_KEY",
+        ...roles.map(constants.passwordSecret),
+      ];
+      if (new Set(planned).size !== planned.length || fileNames(planned) !== expected)
+        throw new StagingError("STAGING_BROKER_FILE_NAMES_INVALID");
       const workos = readCredentialFile(ctx.directory, "workos-api-key", specs);
       const turnstile = readCredentialFile(ctx.directory, "turnstile-secret", specs);
       const handle = createOwnerFile(ctx.directory, "tmp/broker-secrets.json");
@@ -428,6 +445,10 @@ command("provision-roles", {
       const secrets = { WORKOS_API_KEY: workos, TURNSTILE_SECRET_KEY: turnstile };
       for (const role of roles)
         secrets[constants.passwordSecret(role)] = provisioned.passwords.get(role);
+      if (fileNames(Object.keys(secrets)) !== expected) {
+        handle.abandon();
+        throw new StagingError("STAGING_BROKER_FILE_NAMES_INVALID");
+      }
       handle.write(JSON.stringify(secrets) + "\n");
       recordRotation(ctx.directory, roles.map(constants.passwordSecret), {
         worker: "broker",

@@ -327,9 +327,55 @@ test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and
       actions: stagingChallengeActions,
       ...patch,
     });
+  // Two broker vars that JSON.parse reads as the valid one, but the broker's own parser
+  // (loginJson: no duplicate member, at most 1024 bytes) refuses after upload.
+  const duplicate =
+    `{"schemaVersion":1,"hostname":"evil.example","hostname":${JSON.stringify(host)},` +
+    `"actions":${JSON.stringify(stagingChallengeActions)}}`;
+  const oversized = brokerVar() + " ".repeat(1025 - brokerVar().length);
+  for (const lenient of [duplicate, oversized])
+    assert.deepEqual(JSON.parse(lenient), JSON.parse(brokerVar()));
+  assert.equal(new TextEncoder().encode(oversized).length, 1025);
   for (const [label, challengeVars, code, reason] of [
     ["api var absent", { api: null }, "STAGING_CHALLENGE_CONFIGURATION_MISSING"],
     ["broker var absent", { broker: null }, "STAGING_CHALLENGE_CONFIGURATION_MISSING"],
+    ["api var empty", { api: "" }, "STAGING_CHALLENGE_CONFIGURATION_MISSING"],
+    [
+      "login configuration absent on both sides",
+      { apiLogin: null, brokerLogin: null },
+      "STAGING_CHALLENGE_CONFIGURATION_MISSING",
+      "shared_vars",
+    ],
+    [
+      "binding absent on both sides",
+      { apiBinding: null, brokerBinding: null },
+      "STAGING_CHALLENGE_CONFIGURATION_MISSING",
+      "shared_vars",
+    ],
+    [
+      "binding empty on both sides",
+      { apiBinding: "", brokerBinding: "" },
+      "STAGING_CHALLENGE_CONFIGURATION_MISSING",
+      "shared_vars",
+    ],
+    [
+      "broker login configuration absent",
+      { brokerLogin: null },
+      "STAGING_CHALLENGE_CONFIGURATION_MISSING",
+      "shared_vars",
+    ],
+    [
+      "broker duplicate hostname member",
+      { broker: duplicate },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "broker",
+    ],
+    [
+      "broker var over 1024 bytes",
+      { broker: oversized },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "broker",
+    ],
     [
       "dummy site key",
       { api: apiVar({ siteKey: "1x00000000000000000000AA" }) },
@@ -416,9 +462,18 @@ test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and
       }
     }
   }
-  // The consistent pair passes gate 4 and the deploy goes on (the other AC04 cases).
+  // The consistent pair passes gate 4 and the deploy goes on (the other AC04 cases). The
+  // shared vars are real text on both sides, so this is not null equalling null.
   const ok = await world({ environment: ciEnvironment() });
   try {
+    const loaded = await ok.ctx.config();
+    for (const value of [
+      loaded.loginConfigurationJson,
+      loaded.bindingJson,
+      loaded.broker.loginConfigurationJson,
+      loaded.broker.bindingJson,
+    ])
+      assert.ok(typeof value === "string" && value.length > 0);
     const { result } = await ok.run(["deploy", "--ci"]);
     assert.equal(result.gates.challenge, "ok");
     assert.equal(result.outcome, "deployed");

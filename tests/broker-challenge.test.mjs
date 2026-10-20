@@ -5,6 +5,8 @@ import {
   brokerNeonRoleNames,
   brokerPasswordSecret,
   challengeLimits,
+  parseTurnstileConfiguration,
+  turnstileHostnameMismatch,
 } from "../packages/identity/src/broker-protocol.ts";
 import { brokerCapabilities, brokerHealth } from "../apps/broker/src/capabilities.ts";
 import {
@@ -243,21 +245,55 @@ test("P05.T01ab-AC03: secrets, budgets, tokens and actions outside the rules mak
 });
 
 test("P05.T01ab-AC03: the configured hostname must be the login origin's", async () => {
+  const valid = JSON.stringify({ schemaVersion: 1, hostname, actions });
+  const padded = (bytes) => valid + " ".repeat(bytes - valid.length);
   for (const configuration of [
     { schemaVersion: 1, hostname: "other.example.test", actions },
     { schemaVersion: 2, hostname, actions },
     { schemaVersion: 1, hostname: "Workspace.Example.Test", actions },
     { schemaVersion: 1, hostname, actions: { login: "same", signup: "same" } },
     { schemaVersion: 1, hostname, actions, extra: 1 },
+    // JSON.parse reads these two as the valid configuration; the broker does not.
+    `{"schemaVersion":1,"hostname":"other.example.test","hostname":${JSON.stringify(hostname)},` +
+      `"actions":${JSON.stringify(actions)}}`,
+    padded(1025),
   ]) {
-    const env = brokerEnv("development", {
-      TURNSTILE_CONFIGURATION_JSON: JSON.stringify(configuration),
-    });
-    assert.equal((await brokerCapabilities(env)).challenge, null, JSON.stringify(configuration));
+    const text = typeof configuration === "string" ? configuration : JSON.stringify(configuration);
+    const env = brokerEnv("development", { TURNSTILE_CONFIGURATION_JSON: text });
+    assert.equal((await brokerCapabilities(env)).challenge, null, text.slice(0, 120));
   }
+  const boundary = brokerEnv("development", { TURNSTILE_CONFIGURATION_JSON: padded(1024) });
+  assert.deepEqual((await brokerCapabilities(boundary)).challenge?.actions, [
+    actions.login,
+    actions.signup,
+  ]);
   const missing = brokerEnv();
   delete missing.TURNSTILE_CONFIGURATION_JSON;
   assert.equal((await brokerCapabilities(missing)).challenge, null);
+});
+
+// The one parser the broker and the staging deploy's gate 4 share: a hostname that is not
+// the login origin's is the only failure with its own message.
+test("P05.T01ab: parseTurnstileConfiguration is strict and names only a hostname mismatch", () => {
+  const valid = JSON.stringify({ schemaVersion: 1, hostname, actions });
+  assert.deepEqual(parseTurnstileConfiguration(valid, origin), { hostname, actions });
+  assert.ok(Object.isFrozen(parseTurnstileConfiguration(valid, origin)));
+  for (const loginOrigin of ["https://other.example.test", "not a url", null, undefined, 1])
+    assert.throws(() => parseTurnstileConfiguration(valid, loginOrigin), {
+      message: turnstileHostnameMismatch,
+    });
+  for (const json of [
+    null,
+    "",
+    "[]",
+    valid + " ".repeat(1025 - valid.length),
+    valid.replace('"schemaVersion":1', '"schemaVersion":1,"schemaVersion":1'),
+    JSON.stringify({ schemaVersion: 1, hostname: "Workspace.Example.Test", actions }),
+    JSON.stringify({ schemaVersion: 1, hostname, actions: { login: "a" } }),
+  ])
+    assert.throws(() => parseTurnstileConfiguration(json, origin), {
+      message: "BROKER_PROTOCOL_INVALID",
+    });
 });
 
 test("P05.T01ab-AC04 (broker): status, redirect, size, transport and timeout are held after one request", async () => {
