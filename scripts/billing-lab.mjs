@@ -1699,7 +1699,27 @@ INSERT INTO morrow_billing.billing_accounts VALUES(${lit(p.org)},${lit(p.workspa
         opRow().status === "verified" &&
         opRow().attempt === "1",
     );
-    // G6. Only the fake Stripe origin was called, always with the broker's key.
+    // G6. Stripe expires an open session: checkout.session.expired closes the intent, and a
+    // new checkout then opens a new session for the same customer.
+    const x = tenant("billing_x");
+    const xFirst = await realCall(x, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const xIntent = intents(x)[0];
+    const expiredSession = fake.expire(xIntent.stripe_session_id);
+    const expiredStatus = await post(fake.signedEvent("checkout.session.expired", expiredSession));
+    const xAgain = await realCall(x, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const xIntents = intents(x);
+    check(
+      "G_an_expired_session_closes_its_intent_and_a_new_checkout_works",
+      xFirst.status === 201 &&
+        expiredStatus === 200 &&
+        xIntents.find((i) => i.id === xIntent.id)?.status === "expired" &&
+        xAgain.status === 201 &&
+        xAgain.body.operationId !== xFirst.body.operationId &&
+        xIntents.filter((i) => i.status === "open").length === 1 &&
+        fake.state.sessions.get(xIntents.find((i) => i.status === "open").stripe_session_id)
+          ?.customer === fake.state.sessions.get(xIntent.stripe_session_id)?.customer,
+    );
+    // G7. Only the fake Stripe origin was called, always with the broker's key.
     check(
       "G_zero_unexpected_outbound_requests",
       fake.requests.length > 0 &&

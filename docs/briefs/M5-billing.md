@@ -42,14 +42,27 @@ Shopify App Pricing; top-ups, coupons, trials, proration and plan changes; dunni
 
 ## Test checklist
 
-- [ ] The P01.T04a decision tables (`classify-payment`, `purchase-decision`) run against the persisted path.
-- [ ] Recorded fixtures on the pinned version: a real `invoice.paid` (`subscription_create`) resolves its operation through `parent.subscription_details.metadata`; a cancellation via `cancel_at` folds correctly.
-- [ ] Webhook: bad signature, stale timestamp, wrong mode or account, duplicate event, `invoice.paid` before `checkout.session.completed` → correct and idempotent.
-- [ ] A payment verified after a store link → `ROUTE_MISMATCH` recorded; never `morrow_direct`.
-- [ ] Concurrent checkouts → one open intent; an expired session (event, or the lazy close) → a new checkout works; double `invoice.paid` → one grant.
-- [ ] Unknown Stripe outcome: readback before replay; never a new idempotency key.
-- [ ] Billing and usage screens: call to action only from `billingCallToAction`; axe at the four widths.
-- [ ] An end-to-end lab with recorded Stripe fixtures, then a test-mode smoke under owner approval with a `docs/evidence/live/` record.
+- [x] The P01.T04a decision tables (`classify-payment`, `purchase-decision`) run against the persisted path. (lab:billing F: the 30 Stripe subscription-period rows M5 can persist and the 48 purchase rows of the two purchase routes; reversed payers, App Pricing, plan changes and top-ups are outside the M5 path. One stricter persisted outcome is asserted as such: subscribe in `morrow_direct` after a terminal subscription is refused until M6.)
+- [ ] Recorded fixtures on the pinned version: a real `invoice.paid` (`subscription_create`) resolves its operation through `parent.subscription_details.metadata`; a cancellation via `cancel_at` folds correctly. (PR-1: done on synthetic fixtures hand-built from the 2025-03-31.basil reference: tests/billing-apply-plan.test.mjs, lab:billing D and G. Open: replace them with objects recorded in the owner-approved test-mode smoke.)
+- [x] Webhook: bad signature, stale timestamp, wrong mode or account, duplicate event, `invoice.paid` before `checkout.session.completed` → correct and idempotent. (tests/billing-webhook-verify.test.mjs; lab:billing D2-D4 and G2-G3, including a held readback and a lost commit read back.)
+- [x] A payment verified after a store link → `ROUTE_MISMATCH` recorded; never `morrow_direct`. (lab:billing D8 and F, a defence case reachable only through a fixture under ADR-0022 item 5.)
+- [x] Concurrent checkouts → one open intent; an expired session (event, or the lazy close) → a new checkout works; double `invoice.paid` → one grant. (lab:billing B4, B5, D2 and G6.)
+- [x] Unknown Stripe outcome: readback before replay; never a new idempotency key. (tests/billing-stripe-broker.test.mjs; lab:billing C and G5.)
+- [ ] Billing and usage screens: call to action only from `billingCallToAction`; axe at the four widths. (PR-2.)
+- [ ] An end-to-end lab with recorded Stripe fixtures, then a test-mode smoke under owner approval with a `docs/evidence/live/` record. (PR-1: lab:billing G runs the real broker code against the fake Stripe origin over PostgreSQL 17 with zero real provider calls. Open: lab:billing-workers, the workerd api and broker pair, waits for M2 PR-2's vault transport at the rebase; the smoke is owner-gated after merge.)
+
+### PR-1 status (server)
+
+- [x] `governance.billing.manage` and `governance.model_default.revise` in the catalogue (Governance, control, `human_only`, review not required, never paid work); owner template v2 issued at signup and backfilled for active founders; `!isPaidWork` for every v2 row. (tests/account-onboarding.test.mjs, tests/policy.test.mjs, lab:billing A including a real signup on the full chain.)
+- [x] Route-row writer in the signup transaction: delivered by M2 PR-1 (0021-0023); it still fires after the `create_first_organization` replacement (lab:billing A; the body differs from 0013's only in the template function and literal, tests/account-onboarding.test.mjs).
+- [x] Purchase guard: one prefix `/workspace/:ws/billing/morrow/`, a closed path → action table, denial or billing-reader failure before any handler or broker call. (tests/billing-commands.test.mjs; lab:billing B2.)
+- [x] Credits only from confirmed payments: grants from `BillingTerms` and a read-back paid invoice, re-derived in SQL, never from the Checkout return or a client. (lab:billing D1, D9 forged plans, F.)
+- [x] Tenant from the customer mapping, cross-checked with the operation in the subscription metadata. (lab:billing D7; tests/billing-apply-plan.test.mjs.)
+- [x] `mapApiEnvironment` rejects `STRIPE_` bindings; Stripe credentials bind only to the broker in development and staging (16 names; production 12). (tests/api-environment, edge-config, broker-protocol, staging-secrets; `STRIPE_OUTSIDE_BROKER` boundary rule.)
+- [ ] Tier 2 AI review (separate context, same model family) with the security lens, stating whether the new api routes and broker methods widen ADR-0007 R1/R2.
+- [ ] (Post-merge, owner) Stripe test account, restricted key and webhook secret placed, Product/Price created, portal configuration saved, staging terms committed, test-mode smoke with a `docs/evidence/live/` record.
+
+Scope notes for PR-1: the signup route-row writer was already delivered by M2 PR-1; owner template v2 is v1 plus the two Governance controls (ADR-0022 item 3), and the Ask admin grant goes into a later owner template version; `credit_wallets` is created here (M3 PR-1 consumes it). The broker's vault-login transport and the store-installation bridge are branch-local stubs of M2 PR-2's fixed interfaces (`apps/broker/src/vault-database.ts`, migration `work-store-installations-stub`), replaced at the rebase.
 
 ## Owner actions
 
@@ -62,3 +75,5 @@ Shopify App Pricing; top-ups, coupons, trials, proration and plan changes; dunni
 ## Open questions
 
 - How long must payment records be kept (tax advisor; ADR-0022 item 13 proposes seven years)?
+- Resolved (owner, 2026-10-20): unused monthly credits roll over in the beta. `CreditGrant.expiresAt` stays null and credits stay spendable while the subscription is active; revisit before live money at M6 (ADR-0022 item 11 amendment).
+- Resolved (owner, 2026-10-20): the Stripe webhook applies only broker-recorded receipts through api-login ingress definers that refuse any session context and re-derive the payment key, mode and credit units in SQL; the vault login is not widened into billing writes (ADR-0022 item 9 amendment).
