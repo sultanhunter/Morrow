@@ -500,7 +500,7 @@ fixtureCases.push(
     widths: [1440, 390],
     scenario: "connections_unlinked",
     setup: (page) =>
-      page.getByText("Sign in, then reopen Morrow from your Shopify admin").waitFor(),
+      page.getByText("Sign in, then reopen Morrow from your Shopify admin").first().waitFor(),
   }),
   fixtureCase("connections", "detail", `/w/${ws}/connections/conn-sample-1`, {
     widths: [1440, 390],
@@ -518,8 +518,8 @@ fixtureCases.push(
     scenario: "connections_handoff",
     setup: async (page) => {
       await linkButton(page).click();
-      await page.getByText("Store linked.").waitFor();
-      await page.getByText("Connected").waitFor();
+      await page.getByText("Store linked.").first().waitFor();
+      await page.getByText("Connected", { exact: true }).first().waitFor();
     },
   }),
   fixtureCase("connections", "handoff_route", handoffPath, {
@@ -530,7 +530,7 @@ fixtureCases.push(
   fixtureCase("connections", "handoff_expired", handoffPath, {
     widths: [1440, 390],
     scenario: "connections_handoff_expired",
-    setup: (page) => page.getByText("This connection link expired").waitFor(),
+    setup: (page) => page.getByText("This connection link expired").first().waitFor(),
   }),
   fixtureCase("connections", "link_uncertain", handoffPath, {
     widths: [1440, 390],
@@ -1022,7 +1022,7 @@ export const keyboardWalks = [
       await page.getByRole("button", { name: "Check again" }).waitFor();
       await tabTo(page, (a) => a.text === "Check again");
       await page.keyboard.press("Enter");
-      await page.getByText("Store linked.").waitFor();
+      await page.getByText("Store linked.").first().waitFor();
       expect(new URL(page.url()).hash === "", "fragment_replaced");
       expect(
         (await morrowKeys(page)).every((k) => k !== "morrow.intended.v1"),

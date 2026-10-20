@@ -114,7 +114,12 @@ function LinkStore({
     if (!live.current) return;
     switch (outcome.kind) {
       case "ok":
-        return setStep({ step: "confirm", preview: outcome.value, notice: null });
+        // A preview joined to an apply still in flight under the same key (a remount
+        // mid-apply) answers that apply's reply: check again once it settles.
+        return typeof outcome.value.csrfToken === "string" &&
+          typeof outcome.value.installationId === "string"
+          ? setStep({ step: "confirm", preview: outcome.value, notice: null })
+          : setStep({ step: "preview_failed", uncertain: true, offline: false });
       case "not_found":
         return finish("expired");
       case "conflict":

@@ -6,8 +6,8 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-// P04.T02a AC21: dispatch is hard-disabled in the orchestrator Worker and the
-// connector stays a fail-closed placeholder. `cloudflare:*` modules are stubbed.
+// P04.T02a AC21: dispatch is hard-disabled in the orchestrator Worker, and the connector
+// (M2 PR-2's worker/index.ts) is fail-closed without its reviewed identifiers. `cloudflare:*` modules are stubbed.
 const stubs = {
   "cloudflare:workers":
     "export class WorkflowEntrypoint { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }",
@@ -91,24 +91,32 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step", 
   assert.equal(steps, 0);
 });
 
-test("the connector placeholder returns 503 except GET /healthz", async (t) => {
-  const module = await load(t, "apps/shopify-connector/worker/placeholder.ts");
-  const health = await module.default.fetch(new Request("https://connector.test/healthz"));
+// M2 PR-2 replaced the placeholder with worker/index.ts. Its committed configuration (only
+// MORROW_ENVIRONMENT and the broker binding) is still deny-all: 503 except GET /healthz,
+// which reports not ready (tests/connector-worker.test.mjs covers the configured worker).
+test("the unconfigured connector returns 503 except GET /healthz, which is not ready", async (t) => {
+  const module = await load(t, "apps/shopify-connector/worker/index.ts");
+  const env = { MORROW_ENVIRONMENT: "development" };
+  const health = await module.default.fetch(new Request("https://connector.test/healthz"), env);
   assert.equal(health.status, 200);
-  assert.equal(
-    await health.text(),
-    '{"schemaVersion":1,"service":"connector","mode":"placeholder"}',
-  );
+  assert.equal(await health.text(), '{"schemaVersion":1,"service":"connector","ready":false}');
   for (const [method, path] of [
-    ["POST", "/healthz"],
     ["GET", "/"],
     ["GET", "/auth/callback"],
     ["POST", "/webhooks"],
+    ["GET", "/shopify/a/lab-app/launch?shop=a.myshopify.com"],
+    ["POST", "/shopify/a/lab-app/webhooks"],
   ]) {
     const response = await module.default.fetch(
       new Request("https://connector.test" + path, { method }),
+      env,
     );
     assert.equal(response.status, 503);
     assert.equal(await response.text(), '{"code":"connector_unavailable"}');
   }
+  const post = await module.default.fetch(
+    new Request("https://connector.test/healthz", { method: "POST" }),
+    env,
+  );
+  assert.equal(post.status, 405);
 });

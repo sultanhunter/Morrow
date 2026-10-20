@@ -126,7 +126,8 @@ function guardOutcome(status: number, body: unknown): Outcome<never> | null {
   if ((status === 400 || status === 405) && coded(body, "request_denied"))
     return { kind: "invalid", field: null };
   if (status === 403 && coded(body, "request_denied")) return denied;
-  if (status === 404 && coded(body, "linking_not_found")) return notFound;
+  // linking_not_found, or the guard's own 404: nothing ran either way.
+  if (status === 404) return notFound;
   return null;
 }
 
