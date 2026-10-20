@@ -433,17 +433,17 @@
       "additionalProperties": false
     },
     "governance.model_default.revise.input": {
-      "description": "M3 PR-1 branch-local stub of M5 PR-1's body (integration interface 'Capabilities and owner template v2'), dropped at rebase for M5's: the workspace's default model selection and member ceiling.",
+      "description": "M5 PR-1 (ADR-0022 items 3 and 16): the workspace default model selection and member ceiling. model and effort are opaque catalogue keys; expectedRevision is null for the first revision.",
       "type": "object",
       "properties": {
         "model": {
-          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelSelectionKey"
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelOptionKey"
         },
         "effort": {
-          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelSelectionKey"
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelOptionKey"
         },
         "maxCreditsPerProduct": {
-          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelCreditCeiling"
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/CreditsPerProductCeiling"
         },
         "expectedRevision": {
           "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableRevision"
@@ -458,7 +458,6 @@
       "additionalProperties": false
     },
     "governance.model_default.revise.output": {
-      "description": "M3 PR-1 branch-local stub of M5 PR-1's body, dropped at rebase for M5's.",
       "type": "object",
       "properties": {
         "revision": {

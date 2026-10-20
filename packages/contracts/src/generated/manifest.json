@@ -5,8 +5,8 @@
     "docs/contracts/schemas/v1/core.schema.json": "b7d28ad545547029d777e1ae78105e36405cb81600f805a336da114d08fbcf2b",
     "docs/contracts/schemas/v1/capabilities.schema.json": "e3844943ed482d23bea1279b697d79af3f3f9270da5606065152d146f14e53a1",
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
-    "docs/contracts/schemas/v1.1/core.schema.json": "218c8e3ffb9a78cd45f4bb8f2f33b4c98ed1b62fb8112dbcf990b89f1b381059",
-    "docs/contracts/schemas/v1.1/capabilities.schema.json": "b233f7b896f9645577fb07a2470fbc3dc212124e76d83d43069551563b9c3706",
+    "docs/contracts/schemas/v1.1/core.schema.json": "9b7285ff2a9f0b0f602e39f18f30008496c018b5d5d30204d3ab3e0dffb9410b",
+    "docs/contracts/schemas/v1.1/capabilities.schema.json": "d8cf119d626e4d9a9ae32881e2e9bd5400afde479887bc679b96fd225bcf269b",
     "docs/contracts/schemas/v1.1/billing.schema.json": "763f73b99def0b5d8b2083f0084c9504e823fa81a3e772db8b3c5a45f94d9490"
   },
   "event_registry": "db4a4f3a1b8735cf1203a778ce861a22601e48125f6323356a2d23e228ed46a7",
@@ -134,5 +134,5 @@
   "capabilities": 114,
   "capability_body_overrides": 28,
   "event_types": 22,
-  "generated_sha256": "9ed7356da48087950f534cec5c91d37ae56a9a45624a78a13290a1609b7f8762"
+  "generated_sha256": "da5cbb5b674c86553050179afd6965bd2fcabd877d6ec8dc0c51a85c0705dbe3"
 }

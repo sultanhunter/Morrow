@@ -3027,7 +3027,7 @@
       "provider": "morrow",
       "mode": "internal",
       "operations": [
-        "planned typed Morrow command/query governance.model_default.revise"
+        "planned typed Morrow command governance.model_default.revise"
       ],
       "required_scopes": [],
       "sources": [],
@@ -3044,7 +3044,7 @@
       "payload_schema_status": "contract_defined_implementation_pending",
       "scope_status": "pending_conformance",
       "conformance_tasks": [
-        "P13.T01"
+        "P12.T01"
       ],
       "logical_idempotency": "tenant-command-id/request-digest; one operation identity",
       "unknown_outcome": "retry bounded reads or reconcile persisted internal command"

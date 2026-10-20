@@ -7187,7 +7187,7 @@
     },
     {
       "id": "governance.model_default.revise",
-      "name": "Change the workspace's default model and member ceiling",
+      "name": "Revise the workspace default model selection and member ceiling",
       "domain": "Governance",
       "contract_version": "0.1.0-draft",
       "status": "Proposed",
@@ -7198,17 +7198,17 @@
         "envelope": "ScopedRequestV1",
         "fields": {
           "model": {
-            "type": "ModelSelectionKey",
+            "type": "ModelOptionKey",
             "required": true,
             "nullable": false
           },
           "effort": {
-            "type": "ModelSelectionKey",
+            "type": "ModelOptionKey",
             "required": true,
             "nullable": false
           },
           "maxCreditsPerProduct": {
-            "type": "ModelCreditCeiling",
+            "type": "CreditsPerProductCeiling",
             "required": true,
             "nullable": false
           },
@@ -7243,7 +7243,7 @@
       "executor": "human_only",
       "kill_switch": false,
       "irreversible": false,
-      "verification": "Only catalogue keys of the active version; a member without this capability is held to the ceiling",
+      "verification": "Only keys of the active catalogue version are accepted, and the ceiling binds members without this grant",
       "failure_behavior": "Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.",
       "journey": "J13",
       "hosts": [
@@ -7251,11 +7251,10 @@
       ],
       "layout": "Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.",
       "implementation_tasks": [
-        "P13.T01"
+        "P12.T01"
       ],
       "acceptance_cases": [
-        "P01.A01",
-        "P13.A01"
+        "P01.A01"
       ],
       "activation": "blocked_until_contract_and_provider_qualified"
     },

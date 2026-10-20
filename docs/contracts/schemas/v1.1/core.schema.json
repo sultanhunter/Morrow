@@ -5713,8 +5713,8 @@
       ],
       "additionalProperties": false
     },
-    "ModelSelectionKey": {
-      "description": "ModelSelectionKey (ADR-0022 items 2 and 16; M3 PR-1): an opaque model or effort key of the model catalogue (docs/decisions/model-policy.json). A pattern-checked string, never an enum: the server checks it against a catalogue version, so a new model, effort or catalogue version changes no contract.",
+    "ModelOptionKey": {
+      "description": "An opaque model-catalogue key, a model or an effort (ADR-0022 items 2 and 16): the server checks it against the active catalogue version, so adding a model, an effort or a version changes no contract.",
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]{0,39}$"
     },
@@ -5723,10 +5723,10 @@
       "type": "object",
       "properties": {
         "model": {
-          "$ref": "#/$defs/ModelSelectionKey"
+          "$ref": "#/$defs/ModelOptionKey"
         },
         "effort": {
-          "$ref": "#/$defs/ModelSelectionKey"
+          "$ref": "#/$defs/ModelOptionKey"
         }
       },
       "required": [
@@ -5735,14 +5735,14 @@
       ],
       "additionalProperties": false
     },
-    "ModelCreditCeiling": {
-      "description": "ModelCreditCeiling (ADR-0022 item 16; M3 PR-1): the workspace's member ceiling in credits per product, and the bound of one selection's credits per product.",
+    "CreditsPerProductCeiling": {
+      "description": "The workspace member ceiling of credits per product (ADR-0022 item 16): 1 to 99.",
       "type": "integer",
       "minimum": 1,
       "maximum": 99
     },
     "NullableRevision": {
-      "description": "NullableRevision (M3 PR-1): an expected revision, or null when no record exists yet.",
+      "description": "A Revision or null (a capability body field type; R11 needs a named type).",
       "anyOf": [
         {
           "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"

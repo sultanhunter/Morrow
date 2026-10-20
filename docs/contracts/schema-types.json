@@ -89,6 +89,10 @@
       "schema": "urn:morrow:contracts:core:v1#/$defs/CoverageRef",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
     },
+    "CreditsPerProductCeiling": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/CreditsPerProductCeiling",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
     "CriteriaList": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/CriteriaList",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
@@ -185,12 +189,8 @@
       "schema": "urn:morrow:contracts:core:v1.1#/$defs/MessagePartInputs",
       "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
     },
-    "ModelCreditCeiling": {
-      "schema": "urn:morrow:contracts:core:v1.1#/$defs/ModelCreditCeiling",
-      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
-    },
-    "ModelSelectionKey": {
-      "schema": "urn:morrow:contracts:core:v1.1#/$defs/ModelSelectionKey",
+    "ModelOptionKey": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/ModelOptionKey",
       "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
     },
     "MoneyList": {

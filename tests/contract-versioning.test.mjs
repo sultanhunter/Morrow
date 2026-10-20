@@ -622,9 +622,9 @@ test("ADR-0022 items 2 and 16: ModelSelection keys are opaque pattern-checked st
   ])
     assert.equal(ok(bad), false, JSON.stringify(bad));
   // The ceiling is an integer 1..99; an expected revision may be null.
-  assert.equal(validateCurrentDefinition("ModelCreditCeiling", 6), true);
+  assert.equal(validateCurrentDefinition("CreditsPerProductCeiling", 6), true);
   for (const bad of [0, 100, 1.5, "1"])
-    assert.equal(validateCurrentDefinition("ModelCreditCeiling", bad), false, String(bad));
+    assert.equal(validateCurrentDefinition("CreditsPerProductCeiling", bad), false, String(bad));
   assert.equal(validateCurrentDefinition("NullableRevision", null), true);
   assert.equal(validateCurrentDefinition("NullableRevision", 0), false);
 });

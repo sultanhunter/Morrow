@@ -267,7 +267,7 @@ export function createModelCatalogue(data: ModelCatalogueData) {
      * ceiling below it would refuse every member's default).
      */
     checkWorkspaceDefault(selection: unknown, ceiling: unknown): WorkspaceDefaultResult {
-      if (!validateCurrentDefinition("ModelCreditCeiling", ceiling))
+      if (!validateCurrentDefinition("CreditsPerProductCeiling", ceiling))
         return Object.freeze({ ok: false, code: "ceiling_invalid" });
       const resolved = resolveSelection({
         selection,
