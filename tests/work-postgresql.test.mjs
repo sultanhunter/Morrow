@@ -319,10 +319,17 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
     pkg.scripts["lab:spine-foundation"],
     "node --import tsx scripts/spine-foundation-lab.mjs",
   );
+  // M3 PR-1 appends its listings authority lab; its run-credits lab rides pg-linking.
+  assert.equal(
+    pkg.scripts["lab:listings-authority"],
+    "node --import tsx scripts/listings-authority-lab.mjs",
+  );
+  assert.equal(pkg.scripts["lab:run-credits"], "node --import tsx scripts/run-credits-lab.mjs");
   assert.equal(
     pkg.scripts["lab:group:pg-work"],
-    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation",
+    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation && npm run lab:listings-authority",
   );
+  assert.ok(pkg.scripts["lab:group:pg-linking"].endsWith(" && npm run lab:run-credits"));
   // The `work` leg of the ci.yml postgres matrix (P03.T04f).
   assert.match(
     read(".github/workflows/ci.yml"),

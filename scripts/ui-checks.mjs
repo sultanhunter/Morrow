@@ -282,6 +282,26 @@ export const fixtureCases = [
     },
   }),
   fixtureCase("entry", "unavailable_destination", `/w/${ws}/agents`),
+  // M3 PR-1: the Listings agent card (the connection route mounts it until M2 PR-2's
+  // connection screen hosts it): ready, the review of the server-built document, the
+  // stop dialog; and the model default under Settings > Governance.
+  fixtureCase("agents", "listings_card", `/w/${ws}/connections/store-linen`),
+  fixtureCase("agents", "listings_review", `/w/${ws}/connections/store-linen`, {
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Enable Listings agent" }).click();
+      await page.getByRole("heading", { name: "Review before enabling" }).waitFor();
+    },
+  }),
+  fixtureCase("agents", "listings_stop", `/w/${ws}/connections/store-linen`, {
+    widths: [1440, 390],
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Enable Listings agent" }).click();
+      await page.getByRole("button", { name: "Confirm and enable" }).click();
+      await page.getByRole("button", { name: "Stop AI work" }).click();
+      await page.getByRole("heading", { name: "Stop AI work for this store" }).waitFor();
+    },
+  }),
+  fixtureCase("settings", "model_default", `/w/${ws}/settings/governance`),
   fixtureCase("account", "form", "/", { scenario: "account_form" }),
   fixtureCase("account", "chooser", "/", { scenario: "account_chooser" }),
   fixtureCase("account", "invite", "/", { scenario: "account_invite" }),

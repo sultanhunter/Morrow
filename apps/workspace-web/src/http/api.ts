@@ -457,10 +457,23 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
       ),
       listingsDocument: gated(
         "agents.listingsDocument",
-        (ws: string, storeId: string, c: Command<Record<string, never>>) =>
-          command(requests.listingsDocument(ws, storeId, c), (b) =>
-            decodeListingsDocument(b, storeId),
-          ),
+        async (ws: string, storeId: string, c: Command<Record<string, never>>) => {
+          const request = requests.listingsDocument(ws, storeId, c);
+          if (!request) return refused;
+          const reply = await send(request);
+          // A replayed document never carries its nonce again (it is returned once), so
+          // it cannot be confirmed: a terminal conflict, and the person starts again.
+          if (
+            reply.kind === "response" &&
+            reply.status === 200 &&
+            reply.body !== null &&
+            typeof reply.body === "object" &&
+            (reply.body as Record<string, unknown>).replayed === true &&
+            (reply.body as Record<string, unknown>).nonce === null
+          )
+            return { kind: "conflict", recheck: true, message: "" } as const;
+          return workOutcome(reply, "command", (b) => decodeListingsDocument(b, storeId));
+        },
       ),
       listingsEnable: gated(
         "agents.listingsEnable",

@@ -122,37 +122,25 @@ export function ModelDefaultScreen({ workspace }: { readonly workspace: Workspac
           <div className="panel-head">
             <h2 id="model-default-title">{copy.models.catalogue(models.value.catalogueVersion)}</h2>
           </div>
-          <table className="table" data-testid="model-catalogue">
-            <thead>
-              <tr>
-                <th scope="col">{copy.models.model}</th>
-                <th scope="col">{copy.models.effort}</th>
-                <th scope="col">{copy.models.creditsHeader}</th>
-                <th scope="col">{copy.models.availability}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {models.value.entries.map((e) => (
-                <tr key={entryKey(e)}>
-                  <td>{label(e.model)}</td>
-                  <td>{label(e.effort)}</td>
-                  <td>
-                    {copy.models.credits(e.creditsPerProduct)}
-                    <br />
-                    <span className="muted small">{copy.models.limit(e.runProductLimit)}</span>
-                  </td>
-                  <td>
-                    {entryKey(e) === entryKey(models.value.workspaceDefault) ? (
-                      <Tag tone="accent">{copy.models.default}</Tag>
-                    ) : null}{" "}
-                    <Tag tone={e.allowedForMember ? "success" : "neutral"}>
-                      {e.allowedForMember ? copy.models.withinCeiling : copy.models.aboveCeiling}
-                    </Tag>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ul className="item-list" data-testid="model-catalogue">
+            {models.value.entries.map((e) => (
+              <li key={entryKey(e)} className="item item-stacked">
+                <p>{`${label(e.model)} · ${label(e.effort)}`}</p>
+                <p className="meta">
+                  {copy.models.credits(e.creditsPerProduct)} ·{" "}
+                  {copy.models.limit(e.runProductLimit)}
+                </p>
+                <p className="meta">
+                  {entryKey(e) === entryKey(models.value.workspaceDefault) ? (
+                    <Tag tone="accent">{copy.models.default}</Tag>
+                  ) : null}
+                  <Tag tone={e.allowedForMember ? "success" : "neutral"}>
+                    {e.allowedForMember ? copy.models.withinCeiling : copy.models.aboveCeiling}
+                  </Tag>
+                </p>
+              </li>
+            ))}
+          </ul>
           {models.value.canRevise ? (
             <DefaultForm ws={ws} view={models.value} onSaved={reload} />
           ) : (

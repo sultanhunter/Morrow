@@ -269,8 +269,6 @@ export const copy = {
     effort: "Effort",
     credits: (n: number) => `${n} ${n === 1 ? "credit" : "credits"} per product`,
     limit: (n: number) => `Up to ${n} products per run`,
-    creditsHeader: "Credits",
-    availability: "For members",
     ceiling: "Member ceiling",
     ceilingHint: "Credits per product a member may pick without this permission (1 to 99).",
     default: "Default",

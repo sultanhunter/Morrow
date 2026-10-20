@@ -225,6 +225,7 @@ export function ListingsAgentCard({
           phase={prepare.phase}
           onCheckAgain={prepare.checkAgain}
           onRetry={prepare.retry}
+          messages={{ conflict: (o) => o.message || copy.agents.expired }}
         />
       </>
     );

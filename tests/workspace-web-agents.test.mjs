@@ -343,6 +343,14 @@ test("the HTTP port: reads, PUT under the POST rules, and the outcome mapping", 
     (await port.agents.listingsDocument(ws, store, { key: key(), body: {} })).kind,
     "denied",
   );
+  // A replayed document has no nonce (returned once): a terminal conflict, never uncertain.
+  replies.push(
+    json(200, { schemaVersion: 1, documentDigest: hex("a"), nonce: null, replayed: true }),
+  );
+  assert.equal(
+    (await port.agents.listingsDocument(ws, store, { key: key(), body: {} })).kind,
+    "conflict",
+  );
   replies.push(json(200, { schemaVersion: 1, surprise: true }));
   assert.equal(
     (await port.agents.listingsStop(ws, store, { key: key(), body: { reason: "Pause" } })).kind,
