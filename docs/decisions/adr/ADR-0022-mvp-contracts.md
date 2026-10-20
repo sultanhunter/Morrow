@@ -251,7 +251,7 @@ Owner decision, 2026-10-20, in chat. The question was: "How should turning on th
 
 A verified Stripe payment has no browser session. It is applied in two steps.
 
-1. **The broker records a receipt.** The broker verifies Stripe's signature, then records the event as a receipt through definers on its own login, `morrow_vault_broker`. Recording is that login's only billing write. It stores the receipt and its object digest. The tenant comes only from the Stripe customer mapping recorded when the workspace's own session-authorised checkout created the customer. The vault login never applies a payment, fixes a route or grants credits.
+1. **The broker records a receipt.** The broker verifies Stripe's signature, then records the event as a receipt through definers on its own login, `morrow_vault_broker`. The vault login has two billing writes: it records receipts with their object digests, and it settles the broker's own Stripe operations. Settling the customer operation records the Stripe customer mapping for the workspace whose session-authorised checkout requested it. The receipt's tenant comes only from that mapping. The vault login never applies a payment, fixes a route or grants credits.
 2. **The api Worker applies the receipt.** The api Worker's login, `morrow_api_worker`, applies the receipt through `receipt_begin`, `receipt_apply` and `receipt_status`:
    - They refuse any work session context.
    - They accept only a recorded receipt with a matching digest, and take the tenant from that receipt.
@@ -261,7 +261,7 @@ A verified Stripe payment has no browser session. It is applied in two steps.
 
 Every session definer stays session-only. Like the connector's compliance definers (`shop/redact` and uninstall; spine §11), these definers write only the tenant that a verified provider event names.
 
-Owner decision, 2026-10-20, in chat. The question was: "How should a verified Stripe payment be written into a workspace? Stripe webhooks arrive with no signed-in user." The owner answered: "Receipt-only path (Recommended)". The option read: "The broker verifies Stripe's signature and records a receipt. The database applies it only from that receipt: it finds the workspace from the Stripe customer and recomputes the plan and credits itself. No browser session is involved. Recorded as a short ADR-0022 amendment." The alternative not chosen was that the broker's vault login also writes the billing records directly.
+Owner decision, 2026-10-20, in chat. The question was: "How should a verified Stripe payment be written into a workspace? Stripe webhooks arrive with no signed-in user." The owner answered: "Receipt-only path (Recommended)". The option read: "The broker verifies Stripe's signature and records a receipt. The database applies it only from that receipt: it finds the workspace from the Stripe customer and recomputes the plan and credits itself. No browser session is involved. Recorded as a short ADR-0022 amendment." The other option, not chosen, read: "The broker's vault database login also writes the billing records directly. Simpler, but it widens what that login can do."
 
 ### 2026-10-20: item 11, credit rollover in the beta (M5 PR-1)
 
