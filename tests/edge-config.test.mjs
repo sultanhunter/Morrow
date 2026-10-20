@@ -809,20 +809,68 @@ test("P04.T01i AC01: shared vars byte-equal, challenge actions byte-equal, a dir
       both((vars) => patchVar(vars, "MORROW_DATABASE_BINDING_JSON", { database: "neondb" })),
       "EDGE_STAGING_BINDING",
     ],
+    // Other well-formed direct `ep-` hosts than staging.json's endpoint_host: the root
+    // branch's (as the PR-D review names it), a one-character change, another cell.
+    ...[
+      "ep-falling-math-b78o6uzn.c-13.us-east-1.aws.neon.tech",
+      "ep-hidden-mouse-b7e6ff6m.c-13.us-east-1.aws.neon.tech",
+      "ep-hidden-mouse-b7e6ff6l.c-12.us-east-1.aws.neon.tech",
+    ].map((hostname) => [
+      both((vars) => patchVar(vars, "MORROW_DATABASE_BINDING_JSON", { hostname })),
+      "EDGE_STAGING_BINDING",
+    ]),
   ];
   for (const [index, [mutate, expected]] of cases.entries()) {
     const found = codes(await verify(tree(mutate)));
     assert.ok(found.includes(expected), index + ": " + expected + " not in " + found.join(","));
   }
-  // staging.json binds another branch: the committed binding no longer matches.
-  const found = codes(
+  // staging.json binds another branch or endpoint, or none: the committed binding no longer
+  // matches.
+  for (const patch of [
+    (s) => (s.neon.branch_id = "br-other-branch-a1b2c3d4"),
+    (s) => (s.neon.endpoint_host = "ep-falling-math-b78o6uzn.c-13.us-east-1.aws.neon.tech"),
+    (s) => (s.neon.endpoint_host = null),
+    (s) => delete s.neon.endpoint_host,
+  ]) {
+    const found = codes(await verify(tree(), undefined, records({ staging: patch })));
+    assert.ok(found.includes("EDGE_STAGING_BINDING"), found.join(","));
+  }
+  // The -pooler refusal holds even when staging.json names the pooler host.
+  const pooler = "ep-hidden-mouse-b7e6ff6l-pooler.c-13.us-east-1.aws.neon.tech";
+  const pooled = codes(
     await verify(
-      tree(),
+      tree(both((vars) => patchVar(vars, "MORROW_DATABASE_BINDING_JSON", { hostname: pooler }))),
       undefined,
-      records({ staging: (s) => (s.neon.branch_id = "br-other-branch-a1b2c3d4") }),
+      records({ staging: (s) => (s.neon.endpoint_host = pooler) }),
     ),
   );
-  assert.ok(found.includes("EDGE_STAGING_BINDING"), found.join(","));
+  assert.ok(pooled.includes("EDGE_STAGING_BINDING"), pooled.join(","));
+});
+
+test("P04.T01i AC01: the site key is staging.json's widget's; another well-formed 0x key fails", async () => {
+  const reviewed = committedStaging.cloudflare.turnstile.site_key;
+  assert.equal(reviewed, "0x4AAAAAAFdwF1eDox4vfBd2");
+  // A swapped key of the same shape in the committed var.
+  const swapped = "0x4AAAAAAFdwF1eDox4vfBd3";
+  const found = codes(
+    await verify(
+      tree({
+        api: (c) => patchVar(c.env.staging.vars, "LOGIN_CHALLENGE_JSON", { siteKey: swapped }),
+      }),
+    ),
+  );
+  assert.ok(found.includes("EDGE_STAGING_VALUE_SITE_KEY"), found.join(","));
+  // staging.json records another key, or none: the committed var no longer matches.
+  for (const patch of [
+    (s) => (s.cloudflare.turnstile.site_key = swapped),
+    (s) => (s.cloudflare.turnstile = null),
+    (s) => delete s.cloudflare.turnstile,
+  ]) {
+    const verdict = await verify(tree(), undefined, records({ staging: patch }));
+    assert.deepEqual(verdict.problems, [
+      "EDGE_STAGING_VALUE_SITE_KEY:api:staging:LOGIN_CHALLENGE_JSON",
+    ]);
+  }
 });
 
 test("P04.T01i AC01 (P04.T02a AC24 narrowed): staging vars name only the reviewed identifiers", async () => {

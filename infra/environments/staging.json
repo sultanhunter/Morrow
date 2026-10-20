@@ -8,6 +8,11 @@
     "account_id": "79ff672d013b8f0956437af6eea3c213",
     "workers_dev_subdomain": "sultanibneusman0",
     "origin": "https://morrow-staging-api.sultanibneusman0.workers.dev",
+    "turnstile": {
+      "widget": "morrow-staging",
+      "mode": "invisible",
+      "site_key": "0x4AAAAAAFdwF1eDox4vfBd2"
+    },
     "workers": {
       "api": "morrow-staging-api",
       "connector": "morrow-staging-connector",
@@ -32,6 +37,7 @@
     "branch_id": "br-dark-recipe-b78ytwj9",
     "branch_name": "staging",
     "region_id": "aws-us-east-1",
+    "endpoint_host": "ep-hidden-mouse-b7e6ff6l.c-13.us-east-1.aws.neon.tech",
     "primary_storage_country": "US",
     "major_version": 17,
     "minor_version": null,

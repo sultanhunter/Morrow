@@ -891,16 +891,30 @@ test("cli: schema-head prints the head; effects refuse without the card or ident
     assert.equal(await main(["migrate"], unset.ctx), 1);
     assert.equal(JSON.parse(unset.err.at(-1)).code, "STAGING_IDENTIFIERS_UNSET");
     const committed = JSON.parse(read("infra/environments/staging.json"));
-    const mismatched = await fakeContext({
-      home: planted.home,
-      tools: fakeTools().tools,
-      staging: {
-        ...committed,
-        neon: { ...committed.neon, project_id: "another-project", branch_id: labBinding.branchId },
-      },
-    });
-    assert.equal(await main(["migrate"], mismatched.ctx), 1);
-    assert.equal(JSON.parse(mismatched.err.at(-1)).code, "STAGING_BINDING_INVALID");
+    const bound = {
+      project_id: labBinding.projectId,
+      branch_id: labBinding.branchId,
+      endpoint_host: labBinding.hostname,
+    };
+    // The binding resolves only to staging.json's project, branch and direct endpoint:
+    // another project, another well-formed `ep-` host (the root branch's, as the PR-D review
+    // names it, or a one-character change), or no endpoint recorded, fails before any read.
+    for (const neon of [
+      { ...bound, project_id: "another-project" },
+      { ...bound, endpoint_host: "ep-falling-math-b78o6uzn.c-13.us-east-1.aws.neon.tech" },
+      { ...bound, endpoint_host: labBinding.hostname.replace("000001", "000002") },
+      { ...bound, endpoint_host: null },
+    ]) {
+      const mismatched = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+        staging: { ...committed, neon: { ...committed.neon, ...neon } },
+      });
+      for (const argv of [["migrate"], ["connections"]]) {
+        assert.equal(await main(argv, mismatched.ctx), 1);
+        assert.equal(JSON.parse(mismatched.err.at(-1)).code, "STAGING_BINDING_INVALID");
+      }
+    }
     assert.equal(err.length, 0);
   } finally {
     planted.cleanup();

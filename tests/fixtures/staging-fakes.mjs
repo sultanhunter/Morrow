@@ -551,8 +551,6 @@ export const labLoginConfigurationJson = JSON.stringify({
   retentionTier: "staging",
 });
 
-// A context for scripts/staging.mjs over fakes. Every seam is replaceable through
-// `overrides`; nothing reaches a real tool, provider or the operator's HOME.
 // The committed staging file with every identifier unset, independent of the values
 // PR-D commits.
 export function unsetStaging() {
@@ -560,17 +558,26 @@ export function unsetStaging() {
   const base = JSON.parse(readFileSync(join(root, "infra/environments/staging.json"), "utf8"));
   return {
     ...base,
-    cloudflare: { ...base.cloudflare, account_id: null, workers_dev_subdomain: null, origin: null },
+    cloudflare: {
+      ...base.cloudflare,
+      account_id: null,
+      workers_dev_subdomain: null,
+      origin: null,
+      turnstile: { ...base.cloudflare.turnstile, site_key: null },
+    },
     neon: {
       ...base.neon,
       project_id: null,
       root_branch_id: null,
       branch_id: null,
       region_id: null,
+      endpoint_host: null,
     },
   };
 }
 
+// A context for scripts/staging.mjs over fakes. Every seam is replaceable through
+// `overrides`; nothing reaches a real tool, provider or the operator's HOME.
 export async function fakeContext({
   home,
   root,
@@ -611,6 +618,8 @@ export async function fakeContext({
       account_id: "0".repeat(31) + "1",
       workers_dev_subdomain: "lab",
       origin: "https://morrow-staging-api.lab.workers.dev",
+      // The challenge vars below carry the synthetic site key; gate 4 holds them to this.
+      turnstile: { ...baseStaging.cloudflare.turnstile, site_key: labSiteKey },
     },
     neon: {
       ...baseStaging.neon,
@@ -620,6 +629,8 @@ export async function fakeContext({
       root_branch_id: null,
       region_id: null,
       branch_id: binding?.branchId ?? null,
+      // The binding resolves only through staging.json's endpoint (stagingBinding).
+      endpoint_host: binding?.hostname ?? null,
     },
   };
   const bindingJson = binding === null ? null : JSON.stringify(binding);

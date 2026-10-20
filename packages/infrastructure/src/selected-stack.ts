@@ -9,21 +9,25 @@ export type SelectedEnvironment = (typeof selectedEnvironments)[number];
 // root and `staging` branches with the observed history window instead of Launch PITR,
 // and the GitHub environment that holds the CI deploy token (OQ-2 answer A). The
 // identifiers are the reviewed public values P04.T01i PR-D part 1 commits: the account
-// and subdomain of the owner's 2026-10-19 decision (c), and the Neon project, root branch,
-// `staging` branch and region of docs/evidence/live/2026-10-19-neon-project-create.md and
-// 2026-10-20-neon-staging-branch.md. The origin is derived, never typed: D1's
-// `https://${api name}.${workers_dev_subdomain}.workers.dev`.
+// and subdomain of the owner's 2026-10-19 decision (c); the Neon project, root branch,
+// `staging` branch, region and the branch's direct read-write endpoint of
+// docs/evidence/live/2026-10-19-neon-project-create.md and 2026-10-20-neon-staging-branch.md;
+// and the Turnstile widget of 2026-10-20-cloudflare-turnstile-widget.md (its site key is
+// public). verify-config and gate 4 hold the committed vars to these values. The origin is
+// derived, never typed: D1's `https://${api name}.${workers_dev_subdomain}.workers.dev`.
 const stagingSubdomain = "sultanibneusman0";
 const stagingCloudflare = {
   account_id: "79ff672d013b8f0956437af6eea3c213",
   workers_dev_subdomain: stagingSubdomain,
   origin: `https://morrow-staging-api.${stagingSubdomain}.workers.dev`,
+  turnstile: { widget: "morrow-staging", mode: "invisible", site_key: "0x4AAAAAAFdwF1eDox4vfBd2" },
 };
 const stagingNeon = {
   project_id: "sweet-sound-23947873",
   root_branch_id: "br-noisy-wind-b7cxr2a1",
   branch_id: "br-dark-recipe-b78ytwj9",
   region_id: "aws-us-east-1",
+  endpoint_host: "ep-hidden-mouse-b7e6ff6l.c-13.us-east-1.aws.neon.tech",
   branch_name: "staging",
   history_window_hours: 6,
   recovery: "owner_reset_from_root_branch",

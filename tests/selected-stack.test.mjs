@@ -47,6 +47,8 @@ test("staging carries only the reviewed identifiers; development and production 
       root: staging.neon.root_branch_id,
       branch: staging.neon.branch_id,
       region: staging.neon.region_id,
+      endpoint: staging.neon.endpoint_host,
+      turnstile: staging.cloudflare.turnstile,
     },
     {
       account: "79ff672d013b8f0956437af6eea3c213",
@@ -56,6 +58,12 @@ test("staging carries only the reviewed identifiers; development and production 
       root: "br-noisy-wind-b7cxr2a1",
       branch: "br-dark-recipe-b78ytwj9",
       region: "aws-us-east-1",
+      endpoint: "ep-hidden-mouse-b7e6ff6l.c-13.us-east-1.aws.neon.tech",
+      turnstile: {
+        widget: "morrow-staging",
+        mode: "invisible",
+        site_key: "0x4AAAAAAFdwF1eDox4vfBd2",
+      },
     },
   );
   assert.deepEqual(inspectSelectedConfiguration(staging), []);
@@ -64,11 +72,16 @@ test("staging carries only the reviewed identifiers; development and production 
     assert.equal(config.cloudflare.account_id, null);
     assert.equal(config.neon.project_id, null);
     assert.equal(config.neon.branch_id, null);
+    assert.equal("endpoint_host" in config.neon, false);
+    assert.equal("turnstile" in config.cloudflare, false);
   }
   for (const change of [
     (c) => (c.neon.branch_id = c.neon.root_branch_id),
     (c) => (c.cloudflare.origin = "https://morrow-staging-api.other.workers.dev"),
     (c) => (c.cloudflare.workers_dev_subdomain = null),
+    (c) => (c.neon.endpoint_host = "ep-falling-math-b78o6uzn.c-13.us-east-1.aws.neon.tech"),
+    (c) => (c.cloudflare.turnstile.site_key = "0x4AAAAAAFdwF1eDox4vfBd3"),
+    (c) => delete c.cloudflare.turnstile,
   ]) {
     const config = structuredClone(staging);
     change(config);

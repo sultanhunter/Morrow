@@ -383,6 +383,13 @@ test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and
       "STAGING_CHALLENGE_CONFIGURATION_INVALID",
       "api",
     ],
+    // Another well-formed key than staging.json's widget's (`cloudflare.turnstile.site_key`).
+    [
+      "swapped well-formed site key",
+      { api: apiVar({ siteKey: labSiteKey.slice(0, -1) + "z" }) },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "site_key",
+    ],
     [
       "api provider none",
       { api: JSON.stringify({ provider: "none" }) },
@@ -491,6 +498,27 @@ test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and
     hostname: "morrow-staging-api.sultanibneusman0.workers.dev",
     actions: stagingChallengeActions,
   });
+  assert.equal(
+    JSON.parse(committed.challengeJson).siteKey,
+    committed.staging.cloudflare.turnstile.site_key,
+  );
+  // staging.json records another well-formed key, or none: the committed vars fail gate 4.
+  for (const turnstile of [
+    { ...committed.staging.cloudflare.turnstile, site_key: "0x4AAAAAAFdwF1eDox4vfBd3" },
+    null,
+  ])
+    await assert.rejects(
+      checkChallengeConfiguration({
+        ...committed,
+        staging: {
+          ...committed.staging,
+          cloudflare: { ...committed.staging.cloudflare, turnstile },
+        },
+      }),
+      (error) =>
+        error.code === "STAGING_CHALLENGE_CONFIGURATION_INVALID" &&
+        error.details.reason === "site_key",
+    );
 });
 
 // P04.T01i PR-D part 1: gate 4's digest step reads the committed login configuration with

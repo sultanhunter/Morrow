@@ -544,9 +544,10 @@ const loadStagingParsers = () =>
 
 // P04.T01i D1 "Rules" (AC01) on the staging vars, with the runtimes' own parsers, and the
 // narrowed P04.T02a AC24: a staging var may name only the reviewed WorkOS environment,
-// application and client (docs/decisions/workos-staging.json), the bound `br-…` branch of
-// staging.json, a direct `ep-….aws.neon.tech` endpoint, the `0x…` Turnstile site key (in
-// LOGIN_CHALLENGE_JSON only) and the origin. Every origin use is D1's
+// application and client (docs/decisions/workos-staging.json), and from staging.json the
+// bound `br-…` branch, the branch's direct endpoint (`neon.endpoint_host`, never `-pooler`),
+// the Turnstile site key (`cloudflare.turnstile.site_key`, in LOGIN_CHALLENGE_JSON only) and
+// the origin. Every origin use is D1's
 // `https://${env.staging.name}.${workers_dev_subdomain}.workers.dev`, with the subdomain read
 // from staging.json; the only other URLs are its callback and the WorkOS issuer, which the
 // login parser fixes to the client. Returns the problems and the identifiers a committed
@@ -596,7 +597,9 @@ async function stagingValueChecks({ vars, apiName, staging, workos }) {
   } catch {
     problem("EDGE_STAGING_LOGIN_CONFIGURATION", "api:staging");
   }
-  // The binding: the committed `staging` branch of the committed project, never a pooler.
+  // The binding: the committed `staging` branch of the committed project, through that
+  // branch's committed direct endpoint (any other well-formed `ep-` host, such as the root
+  // branch's, fails), never a pooler.
   try {
     const binding = parseBrokerDatabaseBinding(text("api", "MORROW_DATABASE_BINDING_JSON"));
     const label = binding.hostname.split(".")[0];
@@ -606,6 +609,8 @@ async function stagingValueChecks({ vars, apiName, staging, workos }) {
       binding.branchId !== neon.branch_id ||
       binding.branchId === neon.root_branch_id ||
       binding.database !== "morrow" ||
+      typeof neon.endpoint_host !== "string" ||
+      binding.hostname !== neon.endpoint_host ||
       label.includes("-pooler") ||
       !binding.hostname.endsWith(".aws.neon.tech")
     )
@@ -619,6 +624,8 @@ async function stagingValueChecks({ vars, apiName, staging, workos }) {
       problem("EDGE_STAGING_SHARED_VARS", "broker:staging:" + name);
   // The two challenge vars: each runtime's parser, the Turnstile hostname the origin's, and
   // the actions byte-equal (both parsers refuse a duplicate member, so JSON.parse agrees).
+  // The site key is staging.json's widget's: another well-formed `0x` key fails.
+  const reviewedSiteKey = staging?.cloudflare?.turnstile?.site_key;
   let siteKey = null;
   let apiActions = null;
   let brokerActions = null;
@@ -668,7 +675,10 @@ async function stagingValueChecks({ vars, apiName, staging, workos }) {
       const keys = matchesOf(/\b0x[0-9A-Za-z_-]*/, value);
       if (
         keys.length &&
-        (worker !== "api" || name !== "LOGIN_CHALLENGE_JSON" || keys.some((key) => key !== siteKey))
+        (worker !== "api" ||
+          name !== "LOGIN_CHALLENGE_JSON" ||
+          typeof reviewedSiteKey !== "string" ||
+          keys.some((key) => key !== siteKey || key !== reviewedSiteKey))
       )
         problem("EDGE_STAGING_VALUE_SITE_KEY", where);
     }
