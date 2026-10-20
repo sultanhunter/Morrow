@@ -107,11 +107,16 @@ test("roles: three membership-free executor logins, no password, no new owner or
   // No migration creates, alters or grants a role (ADR-0022 item 8; ADR-0020).
   for (const text of spine)
     assert.doesNotMatch(code(text), /CREATE ROLE|ALTER ROLE|GRANT morrow_[a-z_]+ TO/);
-  // Each login executes only its registered definers.
+  // Each login executes only its registered definers, granted from 0019 on (the logins'
+  // first migration) anywhere in the chain, so a later PR's definers register by entry.
   assert.deepEqual(Object.keys(executorLogins).sort(), logins);
+  const executorChain = loadMigrationChain()
+    .filter((entry) => entry.sequence >= 19)
+    .map((entry) => entry.text);
+  assert.ok(spine.every((text) => executorChain.includes(text)));
   for (const [login, functions] of Object.entries(executorLogins)) {
     const granted = [
-      ...spine.flatMap((text) => [
+      ...executorChain.flatMap((text) => [
         ...code(text).matchAll(/GRANT EXECUTE ON FUNCTION ([^;]*?) TO ([a-z_,]+);/g),
       ]),
     ]
@@ -223,8 +228,10 @@ test("registry: every 0020 object is registered with its class", () => {
     assert.ok(workTables[table], table);
     assert.match(foundation, new RegExp(`CREATE TABLE morrow_work\\.${table} \\(`));
   }
-  assert.deepEqual(Object.keys(billingTables), ["workspace_billing_routes"]);
-  assert.deepEqual(Object.keys(vaultTables).sort(), ["app_secrets", "credentials"]);
+  // 0020's tables are registered; later PRs add their own (S1 in lab:tenant-conformance
+  // keeps each registry equal to the live catalog).
+  assert.ok(Object.hasOwn(billingTables, "workspace_billing_routes"));
+  for (const table of ["app_secrets", "credentials"]) assert.ok(Object.hasOwn(vaultTables, table));
   for (const [schema, functions] of [
     ["morrow_work", workFunctions],
     ["morrow_billing", billingFunctions],
