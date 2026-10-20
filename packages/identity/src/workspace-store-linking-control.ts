@@ -24,8 +24,56 @@ FROM pg_catalog.pg_roles r WHERE r.rolname=current_user`,
     "SELECT handoff_id,command_id,request_digest,session_digest,nonce_digest,organization_id,workspace_id,installation_id,purpose,expected_policy_revision,expected_ownership_revision FROM morrow_identity.lookup_workspace_store_link($1,$2,$3,$4)",
   status:
     "SELECT outcome,link_id,ownership_revision,policy_revision,audit_id FROM morrow_identity.workspace_store_link_status($1,$2,$3,$4)",
+  // M2 PR-2 (migration 0026, P09.T02a): the actor's authority for the TypeScript kernel,
+  // the Shopify continuation issuer (READ WRITE) and the connections read.
+  authority:
+    "SELECT principal_id,organization_id,workspace_id,membership_id,policy_revision,grants::text AS grants,grant_count,database_now_ms FROM morrow_identity.linking_actor_authority($1,$2)",
+  issue: "SELECT morrow_identity.issue_shopify_link_handoff($1,$2,$3,$4,$5) AS outcome",
+  connections:
+    "SELECT installations::text AS installations,app_registered,install_url,route,linked FROM morrow_identity.workspace_connections($1,$2)",
   commit: workspaceStoreLinkingSql.commit,
 });
+// M2 PR-2: the actor facts the connection kernel decides on (governance.connection.connect
+// administer on the workspace resource). Server facts only; grants are re-validated by
+// the kernel itself.
+export interface LinkingAuthorityFacts {
+  readonly principalId: string;
+  readonly organizationId: string;
+  readonly workspaceId: string;
+  readonly membershipId: string;
+  readonly policyRevision: number;
+  readonly grants: readonly unknown[];
+  readonly databaseNowMs: number;
+}
+export type ShopifyIssueOutcome =
+  | "issued"
+  | "exists"
+  | "denied"
+  | "route_not_ready"
+  | "not_found"
+  | "invalid";
+const issueOutcomes: readonly string[] = [
+  "issued",
+  "exists",
+  "denied",
+  "route_not_ready",
+  "not_found",
+  "invalid",
+];
+export interface WorkspaceConnectionFacts {
+  readonly installations: readonly unknown[];
+  readonly appRegistered: boolean;
+  readonly installUrl: string | null;
+  readonly route: "morrow_direct" | "shopify_app_pricing" | "unfixed" | "missing" | "invalid";
+  readonly linked: boolean;
+}
+const routes: readonly string[] = [
+  "morrow_direct",
+  "shopify_app_pricing",
+  "unfixed",
+  "missing",
+  "invalid",
+];
 export class WorkspaceStoreLinkingControlError extends Error {
   constructor(
     readonly code: "WORKSPACE_LINKING_CONTROL_INVALID" | "WORKSPACE_LINKING_OUTCOME_UNKNOWN",
@@ -82,6 +130,114 @@ function parse(text: unknown, names: readonly string[]) {
   } catch {
     throw invalid();
   }
+}
+function sessionSelector(text: unknown) {
+  const v = parse(text, ["sessionDigest", "workspaceId"]);
+  if (!digest(v.sessionDigest) || !id(v.workspaceId)) throw invalid();
+  return v as Readonly<{ sessionDigest: string; workspaceId: string }>;
+}
+function issueInput(text: unknown) {
+  const v = parse(text, ["sessionDigest", "workspaceId", "nonceDigest", "commandId", "grantId"]);
+  if (
+    !digest(v.sessionDigest) ||
+    !digest(v.nonceDigest) ||
+    !id(v.workspaceId) ||
+    !uuid(v.commandId) ||
+    !id(v.grantId)
+  )
+    throw invalid();
+  return v as Readonly<{
+    sessionDigest: string;
+    workspaceId: string;
+    nonceDigest: string;
+    commandId: string;
+    grantId: string;
+  }>;
+}
+// A JSON array that PostgreSQL rendered from jsonb (jsonb::text: no duplicate member names
+// can exist), bounded in bytes; its items are validated by their consumers.
+const utf8 = new TextEncoder();
+function jsonArray(text: unknown, limit: number): readonly unknown[] {
+  let value: unknown;
+  try {
+    if (typeof text !== "string" || text.length > limit || utf8.encode(text).length > limit)
+      throw unknown();
+    value = JSON.parse(text);
+  } catch {
+    throw unknown();
+  }
+  if (!Array.isArray(value)) throw unknown();
+  return Object.freeze(value);
+}
+function authorityRow(
+  value: unknown,
+  selected: { workspaceId: string },
+): LinkingAuthorityFacts | null {
+  const row = rows(value);
+  if (row === null) return null;
+  const v = closed(row, [
+    "principal_id",
+    "organization_id",
+    "workspace_id",
+    "membership_id",
+    "policy_revision",
+    "grants",
+    "grant_count",
+    "database_now_ms",
+  ]);
+  if (
+    ![v.principal_id, v.organization_id, v.workspace_id, v.membership_id].every(id) ||
+    v.workspace_id !== selected.workspaceId ||
+    typeof v.grant_count !== "number" ||
+    !Number.isSafeInteger(v.grant_count) ||
+    v.grant_count < 0 ||
+    typeof v.database_now_ms !== "string" ||
+    !/^[1-9][0-9]{0,15}$/.test(v.database_now_ms) ||
+    !time(Number(v.database_now_ms))
+  )
+    throw unknown();
+  // More than 1000 grants is refused, as the work kernel does.
+  if (v.grant_count > 1000) return null;
+  const grants = jsonArray(v.grants, 4 * 1024 * 1024);
+  if (grants.length !== v.grant_count) throw unknown();
+  return Object.freeze({
+    principalId: v.principal_id as string,
+    organizationId: v.organization_id as string,
+    workspaceId: v.workspace_id as string,
+    membershipId: v.membership_id as string,
+    policyRevision: revision(v.policy_revision),
+    grants,
+    databaseNowMs: Number(v.database_now_ms),
+  });
+}
+function issueRow(value: unknown): ShopifyIssueOutcome {
+  const v = closed(rows(value), ["outcome"]);
+  if (typeof v.outcome !== "string" || !issueOutcomes.includes(v.outcome)) throw unknown();
+  return v.outcome as ShopifyIssueOutcome;
+}
+function connectionsRow(value: unknown): WorkspaceConnectionFacts | null {
+  const row = rows(value);
+  if (row === null) return null;
+  const v = closed(row, ["installations", "app_registered", "install_url", "route", "linked"]);
+  if (
+    typeof v.app_registered !== "boolean" ||
+    typeof v.linked !== "boolean" ||
+    typeof v.route !== "string" ||
+    !routes.includes(v.route) ||
+    (v.app_registered
+      ? typeof v.install_url !== "string" || v.install_url.length > 2048
+      : v.install_url !== null)
+  )
+    throw unknown();
+  const installations = jsonArray(v.installations, 512 * 1024);
+  if (installations.length > 51) throw unknown();
+  return Object.freeze({
+    installations,
+    appRegistered: v.app_registered,
+    installUrl: v.install_url as string | null,
+    route: v.route as WorkspaceConnectionFacts["route"],
+    linked: v.linked,
+  });
 }
 function selector(text: unknown) {
   const v = parse(text, ["sessionDigest", "workspaceId", "nonceDigest", "commandId"]);
@@ -368,7 +524,73 @@ export function createControlledWorkspaceStoreLinking({
       return decoded;
     });
   };
+  const prologue = async (
+    query: (text: string, values?: readonly string[]) => Promise<unknown>,
+    begin: string,
+  ) => {
+    await query(begin);
+    role(await query(workspaceStoreLinkingControlSql.role));
+    await query(workspaceStoreLinkingControlSql.timeout);
+    await query(workspaceStoreLinkingControlSql.idleTimeout);
+  };
   return Object.freeze({
+    // M2 PR-2: the actor and its grants, for the kernel (READ ONLY).
+    async authority(text: unknown, control: StandaloneWorkspaceSqlControl) {
+      const selected = sessionSelector(text);
+      return own(control, async (query) => {
+        await prologue(query, workspaceStoreLinkingControlSql.begin);
+        const facts = authorityRow(
+          await query(workspaceStoreLinkingControlSql.authority, [
+            selected.sessionDigest,
+            selected.workspaceId,
+          ]),
+          selected,
+        );
+        await query(workspaceStoreLinkingControlSql.commit);
+        return facts;
+      });
+    },
+    // M2 PR-2: the P09.T02a issuer, one READ WRITE transaction. A lost COMMIT
+    // acknowledgement is WORKSPACE_LINKING_OUTCOME_UNKNOWN; a retry with the same
+    // command answers exists.
+    async issue(
+      text: unknown,
+      control: StandaloneWorkspaceSqlControl,
+    ): Promise<ShopifyIssueOutcome> {
+      const input = issueInput(text);
+      return own(control, async (query) => {
+        await prologue(query, workspaceStoreLinkingSql.begin);
+        const outcome = issueRow(
+          await query(workspaceStoreLinkingControlSql.issue, [
+            input.sessionDigest,
+            input.workspaceId,
+            input.nonceDigest,
+            input.commandId,
+            input.grantId,
+          ]),
+        );
+        await query(workspaceStoreLinkingControlSql.commit);
+        return outcome;
+      });
+    },
+    // M2 PR-2: the connections screen's facts and the actor's authority, one READ ONLY
+    // transaction (one snapshot).
+    async connections(text: unknown, control: StandaloneWorkspaceSqlControl) {
+      const selected = sessionSelector(text);
+      return own(control, async (query) => {
+        await prologue(query, workspaceStoreLinkingControlSql.begin);
+        const values = [selected.sessionDigest, selected.workspaceId];
+        const facts = authorityRow(
+          await query(workspaceStoreLinkingControlSql.authority, values),
+          selected,
+        );
+        const connections = connectionsRow(
+          await query(workspaceStoreLinkingControlSql.connections, values),
+        );
+        await query(workspaceStoreLinkingControlSql.commit);
+        return facts && connections ? Object.freeze({ facts, connections }) : null;
+      });
+    },
     async lookup(text: unknown, control: StandaloneWorkspaceSqlControl) {
       return (await read(text, control, "lookup")) as Readonly<WorkspaceStoreLinkInput> | null;
     },

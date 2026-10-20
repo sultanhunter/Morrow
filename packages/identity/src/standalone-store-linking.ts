@@ -1,4 +1,5 @@
 import { createControlledWorkspaceStoreLinking } from "./workspace-store-linking-control.js";
+import { runShopifyLinkIssuer, type ConnectionKernel } from "./shopify-link-issuer.js";
 import {
   createStandaloneRequestGuard,
   standaloneJson,
@@ -9,14 +10,19 @@ import type { StandaloneWorkspaceBootstrapDependencies } from "./standalone-work
 export type StandaloneStoreLinkingRoute = "preview" | "apply" | "status";
 
 // Captured once for each owning construction. Legacy callers retain their
-// original shared service; managed callers supply their request-bound pool.
+// original shared service; managed callers supply their request-bound pool. M2 PR-2: with
+// a connection kernel, the preview first runs the Shopify continuation issuer
+// (shopify-link-issuer.ts); without one, no Shopify handoff can be issued.
 export function createStandaloneStoreLinkingExecution(
-  dependencies: StandaloneWorkspaceBootstrapDependencies,
+  dependencies: StandaloneWorkspaceBootstrapDependencies & {
+    readonly connections?: ConnectionKernel;
+  },
 ) {
   const service = createControlledWorkspaceStoreLinking({
     pool: dependencies.pool,
     now: dependencies.now,
   });
+  const kernel = dependencies.connections;
   return Object.freeze({
     async execute(
       route: StandaloneStoreLinkingRoute,
@@ -35,6 +41,16 @@ export function createStandaloneStoreLinkingExecution(
           return result
             ? standaloneJson(200, { schemaVersion: 1, ...result })
             : standaloneJson(404, { code: "linking_not_found" });
+        }
+        if (route === "preview" && kernel) {
+          const issued = await runShopifyLinkIssuer(
+            dependencies.pool,
+            dependencies.now,
+            kernel,
+            context,
+          );
+          context.check();
+          if (issued !== "proceed") return issued;
         }
         const input = await context.wait(service.lookup(selector, context.control));
         context.check();

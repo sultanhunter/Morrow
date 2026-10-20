@@ -65,7 +65,7 @@ CREATE TABLE morrow_identity.shopify_apps (
  scopes text NOT NULL CHECK (scopes='read_products,write_products'),
  api_version text NOT NULL CHECK (api_version='2026-10'),
  install_url text NOT NULL CHECK (length(install_url)<=2048
-  AND install_url ~ '^https://(admin\.shopify\.com|[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com)/[!-~]{1,1900}$'),
+  AND install_url ~ '^https://(admin\.shopify\.com|[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com)/[!-~]+$'),
  status text NOT NULL CHECK (status IN ('active','retired')),
  revision morrow_identity.revision NOT NULL,
  created_at timestamptz NOT NULL CHECK (created_at=date_trunc('milliseconds',created_at) AND isfinite(created_at)),
@@ -169,13 +169,18 @@ CREATE FUNCTION morrow_identity.shopify_preserve_record() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_identity,pg_temp AS $$
 DECLARE v_fixed text[];
 BEGIN
+ -- One branch per table: PL/pgSQL resolves every NEW field an expression names.
  IF TG_OP='INSERT' THEN
-  IF TG_TABLE_NAME='shopify_apps' AND NEW.status='active' AND NEW.revision=1 AND NEW.retired_at IS NULL THEN RETURN NEW; END IF;
-  IF TG_TABLE_NAME='shopify_oauth_states' AND NEW.claimed_at IS NULL AND NEW.installation_id IS NULL THEN RETURN NEW; END IF;
-  IF TG_TABLE_NAME='store_installations' AND NEW.status='unlinked' AND NEW.revision=1 AND NEW.generation=1
-   AND NEW.link_id IS NULL AND NEW.linked_at IS NULL AND NEW.reauthorised_at IS NULL AND NEW.credential_version=1
-   AND NEW.updated_at=NEW.created_at THEN RETURN NEW; END IF;
-  IF TG_TABLE_NAME='install_continuations' AND NEW.consumed_at IS NULL AND NEW.superseded_at IS NULL THEN RETURN NEW; END IF;
+  IF TG_TABLE_NAME='shopify_apps' THEN
+   IF NEW.status='active' AND NEW.revision=1 AND NEW.retired_at IS NULL THEN RETURN NEW; END IF;
+  ELSIF TG_TABLE_NAME='shopify_oauth_states' THEN
+   IF NEW.claimed_at IS NULL AND NEW.installation_id IS NULL THEN RETURN NEW; END IF;
+  ELSIF TG_TABLE_NAME='store_installations' THEN
+   IF NEW.status='unlinked' AND NEW.revision=1 AND NEW.generation=1 AND NEW.link_id IS NULL AND NEW.linked_at IS NULL
+    AND NEW.reauthorised_at IS NULL AND NEW.credential_version=1 AND NEW.updated_at=NEW.created_at THEN RETURN NEW; END IF;
+  ELSIF TG_TABLE_NAME='install_continuations' THEN
+   IF NEW.consumed_at IS NULL AND NEW.superseded_at IS NULL THEN RETURN NEW; END IF;
+  END IF;
   RAISE EXCEPTION 'SHOPIFY_RECORD_INVALID';
  END IF;
  IF TG_OP='UPDATE' THEN
@@ -268,7 +273,7 @@ BEGIN
   OR p_intended_shop_digest IS NULL OR p_intended_shop_digest !~ '^[a-f0-9]{64}$'
   OR p_org IS NULL OR p_org !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_ws IS NULL OR p_ws !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
   OR p_install_url IS NULL OR length(p_install_url)>2048
-  OR p_install_url !~ '^https://(admin\.shopify\.com|[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com)/[!-~]{1,1900}$'
+  OR p_install_url !~ '^https://(admin\.shopify\.com|[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com)/[!-~]+$'
   OR NOT EXISTS(SELECT 1 FROM morrow_identity.workspaces w JOIN morrow_identity.organizations o ON o.id=w.organization_id
    WHERE w.id=p_ws AND w.organization_id=p_org AND w.active AND o.active) THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;

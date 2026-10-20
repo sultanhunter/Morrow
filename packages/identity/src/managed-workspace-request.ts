@@ -8,6 +8,7 @@ import {
 import { executeStandaloneWorkspaceBootstrap } from "./standalone-workspace-bootstrap.js";
 import { executeAccountOverview, executeFirstOrganization } from "./account-onboarding.js";
 import { createStandaloneStoreLinkingExecution } from "./standalone-store-linking.js";
+import { executeWorkspaceConnections, type ConnectionKernel } from "./shopify-link-issuer.js";
 import { dispatchStandaloneLogoutWithAttempt } from "./standalone-logout.js";
 import { dispatchStandaloneRotationWithAttempt } from "./standalone-session-rotation.js";
 import { SESSION_COOKIE_CLEAR } from "./request-primitives.js";
@@ -114,6 +115,8 @@ const exactRoutes: Readonly<Record<string, Route>> = Object.freeze({
 });
 const workspaceSuffixes: readonly (readonly [string, StandaloneRequestRoute])[] = Object.freeze([
   ["/bootstrap", "bootstrap"],
+  // M2 PR-2: GET /workspace/:ws/connections (the guard checks the exact path).
+  ["/connections", "connections"],
   ["/preview", "preview"],
   ["/status", "status"],
 ]);
@@ -128,9 +131,11 @@ export function createWorkersManagedWorkspaceHandler(
     binding: Readonly<CapturedManagedWorkspaceBinding>;
     credentialBroker: unknown;
     now: () => number;
+    // M2 PR-2: the api's connection kernel (governance.connection.connect administer).
+    connections?: ConnectionKernel;
   }>,
 ) {
-  const { binding, credentialBroker, now } = dependencies;
+  const { binding, credentialBroker, now, connections } = dependencies;
   const guard = createManagedStandaloneRequestGuard(binding.workspaceConfigurationJson, now);
   const fetch = async (request: Request, _env: unknown, actualCtx: Context): Promise<Response> => {
     let attempt: LoginAttempt | undefined, owner: Owner | undefined;
@@ -202,13 +207,18 @@ export function createWorkersManagedWorkspaceHandler(
           configurationJson: binding.workspaceConfigurationJson,
           pool: pools.linkingPool,
           now: attempt.check,
+          ...(connections ? { connections } : {}),
         });
         const identityPool = pools.identityPool;
+        const linkingPool = pools.linkingPool;
+        const check = attempt.check;
         response = await entry.handle(selected, (context) => {
           invoked = true;
           return selected === "bootstrap"
             ? executeStandaloneWorkspaceBootstrap(identityPool, context)
-            : linking.execute(selected, context);
+            : selected === "connections"
+              ? executeWorkspaceConnections(linkingPool, check, connections, context)
+              : linking.execute(selected, context);
         });
       }
       if (!response) throw held();

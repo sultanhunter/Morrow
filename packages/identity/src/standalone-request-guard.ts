@@ -12,7 +12,10 @@ export interface StandaloneWorkspaceSqlControl {
   readonly deadlineMs: number;
   readonly signal: AbortSignal;
 }
-export type StandaloneRequestRoute = "bootstrap" | "preview" | "apply" | "status";
+// M2 PR-2: "connections" is GET /workspace/:ws/connections, a bootstrap-style read.
+export type StandaloneRequestRoute = "bootstrap" | "connections" | "preview" | "apply" | "status";
+const getRoute = (route: StandaloneRequestRoute) =>
+  route === "bootstrap" || route === "connections";
 export interface GuardedStandaloneRequest {
   readonly workspaceId: string;
   readonly sessionDigest: string;
@@ -106,6 +109,7 @@ function cookieSecret(header: string | null): string {
 }
 function routePath(route: StandaloneRequestRoute): string {
   if (route === "bootstrap") return "/bootstrap";
+  if (route === "connections") return "/connections";
   if (route === "preview") return "/store-links/preview";
   if (route === "apply") return "/store-links";
   if (route === "status") return "/store-links/status";
@@ -265,7 +269,7 @@ async function runGuard(
     if (request.url.length > 2048) return failure(400);
     const url = new URL(request.url),
       match = /^\/workspace\/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})(\/.*)$/.exec(url.pathname),
-      method = route === "bootstrap" ? "GET" : "POST";
+      method = getRoute(route) ? "GET" : "POST";
     if (
       url.origin !== origin ||
       url.href !== `${origin}${url.pathname}` ||
@@ -295,7 +299,7 @@ async function runGuard(
       nonceDigest: string | null = null,
       csrfToken: string | null = null;
     const sessionDigest = await guardDigest(secret, check, wait, managed);
-    if (route === "bootstrap") {
+    if (getRoute(route)) {
       const length = request.headers.get("Content-Length");
       if (
         request.body !== null ||
@@ -380,7 +384,7 @@ async function runGuard(
           ? "unavailable"
           : "request_denied";
     const response = standaloneJson(status, { code });
-    if (status === 405) response.headers.set("Allow", route === "bootstrap" ? "GET" : "POST");
+    if (status === 405) response.headers.set("Allow", getRoute(route) ? "GET" : "POST");
     return response;
   }
 }
@@ -548,7 +552,7 @@ export function createStandaloneRequestGuard(configurationJson: unknown, now: ()
               ? "unavailable"
               : "request_denied";
         const response = standaloneJson(status, { code });
-        if (status === 405) response.headers.set("Allow", route === "bootstrap" ? "GET" : "POST");
+        if (status === 405) response.headers.set("Allow", getRoute(route) ? "GET" : "POST");
         return response;
       } finally {
         if (timer !== undefined) clearTimeout(timer);

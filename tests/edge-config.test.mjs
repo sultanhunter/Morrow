@@ -444,7 +444,40 @@ test("AC05 (rules): bundle exclusions name the forbidden inputs", () => {
       ],
       "",
     ),
-    ["neon_driver", "neon_pool", "runtime_validators", "api_source"],
+    // M2 PR-2: the Neon driver is the vault login's own transport (vault-database.ts).
+    ["neon_pool", "runtime_validators", "api_source"],
+  );
+  // M2 PR-2: the connector may include only its reviewed packages/ allowlist, never
+  // another Worker's source, the validators or a Shopify library (ADR-0008 item 1).
+  const connector = edgeWorkers.find((worker) => worker.key === "connector");
+  assert.equal(connector.entry, "worker/index.ts");
+  assert.deepEqual(
+    bundleExclusions(
+      connector,
+      [
+        "apps/shopify-connector/worker/index.ts",
+        "node_modules/@neondatabase/serverless/index.mjs",
+        "packages/identity/src/broker-protocol.ts",
+        "packages/identity/src/executor-role-preflight.ts",
+        "packages/identity/src/standalone-login-protocol.ts",
+        "packages/identity/src/workos-session-status-json.ts",
+      ],
+      "",
+    ),
+    [],
+  );
+  assert.deepEqual(
+    bundleExclusions(
+      connector,
+      [
+        "apps/broker/src/vault.ts",
+        "packages/contracts/src/generated/runtime-validators.mjs",
+        "node_modules/@shopify/shopify-api/dist/esm/index.mjs",
+        "packages/identity/src/controlled-neon-login-pool.ts",
+      ],
+      "",
+    ),
+    ["other_worker_source", "runtime_validators", "shopify_library", "package_source"],
   );
 });
 
