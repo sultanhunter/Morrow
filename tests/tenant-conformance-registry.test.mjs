@@ -171,8 +171,17 @@ test("S7 registry: the reviewed 0020 column grants", () => {
     "updated_at",
     "workspace_id",
   ]);
-  // One line per table, so a PR that widens one table changes only its line.
-  assert.deepEqual(billingTables.workspace_billing_routes.commandColumnUpdates, []);
+  // One line per table, so a PR that widens one table changes only its line. M5 PR-1
+  // (0027): the receipt application fixes the route (route_fix_guard, route_guard), so the
+  // command role gains UPDATE on exactly the fix columns; never origin or shopify_bound_at.
+  assert.deepEqual(billingTables.workspace_billing_routes.commandColumnUpdates, [
+    "fixing_payment_key",
+    "mode",
+    "revision",
+    "route",
+    "route_fixed_at",
+    "updated_at",
+  ]);
   assert.deepEqual(vaultTables.app_secrets.commandColumnUpdates, []);
   assert.deepEqual(vaultTables.credentials.commandColumnUpdates, []);
 });
