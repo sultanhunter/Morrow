@@ -14,7 +14,10 @@
 //      signed query's hmac, a fresh timestamp and no signature parameter; a webhook's
 //      headers and base64 HMAC). When this isolate already holds the app's secret (read
 //      from the vault within shopifySecretCacheMs), Shopify's HMAC is verified first, so
-//      only a Shopify-signed request of a known app reaches the registry statement;
+//      only a Shopify-signed request of a known app reaches the registry statement. An
+//      older ("stale") secret, up to shopifySecretStaleMs, still lets a request it verifies
+//      count as verified for layer 3; one it does not verify takes the unverified path,
+//      so a rotated secret is read again;
 //   3. per isolate, at most shopifyIngressLimits.unverified transactions for requests
 //      whose signature could not be checked first (an app whose secret this isolate does
 //      not hold, or an unknown app key) and shopifyIngressLimits.total ingress
@@ -115,11 +118,13 @@ const readBudgetMs = 3000;
 // Ingress vault transactions at once per broker isolate (layer 3 of the header):
 // `unverified` for requests whose signature could not be checked first, `total` for all.
 export const shopifyIngressLimits = Object.freeze({ unverified: 1, total: 3 });
-// How long an isolate keeps an app secret it read from the vault (layer 2), and for how
-// many apps. A rotated secret is honoured within this time: until then the old secret
-// refuses Shopify's new signatures without a vault read (a launch is refused, a webhook
-// is retried by Shopify).
+// How long an isolate trusts an app secret it read from the vault to refuse a request
+// without a vault read (layer 2), how long it keeps it at all, and for how many apps. A
+// rotated secret is honoured within shopifySecretCacheMs: until then the old secret
+// refuses Shopify's new signatures without a vault read (a launch is refused, a webhook is
+// retried by Shopify).
 export const shopifySecretCacheMs = 60_000;
+export const shopifySecretStaleMs = 3_600_000;
 const secretCacheApps = 64;
 // The install keeps this much of its budget for its last transaction.
 const storeReserveMs = 2500;
@@ -228,43 +233,45 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
     }
   }
   // Layer 2: the app secrets this isolate read from the vault, per vault capability (so a
-  // keyring or database never sees another's), each until shopifySecretCacheMs after the
-  // read that returned it. Only a vault read sets or clears an entry.
-  const secrets = new WeakMap<object, Map<string, { secret: string; until: number }>>();
-  function cachedSecret(vault: Readonly<BrokerVault>, appKey: string): string | null {
-    const apps = secrets.get(vault);
-    const entry = apps?.get(appKey);
-    if (!entry) return null;
-    if (entry.until > deps.now()) return entry.secret;
-    apps!.delete(appKey);
-    return null;
-  }
+  // keyring or database never sees another's), with the time of the read that returned
+  // them. Only a vault read sets or clears an entry; an unknown app key never touches one.
+  const secrets = new WeakMap<object, Map<string, { secret: string; readAt: number }>>();
   function remember(vault: Readonly<BrokerVault>, appKey: string, secret: string | null) {
     let apps = secrets.get(vault);
     if (!apps) secrets.set(vault, (apps = new Map()));
     apps.delete(appKey);
     if (secret === null) return;
     if (apps.size >= secretCacheApps) apps.delete(apps.keys().next().value!);
-    apps.set(appKey, { secret, until: deps.now() + shopifySecretCacheMs });
+    apps.set(appKey, { secret, readAt: deps.now() });
   }
-  // A signed admin query checked against the cached secret: true or false, or null when
-  // the isolate holds no secret for the app.
-  async function preverifiedQuery(
+  // One request's signature against the held secret, before any database: "refused" (a
+  // fresh secret refuses it), "verified" (a fresh or stale secret verifies it) or
+  // "unverified" (no secret held, or a stale one does not verify it).
+  async function preverify(
     vault: Readonly<BrokerVault>,
     appKey: string,
-    rawQuery: string,
-    shop: string,
-  ): Promise<boolean | null> {
-    const cached = cachedSecret(vault, appKey);
-    if (cached === null) return null;
-    const verified = await verifyShopifyQuery(
-      cached,
-      rawQuery,
-      nowSeconds(),
-      shopifyLimits.timestampToleranceSeconds,
-    );
-    return verified !== null && verified.get("shop") === shop;
+    check: (secret: string) => Promise<boolean>,
+  ): Promise<"refused" | "verified" | "unverified"> {
+    const apps = secrets.get(vault);
+    const entry = apps?.get(appKey);
+    if (!entry) return "unverified";
+    const age = deps.now() - entry.readAt;
+    if (!(age >= 0 && age < shopifySecretStaleMs)) {
+      apps!.delete(appKey);
+      return "unverified";
+    }
+    if (await check(entry.secret)) return "verified";
+    return age < shopifySecretCacheMs ? "refused" : "unverified";
   }
+  const queryCheck = (rawQuery: string, shop: string) => async (secret: string) =>
+    (
+      await verifyShopifyQuery(
+        secret,
+        rawQuery,
+        nowSeconds(),
+        shopifyLimits.timestampToleranceSeconds,
+      )
+    )?.get("shop") === shop;
 
   async function launchVerify(env: unknown, appKey: unknown, rawQuery: unknown): Promise<string> {
     if (typeof appKey !== "string" || typeof rawQuery !== "string")
@@ -281,10 +288,10 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
     if (!shopifyQueryShape(rawQuery, nowSeconds(), shopifyLimits.timestampToleranceSeconds))
       return refused;
     const vault = await vaultOf(env);
-    // With the app's secret cached, Shopify's signature before any database.
-    const preverified = await preverifiedQuery(vault, appKey, rawQuery, shop);
-    if (preverified === false) return refused;
-    const read = await ingress(preverified === true, () =>
+    // With the app's secret held, Shopify's signature before any database.
+    const preverified = await preverify(vault, appKey, queryCheck(rawQuery, shop));
+    if (preverified === "refused") return refused;
+    const read = await ingress(preverified === "verified", () =>
       launchContext(deps, vault, appKey, shop, readBudgetMs),
     );
     remember(vault, appKey, read.secret);
@@ -345,8 +352,8 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
     if (!shopifyQueryShape(rawQuery, nowSeconds(), shopifyLimits.timestampToleranceSeconds))
       return answer("refused");
     const vault = await vaultOf(env);
-    const preverified = await preverifiedQuery(vault, appKey, rawQuery, shop);
-    if (preverified === false) return answer("refused");
+    const preverified = await preverify(vault, appKey, queryCheck(rawQuery, shop));
+    if (preverified === "refused") return answer("refused");
     // 2. The secret, Shopify's signature and timestamp, then the claim, committed alone
     // before any provider call. An unverified query sends no claim statement.
     let read: {
@@ -354,7 +361,7 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
       claimed: { clientId: string; shopDigest: string } | "refused" | null;
     };
     try {
-      read = await ingress(preverified === true, () =>
+      read = await ingress(preverified === "verified", () =>
         deps.transaction(vault, Math.min(readBudgetMs, Math.max(1, remaining())), async (query) => {
           const secret = await readAppSecret(vault.keyring, query, appKey);
           if (secret.outcome !== "found") return { secret: null, claimed: null };
@@ -571,12 +578,14 @@ export function createShopifyBroker(deps: Readonly<ShopifyBrokerDependencies>) {
     )
       return refused;
     const vault = await vaultOf(env);
-    // The raw-body signature, before any parse: first against the cached secret, so a
+    // The raw-body signature, before any parse: first against the held secret, so a
     // forged delivery of a known app reaches no database.
     const hmac = headers["x-shopify-hmac-sha256"];
-    const cached = cachedSecret(vault, appKey);
-    if (cached !== null && !(await verifyShopifyWebhookHmac(cached, body, hmac))) return refused;
-    const read = await ingress(cached !== null, () =>
+    const preverified = await preverify(vault, appKey, (secret) =>
+      verifyShopifyWebhookHmac(secret, body, hmac),
+    );
+    if (preverified === "refused") return refused;
+    const read = await ingress(preverified === "verified", () =>
       launchContext(deps, vault, appKey, shop, readBudgetMs),
     );
     remember(vault, appKey, read.secret);

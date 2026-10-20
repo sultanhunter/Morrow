@@ -21,6 +21,7 @@ import {
   createShopifyBroker,
   shopifyIngressLimits,
   shopifySecretCacheMs,
+  shopifySecretStaleMs,
 } from "../apps/broker/src/shopify-install.ts";
 import {
   VaultError,
@@ -437,7 +438,8 @@ test("ingress layer 2: with the app's secret held, forged launches, callbacks an
     "refused",
   );
   assert.equal(h.db.transactions, 5);
-  // A held secret lasts shopifySecretCacheMs from the read that returned it.
+  // A held secret refuses on its own for shopifySecretCacheMs from the read that returned
+  // it; after that a request it does not verify reads the vault again.
   clock.ms += shopifySecretCacheMs + 1;
   assert.equal(await launch(appKey, forgedQuery()), "refused");
   assert.equal(h.db.transactions, 6);
@@ -536,6 +538,37 @@ test("ingress layer 3: one unverified and three ingress transactions at once per
   assert.deepEqual(install.db.events, ["claim", "exchange", "identity", "prepare", "store"]);
   g.open();
   await Promise.all(during);
+});
+
+test("ingress layer 3: a request a stale held secret verifies keeps a verified slot", async () => {
+  const clock = { ms: nowSeconds * 1000 };
+  const g = gate();
+  const h = await harness({ clock, launchGate: g.wait });
+  const at = () => String(Math.trunc(clock.ms / 1000));
+  const launch = (key = appKey) =>
+    h.broker.launchVerify(h.env, key, signed({ shop, timestamp: at() }));
+  g.open();
+  assert.equal(decodeShopifyLaunchVerdict(await launch()).verdict, "verified");
+  // Stale: older than shopifySecretCacheMs, younger than shopifySecretStaleMs.
+  clock.ms += shopifySecretCacheMs + 1;
+  assert.ok(shopifySecretCacheMs + 1 < shopifySecretStaleMs);
+  g.close();
+  const unknownApp = launch("unknown-app");
+  await holding(g, 1);
+  // The unverified slot is held, yet the signed launch of the known app runs.
+  const signedLaunch = launch();
+  await holding(g, 2);
+  g.open();
+  assert.equal(decodeShopifyLaunchVerdict(await signedLaunch).verdict, "verified");
+  assert.equal(decodeShopifyLaunchVerdict(await unknownApp).verdict, "refused");
+  // Past shopifySecretStaleMs the secret is dropped: the next request is unverified.
+  clock.ms += shopifySecretStaleMs;
+  g.close();
+  const first = launch();
+  await holding(g, 1);
+  await assert.rejects(() => launch(), busy);
+  g.open();
+  assert.equal(decodeShopifyLaunchVerdict(await first).verdict, "verified");
 });
 
 test("install: claim, verify, exchange once, exact scopes, identity, then one sealed store", async () => {
