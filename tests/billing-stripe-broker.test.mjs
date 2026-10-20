@@ -71,6 +71,7 @@ function operation(purpose, params = {}, { createdAtMs = Date.now() } = {}) {
   };
 }
 const hour = 3600 * 1000;
+const selectList = (text) => /^SELECT (.+) FROM /.exec(text)[1].split(",");
 function vault(
   ops,
   { digestOverride = null, settleFails = false, now = () => Date.now(), hook = () => {} } = {},
@@ -89,7 +90,15 @@ function vault(
       hook(text);
       const op = byId.get(values[0]);
       if (text === billingVaultStatements.stripeOpBegin) {
-        if (!op) return [{ ...emptyBegin, outcome: "not_found" }];
+        if (!op)
+          return [
+            Object.fromEntries(
+              selectList(text).map((column) => [
+                column,
+                { ...emptyBegin, outcome: "not_found" }[column],
+              ]),
+            ),
+          ];
         let outcome;
         if (op.status === "authorized") {
           op.status = "dispatching";
@@ -113,18 +122,19 @@ function vault(
           op.purpose,
           ...purposeParts[op.purpose](op.id, op.params),
         ]);
-        return [
-          {
-            outcome,
-            purpose: op.purpose,
-            status: op.status,
-            request_digest: digestOverride ?? op.digest,
-            params: JSON.stringify(op.params),
-            provider_object_id: op.providerObjectId,
-            created_at_ms: String(op.createdAtMs),
-            send_started_at_ms: op.sendStartedAtMs === null ? null : String(op.sendStartedAtMs),
-          },
-        ];
+        // The definer's row, projected onto the statement's own select list (as the
+        // database would), so a column the statement omits is missing here too.
+        const full = {
+          outcome,
+          purpose: op.purpose,
+          status: op.status,
+          request_digest: digestOverride ?? op.digest,
+          params: JSON.stringify(op.params),
+          provider_object_id: op.providerObjectId,
+          created_at_ms: String(op.createdAtMs),
+          send_started_at_ms: op.sendStartedAtMs === null ? null : String(op.sendStartedAtMs),
+        };
+        return [Object.fromEntries(selectList(text).map((column) => [column, full[column]]))];
       }
       if (text === billingVaultStatements.stripeOpSettle) {
         if (settleFails) throw Error("VAULT_OUTCOME_UNKNOWN");

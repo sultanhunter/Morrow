@@ -5,7 +5,7 @@
 // optional value is the empty string, which the statement turns into NULL.
 export const billingVaultStatements = Object.freeze({
   stripeOpBegin:
-    "SELECT outcome,purpose,status,request_digest,params,provider_object_id,created_at_ms FROM morrow_billing.stripe_op_begin($1)",
+    "SELECT outcome,purpose,status,request_digest,params,provider_object_id,created_at_ms,send_started_at_ms FROM morrow_billing.stripe_op_begin($1)",
   stripeOpSettle:
     "SELECT morrow_billing.stripe_op_settle($1,$2,NULLIF($3,''),NULLIF($4,'')) AS outcome",
   stripeReceiptRecord:
