@@ -34,6 +34,47 @@ test("selected environment inventories are distinct and remain non-activating", 
     assert.equal(config.runtime.dispatch, "disabled");
   }
 });
+// P04.T01i PR-D part 1: staging carries exactly the reviewed public identifiers, and
+// development and production still bind none. Any other value is an unreviewed delta.
+test("staging carries only the reviewed identifiers; development and production none", () => {
+  const staging = read("infra/environments/staging.json");
+  assert.deepEqual(
+    {
+      account: staging.cloudflare.account_id,
+      subdomain: staging.cloudflare.workers_dev_subdomain,
+      origin: staging.cloudflare.origin,
+      project: staging.neon.project_id,
+      root: staging.neon.root_branch_id,
+      branch: staging.neon.branch_id,
+      region: staging.neon.region_id,
+    },
+    {
+      account: "79ff672d013b8f0956437af6eea3c213",
+      subdomain: "sultanibneusman0",
+      origin: "https://morrow-staging-api.sultanibneusman0.workers.dev",
+      project: "sweet-sound-23947873",
+      root: "br-noisy-wind-b7cxr2a1",
+      branch: "br-dark-recipe-b78ytwj9",
+      region: "aws-us-east-1",
+    },
+  );
+  assert.deepEqual(inspectSelectedConfiguration(staging), []);
+  for (const environment of ["development", "production"]) {
+    const config = read(`infra/environments/${environment}.json`);
+    assert.equal(config.cloudflare.account_id, null);
+    assert.equal(config.neon.project_id, null);
+    assert.equal(config.neon.branch_id, null);
+  }
+  for (const change of [
+    (c) => (c.neon.branch_id = c.neon.root_branch_id),
+    (c) => (c.cloudflare.origin = "https://morrow-staging-api.other.workers.dev"),
+    (c) => (c.cloudflare.workers_dev_subdomain = null),
+  ]) {
+    const config = structuredClone(staging);
+    change(config);
+    assert.deepEqual(inspectSelectedConfiguration(config), ["UNREVIEWED_CONFIGURATION_DELTA"]);
+  }
+});
 test("configuration digest is independent of JSON key ordering", () => {
   const config = selectedConfiguration("staging");
   const reordered = Object.fromEntries(Object.entries(config).reverse());

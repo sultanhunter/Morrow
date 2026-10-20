@@ -1313,7 +1313,7 @@ test("token: staging-token.mjs is the first import and removes the token before 
 
 // ---------------------------------------------------------------------------
 // Shapes the rest of PR-B and PR-D build on.
-test("staging.json: the D1 shape; each identifier is null or well-formed (PR-D part 1)", () => {
+test("staging.json: the D1 shape; every identifier is set and well-formed (PR-D part 1)", () => {
   const staging = JSON.parse(read("infra/environments/staging.json"));
   const { cloudflare, neon } = staging;
   for (const [value, shape] of [
@@ -1324,15 +1324,13 @@ test("staging.json: the D1 shape; each identifier is null or well-formed (PR-D p
     [neon.branch_id, /^br-[a-z]+-[a-z]+-[a-z0-9]{8}$/],
     [neon.region_id, /^aws-[a-z]+-[a-z]+-[0-9]$/],
   ])
-    if (value !== null) assert.match(value, shape);
+    assert.match(value, shape);
   // The origin is derived from the subdomain, and the bound branch is never the root.
   assert.equal(
     cloudflare.origin,
-    cloudflare.workers_dev_subdomain === null
-      ? null
-      : `https://morrow-staging-api.${cloudflare.workers_dev_subdomain}.workers.dev`,
+    `https://${cloudflare.workers.api}.${cloudflare.workers_dev_subdomain}.workers.dev`,
   );
-  if (neon.branch_id !== null) assert.notEqual(neon.branch_id, neon.root_branch_id);
+  assert.notEqual(neon.branch_id, neon.root_branch_id);
   assert.equal(staging.neon.plan, "Free");
   assert.equal(staging.neon.branch_name, "staging");
   assert.equal(staging.neon.history_window_hours, 6);

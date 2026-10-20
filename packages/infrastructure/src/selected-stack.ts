@@ -7,11 +7,23 @@ export type SelectedEnvironment = (typeof selectedEnvironments)[number];
 
 // Staging (P04.T01i D1, ADR-0019 items 2 and 10): the workers.dev origin, the Neon Free
 // root and `staging` branches with the observed history window instead of Launch PITR,
-// and the GitHub environment that holds the CI deploy token (OQ-2 answer A). Every
-// identifier stays null until P04.T01i PR-D commits the reviewed values here.
-const stagingCloudflare = { workers_dev_subdomain: null, origin: null };
+// and the GitHub environment that holds the CI deploy token (OQ-2 answer A). The
+// identifiers are the reviewed public values P04.T01i PR-D part 1 commits: the account
+// and subdomain of the owner's 2026-10-19 decision (c), and the Neon project, root branch,
+// `staging` branch and region of docs/evidence/live/2026-10-19-neon-project-create.md and
+// 2026-10-20-neon-staging-branch.md. The origin is derived, never typed: D1's
+// `https://${api name}.${workers_dev_subdomain}.workers.dev`.
+const stagingSubdomain = "sultanibneusman0";
+const stagingCloudflare = {
+  account_id: "79ff672d013b8f0956437af6eea3c213",
+  workers_dev_subdomain: stagingSubdomain,
+  origin: `https://morrow-staging-api.${stagingSubdomain}.workers.dev`,
+};
 const stagingNeon = {
-  root_branch_id: null,
+  project_id: "sweet-sound-23947873",
+  root_branch_id: "br-noisy-wind-b7cxr2a1",
+  branch_id: "br-dark-recipe-b78ytwj9",
+  region_id: "aws-us-east-1",
   branch_name: "staging",
   history_window_hours: 6,
   recovery: "owner_reset_from_root_branch",
