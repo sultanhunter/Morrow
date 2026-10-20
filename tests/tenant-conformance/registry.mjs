@@ -286,8 +286,10 @@ export const bridgeFunctions = Object.freeze([
 // is readable only while the session user is the broker's login (vault_broker).
 //
 // S7 per-table spec (M2 PR-2a). Every billingTables and vaultTables entry carries exactly
-// {class, parents, policies, content, commandPrivileges, commandColumnUpdates, apiColumns}:
-// class, parents, policies and content as in workTables, and the table's whole ACL:
+// {class, parents, policies, content, commandPrivileges, commandColumnUpdates, apiColumns},
+// plus an optional `lease: true`: class, parents, policies, content and lease as in
+// workTables (`lease: true` expects tenant_lease, the lease-context command policy), and
+// the table's whole ACL:
 //   commandPrivileges     the table privileges morrow_work_command holds (never DELETE,
 //                         TRUNCATE, REFERENCES or TRIGGER);
 //   commandColumnUpdates  the columns morrow_work_command may UPDATE (column grants);
