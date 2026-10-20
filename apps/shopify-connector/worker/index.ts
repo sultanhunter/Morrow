@@ -2,8 +2,9 @@
 // `main`, replacing the P04.T02a placeholder. Bindings map to the connector once per env
 // object (isolate); any problem keeps the deny-all instance: 503 on every path, and
 // /healthz answers ready false. It binds MORROW_ENVIRONMENT, the reviewed identifiers
-// (CONNECTOR_CONFIGURATION_JSON, MORROW_DATABASE_BINDING_JSON) and the broker's
-// ConnectorBroker entrypoint; no secret and no Shopify library (ADR-0008 items 1-2).
+// (CONNECTOR_CONFIGURATION_JSON, MORROW_DATABASE_BINDING_JSON), the broker's
+// ConnectorBroker entrypoint and its two ingress rate limits; no secret and no Shopify
+// library (ADR-0008 items 1-2).
 import { createConnectorHandler } from "./connector.js";
 import { createConnectorDatabase } from "./database.js";
 import { mapConnectorEnvironment, type ConnectorEnvironmentCode } from "./environment.js";
@@ -34,6 +35,7 @@ function select(env: unknown): Selected {
           configuration: mapped.configuration,
           broker,
           database: createConnectorDatabase(mapped.binding, broker),
+          limiters: mapped.limiters,
         }),
         health: () => broker.health(),
       });

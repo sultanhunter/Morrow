@@ -4,6 +4,7 @@ import {
   type ConnectorBrokerRpc,
 } from "../../../packages/identity/src/broker-protocol.js";
 import { loginJson } from "../../../packages/identity/src/standalone-login-protocol.js";
+import type { RateLimiter } from "../../../packages/identity/src/edge-limiter.js";
 
 // Synchronous Worker env -> the connector's configuration (M2 PR-2; ADR-0022 item 6;
 // ADR-0008 items 2, 5 and 6). It never throws; the first failing check decides the code,
@@ -13,7 +14,9 @@ import { loginJson } from "../../../packages/identity/src/standalone-login-proto
 // being carried. Committed configuration binds only MORROW_ENVIRONMENT and the broker;
 // CONNECTOR_CONFIGURATION_JSON and MORROW_DATABASE_BINDING_JSON are reviewed staging
 // identifiers that arrive through the P04.T01i PR-D path. Production never maps (its
-// database binding is refused until ADR-0007 item 9).
+// database binding is refused until ADR-0007 item 9). The two per-address Workers rate
+// limits (INSTALL_LIMITER, WEBHOOK_LIMITER; scripts/edge.mjs edgeConnectorRateLimits) are
+// committed for every environment and required outside development (both or neither).
 
 export type ConnectorEnvironmentCode =
   | "CONNECTOR_ENV_RECORD_INVALID"
@@ -24,8 +27,14 @@ export type ConnectorEnvironmentCode =
   | "CONNECTOR_ENV_PARTIAL"
   | "CONNECTOR_ENV_VALUE_INVALID"
   | "CONNECTOR_ENV_CROSS_BINDING_MISMATCH"
-  | "CONNECTOR_ENV_BROKER_BINDING_INVALID";
+  | "CONNECTOR_ENV_BROKER_BINDING_INVALID"
+  | "CONNECTOR_ENV_LIMITER_INVALID";
 export type ConnectorEnvironmentName = "development" | "staging" | "production";
+/** The connector's ingress limits: launch, status and callback; webhooks. */
+export interface ConnectorLimiters {
+  readonly install: RateLimiter;
+  readonly webhooks: RateLimiter;
+}
 export interface ConnectorConfiguration {
   /** The connector's own https origin (its own hostname, ADR-0022 item 6). */
   readonly origin: string;
@@ -39,12 +48,18 @@ export type ConnectorEnvironmentMapping =
       configuration: Readonly<ConnectorConfiguration>;
       binding: Readonly<BrokerDatabaseBinding>;
       broker: ConnectorBrokerRpc;
+      /** Null only in development without the committed limiters (a lab). */
+      limiters: Readonly<ConnectorLimiters> | null;
     }>
   | Readonly<{ ok: false; code: ConnectorEnvironmentCode }>;
 
 export const connectorEnvironmentValueBindings = Object.freeze([
   ["CONNECTOR_CONFIGURATION_JSON", 1024],
   ["MORROW_DATABASE_BINDING_JSON", 4096],
+] as const);
+export const connectorLimiterBindings = Object.freeze([
+  ["INSTALL_LIMITER", "install"],
+  ["WEBHOOK_LIMITER", "webhooks"],
 ] as const);
 const environments: readonly string[] = ["development", "staging", "production"];
 // Provider credentials, database passwords and the vault keys bind only to the broker.
@@ -162,11 +177,37 @@ export function mapConnectorEnvironment(env: unknown): ConnectorEnvironmentMappi
   } catch {
     return fail("CONNECTOR_ENV_BROKER_BINDING_INVALID");
   }
+  // 8. The ingress limits: both, each with a limit function; neither only in development.
+  let limiters: Readonly<ConnectorLimiters> | null = null;
+  try {
+    const present = connectorLimiterBindings.filter(([name]) => Object.hasOwn(record, name));
+    if (present.length === 0) {
+      if (environment !== "development") return fail("CONNECTOR_ENV_LIMITER_INVALID");
+    } else {
+      if (present.length !== connectorLimiterBindings.length)
+        return fail("CONNECTOR_ENV_LIMITER_INVALID");
+      const bound: Partial<Record<keyof ConnectorLimiters, RateLimiter>> = {};
+      for (const [name, key] of connectorLimiterBindings) {
+        const value = dataProperty(record, name).value;
+        if (
+          value === null ||
+          (typeof value !== "object" && typeof value !== "function") ||
+          typeof (value as { limit?: unknown }).limit !== "function"
+        )
+          return fail("CONNECTOR_ENV_LIMITER_INVALID");
+        bound[key] = value as RateLimiter;
+      }
+      limiters = Object.freeze(bound as ConnectorLimiters);
+    }
+  } catch {
+    return fail("CONNECTOR_ENV_LIMITER_INVALID");
+  }
   return Object.freeze({
     ok: true,
     environment: binding.environment,
     configuration,
     binding,
     broker,
+    limiters,
   });
 }

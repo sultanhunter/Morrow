@@ -443,14 +443,16 @@ const allowedBindings = Object.freeze({
   api: ["vars", "services", "secrets", "assets", "ratelimits"],
   broker: ["vars", "secrets"],
   orchestrator: ["workflows", "queues", "secrets"],
-  // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint (and nothing else).
-  connector: ["vars", "services", "secrets"],
+  // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint and, since the
+  // PR-2 review, its two per-address ingress limits (edgeConnectorRateLimits).
+  connector: ["vars", "services", "secrets", "ratelimits"],
 });
 // The reviewed packages/ files the connector bundle may include (M2 PR-2): the shared
-// broker protocol and the role preflight text, with the JSON helpers they import. No
-// pool, SQL module, validator or policy code.
+// broker protocol and the role preflight text, with the JSON helpers they import, and the
+// per-address limiter key (WebCrypto only). No pool, SQL module, validator or policy code.
 export const connectorPackageAllowlist = Object.freeze([
   "packages/identity/src/broker-protocol.ts",
+  "packages/identity/src/edge-limiter.ts",
   "packages/identity/src/executor-role-preflight.ts",
   "packages/identity/src/standalone-login-protocol.ts",
   "packages/identity/src/workos-session-status-json.ts",
@@ -483,6 +485,25 @@ export function edgeRateLimits(environment) {
     ["LOGIN_START_LIMITER", 10],
     ["LOGIN_CALLBACK_LIMITER", 20],
     ["SIGNUP_LIMITER", 5],
+  ].map(([name, limit], i) => ({
+    name,
+    namespace_id: String(base + i),
+    simple: { limit, period: 60 },
+  }));
+}
+
+// M2 PR-2 review (ADR-0019 items 6 and 8 applied to the connector, the second public
+// Worker): the connector's per-address Shopify ingress limits, exact per environment:
+// launch, status and callback 20 and webhooks 300 per 60 s, in namespaces 7004-7005
+// (development), 7104-7105 (staging) and 7204-7205 (production), after the api's. Webhooks
+// are keyed by address too, never by app key (an unknown app key would be a fresh budget,
+// and a public one would let anyone starve that store's deliveries), with the higher limit
+// because Shopify's delivery addresses carry every store's webhooks.
+export function edgeConnectorRateLimits(environment) {
+  const base = { development: 7004, staging: 7104, production: 7204 }[environment];
+  return [
+    ["INSTALL_LIMITER", 20],
+    ["WEBHOOK_LIMITER", 300],
   ].map(([name, limit], i) => ({
     name,
     namespace_id: String(base + i),
@@ -588,6 +609,11 @@ export async function verifyEdgeConfig({
         ])
       )
         problem("EDGE_CONNECTOR_BROKER_BINDING", where);
+      if (
+        worker.key === "connector" &&
+        !same(config.ratelimits, edgeConnectorRateLimits(environment))
+      )
+        problem("EDGE_CONNECTOR_RATELIMITS", where);
       if (worker.key === "api") {
         if (
           !same(config.services, [
@@ -658,6 +684,7 @@ export function bundleExclusions(worker, inputs, bundleText) {
           [/^apps\/broker\//, "broker_source"],
           [/(^|\/)ajv\/dist\/compile\//, "ajv_compile"],
           [/(^|\/)node_modules\/unenv\/.*\/node\/https?(\/|\.mjs$)/, "node_http"],
+          [/(^|\/)@shopify\//, "shopify_library"],
         ]
       : worker.key === "broker"
         ? [
@@ -666,6 +693,9 @@ export function bundleExclusions(worker, inputs, bundleText) {
             [/controlled-neon-login-pool\.ts$/, "neon_pool"],
             [/runtime-validators\.mjs$/, "runtime_validators"],
             [/^apps\/api\//, "api_source"],
+            // ADR-0008 item 1 as amended (owner answer 4): Shopify calls are hand-written
+            // in the broker; no @shopify/ library is ever deployed.
+            [/(^|\/)@shopify\//, "shopify_library"],
           ]
         : worker.key === "connector"
           ? [

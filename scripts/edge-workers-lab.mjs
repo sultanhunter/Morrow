@@ -13,7 +13,9 @@
 // serves only its own role lease and health, and a bad vault KEK disables the vault only.
 // M2 PR-2 binds the connector bundle to the broker's ConnectorBroker: unconfigured it is
 // deny-all; configured, syntactic refusals reach no database, the Shopify methods exist on
-// ConnectorBroker only, and an unreachable vault login fails closed.
+// ConnectorBroker only, and an unreachable vault login fails closed. The PR-2 review adds
+// the connector's committed per-address ingress limits: no address fails closed and the
+// limit's next request is 429 with no broker call.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,6 +24,7 @@ import { Log, LogLevel, Miniflare } from "miniflare";
 import { writeArtifact } from "./artifacts.mjs";
 import {
   captureConsole,
+  edgeConnectorRateLimits,
   edgeDryRun,
   edgeRateLimits,
   edgeRefusals,
@@ -114,6 +117,18 @@ check(
   "M2PR2:connector_binds_the_same_environment_connector_broker_entrypoint",
   JSON.stringify(options.connector.serviceBindings) ===
     JSON.stringify({ BROKER: { name: names.broker, entrypoint: "ConnectorBroker" } }),
+);
+// M2 PR-2 review: the connector's Miniflare `ratelimits` are its committed development
+// ingress limiters, never a lab override.
+check(
+  "M2PR2:wrangler_options_bind_the_connector_development_limiters",
+  JSON.stringify(
+    Object.values(options.connector.ratelimits ?? {}).map(({ name, namespace_id, simple }) => ({
+      name,
+      namespace_id,
+      simple,
+    })),
+  ) === JSON.stringify(edgeConnectorRateLimits("development")),
 );
 
 // Synthetic configuration; every marker is built at runtime and never written.
@@ -1132,9 +1147,17 @@ await instance(
       bindings,
     },
   ];
-  const connectorFetch = async (mf, path, init = {}) => {
+  // Every request carries a client address unless `address` is null (the edge sets
+  // CF-Connecting-IP; its absence fails closed).
+  const connectorFetch = async (mf, path, init = {}, address = "198.51.100.20") => {
     const worker = await mf.getWorker(names.connector);
-    const response = await worker.fetch(connectorOrigin + path, { redirect: "manual", ...init });
+    const headers = { ...(init.headers ?? {}) };
+    if (address !== null) headers["CF-Connecting-IP"] = address;
+    const response = await worker.fetch(connectorOrigin + path, {
+      redirect: "manual",
+      ...init,
+      headers,
+    });
     return { status: response.status, headers: response.headers, body: await response.text() };
   };
   const unavailableBody = '{"code":"connector_unavailable"}';
@@ -1270,6 +1293,39 @@ await instance(
         launch.status === 503 &&
           !launch.headers.has("location") &&
           observed.brokerNeon >= 1 &&
+          observed.connectorOutbound === 0,
+      );
+      // The ingress limits (M2 PR-2 review): a request with no client address fails closed
+      // before any broker call; from one address the 21st launch in a window is 429 and
+      // reaches no broker or database.
+      const signedLaunch = () =>
+        "/shopify/a/lab-app/launch?hmac=" +
+        "0".repeat(64) +
+        "&shop=lab-dev-store.myshopify.com&timestamp=" +
+        Math.floor(Date.now() / 1000);
+      const beforeNoAddress = observed.brokerNeon;
+      const noAddress = await connectorFetch(mf, signedLaunch(), {}, null);
+      check(
+        "M2PR2:connector_without_an_address_fails_closed",
+        noAddress.status === 503 && observed.brokerNeon === beforeNoAddress,
+      );
+      const left = 60000 - (Date.now() % 60000);
+      if (left < 25000) await new Promise((resolve) => setTimeout(resolve, left + 250));
+      const burst = [];
+      for (let i = 0; i < 20; i++)
+        burst.push((await connectorFetch(mf, signedLaunch(), {}, "198.51.100.21")).status);
+      const beforeLimited = observed.brokerNeon;
+      const limited = await connectorFetch(mf, signedLaunch(), {}, "198.51.100.21");
+      const afterLimited = observed.brokerNeon;
+      const other = await connectorFetch(mf, signedLaunch(), {}, "198.51.100.22");
+      check(
+        "M2PR2:connector_install_limit_is_20_per_address",
+        burst.every((status) => status === 503) &&
+          limited.status === 429 &&
+          limited.body.includes("Too many attempts") &&
+          afterLimited === beforeLimited &&
+          other.status === 503 &&
+          observed.brokerNeon > afterLimited &&
           observed.connectorOutbound === 0,
       );
       // The Shopify methods exist on ConnectorBroker only.

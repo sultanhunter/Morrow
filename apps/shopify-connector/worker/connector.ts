@@ -15,13 +15,24 @@
 //             (#handoff=..., never sent to any server); the cookie is always cleared.
 //   status    a Shopify-signed GET: a status page with no workspace data.
 //   webhooks  see webhooks.ts.
+// Ingress limits (M2 PR-2 review, layer 1 of apps/broker/src/shopify-install.ts; ADR-0019
+// items 6 and 8 applied to the second public Worker): every request that would reach the
+// broker is first counted per client address (CF-Connecting-IP, the api's P05.T01ab key),
+// launch, status and callback against INSTALL_LIMITER (20 a minute) and webhooks against
+// WEBHOOK_LIMITER (300 a minute: Shopify's delivery addresses carry every store's
+// webhooks), so one address cannot keep the broker's vault login busy. Workers rate limits
+// count per Cloudflare location. Refusals that reach nothing (the route table, the
+// callback's cookie rule) are not counted. Over the limit is 429; a missing or invalid
+// address or a failed limiter fails closed (503) with one fixed-code
+// morrow_connector_guard line.
 import {
   decodeShopifyInstallResult,
   decodeShopifyLaunchVerdict,
   decodeShopifyWebhookVerdict,
   type ConnectorBrokerRpc,
 } from "../../../packages/identity/src/broker-protocol.js";
-import type { ConnectorConfiguration } from "./environment.js";
+import { limitAddress } from "../../../packages/identity/src/edge-limiter.js";
+import type { ConnectorConfiguration, ConnectorLimiters } from "./environment.js";
 import type { ConnectorDatabase } from "./database.js";
 import {
   newOAuthState,
@@ -42,12 +53,18 @@ export interface ConnectorDependencies {
     "shopifyLaunchVerify" | "shopifyInstallComplete" | "shopifyWebhookVerify"
   >;
   readonly database: ConnectorDatabase;
+  /** The ingress limits; null or absent only in development (a lab without them). */
+  readonly limiters?: Readonly<ConnectorLimiters> | null;
 }
-// RPC and SQL budgets inside the platform's request time.
+// RPC and SQL budgets inside the platform's request time. The install RPC's own timer
+// adds installSlackMs to the broker's budget: the broker returns by its deadline (its last
+// transaction's close never waits past it), and the slack covers the RPC's two hops, so a
+// committed install is not reported as "Not confirmed".
 export const connectorBudgets = Object.freeze({
   launchMs: 4000,
   stateOpenMs: 3000,
   installMs: 9000,
+  installSlackMs: 1500,
   webhookMs: 4000,
 });
 const held = () => Error("CONNECTOR_BROKER_HELD");
@@ -70,9 +87,44 @@ async function rpc<T>(start: () => Promise<T>, ms: number): Promise<T> {
 
 export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
   const { configuration, broker, database } = deps;
+  const limiters = deps.limiters ?? null;
   const redirectUri = (appKey: string) => `${configuration.origin}/shopify/a/${appKey}/callback`;
 
-  async function launch(appKey: string, rawQuery: string, statusOnly: boolean): Promise<Response> {
+  // One count for this request's address; "allowed" when no limiter is bound (development).
+  async function admit(
+    request: Request,
+    kind: keyof ConnectorLimiters,
+  ): Promise<"allowed" | "limited" | "unavailable"> {
+    if (!limiters) return "allowed";
+    const limit = await limitAddress(
+      limiters[kind],
+      kind === "install" ? "shopify_install" : "shopify_webhooks",
+      request.headers.get("cf-connecting-ip"),
+    );
+    if (limit === "allowed" || limit === "limited") return limit;
+    console.log(
+      JSON.stringify({
+        event: "morrow_connector_guard",
+        code:
+          limit === "address_missing"
+            ? "ADDRESS_MISSING"
+            : limit === "address_invalid"
+              ? "ADDRESS_INVALID"
+              : "LIMITER_FAILED",
+      }),
+    );
+    return "unavailable";
+  }
+
+  async function launch(
+    request: Request,
+    appKey: string,
+    rawQuery: string,
+    statusOnly: boolean,
+  ): Promise<Response> {
+    const admitted = await admit(request, "install");
+    if (admitted !== "allowed")
+      return connectorPage(admitted === "limited" ? "limited" : "unavailable");
     let verdict;
     try {
       verdict = decodeShopifyLaunchVerdict(
@@ -134,6 +186,11 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
     // No cookie, or a state that is not this browser's: nothing reaches the broker.
     if (!cookie || queryState === null || !sameState(cookie, queryState))
       return connectorPage("invalid", { setCookie: stateCookieClear });
+    const admitted = await admit(request, "install");
+    if (admitted !== "allowed")
+      return connectorPage(admitted === "limited" ? "limited" : "unavailable", {
+        setCookie: stateCookieClear,
+      });
     // The digest of the cookie's state, which equals the query's; the broker rechecks it.
     const digest = await oauthStateDigest(cookie);
     let installed;
@@ -141,7 +198,7 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       installed = decodeShopifyInstallResult(
         await rpc(
           () => broker.shopifyInstallComplete(appKey, rawQuery, digest, connectorBudgets.installMs),
-          connectorBudgets.installMs + 500,
+          connectorBudgets.installMs + connectorBudgets.installSlackMs,
         ),
       );
     } catch {
@@ -179,6 +236,15 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
   }
 
   async function webhooks(request: Request, appKey: string): Promise<Response> {
+    // Counted before the body is read: only Shopify sends webhooks, so a junk sender
+    // spends only its own address's budget.
+    const admitted = await admit(request, "webhooks");
+    if (admitted === "limited") {
+      const limited = connectorJson(429, { code: "rate_limited" });
+      limited.headers.set("retry-after", "60");
+      return limited;
+    }
+    if (admitted !== "allowed") return connectorJson(503, { code: "unavailable" });
     const input = await readWebhook(request);
     if (!input) return connectorJson(401, { code: "unauthorized" });
     let verdict;
@@ -212,7 +278,7 @@ export function createConnectorHandler(deps: Readonly<ConnectorDependencies>) {
       if (selected.route === "webhooks") return webhooks(request, selected.appKey);
       if (selected.route === "callback")
         return callback(request, selected.appKey, selected.rawQuery);
-      return launch(selected.appKey, selected.rawQuery, selected.route === "status");
+      return launch(request, selected.appKey, selected.rawQuery, selected.route === "status");
     },
   });
 }

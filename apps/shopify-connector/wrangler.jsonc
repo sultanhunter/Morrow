@@ -6,6 +6,11 @@
 // identifiers (CONNECTOR_CONFIGURATION_JSON, MORROW_DATABASE_BINDING_JSON) arrive through
 // the P04.T01i PR-D path; without them the connector is deny-all (503). workers.dev stays
 // off here: enabling the staging hostname needs the staging card change (ADR-0022 item 6).
+// M2 PR-2 review (ADR-0019 items 6 and 8 applied to the second public Worker): the
+// per-address ingress limits, launch, status and callback 20 and webhooks 300 per 60 s
+// (Shopify's delivery addresses are shared by every store's app), one namespace per limit
+// and environment (development 7004-7005, staging 7104-7105, production 7204-7205).
+// `ratelimits` is not inherited, so every environment names its own.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "morrow-development-connector",
@@ -27,6 +32,10 @@
       "entrypoint": "ConnectorBroker",
     },
   ],
+  "ratelimits": [
+    { "name": "INSTALL_LIMITER", "namespace_id": "7004", "simple": { "limit": 20, "period": 60 } },
+    { "name": "WEBHOOK_LIMITER", "namespace_id": "7005", "simple": { "limit": 300, "period": 60 } },
+  ],
   "secrets": { "required": [] },
   "env": {
     "staging": {
@@ -39,6 +48,18 @@
           "entrypoint": "ConnectorBroker",
         },
       ],
+      "ratelimits": [
+        {
+          "name": "INSTALL_LIMITER",
+          "namespace_id": "7104",
+          "simple": { "limit": 20, "period": 60 },
+        },
+        {
+          "name": "WEBHOOK_LIMITER",
+          "namespace_id": "7105",
+          "simple": { "limit": 300, "period": 60 },
+        },
+      ],
       "secrets": { "required": [] },
     },
     "production": {
@@ -49,6 +70,18 @@
           "binding": "BROKER",
           "service": "morrow-production-broker",
           "entrypoint": "ConnectorBroker",
+        },
+      ],
+      "ratelimits": [
+        {
+          "name": "INSTALL_LIMITER",
+          "namespace_id": "7204",
+          "simple": { "limit": 20, "period": 60 },
+        },
+        {
+          "name": "WEBHOOK_LIMITER",
+          "namespace_id": "7205",
+          "simple": { "limit": 300, "period": 60 },
         },
       ],
       "secrets": { "required": [] },

@@ -1,7 +1,8 @@
 // M2 PR-2: the connector Worker (apps/shopify-connector/worker) with a faked broker and a
 // faked database login: the fail-closed environment, the exact route table, the state
 // cookie, the authorize redirect, the callback's cookie rule and continuation redirect,
-// the webhook 401/503 contract and the fixed pages. No network and no database.
+// the webhook 401/503 contract, the per-address ingress limits and the fixed pages. No
+// network and no database.
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import test from "node:test";
@@ -34,11 +35,24 @@ const binding = {
   database: "morrow",
 };
 const brokerStub = () => ({ fetch() {}, health: async () => true });
+// A Workers rate limit: `allow` decides each count; every key is recorded.
+const limiterStub = (allow = () => true) => {
+  const keys = [];
+  return {
+    keys,
+    async limit({ key }) {
+      keys.push(key);
+      return { success: allow(key) };
+    },
+  };
+};
 const goodEnv = (extra = {}) => ({
   MORROW_ENVIRONMENT: "staging",
   CONNECTOR_CONFIGURATION_JSON: JSON.stringify({ schemaVersion: 1, origin, apiOrigin }),
   MORROW_DATABASE_BINDING_JSON: JSON.stringify(binding),
   BROKER: brokerStub(),
+  INSTALL_LIMITER: limiterStub(),
+  WEBHOOK_LIMITER: limiterStub(),
   ...extra,
 });
 
@@ -124,12 +138,55 @@ test("environment: every failure is a fixed code and keeps the deny-all instance
       "CONNECTOR_ENV_VALUE_INVALID",
     ],
     [goodEnv({ BROKER: {} }), "CONNECTOR_ENV_BROKER_BINDING_INVALID"],
+    // The ingress limits: both, each a limiter, outside development.
+    [
+      (() => {
+        const { INSTALL_LIMITER: _a, WEBHOOK_LIMITER: _b, ...rest } = goodEnv();
+        return rest;
+      })(),
+      "CONNECTOR_ENV_LIMITER_INVALID",
+    ],
+    [
+      (() => {
+        const { WEBHOOK_LIMITER: _b, ...rest } = goodEnv();
+        return rest;
+      })(),
+      "CONNECTOR_ENV_LIMITER_INVALID",
+    ],
+    [goodEnv({ INSTALL_LIMITER: {} }), "CONNECTOR_ENV_LIMITER_INVALID"],
+    [goodEnv({ WEBHOOK_LIMITER: null }), "CONNECTOR_ENV_LIMITER_INVALID"],
   ];
   for (const [env, code] of codes) {
     const result = mapConnectorEnvironment(env);
     assert.equal(result.ok, false, code);
     assert.equal(result.code, code);
   }
+  // Development (a lab) may omit both limiters, but not one.
+  const development = (extra) => {
+    const {
+      INSTALL_LIMITER: _a,
+      WEBHOOK_LIMITER: _b,
+      ...rest
+    } = goodEnv({
+      MORROW_ENVIRONMENT: "development",
+      CONNECTOR_CONFIGURATION_JSON: JSON.stringify({
+        schemaVersion: 1,
+        origin: "http://127.0.0.1:8788",
+        apiOrigin: "http://127.0.0.1:8787",
+      }),
+      MORROW_DATABASE_BINDING_JSON: JSON.stringify({ ...binding, environment: "development" }),
+    });
+    return { ...rest, ...extra };
+  };
+  const bare = mapConnectorEnvironment(development({}));
+  assert.equal(bare.ok, true);
+  assert.equal(bare.limiters, null);
+  assert.equal(
+    mapConnectorEnvironment(development({ INSTALL_LIMITER: limiterStub() })).code,
+    "CONNECTOR_ENV_LIMITER_INVALID",
+  );
+  assert.equal(Object.isFrozen(mapped.limiters), true);
+  assert.deepEqual(Object.keys(mapped.limiters), ["install", "webhooks"]);
 });
 
 test("routes: the four exact paths, their methods and bounded signed queries only", () => {
@@ -183,7 +240,7 @@ test("state cookie: __Host-, Secure, HttpOnly, SameSite=Lax, Path=/, ten minutes
 });
 
 // A faked broker and database login recording every call.
-function harness(answers = {}) {
+function harness(answers = {}, limiters = undefined) {
   const calls = [];
   const broker = {
     async shopifyLaunchVerify(appKey, rawQuery) {
@@ -224,6 +281,7 @@ function harness(answers = {}) {
     configuration: { origin, apiOrigin },
     broker,
     database,
+    ...(limiters === undefined ? {} : { limiters }),
   });
   return { calls, handler };
 }
@@ -443,6 +501,107 @@ test("webhooks: missing headers or a refused signature are 401; a verified deliv
   const delivered = await post(verified);
   assert.equal(delivered.status, 503);
   assert.deepEqual(await delivered.json(), { code: "webhook_inbox_unavailable" });
+});
+
+test("ingress limits: counted per address before any broker call; 429 over, 503 without an address", async () => {
+  const state = randomBytes(32).toString("base64url");
+  const from = (address, init = {}) =>
+    address === null
+      ? init
+      : { ...init, headers: { ...(init.headers ?? {}), "cf-connecting-ip": address } };
+  const launchUrl = origin + "/shopify/a/dev-app/launch?shop=dev-1.myshopify.com&hmac=x";
+  const webhookInit = {
+    method: "POST",
+    body: '{"shop_id":1}',
+    headers: {
+      "x-shopify-api-version": "2026-10",
+      "x-shopify-hmac-sha256": "x".repeat(43) + "=",
+      "x-shopify-shop-domain": "dev-1.myshopify.com",
+      "x-shopify-topic": "shop/redact",
+      "x-shopify-webhook-id": "id-1",
+    },
+  };
+  // Allowed: one count per broker-bound request, keyed by route and the hashed address.
+  const install = limiterStub();
+  const webhooks = limiterStub();
+  const open = harness({}, { install, webhooks });
+  assert.equal(
+    (await open.handler.fetch(new Request(launchUrl, from("198.51.100.7")))).status,
+    302,
+  );
+  assert.equal(install.keys.length, 1);
+  assert.match(install.keys[0], /^shopify_install:[a-f0-9]{32}$/);
+  assert.ok(!install.keys[0].includes("198.51.100.7"));
+  // The callback's cookie refusal reaches nothing and is not counted.
+  await open.handler.fetch(
+    new Request(origin + `/shopify/a/dev-app/callback?state=${state}`, from("198.51.100.7")),
+  );
+  assert.equal(install.keys.length, 1);
+  await open.handler.fetch(
+    new Request(origin + "/shopify/a/dev-app/webhooks", from("203.0.113.9", webhookInit)),
+  );
+  assert.equal(webhooks.keys.length, 1);
+  assert.match(webhooks.keys[0], /^shopify_webhooks:[a-f0-9]{32}$/);
+  assert.deepEqual(
+    open.calls.map((c) => c[0]),
+    ["launch", "stateOpen", "webhook"],
+  );
+  // Over the limit: 429, and nothing reaches the broker.
+  const limited = harness(
+    {},
+    { install: limiterStub(() => false), webhooks: limiterStub(() => false) },
+  );
+  const launch = await limited.handler.fetch(new Request(launchUrl, from("198.51.100.7")));
+  assert.equal(launch.status, 429);
+  const callback = await limited.handler.fetch(
+    new Request(
+      origin + `/shopify/a/dev-app/callback?state=${state}&shop=x`,
+      from("198.51.100.7", { headers: { cookie: `__Host-morrow_shopify_state=${state}` } }),
+    ),
+  );
+  assert.equal(callback.status, 429);
+  assert.equal(callback.headers.get("set-cookie"), stateCookieClear);
+  const hook = await limited.handler.fetch(
+    new Request(origin + "/shopify/a/dev-app/webhooks", from("203.0.113.9", webhookInit)),
+  );
+  assert.equal(hook.status, 429);
+  assert.equal(hook.headers.get("retry-after"), "60");
+  assert.deepEqual(await hook.json(), { code: "rate_limited" });
+  assert.deepEqual(limited.calls, []);
+  // No address, an invalid one or a failing limiter: fail closed (503), nothing sent.
+  const logged = [];
+  const saved = console.log;
+  console.log = (line) => logged.push(JSON.parse(line));
+  try {
+    for (const [address, limiters, code] of [
+      [null, { install: limiterStub(), webhooks: limiterStub() }, "ADDRESS_MISSING"],
+      ["not-an-address", { install: limiterStub(), webhooks: limiterStub() }, "ADDRESS_INVALID"],
+      [
+        "198.51.100.7",
+        {
+          install: {
+            limit: async () => {
+              throw Error("down");
+            },
+          },
+          webhooks: { limit: async () => ({}) },
+        },
+        "LIMITER_FAILED",
+      ],
+    ]) {
+      const h = harness({}, limiters);
+      assert.equal((await h.handler.fetch(new Request(launchUrl, from(address)))).status, 503);
+      const w = await h.handler.fetch(
+        new Request(origin + "/shopify/a/dev-app/webhooks", from(address, webhookInit)),
+      );
+      assert.equal(w.status, 503);
+      assert.deepEqual(h.calls, []);
+      assert.ok(logged.some((row) => row.event === "morrow_connector_guard" && row.code === code));
+    }
+  } finally {
+    console.log = saved;
+  }
+  assert.ok(!JSON.stringify(logged).includes("198.51.100.7"));
 });
 
 test("pages: no script, style, form or frame; escaped shop; CSP default-src 'none'", async () => {
