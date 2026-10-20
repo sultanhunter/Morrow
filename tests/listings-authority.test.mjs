@@ -1,0 +1,1012 @@
+// M3 PR-1 (ADR-0022 items 3, 15 and 16, with the item 3 amendment of 2026-10-20): the
+// Listings agent's records, its kernel requests and its commands, with no I/O. The SQL
+// side of every rule runs against PostgreSQL 17 in lab:listings-authority.
+//   * The release manifest, scope, grant set, owner disable grant and installation
+//     document are exactly what the listings-authority migration seeds and checks.
+//   * Enable and resume need agents.installation.activate {execute} on the store resource
+//     (its exact_approval obligation is met by the confirmed document) and every verb the
+//     installation receives; "Stop AI work" needs agents.installation.disable {execute} on
+//     the installation resource; the model default needs governance.model_default.revise.
+//   * The commands run the kernel before their definer, rerun it at confirmation, never
+//     send a definer after a denial, and "Stop AI work" never reads entitlement or credits.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import {
+  validateCurrentDefinition,
+  validateDefinition,
+} from "../packages/contracts/src/validation.ts";
+import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
+import { canonicalJson } from "../packages/work/src/digest.ts";
+import { WorkReject } from "../packages/work/src/connection.ts";
+import {
+  agentRequestDigest,
+  enableAllowed,
+  prepareAgentCommand,
+  reviseAllowed,
+  runAgentCommand,
+  runAgentRead,
+  stopAllowed,
+} from "../packages/work/src/agents/commands.ts";
+import {
+  parseDocumentBody,
+  parseEnableBody,
+  parseModelDefaultBody,
+  parseStopBody,
+} from "../packages/work/src/agents/bodies.ts";
+import {
+  buildInstallationDocument,
+  documentLifetimeMs,
+  installationGrants,
+  installationResource,
+  installationScope,
+  listingsConfiguration,
+  listingsConfigurationDigest,
+  listingsGrantSet,
+  listingsReleaseDigest,
+  listingsReleaseManifest,
+  listingsScope,
+  ownerDisableGrant,
+  parseInstallationDocument,
+} from "../packages/work/src/agents/listings.ts";
+import { agentStatements } from "../packages/work/src/agents/sql.ts";
+import { workStatements } from "../packages/work/src/sql.ts";
+
+const sha = (value) => createHash("sha256").update(value).digest("hex");
+const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
+// Migrations are found by slug, never by number (they are renumbered at rebase).
+const migration = (slug) =>
+  readFileSync(
+    "migrations/" + manifest.migrations.find((m) => m.file.endsWith("." + slug + ".sql")).file,
+    "utf8",
+  );
+const authoritySql = migration("listings-authority");
+const identitySql = migration("listings-identity-bridge");
+
+const O = "org_o",
+  W = "ws_w",
+  S = "store_a",
+  C = "connection_a",
+  I = "installation_a";
+const nowMs = Date.parse("2026-10-20T12:00:00.000Z");
+const owner = Object.freeze({
+  kind: "human",
+  principalId: "person_owner",
+  organizationId: O,
+  workspaceId: W,
+  membershipId: "membership_owner",
+  installationId: null,
+  mandateId: null,
+});
+const member = Object.freeze({
+  ...owner,
+  principalId: "person_member",
+  membershipId: "membership_member",
+});
+const workspace = {
+  organizationId: O,
+  workspaceId: W,
+  storeId: null,
+  connectionId: null,
+  kind: "workspace",
+  id: W,
+};
+const store = () => storeResource(O, W, S, C);
+const linking = { ...owner, kind: "service", principalId: "morrow.linking", membershipId: null };
+function grant(id, principal, capabilityId, verbs, resource, fields, overrides = {}) {
+  const g = {
+    id,
+    principal: structuredClone(principal),
+    capabilityId,
+    verbs,
+    scope: {
+      organizationId: O,
+      workspaceId: W,
+      storeIds: resource.storeId === null ? [] : [resource.storeId],
+      accountIds: [],
+      resources: [structuredClone(resource)],
+      fields,
+    },
+    issuedBy: structuredClone(linking),
+    validFrom: "2026-10-01T00:00:00.000Z",
+    expiresAt: null,
+    revokedAt: null,
+    policyRevision: 1,
+    ...overrides,
+  };
+  assert.equal(validateCurrentDefinition("Grant", g), true, id);
+  return g;
+}
+const activateFields = ["evaluation", "grant", "installationId", "revision"];
+const reviseFields = ["effort", "expectedRevision", "maxCreditsPerProduct", "model"];
+// The linked owner of M2 PR-2's store-link template, plus the disable grant of an enabled
+// installation and the model-default capability of signup template v2 (M5 PR-1).
+function ownerGrants(who = owner, { activate = true, disable = true, revise = true } = {}) {
+  const tag = who.principalId;
+  const list = [
+    grant(tag + "_read", who, "catalog.products.read", ["view", "delegate"], store(), [
+      ...listingFieldPaths,
+    ]),
+    grant(tag + "_propose", who, "catalog.content.propose", ["execute", "delegate"], store(), [
+      ...listingFieldPaths,
+    ]),
+    grant(
+      tag + "_publish",
+      who,
+      "catalog.content.publish",
+      ["propose", "approve", "execute", "delegate"],
+      store(),
+      [...listingFieldPaths],
+    ),
+  ];
+  if (activate)
+    list.push(
+      grant(tag + "_activate", who, "agents.installation.activate", ["execute"], store(), [
+        ...activateFields,
+      ]),
+    );
+  if (disable)
+    list.push(
+      grant(
+        tag + "_disable",
+        who,
+        "agents.installation.disable",
+        ["execute"],
+        installationResource(store(), I),
+        ["control", "installationId"],
+      ),
+    );
+  if (revise)
+    list.push(
+      grant(tag + "_revise", who, "governance.model_default.revise", ["execute"], workspace, [
+        ...reviseFields,
+      ]),
+    );
+  return list;
+}
+const authority = (grants = ownerGrants(), who = owner) => ({
+  actor: structuredClone(who),
+  policyRevision: 1,
+  grants,
+  databaseNowMs: nowMs,
+  resource: structuredClone(workspace),
+});
+
+// ---------------------------------------------------------------------------
+test("the release manifest and configuration are exactly what the migration seeds", async () => {
+  assert.ok(authoritySql.includes("('" + listingsReleaseManifest + "')"));
+  assert.equal(await listingsReleaseDigest(), sha(listingsReleaseManifest));
+  const parsed = JSON.parse(listingsReleaseManifest);
+  assert.deepEqual(parsed.fields, [...listingFieldPaths]);
+  // The release carries exactly the installation's verbs: never approve or execute on
+  // catalog.content.publish.
+  assert.deepEqual(
+    parsed.capabilities,
+    Object.fromEntries(listingsGrantSet.map((g) => [g.capabilityId, [...g.verbs]])),
+  );
+  assert.equal(canonicalJson(parsed), listingsReleaseManifest);
+  assert.ok(authoritySql.includes("morrow_work.sha256_text('" + listingsConfiguration + "')"));
+  assert.equal(await listingsConfigurationDigest(), sha(listingsConfiguration));
+  assert.deepEqual(
+    listingsGrantSet.map((g) => [g.capabilityId, [...g.verbs]]),
+    [
+      ["catalog.content.propose", ["execute"]],
+      ["catalog.content.publish", ["propose"]],
+      ["catalog.products.read", ["view"]],
+    ],
+  );
+  // The SQL grant set (listings_grant_set) names the same rows in the same order.
+  for (const g of listingsGrantSet)
+    assert.ok(
+      authoritySql.includes(
+        `jsonb_build_object('capabilityId','${g.capabilityId}','verbs','${JSON.stringify(g.verbs)}'::jsonb`,
+      ),
+      g.capabilityId,
+    );
+  // The identity bridge's allowlist is the same three grants and never more.
+  assert.match(identitySql, /'catalog\.products\.read' AND g->'verbs'='\["view"\]'::jsonb/);
+  assert.match(identitySql, /'catalog\.content\.propose' AND g->'verbs'='\["execute"\]'::jsonb/);
+  assert.match(identitySql, /'catalog\.content\.publish' AND g->'verbs'='\["propose"\]'::jsonb/);
+});
+
+test("scopes: the installation owns exactly its store resource; the owner its installation", () => {
+  const scope = listingsScope(store());
+  assert.deepEqual(scope, {
+    organizationId: O,
+    workspaceId: W,
+    storeIds: [S],
+    accountIds: [],
+    resources: [store()],
+    fields: [...listingFieldPaths],
+  });
+  const resource = installationResource(store(), I);
+  assert.deepEqual(resource, {
+    organizationId: O,
+    workspaceId: W,
+    storeId: S,
+    connectionId: C,
+    kind: "installation",
+    id: I,
+  });
+  assert.deepEqual(installationScope(store(), I), {
+    organizationId: O,
+    workspaceId: W,
+    storeIds: [S],
+    accountIds: [],
+    resources: [resource],
+    fields: ["control", "installationId"],
+  });
+  assert.throws(() => installationResource(store(), "bad id"), /LISTINGS_RECORD_INVALID/);
+});
+
+test("the installation document: server-built, bound to the actor, five minutes, canonical", async () => {
+  const id = randomUUID();
+  const built = await buildInstallationDocument({
+    id,
+    purpose: "enable",
+    store: store(),
+    installationId: I,
+    actor: owner,
+    createdAtMs: nowMs,
+  });
+  const d = built.document;
+  assert.equal(built.canonical, canonicalJson(JSON.parse(built.canonical)));
+  assert.equal(built.digest, sha(built.canonical));
+  assert.equal(documentLifetimeMs, 300000);
+  assert.deepEqual(
+    [d.schemaVersion, d.kind, d.id, d.purpose, d.installationId, d.createdAt, d.expiresAt],
+    [
+      1,
+      "morrow.agent_installation_document",
+      id,
+      "enable",
+      I,
+      "2026-10-20T12:00:00.000Z",
+      "2026-10-20T12:05:00.000Z",
+    ],
+  );
+  assert.deepEqual(d.actor, { principalId: owner.principalId, membershipId: owner.membershipId });
+  assert.deepEqual(d.release, {
+    id: "morrow.listings",
+    revision: 1,
+    digest: sha(listingsReleaseManifest),
+  });
+  assert.deepEqual(d.store, store());
+  assert.deepEqual(
+    d.grants.map((g) => [g.capabilityId, g.verbs, g.scope]),
+    listingsGrantSet.map((g) => [g.capabilityId, [...g.verbs], listingsScope(store())]),
+  );
+  assert.deepEqual(d.ownerGrant, {
+    capabilityId: "agents.installation.disable",
+    verbs: ["execute"],
+    scope: installationScope(store(), I),
+  });
+  // The SQL check (enable_document_matches) rebuilds exactly these keys.
+  for (const key of Object.keys(d))
+    assert.ok(authoritySql.includes(`'${key}'`), "enable_document_matches names " + key);
+  // A resume document differs only in its purpose, so the digest changes.
+  const resume = await buildInstallationDocument({
+    id,
+    purpose: "resume",
+    store: store(),
+    installationId: I,
+    actor: owner,
+    createdAtMs: nowMs,
+  });
+  assert.notEqual(resume.digest, built.digest);
+  assert.deepEqual(parseInstallationDocument(built.canonical), JSON.parse(built.canonical));
+  // Any other text is refused: a non-canonical rendering, another kind, a bad store, a
+  // widened grant, another owner grant, another release or an extra key.
+  const tampered = (edit) => {
+    const value = JSON.parse(built.canonical);
+    edit(value);
+    return canonicalJson(value);
+  };
+  for (const bad of [
+    tampered((v) => v.grants[1].verbs.push("execute")),
+    tampered((v) => (v.grants[0].scope.fields = ["title"])),
+    tampered((v) => v.grants.pop()),
+    tampered((v) => (v.ownerGrant.scope.resources[0].id = "installation_b")),
+    tampered((v) => (v.release.id = "morrow.other")),
+    tampered((v) => (v.store = storeResource(O, W, "store_b", C))),
+    tampered((v) => (v.extra = 1)),
+    JSON.stringify(JSON.parse(built.canonical), null, 1),
+    built.canonical.replace('"enable"', '"install"'),
+    built.canonical.replace('"kind":"store"', '"kind":"workspace"'),
+    "{",
+    42,
+    "x".repeat(16385),
+  ])
+    assert.throws(() => parseInstallationDocument(bad), /LISTINGS_RECORD_INVALID/);
+  // Only a human member of the store's own tenant, with exact ids and an integer time.
+  for (const change of [
+    { actor: { ...owner, kind: "agent", membershipId: null, installationId: I } },
+    { actor: { ...owner, membershipId: null } },
+    { actor: { ...owner, organizationId: "org_p" } },
+    { actor: { ...owner, workspaceId: "ws_other" } },
+    { id: "not-a-uuid" },
+    { installationId: "bad id" },
+    { createdAtMs: nowMs + 0.5 },
+  ])
+    await assert.rejects(
+      buildInstallationDocument({
+        id,
+        purpose: "enable",
+        store: store(),
+        installationId: I,
+        actor: owner,
+        createdAtMs: nowMs,
+        ...change,
+      }),
+      /LISTINGS_RECORD_INVALID/,
+    );
+});
+
+test("installation grants: the owner issues exactly the release's verbs to the agent", () => {
+  const agentPrincipalId = "agent_" + randomUUID();
+  const grants = installationGrants({
+    store: store(),
+    installationId: I,
+    agentPrincipalId,
+    issuer: owner,
+    validFrom: "2026-10-20T12:00:00.000Z",
+    policyRevision: 3,
+    ids: ["g1", "g2", "g3"],
+  });
+  assert.equal(grants.length, 3);
+  for (const [i, g] of grants.entries()) {
+    assert.equal(validateCurrentDefinition("Grant", g), true);
+    // A v1 reader refuses a store-scoped grant (fails closed).
+    assert.equal(validateDefinition("core", "Grant", g), false);
+    assert.deepEqual(g.principal, {
+      kind: "agent",
+      principalId: agentPrincipalId,
+      organizationId: O,
+      workspaceId: W,
+      membershipId: null,
+      installationId: I,
+      mandateId: null,
+    });
+    assert.deepEqual(g.issuedBy, owner);
+    assert.deepEqual(
+      [g.capabilityId, g.verbs],
+      [listingsGrantSet[i].capabilityId, [...listingsGrantSet[i].verbs]],
+    );
+    assert.deepEqual(g.scope, listingsScope(store()));
+    assert.deepEqual([g.expiresAt, g.revokedAt, g.policyRevision], [null, null, 3]);
+  }
+  const verbsOf = (c) => grants.find((g) => g.capabilityId === c).verbs;
+  assert.deepEqual(verbsOf("catalog.content.publish"), ["propose"]);
+  assert.throws(
+    () =>
+      installationGrants({
+        store: store(),
+        installationId: I,
+        agentPrincipalId,
+        issuer: owner,
+        validFrom: "2026-10-20T12:00:00.000Z",
+        policyRevision: 3,
+        ids: ["g1", "g2"],
+      }),
+    /LISTINGS_RECORD_INVALID/,
+  );
+  const disable = ownerDisableGrant({
+    store: store(),
+    installationId: I,
+    owner,
+    validFrom: "2026-10-20T12:00:00.000Z",
+    policyRevision: 3,
+    id: "g4",
+  });
+  assert.deepEqual(disable.principal, owner);
+  assert.deepEqual(
+    [disable.capabilityId, disable.verbs, disable.issuedBy.kind, disable.issuedBy.principalId],
+    ["agents.installation.disable", ["execute"], "service", "morrow.agents"],
+  );
+  assert.deepEqual(disable.scope, installationScope(store(), I));
+  assert.equal(validateCurrentDefinition("Grant", disable), true);
+});
+
+test("enable needs activate on the store and every verb the installation receives", async () => {
+  assert.equal(await enableAllowed(authority(), store()), true);
+  // No activate grant; activate on another store; activate without the request's fields.
+  assert.equal(
+    await enableAllowed(authority(ownerGrants(owner, { activate: false })), store()),
+    false,
+  );
+  assert.equal(await enableAllowed(authority(), storeResource(O, W, "store_b", C)), false);
+  assert.equal(await enableAllowed(authority(), storeResource(O, W, S, "connection_b")), false);
+  const narrow = ownerGrants().map((g) =>
+    g.capabilityId === "agents.installation.activate"
+      ? { ...g, scope: { ...g.scope, fields: ["installationId"] } }
+      : g,
+  );
+  assert.equal(await enableAllowed(authority(narrow), store()), false);
+  // An installation never exceeds its owner: each catalogue verb it receives is required.
+  for (const [capabilityId, verb] of [
+    ["catalog.products.read", "view"],
+    ["catalog.content.propose", "execute"],
+    ["catalog.content.publish", "propose"],
+  ]) {
+    const without = ownerGrants().map((g) =>
+      g.capabilityId === capabilityId ? { ...g, verbs: g.verbs.filter((v) => v !== verb) } : g,
+    );
+    assert.equal(await enableAllowed(authority(without), store()), false, capabilityId);
+    const fields = ownerGrants().map((g) =>
+      g.capabilityId === capabilityId ? { ...g, scope: { ...g.scope, fields: ["title"] } } : g,
+    );
+    assert.equal(await enableAllowed(authority(fields), store()), false, capabilityId + " fields");
+  }
+  // A revoked or expired activate grant, or one from a later policy revision.
+  for (const change of [
+    { revokedAt: "2026-10-19T00:00:00.000Z" },
+    { expiresAt: "2026-10-20T11:59:59.999Z" },
+    { policyRevision: 2 },
+    { validFrom: "2026-10-20T12:00:00.001Z" },
+  ]) {
+    const grants = ownerGrants().map((g) =>
+      g.capabilityId === "agents.installation.activate" ? { ...g, ...change } : g,
+    );
+    assert.equal(await enableAllowed(authority(grants), store()), false, JSON.stringify(change));
+  }
+  // A member without the store-link grants cannot enable.
+  assert.equal(
+    await enableAllowed(authority(ownerGrants(member, { activate: false }), member), store()),
+    false,
+  );
+});
+
+test("Stop AI work needs disable on the installation; the model default needs revise", async () => {
+  const target = installationResource(store(), I);
+  assert.equal(await stopAllowed(authority(), target), true);
+  assert.equal(await stopAllowed(authority(ownerGrants(owner, { disable: false })), target), false);
+  assert.equal(
+    await stopAllowed(authority(), installationResource(store(), "installation_b")),
+    false,
+  );
+  // activate confers no stop; a stop on the store resource is not the installation's.
+  assert.equal(await stopAllowed(authority(), store()), false);
+  assert.equal(await reviseAllowed(authority()), true);
+  assert.equal(await reviseAllowed(authority(ownerGrants(owner, { revise: false }))), false);
+  const narrow = ownerGrants().map((g) =>
+    g.capabilityId === "governance.model_default.revise"
+      ? { ...g, scope: { ...g.scope, fields: ["model", "effort"] } }
+      : g,
+  );
+  assert.equal(await reviseAllowed(authority(narrow)), false);
+});
+
+test("request digests and closed bodies", async () => {
+  const body = { control: { reason: "Pause please", sourceProposalRef: null } };
+  const digest = await agentRequestDigest("installation.stop", W, [S], body);
+  assert.equal(
+    digest,
+    sha(
+      '["morrow.work.command",1,"installation.stop","ws_w",["store_a"],{"control":{"reason":"Pause please","sourceProposalRef":null}}]',
+    ),
+  );
+  for (const other of [
+    agentRequestDigest("installation.enable", W, [S], body),
+    agentRequestDigest("installation.stop", "ws_x", [S], body),
+    agentRequestDigest("installation.stop", W, ["store_b"], body),
+    agentRequestDigest("installation.stop", W, [S], { control: { ...body.control, reason: "x" } }),
+  ])
+    assert.notEqual(await other, digest);
+  assert.deepEqual(parseDocumentBody({}), {});
+  for (const bad of [null, [], { x: 1 }, Object.create({ a: 1 })])
+    assert.equal(parseDocumentBody(bad), null);
+  const hex = "a".repeat(64);
+  assert.deepEqual(parseEnableBody({ documentDigest: hex, nonce: hex }), {
+    documentDigest: hex,
+    nonce: hex,
+  });
+  for (const bad of [
+    { documentDigest: hex },
+    { documentDigest: hex, nonce: "A".repeat(64) },
+    { documentDigest: hex, nonce: hex, storeId: S },
+    { documentDigest: "a".repeat(63), nonce: hex },
+  ])
+    assert.equal(parseEnableBody(bad), null, JSON.stringify(bad));
+  assert.deepEqual(parseStopBody(body), body);
+  for (const bad of [
+    { control: { reason: "   ", sourceProposalRef: null } },
+    { control: { reason: "", sourceProposalRef: null } },
+    { control: { reason: "x".repeat(1025), sourceProposalRef: null } },
+    { control: { reason: "Pause" } },
+    { control: { reason: "Pause", sourceProposalRef: null }, installationId: I },
+  ])
+    assert.equal(parseStopBody(bad), null, JSON.stringify(bad));
+  const revise = {
+    model: "claude_opus_5_5",
+    effort: "high",
+    maxCreditsPerProduct: 6,
+    expectedRevision: null,
+  };
+  assert.deepEqual(parseModelDefaultBody(revise), revise);
+  for (const change of [
+    { model: "claude-opus-5-5" },
+    { effort: "XHIGH" },
+    { maxCreditsPerProduct: 0 },
+    { maxCreditsPerProduct: 100 },
+    { maxCreditsPerProduct: 1.5 },
+    { expectedRevision: 0 },
+    { catalogueVersion: 1 },
+  ])
+    assert.equal(parseModelDefaultBody({ ...revise, ...change }), null, JSON.stringify(change));
+});
+
+// ---------------------------------------------------------------------------
+// The commands against a scripted transaction: every statement is recorded, each reply
+// comes from the script, and nothing else runs.
+const sessionDigest = "d".repeat(64);
+function contextRow(grants, who = owner) {
+  return {
+    principal_id: who.principalId,
+    organization_id: O,
+    workspace_id: W,
+    membership_id: who.membershipId,
+    policy_revision: "1",
+    grants: JSON.stringify(grants),
+    grant_count: String(grants.length),
+    grants_digest: "e".repeat(64),
+    database_now_us: String(nowMs * 1000),
+  };
+}
+const installationRow = (status = "active") => ({
+  id: I,
+  revision: "1",
+  store_id: S,
+  connection_id: C,
+  agent_principal_id: "agent_" + "0".repeat(8) + "-0000-4000-8000-" + "0".repeat(12),
+  owner_principal_id: owner.principalId,
+  owner_membership_id: owner.membershipId,
+  status,
+  release_id: "morrow.listings",
+  release_revision: "1",
+  release_digest: sha(listingsReleaseManifest),
+  updated_at: "2026-10-20T11:00:00.000Z",
+});
+const reviewContextRow = {
+  policy_revision: "1",
+  policy_canonical: "{}",
+  policy_digest: "f".repeat(64),
+  defaults_digest: "f".repeat(64),
+  capability_effect: "control",
+  capability_irreversible: "false",
+  capability_review_required: "false",
+  capability_kill_switch: "true",
+  risk: "medium",
+  owner_principal_id: owner.principalId,
+  owner_membership_id: owner.membershipId,
+  active_human_membership_count: "1",
+  last_membership_change_at: null,
+  claimed_approval_id: null,
+  database_now: "2026-10-20T12:00:00.000Z",
+};
+function scriptedTx(replies) {
+  const sent = [];
+  const tx = {
+    submitted: false,
+    rolledBack: false,
+    sent,
+    async run(name, values) {
+      assert.ok(Object.hasOwn(workStatements, name), name);
+      sent.push([name, [...values]]);
+      const reply = replies[name];
+      return typeof reply === "function" ? reply(values) : (reply ?? []);
+    },
+    markSubmitted() {
+      tx.submitted = true;
+    },
+    rollbackOnly() {
+      tx.rolledBack = true;
+    },
+  };
+  return tx;
+}
+const guarded = (method, pattern, body, params = { storeId: S }) => ({
+  route: { method, pattern, query: [] },
+  workspaceId: W,
+  params,
+  query: new Map(),
+  sessionDigest,
+  commandId: method === "GET" ? null : randomUUID(),
+  body,
+});
+const names = (tx) => tx.sent.map(([name]) => name);
+const billing = /billing|credit|wallet|entitlement|reservation|unrecovered/i;
+const applied = (result) => [{ outcome: "applied", result: JSON.stringify(result) }];
+
+test("Stop AI work: kernel, kill-switch target check, then the record commits with the stop", async () => {
+  const body = { control: { reason: "Pause the agent", sourceProposalRef: null } };
+  const g = guarded("POST", "/stores/:storeId/agents/listings/stop", body);
+  const prepared = await prepareAgentCommand("installation.stop", g);
+  const tx = scriptedTx({
+    enterContext: [contextRow(ownerGrants())],
+    beginAgentCommand: [{ outcome: "new", aggregate_type: null, aggregate_id: null, result: null }],
+    listingsInstallation: [installationRow()],
+    reviewContext: [reviewContextRow],
+    installationStop: [],
+    cmdStopAiWork: (values) =>
+      applied({ status: "disabled", killSwitchRecordId: JSON.parse(values[5]).id }),
+  });
+  const result = await runAgentCommand(tx, g, prepared, "corr_1");
+  assert.equal(result.status, 200);
+  assert.deepEqual(names(tx), [
+    "enterContext",
+    "beginAgentCommand",
+    "listingsInstallation",
+    "reviewContext",
+    "installationStop",
+    "cmdStopAiWork",
+  ]);
+  // No billing, credit or entitlement statement is ever sent (ADR-0011 Q8).
+  for (const [name] of tx.sent) {
+    assert.doesNotMatch(name, billing);
+    assert.doesNotMatch(workStatements[name], billing, name);
+  }
+  const [, values] = tx.sent.at(-1);
+  assert.deepEqual(values.slice(0, 5), [g.commandId, prepared.digest, "corr_1", S, I]);
+  const record = JSON.parse(values[5]);
+  assert.equal(values[5], canonicalJson(record));
+  assert.equal(values[6], sha(values[5]));
+  assert.equal(validateCurrentDefinition("KillSwitchRecord", record), true);
+  assert.deepEqual(
+    [record.capabilityId, record.actor, record.control, record.commandId, record.requestDigest],
+    ["agents.installation.disable", owner, body.control, g.commandId, prepared.digest],
+  );
+  assert.deepEqual(record.targets, [installationResource(store(), I)]);
+  assert.deepEqual(
+    [record.priorStateObserved, record.storeId, record.revision, record.createdAt],
+    ["active", S, 1, "2026-10-20T12:00:00.000Z"],
+  );
+  // Already stopped: the record says so, and the definer keeps the existing stop.
+  const again = scriptedTx({
+    ...{
+      enterContext: [contextRow(ownerGrants())],
+      beginAgentCommand: [
+        { outcome: "new", aggregate_type: null, aggregate_id: null, result: null },
+      ],
+      listingsInstallation: [installationRow("disabled")],
+      reviewContext: [reviewContextRow],
+      installationStop: [
+        { id: "stop_1", set_by_kind: "human", kill_switch_record_id: "r1", created_at: "x" },
+      ],
+      cmdStopAiWork: applied({ status: "disabled" }),
+    },
+  });
+  await runAgentCommand(again, g, prepared, "corr_2");
+  assert.equal(JSON.parse(again.sent.at(-1)[1][5]).priorStateObserved, "already_stopped");
+});
+
+test("Stop AI work without the disable grant, or with no installation, sends no definer", async () => {
+  const body = { control: { reason: "Pause", sourceProposalRef: null } };
+  const g = guarded("POST", "/stores/:storeId/agents/listings/stop", body);
+  const prepared = await prepareAgentCommand("installation.stop", g);
+  for (const [grants, installation, reason] of [
+    [ownerGrants(owner, { disable: false }), [installationRow()], "denied"],
+    [ownerGrants(), [], "not_found"],
+  ]) {
+    const tx = scriptedTx({
+      enterContext: [contextRow(grants)],
+      beginAgentCommand: [
+        { outcome: "new", aggregate_type: null, aggregate_id: null, result: null },
+      ],
+      listingsInstallation: installation,
+      reviewContext: [reviewContextRow],
+    });
+    await assert.rejects(
+      runAgentCommand(tx, g, prepared, "corr"),
+      (e) => e instanceof WorkReject && e.reason === reason,
+    );
+    assert.equal(tx.submitted, false);
+    assert.equal(names(tx).includes("cmdStopAiWork"), false);
+  }
+  // A replay returns the recorded result, rolls back and sends nothing else.
+  const tx = scriptedTx({
+    enterContext: [contextRow(ownerGrants())],
+    beginAgentCommand: [
+      {
+        outcome: "replay",
+        aggregate_type: "installation",
+        aggregate_id: I,
+        result: '{"status":"disabled"}',
+      },
+    ],
+  });
+  const replay = await runAgentCommand(tx, g, prepared, "corr");
+  assert.deepEqual(replay.body, { status: "disabled", replayed: true });
+  assert.equal(tx.rolledBack, true);
+  assert.deepEqual(names(tx), ["enterContext", "beginAgentCommand"]);
+});
+
+test("Enable step 1 builds the document server-side; only a person's stop resumes", async () => {
+  const g = guarded("POST", "/stores/:storeId/agents/listings/document", {});
+  const prepared = await prepareAgentCommand("installation.document", g);
+  const replies = (installation, stop = []) => ({
+    enterContext: [contextRow(ownerGrants())],
+    beginAgentCommand: [{ outcome: "new", aggregate_type: null, aggregate_id: null, result: null }],
+    storeAssociation: [{ store_id: S, connection_id: C, database_now: "x" }],
+    listingsInstallation: installation,
+    installationStop: stop,
+    cmdListingsEnableDocument: (values) =>
+      applied({
+        documentId: values[6],
+        documentDigest: values[8],
+        installationId: values[5],
+        purpose: values[4],
+        expiresAt: "2026-10-20T12:05:00.000Z",
+      }),
+  });
+  const tx = scriptedTx(replies([]));
+  const result = await runAgentCommand(tx, g, prepared, "corr");
+  assert.equal(result.status, 201);
+  const [, values] = tx.sent.at(-1);
+  const document = parseInstallationDocument(values[7]);
+  assert.equal(values[8], sha(values[7]));
+  assert.equal(values[4], "enable");
+  assert.equal(document.purpose, "enable");
+  assert.deepEqual(document.store, store());
+  // The nonce goes to the owner once; only its digest is stored.
+  assert.match(result.body.nonce, /^[a-f0-9]{64}$/);
+  assert.equal(values[9], sha(result.body.nonce));
+  assert.deepEqual(result.body.document, document);
+  // Resume: the owner's own stop (a person's) on a disabled installation.
+  const resume = scriptedTx(
+    replies(
+      [installationRow("disabled")],
+      [{ id: "stop_1", set_by_kind: "human", kill_switch_record_id: "r1", created_at: "x" }],
+    ),
+  );
+  await runAgentCommand(resume, g, prepared, "corr");
+  assert.equal(resume.sent.at(-1)[1][4], "resume");
+  assert.equal(resume.sent.at(-1)[1][5], I);
+  // An active installation, or a disabled one with no stop or a system or operator stop
+  // (those lift only through their own paths), is a state conflict with no definer.
+  for (const [installation, stop] of [
+    [[installationRow("active")], []],
+    [[installationRow("disabled")], []],
+    [
+      [installationRow("disabled")],
+      [{ id: "s", set_by_kind: "system", kill_switch_record_id: null, created_at: "x" }],
+    ],
+    [
+      [installationRow("disabled")],
+      [{ id: "s", set_by_kind: "operator", kill_switch_record_id: null, created_at: "x" }],
+    ],
+  ]) {
+    const conflict = scriptedTx(replies(installation, stop));
+    await assert.rejects(
+      runAgentCommand(conflict, g, prepared, "corr"),
+      (e) => e instanceof WorkReject && e.reason === "state_conflict",
+    );
+    assert.equal(conflict.submitted, false);
+  }
+  // No current association: not found. No activate grant: denied. Neither sends a definer.
+  const unlinked = scriptedTx({ ...replies([]), storeAssociation: [] });
+  await assert.rejects(
+    runAgentCommand(unlinked, g, prepared, "corr"),
+    (e) => e.reason === "not_found",
+  );
+  const denied = scriptedTx({
+    ...replies([]),
+    enterContext: [contextRow(ownerGrants(owner, { activate: false }))],
+  });
+  await assert.rejects(runAgentCommand(denied, g, prepared, "corr"), (e) => e.reason === "denied");
+  for (const t of [unlinked, denied]) assert.equal(t.submitted, false);
+});
+
+test("Enable step 2 reruns the kernel and sends grants the definer checks against the document", async () => {
+  const built = await buildInstallationDocument({
+    id: randomUUID(),
+    purpose: "enable",
+    store: store(),
+    installationId: I,
+    actor: owner,
+    createdAtMs: nowMs,
+  });
+  const nonce = "c".repeat(64);
+  const g = guarded("POST", "/stores/:storeId/agents/listings", {
+    documentDigest: built.digest,
+    nonce,
+  });
+  const prepared = await prepareAgentCommand("installation.enable", g);
+  const replies = (grants, canonical = built.canonical) => ({
+    enterContext: [contextRow(grants)],
+    beginAgentCommand: [{ outcome: "new", aggregate_type: null, aggregate_id: null, result: null }],
+    storeAssociation: [{ store_id: S, connection_id: C, database_now: "x" }],
+    agentEnableDocument: [
+      {
+        id: built.document.id,
+        purpose: "enable",
+        store_id: S,
+        connection_id: C,
+        installation_id: I,
+        canonical,
+        expires_at: built.document.expiresAt,
+        consumed: "false",
+      },
+    ],
+    cmdListingsEnable: applied({ installationId: I, revision: 1, status: "active" }),
+  });
+  const tx = scriptedTx(replies(ownerGrants()));
+  const result = await runAgentCommand(tx, g, prepared, "corr");
+  assert.equal(result.status, 200);
+  const [name, values] = tx.sent.at(-1);
+  assert.equal(name, "cmdListingsEnable");
+  assert.deepEqual(values.slice(3, 6), [S, built.digest, nonce]);
+  assert.match(values[6], /^agent_[a-f0-9-]{36}$/);
+  assert.match(values[7], /^agent_[a-f0-9-]{36}$/);
+  assert.notEqual(values[6], values[7]);
+  const texts = JSON.parse(values[8]);
+  assert.equal(texts.length, 3);
+  for (const [i, text] of texts.entries()) {
+    const payload = JSON.parse(text);
+    assert.equal(text, canonicalJson(payload));
+    assert.equal(validateCurrentDefinition("Grant", payload), true);
+    assert.deepEqual(
+      { capabilityId: payload.capabilityId, verbs: payload.verbs, scope: payload.scope },
+      JSON.parse(JSON.stringify(built.document.grants[i])),
+    );
+    assert.equal(payload.principal.principalId, values[6]);
+    assert.equal(payload.principal.installationId, I);
+    assert.deepEqual(payload.issuedBy, owner);
+    assert.equal(payload.validFrom, "2026-10-20T12:00:00.000Z");
+  }
+  const ownerGrant = JSON.parse(values[9]);
+  assert.deepEqual(ownerGrant.scope, built.document.ownerGrant.scope);
+  assert.deepEqual(ownerGrant.principal, owner);
+  // Authority lost between the document and the confirmation: denied before any definer.
+  for (const grants of [
+    ownerGrants(owner, { activate: false }),
+    ownerGrants().filter((x) => x.capabilityId !== "catalog.content.publish"),
+  ]) {
+    const lost = scriptedTx(replies(grants));
+    await assert.rejects(runAgentCommand(lost, g, prepared, "corr"), (e) => e.reason === "denied");
+    assert.equal(lost.submitted, false);
+    assert.equal(names(lost).includes("agentEnableDocument"), false);
+  }
+  // A stored document of another store is not this request's.
+  const other = await buildInstallationDocument({
+    id: randomUUID(),
+    purpose: "enable",
+    store: storeResource(O, W, "store_b", C),
+    installationId: I,
+    actor: owner,
+    createdAtMs: nowMs,
+  });
+  const foreign = scriptedTx(replies(ownerGrants(), other.canonical));
+  await assert.rejects(
+    runAgentCommand(foreign, g, prepared, "corr"),
+    (e) => e.reason === "not_found",
+  );
+  assert.equal(foreign.submitted, false);
+  // A resume confirmation sends no grants and no principals.
+  const resumeDoc = await buildInstallationDocument({
+    id: randomUUID(),
+    purpose: "resume",
+    store: store(),
+    installationId: I,
+    actor: owner,
+    createdAtMs: nowMs,
+  });
+  const resume = scriptedTx(replies(ownerGrants(), resumeDoc.canonical));
+  await runAgentCommand(resume, g, prepared, "corr");
+  assert.deepEqual(resume.sent.at(-1)[1].slice(6), [null, null, null, null]);
+  // A refusal from the definer is the mapped rejection, after a rollback.
+  for (const [outcome, reason] of [
+    ["guard_failed", "guard_failed"],
+    ["stopped", "state_conflict"],
+    ["state_conflict", "state_conflict"],
+    ["stale_authority", "stale_authority"],
+    ["something_else", "unavailable"],
+  ]) {
+    const refused = scriptedTx({
+      ...replies(ownerGrants()),
+      cmdListingsEnable: [{ outcome, result: null }],
+    });
+    await assert.rejects(runAgentCommand(refused, g, prepared, "corr"), (e) => e.reason === reason);
+    assert.equal(refused.rolledBack, true);
+  }
+});
+
+test("the model default: revise only, keys of the active catalogue, a ceiling that admits it", async () => {
+  const body = {
+    model: "claude_opus_5_5",
+    effort: "high",
+    maxCreditsPerProduct: 6,
+    expectedRevision: null,
+  };
+  const g = guarded("PUT", "/settings/model-default", body, {});
+  const prepared = await prepareAgentCommand("model_default.revise", g);
+  const replies = (grants) => ({
+    enterContext: [contextRow(grants)],
+    beginAgentCommand: [{ outcome: "new", aggregate_type: null, aggregate_id: null, result: null }],
+    cmdModelDefaultRevise: applied({ revision: 1 }),
+  });
+  const tx = scriptedTx(replies(ownerGrants()));
+  const result = await runAgentCommand(tx, g, prepared, "corr");
+  assert.deepEqual(result.body, {
+    revision: 1,
+    model: "claude_opus_5_5",
+    effort: "high",
+    maxCreditsPerProduct: 6,
+  });
+  assert.deepEqual(tx.sent.at(-1)[1].slice(3), ["1", "claude_opus_5_5", "high", "6", null]);
+  // A member without governance.model_default.revise is denied before the definer.
+  const member = scriptedTx(replies(ownerGrants(owner, { revise: false })));
+  await assert.rejects(runAgentCommand(member, g, prepared, "corr"), (e) => e.reason === "denied");
+  assert.equal(member.submitted, false);
+  // A ceiling below the default's credits, an unknown key or a retired model is invalid.
+  for (const change of [
+    { maxCreditsPerProduct: 5 },
+    { model: "claude_opus_9" },
+    { effort: "xhigh" },
+  ]) {
+    const bad = { ...body, ...change };
+    const gb = guarded("PUT", "/settings/model-default", bad, {});
+    const tb = scriptedTx(replies(ownerGrants()));
+    await assert.rejects(
+      runAgentCommand(tb, gb, await prepareAgentCommand("model_default.revise", gb), "corr"),
+      (e) => e.reason === "invalid",
+      JSON.stringify(change),
+    );
+    assert.equal(tb.submitted, false);
+  }
+  // A body that fails the contract never reaches a transaction.
+  await assert.rejects(
+    prepareAgentCommand(
+      "model_default.revise",
+      guarded("PUT", "/settings/model-default", { ...body, model: "claude-opus-5-5" }, {}),
+    ),
+    (e) => e instanceof WorkReject && e.reason === "invalid",
+  );
+});
+
+test("GET /models: the active catalogue, the member ceiling, no provider strings", async () => {
+  const read = async (grants, row = []) => {
+    const tx = scriptedTx({ enterContext: [contextRow(grants)], workspaceModelDefault: row });
+    return (await runAgentRead(tx, guarded("GET", "/models", null, {}), "models.list")).body;
+  };
+  const memberView = await read(ownerGrants(owner, { revise: false }));
+  assert.equal(memberView.catalogueVersion, 1);
+  assert.equal(memberView.ceiling, 1);
+  assert.equal(memberView.canRevise, false);
+  assert.deepEqual(memberView.workspaceDefault, { model: "claude_sonnet_5_5", effort: "low" });
+  const allowed = memberView.entries
+    .filter((e) => e.allowedForMember)
+    .map((e) => e.creditsPerProduct);
+  assert.ok(allowed.length > 0 && allowed.every((c) => c <= 1));
+  const text = JSON.stringify(memberView);
+  assert.doesNotMatch(text, /claude-|anthropic|usd|price|cost|token/i);
+  // The owner may pick every entry; after the ceiling is raised to 6 so may the member.
+  const ownerView = await read(ownerGrants());
+  assert.ok(ownerView.entries.every((e) => e.allowedForMember));
+  const raised = await read(ownerGrants(owner, { revise: false }), [
+    {
+      catalogue_version: "1",
+      model_key: "claude_opus_5_5",
+      effort_key: "high",
+      max_credits_per_product: "6",
+      revision: "2",
+      updated_at: "2026-10-20T11:00:00.000Z",
+    },
+  ]);
+  assert.equal(raised.ceiling, 6);
+  assert.equal(raised.revision, 2);
+  assert.deepEqual(raised.workspaceDefault, { model: "claude_opus_5_5", effort: "high" });
+  assert.ok(raised.entries.every((e) => e.allowedForMember));
+});
+
+test("every agents statement is fixed, parameterised text in workStatements", () => {
+  for (const [name, text] of Object.entries(agentStatements)) {
+    assert.equal(workStatements[name], text, name);
+    assert.doesNotMatch(
+      text,
+      /SET (LOCAL )?ROLE|set_config|\bINSERT\b|\bUPDATE\b|\bDELETE\b/,
+      name,
+    );
+    assert.match(text, /^SELECT /, name);
+  }
+});

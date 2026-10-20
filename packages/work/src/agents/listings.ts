@@ -183,17 +183,71 @@ export function parseInstallationDocument(canonical: unknown): InstallationDocum
   if (
     !d ||
     typeof d !== "object" ||
+    Array.isArray(d) ||
+    Object.keys(d).sort().join(",") !== documentKeys ||
     d.schemaVersion !== 1 ||
     d.kind !== "morrow.agent_installation_document" ||
     (d.purpose !== "enable" && d.purpose !== "resume") ||
     !validateCurrentDefinition("ResourceRef", d.store) ||
     d.store.kind !== "store" ||
+    d.store.organizationId !== d.organizationId ||
+    d.store.workspaceId !== d.workspaceId ||
     !validateCurrentDefinition("Id", d.installationId) ||
     canonicalJson(value) !== canonical
   )
     throw invalid();
+  // Everything the owner confirmed is re-derived from the store and installation: the
+  // release, the exact grant set and the owner's disable grant (the migration's
+  // enable_document_matches proves the same for the stored row).
+  let store: StoreResource;
+  try {
+    store = storeResource(d.organizationId, d.workspaceId, d.store.storeId, d.store.connectionId);
+  } catch {
+    throw invalid();
+  }
+  const scope = listingsScope(store);
+  const confirmed = value as Record<string, unknown>;
+  const expected = {
+    grants: listingsGrantSet.map((g) => ({
+      capabilityId: g.capabilityId,
+      verbs: [...g.verbs],
+      scope,
+    })),
+    ownerGrant: {
+      capabilityId: "agents.installation.disable",
+      verbs: ["execute"],
+      scope: installationScope(store, d.installationId),
+    },
+  };
+  if (
+    canonicalJson(JSON.parse(JSON.stringify(expected))) !==
+      canonicalJson({ grants: confirmed.grants, ownerGrant: confirmed.ownerGrant }) ||
+    d.release === null ||
+    typeof d.release !== "object" ||
+    d.release.id !== listingsRelease.id ||
+    d.release.revision !== listingsRelease.revision ||
+    typeof d.release.digest !== "string" ||
+    !/^[a-f0-9]{64}$/.test(d.release.digest)
+  )
+    throw invalid();
   return d;
 }
+const documentKeys = [
+  "actor",
+  "createdAt",
+  "expiresAt",
+  "grants",
+  "id",
+  "installationId",
+  "kind",
+  "organizationId",
+  "ownerGrant",
+  "purpose",
+  "release",
+  "schemaVersion",
+  "store",
+  "workspaceId",
+].join(",");
 
 /**
  * The installation's three grant payloads (current Grant), issued by the owner to the
