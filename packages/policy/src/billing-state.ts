@@ -14,7 +14,7 @@
 // facts and states this module issued are accepted back.
 import type {
   Core_ActorRef,
-  Core_Grant,
+  Current_Grant,
   CurrentBilling_BillingAccount,
   CurrentBilling_BillingRoute,
   CurrentBilling_BillingTerms,
@@ -26,7 +26,11 @@ import type {
   CurrentBilling_VerifiedPaymentEvent,
   CurrentBilling_WorkspaceBillingRoute,
 } from "@morrow/contracts";
-import { validateCurrentBillingDefinition, validateDefinition } from "@morrow/contracts/validation";
+import {
+  validateCurrentBillingDefinition,
+  validateCurrentDefinition,
+  validateDefinition,
+} from "@morrow/contracts/validation";
 import { plainJson, closed, freezeJson } from "./json-boundary";
 import { isPaidWork } from "./paid-work";
 import { isCurrentGrant } from "./index";
@@ -1663,7 +1667,7 @@ const permissionVerbs: readonly string[] = [
  * narrow it. Throws `BILLING_INPUT_INVALID`.
  */
 export function spendingScope(
-  grantList: readonly Core_Grant[],
+  grantList: readonly Current_Grant[],
   actorRef: Core_ActorRef,
   permissionRequest: PermissionRequest,
   policyRevision: number,
@@ -1672,18 +1676,19 @@ export function spendingScope(
   if (!plainJson(grantList) || !plainJson(actorRef) || !plainJson(permissionRequest))
     throw inputInvalid();
   // Isolate first, then validate the copies that are used.
-  const grants = clone<Core_Grant[]>(grantList);
+  const grants = clone<Current_Grant[]>(grantList);
   const actor = clone<Core_ActorRef>(actorRef);
   const request = clone<PermissionRequest>(permissionRequest);
   if (
     !Array.isArray(grants) ||
     grants.length > 1000 ||
-    !grants.every((g) => validateDefinition("core", "Grant", g)) ||
+    // Current definitions (ADR-0022 item 2): grants and the resource may name the store.
+    !grants.every((g) => validateCurrentDefinition("Grant", g)) ||
     !validateDefinition("core", "ActorRef", actor) ||
     !closed(request, ["capabilityId", "verb", "resource", "accountId", "fields"]) ||
     !validateDefinition("core", "CapabilityId", request.capabilityId) ||
     !permissionVerbs.includes(request.verb as string) ||
-    !validateDefinition("core", "ResourceRef", request.resource) ||
+    !validateCurrentDefinition("ResourceRef", request.resource) ||
     !validateDefinition("core", "Revision", policyRevision)
   )
     throw inputInvalid();
