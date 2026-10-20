@@ -332,7 +332,7 @@ Draft product copy and SEO fields. Owner: Morrow platform owner. Effect: interna
 
 Input: productIds: IdList; claimEvidence: EvidenceList; locale: string. Output: proposalRef: ProposalRef.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant catalog.content.propose. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: title, description, SEO title, SEO description. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant catalog.content.propose. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: title, description, SEO title, SEO description, tags. Executor: agent_direct_write. Review gate: no action approval by default; grants and other policy gates still apply.
 
 Retention: R02. Verification: Draft claims match merchant evidence and exact allowed fields. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 
@@ -344,7 +344,7 @@ Apply an approved product content change. Owner: Morrow platform owner. Effect: 
 
 Input: proposalRef: ProposalRef; approvalRef: ApprovalRef. Output: operationId: Id; readback: EvidenceRef.
 
-Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant catalog.content.publish. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: title, description, SEO title, SEO description. Executor: agent_after_approval. Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant catalog.content.publish. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: title, description, SEO title, SEO description, tags. Executor: agent_after_approval. Review gate: required for this proposed contract; exact eligible decision/mandate semantics settle in P01.T02.
 
 Retention: R02. Verification: Readback matches selected fields without altering variants or price. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
 

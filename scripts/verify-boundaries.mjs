@@ -309,6 +309,13 @@ for (const [name, path, code, expected] of [
     'const check = validators["core:Approval"];',
     "SUPERSEDED_CONTRACT_USE:packages/policy/src/review.ts:Approval",
   ],
+  // ADR-0022 item 2: a v1 Grant read would refuse every store-link grant.
+  [
+    "superseded_v1_grant",
+    "packages/work/src/context.ts",
+    'validateDefinition("core", "Grant", grant);',
+    "SUPERSEDED_CONTRACT_USE:packages/work/src/context.ts:Grant",
+  ],
   [
     "superseded_billing_type_reference",
     "packages/policy/src/billing-state.ts",
@@ -344,6 +351,13 @@ for (const [name, path, code, expected] of [
     "packages/policy/src/collaboration.ts",
     'validateDefinition("core-v1.1", "AskAdminReadRecord", record);',
     "REFINED_DEFINITION_BYPASS:packages/policy/src/collaboration.ts:AskAdminReadRecord",
+  ],
+  // ADR-0022 item 2: the store rule (id = storeId) lives only in validateCurrentDefinition.
+  [
+    "refined_store_grant",
+    "packages/policy/src/index.ts",
+    'validateDefinition("core-v1.1", "Grant", grant);',
+    "REFINED_DEFINITION_BYPASS:packages/policy/src/index.ts:Grant",
   ],
 ])
   negatives.push({ name, passed: inspectRefinedSelectorUse(path, code).includes(expected) });

@@ -1950,7 +1950,8 @@
         "title",
         "description",
         "SEO title",
-        "SEO description"
+        "SEO description",
+        "tags"
       ],
       "source_authority": "Verified provider records for live external facts; approved merchant evidence for business claims; Morrow records for work and decisions. Generated content is a proposal, never source authority.",
       "retention_class": "R02",
@@ -2021,7 +2022,8 @@
         "title",
         "description",
         "SEO title",
-        "SEO description"
+        "SEO description",
+        "tags"
       ],
       "source_authority": "Verified provider records for live external facts; approved merchant evidence for business claims; Morrow records for work and decisions. Generated content is a proposal, never source authority.",
       "retention_class": "R02",

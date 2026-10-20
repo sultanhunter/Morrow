@@ -10,6 +10,7 @@ import {
   bridgeFunctions,
   executorLogins,
   registeredRoutes,
+  schemaUsage,
   vaultFunctions,
   vaultTables,
   workDomains,
@@ -566,8 +567,11 @@ test("S6: workRoutes and the registry match one-to-one", () => {
 });
 
 // M2 PR-1 (0020): morrow_billing and morrow_vault follow S1-S5 in their own registries,
-// and each executor login executes exactly its registered functions.
+// and each executor login executes exactly its registered functions. M2 PR-2a: every
+// expectation comes from the registry (schemaUsage and each table's S7 spec), so a later
+// PR's tables and grants are checked by adding registry entries only.
 test("S7: the billing and vault schemas, and what each executor login may execute", () => {
+  assert.deepEqual(Object.keys(schemaUsage).sort(), ["morrow_billing", "morrow_vault"]);
   for (const [schema, tables, functions] of [
     ["morrow_billing", billingTables, billingFunctions],
     ["morrow_vault", vaultTables, vaultFunctions],
@@ -588,9 +592,7 @@ test("S7: the billing and vault schemas, and what each executor login may execut
     assert.equal(schemaAcl[0].owner, workRoles.owner, schema);
     assert.deepEqual(
       [...schemaAcl[0].grants].sort(),
-      schema === "morrow_billing"
-        ? ["morrow_identity_owner:USAGE", "morrow_work_api:USAGE", "morrow_work_command:USAGE"]
-        : ["morrow_vault_broker:USAGE", "morrow_work_command:USAGE"],
+      schemaUsage[schema].map((role) => role + ":USAGE").sort(),
       schema,
     );
     for (const [table, spec] of Object.entries(tables)) {
@@ -615,24 +617,34 @@ test("S7: the billing and vault schemas, and what each executor login may execut
             table + " -> " + parent,
           );
       }
-      // S4: the command role holds SELECT (and, for the route, INSERT); the api role reads
-      // only the route, column by column; nobody else holds anything; no DELETE or TRUNCATE.
+      // S4, from the table's S7 spec: the command role holds exactly its table privileges
+      // and column UPDATEs, the api role reads exactly its columns, and nobody else holds
+      // anything (no DELETE or TRUNCATE for anyone).
       const acl = rows(
         `SELECT a.grantee::regrole::text AS grantee, a.privilege_type FROM pg_class c, aclexplode(c.relacl) a WHERE c.oid='${schema}.${table}'::regclass AND a.grantee<>c.relowner`,
       );
       assert.deepEqual(
         acl.map((a) => a.grantee + ":" + a.privilege_type).sort(),
-        schema === "morrow_billing"
-          ? ["morrow_work_command:INSERT", "morrow_work_command:SELECT"]
-          : ["morrow_work_command:SELECT"],
+        spec.commandPrivileges.map((privilege) => workRoles.command + ":" + privilege).sort(),
         table,
       );
+      // Every column with an ACL, system columns included (a grant on ctid or xmin, or to
+      // PUBLIC, shows up as an unexpected grantee or column); a dropped column's ACL is
+      // cleared, so it never appears.
       const columns = rows(
-        `SELECT DISTINCT a.grantee::regrole::text AS grantee, a.privilege_type FROM pg_attribute t, aclexplode(t.attacl) a WHERE t.attrelid='${schema}.${table}'::regclass AND t.attacl IS NOT NULL`,
+        `SELECT a.grantee::regrole::text AS grantee, a.privilege_type, t.attname FROM pg_attribute t, aclexplode(t.attacl) a WHERE t.attrelid='${schema}.${table}'::regclass AND t.attacl IS NOT NULL`,
       );
+      const granted = {};
+      for (const c of columns) (granted[c.grantee + ":" + c.privilege_type] ??= []).push(c.attname);
+      const expected = {};
+      if (spec.apiColumns.length) expected[workRoles.api + ":SELECT"] = spec.apiColumns;
+      if (spec.commandColumnUpdates.length)
+        expected[workRoles.command + ":UPDATE"] = spec.commandColumnUpdates;
       assert.deepEqual(
-        columns.map((a) => a.grantee + ":" + a.privilege_type),
-        schema === "morrow_billing" ? ["morrow_work_api:SELECT"] : [],
+        Object.fromEntries(Object.entries(granted).map(([key, names]) => [key, names.sort()])),
+        Object.fromEntries(
+          Object.entries(expected).map(([key, names]) => [key, [...names].sort()]),
+        ),
         table,
       );
     }

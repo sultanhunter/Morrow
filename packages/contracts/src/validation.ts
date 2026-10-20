@@ -113,12 +113,25 @@ function adminReadRecord(record: unknown): boolean {
     new Set(asks.map((a) => a.conversationId)).size === asks.length
   );
 }
+// A ResourceRef that already passed its v1.1 schema (ADR-0022 item 2): a store
+// resource names the store itself, so its id is its storeId. The schema already
+// makes storeId and connectionId non-null for kind store; JSON Schema cannot
+// compare two properties, so the equality is checked here.
+const storeBound = (ref: unknown) => {
+  const r = ref as { kind: string; id: string; storeId: string | null };
+  return r.kind !== "store" || r.id === r.storeId;
+};
+const scopeStoresBound = (scope: unknown) =>
+  (scope as { resources: readonly unknown[] }).resources.every(storeBound);
 /**
  * Effective definition: the newest core layer that defines the name. For
  * EventEnvelope (@2), and a StreamFrame carrying one, this is the schema plus
  * the event registry selector and the payloadRef binding; for
- * AskAdminReadRecord, the schema plus its reader and uniqueness rules. Product
- * code validates these three only here, never by their exact selectors.
+ * AskAdminReadRecord, the schema plus its reader and uniqueness rules; for
+ * ResourceRef, Scope and Grant (v1.1), the schema plus the store rule (a store
+ * resource's id is its storeId), applied to every resource a scope or grant
+ * names. Product code validates these six only here, never by their exact
+ * selectors.
  */
 export function validateCurrentDefinition(name: CurrentDefinitionName, value: unknown): boolean {
   if (!selected(currentDefinitionSelectors, name, value)) return false;
@@ -128,6 +141,9 @@ export function validateCurrentDefinition(name: CurrentDefinitionName, value: un
     return frame.kind !== "event" || registeredEnvelope(frame.envelope);
   }
   if (name === "AskAdminReadRecord") return adminReadRecord(value);
+  if (name === "ResourceRef") return storeBound(value);
+  if (name === "Scope") return scopeStoresBound(value);
+  if (name === "Grant") return scopeStoresBound((value as { scope: unknown }).scope);
   return true;
 }
 /** Effective billing definition: the newest billing layer that defines the name (ADR-0015). */

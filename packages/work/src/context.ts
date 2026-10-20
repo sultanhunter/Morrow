@@ -1,15 +1,24 @@
-import type { Core_ActorRef, Core_Grant, Core_ResourceRef } from "@morrow/contracts";
-import { validateDefinition } from "@morrow/contracts/validation";
+import type { Core_ActorRef, Current_Grant, Current_ResourceRef } from "@morrow/contracts";
+import { validateCurrentDefinition, validateDefinition } from "@morrow/contracts/validation";
 import type { WorkTx } from "./connection.js";
 
+/**
+ * The session's workspace resource, the resource of every work request: storeless, so it
+ * is also a v1 ResourceRef (Proposal@2's scope names it).
+ */
+export type WorkspaceResource = Current_ResourceRef & {
+  readonly storeId: null;
+  readonly connectionId: null;
+  readonly kind: "workspace";
+};
 // The authority snapshot of one request, resolved by morrow_work.enter_context()
 // from the session digest. It is server-side data only: grants never reach a client.
 export interface WorkAuthority {
   readonly actor: Core_ActorRef;
   readonly policyRevision: number;
-  readonly grants: readonly Core_Grant[];
+  readonly grants: readonly Current_Grant[];
   readonly databaseNowMs: number;
-  readonly resource: Core_ResourceRef;
+  readonly resource: WorkspaceResource;
 }
 export class WorkContextUnavailable extends Error {
   constructor() {
@@ -32,8 +41,11 @@ const keys = [
   "workspace_id",
 ].join(",");
 
-/** Decodes trusted grant rows: at most 1000, each a valid v1 Grant, unique by id. */
-export function decodeGrants(text: unknown, count: unknown): readonly Core_Grant[] | "overflow" {
+/**
+ * Decodes trusted grant rows: at most 1000, each a valid current Grant (v1.1: its scope may
+ * name the store resource, ADR-0022 item 2; every v1 grant is one), unique by id.
+ */
+export function decodeGrants(text: unknown, count: unknown): readonly Current_Grant[] | "overflow" {
   if (typeof count !== "string" || !/^(0|[1-9][0-9]{0,4})$/.test(count))
     throw new WorkContextUnavailable();
   if (Number(count) > 1000) return "overflow";
@@ -47,11 +59,11 @@ export function decodeGrants(text: unknown, count: unknown): readonly Core_Grant
   if (
     !Array.isArray(grants) ||
     grants.length !== Number(count) ||
-    !grants.every((g) => validateDefinition("core", "Grant", g)) ||
-    new Set(grants.map((g: Core_Grant) => g.id)).size !== grants.length
+    !grants.every((g) => validateCurrentDefinition("Grant", g)) ||
+    new Set(grants.map((g: Current_Grant) => g.id)).size !== grants.length
   )
     throw new WorkContextUnavailable();
-  return Object.freeze(grants as Core_Grant[]);
+  return Object.freeze(grants as Current_Grant[]);
 }
 
 export async function enterWorkContext(
@@ -92,7 +104,7 @@ export async function enterWorkContext(
     installationId: null,
     mandateId: null,
   });
-  const resource: Core_ResourceRef = Object.freeze({
+  const resource: WorkspaceResource = Object.freeze({
     organizationId: row.organization_id,
     workspaceId,
     storeId: null,
@@ -102,7 +114,7 @@ export async function enterWorkContext(
   });
   if (
     !validateDefinition("core", "ActorRef", actor) ||
-    !validateDefinition("core", "ResourceRef", resource)
+    !validateCurrentDefinition("ResourceRef", resource)
   )
     throw new WorkContextUnavailable();
   return Object.freeze({
