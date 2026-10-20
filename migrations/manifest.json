@@ -206,6 +206,27 @@
       "sha256": "00c64ae0bbb21fc245cf5e3521bdedbd7cbfeb33aec442b1b684426b06b6902b",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 25,
+      "file": "0025.work-store-installations-stub.sql",
+      "sha256": "10e427dd9762773892e92883151232d69935b3dcc6296ade20ac97619e00d618",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M5-billing.md"
+    },
+    {
+      "sequence": 26,
+      "file": "0026.billing-identity-bridge.sql",
+      "sha256": "efccb020cedb375d1d3dc972fe5f6918cec8539785eab31657324996cfe653e3",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M5-billing.md"
+    },
+    {
+      "sequence": 27,
+      "file": "0027.billing-records.sql",
+      "sha256": "484efb992507680b8b571f92a08599ee834d48049e82df38a89df2d848b6209a",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M5-billing.md"
     }
   ]
 }

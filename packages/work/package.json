@@ -11,7 +11,8 @@
     "./operations": "./src/operations/ledger.ts",
     "./stops": "./src/stops.ts",
     "./billing-route": "./src/billing-route.ts",
-    "./redaction": "./src/redaction.ts"
+    "./redaction": "./src/redaction.ts",
+    "./billing": "./src/billing/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
