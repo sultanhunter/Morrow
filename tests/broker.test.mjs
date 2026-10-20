@@ -54,6 +54,13 @@ function brokerEnv(environment = "development", change = {}) {
     }),
     MORROW_DATABASE_BINDING_JSON: JSON.stringify(binding(change.bindingEnvironment ?? environment)),
     WORKOS_API_KEY: change.key ?? marker("sk_test_"),
+    // P05.T01ab: staging and production are healthy only with the challenge capability.
+    TURNSTILE_SECRET_KEY: marker("0x"),
+    TURNSTILE_CONFIGURATION_JSON: JSON.stringify({
+      schemaVersion: 1,
+      hostname: new URL(login.origin).hostname,
+      actions: { login: "account_login", signup: "organization_signup" },
+    }),
     ...Object.fromEntries(
       [...brokerNeonRoleNames, "morrow_vault_broker"].map((role) => [
         brokerPasswordSecret(role),
@@ -319,6 +326,15 @@ test("AC14: a key from the wrong tier disables sessions only", async () => {
     assert.equal(await brokerCallerHealth(production, caller), false, caller);
   const ready = brokerEnv("staging").env;
   assert.equal(await brokerHealth(ready), true);
+  // P05.T01ab: a hosted broker without its Turnstile secret is not ready; development is.
+  for (const [environment, expected] of [
+    ["staging", false],
+    ["development", true],
+  ]) {
+    const { env } = brokerEnv(environment);
+    delete env.TURNSTILE_SECRET_KEY;
+    assert.equal(await brokerHealth(env), expected, environment);
+  }
   assert.equal(
     await brokerHealth(brokerEnv("staging", { retentionTier: "development" }).env),
     false,
@@ -377,7 +393,7 @@ test("AC29: 20 concurrent first calls share one initialisation; a failure stays 
   for (const value of [undefined, null, "env"]) assert.equal(await brokerHealth(value), false);
 });
 
-test("AC10: ApiBroker has exactly three prototype methods, arity checks and a 404 default", async (t) => {
+test("AC10: ApiBroker has exactly four prototype methods, arity checks and a 404 default", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "morrow-broker-entry-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const bundled = await build({
@@ -405,7 +421,9 @@ test("AC10: ApiBroker has exactly three prototype methods, arity checks and a 40
   const file = join(directory, "broker.mjs");
   writeFileSync(file, bundled.outputFiles[0].text);
   const module = await import(pathToFileURL(file).href);
+  // P05.T01ab (ADR-0019 item 6) added challengeVerify.
   assert.deepEqual(Object.getOwnPropertyNames(module.ApiBroker.prototype).sort(), [
+    "challengeVerify",
     "constructor",
     "health",
     "neonLease",
@@ -437,9 +455,11 @@ test("AC10: ApiBroker has exactly three prototype methods, arity checks and a 40
   await failure(entry.neonLease());
   await failure(entry.neonLease("a", "b"));
   await failure(entry.workosSessionPage("a", "b"));
+  await failure(entry.challengeVerify("account_login", "token"));
+  await failure(entry.challengeVerify("account_login", "token", 1000, 1));
   assert.deepEqual(
     logs.map((line) => JSON.parse(line).code),
-    ["INPUT_INVALID", "INPUT_INVALID", "INPUT_INVALID", "INPUT_INVALID"],
+    Array(6).fill("INPUT_INVALID"),
   );
   assert.equal(await entry.health(), true);
   const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);

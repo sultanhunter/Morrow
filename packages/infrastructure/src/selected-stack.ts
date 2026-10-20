@@ -5,9 +5,28 @@ export const selectedStack = "cloudflare-neon-runtime";
 export const selectedEnvironments = ["development", "staging", "production"] as const;
 export type SelectedEnvironment = (typeof selectedEnvironments)[number];
 
+// Staging (P04.T01i D1, ADR-0019 items 2 and 10): the workers.dev origin, the Neon Free
+// root and `staging` branches with the observed history window instead of Launch PITR,
+// and the GitHub environment that holds the CI deploy token (OQ-2 answer A). Every
+// identifier stays null until P04.T01i PR-D commits the reviewed values here.
+const stagingCloudflare = { workers_dev_subdomain: null, origin: null };
+const stagingNeon = {
+  root_branch_id: null,
+  branch_name: "staging",
+  history_window_hours: 6,
+  recovery: "owner_reset_from_root_branch",
+  recovery_requirement: "seven_day_staging_recovery_open_in_P04.T04",
+};
+const stagingGithub = {
+  repository: "sultanhunter/Morrow",
+  scope: "environment",
+  environment: "staging",
+};
+
 export function selectedConfiguration(environment: SelectedEnvironment) {
   if (!selectedEnvironments.includes(environment)) throw Error("UNKNOWN_ENVIRONMENT");
   const prefix = `morrow-${environment}`;
+  const staging = environment === "staging";
   return {
     schema_version: 1,
     stack: selectedStack,
@@ -16,6 +35,7 @@ export function selectedConfiguration(environment: SelectedEnvironment) {
     global_processing: "permitted_under_approved_data_policy",
     cloudflare: {
       account_id: null,
+      ...(staging ? { ...stagingCloudflare } : {}),
       workers: {
         api: `${prefix}-api`,
         connector: `${prefix}-connector`,
@@ -41,10 +61,11 @@ export function selectedConfiguration(environment: SelectedEnvironment) {
       primary_storage_country: "US",
       major_version: 17,
       minor_version: null,
-      plan: environment === "production" ? "Scale" : "Launch",
+      plan: environment === "production" ? "Scale" : staging ? "Free" : "Launch",
       maximum_cu: null,
-      pitr_days: environment === "production" ? 30 : 7,
-      daily_recovery_days: environment === "production" ? 35 : 7,
+      pitr_days: environment === "production" ? 30 : staging ? null : 7,
+      daily_recovery_days: environment === "production" ? 35 : staging ? null : 7,
+      ...(staging ? { ...stagingNeon } : {}),
       tenant_context: "SET_LOCAL_in_interactive_transaction",
       authority_cache: false,
     },
@@ -77,6 +98,7 @@ export function selectedConfiguration(environment: SelectedEnvironment) {
     provider_qualification: null,
     deployed_revision: null,
     dispatch: "disabled",
+    ...(staging ? { github: { ...stagingGithub } } : {}),
   };
 }
 

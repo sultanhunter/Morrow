@@ -162,8 +162,9 @@ jobs:
         if: always()
         run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
 
-  # Each leg runs its lab groups one lab at a time. `core-http` holds the two shorter
-  # groups, pg-core then pg-http, so one runner pays the setup and image pull once.
+  # Each leg runs its lab groups one lab at a time. pg-core and pg-http shared one
+  # `core-http` leg until pg-core gained the approval-records and createrole labs; that
+  # leg then ran 11 to 15 minutes against its 14-minute cap, so each now has its own leg.
   postgres:
     needs: scope
     if: needs.scope.outputs.full == 'true'
@@ -172,7 +173,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        leg: [core-http, linking, work]
+        leg: [core, http, linking, work]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -190,14 +191,14 @@ jobs:
       - name: Pull the pinned PostgreSQL image
         run: docker pull "$(node -p 'require("./infra/local-engine.json").image')"
       - name: Record the isolated pinned PostgreSQL engine build
-        if: matrix.leg == 'core-http'
+        if: matrix.leg == 'core'
         run: >-
           node --input-type=module --eval 'import {localPostgresLab} from "./scripts/local-postgres-lab.mjs"; await localPostgresLab("P04.engine-diagnostic", async ({image,version}) => console.log(JSON.stringify({image,version})));'
       - name: Exercise the pg-core laboratories, one at a time
-        if: matrix.leg == 'core-http'
+        if: matrix.leg == 'core'
         run: npm run lab:group:pg-core
       - name: Exercise the pg-http laboratories, one at a time
-        if: matrix.leg == 'core-http'
+        if: matrix.leg == 'http'
         run: npm run lab:group:pg-http
       - name: Exercise the pg-linking laboratories, one at a time
         if: matrix.leg == 'linking'

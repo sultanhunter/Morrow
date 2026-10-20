@@ -52,9 +52,12 @@ export const brokerVaultRole = "morrow_vault_broker";
 export const brokerVaultKekSecrets: readonly string[] = Object.freeze(["MORROW_VAULT_KEK_V1"]);
 export const brokerPasswordSecret = (role: BrokerNeonRole | typeof brokerVaultRole) =>
   `MORROW_DB_PASSWORD_${role.toUpperCase()}`;
-// Development and staging: every secret, the vault's included.
+// Development and staging: every secret, the vault's included. P05.T01ab (ADR-0019
+// item 6): the Turnstile secret is the one provider credential admitted beside WorkOS
+// under v0. It verifies tokens and cannot mint them.
 export const brokerRequiredSecrets: readonly string[] = Object.freeze([
   "WORKOS_API_KEY",
+  "TURNSTILE_SECRET_KEY",
   ...brokerNeonRoleNames.map(brokerPasswordSecret),
   brokerPasswordSecret(brokerVaultRole),
   ...brokerVaultKekSecrets,
@@ -93,6 +96,8 @@ export interface ApiBrokerRpc {
   health(): Promise<boolean>;
   neonLease(namespaceJson: string): Promise<string>;
   workosSessionPage(namespaceJson: string, selectorJson: string, budgetMs: number): Promise<string>;
+  // P05.T01ab (ADR-0019 item 6): one siteverify call; held is the error BROKER_HELD.
+  challengeVerify(action: string, token: string, budgetMs: number): Promise<ChallengeVerdict>;
 }
 // M2 PR-1 (ADR-0022 item 7, spine §4): the connector's and the orchestrator's own
 // entrypoints. PR-1 gives each its health and its own role lease; the Shopify and model
@@ -106,10 +111,85 @@ export interface RuntimeBrokerRpc {
   neonLease(namespaceJson: string): Promise<string>;
 }
 
+// P05.T01ab: the challenge protocol shared by the api guard and the broker.
+export type ChallengeVerdict = "passed" | "failed";
+export type ChallengeActionName = "login" | "signup";
+export type ChallengeActions = Readonly<Record<ChallengeActionName, string>>;
+export const challengeLimits = Object.freeze({
+  tokenMaxBytes: 2048,
+  budgetMaxMs: 5000,
+  replyMaxBytes: 4096,
+  freshnessMs: 300000,
+  skewMs: 30000,
+});
+// The X-Morrow-Challenge header and the token the broker accepts: 1-2048 bytes.
+export const challengeTokenPattern = /^[A-Za-z0-9._-]{1,2048}$/;
+// Cloudflare's published dummy keys start 1x, 2x or 3x; only a real 0x key passes.
+export const turnstileKeyPattern = /^0x[0-9A-Za-z_-]{20,128}$/;
+// Turnstile actions: up to 32 characters of [A-Za-z0-9_-].
+const actionPattern = /^[A-Za-z0-9_-]{1,32}$/;
+
 const invalid = () => Error("BROKER_PROTOCOL_INVALID");
 const encoder = new TextEncoder();
 const exact = (pattern: RegExp, value: unknown): value is string =>
   typeof value === "string" && pattern.exec(value)?.[0] === value;
+
+export function challengeTokenValid(value: unknown): value is string {
+  return exact(challengeTokenPattern, value);
+}
+
+// Exactly {login, signup}, two distinct Turnstile action names.
+export function parseChallengeActions(value: unknown): ChallengeActions {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join(",") !== "login,signup"
+  )
+    throw invalid();
+  const { login, signup } = value as Record<string, unknown>;
+  if (!exact(actionPattern, login) || !exact(actionPattern, signup) || login === signup)
+    throw invalid();
+  return Object.freeze({ login, signup });
+}
+
+// The broker's TURNSTILE_CONFIGURATION_JSON {schemaVersion:1, hostname, actions}: one
+// parser for the broker's challenge setup and the staging deploy's gate 4, so the gate
+// admits exactly what the broker will. loginJson(…, 1024) bounds the bytes and rejects
+// duplicate member names. The hostname is a lower-case DNS name equal to the login
+// origin's (Turnstile reports where it was solved); a mismatch alone throws
+// turnstileHostnameMismatch, every other failure BROKER_PROTOCOL_INVALID.
+export interface TurnstileConfiguration {
+  readonly hostname: string;
+  readonly actions: ChallengeActions;
+}
+export const turnstileHostnameMismatch = "BROKER_PROTOCOL_HOSTNAME_MISMATCH";
+const hostnamePattern =
+  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+export function parseTurnstileConfiguration(
+  json: unknown,
+  loginOrigin: unknown,
+): Readonly<TurnstileConfiguration> {
+  let hostname: string;
+  let actions: ChallengeActions;
+  try {
+    const configuration = loginJson(json, 1024, ["schemaVersion", "hostname", "actions"]);
+    if (configuration.schemaVersion !== 1 || !exact(hostnamePattern, configuration.hostname))
+      throw invalid();
+    hostname = configuration.hostname;
+    actions = parseChallengeActions(configuration.actions);
+  } catch {
+    throw invalid();
+  }
+  let loginHostname: string | null = null;
+  try {
+    loginHostname = typeof loginOrigin === "string" ? new URL(loginOrigin).hostname : null;
+  } catch {
+    loginHostname = null;
+  }
+  if (loginHostname !== hostname) throw Error(turnstileHostnameMismatch);
+  return Object.freeze({ hostname, actions });
+}
 
 export function brokerUtf8Bytes(value: string): number {
   return encoder.encode(value).length;

@@ -4,15 +4,14 @@
 //
 // The local superuser creates a Neon-shaped `neon_superuser` and a non-superuser
 // CREATEROLE login `neondb_owner` that owns the `morrow` database (P04.T01j M-N1). The
-// administrator then runs every prerequisite file itself and applies each manifest entry
-// with the ADR-0020 item 5 runner protocol (P04.T01j D4): one transaction on one fresh
+// administrator then runs every prerequisite file itself and applies each entry of the one
+// verified chain (scripts/migration-chain.mjs, which the labs pass in) with the ADR-0020
+// item 5 runner protocol (P04.T01j D4): one transaction on one fresh
 // connection that grants itself SET on the entry's `executeAs` role, runs the file, and
 // revokes that row again before COMMIT. After every entry the catalog must show no SET row
 // on a Morrow role other than the two reviewed work memberships; a REVOKE's exit status
 // is never trusted, because a no-op REVOKE exits 0.
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { migrationSqlViolations } from "../migration-sql.mjs";
 
 export const administrator = "neondb_owner";
@@ -20,7 +19,6 @@ export const bootstrapSuperuser = "postgres";
 const roleName = /^[a-z_][a-z0-9_]{0,62}$/;
 const executeAsRole = /^morrow_[a-z]+_owner$/;
 const container = /^[a-f0-9]{64}$/;
-const sha = (value) => createHash("sha256").update(value).digest("hex");
 
 // The 18 roles the prerequisite files create, in creation order. In createrole mode each
 // has exactly one creation row; in superuser mode none has any row of its own.
@@ -159,29 +157,6 @@ export function createAdministrator(id, { bypassrls = false } = {}) {
     { database: "morrow_lab" },
   );
   if (shape !== `t,f,t,${bypassrls ? "t" : "f"},UTF8,0`) throw Error("CREATEROLE_FIXTURE_SHAPE");
-}
-
-// The manifest chain: each entry's bytes and each prerequisite's bytes must match their
-// pinned digests.
-export function manifestChain() {
-  const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-  return manifest.migrations.map((entry, index) => {
-    const text = readFileSync("migrations/" + entry.file, "utf8");
-    if (entry.sequence !== index + 1 || sha(text) !== entry.sha256)
-      throw Error("CREATEROLE_FIXTURE_MIGRATION_UNQUALIFIED");
-    const prerequisites = (entry.prerequisites ?? []).map((p) => {
-      const bytes = readFileSync(p.file, "utf8");
-      if (sha(bytes) !== p.sha256) throw Error("CREATEROLE_FIXTURE_PREREQUISITE_UNQUALIFIED");
-      return Object.freeze({ file: p.file, text: bytes });
-    });
-    return Object.freeze({
-      sequence: entry.sequence,
-      file: entry.file,
-      executeAs: entry.executeAs,
-      text,
-      prerequisites: Object.freeze(prerequisites),
-    });
-  });
 }
 
 // A manifest entry without its own first "BEGIN;" and last "COMMIT;" lines. The file must

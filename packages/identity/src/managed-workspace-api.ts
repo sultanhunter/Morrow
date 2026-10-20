@@ -13,6 +13,35 @@ export interface ManagedWorkspaceApiDependencies {
 type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
 const invalid = () => Error("MANAGED_WORKSPACE_API_CONFIGURATION_INVALID");
 
+// The one route table of the composed api, by exact WHATWG pathname (never decoded,
+// so `/auth/%6Cogin` is not `/auth/login`, and a trailing slash is another path).
+// The router below dispatches by it and the P05.T01ab abuse guard selects by it, so
+// the two cannot disagree. Login start, the callback and signup are the classes the
+// login dispatcher and the workspace handler then match by the same exact paths.
+export type ManagedApiRoute =
+  | "login_start"
+  | "login_callback"
+  | "challenge"
+  | "logout"
+  | "rotate"
+  | "auth"
+  | "signup"
+  | "workspace"
+  | "not_found";
+export function managedApiRoute(pathname: string): ManagedApiRoute {
+  if (pathname === "/auth/login") return "login_start";
+  if (pathname === "/auth/workos/callback") return "login_callback";
+  if (pathname === "/auth/challenge") return "challenge";
+  if (pathname === "/auth/logout") return "logout";
+  if (pathname === "/auth/rotate") return "rotate";
+  if (pathname === "/auth" || pathname.startsWith("/auth/")) return "auth";
+  // The account routes (P05.T01x) are exact paths owned by the workspace handler.
+  if (pathname === "/organizations") return "signup";
+  if (pathname === "/workspace" || pathname.startsWith("/workspace/") || pathname === "/workspaces")
+    return "workspace";
+  return "not_found";
+}
+
 // A source-owned local constructor. Configuration and methods are captured
 // once; there is no environment-selected provider or per-request initializer.
 export function createWorkersManagedWorkspaceApi(dependencies?: ManagedWorkspaceApiDependencies) {
@@ -90,13 +119,9 @@ export function createWorkersManagedWorkspaceApi(dependencies?: ManagedWorkspace
     } catch {
       return Promise.resolve(standaloneJson(400, { code: "request_denied" }));
     }
-    const auth = path === "/auth" || path.startsWith("/auth/");
-    // The account routes (P05.T01x) are exact paths owned by the workspace handler.
-    const workspace =
-      path === "/workspace" ||
-      path.startsWith("/workspace/") ||
-      path === "/workspaces" ||
-      path === "/organizations";
+    const route = managedApiRoute(path);
+    const workspace = route === "signup" || route === "workspace";
+    const auth = !workspace && route !== "not_found";
     if (!configured)
       return Promise.resolve(
         standaloneJson(workspace ? 401 : auth ? 503 : 404, {
@@ -105,7 +130,7 @@ export function createWorkersManagedWorkspaceApi(dependencies?: ManagedWorkspace
       );
     // No await or second budget precedes the selected source owner.
     // Logout and rotate (P05.T01y) share the workspace handler's attempt, pool and binding.
-    if (path === "/auth/logout" || path === "/auth/rotate")
+    if (route === "logout" || route === "rotate")
       return configured.workspace.fetch(request, env, actualCtx);
     if (auth) return configured.login.fetch(request, env, actualCtx);
     if (workspace) return configured.workspace.fetch(request, env, actualCtx);

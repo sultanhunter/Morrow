@@ -5,9 +5,12 @@
 // outbound request is routed to an in-process oracle or counted and refused.
 // Covers AC06, AC08, AC10, AC11, AC13-AC15 (broker side), AC18 (first half),
 // AC22, AC26, AC28, AC29 and AC30. The PostgreSQL-backed journeys (AC17, AC19,
-// AC20, AC27 and the rest of AC13/AC18/AC26) are in edge-postgresql-lab.mjs. M2 PR-1
-// adds the trust model v1 entrypoints (ConnectorBroker, RuntimeBroker): each serves only
-// its own role lease and health, and a bad vault KEK disables the vault only.
+// AC20, AC27 and the rest of AC13/AC18/AC26) are in edge-postgresql-lab.mjs.
+// P05.T01ab adds the sign-in abuse guard over the same bundles: Miniflare `ratelimits`
+// from the committed development config and a synthetic siteverify behind the
+// broker's fixed URL (AC01, AC02, AC03, AC04, AC05, AC09, AC10 and the fourth method).
+// M2 PR-1 adds the trust model v1 entrypoints (ConnectorBroker, RuntimeBroker): each
+// serves only its own role lease and health, and a bad vault KEK disables the vault only.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,6 +20,7 @@ import { writeArtifact } from "./artifacts.mjs";
 import {
   captureConsole,
   edgeDryRun,
+  edgeRateLimits,
   edgeRefusals,
   edgeWorkers,
   ensureWorkspaceDist,
@@ -24,6 +28,11 @@ import {
   workerConfigPath,
 } from "./edge.mjs";
 import { createPlatformWorkosProviderOracle } from "./fixtures/fixed-workos-platform-provider.mjs";
+import {
+  createSiteverifyOracle,
+  labChallengeActions,
+  siteverifyOrigin,
+} from "./fixtures/turnstile-siteverify.mjs";
 
 const held = (code) => Error("EDGE_WORKERS_LAB_" + code);
 if (process.version !== "v24.13.0") throw held("PINNED_NODE_REQUIRED");
@@ -80,6 +89,18 @@ check(
   JSON.stringify(options.api.serviceBindings) ===
     JSON.stringify({ BROKER: { name: names.broker, entrypoint: "ApiBroker" } }),
 );
+// P05.T01ab: the Miniflare `ratelimits` of every api instance are the committed
+// development limiters (wrangler's own options), never a lab override.
+check(
+  "P05T01ab:wrangler_options_bind_the_development_limiters",
+  JSON.stringify(
+    Object.values(options.api.ratelimits ?? {}).map(({ name, namespace_id, simple }) => ({
+      name,
+      namespace_id,
+      simple,
+    })),
+  ) === JSON.stringify(edgeRateLimits("development")),
+);
 check(
   "orchestrator_and_connector_have_no_service_bindings",
   Object.keys(options.orchestrator.serviceBindings ?? {}).length === 0 &&
@@ -91,6 +112,12 @@ const origin = "https://workspace.example.test";
 const keyMarker = ["sk", "test", randomBytes(16).toString("hex")].join("_");
 privateMarkers.push(keyMarker);
 const provider = createPlatformWorkosProviderOracle({ origin, managementMarker: keyMarker });
+// Every issued Turnstile token is a private marker, like the secret.
+const siteverify = createSiteverifyOracle({
+  hostname: new URL(origin).hostname,
+  onIssue: (token) => privateMarkers.push(token),
+});
+privateMarkers.push(siteverify.secret);
 const login = JSON.parse(provider.configurationJson);
 const auth = JSON.parse(login.authenticationBindingJson);
 const configurationDigest = hash(
@@ -189,6 +216,8 @@ function brokerBindings(change = {}) {
     LOGIN_CONFIGURATION_JSON: provider.configurationJson,
     MORROW_DATABASE_BINDING_JSON: JSON.stringify(databaseBinding),
     WORKOS_API_KEY: keyMarker,
+    TURNSTILE_SECRET_KEY: siteverify.secret,
+    TURNSTILE_CONFIGURATION_JSON: siteverify.turnstileConfigurationJson,
     ...Object.fromEntries(
       Object.keys(passwords).map((role) => [
         "MORROW_DB_PASSWORD_" + role.toUpperCase(),
@@ -199,6 +228,9 @@ function brokerBindings(change = {}) {
     ...change,
   };
 }
+// P05.T01ab: the full development guard (the committed limiters plus a challenge).
+const guardedApiBindings = (change = {}) =>
+  apiBindings({ LOGIN_CHALLENGE_JSON: siteverify.loginChallengeJson, ...change });
 const neonNamespace = (role, binding = databaseBinding) =>
   JSON.stringify({
     schemaVersion: 1,
@@ -268,7 +300,14 @@ export default {
 // One Miniflare instance per case, disposed in finally. Outbound traffic is routed
 // per Worker and counted; logs are the Workers' own structured console lines.
 async function instance(name, { api = {}, broker = {}, extra = [], assets } = {}, run) {
-  const observed = { logs: [], apiProvider: [], brokerProvider: [], neon: 0, unexpected: 0 };
+  const observed = {
+    logs: [],
+    apiProvider: [],
+    brokerProvider: [],
+    neon: 0,
+    siteverify: 0,
+    unexpected: 0,
+  };
   const apiOptions = assets
     ? workerOptions(apiWorker, { assets: { directory: assets } })
     : options.api;
@@ -313,6 +352,10 @@ async function instance(name, { api = {}, broker = {}, extra = [], assets } = {}
             authorization: request.headers.get("authorization") === "Bearer " + keyMarker,
           });
           return provider.handleRequest(request);
+        }
+        if (url.origin === siteverifyOrigin) {
+          observed.siteverify++;
+          return siteverify.handleRequest(request);
         }
         observed.unexpected++;
         return new Response(null, { status: 503 });
@@ -376,6 +419,14 @@ async function instance(name, { api = {}, broker = {}, extra = [], assets } = {}
   } finally {
     await mf.dispose();
   }
+  // P04.T01i D6 lab redaction: no Worker log line of any instance holds a private
+  // marker (the WorkOS key, passwords, keyring material, the Turnstile secret and
+  // every token the lab issued or made up).
+  const logged = JSON.stringify(observed.logs);
+  check(
+    name + ":no_private_marker_in_logs",
+    privateMarkers.every((marker) => !logged.includes(marker)),
+  );
   const own = checks.slice(startedChecks);
   cases.push({
     name,
@@ -386,6 +437,7 @@ async function instance(name, { api = {}, broker = {}, extra = [], assets } = {}
       apiProvider: observed.apiProvider,
       brokerProvider: observed.brokerProvider.length,
       neon: observed.neon,
+      siteverify: observed.siteverify,
       unexpected: observed.unexpected,
     },
   });
@@ -1069,6 +1121,400 @@ await instance(
     }
   });
 }
+// ---- P05.T01ab: the sign-in abuse guard over the real development bundles ----
+const loginUnavailable = '{"schemaVersion":1,"outcome":"login_unavailable"}';
+const guardOutcome = (outcome) => JSON.stringify({ schemaVersion: 1, outcome });
+const startWith = (fetchApi, headers = {}, path = "/auth/login") =>
+  fetchApi(path, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      "Content-Type": "application/json",
+      "X-Morrow-Request": "1",
+      "Sec-Fetch-Site": "same-origin",
+      ...headers,
+    },
+    body: JSON.stringify({ schemaVersion: 2 }),
+  });
+const signupWith = (fetchApi, headers = {}) =>
+  fetchApi("/organizations", {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      "Content-Type": "application/json",
+      "X-Morrow-Request": "1",
+      "Idempotency-Key": randomUUID(),
+      Cookie: cookie,
+      ...headers,
+    },
+    body: JSON.stringify({ schemaVersion: 1, organizationName: "Org", workspaceName: "Main" }),
+  });
+const guardEvents = (events) => events("morrow_edge_guard").map((row) => row.code);
+const noStore429 = (response) =>
+  response.status === 429 &&
+  response.body === guardOutcome("rate_limited") &&
+  response.headers.get("retry-after") === "60" &&
+  response.headers.get("cache-control") === "no-store";
+
+await instance(
+  "P05T01ab_AC09_configuration_route",
+  { api: { bindings: guardedApiBindings() } },
+  async ({ fetchApi, observed }) => {
+    const configured = await fetchApi("/auth/challenge");
+    check(
+      "P05T01ab-AC09:turnstile_shape",
+      configured.status === 200 &&
+        configured.body ===
+          JSON.stringify({
+            schemaVersion: 1,
+            provider: "turnstile",
+            siteKey: JSON.parse(siteverify.loginChallengeJson).siteKey,
+            actions: labChallengeActions,
+          }) &&
+        configured.headers.get("cache-control") === "no-store" &&
+        configured.headers.get("content-type") === "application/json; charset=utf-8",
+    );
+    const head = await fetchApi("/auth/challenge", { method: "HEAD" });
+    const post = await fetchApi("/auth/challenge", { method: "POST" });
+    check("P05T01ab-AC09:methods", head.status === 200 && head.body === "" && post.status === 405);
+    check(
+      "P05T01ab-AC09:no_broker_or_provider_call",
+      observed.siteverify + observed.neon + observed.unexpected === 0,
+    );
+  },
+);
+await instance(
+  "P05T01ab_AC09_provider_none_in_development",
+  { api: { bindings: apiBindings() } },
+  async ({ fetchApi }) => {
+    const none = await fetchApi("/auth/challenge");
+    check(
+      "P05T01ab-AC09:provider_none",
+      none.status === 200 && none.body === '{"provider":"none"}',
+    );
+  },
+);
+await instance("P05T01ab_AC09_unbound_api", {}, async ({ fetchApi }) => {
+  const unbound = await fetchApi("/auth/challenge");
+  check(
+    "P05T01ab-AC09:unbound_is_the_deny_all_503",
+    unbound.status === 503 && unbound.body === '{"code":"unavailable"}',
+  );
+});
+
+await instance(
+  "P05T01ab_AC02_AC03_AC10_challenge",
+  { api: { bindings: guardedApiBindings() } },
+  async ({ fetchApi, probe, observed, events }) => {
+    for (const [label, headers] of [
+      ["missing", {}],
+      ["empty", { "X-Morrow-Challenge": "" }],
+      ["oversized", { "X-Morrow-Challenge": "a".repeat(2049) }],
+      ["charset", { "X-Morrow-Challenge": "a/b+c=" }],
+    ]) {
+      const started = await startWith(fetchApi, headers);
+      check(
+        "P05T01ab-AC02:login_" + label,
+        started.status === 403 &&
+          started.body === guardOutcome("challenge_required") &&
+          started.headers.getSetCookie().length === 0,
+      );
+    }
+    const unsigned = await signupWith(fetchApi);
+    check(
+      "P05T01ab-AC02:signup_missing",
+      unsigned.status === 403 && unsigned.body === guardOutcome("challenge_required"),
+    );
+    check("P05T01ab-AC02:zero_broker_calls", observed.siteverify === 0 && observed.neon === 0);
+    // A bogus token: one siteverify call, 403 challenge_failed, no login flow.
+    for (const mode of ["bogus", "other_action", "other_host", "stale"]) {
+      const token =
+        mode === "bogus"
+          ? "lab.bogus." + randomUUID()
+          : siteverify.issue(labChallengeActions.login, mode);
+      if (mode === "bogus") privateMarkers.push(token);
+      const before = observed.siteverify;
+      const failed = await startWith(fetchApi, { "X-Morrow-Challenge": token });
+      check(
+        "P05T01ab-AC03:" + mode + "_challenge_failed",
+        failed.status === 403 &&
+          failed.body === guardOutcome("challenge_failed") &&
+          observed.siteverify === before + 1,
+      );
+      // Siteverify said success for the three solved-but-wrong tokens, so the broker's
+      // own action, hostname and challenge_ts checks are what refused them.
+      check(
+        "P05T01ab-AC03:" + mode + "_siteverify_success_" + String(mode !== "bogus"),
+        siteverify.requests.at(-1)?.success === (mode !== "bogus"),
+      );
+    }
+    // No rejected start reached the login handler, so no login flow and no database.
+    check("P05T01ab-AC03:rejections_reach_no_database", observed.neon === 0);
+    const replayed = siteverify.issue(labChallengeActions.login);
+    // A valid token passes the guard: the handler runs (this lab has no database).
+    const first = await startWith(fetchApi, { "X-Morrow-Challenge": replayed });
+    check(
+      "P05T01ab-AC06:valid_token_reaches_the_handler",
+      first.status === 503 && first.body === loginUnavailable && observed.neon > 0,
+    );
+    const second = await startWith(fetchApi, { "X-Morrow-Challenge": replayed });
+    check(
+      "P05T01ab-AC03:single_use_token",
+      first.status !== 403 &&
+        second.status === 403 &&
+        second.body === guardOutcome("challenge_failed"),
+    );
+    // A login token is not a signup token.
+    const crossed = await signupWith(fetchApi, {
+      "X-Morrow-Challenge": siteverify.issue(labChallengeActions.login),
+    });
+    check(
+      "P05T01ab-AC03:signup_needs_its_own_action",
+      crossed.status === 403 && crossed.body === guardOutcome("challenge_failed"),
+    );
+    const requests = siteverify.requests;
+    check(
+      "P05T01ab-AC03:siteverify_shape",
+      requests.length === observed.siteverify &&
+        requests.every(
+          (row) =>
+            row.method === "POST" &&
+            row.path === "/turnstile/v0/siteverify" &&
+            row.contentType === "application/x-www-form-urlencoded" &&
+            JSON.stringify(row.fields) === '["secret","response"]' &&
+            row.secretMatches,
+        ),
+    );
+    const failedLines = events("morrow_challenge");
+    check(
+      "P05T01ab-AC10:one_line_per_failed_verdict",
+      failedLines.length === 6 && failedLines.every((row) => row.code === "failed"),
+    );
+    check("P05T01ab-AC10:rejections_log_no_guard_line", guardEvents(events).length === 0);
+    // The fourth ApiBroker method over the real RPC binding.
+    const [passed] = await probe({
+      op: "challengeVerify",
+      args: [labChallengeActions.signup, siteverify.issue(labChallengeActions.signup), 3000],
+    });
+    check(
+      "P05T01ab-AC03:rpc_passed_string",
+      passed.ok && passed.type === "string" && passed.value === "passed",
+    );
+    const [bad] = await probe({ op: "challengeVerify", args: ["account_login", "a b", 3000] });
+    const [budget] = await probe({ op: "challengeVerify", args: ["account_login", "abc", 5001] });
+    check(
+      "P05T01ab-AC03:rpc_refusals_held",
+      bad.ok === false && bad.message === "BROKER_HELD" && budget.ok === false,
+    );
+  },
+);
+
+for (const fault of ["status_500", "redirect", "oversized", "hang"])
+  await instance(
+    "P05T01ab_AC04_held_" + fault,
+    { api: { bindings: guardedApiBindings() } },
+    async ({ fetchApi, events, observed }) => {
+      siteverify.setFault(fault);
+      try {
+        const started = await startWith(fetchApi, {
+          "X-Morrow-Challenge": siteverify.issue(labChallengeActions.login),
+        });
+        check(
+          "P05T01ab-AC04:" + fault + "_login_503",
+          started.status === 503 && started.body === loginUnavailable,
+        );
+        if (fault === "status_500") {
+          const signup = await signupWith(fetchApi, {
+            "X-Morrow-Challenge": siteverify.issue(labChallengeActions.signup),
+          });
+          check(
+            "P05T01ab-AC04:signup_503_route_body",
+            signup.status === 503 && signup.body === '{"code":"unavailable"}',
+          );
+        }
+        check(
+          "P05T01ab-AC04:" + fault + "_fixed_codes",
+          guardEvents(events).every((code) => code === "CHALLENGE_HELD") &&
+            guardEvents(events).length >= 1 &&
+            events("morrow_challenge").length === 0,
+        );
+        check("P05T01ab-AC04:" + fault + "_no_database", observed.neon === 0);
+      } finally {
+        siteverify.setFault(null);
+      }
+    },
+  );
+
+// The committed development limiters: login start 10, the callback 20, signup 5 per 60 s.
+// Workers rate limits count per fixed window (Miniflare: 60 s windows on the epoch), so
+// each burst starts with at least 25 s left in its window; the guarded starts carry no
+// token, so every request the limiter admits is a cheap 403 with no broker or database.
+const freshWindow = async (leftMs = 25000) => {
+  const left = 60000 - (Date.now() % 60000);
+  if (left < leftMs) await new Promise((resolve) => setTimeout(resolve, left + 250));
+};
+await instance(
+  "P05T01ab_AC01_AC05_limiter",
+  { api: { bindings: guardedApiBindings() } },
+  async ({ fetchApi, events, observed }) => {
+    const from = (address) => ({ "CF-Connecting-IP": address });
+    const required = (r) => r.status === 403 && r.body === guardOutcome("challenge_required");
+    // What a third-party page can make a visitor's browser send without a preflight: a
+    // simple cross-site POST (no X-Morrow-Request), and another method or a preflight.
+    const crossSitePost = (path, address) =>
+      fetchApi(path, {
+        method: "POST",
+        headers: {
+          ...from(address),
+          "Content-Type": "text/plain",
+          "Sec-Fetch-Site": "cross-site",
+          "MF-Sec-Fetch-Mode": "no-cors",
+        },
+        body: "{}",
+      });
+    const otherMethod = (path, address, method) =>
+      fetchApi(path, {
+        method,
+        headers: {
+          ...from(address),
+          Origin: "https://elsewhere.example.test",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "x-morrow-request",
+        },
+      });
+    await freshWindow();
+    // P05.T01ab-AC01 step 0: twelve uncounted requests first, then the full ten starts.
+    const uncounted = [];
+    for (let i = 0; i < 4; i++) {
+      uncounted.push(["post", await crossSitePost("/auth/login", "198.51.100.10")]);
+      uncounted.push(["get", await otherMethod("/auth/login", "198.51.100.10", "GET")]);
+      uncounted.push(["options", await otherMethod("/auth/login", "198.51.100.10", "OPTIONS")]);
+    }
+    check(
+      "P05T01ab-AC01:cross_site_start_requests_refused_uncounted",
+      uncounted.every(([kind, r]) =>
+        kind === "post"
+          ? r.status === 403 && r.body === loginUnavailable
+          : r.status === 405 && r.body === loginUnavailable,
+      ),
+    );
+    const starts = [];
+    for (let i = 0; i < 11; i++) starts.push(await startWith(fetchApi, from("198.51.100.10")));
+    check(
+      "P05T01ab-AC05:eleventh_start_429_after_ten_challenge_required",
+      starts.slice(0, 10).every(required) && noStore429(starts[10]),
+    );
+    const other = await startWith(fetchApi, from("198.51.100.11"));
+    check("P05T01ab-AC05:other_address_unaffected", required(other));
+    // IPv6: one /56 is one bucket; another /56 is not.
+    await freshWindow();
+    const v6 = [];
+    for (let i = 0; i < 10; i++)
+      v6.push(await startWith(fetchApi, from(`2001:db8:1234:56${i.toString(16)}0::${i + 1}`)));
+    const sameSite = await startWith(fetchApi, from("2001:db8:1234:56ff:ffff::1"));
+    const otherSite = await startWith(fetchApi, from("2001:db8:1234:5700::1"));
+    check(
+      "P05T01ab-AC05:ipv6_keyed_by_slash_56",
+      v6.every(required) && noStore429(sameSite) && required(otherSite),
+    );
+    // The router's own matcher decides what is login start: a query string is the same
+    // path, so it is limited; the router answers 400 for a start with a query.
+    await freshWindow();
+    const query = [];
+    for (let i = 0; i < 11; i++)
+      query.push(await startWith(fetchApi, from("203.0.113.21"), "/auth/login?x=1"));
+    check(
+      "P05T01ab-AC01:query_string_is_login_start",
+      query.slice(0, 10).every(required) && noStore429(query[10]),
+    );
+    // The callback counts only top-level document navigations. HEAD (the router's
+    // 405), an <img> load and a fetch come first, uncounted; the image and the fetch
+    // get the handler's 303 from the guard. (MF-Sec-Fetch-Mode is how Miniflare sets
+    // the Sec-Fetch-Mode its own client would otherwise overwrite.)
+    await freshWindow();
+    const callbackAt = (headers) =>
+      fetchApi("/auth/workos/callback", {
+        redirect: "manual",
+        headers: { ...from("203.0.113.22"), ...headers },
+      });
+    const quiet = [];
+    for (let i = 0; i < 7; i++) {
+      quiet.push(
+        await fetchApi("/auth/workos/callback", { method: "HEAD", headers: from("203.0.113.22") }),
+      );
+      quiet.push(await callbackAt({ "MF-Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "image" }));
+      quiet.push(await callbackAt({ "MF-Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty" }));
+    }
+    check(
+      "P05T01ab-AC01:head_image_and_fetch_callbacks_uncounted",
+      quiet.every((r, i) =>
+        i % 3 === 0
+          ? r.status === 405
+          : r.status === 303 && r.headers.get("location") === "/auth/result" && r.body === "",
+      ),
+    );
+    const navigations = [];
+    for (let i = 0; i < 21; i++)
+      navigations.push(
+        await callbackAt({ "MF-Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document" }),
+      );
+    check(
+      "P05T01ab-AC05:navigation_callback_limited_at_21",
+      navigations.slice(0, 20).every((r) => r.status !== 429) && noStore429(navigations[20]),
+    );
+    await freshWindow();
+    const quietSignups = [];
+    for (let i = 0; i < 3; i++) {
+      quietSignups.push(["post", await crossSitePost("/organizations", "203.0.113.23")]);
+      quietSignups.push([
+        "options",
+        await otherMethod("/organizations", "203.0.113.23", "OPTIONS"),
+      ]);
+    }
+    check(
+      "P05T01ab-AC01:cross_site_signup_requests_refused_uncounted",
+      quietSignups.every(
+        ([kind, r]) =>
+          r.status === (kind === "post" ? 403 : 405) && r.body === '{"code":"request_denied"}',
+      ),
+    );
+    const signups = [];
+    for (let i = 0; i < 6; i++) signups.push(await signupWith(fetchApi, from("203.0.113.23")));
+    check(
+      "P05T01ab-AC05:sixth_signup_429",
+      signups.slice(0, 5).every(required) && noStore429(signups[5]),
+    );
+    check("P05T01ab-AC05:limited_and_rejected_reach_no_broker", observed.siteverify === 0);
+    check("P05T01ab-AC01:uncounted_and_limited_reach_no_database", observed.neon === 0);
+    // A trailing slash or an encoded letter is another path: never limited, and the
+    // router answers its own 404.
+    const loose = [];
+    for (const path of ["/auth/login/", "/auth/%6Cogin"])
+      for (let i = 0; i < 11; i++)
+        loose.push(await startWith(fetchApi, from("203.0.113.20"), path));
+    check(
+      "P05T01ab-AC01:trailing_slash_and_encoded_paths_not_guarded",
+      loose.every((r) => r.status === 404 && r.body === loginUnavailable),
+    );
+    const invalid = await startWith(fetchApi, from("not-an-address"));
+    check(
+      "P05T01ab-AC05:invalid_address_503",
+      invalid.status === 503 && invalid.body === loginUnavailable,
+    );
+    check(
+      "P05T01ab-AC10:only_the_fail_closed_cause_logged",
+      JSON.stringify(guardEvents(events)) === '["ADDRESS_INVALID"]',
+    );
+    const logged = JSON.stringify(observed.logs);
+    check(
+      "P05T01ab-AC05:no_address_in_any_log_line",
+      ["198.51.100", "203.0.113", "2001:db8", "not-an-address"].every(
+        (address) => !logged.includes(address),
+      ),
+    );
+  },
+);
+
 check("orchestrator_bundle_built", bundle(orchestratorWorker).includes("dispatch_disabled"));
 rmSync(scratch, { recursive: true, force: true });
 

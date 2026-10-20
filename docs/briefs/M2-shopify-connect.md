@@ -70,6 +70,7 @@ Part 1 (database, commit `12fd316`) and part 2 (TypeScript and broker). No provi
 - [x] Billing route row (`@morrow/work/billing-route`): `billingRouteForCreation` from `originForCreation`, the api's reader and row mapping; 0021's signup trigger writes exactly that row, and the signup route policy admits a website row only for a website signup's workspace (0022–0023) (`tests/billing-route-row.test.mjs`, lab R5–R6).
 - [x] Contract: `StopRecord@1` with `SystemStopActor` and `OperatorStopActor` in core v1.1 (an addition; `npm run contracts:generate`).
 - [x] The redaction-handler list (`packages/work/src/redaction.ts`): every table of `morrow_work`, `morrow_billing`, `morrow_vault` and `morrow_identity` has a content class, compared with the live catalog; every store-content table has exactly one handler, including `linking_candidates` (shop identity, `pseudonymise` at `shop/redact`, executable in M2 PR-3); M2's store tables register as they land (`tests/redaction-handlers.test.mjs`, conformance S8).
+- [x] Merged with `main` `bb882ad` (#25–#28) and reconciled with the P04.T01i staging tooling: 0019–0024 and the spine prerequisite load through `scripts/migration-chain.mjs` (`executeAs`, pinned prerequisites, `migrationSqlViolations`), which the tenant-conformance harness, `lab:createrole-administrator` and `lab:spine-foundation` read; `brokerRequiredSecrets` is fourteen names (production's vault-free twelve) in wrangler's `secrets.required`, gate 6, `secrets-status` and `provision-roles --first`, which provisions the eleven broker logins (the vault login included) and reads the owner's KEK from `vault-kek-v1` without generating one; `lab:staging-runner` applies the chain through 0024 in superuser and createrole modes (`tests/staging-secrets.test.mjs`, `tests/staging-runner.test.mjs`).
 - [ ] Commands that write stops: "Stop AI work" lands with the installation records in M3 PR-1 and the disconnect command in M2 PR-3 (spine §10); the uninstall stop's connector definer in M2 PR-3.
 - [ ] The broker's database transport for the vault login and the connector and orchestrator service bindings land with their first callers (M2 PR-2, M3 PR-1).
 - [ ] Hosted CI on the PR head; one AI review (separate context, same model family) with the security lens.
@@ -78,7 +79,7 @@ Part 1 (database, commit `12fd316`) and part 2 (TypeScript and broker). No provi
 
 1. A Shopify Partner organisation and a fresh development store (never the live shop).
 2. Per-action approval, or a new staging card, for the connector's workers.dev hostname, each app deploy and the development-store install.
-3. Generate the vault KEK with the provided script, keep the offline copy, and place it with `morrow_put`; store each app's client secret with the vault script.
+3. Generate the vault KEK with the provided script, keep the offline copy, and place it: `npm run vault -- kek --out ~/.config/morrow/staging/vault-kek-v1` writes the staging owner file directly (0600; it prints only a fingerprint), or place a KEK generated elsewhere with `morrow_put "Vault KEK v1" vault-kek-v1`. `staging:provision-roles -- --first` and `staging:put-secret -- MORROW_VAULT_KEK_V1` read that file; no tool generates a KEK. Store each app's client secret with the vault script.
 4. For the smoke: pay for the staging workspace in Stripe test mode (after M5 PR-1).
 
 ## Open questions

@@ -5017,6 +5017,92 @@
       ],
       "additionalProperties": false
     },
+    "ChallengeToken": {
+      "description": "The X-Morrow-Challenge request header (P05.T01ab, ADR-0019 item 7): one single-use Turnstile token, 1-2048 bytes of [A-Za-z0-9._-]. Required on POST /auth/login and POST /organizations wherever GET /auth/challenge names a provider (staging and production). Any other shape is 403 challenge_required without a verification call; a verified request reaches its route with the header removed.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^[A-Za-z0-9._-]{1,2048}$"
+    },
+    "LoginChallengeConfiguration": {
+      "description": "GET /auth/challenge (P05.T01ab, ADR-0019 item 7): the public widget configuration for login start (actions.login) and signup (actions.signup), no-store, or {provider:none} where no challenge is asked for. The site key is public; the secret lives only in the broker.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "provider": {
+              "const": "turnstile"
+            },
+            "siteKey": {
+              "type": "string",
+              "pattern": "^0x[0-9A-Za-z_-]{20,128}$"
+            },
+            "actions": {
+              "type": "object",
+              "properties": {
+                "login": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{1,32}$"
+                },
+                "signup": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{1,32}$"
+                }
+              },
+              "required": [
+                "login",
+                "signup"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "provider",
+            "siteKey",
+            "actions"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "provider": {
+              "const": "none"
+            }
+          },
+          "required": [
+            "provider"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SignInGuardOutcome": {
+      "description": "The sign-in abuse guard's rejections on POST /auth/login, GET /auth/workos/callback and POST /organizations (P05.T01ab, ADR-0019 items 7 and 8), answered before the route runs and before any SQL: 403 challenge_required (missing or malformed X-Morrow-Challenge, login start and signup only), 403 challenge_failed (the token did not verify) and 429 rate_limited with Retry-After: 60 (the per-address limit; signup's own per-profile 429 says Retry-After: 600). All are no-store and nothing is logged for them. A guard that cannot decide fails closed with the route's existing 503 body.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "challenge_required",
+            "challenge_failed",
+            "rate_limited"
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
     "SystemStopActor": {
       "description": "The system as the setter of a stop (StopRecord@1): an automatic stop such as the connection stop of the app/uninstalled webhook. It names no person.",
       "type": "object",

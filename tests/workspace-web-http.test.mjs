@@ -68,6 +68,56 @@ test("AC05: at body v2 the start is exactly {schemaVersion:2}; at v1 without a w
   await v1.port.session.startSignIn("ws-1");
   assert.equal(v1.calls[0].init.body, '{"schemaVersion":1,"workspaceId":"ws-1"}');
 });
+test("P05.T01ab-AC08: a challenge token travels only as X-Morrow-Challenge on the start POST", async () => {
+  const token = "tok." + "A".repeat(64);
+  const { calls, port: p } = port(() =>
+    json(200, { schemaVersion: 1, authorizationUrl: authorize }),
+  );
+  assert.equal((await p.session.startSignIn("ws-1", token)).kind, "ok");
+  assert.equal(headers(calls[0].init).get("x-morrow-challenge"), token);
+  assert.equal(calls[0].init.body, '{"schemaVersion":2}');
+  await p.session.startSignIn("ws-1", null);
+  assert.equal(headers(calls[1].init).has("x-morrow-challenge"), false);
+  // A malformed token is refused before anything is sent.
+  for (const bad of ["", "a b", "a".repeat(2049), "tok\u00e9"])
+    assert.equal((await p.session.startSignIn("ws-1", bad)).kind, "invalid");
+  assert.equal(calls.length, 2);
+  assert.deepEqual(requests.login(2, null, token), {
+    method: "POST",
+    path: "/auth/login",
+    body: '{"schemaVersion":2}',
+    key: null,
+    challenge: token,
+  });
+  assert.equal(requests.login(2, null, "a b"), null);
+  assert.equal(Object.hasOwn(requests.login(2, null), "challenge"), false);
+  // The client itself refuses a malformed token and sends nothing.
+  const recorded = [];
+  const client = createClient({
+    transport: async (path, init) => (recorded.push(init), json(200, {})),
+    online: () => true,
+  });
+  assert.deepEqual(await client.post("/auth/login", "{}", null, "a/b"), {
+    kind: "not_sent",
+    offline: false,
+  });
+  assert.equal(recorded.length, 0);
+});
+test("P05.T01ab: a guard 403 or 429 on the start is 'couldn't start', and nothing navigates", async () => {
+  for (const [status, outcome] of [
+    [403, "challenge_required"],
+    [403, "challenge_failed"],
+    [429, "rate_limited"],
+  ]) {
+    const { port: p } = port(() =>
+      json(status, { schemaVersion: 1, outcome }, status === 429 ? { "retry-after": "60" } : {}),
+    );
+    assert.deepEqual(await p.session.startSignIn("ws-1", "tok.a"), {
+      kind: "unavailable",
+      offline: false,
+    });
+  }
+});
 test("AC05: only the pinned WorkOS origin and path navigate; anything else is 'couldn't start'", async () => {
   for (const authorizationUrl of [
     "https://evil.example/user_management/authorize?x=1",

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createClient, isCommandKey } from "../apps/workspace-web/src/http/client.ts";
-import { createHttpPort } from "../apps/workspace-web/src/http/api.ts";
+import { createHttpPort, requests } from "../apps/workspace-web/src/http/api.ts";
 import { composed, loginBodyVersion } from "../apps/workspace-web/src/http/composed.ts";
 import {
   decodeAccountOverview,
@@ -307,6 +307,93 @@ test("AC25: 503 outcome_unknown keeps the key; Check again replays; a later 429 
   assert.equal(new Set(calls.map((call) => headers(call.init).get("idempotency-key"))).size, 1);
   assert.equal(new Set(calls.map((call) => call.init.body)).size, 1);
   assert.equal(pending.blocking(), false);
+});
+
+// P05.T01ab (P04.T01i D5) on the create-organization form: the token travels only as
+// X-Morrow-Challenge on POST /organizations, and the guard's replies keep their meaning.
+test("P05.T01ab: a signup token travels only as X-Morrow-Challenge on POST /organizations", async () => {
+  const created = {
+    schemaVersion: 1,
+    outcome: "created",
+    organizationId: "o-1",
+    workspaceId: "w-1",
+  };
+  const token = "tok." + "S".repeat(64);
+  const { calls, port: p } = port(({ path }) =>
+    path === "/workspaces"
+      ? json(200, { schemaVersion: 1, workspaces: [], truncated: false, onboarding: "available" })
+      : json(201, created),
+  );
+  const c = command({ organizationName: "Linen", workspaceName: "Main" });
+  assert.equal((await p.account.overview()).kind, "ok");
+  assert.equal((await p.account.createOrganization(c, token)).kind, "ok");
+  await p.account.createOrganization(c, null);
+  await p.account.createOrganization(c);
+  assert.deepEqual(
+    calls.map((call) => [call.path, headers(call.init).get("x-morrow-challenge")]),
+    [
+      ["/workspaces", null],
+      ["/organizations", token],
+      ["/organizations", null],
+      ["/organizations", null],
+    ],
+  );
+  // The token changes nothing else: same body and key.
+  assert.equal(calls[1].init.body, calls[2].init.body);
+  assert.equal(headers(calls[1].init).get("idempotency-key"), c.key);
+  // A malformed token is refused before anything is sent.
+  for (const bad of ["", "a b", "a".repeat(2049), "tok\u00e9", "a/b"])
+    assert.deepEqual(await p.account.createOrganization(c, bad), { kind: "invalid", field: null });
+  assert.equal(calls.length, 4);
+  assert.deepEqual(requests.createOrganization(c, token), {
+    method: "POST",
+    path: "/organizations",
+    body: '{"schemaVersion":1,"organizationName":"Linen","workspaceName":"Main"}',
+    key: c.key,
+    challenge: token,
+  });
+  assert.equal(Object.hasOwn(requests.createOrganization(c), "challenge"), false);
+  assert.equal(requests.createOrganization(c, "a b"), null);
+});
+
+test("P05.T01ab: the guard's 403 challenge_* is unavailable and its 429 a hold; after an unknown outcome both stay unknown", async () => {
+  const c = command({ organizationName: "Linen", workspaceName: "Main" });
+  const guard = (status, outcome) =>
+    json(status, { schemaVersion: 1, outcome }, status === 429 ? { "retry-after": "60" } : {});
+  for (const outcome of ["challenge_required", "challenge_failed"]) {
+    const one = port(() => guard(403, outcome));
+    assert.deepEqual(await one.port.account.createOrganization(c, "tok.a"), {
+      kind: "unavailable",
+      offline: false,
+    });
+  }
+  const limited = port(() => guard(429, "rate_limited"));
+  assert.deepEqual(await limited.port.account.createOrganization(c, "tok.a"), {
+    kind: "rate_limited",
+    retryAfterSeconds: 60,
+  });
+  // Check again after an unknown outcome sends the same key and body with a new token;
+  // a guard refusal in between is not a terminal reply, so the command stays unknown.
+  const replies = [
+    json(503, { schemaVersion: 1, outcome: "outcome_unknown" }),
+    guard(403, "challenge_failed"),
+    guard(429, "rate_limited"),
+    json(200, { schemaVersion: 1, outcome: "replayed", organizationId: "o-1", workspaceId: "w-1" }),
+  ];
+  const { calls, port: p } = port(({ index }) => replies[index]);
+  const pending = createPending({ storage: new MemoryStorage() });
+  let n = 0;
+  const run = () => pending.run(c, null, () => p.account.createOrganization(c, "tok." + ++n));
+  assert.equal((await run()).kind, "uncertain");
+  assert.equal((await run()).kind, "uncertain", "a challenge 403 after uncertain stays uncertain");
+  assert.equal((await run()).kind, "uncertain", "a guard 429 after uncertain stays uncertain");
+  assert.deepEqual(await run(), { kind: "ok", value: { workspaceId: "w-1" }, replayed: true });
+  assert.deepEqual(
+    calls.map((call) => headers(call.init).get("x-morrow-challenge")),
+    ["tok.1", "tok.2", "tok.3", "tok.4"],
+  );
+  assert.equal(new Set(calls.map((call) => headers(call.init).get("idempotency-key"))).size, 1);
+  assert.equal(new Set(calls.map((call) => call.init.body)).size, 1);
 });
 
 test("AC27: work reads decode v1 records and pages; a record of another workspace or id is not shown", async () => {

@@ -3,9 +3,11 @@
 //
 //   npm run vault -- kek --out <file>
 //       Writes a new KEK (32 random bytes, 64 lowercase hex characters) to a new 0600 file
-//       outside the repository and prints only its fingerprint. Keep that file as the
-//       offline copy and place its content as the broker secret MORROW_VAULT_KEK_V1
-//       (morrow_put, then staging:put-secret).
+//       outside the repository and prints only its fingerprint. Keep an offline copy. For
+//       staging, write it to ~/.config/morrow/staging/vault-kek-v1, the staging tools'
+//       owner file for the broker secret MORROW_VAULT_KEK_V1: `staging:provision-roles
+//       -- --first` and `staging:put-secret -- MORROW_VAULT_KEK_V1` read it and never
+//       generate a KEK (a KEK made elsewhere is placed there with morrow_put).
 //   npm run vault -- seal-app-secret --environment <development|staging>
 //       --app-key <key> --version <n> --kek-file <file> [--kek-version <n>] --out <file>
 //       Reads one Shopify app client secret from stdin (not echoed on a terminal), seals it

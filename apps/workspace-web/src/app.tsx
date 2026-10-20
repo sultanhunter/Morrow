@@ -28,6 +28,7 @@ import {
   useRead,
   useServices,
   useServicesVersion,
+  type ChallengeHost,
   type Composed,
   type Id,
   type Outcome,
@@ -77,7 +78,16 @@ export interface AppProps {
   /** Created once per page load by the entry, outside React (StrictMode-safe). */
   readonly runtime: AppRuntime;
   readonly fixture?: ReactNode;
+  /** P05.T01ab: the bot-challenge widget host; without one no form asks for a token. */
+  readonly challenge?: ChallengeHost;
 }
+
+/** A host for builds that ask for no challenge (the fixture build). */
+export const noChallenge: ChallengeHost = () => ({
+  token: () => Promise.resolve(null),
+  reset: () => {},
+  remove: () => {},
+});
 
 export interface AppRuntime {
   readonly router: Router;
@@ -174,6 +184,7 @@ export function App({
   loadRoot,
   runtime,
   fixture,
+  challenge = noChallenge,
 }: AppProps) {
   const { router, guard, pending } = runtime;
   const route = useSyncExternalStore(router.subscribe, router.state);
@@ -298,13 +309,14 @@ export function App({
       dismissMarker: (marker) => pending.dismiss(marker),
       subscribe: (listener) => pending.subscribe(listener),
       version: () => pending.version(),
-      startSignIn: async (workspaceId) => {
-        const outcome = await port.session.startSignIn(workspaceId);
+      startSignIn: async (workspaceId, token) => {
+        const outcome = await port.session.startSignIn(workspaceId, token);
         if (outcome.kind !== "ok") return "failed";
         assignLocation(outcome.value.navigateTo);
         return "started";
       },
       signOut: () => void signOutRef.current(),
+      challenge,
     }),
     // Stable for the app's life: the props it reads never change, callbacks read refs.
     [guarded],

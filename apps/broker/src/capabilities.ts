@@ -1,6 +1,7 @@
 import { createWorkersFixedWorkosLoginPort } from "../../../packages/identity/src/fixed-workos-login-port.js";
 import type { FixedWorkosLoginPort } from "../../../packages/identity/src/standalone-login.js";
 import {
+  loginJson,
   parseLoginConfiguration,
   type LoginControl,
 } from "../../../packages/identity/src/standalone-login-protocol.js";
@@ -12,6 +13,8 @@ import {
   brokerVaultRole,
   neonLeaseNamespace,
   parseBrokerDatabaseBinding,
+  parseTurnstileConfiguration,
+  turnstileKeyPattern,
   workosSessionNamespace,
   type BrokerCaller,
 } from "../../../packages/identity/src/broker-protocol.js";
@@ -19,12 +22,13 @@ import { createVaultKeyring, type VaultKeyring } from "./vault.js";
 
 // Broker v0 trust model (ADR-0007 item 3): every holder of the ApiBroker binding
 // is trusted for these pre-authentication identity calls and role leases only.
-// No merchant, model or other provider credential may be added under it.
+// No merchant, model or other provider credential may be added under it; the
+// Turnstile secret is the one admitted beside WorkOS (ADR-0019 item 6).
 // Trust model v1 (ADR-0022 item 7) adds one entrypoint per caller, each serving only
 // its own role lease; the vault keys stay inside the broker and never cross RPC.
 
 export type BrokerEntrypoint = "ApiBroker" | "ConnectorBroker" | "RuntimeBroker";
-export type BrokerMethod = "health" | "neonLease" | "workosSessionPage";
+export type BrokerMethod = "health" | "neonLease" | "workosSessionPage" | "challengeVerify";
 export type BrokerFailureCode =
   | "INPUT_INVALID"
   | "NAMESPACE_DENIED"
@@ -50,6 +54,12 @@ export interface BrokerVault {
   readonly keyring: VaultKeyring;
   readonly databasePassword: string;
 }
+// P05.T01ab: siteverify for the configured hostname and the two configured actions.
+export interface BrokerChallenge {
+  readonly secret: string;
+  readonly hostname: string;
+  readonly actions: readonly string[];
+}
 export interface BrokerCapabilities {
   readonly sessions: Readonly<BrokerSessions> | null;
   /** The api caller's eight role leases (ApiBroker). */
@@ -59,6 +69,10 @@ export interface BrokerCapabilities {
   /** The orchestrator's own role lease (RuntimeBroker). */
   readonly runtime: Readonly<BrokerDatabase> | null;
   readonly vault: Readonly<BrokerVault> | null;
+  readonly challenge: Readonly<BrokerChallenge> | null;
+  // Hosted environments sign in only behind the guard (ADR-0019 item 6), so their
+  // health also needs the challenge capability; development may run without it.
+  readonly challengeRequired: boolean;
 }
 
 const nothing: Readonly<BrokerCapabilities> = Object.freeze({
@@ -67,6 +81,8 @@ const nothing: Readonly<BrokerCapabilities> = Object.freeze({
   connector: null,
   runtime: null,
   vault: null,
+  challenge: null,
+  challengeRequired: true,
 });
 const environments = ["development", "staging", "production"] as const;
 const initialisations = new WeakMap<object, Promise<Readonly<BrokerCapabilities>>>();
@@ -165,6 +181,37 @@ async function vault(env: object, environment: string): Promise<Readonly<BrokerV
   }
 }
 
+// TURNSTILE_CONFIGURATION_JSON {schemaVersion:1, hostname, actions} and the 0x secret.
+// The hostname must be the login origin's: Turnstile reports where it was solved.
+// parseTurnstileConfiguration is shared with the staging deploy's gate 4.
+function challenge(env: object): Readonly<BrokerChallenge> | null {
+  try {
+    const secret = own(env, "TURNSTILE_SECRET_KEY");
+    if (typeof secret !== "string" || turnstileKeyPattern.exec(secret)?.[0] !== secret) return null;
+    const login = loginJson(own(env, "LOGIN_CONFIGURATION_JSON"), 32768, [
+      "schemaVersion",
+      "controllerProtocol",
+      "origin",
+      "retentionTier",
+      "authenticationBindingJson",
+      "verificationProfileJson",
+      "profileId",
+      "profileRecordRevision",
+    ]);
+    const { hostname, actions } = parseTurnstileConfiguration(
+      own(env, "TURNSTILE_CONFIGURATION_JSON"),
+      login.origin,
+    );
+    return Object.freeze({
+      secret,
+      hostname,
+      actions: Object.freeze([actions.login, actions.signup]),
+    });
+  } catch {
+    return null;
+  }
+}
+
 async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
   let result = nothing;
   try {
@@ -179,6 +226,8 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
         connector: database(env, environment, "connector"),
         runtime: database(env, environment, "runtime"),
         vault: await vault(env, environment),
+        challenge: challenge(env),
+        challengeRequired: environment !== "development",
       });
   } catch {
     result = nothing;
@@ -191,6 +240,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
       connector: result.connector !== null,
       runtime: result.runtime !== null,
       vault: result.vault !== null,
+      challenge: result.challenge !== null,
     }),
   );
   return result;
@@ -234,7 +284,11 @@ export const brokerEntrypoints: Readonly<Record<BrokerCaller, BrokerEntrypoint>>
 export function brokerHealth(env: unknown): Promise<boolean> {
   return invokeBrokerMethod("health", async () => {
     const capabilities = await brokerCapabilities(env);
-    return capabilities.sessions !== null && capabilities.database !== null;
+    return (
+      capabilities.sessions !== null &&
+      capabilities.database !== null &&
+      (capabilities.challenge !== null || !capabilities.challengeRequired)
+    );
   });
 }
 

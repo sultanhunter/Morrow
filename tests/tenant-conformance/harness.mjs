@@ -11,13 +11,12 @@
 // with SET ROLE, as scaffolding.
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { localPostgresLab } from "../../scripts/local-postgres-lab.mjs";
 import {
   applyChainAsAdministrator,
   createAdministrator,
-  manifestChain as administratorChain,
 } from "../../scripts/fixtures/createrole-administrator.mjs";
+import { loadMigrationChain } from "../../scripts/migration-chain.mjs";
 import { validateDefinition } from "../../packages/contracts/src/validation.ts";
 import { workPermissions } from "../../packages/contracts/src/work-permissions.ts";
 
@@ -33,38 +32,29 @@ export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // ---------------------------------------------------------------------------
 // Database lifecycle and the migration chain.
 
-// Role prerequisites in the order the identity fixtures use them, then the work
-// roles before the first work migration. Every other manifest entry is applied
-// generically with its own `executeAs`. Keyed by the migration name without its
-// sequence, so an entry keeps its prerequisite under any sequence: account-onboarding
-// is P05.T01x Part B (0013), which refuses to apply without morrow_identity_onboarding.
-const prerequisites = new Map([
-  ["identity-foundation.sql", "infra/identity-role-prerequisites.sql"],
-  ["login-flow-custody.sql", "infra/identity-login-role-prerequisites.sql"],
-  ["self-browser-family-logout.sql", "infra/identity-logout-role-prerequisites.sql"],
-  ["account-onboarding.sql", "infra/identity-onboarding-role-prerequisites.sql"],
-  // M2 PR-1: the three membership-free executor logins (ADR-0022 item 8), before 0019.
-  ["spine-identity-bridge.sql", "infra/spine-executor-role-prerequisites.sql"],
-]);
-export const migrationPrerequisite = (file) =>
-  prerequisites.get(file.replace(/^[0-9]{4}\./, "")) ?? null;
-export const workMigrationFiles = Object.freeze([
-  "0014.work-identity-bridge.sql",
-  "0015.work-state.sql",
-]);
-
-export function manifestChain() {
-  const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
-  let previous = 0;
-  return manifest.migrations.map((entry) => {
-    const text = readFileSync("migrations/" + entry.file, "utf8");
-    if (!(entry.sequence > previous) || sha(text) !== entry.sha256)
-      throw Error("HARNESS_MIGRATION_UNQUALIFIED");
-    previous = entry.sequence;
-    const executeAs = entry.executeAs ?? "morrow_identity_owner";
-    if (!/^morrow_[a-z]+_owner$/.test(executeAs)) throw Error("HARNESS_EXECUTE_AS_INVALID");
-    return Object.freeze({ ...entry, executeAs, text });
-  });
+// The chain comes from scripts/migration-chain.mjs (P04.T01i D3): the manifest's own
+// pinned prerequisites ({file, sha256}) and `executeAs`, verified by digest. The harness
+// keeps no private file map. Each prerequisite runs once, before the first entry that
+// pins it; every entry runs under its own `executeAs` on a fresh connection (the
+// superuser "harness shape" of P04.T01j D4).
+export function migrationPlan(chain = loadMigrationChain()) {
+  const steps = [];
+  for (const entry of chain) {
+    for (const prerequisite of entry.prerequisites)
+      steps.push(
+        Object.freeze({ kind: "prerequisite", file: prerequisite.file, text: prerequisite.text }),
+      );
+    steps.push(
+      Object.freeze({
+        kind: "migration",
+        sequence: entry.sequence,
+        file: entry.file,
+        executeAs: entry.executeAs,
+        text: entry.text,
+      }),
+    );
+  }
+  return Object.freeze(steps);
 }
 
 // A fresh psql connection per call. The shared adapter's 10 s limit is too short
@@ -149,25 +139,31 @@ export function applyMigrationChain(
   id,
   { stopBefore = Infinity, administrator = "superuser" } = {},
 ) {
+  if (administrator !== "superuser" && administrator !== "createrole")
+    throw Error("HARNESS_ADMINISTRATOR_INVALID");
+  // Both shapes read the one verified chain (P04.T01i D3): every migration and pinned
+  // prerequisite digest is checked before any SQL runs.
+  let chain;
+  try {
+    chain = loadMigrationChain();
+  } catch {
+    throw Error("HARNESS_MIGRATION_UNQUALIFIED");
+  }
   if (administrator === "createrole") {
     createAdministrator(id, { bypassrls: false });
-    return applyChainAsAdministrator(id, administratorChain(), { stopBefore });
+    return applyChainAsAdministrator(id, chain, { stopBefore });
   }
-  if (administrator !== "superuser") throw Error("HARNESS_ADMINISTRATOR_INVALID");
   psql(id, "CREATE DATABASE morrow;", { database: "morrow_lab" });
-  let workRolesApplied = false;
   const applied = [];
-  for (const entry of manifestChain()) {
-    if (entry.sequence >= stopBefore) break;
-    const prerequisite = migrationPrerequisite(entry.file);
-    if (prerequisite) psql(id, readFileSync(prerequisite, "utf8"));
-    if (!workRolesApplied && workMigrationFiles.includes(entry.file)) {
-      psql(id, readFileSync("infra/work-role-prerequisites.sql", "utf8"));
-      workRolesApplied = true;
+  for (const step of migrationPlan(chain.filter((entry) => entry.sequence < stopBefore))) {
+    if (step.kind === "prerequisite") {
+      psql(id, step.text);
+      continue;
     }
+    if (!/^morrow_[a-z]+_owner$/.test(step.executeAs)) throw Error("HARNESS_EXECUTE_AS_INVALID");
     // A fresh connection per migration: a SET ROLE before BEGIN is session-level.
-    psql(id, "SET ROLE " + entry.executeAs + ";\n" + entry.text);
-    applied.push(entry.sequence);
+    psql(id, "SET ROLE " + step.executeAs + ";\n" + step.text);
+    applied.push(step.sequence);
   }
   return applied;
 }

@@ -418,7 +418,7 @@ const settingKeys = new Set([
   "tsconfig",
 ]);
 const allowedBindings = Object.freeze({
-  api: ["vars", "services", "secrets", "assets"],
+  api: ["vars", "services", "secrets", "assets", "ratelimits"],
   broker: ["vars", "secrets"],
   orchestrator: ["workflows", "queues", "secrets"],
   connector: ["vars", "secrets"],
@@ -442,6 +442,21 @@ export const committedIdentifierPatterns = Object.freeze([
   ["route", /"routes?"\s*:/],
 ]);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// P05.T01ab (ADR-0019 item 8): the api's per-address sign-in limits, exact per
+// environment: login start 10, the callback 20 and signup 5 per 60 s, in namespaces
+// 7001-7003 (development), 7101-7103 (staging) and 7201-7203 (production).
+export function edgeRateLimits(environment) {
+  const base = { development: 7001, staging: 7101, production: 7201 }[environment];
+  return [
+    ["LOGIN_START_LIMITER", 10],
+    ["LOGIN_CALLBACK_LIMITER", 20],
+    ["SIGNUP_LIMITER", 5],
+  ].map(([name, limit], i) => ({
+    name,
+    namespace_id: String(base + i),
+    simple: { limit, period: 60 },
+  }));
+}
 
 // Resolved-configuration checks for AC01, AC04, AC22 (static) and AC24.
 export async function verifyEdgeConfig({
@@ -551,6 +566,8 @@ export async function verifyEdgeConfig({
           !same(Object.keys(assets).sort(), ["directory", "not_found_handling", "run_worker_first"])
         )
           problem("EDGE_API_ASSETS", where);
+        if (!same(config.ratelimits, edgeRateLimits(environment)))
+          problem("EDGE_API_RATELIMITS", where);
         if (
           config.dev?.ip !== edgeDevOrigin.host ||
           config.dev?.port !== edgeDevOrigin.port ||
@@ -830,9 +847,19 @@ async function smokeDevPhase(protocol, markers, check) {
       label("broker_binds_only_morrow_environment"),
       JSON.stringify(tables["morrow-development-broker"]) === '["MORROW_ENVIRONMENT"]',
     );
+    // P05.T01ab adds the three per-address limiters; still no text or secret binding.
     check(
-      label("api_binds_only_broker_and_environment"),
-      JSON.stringify(tables["morrow-development-api"]) === '["BROKER","MORROW_ENVIRONMENT"]',
+      label("api_binds_only_broker_environment_and_limiters"),
+      JSON.stringify([...(tables["morrow-development-api"] ?? [])].sort()) ===
+        JSON.stringify(
+          [
+            "BROKER",
+            "LOGIN_CALLBACK_LIMITER",
+            "LOGIN_START_LIMITER",
+            "MORROW_ENVIRONMENT",
+            "SIGNUP_LIMITER",
+          ].sort(),
+        ),
     );
     const missing = /Missing required secrets: ([^\n]*)/.exec(stripColour(output))?.[1] ?? "";
     check(

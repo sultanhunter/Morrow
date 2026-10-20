@@ -74,8 +74,11 @@ test("one role table drives the ten role secrets and the broker's required secre
   assert.deepEqual(brokerCallerRoles.runtime, ["morrow_runtime_executor"]);
   // The broker's own vault login is never leased, so it is not in the table.
   assert.equal(Object.hasOwn(brokerNeonRoles, "morrow_vault_broker"), false);
+  // P05.T01ab (ADR-0019 item 6): the Turnstile secret is the one provider credential
+  // admitted beside WorkOS under v0.
   assert.deepEqual(brokerRequiredSecrets, [
     "WORKOS_API_KEY",
+    "TURNSTILE_SECRET_KEY",
     ...brokerNeonRoleNames.map((role) => "MORROW_DB_PASSWORD_" + role.toUpperCase()),
     "MORROW_DB_PASSWORD_MORROW_VAULT_BROKER",
     "MORROW_VAULT_KEK_V1",

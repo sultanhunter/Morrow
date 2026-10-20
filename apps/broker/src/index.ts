@@ -1,10 +1,12 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type {
   ApiBrokerRpc,
+  ChallengeVerdict,
   ConnectorBrokerRpc,
   RuntimeBrokerRpc,
 } from "../../../packages/identity/src/broker-protocol.js";
 import { brokerCallerHealth, brokerHealth, brokerInputInvalid } from "./capabilities.js";
+import { brokerChallengeVerify } from "./challenge.js";
 import { brokerNeonLease } from "./neon-lease.js";
 import { brokerWorkosSessionPage } from "./workos-session.js";
 
@@ -13,7 +15,8 @@ import { brokerWorkosSessionPage } from "./workos-session.js";
 // Each method checks its arity and forwards to a module-scope handler. Results are
 // strings or booleans only.
 
-// The api Worker's entrypoint: exactly three prototype methods (v0).
+// The api Worker's entrypoint: exactly four prototype methods (v0; ADR-0019 item 6
+// added challengeVerify).
 export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0 ? brokerHealth(this.env) : brokerInputInvalid("health");
@@ -31,6 +34,11 @@ export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc
     return arguments.length === 3
       ? brokerWorkosSessionPage(this.env, namespaceJson, selectorJson, budgetMs)
       : brokerInputInvalid("workosSessionPage");
+  }
+  challengeVerify(action: string, token: string, budgetMs: number): Promise<ChallengeVerdict> {
+    return arguments.length === 3
+      ? brokerChallengeVerify(this.env, action, token, budgetMs)
+      : brokerInputInvalid("challengeVerify");
   }
 }
 

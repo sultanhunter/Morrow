@@ -31,6 +31,10 @@ export function newCommandKey(): string {
   return key;
 }
 export const byteLength = (text: string) => new TextEncoder().encode(text).length;
+/** P05.T01ab: the X-Morrow-Challenge shape the api guard accepts (1-2048 bytes). */
+export const challengeTokenPattern = /^[A-Za-z0-9._-]{1,2048}$/;
+export const isChallengeToken = (value: unknown): value is string =>
+  typeof value === "string" && challengeTokenPattern.test(value);
 
 export interface ClientOptions {
   readonly transport?: Transport;
@@ -40,7 +44,13 @@ export interface ClientOptions {
 }
 export interface Client {
   get(path: string, signal?: AbortSignal): Promise<Reply>;
-  post(path: string, body: string, idempotencyKey: string | null): Promise<Reply>;
+  /** `challenge` adds X-Morrow-Challenge (login start and signup only). */
+  post(
+    path: string,
+    body: string,
+    idempotencyKey: string | null,
+    challenge?: string | null,
+  ): Promise<Reply>;
 }
 
 const relativePath = (path: string) =>
@@ -105,7 +115,7 @@ export function createClient(options: ClientOptions = {}): Client {
       );
     },
     // Commands are never aborted by navigation; after 15 s they are uncertain.
-    post(path, body, idempotencyKey) {
+    post(path, body, idempotencyKey, challenge = null) {
       const headers: Record<string, string> = {
         "X-Morrow-Request": "1",
         "Content-Type": "application/json",
@@ -114,6 +124,11 @@ export function createClient(options: ClientOptions = {}): Client {
         if (!isCommandKey(idempotencyKey))
           return Promise.resolve({ kind: "not_sent", offline: false });
         headers["Idempotency-Key"] = idempotencyKey;
+      }
+      if (challenge !== null) {
+        if (!isChallengeToken(challenge))
+          return Promise.resolve({ kind: "not_sent", offline: false });
+        headers["X-Morrow-Challenge"] = challenge;
       }
       return exchange(
         path,

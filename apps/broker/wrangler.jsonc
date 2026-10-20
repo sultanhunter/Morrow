@@ -1,13 +1,14 @@
 // morrow-<env>-broker (ADR-0007): no public route, no workers.dev or preview
 // URL; reachable only through its service-binding entrypoints (ApiBroker, and under
 // trust model v1 ConnectorBroker and RuntimeBroker, ADR-0022 item 7). It is the only
-// Worker that binds provider credentials (`brokerRequiredSecrets`): the WorkOS API
-// key, the ten leased Neon role passwords, its own vault login's password and the
-// vault KEK (MORROW_VAULT_KEK_V1); production omits the last two (the vault is held there
-// until the ADR-0007 item 9 production custody ADR). No identifier is committed; the first hosted
-// deploy fails closed until P04.T01i supplies `wrangler deploy --secrets-file`.
-// Merchant and model credentials come only under trust model v1, as vault rows or
-// the secrets ADR-0022 item 7 admits, each with the PR that uses it.
+// Worker that binds provider credentials (`brokerRequiredSecrets`, 14 names): the WorkOS
+// API key, the Turnstile secret (P05.T01ab, ADR-0019 item 6), the ten leased Neon role
+// passwords, its own vault login's password and the vault KEK (MORROW_VAULT_KEK_V1);
+// production omits the last two (12 names; the vault is held there until the ADR-0007
+// item 9 production custody ADR). No identifier is committed; the first hosted deploy
+// fails closed until P04.T01i supplies `wrangler deploy --secrets-file`. Merchant and
+// model credentials come only under trust model v1, as vault rows or the secrets
+// ADR-0022 item 7 admits, each with the PR that uses it.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "morrow-development-broker",
@@ -25,6 +26,7 @@
   "secrets": {
     "required": [
       "WORKOS_API_KEY",
+      "TURNSTILE_SECRET_KEY",
       "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGIN",
       "MORROW_DB_PASSWORD_MORROW_IDENTITY_PREAUTH",
       "MORROW_DB_PASSWORD_MORROW_IDENTITY_SESSIONS",
@@ -46,6 +48,7 @@
       "secrets": {
         "required": [
           "WORKOS_API_KEY",
+          "TURNSTILE_SECRET_KEY",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGIN",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_PREAUTH",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_SESSIONS",
@@ -69,6 +72,7 @@
       "secrets": {
         "required": [
           "WORKOS_API_KEY",
+          "TURNSTILE_SECRET_KEY",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGIN",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_PREAUTH",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_SESSIONS",

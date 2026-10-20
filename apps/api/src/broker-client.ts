@@ -1,8 +1,11 @@
 import {
   brokerLimits,
   brokerUtf8Bytes,
+  challengeLimits,
+  challengeTokenValid,
   decodeNeonLeaseGrant,
   type ApiBrokerRpc,
+  type ChallengeVerdict,
 } from "../../../packages/identity/src/broker-protocol.js";
 import type { LoginControl } from "../../../packages/identity/src/standalone-login-protocol.js";
 import type { WorkosSessionPageReader } from "../../../packages/identity/src/workos-session-status.js";
@@ -163,5 +166,36 @@ export function createBrokerHealth(
       return value;
     })();
     return pending;
+  };
+}
+
+// P05.T01ab: exactly one challengeVerify RPC, raced against the request's signal and
+// the budget plus a small RPC allowance; never retried. Only "passed" or "failed"
+// are verdicts; anything else, a late reply or a throw is API_BROKER_HELD.
+export function createBrokerChallengeVerifier(
+  broker: ApiBrokerRpc,
+): (
+  action: string,
+  token: string,
+  budgetMs: number,
+  signal: AbortSignal,
+) => Promise<ChallengeVerdict> {
+  return async (action, token, budgetMs, signal) => {
+    if (
+      typeof action !== "string" ||
+      !challengeTokenValid(token) ||
+      !Number.isSafeInteger(budgetMs) ||
+      budgetMs < 1 ||
+      budgetMs > challengeLimits.budgetMaxMs ||
+      !(signal instanceof AbortSignal)
+    )
+      throw held();
+    const verdict: unknown = await raceBrokerCall(
+      () => broker.challengeVerify(action, token, budgetMs),
+      signal,
+      budgetMs + 250,
+    );
+    if (verdict !== "passed" && verdict !== "failed") throw held();
+    return verdict;
   };
 }

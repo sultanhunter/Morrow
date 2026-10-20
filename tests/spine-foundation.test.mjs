@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { migrationSqlViolations } from "../scripts/migration-sql.mjs";
-import { migrationPrerequisite } from "./tenant-conformance/harness.mjs";
+import { loadMigrationChain } from "../scripts/migration-chain.mjs";
 import {
   billingFunctions,
   billingTables,
@@ -55,10 +55,18 @@ test("manifest: rows 19-24, their executeAs roles, digests and the one prerequis
     { file: "infra/spine-executor-role-prerequisites.sql", sha256: sha(prerequisites) },
   ]);
   for (const row of rows.slice(1)) assert.equal(row.prerequisites, undefined, row.file);
-  // The superuser harness applies the same prerequisite before 0019.
-  assert.equal(
-    migrationPrerequisite("0019.spine-identity-bridge.sql"),
-    "infra/spine-executor-role-prerequisites.sql",
+  // The one chain module (P04.T01i D3), which the harness and every lab read, pins the same
+  // prerequisite before 0019 and the three logins it creates.
+  const entry = loadMigrationChain().find((e) => e.sequence === 19);
+  assert.deepEqual(
+    entry.prerequisites.map((p) => [p.file, p.sha256, [...p.roles]]),
+    [["infra/spine-executor-role-prerequisites.sql", sha(prerequisites), logins]],
+  );
+  assert.deepEqual(
+    loadMigrationChain()
+      .filter((e) => e.sequence >= 19)
+      .map((e) => e.executeAs),
+    rows.map((m) => m.executeAs),
   );
 });
 

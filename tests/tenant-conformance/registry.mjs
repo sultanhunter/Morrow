@@ -376,6 +376,13 @@ export const executorLogins = Object.freeze({
   morrow_vault_broker: ["morrow_vault.app_secret_get(text)"],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);
+// Non-tenant schemas outside the manifest. The staging runner's ledger (ADR-0019 item 12)
+// is tooling metadata owned by the migration administrator, with no access for PUBLIC or
+// any Morrow role; lab:staging-runner asserts that. It holds no tenant column or row.
+export const excludedSchemas = Object.freeze({
+  morrow_migrations:
+    "staging runner ledger (ADR-0019 item 12); administrator-owned tooling metadata",
+});
 
 // Each route's P3 probe: which fixture record supplies its foreign IDs and body.
 const probe = (records, body) => Object.freeze({ records, body });

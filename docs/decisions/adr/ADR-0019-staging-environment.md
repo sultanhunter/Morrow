@@ -2,7 +2,7 @@
 
 - Status: Accepted 2026-10-19 (owner approval in chat; see Approval). Items 1, 2, 4, 5 and 6, and the per-IP limit in item 8, restate the owner's decisions of 2026-10-19 (chat). The owner's approval of this record also confirms the items marked *Recommended*.
 - Date: 2026-10-19
-- Amended: item 5, 2026-10-19 (owner answer on third-party GitHub access: an exception for the platform GitHub Apps). See Amendments.
+- Amended: item 5, 2026-10-19 (owner answer on third-party GitHub access: an exception for the platform GitHub Apps); item 9, 2026-10-19 (owner answer on the failed-verification log line). See Amendments.
 - Amends:
   - ADR-0014 item 5 (when branch protection must exist);
   - ADR-0007 items 1, 3 and 4 (a public workers.dev route on the api, a fourth broker method, and one more provider credential in the broker);
@@ -89,7 +89,7 @@
    - The limits are eventually consistent per Cloudflare location. They are a speed bump, not a quota, and the per-profile windows of ADR-0009 item 8 still apply.
 9. **Observability for M1 (*Recommended*).**
    - Workers Logs are on in staging, with invocation logs, traces, logpush and source maps off.
-   - Only fixed-code events are logged, and rejected requests are not logged.
+   - Only fixed-code events are logged. Rejected requests are not logged, except one fixed-code `morrow_challenge {code:"failed"}` line per failed verification (amended 2026-10-19; see Amendments). The per-IP limiter (item 8) caps that line, and it costs about $0.60 per 1M lines.
    - Cloudflare billing usage alerts go to the owner at about 10% of each included allowance.
    - **M1 is reached with only part of P04.T03a.** P04.T03a's acceptance, "a deliberately failed staging request produces one correlated, redacted event and an alert to a named recipient", stays open, and the P04 Done gate is not claimed. Until P06.T01c, GitHub's failed-run email to the owner is the interim route for an uncertain deploy, rollback or migration.
 10. **Staging database (*Recommended*).**
@@ -162,3 +162,15 @@ Item 5's mitigation "Every other GitHub App, OAuth app, token, deploy key and co
 The same exception applies to the ADR-0014 item 5 amendment.
 
 Owner decision, 2026-10-19, in chat. Asked "Security gap: the staging rules you approved (ADR-0019) assume no outside app can push to the Morrow repo. Today several can: the Codex app (read/write to all repos), plus Vercel, Netlify and others, and an old no-expiry token 'AppForge Github Actions' (repo + workflow access). Anything that can push to Morrow could change CI and deploy code that reads the staging keys. And because staging shares your Cloudflare account, that code could also reach your other products' R2 buckets. What should we do?", the owner answered "Suspend Codex + revoke old token (Recommended)". The option read: "I suspend the Codex app (reversible; you said you don't use it) and you delete the 10-month-unused 'AppForge' token. The reputable platform apps (Vercel, Netlify, etc.) stay, recorded as an accepted MVP risk." This supersedes the owner's earlier answer on the Codex app the same day, "i am not working with codex so it won't push anything so leave it".
+
+### 2026-10-19: item 9, the failed-verification log line (P05.T01ab)
+
+The second bullet of item 9 now reads:
+
+> Only fixed-code events are logged. Rejected requests are not logged, except one fixed-code `morrow_challenge {code:"failed"}` line per failed verification. The per-IP limiter (item 8) caps that line at 15 a minute per IPv4 address or IPv6 /56 (10 at login start plus 5 at signup). It costs about $0.60 per 1M lines (Workers Logs beyond the included allowance).
+
+- **Why.** A failed verification is a 403, so the original wording forbade the line that P04.T01i D6 specifies and that M-O1, the staging log probe, needs as its one event a probe can cause on purpose. The line carries a fixed code and no value: no address, token, secret or reply.
+- **What P05.T01ab emits.** The broker logs the line once for each `failed` verdict (403 `challenge_failed`). A held verification answers 503 and logs only its fixed-code fail-closed lines (`morrow_broker {method:"challengeVerify", code}` and `morrow_edge_guard {code:"CHALLENGE_HELD"}`), which item 9 already allowed. Other rejections (403 `challenge_required`, the request guard's 403 and every 429) still log nothing.
+- **Residual cost.** A client that rotates addresses is not capped by the limiter. Each well-formed junk token it sends costs one siteverify call and one log line; the bound there is the Cloudflare usage alert and the kill switch (item 15).
+
+Owner decision, 2026-10-19, in chat. Asked "Sign-in protection detail: when someone sends a fake bot-check token, we log one line, which costs a fraction of a cent. The per-IP rate limit already caps volume. The staging rules said rejected requests are never logged. Keep this one log line?", the owner answered "Keep it (Recommended)".

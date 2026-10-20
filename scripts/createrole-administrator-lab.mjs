@@ -11,7 +11,6 @@ import {
   createAdministrator,
   d4Transaction,
   identityExecutors,
-  manifestChain,
   migrationBody,
   morrowMembershipCensusSql,
   morrowRoles,
@@ -19,6 +18,7 @@ import {
   psqlAs,
   spineExecutors,
 } from "./fixtures/createrole-administrator.mjs";
+import { loadMigrationChain } from "./migration-chain.mjs";
 
 // P04.T01j D8 (ADR-0020): the non-superuser migration administrator. Three throwaway
 // network-none PostgreSQL 17 containers, one at a time:
@@ -42,7 +42,9 @@ const check = (name, passed) => {
   checks.push({ name, passed: true });
   console.log(JSON.stringify({ check: name, passed: true }));
 };
-const chain = manifestChain();
+// The one verified chain (scripts/migration-chain.mjs, P04.T01i D3): every migration and
+// pinned prerequisite digest, the runner contract and `executeAs`, checked before any SQL.
+const chain = loadMigrationChain();
 // The chain through its head, including the M2 PR-1 spine migrations (0019-0024), which
 // add the three membership-free executor logins this lab also qualifies.
 if (

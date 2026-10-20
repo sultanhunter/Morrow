@@ -6,6 +6,8 @@
   "global_processing": "permitted_under_approved_data_policy",
   "cloudflare": {
     "account_id": null,
+    "workers_dev_subdomain": null,
+    "origin": null,
     "workers": {
       "api": "morrow-staging-api",
       "connector": "morrow-staging-connector",
@@ -26,15 +28,20 @@
   },
   "neon": {
     "project_id": null,
+    "root_branch_id": null,
     "branch_id": null,
+    "branch_name": "staging",
     "region_id": null,
     "primary_storage_country": "US",
     "major_version": 17,
     "minor_version": null,
-    "plan": "Launch",
+    "plan": "Free",
+    "history_window_hours": 6,
     "maximum_cu": null,
-    "pitr_days": 7,
-    "daily_recovery_days": 7,
+    "pitr_days": null,
+    "daily_recovery_days": null,
+    "recovery": "owner_reset_from_root_branch",
+    "recovery_requirement": "seven_day_staging_recovery_open_in_P04.T04",
     "tenant_context": "SET_LOCAL_in_interactive_transaction",
     "authority_cache": false
   },
@@ -66,5 +73,10 @@
     "single_writer_generation": true,
     "effective_network_tests": "not_run",
     "dispatch": "disabled"
+  },
+  "github": {
+    "repository": "sultanhunter/Morrow",
+    "scope": "environment",
+    "environment": "staging"
   }
 }

@@ -22,6 +22,11 @@ import { chromium } from "playwright";
 import { artifactPath, writeArtifact } from "./artifacts.mjs";
 import { edgeRefusals } from "./edge.mjs";
 import { edgePostgresqlJourneys, edgePostgresqlRoles } from "./edge-postgresql-lab.mjs";
+import {
+  labChallengeActions,
+  turnstileScriptUrl as turnstileScript,
+  turnstileStub,
+} from "./fixtures/turnstile-siteverify.mjs";
 import { accountAndWorkJourneys } from "./workspace-ui-journey-work.mjs";
 
 const held = (code) => Error("WORKSPACE_UI_JOURNEY_" + code);
@@ -29,6 +34,9 @@ const require = (condition, code) => {
   if (!condition) throw held(code);
 };
 const workosAuthorize = "https://api.workos.com/user_management/authorize";
+// P05.T01ab: the one Turnstile URL the SPA loads is fulfilled with a stub
+// `window.turnstile` (scripts/fixtures/turnstile-siteverify.mjs) that hands out tokens
+// the lab issued to its synthetic siteverify, one per execute, in order.
 
 const freePort = () =>
   new Promise((done, fail) => {
@@ -80,7 +88,7 @@ export async function workspaceUiJourney(engine, createService) {
   const port = await freePort();
   const origin = `https://127.0.0.1:${port}`;
   const tls = labCertificate();
-  const observed = { aborted: 0, authorize: 0, posts: [] };
+  const observed = { aborted: 0, authorize: 0, turnstileScript: 0, posts: [] };
   const result = await edgePostgresqlJourneys(engine, createService, {
     origin,
     listen: { host: "127.0.0.1", port, httpsKey: tls.key, httpsCert: tls.cert },
@@ -118,6 +126,21 @@ export async function workspaceUiJourney(engine, createService) {
               }
               observed.aborted++;
               return route.abort();
+            },
+          );
+          // Registered after the abort-all route, so Playwright tries it first: the
+          // allowlisted Turnstile script is fulfilled by the stub and never aborted.
+          const stubTokens = [1, 2, 3, 4].map(() => h.siteverify.issue(labChallengeActions.login));
+          h.secret(...stubTokens);
+          await context.route(
+            (url) => url.href === turnstileScript,
+            (route) => {
+              observed.turnstileScript++;
+              return route.fulfill({
+                status: 200,
+                contentType: "text/javascript; charset=utf-8",
+                body: turnstileStub({ [labChallengeActions.login]: stubTokens }),
+              });
             },
           );
           const page = await context.newPage();
@@ -187,6 +210,19 @@ export async function workspaceUiJourney(engine, createService) {
               loginHeaders["content-type"] === "application/json" &&
               !loginSent[0].names.includes("idempotency-key") &&
               !loginSent[0].names.includes("authorization"),
+          );
+          // P05.T01ab-AC08: the start carried the stub's first token, read the
+          // configuration once, loaded the allowlisted script once and was verified once.
+          h.check(
+            "P05T01ab-AC08:start_carries_a_fresh_token",
+            loginSent[0].names.includes("x-morrow-challenge") &&
+              loginHeaders["x-morrow-challenge"] === stubTokens[0] &&
+              h.siteverify.requests.length === 1 &&
+              h.siteverify.requests[0].secretMatches,
+          );
+          h.check(
+            "P05T01ab-AC08:configuration_read_and_script_stubbed_once",
+            sentFor("/auth/challenge").length === 1 && observed.turnstileScript === 1,
           );
           const entered = await enteredBootstrap;
           const view = await entered.json();

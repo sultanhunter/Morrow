@@ -1,0 +1,734 @@
+// P04.T01i AC07 (no secret marker reaches stdout, stderr, argv, the environment, logs,
+// errors or the report, from any source, including malformed files, bad URLs and failing
+// child processes) and AC08 (`secrets-status` reports presence, mode, format and age
+// without values, and exits non-zero on a missing or extra secret or a wrong mode).
+// Every secret here is a synthetic marker in a temporary HOME; nothing reads the
+// operator's ~/.config/morrow or reaches a provider.
+import test, { after } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
+import { captureConsole, edgeRateLimits, loadWranglerApi } from "../scripts/edge.mjs";
+import { identityConstants, main, workerConfigs } from "../scripts/staging.mjs";
+import { createTools, toolJson } from "../scripts/staging-tools.mjs";
+import { syntheticCredential, syntheticGithubCredential } from "../scripts/staging-token.mjs";
+import {
+  fakeContext,
+  fakeDatabase,
+  fakeTools,
+  labBinding,
+  plantedHome,
+} from "./fixtures/staging-fakes.mjs";
+
+const alnum = (n) => randomBytes(n).toString("hex");
+const markers = {
+  workos: "WOS" + alnum(10),
+  turnstile: "tsk" + alnum(12),
+  url: "urlpw" + alnum(10),
+  neonKey: "neonkey" + alnum(18),
+  operator: "op" + alnum(19),
+  token: "envtok" + alnum(17),
+  envWorkos: "envwos" + alnum(10),
+  envNeon: "envneon" + alnum(10),
+  envDb: "envdb" + alnum(10),
+  tool: "toolout" + alnum(10),
+  database: "dberr" + alnum(10),
+  malformed: "badfile" + alnum(10),
+  // M2 PR-1: the owner's vault KEK, 64 lowercase hex characters.
+  kek: alnum(32),
+};
+const files = () => ({
+  "workos-api-key": "sk_test_" + markers.workos,
+  "turnstile-secret": "0x4AAAAAAA" + markers.turnstile,
+  "neon-owner-url": `postgresql://neondb_owner:${markers.url}@${labBinding.hostname}/morrow?sslmode=require`,
+  "neon-project-api-key": "napi_" + markers.neonKey,
+  "cloudflare-operator-token": markers.operator,
+  "vault-kek-v1": markers.kek,
+});
+const everyMarker = () => Object.values(markers);
+const contains = (text, values) => values.filter((value) => value && String(text).includes(value));
+
+// ---------------------------------------------------------------------------
+// AC08: secrets-status in-process over fakes.
+const now = Date.parse("2026-10-20T12:00:00Z");
+const daysAgo = (d) => new Date(now - d * 86400000).toISOString();
+async function status({
+  plant = files(),
+  modes = {},
+  links = {},
+  directoryMode,
+  tools = {},
+  database = {},
+  ages = {},
+} = {}) {
+  const planted = plantedHome(plant, { modes, links, directoryMode });
+  try {
+    const constants = (await fakeContext({ home: planted.home, tools: fakeTools().tools }))
+      .constants;
+    const tracked = [...constants.brokerSecrets, "LOGIN_CAPSULE_KEYRING"];
+    const record = {
+      schemaVersion: 1,
+      secrets: Object.fromEntries(
+        tracked
+          .filter((name) => ages[name] !== null)
+          .map((name) => [
+            name,
+            {
+              rotatedAt: daysAgo(ages[name] ?? 10),
+              worker: name === "LOGIN_CAPSULE_KEYRING" ? "api" : "broker",
+              versionId: null,
+            },
+          ]),
+      ),
+    };
+    writeFileSync(join(planted.directory, "rotation-record.json"), JSON.stringify(record), {
+      mode: 0o600,
+    });
+    const fake = fakeTools({
+      wrangler: {
+        secrets: {
+          api: ["LOGIN_CAPSULE_KEYRING"],
+          broker: constants.brokerSecrets,
+          orchestrator: [],
+          connector: [],
+          ...(tools.secrets ?? {}),
+        },
+      },
+      gh: tools.gh,
+      ...(tools.extra ?? {}),
+    });
+    const db = fakeDatabase({ roles: constants.roles, provisioned: true, ...database });
+    const { ctx, out, err } = await fakeContext({
+      home: planted.home,
+      tools: fake.tools,
+      database: db.connector,
+      now,
+    });
+    const code = await main(["secrets-status"], ctx);
+    const report = JSON.parse(out[0] ?? err[0]);
+    return { code, report, text: out.join("\n") + err.join("\n"), calls: fake.calls };
+  } finally {
+    planted.cleanup();
+  }
+}
+
+// AC02 after P05.T01ab (D1, ADR-0019 items 6 and 8) and M2 PR-1 (ADR-0022 items 7-8): the
+// broker's exact secret set is `brokerRequiredSecrets`, fourteen names: WORKOS_API_KEY,
+// TURNSTILE_SECRET_KEY, the eleven role passwords (the ten leased roles and the broker's
+// own `morrow_vault_broker`) and MORROW_VAULT_KEK_V1. secrets-status, gate 6 and the
+// first-deploy file all use that set, and it is the broker's wrangler `secrets.required`
+// in development and staging; production requires its vault-free subset (twelve names,
+// `brokerRequiredSecretsFor("production")`) until the ADR-0007 item 9 custody ADR.
+// ADR-0022's Anthropic, Shopify and Stripe credentials join only with their milestones.
+// The staging api keeps P05.T01ab's three limiters and no required secret.
+test("AC02: the broker's fourteen secret names are brokerRequiredSecrets and wrangler's secrets.required", async () => {
+  const constants = await identityConstants();
+  assert.equal(constants.roles.length, 11);
+  assert.equal(constants.roles.at(-1), "morrow_vault_broker");
+  assert.deepEqual(constants.vaultKekSecrets, ["MORROW_VAULT_KEK_V1"]);
+  const expected = [
+    "WORKOS_API_KEY",
+    "TURNSTILE_SECRET_KEY",
+    ...constants.roles.map((role) => constants.passwordSecret(role)),
+    "MORROW_VAULT_KEK_V1",
+  ].sort();
+  assert.equal(constants.brokerSecrets.length, 14);
+  assert.deepEqual(constants.brokerSecrets, expected);
+  const { brokerRequiredSecretsFor } = await import("../packages/identity/src/broker-protocol.ts");
+  const production = [...brokerRequiredSecretsFor("production")].sort();
+  assert.deepEqual(
+    production,
+    constants.brokerSecrets.filter(
+      (name) => !["MORROW_DB_PASSWORD_MORROW_VAULT_BROKER", "MORROW_VAULT_KEK_V1"].includes(name),
+    ),
+  );
+  const { unstable_readConfig } = await loadWranglerApi();
+  const resolved = (worker, env) =>
+    captureConsole(() => unstable_readConfig({ config: workerConfigs[worker], env }, {})).value;
+  for (const env of [undefined, "staging", "production"])
+    assert.deepEqual(
+      [...resolved("broker", env).secrets.required].sort(),
+      env === "production" ? production : constants.brokerSecrets,
+      String(env),
+    );
+  const api = resolved("api", "staging");
+  assert.deepEqual(api.ratelimits, edgeRateLimits("staging"));
+  assert.deepEqual(api.secrets.required, []);
+});
+
+test("AC08: a healthy staging reports presence, mode, format and age, and exits 0", async () => {
+  const { code, report, text } = await status();
+  assert.equal(code, 0, JSON.stringify(report.mismatches));
+  assert.deepEqual(report.mismatches, []);
+  assert.equal(report.directory.ok, true);
+  assert.equal(report.directory.mode, "0700");
+  const required = report.files.filter((f) => f.required);
+  // Five operator files and M2 PR-1's vault KEK (`vault-kek-v1`, the owner's own).
+  assert.equal(required.length, 6);
+  assert.ok(required.some((f) => f.file === "vault-kek-v1"));
+  for (const f of required)
+    assert.deepEqual(
+      [f.exists, f.mode, f.owner, f.nonEmpty, f.format, f.ok],
+      [true, "0600", true, true, true, true],
+    );
+  assert.deepEqual(report.workers.broker.missing, []);
+  assert.deepEqual(report.workers.api.names, ["LOGIN_CAPSULE_KEYRING"]);
+  assert.deepEqual(
+    report.github.secrets.map((s) => s.name),
+    ["CLOUDFLARE_API_TOKEN"],
+  );
+  assert.equal(report.roles.ok, true);
+  assert.equal(report.roles.publicTempRevoked, true);
+  assert.ok(report.ages.every((a) => a.days === 10));
+  assert.deepEqual(contains(text, everyMarker()), []);
+});
+
+test("AC08: a missing, extra or malformed secret, a wrong mode or a symlink exits non-zero", async () => {
+  const cases = [
+    [{ plant: (({ "workos-api-key": _, ...rest }) => rest)(files()) }, "file:workos-api-key"],
+    [{ modes: { "turnstile-secret": 0o644 } }, "file:turnstile-secret"],
+    [{ plant: (({ "vault-kek-v1": _, ...rest }) => rest)(files()) }, "file:vault-kek-v1"],
+    [{ plant: { ...files(), "vault-kek-v1": markers.malformed } }, "file:vault-kek-v1"],
+    [{ modes: { "vault-kek-v1": 0o640 } }, "file:vault-kek-v1"],
+    [
+      { plant: { ...files(), "workos-api-key": "pk_live_" + markers.malformed } },
+      "file:workos-api-key",
+    ],
+    [
+      {
+        plant: {
+          ...files(),
+          "neon-owner-url": "postgresql://neondb_owner:" + markers.malformed + "@[bad",
+        },
+      },
+      "file:neon-owner-url",
+    ],
+    [{ plant: { ...files(), "workos-api-key": "" } }, "file:workos-api-key"],
+    [
+      {
+        plant: (({ "neon-project-api-key": _, ...rest }) => rest)(files()),
+        links: { "neon-project-api-key": "/etc/hosts" },
+      },
+      "file:neon-project-api-key",
+    ],
+    [{ directoryMode: 0o755 }, "directory"],
+    [{ tools: { secrets: { api: ["LOGIN_CAPSULE_KEYRING", "EXTRA_NAME"] } } }, "worker:api"],
+    [{ tools: { secrets: { broker: ["WORKOS_API_KEY"] } } }, "worker:broker"],
+    [{ tools: { secrets: { orchestrator: ["STRAY"] } } }, "worker:orchestrator"],
+    [
+      {
+        tools: {
+          gh: {
+            variables: [
+              { name: "CLOUDFLARE_ACCOUNT_ID" },
+              { name: "STAGING_DEPLOY_ENABLED" },
+              { name: "ROGUE" },
+            ],
+          },
+        },
+      },
+      "github:variables",
+    ],
+    [{ tools: { gh: { secrets: [] } } }, "github:secrets"],
+    [{ database: { controlsOk: false } }, "roles:controls"],
+    [{ ages: { MORROW_DB_PASSWORD_MORROW_API: 95 } }, "age:MORROW_DB_PASSWORD_MORROW_API"],
+    [{ ages: { LOGIN_CAPSULE_KEYRING: 61 } }, "age:LOGIN_CAPSULE_KEYRING"],
+    [
+      {
+        plant: { ...files(), "tmp/broker-secrets.json": '{"WORKOS_API_KEY":"' + markers.malformed },
+      },
+      "file:tmp/broker-secrets.json",
+    ],
+  ];
+  for (const [change, mismatch] of cases) {
+    const { code, report, text } = await status(change);
+    assert.equal(code, 1, mismatch);
+    assert.ok(
+      report.mismatches.includes(mismatch),
+      mismatch + " in " + JSON.stringify(report.mismatches),
+    );
+    assert.deepEqual(contains(text, everyMarker()), [], mismatch);
+  }
+  const extra = await status({
+    tools: { secrets: { api: ["LOGIN_CAPSULE_KEYRING", "EXTRA_NAME"] } },
+  });
+  assert.deepEqual(extra.report.workers.api.extra, ["EXTRA_NAME"]);
+  const mode = await status({ modes: { "turnstile-secret": 0o640 } });
+  assert.equal(mode.report.files.find((f) => f.file === "turnstile-secret").mode, "0640");
+});
+
+test("AC08: ages warn at 80 days (50 for the keyring); transient files are reported", async () => {
+  const aging = await status({
+    ages: { WORKOS_API_KEY: 85, LOGIN_CAPSULE_KEYRING: 55, TURNSTILE_SECRET_KEY: null },
+  });
+  assert.equal(aging.code, 0);
+  assert.ok(aging.report.warnings.includes("age:WORKOS_API_KEY"));
+  assert.ok(aging.report.warnings.includes("age:LOGIN_CAPSULE_KEYRING"));
+  assert.ok(aging.report.warnings.includes("age_unknown:TURNSTILE_SECRET_KEY"));
+  // A vault KEK is replaced by a new version, never rotated in place: its age is reported
+  // and never warned about or failed (M2 PR-1, ADR-0022 item 7).
+  const kek = await status({ ages: { MORROW_VAULT_KEK_V1: 400 } });
+  assert.equal(kek.code, 0, JSON.stringify(kek.report.mismatches));
+  assert.equal(kek.report.ages.find((a) => a.name === "MORROW_VAULT_KEK_V1").days, 400);
+  assert.ok(!kek.report.warnings.some((w) => w.startsWith("age:MORROW_VAULT_KEK")));
+  const transient = await status({ plant: { ...files(), "cloudflare-ci-token": "c".repeat(40) } });
+  assert.equal(transient.code, 0);
+  assert.ok(transient.report.warnings.includes("transient_present:cloudflare-ci-token"));
+  assert.deepEqual(contains(transient.text, ["c".repeat(40)]), []);
+});
+
+// ---------------------------------------------------------------------------
+// AC07: every subcommand path in a child process, captured at the descriptor level.
+const child = new URL("./fixtures/staging-marker-child.mjs", import.meta.url).pathname;
+function runChild(scenario, plant = files()) {
+  const planted = plantedHome(plant);
+  const work = mkdtempSync(join(tmpdir(), "morrow-staging-marker-"));
+  try {
+    writeFileSync(join(work, "markers.json"), JSON.stringify(markers));
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        child,
+        scenario,
+        planted.home,
+        join(work, "markers.json"),
+        join(work, "dump.json"),
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        timeout: 120000,
+        env: {
+          PATH: process.env.PATH,
+          HOME: planted.home,
+          TMPDIR: process.env.TMPDIR ?? tmpdir(),
+          CLOUDFLARE_API_TOKEN: markers.token,
+          WORKOS_API_KEY: markers.envWorkos,
+          NEON_API_KEY: markers.envNeon,
+          MORROW_DB_PASSWORD_MORROW_API: markers.envDb,
+        },
+      },
+    );
+    const dump = existsSync(join(work, "dump.json"))
+      ? JSON.parse(readFileSync(join(work, "dump.json"), "utf8"))
+      : null;
+    const read = (name) =>
+      existsSync(join(planted.directory, name))
+        ? readFileSync(join(planted.directory, name), "utf8")
+        : null;
+    const mode = (name) =>
+      existsSync(join(planted.directory, name))
+        ? statSync(join(planted.directory, name)).mode & 0o777
+        : null;
+    return {
+      status: result.status,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      dump,
+      brokerFile: read("tmp/broker-secrets.json"),
+      brokerMode: mode("tmp/broker-secrets.json"),
+      apiFile: read("tmp/api-secrets.json"),
+      apiMode: mode("tmp/api-secrets.json"),
+      turnstileFile: read("turnstile-secret"),
+    };
+  } finally {
+    planted.cleanup();
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+// Exactly one JSON line on the expected stream and nothing else: no relayed tool text.
+function oneLine(run, stream) {
+  const text = run[stream].trimEnd();
+  assert.equal(text.split("\n").length, 1, stream + ": " + text);
+  const other = stream === "stdout" ? run.stderr : run.stdout;
+  assert.equal(other, "");
+  return JSON.parse(text);
+}
+function noMarkers(run, extra = []) {
+  const secrets = [...everyMarker(), ...extra];
+  assert.deepEqual(contains(run.stdout, secrets), [], "stdout");
+  assert.deepEqual(contains(run.stderr, secrets), [], "stderr");
+  for (const call of run.dump?.calls ?? [])
+    assert.deepEqual(contains(call.args.join(" "), secrets), [], call.tool + " argv");
+  for (const statement of run.dump?.statements ?? [])
+    assert.deepEqual(
+      contains(statement.text + JSON.stringify(statement.params), secrets),
+      [],
+      "sql",
+    );
+  assert.deepEqual(contains(JSON.stringify(run.dump?.reports ?? []), secrets), [], "report");
+}
+
+test("AC07: failing and noisy tools, database errors and bad files never reach the output", () => {
+  for (const [scenario, stream, code] of [
+    ["status-failing-tools", "stdout", null],
+    ["status-noisy-tools", "stdout", null],
+    ["migrate-failing-git", "stderr", "STAGING_GIT_FAILED"],
+    ["migrate-database-error", "stderr", "STAGING_DATABASE_UNAVAILABLE"],
+    ["migrate-query-error", "stderr", "STAGING_DATABASE_UNAVAILABLE"],
+    ["census-fails", "stderr", "STAGING_CLOUDFLARE_REQUEST_FAILED"],
+    ["put-secret-fails", "stderr", "STAGING_PUT_SECRET_FAILED"],
+    ["seed-database-error", "stderr", "STAGING_SEED_FAILED"],
+  ]) {
+    const run = runChild(scenario);
+    assert.equal(run.status, 1, scenario + " " + run.stderr);
+    const line = oneLine(run, stream);
+    if (code) assert.equal(line.code, code, scenario);
+    noMarkers(run);
+  }
+  const seeded = runChild("seed-database-error");
+  assert.deepEqual(oneLine(seeded, "stderr"), {
+    command: "seed-platform",
+    code: "STAGING_SEED_FAILED",
+    sqlstate: "XX000",
+    server: null,
+  });
+  const malformed = runChild("migrate-database-error", {
+    ...files(),
+    "neon-owner-url": `postgresql://neondb_owner:${markers.malformed}@[::1`,
+  });
+  assert.equal(oneLine(malformed, "stderr").code, "STAGING_FILE_FORMAT");
+  noMarkers(malformed);
+  const unreadable = runChild("status-failing-tools", {
+    ...files(),
+    "tmp/broker-secrets.json": "{" + markers.malformed,
+    "tmp/api-secrets.json": "not json " + markers.malformed,
+  });
+  assert.ok(oneLine(unreadable, "stdout").mismatches.includes("file:tmp/broker-secrets.json"));
+  noMarkers(unreadable);
+});
+
+test("AC07: role passwords reach only the 0600 first-deploy file or `secret bulk` stdin", () => {
+  const first = runChild("provision-first");
+  assert.equal(first.status, 0, first.stderr);
+  assert.equal(oneLine(first, "stdout").file, "tmp/broker-secrets.json");
+  assert.equal(first.brokerMode, 0o600);
+  const secrets = JSON.parse(first.brokerFile);
+  const passwords = Object.entries(secrets)
+    .filter(([name]) => name.startsWith("MORROW_DB_PASSWORD_"))
+    .map(([, value]) => value);
+  // The ten leased roles and the broker's own vault login (M2 PR-1).
+  assert.equal(passwords.length, 11);
+  assert.equal(secrets.WORKOS_API_KEY, "sk_test_" + markers.workos);
+  // The owner's KEK file, byte for byte: the tool reads it and generates none.
+  assert.equal(secrets.MORROW_VAULT_KEK_V1, markers.kek);
+  noMarkers(first, passwords);
+  assert.equal(
+    first.dump.statements.filter((s) => /PASSWORD 'SCRAM-SHA-256\$4096:/.test(s.text)).length,
+    11,
+  );
+
+  const failed = runChild("provision-first-sql-error");
+  assert.equal(failed.status, 1);
+  assert.equal(failed.brokerFile, null, "the reserved file is removed when provisioning fails");
+  noMarkers(failed);
+
+  const rotate = runChild("provision-rotate");
+  assert.equal(rotate.status, 0, rotate.stderr);
+  const result = oneLine(rotate, "stdout");
+  assert.equal(result.roles.length, 11);
+  assert.match(result.versionId, /^[0-9a-f-]{36}$/);
+  assert.equal(rotate.dump.bulkInputs.length, 1);
+  const delivered = Object.values(JSON.parse(rotate.dump.bulkInputs[0].input));
+  assert.equal(delivered.length, 11);
+  noMarkers(rotate, delivered);
+  const bulk = rotate.dump.calls.find((c) => c.tool === "wrangler" && c.args[1] === "bulk");
+  assert.deepEqual(bulk.args, [
+    "secret",
+    "bulk",
+    "--config",
+    "apps/broker/wrangler.jsonc",
+    "--env",
+    "staging",
+  ]);
+  assert.equal(rotate.brokerFile, null);
+
+  const partial = runChild("provision-rotate-bulk-fails");
+  assert.equal(partial.status, 1);
+  assert.deepEqual(oneLine(partial, "stderr"), {
+    command: "provision-roles",
+    code: "STAGING_ROTATION_PARTIAL",
+    status: 1,
+  });
+  noMarkers(partial, Object.values(JSON.parse(partial.dump.bulkInputs[0]?.input ?? "{}")));
+
+  const put = runChild("put-secret");
+  assert.equal(put.status, 0, put.stderr);
+  assert.deepEqual(JSON.parse(put.dump.bulkInputs[0].input), {
+    WORKOS_API_KEY: "sk_test_" + markers.workos,
+  });
+  noMarkers(put);
+
+  // M2 PR-1: the owner's KEK reaches the broker only through `secret bulk` stdin.
+  const kek = runChild("put-secret-kek");
+  assert.equal(kek.status, 0, kek.stderr);
+  assert.equal(oneLine(kek, "stdout").secret, "MORROW_VAULT_KEK_V1");
+  assert.deepEqual(JSON.parse(kek.dump.bulkInputs[0].input), { MORROW_VAULT_KEK_V1: markers.kek });
+  noMarkers(kek);
+});
+
+test("AC07: connections count unknown names without printing them; keyring prints metadata only", () => {
+  const connections = runChild("connections");
+  assert.equal(connections.status, 0, connections.stderr);
+  const report = oneLine(connections, "stdout");
+  assert.equal(report.flagged, true);
+  assert.equal(report.byRole.morrow_api, 2);
+  assert.equal(report.byRole.other, 1);
+  assert.equal(report.byApplication.identity_pool, 2);
+  assert.equal(report.byApplication.unknown, 1);
+  noMarkers(connections);
+
+  const keyring = runChild("keyring");
+  assert.equal(keyring.status, 0, keyring.stderr);
+  const metadata = oneLine(keyring, "stdout");
+  assert.equal(keyring.apiMode, 0o600);
+  const keyringJson = JSON.parse(keyring.apiFile).LOGIN_CAPSULE_KEYRING;
+  const material = JSON.parse(keyringJson).versions[0].material;
+  assert.match(material, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(metadata.configurationDigest, "c".repeat(64));
+  assert.match(metadata.keyId, /^[0-9a-f-]{36}$/);
+  noMarkers(keyring, [material]);
+});
+
+test("AC07: turnstile-create, the Neon probe, the kill and the deploy never print a marker", async () => {
+  const { identityConstants } = await import("../scripts/staging.mjs");
+  const constants = await identityConstants();
+  const without = (name) => Object.fromEntries(Object.entries(files()).filter(([k]) => k !== name));
+  // The Turnstile secret goes only to its new 0600 file; a lost reply leaves no file.
+  const created = runChild("turnstile-create", without("turnstile-secret"));
+  assert.equal(created.status, 0, created.stderr);
+  assert.equal(oneLine(created, "stdout").siteKey, "0x4AAAAAAA" + "S".repeat(14));
+  assert.equal(created.turnstileFile, "0x4AAAAAAA" + markers.turnstile);
+  noMarkers(created);
+  const lost = runChild("turnstile-lost", without("turnstile-secret"));
+  assert.equal(lost.status, 1);
+  assert.equal(oneLine(lost, "stderr").code, "STAGING_TURNSTILE_SECRET_LOST");
+  assert.equal(lost.turnstileFile, null);
+  noMarkers(lost);
+  // The probe's connection string (with its password) and server errors stay inside.
+  const probe = runChild("neon-probe");
+  assert.equal(probe.status, 0, probe.stderr);
+  const report = oneLine(probe, "stdout");
+  assert.deepEqual(report.mN3, { verifierAccepted: false, sqlstate: "XX000" });
+  assert.equal(report.mN1.revokeSqlstate, "XX000");
+  noMarkers(probe);
+  // A kill with every tool failing and a failing fetch still prints one closed line.
+  const kill = runChild("kill-failing");
+  assert.equal(kill.status, 1);
+  assert.equal(
+    oneLine(kill, "stdout").fallback,
+    "dashboard_workers_dev_disable_and_github_workflow_disable",
+  );
+  noMarkers(kill);
+  // A failed upload with noisy wrangler output: an unknown outcome, no relayed text.
+  const failing = runChild("deploy-failing");
+  assert.equal(failing.status, 1);
+  assert.equal(oneLine(failing, "stdout").outcome, "unknown");
+  noMarkers(failing);
+  // The first deploy hands the secret files to wrangler by path, then unlinks them.
+  const brokerSecrets = Object.fromEntries(
+    constants.brokerSecrets.map((name, i) => [
+      name,
+      name === "WORKOS_API_KEY" ? "sk_test_" + markers.workos : "pw" + i + markers.envDb,
+    ]),
+  );
+  const first = runChild("deploy-first", {
+    ...files(),
+    "tmp/broker-secrets.json": JSON.stringify(brokerSecrets),
+    "tmp/api-secrets.json": JSON.stringify({
+      LOGIN_CAPSULE_KEYRING: "keyring" + markers.malformed,
+    }),
+  });
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+  assert.equal(oneLine(first, "stdout").outcome, "deployed");
+  assert.equal(first.brokerFile, null);
+  assert.equal(first.apiFile, null);
+  const secretsFiles = first.dump.calls
+    .filter((c) => c.tool === "wrangler" && c.args.includes("--secrets-file"))
+    .map((c) => c.args.at(-1).replace(/^.*\/staging\//, ""));
+  assert.deepEqual(secretsFiles, ["tmp/broker-secrets.json", "tmp/api-secrets.json"]);
+  noMarkers(first, Object.values(brokerSecrets));
+});
+
+// ---------------------------------------------------------------------------
+// The real tool runners: credentials only in a child's environment, never argv; output
+// of a failing child never relayed; other provider variables never passed.
+test("AC07: tool children get the token or Neon key in their environment only, never argv", async () => {
+  const root = mkdtempSync(join(tmpdir(), "morrow-staging-tools-"));
+  const bin = mkdtempSync(join(tmpdir(), "morrow-staging-bin-"));
+  const savedPath = process.env.PATH;
+  const savedSecret = process.env.WORKOS_API_KEY;
+  try {
+    const recorder = (name) =>
+      `import { writeFileSync } from "node:fs";\nimport { join } from "node:path";\nlet input = "";\nprocess.stdin.on("data", (c) => (input += c));\nprocess.stdin.on("end", () => {\n  writeFileSync(join(${JSON.stringify(root)}, ${JSON.stringify(name)} + "-" + process.pid + ".json"), JSON.stringify({ argv: process.argv.slice(2), env: process.env, input, cwd: process.cwd() }));\n  process.stdout.write("noisy " + (process.env.CLOUDFLARE_API_TOKEN ?? "") + (process.env.NEON_API_KEY ?? ""));\n  process.stderr.write("failing " + (process.env.CLOUDFLARE_API_TOKEN ?? "") + (process.env.NEON_API_KEY ?? ""));\n  process.exit(3);\n});\n`;
+    for (const [dir, name] of [
+      ["node_modules/wrangler/bin", "wrangler.js"],
+      ["node_modules/neonctl/bin", "cli.js"],
+    ]) {
+      mkdirSync(join(root, dir), { recursive: true });
+      writeFileSync(join(root, dir, name), recorder(name.replace(".js", "")));
+    }
+    writeFileSync(join(bin, "gh"), "#!" + process.execPath + "\n" + recorder("gh"));
+    chmodSync(join(bin, "gh"), 0o755);
+    process.env.PATH = bin + ":" + savedPath;
+    process.env.WORKOS_API_KEY = markers.envWorkos;
+    // A GH_TOKEN still in process.env (staging-token.mjs removes it at startup) reaches no
+    // child; gh gets only the captured handle's token.
+    const savedGh = process.env.GH_TOKEN;
+    process.env.GH_TOKEN = "ghs_env" + markers.envDb;
+    after(() =>
+      savedGh === undefined ? delete process.env.GH_TOKEN : (process.env.GH_TOKEN = savedGh),
+    );
+    const token = markers.operator;
+    const tools = createTools({
+      root,
+      home: "/nonexistent-home",
+      credential: syntheticCredential(token),
+      accountId: "a".repeat(32),
+      neonApiKey: "napi_" + markers.neonKey,
+      github: syntheticGithubCredential("ghs_" + markers.tool),
+    });
+    for (const [tool, args] of [
+      [
+        "wrangler",
+        [
+          "secret",
+          "list",
+          "--config",
+          "apps/broker/wrangler.jsonc",
+          "--env",
+          "staging",
+          "--format",
+          "json",
+        ],
+      ],
+      ["neonctl", ["branches", "list", "--project-id", "p"]],
+      ["gh", ["secret", "list", "--json", "name"]],
+    ])
+      await assert.rejects(toolJson(tools, tool, args), (error) => {
+        assert.equal(error.code, "STAGING_" + tool.toUpperCase() + "_FAILED");
+        assert.deepEqual(error.details, { status: 3 });
+        assert.deepEqual(
+          contains(error.message + JSON.stringify(error.details), [token, markers.neonKey]),
+          [],
+        );
+        return true;
+      });
+    const dumps = Object.fromEntries(
+      ["wrangler", "cli", "gh"].map((name) => {
+        const file = spawnSync("ls", [root], { encoding: "utf8" })
+          .stdout.split("\n")
+          .find((f) => f.startsWith(name + "-"));
+        return [name, JSON.parse(readFileSync(join(root, file), "utf8"))];
+      }),
+    );
+    // wrangler: the token in its environment (ADR-0019 item 14), with the account, a
+    // throwaway HOME and an empty env file; never in argv.
+    assert.equal(dumps.wrangler.env.CLOUDFLARE_API_TOKEN, token);
+    assert.equal(dumps.wrangler.env.CLOUDFLARE_ACCOUNT_ID, "a".repeat(32));
+    assert.notEqual(dumps.wrangler.env.HOME, homedir());
+    assert.match(dumps.wrangler.argv.at(-1), /^--env-file=.*empty\.env$/);
+    assert.deepEqual(contains(dumps.wrangler.argv.join(" "), [token]), []);
+    assert.equal(dumps.wrangler.env.WORKOS_API_KEY, undefined);
+    // neonctl: NEON_API_KEY in its environment only, analytics off.
+    assert.equal(dumps.cli.env.NEON_API_KEY, "napi_" + markers.neonKey);
+    assert.ok(dumps.cli.argv.includes("--no-analytics"));
+    assert.equal(dumps.cli.env.CLOUDFLARE_API_TOKEN, undefined);
+    assert.deepEqual(contains(dumps.cli.argv.join(" "), [markers.neonKey]), []);
+    // gh: neither credential, and no inherited provider variable.
+    for (const name of ["CLOUDFLARE_API_TOKEN", "NEON_API_KEY", "WORKOS_API_KEY"])
+      assert.equal(dumps.gh.env[name], undefined);
+    // The workflow's GH_TOKEN reaches gh only, from the captured handle.
+    assert.equal(dumps.gh.env.GH_TOKEN, "ghs_" + markers.tool);
+    assert.equal(dumps.wrangler.env.GH_TOKEN, undefined);
+    assert.equal(dumps.cli.env.GH_TOKEN, undefined);
+    for (const dump of Object.values(dumps))
+      assert.deepEqual(contains(JSON.stringify(dump.env), [markers.envDb]), []);
+    assert.deepEqual(
+      Object.keys(dumps.gh.env).filter(
+        (k) =>
+          !/^(PATH|HOME|LANG|GH_PROMPT_DISABLED|GH_NO_UPDATE_NOTIFIER|NO_COLOR|GH_CONFIG_DIR|GH_TOKEN|__CF_USER_TEXT_ENCODING)$/.test(
+            k,
+          ),
+      ),
+      [],
+    );
+  } finally {
+    process.env.PATH = savedPath;
+    if (savedSecret === undefined) delete process.env.WORKOS_API_KEY;
+    else process.env.WORKOS_API_KEY = savedSecret;
+    rmSync(root, { recursive: true, force: true });
+    rmSync(bin, { recursive: true, force: true });
+  }
+});
+
+test("AC07: credential files must be owner-only regular files in an owner-only directory", async () => {
+  const { readCredentialFile, stagingFileSpecs, createOwnerFile, credentialDirectory } =
+    await import("../scripts/staging-files.mjs");
+  const specs = stagingFileSpecs({ brokerSecretNames: ["WORKOS_API_KEY"] });
+  const cases = [
+    [{ modes: { "workos-api-key": 0o644 } }, "STAGING_FILE_MODE"],
+    [{ plant: {} }, "STAGING_FILE_MISSING"],
+    [{ plant: {}, links: { "workos-api-key": "/etc/hosts" } }, "STAGING_FILE_NOT_REGULAR"],
+    [{ plant: { "workos-api-key": "sk_live_" + markers.malformed } }, "STAGING_FILE_FORMAT"],
+    [{ plant: { "workos-api-key": "" } }, "STAGING_FILE_EMPTY"],
+    [{ directoryMode: 0o750 }, "STAGING_CREDENTIAL_DIRECTORY"],
+  ];
+  for (const [change, code] of cases) {
+    const planted = plantedHome(change.plant ?? files(), {
+      modes: change.modes,
+      links: change.links,
+      directoryMode: change.directoryMode,
+    });
+    try {
+      assert.throws(
+        () => readCredentialFile(credentialDirectory(planted.home), "workos-api-key", specs),
+        (error) => {
+          assert.equal(error.code, code);
+          assert.deepEqual(
+            contains(error.message + JSON.stringify(error.details), everyMarker()),
+            [],
+          );
+          return true;
+        },
+      );
+    } finally {
+      planted.cleanup();
+    }
+  }
+  const planted = plantedHome(files());
+  try {
+    assert.equal(
+      readCredentialFile(planted.directory, "workos-api-key", specs),
+      "sk_test_" + markers.workos,
+    );
+    writeFileSync(join(planted.directory, "neon-owner-url"), files()["neon-owner-url"] + "\n", {
+      mode: 0o600,
+    });
+    const handle = createOwnerFile(planted.directory, "tmp/api-secrets.json");
+    handle.write("{}\n");
+    assert.equal(statSync(join(planted.directory, "tmp/api-secrets.json")).mode & 0o777, 0o600);
+    assert.throws(() => createOwnerFile(planted.directory, "tmp/api-secrets.json"), {
+      code: "STAGING_FILE_EXISTS",
+    });
+    assert.throws(() => createOwnerFile(planted.directory, "../escape"), {
+      code: "STAGING_FILE_UNKNOWN",
+    });
+  } finally {
+    planted.cleanup();
+  }
+});
