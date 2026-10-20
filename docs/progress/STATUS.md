@@ -21,7 +21,7 @@ Updated 2026-10-20. Rewrite this file in place (at most 80 lines). The pre-overh
 
 In progress:
 - **PR #31** (docs): the four 2026-10-20 owner decisions as ADR-0008 item 1 and ADR-0022 items 3, 9 and 11 amendments, with this STATUS. **MVP build wave** (local worktrees, one workflow): M2-PR2a (`claude/m2-pr2a-store-resource`: v1.1 `ResourceRef` kind `store`, kernels on current definitions), then in parallel M2-PR2 (`claude/m2-shopify-connect`), M5-PR1 (`claude/m5-billing`) and M3-PR1 (`claude/m3-listings-agent`). Merge order PR2a, M2-PR2, M5-PR1, M3-PR1; migrations numbered at each final rebase.
-- **PR-D part 1** (`claude/p04-t01i-d1-identifiers`, local): the Cloudflare and Neon identifiers known so far; the census treats Cloudflare code 10121 (no Workers for Platforms) as zero dispatch namespaces; tests no longer assume null identifiers; AC03 records `actions: read` (owner, 2026-10-20). Still to add: `neon.branch_id`, the database binding, the two challenge vars (Turnstile site key), the api's `workers_dev` and the observability blocks.
+- **PR-D part 1** (`claude/p04-t01i-d1-identifiers`, local, merged with `main` `d12379e`; no PR yet): every reviewed identifier in `staging.json`, the selected inventory and the four `env.staging` blocks (the api alone on workers.dev, D1's observability, the login, workspace, logout, binding and challenge vars; the broker's byte-equal copies and its Turnstile configuration), and verify-config's AC01/AC02 rules. `staging:preflight`: all nine identifiers set, pending only `file:vault-kek-v1`; gate 4 accepts the committed configuration (login digest `229ebbfe…`). Also: `turnstile-create` reports Cloudflare's status and codes; the census counts code 10121 as zero dispatch namespaces; the 2026-10-20 live records. Open: PR, one AI review with the security lens, hosted CI (packet "PR-D part 1 implementation notes").
 
 ## Decisions recorded 2026-10-18 to 2026-10-20 (owner, in chat)
 
@@ -47,7 +47,7 @@ In progress:
 ## Next actions
 
 MVP fast track (ADR-0021; `docs/plan/mvp.md`). M1, staging live:
-1. Bring-up under `staging-card-1`, as the owner steps land: census (needs Pages Read), `staging:queues` (E4), `staging:turnstile-create` (E5), the WorkOS redirect (E6), the Neon probe rerun (E3), then PR-D part 1 with every identifier; `migrate`, `provision-roles --first`, `seed-platform`; the owner's `staging:keyring`; `deploy --first` and the smoke; the owner's assisted sign-in.
+1. Bring-up under `staging-card-1` (census, queues, Turnstile widget and WorkOS redirect done 2026-10-20): merge PR-D part 1; the Neon probe rerun (E3); `migrate`, `provision-roles --first`, `seed-platform`; the owner's `staging:keyring`; `deploy --first` and the smoke; the owner's assisted sign-in.
 2. Then M2 PR-2/PR-3, M5 (Stripe test mode), M3 (the listings agent), M4 (approve and apply), M6 (the deletion path before the real-store smoke).
 3. Follow-ups: a KEK fingerprint check in `staging:put-secret`; the #30 advisories (a production broker must hold non-api callers; re-add the 18 → 0019 replay case once staging exists; `identityConstants` via `brokerRequiredSecretsFor("staging")`; the spine T1 preflight asserts its refusal); a `ci` PR disabling the weekly `heavy-faults.yml` schedule.
 
@@ -59,7 +59,7 @@ None for local work. Staging bring-up waits on the owner steps below. This sessi
 
 ## Pending owner actions
 
-- **Bring-up now:** add Account · Cloudflare Pages · Read to `morrow-staging-operator` (the census gets a 403, code 10000); run the Neon steps (create database `morrow`, branch `staging`, save the owner URL to `~/.config/morrow/staging/neon-owner-url`); the vault KEK (below; #30 is merged); delete the local `cloudflare-ci-token` and `cloudflare-operator-token.old-*` files.
+- **Bring-up now:** the vault KEK (below; #30 is merged); delete the local `cloudflare-ci-token` and `cloudflare-operator-token.old-*` files. Done 2026-10-20: Pages Read and Turnstile Edit on the operator token, the Neon `morrow` database and `staging` branch, the WorkOS redirect save.
 - **Before the first staging deploy (`staging-card-1`, "Preconditions for the first deploy"):**
   - GitHub: suspend the ChatGPT Codex Connector app (GitHub's sudo re-authentication stopped Claude's attempt) and delete the classic token "AppForge Github Actions". The platform apps AWS Connector, Codemagic, DigitalOcean, Expo, Netlify, Render and Vercel stay (ADR-0019 item 5 exception).
   - Cloudflare usage alerts at about 10% of each allowance (D9 5(c)), or confirm the D6 fallback: the $5 billable-usage alert (exists) plus your weekly check of Billing → Usage.
@@ -77,4 +77,4 @@ None. The 2026-10-20 Neon probe branch (`br-spring-boat-b71bm6dq`, exit 13 befor
 
 ## Active approval cards
 
-- `staging-card-1` (`docs/decisions/approvals/staging.md`): staging only; approved 2026-10-19, valid until 2026-11-18 or the first production resource. Effects used: E3 once (the probe branch above, with its read-only branch lists); E9 census reads (refused so far: Pages Read missing). E11 is suspended (ADR-0021).
+- `staging-card-1` (`docs/decisions/approvals/staging.md`): staging only; approved 2026-10-19, valid until 2026-11-18 or the first production resource. Effects used: E3 once (the probe branch above); E4 (two queues), E5 (the widget), E6 (the redirect) and E9 (census and permission reads), all 2026-10-20 (`docs/evidence/live/2026-10-20-*`). E11 is suspended (ADR-0021).
