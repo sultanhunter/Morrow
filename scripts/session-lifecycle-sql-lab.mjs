@@ -9,8 +9,6 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   literal as lit,
-  manifestChain,
-  migrationPrerequisite,
   psql,
   psqlAsync,
   sleep,
@@ -22,15 +20,16 @@ import {
   sessionLifecycleReplacements,
 } from "../tests/fixtures/session-lifecycle-replacements.mjs";
 import { writeArtifact } from "./artifacts.mjs";
+import { loadMigrationChain } from "./migration-chain.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const read = (path) => readFileSync(path, "utf8");
 const migrationFile = "0016.browser-session-lifecycle.sql";
-const chain = manifestChain();
+const chain = loadMigrationChain();
 const lifecycle = chain.find((m) => m.file === migrationFile);
 if (!lifecycle || lifecycle.sequence !== 16 || lifecycle.executeAs !== "morrow_identity_owner")
   throw Error("SESSION_LIFECYCLE_LAB_MIGRATION_REQUIRED");
-if (migrationPrerequisite(migrationFile) !== null) throw Error("SESSION_LIFECYCLE_LAB_NO_NEW_ROLE");
+if (lifecycle.prerequisites.length !== 0) throw Error("SESSION_LIFECYCLE_LAB_NO_NEW_ROLE");
 
 const checks = [];
 const failures = [];

@@ -30,6 +30,7 @@ const headRef = "${{ github.event.pull_request.head.sha || github.sha }}";
 // listed here fails the tests below.
 const checkoutRefs = {
   "ci.yml": headRef,
+  "deploy-staging.yml": "${{ github.event.workflow_run.head_sha }}",
   "heavy-faults.yml": "${{ github.sha }}",
   "frozen-regressions.yml": "codex-archive-f89ad75",
 };
@@ -195,8 +196,15 @@ test("every workflow pins actions by commit, never persists credentials and neve
     const workflow = workflows[file];
     assert.ok(!text.includes("continue-on-error"), file);
     assert.ok(!text.includes("pull_request_target"), file);
-    assert.ok(!/\bsecrets\./.test(text), file);
-    assert.deepEqual(workflow.permissions, { contents: "read" }, file);
+    // Only the staging deploy names a secret (its Cloudflare token, in one step) and reads
+    // its own workflow's state (the kill's live signal; P04.T01i D2).
+    if (file === "deploy-staging.yml") {
+      assert.deepEqual(text.match(/\bsecrets\.[A-Za-z_]+/g), ["secrets.CLOUDFLARE_API_TOKEN"]);
+      assert.deepEqual(workflow.permissions, { contents: "read", actions: "read" }, file);
+    } else {
+      assert.ok(!/\bsecrets\./.test(text), file);
+      assert.deepEqual(workflow.permissions, { contents: "read" }, file);
+    }
     for (const [id, job] of Object.entries(workflow.jobs)) {
       assert.equal(job.permissions, undefined, `${file} ${id} must not widen permissions`);
       for (const step of steps(job)) {
@@ -804,6 +812,77 @@ test("the edge dry-run and dev smoke run once, inside a network-none container w
   assert.ok(scripts["ci:static"].includes("npm run edge:check"));
 });
 
+// P04.T01i AC03 (OQ-2 answer A; ADR-0019 items 4 and 14; trimmed by ADR-0021): the staging
+// deploy runs after a green "Morrow foundation" push run on main, in the `staging`
+// environment, never cancels a running deploy, and holds the Cloudflare token in exactly
+// one step, after the tokenless card, gate 1, gate 2 and gate 5 steps.
+test("deploy-staging.yml runs after a green main push, with the token in one step after the tokenless gates", () => {
+  const file = "deploy-staging.yml";
+  const deploy = workflows[file];
+  const text = workflowText(file);
+  assert.equal(ci.name, "Morrow foundation");
+  assert.deepEqual(deploy.on, {
+    workflow_run: { workflows: ["Morrow foundation"], types: ["completed"], branches: ["main"] },
+  });
+  assert.deepEqual(deploy.concurrency, { group: "deploy-staging", "cancel-in-progress": false });
+  assert.deepEqual(Object.keys(deploy.jobs), ["deploy"]);
+  const job = deploy.jobs.deploy;
+  assert.equal(
+    job.if,
+    "github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository",
+  );
+  assert.equal(job.environment, "staging");
+  assert.equal(job["runs-on"], "ubuntu-24.04");
+  assert.ok(job["timeout-minutes"] <= 15);
+  const jobSteps = steps(job);
+  assert.ok(uses(jobSteps[0], "actions/checkout"));
+  // No dependency cache: a cache written by any branch could reach the token's step.
+  const setup = jobSteps.find((s) => uses(s, "actions/setup-node"));
+  assert.deepEqual(setup.with, { "node-version-file": ".nvmrc" });
+  assert.ok(!/\bcache\b/.test(text.replace(/^#.*$/gm, "")));
+  const at = (predicate) => jobSteps.findIndex(predicate);
+  const install = at((s) => s.run === "npm ci --ignore-scripts --no-audit --no-fund");
+  const gates = at((s) => s.id === "gates");
+  const gate5 = at((s) => typeof s.run === "string" && s.run.includes("edge:dry-run"));
+  const deployStep = at((s) => s.run === "node scripts/staging.mjs deploy --ci");
+  const scan = at((s) => s.id === "artifact_scan");
+  assert.ok(install < gates && gates < gate5 && gate5 < deployStep && deployStep < scan);
+  assert.equal(jobSteps[gates].run, "node scripts/staging.mjs ci-gates");
+  assert.equal(jobSteps[gates].if, undefined);
+  assert.deepEqual(jobSteps[gates].env, {
+    GH_TOKEN: "${{ github.token }}",
+    MORROW_DEPLOY_SHA: "${{ github.event.workflow_run.head_sha }}",
+    STAGING_DEPLOY_ENABLED: "${{ vars.STAGING_DEPLOY_ENABLED }}",
+  });
+  assert.deepEqual(rootScriptsRun(jobSteps[gate5].run), ["build", "edge:check", "edge:dry-run"]);
+  assert.equal(jobSteps[gate5].env, undefined);
+  for (const index of [gate5, deployStep])
+    assert.equal(jobSteps[index].if, "steps.gates.outputs.proceed == 'true'");
+  // The token sits in the deploy step's env alone; no other step sees a Cloudflare value.
+  assert.deepEqual(jobSteps[deployStep].env, {
+    CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+    GH_TOKEN: "${{ github.token }}",
+    MORROW_DEPLOY_SHA: "${{ github.event.workflow_run.head_sha }}",
+    STAGING_CLOUDFLARE_ACCOUNT_ID: "${{ vars.CLOUDFLARE_ACCOUNT_ID }}",
+    STAGING_DEPLOY_ENABLED: "${{ vars.STAGING_DEPLOY_ENABLED }}",
+    STAGING_SCHEMA_HEAD: "${{ vars.STAGING_SCHEMA_HEAD }}",
+    STAGING_LOGIN_CONFIGURATION_DIGEST: "${{ vars.STAGING_LOGIN_CONFIGURATION_DIGEST }}",
+  });
+  for (const [index, step] of jobSteps.entries())
+    if (index !== deployStep) assert.ok(!/CLOUDFLARE_|secrets\./.test(JSON.stringify(step)), index);
+  // The report is scanned before upload, and the checkout is left clean.
+  assert.equal(jobSteps[scan].if, "always()");
+  assert.equal(jobSteps[scan].run, 'node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"');
+  assert.ok(uses(jobSteps[scan + 1], "actions/upload-artifact"));
+  assert.equal(jobSteps[scan + 1].if, "always() && steps.artifact_scan.outcome == 'success'");
+  const clean = jobSteps.at(-1);
+  assert.equal(clean.if, "always()");
+  assert.match(clean.run, /test -z "\$\(git status --porcelain --untracked-files=all\)"/);
+  // The subcommands it runs exist.
+  for (const name of ["staging:ci-gates", "staging:deploy", "staging:kill", "staging:unkill"])
+    assert.ok(scripts[name], name);
+});
+
 // P03.T04e §4: the heavy fault matrices run by hand or weekly, behind a change gate, never
 // on pull requests or pushes and never as part of the required foundation check.
 test("heavy-faults.yml runs by hand or weekly behind the change gate and is never required", () => {
@@ -904,4 +983,25 @@ test("the createrole administrator lab is in pg-core and runs once in CI", () =>
     "node --import tsx scripts/createrole-administrator-lab.mjs",
   );
   assert.equal(scriptsReachedByCi().get("lab:createrole-administrator"), 1);
+});
+
+// P04.T01i D3 (AC06, and P04.T01j-AC14 now that P04.T01j has merged): the staging runner
+// lab runs in the pg-http group only, which the `http` leg of the postgres matrix runs
+// once. `core` is the leg closest to its 14-minute cap, so the lab is not there.
+test("the staging runner lab is in pg-http and runs once in CI, on the http leg", () => {
+  const holding = Object.entries(scripts)
+    .filter(([name]) => name.startsWith("lab:group:"))
+    .filter(([, text]) => rootScriptsRun(text).includes("lab:staging-runner"))
+    .map(([name]) => name);
+  assert.deepEqual(holding, ["lab:group:pg-http"]);
+  assert.equal(scripts["lab:staging-runner"], "node --import tsx scripts/staging-runner-lab.mjs");
+  assert.equal(scriptsReachedByCi().get("lab:staging-runner"), 1);
+  const postgres = ci.jobs.postgres;
+  assert.deepEqual(postgres.strategy.matrix.leg, ["core", "http", "linking", "work"]);
+  const runs = steps(postgres).filter((s) => s.run === "npm run lab:group:pg-http");
+  assert.deepEqual(
+    runs.map((s) => s.if),
+    ["matrix.leg == 'http'"],
+  );
+  assert.ok(ci.jobs.foundation.needs.includes("postgres"));
 });

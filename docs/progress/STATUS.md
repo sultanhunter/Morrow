@@ -4,7 +4,7 @@ Updated 2026-10-20. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active packets
 
-`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#25. The latest:
+`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#27. The latest:
 - PR #10 P05.T01x Part B (`e51e5b7`); PR #12 P06.T01a (`06e4dfe`; Verified waits for the P05 exit gate); PR #13 the ADR-0018 Proposal@2 edit (`08e5ebf`); PR #14 P01.T04a PR-A (`bba3cec`).
 - PR #15 P14.T01a PR-1 (`5ad6cc7`, provisional under ADR-0003).
 - PR #11 P03.T04e PR-A (`f8314e8`). Still open: its AC22 `workflow_dispatch` run of `heavy-faults.yml` (about 18 billed minutes), and the AC04 hosted totals and hosted part of AC05, which P03.T04f moves to its first hosted `checks` job.
@@ -14,15 +14,14 @@ Updated 2026-10-20. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #19 P01.T02c PR-A (`e0adf5d`): collaboration contracts v1.1 (ADR-0016).
 - PR #20 P01.T04a PR-B (`8183e16`): the billing route library `@morrow/policy/billing-state` and its decision tables.
 - PR #21 P04.T01j PR-B (`05aa479`): 0005–0015 rebaselined once under ADR-0020 (the frozen rebaseline record, `closedBy` null), the D5 preflight in eight adapters and both oracles, the single-transaction runner rule, `lab:createrole-administrator` in `pg-core` and createrole tenant conformance; M-J1 acknowledged. Still open: AC14 (with P04.T01i PR-B), AC15–AC16 (hosted).
-
 - PR #22 P05.T01y (`d9c60b7`): browser session lifecycle; 0016 on the ADR-0020 helpers.
 - PR #23 (`262604d`): pgwire lab fixes (the concurrent-callback serial race; the workspace-api final hold now named).
 - PR #24 P06.T01b PR-1 (`890099a`): approval records, migrations 0017–0018.
 - PR #25 MVP design (`e8db88f`): ADR-0022 Accepted; Claude behind a provider-neutral model gateway; model catalogue v1 active; briefs M2–M5.
+- PR #27 P05.T01ab = P04.T01i PR-C (`7585782`): the sign-in abuse guard (limits 10/20/5 per 60 s, Turnstile through broker `challengeVerify`, `GET /auth/challenge`, mapper step 10), the broker's ten secret names, the widgets. PR #26 (`38b4347`): the postgres legs are now `[core, http, linking, work]`.
 
 In progress:
-- **P05.T01ab = P04.T01i PR-C** (`claude/p05-t01ab-abuse-guard`, PR #27; merged with `main` at `e8db88f`): the api sign-in abuse guard before any SQL (per-address limits 10/20/5 per 60 s; Turnstile through the fourth broker method `challengeVerify`; `GET /auth/challenge`; mapper step 10 fails staging and production closed without it), contract v1.1 additions (506 validators, bundle 2,886,931 bytes), the widget on the sign-in screen and now on PR-2's create-organization form (fresh token per POST; `challenge_*` and 429 keep the form's existing errors), and the labs; the route table gains P05.T01y's `rotate`, unguarded. The owner kept the `failed` log line (ADR-0019 item 9 amended). Local checks 2026-10-20 on the merged head: `format:check`, `typecheck`, `verify`, 3,422 unit tests, `build`, `lab:edge-workers`, `lab:group:workers`, `ui:check` (165/166 with installed Chrome; the one is Chrome's own favicon 404) and the local journey lab (13 cases, 88 checks, zero aborts) pass. Open: PR, one AI review with the security lens, hosted CI including `ui` and `pgwire` (`docs/acceptance/P05.md`). It reconciles with PR-B (verify-config, `_headers`, the broker's ten secret names); PR-D adds its two JSON vars.
-- Built branches waiting for the merge train (next actions): P04.T01i PR-B (trimmed staging tooling); CI leg split (PR #26).
+- **P04.T01i PR-B, trimmed** (`claude/p04-t01i-b-staging-tooling`; merged with `main` `38b4347` on 2026-10-20; no PR yet): staging tooling, config and the runner lab, with no provider effect. Reconciled with P05.T01ab: gate 6 and `secrets-status` use `brokerRequiredSecrets` (ten names); gate 4 refuses a missing or inconsistent challenge configuration before any upload (`LOGIN_CHALLENGE_JSON`, `TURNSTILE_CONFIGURATION_JSON`: PR-D identifiers). With P04.T01j: the runner's catalog check is D4's reading, and `lab:staging-runner` (now `pg-http`) also applies 0001–0018 as a Neon-shaped `neondb_owner` (P04.T01j-AC14). Local checks 2026-10-20 on the merged head: `npm run ci` (3,550 unit tests, verify with 16 deliberate delivery failures, 12 Worker environments) passed; `lab:staging-runner` 77 checks; `lab:edge-workers` 28 cases, 205 checks; `smoke:scaffold`; every `pg-http` lab and the harness-touched `lab:tenant-conformance` (11/11) and `lab:session-lifecycle-sql` (124) passed, some on a rerun after timing holds at load 200–985. Open: PR, one AI review with the security lens, hosted CI, the owner's AC03 amendment for `actions: read`.
 
 ## Decisions recorded 2026-10-18 and 2026-10-19 (owner, in chat)
 
@@ -39,14 +38,14 @@ In progress:
 
 ## Last green commit
 
-`5806049` on `main` (PR #16): push run 39264458156 passed. Earlier: `f8314e8` (PR #11) push run 39173050501; `5ad6cc7` (PR #15) push run 39171677853; `bba3cec` (PR #14) push run 39169685269; `08e5ebf` (PR #13) push run 39168226191. A push that merges an unchanged PR head now runs only `checks`; record it with its push run and the PR run on the merged head.
+`38b4347` on `main` (PR #26): push run 39340711606 passed. `e8db88f` (PR #25) push run 39325412787; `5806049` (PR #16) push run 39264458156. Earlier: `f8314e8` (PR #11) push run 39173050501; `5ad6cc7` (PR #15) push run 39171677853; `bba3cec` (PR #14) push run 39169685269; `08e5ebf` (PR #13) push run 39168226191. A push that merges an unchanged PR head now runs only `checks`; record it with its push run and the PR run on the merged head.
 
 **Failed:** the scheduled heavy-faults run 39227357944 on `f8314e8` (2026-10-19). ADR-0021 defers those suites, so the proposal is to disable the weekly schedule and keep `workflow_dispatch`. That is a `ci` change for its own PR, not PR #17.
 
 ## Next actions
 
 MVP fast track (ADR-0021; `docs/plan/mvp.md`). M1, staging live:
-1. Merge train: #18 to #25 merged; next P05.T01ab (#27), the CI leg split (#26), then the trimmed P04.T01i PR-B. Each PR gets one AI review (separate context, same model family), with the security lens where it applies.
+1. Merge train: #18 to #27 merged; next the trimmed P04.T01i PR-B. Each PR gets one AI review (separate context, same model family), with the security lens where it applies.
 2. **The trimmed P04.T01i PR-B:** deploy after green CI, migrations, roles and secrets. It keeps `staging:kill`/`unkill` with the flag re-read around the api deploy, the ADR-0019 item 4 deploy gates 1–6, and the census at every deploy. Card effect E11 (Claude's rollbacks) is suspended until the rollback refusal exists; staging rolls forward instead. AC14's hosted drill, AC15–AC17 and AC19 move past launch (`docs/acceptance/P04.md`).
 3. Staging bring-up under `staging-card-1` once its preconditions hold (below); owner sign-in on staging.
 4. Then M2, M3 and M5 in parallel (ADR-0022 accepted in full, so credentials may be bound for development and staging, and M3 PR-1's catalogue part may build on model catalogue v1, active since 2026-10-19); M4 (with the ADR-0005 stop controls, M3/M4); M6 (the deletion path before the real-store smoke).
@@ -56,7 +55,7 @@ Open plan follow-ups: work routes in production must be gated on P09.T05 when pr
 
 ## Blockers
 
-None for local work. The first staging deploy waits on the trimmed P04.T01i PR-B, P04.T01j, P05.T01ab and the preconditions below. The credential-custody gate is cleared for development and staging: ADR-0022 (accepted 2026-10-19) admits Shopify, Anthropic and Stripe credentials to the broker; production custody still needs its own ADR before M6.
+None for local work. The first staging deploy waits on the trimmed P04.T01i PR-B, PR-D part 1 (identifiers, including the challenge vars) and the preconditions below. The credential-custody gate is cleared for development and staging: ADR-0022 (accepted 2026-10-19) admits Shopify, Anthropic and Stripe credentials to the broker; production custody still needs its own ADR before M6.
 
 ## Pending owner actions
 

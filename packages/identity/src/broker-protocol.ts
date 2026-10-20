@@ -97,6 +97,44 @@ export function parseChallengeActions(value: unknown): ChallengeActions {
   return Object.freeze({ login, signup });
 }
 
+// The broker's TURNSTILE_CONFIGURATION_JSON {schemaVersion:1, hostname, actions}: one
+// parser for the broker's challenge setup and the staging deploy's gate 4, so the gate
+// admits exactly what the broker will. loginJson(…, 1024) bounds the bytes and rejects
+// duplicate member names. The hostname is a lower-case DNS name equal to the login
+// origin's (Turnstile reports where it was solved); a mismatch alone throws
+// turnstileHostnameMismatch, every other failure BROKER_PROTOCOL_INVALID.
+export interface TurnstileConfiguration {
+  readonly hostname: string;
+  readonly actions: ChallengeActions;
+}
+export const turnstileHostnameMismatch = "BROKER_PROTOCOL_HOSTNAME_MISMATCH";
+const hostnamePattern =
+  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+export function parseTurnstileConfiguration(
+  json: unknown,
+  loginOrigin: unknown,
+): Readonly<TurnstileConfiguration> {
+  let hostname: string;
+  let actions: ChallengeActions;
+  try {
+    const configuration = loginJson(json, 1024, ["schemaVersion", "hostname", "actions"]);
+    if (configuration.schemaVersion !== 1 || !exact(hostnamePattern, configuration.hostname))
+      throw invalid();
+    hostname = configuration.hostname;
+    actions = parseChallengeActions(configuration.actions);
+  } catch {
+    throw invalid();
+  }
+  let loginHostname: string | null = null;
+  try {
+    loginHostname = typeof loginOrigin === "string" ? new URL(loginOrigin).hostname : null;
+  } catch {
+    loginHostname = null;
+  }
+  if (loginHostname !== hostname) throw Error(turnstileHostnameMismatch);
+  return Object.freeze({ hostname, actions });
+}
+
 export function brokerUtf8Bytes(value: string): number {
   return encoder.encode(value).length;
 }

@@ -15,11 +15,7 @@ import { identitySql } from "../packages/identity/src/index.ts";
 import { createStandaloneWorkspaceBootstrap } from "../packages/identity/src/standalone-workspace-bootstrap.ts";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
 import { createSessionKeeper } from "../packages/workspace-ui/src/session-keeper.ts";
-import {
-  literal as lit,
-  manifestChain,
-  withWorkDatabase,
-} from "../tests/tenant-conformance/harness.mjs";
+import { literal as lit, withWorkDatabase } from "../tests/tenant-conformance/harness.mjs";
 import {
   createLocalLoginTlsFixture,
   createBoundedLoginCookieJar,
@@ -27,9 +23,10 @@ import {
 import { localSelfLogoutSqlPool } from "./local-self-logout-sql.mjs";
 import { localStandaloneSqlPool } from "./local-standalone-sql.mjs";
 import { writeArtifact } from "./artifacts.mjs";
+import { loadMigrationChain } from "./migration-chain.mjs";
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
-const chain = manifestChain();
+const chain = loadMigrationChain();
 if (!chain.some((m) => m.sequence === 16 && m.file === "0016.browser-session-lifecycle.sql"))
   throw Error("ROTATE_HTTPS_LAB_MIGRATION_REQUIRED");
 const checks = [];

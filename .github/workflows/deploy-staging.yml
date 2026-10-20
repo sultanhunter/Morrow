@@ -1,0 +1,85 @@
+name: Deploy staging
+# P04.T01i D2 (ADR-0019 items 4 and 14; OQ-2 answer A; trimmed by ADR-0021): every push to
+# main whose "Morrow foundation" run succeeded deploys the four staging Workers through
+# gates 1–6, in the order broker, orchestrator, connector, api. The workflow_run event
+# always runs main's copy of this file.
+# - The first step holds no Cloudflare token: the card, gate 1 (the sha is still the main
+#   tip) and gate 2 (STAGING_DEPLOY_ENABLED is 1 and this workflow is enabled). A stop is a
+#   successful no-op.
+# - Gate 5 (build, edge:check, edge:dry-run) also runs without the token; edge.mjs refuses
+#   every CLOUDFLARE_* variable.
+# - Only the deploy step's env holds the token. It checks gates 3, 4 and 6 and runs the
+#   census, deploys, re-reading the flag just before every upload and just after the api
+#   deploy (the GITHUB_TOKEN cannot read variables, so the live re-read is this workflow's
+#   state, which `staging:kill` disables; hence `actions: read`), then checks /healthz and
+#   runs the unattended smoke. The census runs again on every path that started an
+#   upload, and the report is written before and after each upload. There is no rollback
+#   (card effect E11 is suspended): staging rolls forward from a new green main commit,
+#   with the kill switch as the stop.
+on:
+  workflow_run:
+    workflows: ["Morrow foundation"]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+      - name: Route reports outside the checkout
+        run: echo "MORROW_ARTIFACTS_DIR=$RUNNER_TEMP/morrow-artifacts" >> "$GITHUB_ENV"
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Card, gate 1 (main tip) and gate 2 (deploy flag), without the Cloudflare token
+        id: gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MORROW_DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          STAGING_DEPLOY_ENABLED: ${{ vars.STAGING_DEPLOY_ENABLED }}
+        run: node scripts/staging.mjs ci-gates
+      - name: Gate 5, build, edge:check and edge:dry-run, without the Cloudflare token
+        if: steps.gates.outputs.proceed == 'true'
+        run: npm run build && npm run edge:check && npm run edge:dry-run
+      - name: Gates 3, 4 and 6, deploy, health, unattended smoke and census
+        if: steps.gates.outputs.proceed == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          MORROW_DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          STAGING_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_DEPLOY_ENABLED: ${{ vars.STAGING_DEPLOY_ENABLED }}
+          STAGING_SCHEMA_HEAD: ${{ vars.STAGING_SCHEMA_HEAD }}
+          STAGING_LOGIN_CONFIGURATION_DIGEST: ${{ vars.STAGING_LOGIN_CONFIGURATION_DIGEST }}
+        run: node scripts/staging.mjs deploy --ci
+      - name: Secret-scan generated reports before upload
+        id: artifact_scan
+        if: always()
+        run: node scripts/scan-artifacts.mjs "$MORROW_ARTIFACTS_DIR"
+      - name: Upload generated reports
+        if: always() && steps.artifact_scan.outcome == 'success'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: morrow-${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/morrow-artifacts
+          if-no-files-found: ignore
+          overwrite: false
+          include-hidden-files: false
+          retention-days: 90
+      - name: Require an unchanged checkout
+        if: always()
+        run: git status --porcelain --untracked-files=all; test -z "$(git status --porcelain --untracked-files=all)"
