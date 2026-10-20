@@ -1,4 +1,4 @@
-import type { Core_AnswerRef, Core_PolicyDecision, Core_ResourceRef } from "@morrow/contracts";
+import type { Core_AnswerRef, Core_PolicyDecision, Current_ResourceRef } from "@morrow/contracts";
 import { validateCapabilityInput, validateCapabilityOutput } from "@morrow/contracts/validation";
 import {
   workAggregateReads,
@@ -117,7 +117,7 @@ const questionTarget = (id: string) => ({
 function workspaceResource(a: WorkAuthority) {
   return a.resource;
 }
-const sameResource = (x: Core_ResourceRef, a: WorkAuthority) => {
+const sameResource = (x: Current_ResourceRef, a: WorkAuthority) => {
   const w = workspaceResource(a);
   return (
     x.organizationId === w.organizationId &&

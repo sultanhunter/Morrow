@@ -1,4 +1,4 @@
-import type { Core_ResourceRef } from "@morrow/contracts";
+import type { Current_ResourceList } from "@morrow/contracts";
 import { validateDefinition } from "@morrow/contracts/validation";
 
 // Closed request bodies (P06.T01a §4.9), built on the generated v1 leaf
@@ -21,7 +21,8 @@ export interface GoalTransitionBody {
 export interface TaskCreateBody {
   goalId: string;
   objective: string;
-  allowedResources: Core_ResourceRef[];
+  // A v1 ResourceList (Task@1 is unchanged): its ResourceRefs have no store kind.
+  allowedResources: Current_ResourceList;
 }
 export interface TaskReadyBody {
   to: "ready";

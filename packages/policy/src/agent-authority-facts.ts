@@ -2,11 +2,11 @@ import type {
   Core_ActorRef,
   Core_AgentInstallation,
   Core_AutomationMandate,
-  Core_Grant,
   Core_PolicyDecision,
-  Core_ResourceRef,
-  Core_Scope,
   CapabilityId,
+  Current_Grant,
+  Current_ResourceRef,
+  Current_Scope,
 } from "@morrow/contracts";
 import type { PermissionRequest, PermissionVerb } from "./index";
 
@@ -22,14 +22,14 @@ export interface CurrentActorAuthority {
   readonly membershipActive: boolean;
   readonly policyRevision: number;
   readonly grantsRevision: number;
-  readonly grants: readonly Core_Grant[];
+  readonly grants: readonly Current_Grant[];
 }
 export interface ResolvedGrantRecord {
   readonly organizationId: string;
   readonly workspaceId: string;
   readonly storeId: string | null;
   readonly recordRevision: number;
-  readonly payload: Core_Grant;
+  readonly payload: Current_Grant;
 }
 export interface ResolvedMandateRecord {
   readonly organizationId: string;
@@ -67,7 +67,7 @@ export interface PrincipalWorkEnvelope {
   readonly authorizer: Core_ActorRef;
   readonly capabilityIds: readonly CapabilityId[];
   readonly verbs: readonly PermissionVerb[];
-  readonly scope: Core_Scope;
+  readonly scope: Current_Scope;
   readonly validFrom: string;
   readonly expiresAt: string;
   readonly revokedAt: string | null;
@@ -79,7 +79,7 @@ export interface DelegationHop {
   readonly revision: number;
   readonly parentTaskId: string;
   readonly parentTaskRevision: number;
-  readonly parentTaskResource: Core_ResourceRef;
+  readonly parentTaskResource: Current_ResourceRef;
   readonly childTaskId: string;
   readonly childTaskRevision: number;
   readonly parentEnvelopeId: string;
@@ -90,14 +90,14 @@ export interface DelegationHop {
   readonly recipient: Core_ActorRef;
   readonly capabilityIds: readonly CapabilityId[];
   readonly verbs: readonly PermissionVerb[];
-  readonly scope: Core_Scope;
+  readonly scope: Current_Scope;
   readonly validFrom: string;
   readonly expiresAt: string;
   readonly revokedAt: string | null;
   readonly parentChildCount: number;
 }
 export interface CurrentOperationConstraints {
-  readonly resource: Core_ResourceRef;
+  readonly resource: Current_ResourceRef;
   readonly accountId: string | null;
   readonly providerAllowed: boolean;
   readonly entitlementAllowed: boolean;

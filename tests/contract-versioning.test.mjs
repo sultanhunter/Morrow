@@ -138,6 +138,9 @@ test("AC03: replacements are declared, and undeclared ones are reported", () => 
       ["billing_definition", "AllocationShare", "ADR-0015"],
       ["billing_definition", "CostAllocation", "ADR-0015"],
       ["definition", "EventEnvelope", "ADR-0016"],
+      ["definition", "ResourceRef", "ADR-0022"],
+      ["definition", "Scope", "ADR-0022"],
+      ["definition", "Grant", "ADR-0022"],
     ],
   );
   const prefixes = {
@@ -338,7 +341,14 @@ test("AC10: contractVersion has exactly one source", () => {
 
 test("AC11: product code cannot validate or type a replaced v1 definition", () => {
   const replaced = replacedDefinitionNames(changes);
-  assert.deepEqual(replaced, ["Proposal", "Approval", "EventEnvelope"]);
+  assert.deepEqual(replaced, [
+    "Proposal",
+    "Approval",
+    "EventEnvelope",
+    "ResourceRef",
+    "Scope",
+    "Grant",
+  ]);
   const check = (path, code) => inspectSupersededUse(path, code, replaced);
   assert.deepEqual(
     check("packages/policy/src/x.ts", 'validateDefinition("core","Proposal", value);'),
@@ -401,6 +411,109 @@ test("AC11: product code cannot validate or type a replaced v1 definition", () =
     files.flatMap((path) => check(path, read(path))),
     [],
   );
+});
+
+// --- M2 PR-2a: the store resource (ADR-0022 item 2) -------------------------------
+test("ADR-0022 item 2: core ResourceRef, Scope and Grant are declared supersets of v1", () => {
+  const v1Defs = layered.core.$defs,
+    v11Defs = layered["core-v1.1"].$defs;
+  // Structurally, each is the v1 definition (local refs made absolute, as every v1.1
+  // reuse is) plus exactly one change: kind gains store with its allOf rule; Scope
+  // names the v1.1 ResourceRef; Grant names the v1.1 Scope.
+  const absolute = (value) =>
+    JSON.parse(
+      JSON.stringify(value).replaceAll('"#/$defs/', '"urn:morrow:contracts:core:v1#/$defs/'),
+    );
+  const without = (value, ...keys) =>
+    Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
+  const resource = structuredClone(without(v11Defs.ResourceRef, "description", "allOf"));
+  assert.equal(resource.properties.kind.enum.at(-1), "store");
+  resource.properties.kind.enum.pop();
+  assert.deepEqual(resource, absolute(v1Defs.ResourceRef));
+  assert.deepEqual(v11Defs.ResourceRef.allOf, [
+    {
+      if: { type: "object", properties: { kind: { const: "store" } }, required: ["kind"] },
+      then: {
+        type: "object",
+        properties: {
+          storeId: { $ref: "urn:morrow:contracts:core:v1#/$defs/Id" },
+          connectionId: { $ref: "urn:morrow:contracts:core:v1#/$defs/Id" },
+        },
+      },
+    },
+  ]);
+  const scope = structuredClone(without(v11Defs.Scope, "description"));
+  assert.deepEqual(scope.properties.resources.items, { $ref: "#/$defs/ResourceRef" });
+  scope.properties.resources.items = { $ref: "urn:morrow:contracts:core:v1#/$defs/ResourceRef" };
+  assert.deepEqual(scope, absolute(v1Defs.Scope));
+  const grant = structuredClone(without(v11Defs.Grant, "description"));
+  assert.deepEqual(grant.properties.scope, { $ref: "#/$defs/Scope" });
+  grant.properties.scope = { $ref: "urn:morrow:contracts:core:v1#/$defs/Scope" };
+  assert.deepEqual(grant, absolute(v1Defs.Grant));
+  // The declared core supersets are exactly these three; every other core replacement
+  // stays incompatible in both directions.
+  assert.deepEqual(
+    changes.changes
+      .filter((c) => c.kind === "definition" && /superset of v1/i.test(c.reason))
+      .map((c) => c.name),
+    ["ResourceRef", "Scope", "Grant"],
+  );
+  assert.match(changes.policy, /ResourceRef, Scope and Grant \(ADR-0022 item 2\) are supersets/);
+  // Every P01.A02 case for them keeps its verdict under the current definition.
+  const fixtures = json("docs/contracts/fixtures/P01.A02.json").filter(
+    (f) => f.kind === "schema" && ["ResourceRef", "Scope", "Grant"].includes(f.definition),
+  );
+  assert.equal(fixtures.length, 6);
+  for (const f of fixtures)
+    assert.equal(validateCurrentDefinition(f.definition, f.value), f.valid, f.id);
+  // The one addition: the store resource. v1 refuses it (a v1 reader fails closed).
+  const store = {
+    organizationId: "org_a",
+    workspaceId: "workspace_a",
+    storeId: "store_a",
+    connectionId: "connection_a",
+    kind: "store",
+    id: "store_a",
+  };
+  const storeScope = {
+    organizationId: "org_a",
+    workspaceId: "workspace_a",
+    storeIds: ["store_a"],
+    accountIds: [],
+    resources: [store],
+    fields: ["title"],
+  };
+  const grantFixture = fixtures.find((f) => f.id === "P01.A02.schema.valid.Grant").value;
+  const storeGrant = { ...structuredClone(grantFixture), scope: storeScope };
+  for (const [name, value] of [
+    ["ResourceRef", store],
+    ["Scope", storeScope],
+    ["Grant", storeGrant],
+  ]) {
+    assert.equal(validateDefinition("core", name, value), false, name);
+    assert.equal(validateDefinition("core-v1.1", name, value), true, name);
+    assert.equal(validateCurrentDefinition(name, value), true, name);
+  }
+  // Kind store needs both store keys (schema), and its id is its storeId (code).
+  for (const change of [
+    { storeId: null },
+    { connectionId: null },
+    { storeId: null, connectionId: null },
+  ])
+    assert.equal(validateCurrentDefinition("ResourceRef", { ...store, ...change }), false);
+  const misnamed = { ...store, id: "store_b" };
+  assert.equal(validateDefinition("core-v1.1", "ResourceRef", misnamed), true);
+  assert.equal(validateCurrentDefinition("ResourceRef", misnamed), false);
+  const misnamedScope = { ...storeScope, resources: [store, misnamed] };
+  assert.equal(validateCurrentDefinition("Scope", misnamedScope), false);
+  assert.equal(validateCurrentDefinition("Grant", { ...storeGrant, scope: misnamedScope }), false);
+  // A storeless or store-bound resource of any other kind is unchanged.
+  for (const kind of ["workspace", "product", "installation"])
+    assert.equal(
+      validateCurrentDefinition("ResourceRef", { ...store, kind, id: kind + "_a" }),
+      validateDefinition("core", "ResourceRef", { ...store, kind, id: kind + "_a" }),
+      kind,
+    );
 });
 
 // --- P01.T04a PR-A: billing routes by origin (ADR-0015) --------------------------

@@ -1,5 +1,9 @@
-import type { Core_ActorRef as ActorRef, Core_Grant, Core_ResourceRef } from "@morrow/contracts";
-import { validateDefinition } from "@morrow/contracts/validation";
+import type {
+  Core_ActorRef as ActorRef,
+  Current_Grant,
+  Current_ResourceRef,
+} from "@morrow/contracts";
+import { validateCurrentDefinition, validateDefinition } from "@morrow/contracts/validation";
 
 // Server-only persistence port. No issuer, cookie parser or request authenticator
 // is supplied here. A qualified WorkOS boundary must produce the session proof.
@@ -48,8 +52,8 @@ FROM context c JOIN morrow_identity.workspaces w ON w.id::text=c.workspace_id AN
 
 export interface CurrentWorkspaceAuthority {
   readonly identity: ResolvedIdentity;
-  readonly resource: Core_ResourceRef;
-  readonly grants: readonly Core_Grant[];
+  readonly resource: Current_ResourceRef;
+  readonly grants: readonly Current_Grant[];
 }
 export interface IdentityReadScope {
   readonly identity: ResolvedIdentity;
@@ -153,7 +157,8 @@ export async function withIdentityRead<T>(
             "grants,membership_id,organization_id,policy_revision,principal_id,workspace_id" ||
           !Array.isArray(row.grants) ||
           row.grants.length > 1000 ||
-          !row.grants.every((g) => validateDefinition("core", "Grant", g))
+          // Current Grant (ADR-0022 item 2): a store-link grant names the store resource.
+          !row.grants.every((g) => validateCurrentDefinition("Grant", g))
         )
           throw denied();
         const { grants, ...context } = row;
@@ -164,7 +169,7 @@ export async function withIdentityRead<T>(
           current.actor.organizationId !== identity.actor.organizationId
         )
           throw denied();
-        const resource: Core_ResourceRef = {
+        const resource: Current_ResourceRef = {
           organizationId: current.actor.organizationId,
           workspaceId: requestedWorkspace,
           storeId: null,
@@ -172,7 +177,7 @@ export async function withIdentityRead<T>(
           kind: "workspace",
           id: requestedWorkspace,
         };
-        return { identity: current, resource, grants: grants as Core_Grant[] };
+        return { identity: current, resource, grants: grants as Current_Grant[] };
       },
       async readWorkspace() {
         if (!live) throw denied();
