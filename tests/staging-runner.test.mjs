@@ -631,6 +631,38 @@ test("neon connector: exact host, explicit parameters, no pipelined password, on
   });
 });
 
+test("neon connector: a connect, and its cleanup, that never settle fail closed at their deadlines", async () => {
+  const ownerUrl = parseOwnerUrl(
+    `postgresql://neondb_owner:${"s".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
+  );
+  let ended = false;
+  class NeverClient {
+    constructor() {
+      this.neonConfig = {};
+    }
+    on() {}
+    connect() {
+      return new Promise(() => {});
+    }
+    end() {
+      ended = true;
+      return new Promise(() => {});
+    }
+  }
+  const started = Date.now();
+  await assert.rejects(
+    neonConnector({
+      ownerUrl,
+      binding: labBinding,
+      driver: { Client: NeverClient },
+      connectDeadlineMs: 50,
+    }).connect(),
+    (error) => error.code === "STAGING_DATABASE_UNAVAILABLE",
+  );
+  assert.ok(Date.now() - started < 4000);
+  assert.equal(ended, true);
+});
+
 test("owner URL: closed grammar, direct host only, and parse errors never quote the input", () => {
   const good = `postgresql://neondb_owner:${"q".repeat(20)}@${labBinding.hostname}/morrow?sslmode=require&channel_binding=require`;
   assert.equal(parseOwnerUrl(good).host, labBinding.hostname);
