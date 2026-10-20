@@ -631,6 +631,57 @@ test("neon connector: exact host, explicit parameters, no pipelined password, on
   });
 });
 
+test(
+  "neon connector: a connect, and its cleanup, that never settle fail closed at their deadlines",
+  { timeout: 10000 },
+  async () => {
+    const ownerUrl = parseOwnerUrl(
+      `postgresql://neondb_owner:${"s".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
+    );
+    let ended = false;
+    let options = null;
+    class NeverClient {
+      constructor(given) {
+        options = given;
+        this.neonConfig = {};
+      }
+      on() {}
+      connect() {
+        return new Promise(() => {});
+      }
+      end() {
+        ended = true;
+        return new Promise(() => {});
+      }
+    }
+    await assert.rejects(
+      neonConnector({
+        ownerUrl,
+        binding: labBinding,
+        driver: { Client: NeverClient },
+        connectDeadlineMs: 50,
+        endDeadlineMs: 50,
+      }).connect(),
+      (error) => {
+        assert.equal(error.code, "STAGING_DATABASE_UNAVAILABLE");
+        assert.ok(
+          !JSON.stringify({ ...error, message: error.message }).includes(ownerUrl.password),
+        );
+        return true;
+      },
+    );
+    assert.equal(ended, true);
+    // The driver's own timeout stays inside the outer deadline (at least 1 s).
+    assert.equal(options.connectionTimeoutMillis, 1000);
+    const defaults = neonConnector({
+      ownerUrl,
+      binding: labBinding,
+      driver: { Client: NeverClient },
+    });
+    assert.ok(defaults);
+  },
+);
+
 test("owner URL: closed grammar, direct host only, and parse errors never quote the input", () => {
   const good = `postgresql://neondb_owner:${"q".repeat(20)}@${labBinding.hostname}/morrow?sslmode=require&channel_binding=require`;
   assert.equal(parseOwnerUrl(good).host, labBinding.hostname);

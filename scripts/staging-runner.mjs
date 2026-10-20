@@ -40,6 +40,8 @@ export function neonConnector({
   binding,
   applicationName = runnerApplicationName,
   driver,
+  connectDeadlineMs = 25000,
+  endDeadlineMs = 2000,
 }) {
   if (ownerUrl.host !== binding.hostname) throw new StagingError("STAGING_HOST_MISMATCH");
   const expectedUrl = `wss://${binding.hostname}/v2?address=${binding.hostname}:5432`;
@@ -47,10 +49,12 @@ export function neonConnector({
     async connect() {
       const { Client } = driver ?? (await import("@neondatabase/serverless"));
       const Native = globalThis.WebSocket;
+      const sockets = [];
       class Guard extends Native {
         constructor(url, protocols) {
           if (String(url) !== expectedUrl) throw Error("STAGING_SOCKET_REFUSED");
           super(url, protocols);
+          sockets.push(this);
         }
       }
       const client = new Client({
@@ -60,7 +64,9 @@ export function neonConnector({
         user: ownerUrl.user,
         password: ownerUrl.password,
         ssl: false,
-        connectionTimeoutMillis: 20000,
+        // The driver's own timeout stays inside ours, so its socket teardown always runs
+        // before the outer deadline fails the connect.
+        connectionTimeoutMillis: Math.max(1000, connectDeadlineMs - 5000),
         query_timeout: 0,
         application_name: applicationName,
         options: "",
@@ -73,13 +79,34 @@ export function neonConnector({
       client.neonConfig.wsProxy = `${binding.hostname}/v2`;
       client.neonConfig.webSocketConstructor = Guard;
       client.on?.("error", () => {});
+      // Hard deadlines: when the endpoint is unreachable, the driver can leave connect()
+      // and then end() pending with nothing keeping the event loop alive, so the process
+      // exited mid-run with no outcome (2026-10-20, neon-probe exit 13). Connect fails
+      // closed at its deadline, and the cleanup end() is bounded too.
+      const bounded = (promise, ms) => {
+        let timer;
+        return Promise.race([
+          promise,
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(Error("deadline")), ms);
+          }),
+        ]).finally(() => clearTimeout(timer));
+      };
       try {
-        await client.connect();
+        await bounded(client.connect(), connectDeadlineMs);
       } catch {
         try {
-          await client.end();
+          await bounded(client.end(), endDeadlineMs);
         } catch {
-          // Already closed.
+          // Already closed, or the socket never opened.
+        }
+        // A socket still connecting would otherwise finish its handshake after we gave up.
+        for (const socket of sockets) {
+          try {
+            socket.close();
+          } catch {
+            // Already closed.
+          }
         }
         throw new StagingError("STAGING_DATABASE_UNAVAILABLE");
       }
