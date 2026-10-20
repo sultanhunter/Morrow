@@ -2,7 +2,10 @@
 // selected X-Shopify-* headers go to the broker, which checks the HMAC over the raw bytes
 // before any parse. A missing header or a refused signature is 401 with no state change.
 // A verified delivery is 503 until M2 PR-3 adds the durable inbox, so Shopify retries it;
-// the generated app TOML subscribes no topic before PR-3, so none is delivered yet.
+// the generated app TOML subscribes no topic before PR-3, so none is delivered yet. That
+// includes app/uninstalled: an uninstall before PR-3 is never delivered and its offline
+// token stays active, so a development store keeps the app installed until PR-3 is
+// deployed (docs/briefs/M2-shopify-connect.md, owner gates).
 import {
   shopifyLimits,
   shopifyWebhookHeaderNames,
