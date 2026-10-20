@@ -12,9 +12,11 @@ import type { Current_ResourceRef } from "@morrow/contracts";
 import { validateCurrentDefinition } from "@morrow/contracts/validation";
 
 /**
- * The listing FieldPaths (ADR-0022 item 1), sorted: the fields a Listings proposal may
- * change and a catalog.* store grant names. A grant's fields are the request's input
- * names (the owner-bootstrap-v1 rule), so catalogue grants use exactly this list.
+ * The listing FieldPaths (ADR-0022 item 1), sorted: the product fields a Listings
+ * proposal may change. ADR-0022 item 1 fixes these catalogue FieldPaths; catalog.* store
+ * grants and kernel requests name exactly these, never the capability's input names
+ * (`productIds`, `proposalRef` and so on). Governance grants differ: their fields are
+ * input names (ADR-0009 item 7, the owner-bootstrap-v1 rule).
  */
 export const listingFieldPaths = Object.freeze([
   "descriptionHtml",

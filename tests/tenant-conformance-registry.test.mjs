@@ -31,12 +31,22 @@ const sortedUnique = (list, pattern) =>
   new Set(list).size === list.length &&
   list.every((x, i) => i === 0 || list[i - 1] < x);
 
-// The problems of one S7 table spec, as strings (empty when well formed).
+// The problems of one S7 table spec, as strings (empty when well formed). The seven
+// specKeys are required; `lease` is the one optional key and, when present, is `true`
+// (S7's checkPolicies then expects tenant_lease, as for workTables).
 function s7SpecProblems(schema, table, spec) {
   const problems = [];
   const at = `${schema}.${table}`;
-  if (!spec || typeof spec !== "object" || Object.keys(spec).sort().join() !== specKeys.join())
+  if (
+    !spec ||
+    typeof spec !== "object" ||
+    Object.keys(spec)
+      .filter((key) => key !== "lease")
+      .sort()
+      .join() !== specKeys.join()
+  )
     return [at + ":keys"];
+  if (Object.hasOwn(spec, "lease") && spec.lease !== true) problems.push(at + ":lease");
   const classes =
     schema === "morrow_vault"
       ? ["vault_platform", "vault_tenant"]
@@ -79,6 +89,8 @@ test("S7 registry: every billing and vault table carries a well-formed per-table
   const good = billingTables.workspace_billing_routes;
   for (const [name, change] of [
     ["keys", { extra: true }],
+    ["lease", { lease: "yes" }],
+    ["lease", { lease: false }],
     ["commandPrivileges", { commandPrivileges: ["DELETE", "SELECT"] }],
     ["commandPrivileges", { commandPrivileges: ["SELECT", "TRUNCATE"] }],
     ["commandPrivileges", { commandPrivileges: ["SELECT", "INSERT"] }],
@@ -98,6 +110,11 @@ test("S7 registry: every billing and vault table carries a well-formed per-table
       (p) => p.endsWith(":apiColumns"),
     ),
   );
+  // The optional `lease: true` is well formed; a missing required key is not.
+  assert.deepEqual(s7SpecProblems("morrow_billing", "x", { ...good, lease: true }), []);
+  const leaseOnly = { ...good, lease: true };
+  delete leaseOnly.apiColumns;
+  assert.deepEqual(s7SpecProblems("morrow_billing", "x", leaseOnly), ["morrow_billing.x:keys"]);
 });
 
 test("S7 registry: schema USAGE agrees with the command role and each executor login", () => {
@@ -124,4 +141,28 @@ test("S7 registry: schema USAGE agrees with the command role and each executor l
           signature,
         );
     }
+});
+
+// The reviewed 0020 column grants, pinned by name as the old hard-coded S7 implied them
+// (migration 0020): the api role reads exactly the route's eleven columns, and the command
+// role holds no column UPDATE on the route or either vault table. A later PR that widens
+// one of these tables changes this expectation beside its registry entry and migration.
+test("S7 registry: the reviewed 0020 column grants", () => {
+  assert.deepEqual(billingTables.workspace_billing_routes.apiColumns, [
+    "created_at",
+    "fixing_payment_key",
+    "mode",
+    "organization_id",
+    "origin",
+    "revision",
+    "route",
+    "route_fixed_at",
+    "shopify_bound_at",
+    "updated_at",
+    "workspace_id",
+  ]);
+  // One line per table, so a PR that widens one table changes only its line.
+  assert.deepEqual(billingTables.workspace_billing_routes.commandColumnUpdates, []);
+  assert.deepEqual(vaultTables.app_secrets.commandColumnUpdates, []);
+  assert.deepEqual(vaultTables.credentials.commandColumnUpdates, []);
 });
