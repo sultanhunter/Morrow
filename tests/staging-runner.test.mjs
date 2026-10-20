@@ -29,11 +29,13 @@ import {
   billingTermsSeedRows,
   checkAdministrator,
   checkIdentity,
+  customerResolutionInput,
   ledgerDrift,
   morrowSetRowsQuery,
   neonConnector,
   platformSeedRows,
   provisioningSql,
+  resolveHeldCustomerOperation,
   runMigrations,
   scramVerifier,
   seedBillingTerms,
@@ -1698,4 +1700,118 @@ test("billing terms seed: as the work owner, idempotent, refused on drift, D4 in
     }),
     { code: "STAGING_TERMS_INVALID" },
   );
+});
+
+// ---------------------------------------------------------------------------
+// M5 PR-1 (review): the operator path for a customer operation the broker held.
+const heldInput = Object.freeze({
+  operatorId: "operator_owner",
+  operationId: "00000000-0000-4000-8000-0000000000c1",
+  resolution: "abandon",
+  evidenceCode: "customers_deleted",
+  evidenceRef: "docs/evidence/live/2026-10-21-stripe-customer-resolve.md",
+});
+test("billing-customer-resolve: closed input, the work owner under D4, committed only on success", async () => {
+  assert.deepEqual(customerResolutionInput(heldInput), Object.values(heldInput));
+  assert.deepEqual(
+    customerResolutionInput({ ...heldInput, resolution: "retry", evidenceCode: "stripe_corrected" })
+      .length,
+    5,
+  );
+  for (const change of [
+    { operatorId: "" },
+    { operationId: "cus_NotAnOperation" },
+    { resolution: "promote" },
+    // The evidence code belongs to its resolution.
+    { resolution: "retry", evidenceCode: "customers_deleted" },
+    { evidenceCode: "stripe_corrected" },
+    { evidenceRef: "docs/decisions/approvals/staging.md" },
+    { evidenceRef: "../docs/evidence/live/2026-10-21-x.md" },
+  ])
+    assert.equal(
+      codeOf(() => customerResolutionInput({ ...heldInput, ...change })),
+      "STAGING_USAGE",
+      JSON.stringify(change),
+    );
+  const administrator = Object.freeze({ name: "neondb_owner", mode: "createrole" });
+  const run = async (row) => {
+    const db = fakeDatabase({ rules: [[/operator_customer_operation_resolve/, [row]]] });
+    const outcome = await resolveHeldCustomerOperation({
+      connect: db.connector().connect,
+      binding: labBinding,
+      administrator,
+      input: heldInput,
+    }).then(
+      (done) => done,
+      (error) => error,
+    );
+    return { outcome, statements: db.statements, texts: db.statements.map((s) => s.text) };
+  };
+  const done = await run({ outcome: "abandoned", operation_status: "failed" });
+  assert.deepEqual(done.outcome, { outcome: "abandoned", operationStatus: "failed" });
+  const after = done.texts.slice(done.texts.indexOf("BEGIN"));
+  assert.deepEqual(after.slice(0, 3), [
+    "BEGIN",
+    "GRANT morrow_work_owner TO neondb_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE",
+    "SET LOCAL ROLE morrow_work_owner",
+  ]);
+  const call = done.statements.find((s) => /operator_customer_operation_resolve/.test(s.text));
+  assert.deepEqual(call.params, Object.values(heldInput));
+  assert.ok(
+    after.indexOf("REVOKE morrow_work_owner FROM neondb_owner GRANTED BY neondb_owner") <
+      after.indexOf("COMMIT"),
+  );
+  // Any other outcome commits nothing and reports the fixed outcome.
+  for (const outcome of ["not_held", "not_found", "invalid", "denied", "surprise"]) {
+    const refused = await run({ outcome, operation_status: null });
+    assert.equal(refused.outcome.code, "STAGING_RESOLVE_REFUSED", outcome);
+    assert.deepEqual(refused.outcome.details, {
+      outcome: outcome === "surprise" ? "unknown" : outcome,
+    });
+    assert.ok(!refused.texts.includes("COMMIT"), outcome);
+  }
+});
+
+test("cli: billing-customer-resolve needs the card, the committed evidence record and main", async () => {
+  const planted = plantedHome();
+  try {
+    const { ctx, err } = await fakeContext({ home: planted.home, tools: fakeTools().tools });
+    const argv = [
+      "billing-customer-resolve",
+      "--operation",
+      heldInput.operationId,
+      "--resolution",
+      "abandon",
+      "--evidence-code",
+      "customers_deleted",
+      "--evidence",
+      heldInput.evidenceRef,
+      "--operator",
+      heldInput.operatorId,
+    ];
+    for (const bad of [
+      argv.slice(0, -1),
+      [...argv, "--operator", "again"],
+      argv.map((a) => (a === "abandon" ? "promote" : a)),
+      argv.map((a) => (a === "customers_deleted" ? "stripe_corrected" : a)),
+    ]) {
+      assert.equal(await main(bad, ctx), 2, bad.join(" "));
+      assert.equal(JSON.parse(err.at(-1)).code, "STAGING_USAGE");
+    }
+    // The evidence record must be committed before any database effect.
+    const db = fakeDatabase();
+    ctx.database = db.connector;
+    assert.equal(await main(argv, ctx), 1);
+    assert.equal(JSON.parse(err.at(-1)).code, "STAGING_EVIDENCE_MISSING");
+    assert.deepEqual(db.statements, []);
+    const proposed = await fakeContext({
+      home: planted.home,
+      tools: fakeTools().tools,
+      card: { ...approvedCard(), status: "proposed", approvedOn: null, expiresOn: null },
+    });
+    assert.equal(await main(argv, proposed.ctx), 1);
+    assert.equal(JSON.parse(proposed.err.at(-1)).code, "STAGING_CARD_INACTIVE");
+  } finally {
+    planted.cleanup();
+  }
 });

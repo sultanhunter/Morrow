@@ -366,8 +366,12 @@ export const stripeLimits = Object.freeze({
   urlMaxBytes: 2048,
 });
 export type StripeWriteOutcome = "verified" | "failed" | "uncertain";
+/**
+ * A customer operation also answers "held": still uncertain once no replay or send can
+ * run, Stripe proved neither outcome, and the operation waits for the operator.
+ */
 export interface StripeCustomerResult {
-  readonly outcome: StripeWriteOutcome;
+  readonly outcome: StripeWriteOutcome | "held";
 }
 export interface StripeCheckoutResult {
   readonly outcome: StripeWriteOutcome | "closed" | "pending";
@@ -411,15 +415,16 @@ const stripeTime = (value: unknown): value is number =>
   Number.isSafeInteger(value) && (value as number) > 0 && (value as number) <= 8640000000000000;
 const writeOutcomes: readonly string[] = ["verified", "failed", "uncertain"];
 
+const customerOutcomes: readonly string[] = [...writeOutcomes, "held"];
 export function encodeStripeCustomerResult(r: StripeCustomerResult): string {
-  if (!writeOutcomes.includes(r.outcome)) throw invalid();
+  if (!customerOutcomes.includes(r.outcome)) throw invalid();
   return JSON.stringify({ schemaVersion: 1, outcome: r.outcome });
 }
 export function decodeStripeCustomerResult(text: unknown): StripeCustomerResult {
   try {
     const r = loginJson(text, stripeLimits.resultMaxBytes, ["schemaVersion", "outcome"]);
-    if (r.schemaVersion !== 1 || !writeOutcomes.includes(r.outcome as string)) throw invalid();
-    return Object.freeze({ outcome: r.outcome as StripeWriteOutcome });
+    if (r.schemaVersion !== 1 || !customerOutcomes.includes(r.outcome as string)) throw invalid();
+    return Object.freeze({ outcome: r.outcome as StripeCustomerResult["outcome"] });
   } catch {
     throw invalid();
   }

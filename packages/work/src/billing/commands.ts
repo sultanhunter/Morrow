@@ -202,7 +202,8 @@ export type BillingCommandRejection =
   | "route_conflict"
   | "terms_conflict"
   | "checkout_conflict"
-  | "customer_missing";
+  | "customer_missing"
+  | "customer_held";
 const baseReason: Readonly<Record<BillingCommandRejection, WorkRejection>> = Object.freeze({
   invalid: "invalid",
   ineligible: "unauthenticated",
@@ -212,6 +213,7 @@ const baseReason: Readonly<Record<BillingCommandRejection, WorkRejection>> = Obj
   terms_conflict: "state_conflict",
   checkout_conflict: "state_conflict",
   customer_missing: "state_conflict",
+  customer_held: "state_conflict",
 });
 /** A definer's decided refusal: the transaction rolls back and the HTTP layer maps it. */
 export class BillingCommandRejected extends WorkReject {
@@ -229,6 +231,7 @@ const rejections: readonly string[] = [
   "terms_conflict",
   "checkout_conflict",
   "customer_missing",
+  "customer_held",
 ];
 // After markSubmitted: a decided refusal rolls back; any reply that is not a decided
 // outcome stays an unknown outcome (withWorkTransaction), never success or denial.

@@ -209,6 +209,24 @@ export function periodFromRow(row: Row): BillingPeriod {
     return invalid();
   return Object.freeze({ start: row.period_start as string, end: row.period_end as string });
 }
+/**
+ * The workspace's customer operation held for the operator: Stripe proved neither outcome
+ * once no replay or send could run, so checkout waits for the operator's resolution.
+ */
+export interface BillingSetupHold {
+  readonly operationId: string;
+  readonly heldAt: string;
+}
+export function setupHoldFromRow(row: Row): BillingSetupHold {
+  if (
+    !exact(row, ["operation_id", "held_at"]) ||
+    typeof row.operation_id !== "string" ||
+    !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(row.operation_id) ||
+    !utc(row.held_at)
+  )
+    return invalid();
+  return Object.freeze({ operationId: row.operation_id, heldAt: row.held_at as string });
+}
 export interface BillingIntentView {
   readonly id: string;
   readonly status: "open" | "completed";
@@ -293,6 +311,7 @@ export interface BillingFactsRead {
   readonly wallet: CurrentBilling_CreditWallet | null;
   readonly billingPeriod: BillingPeriod | null;
   readonly intent: BillingIntentView | null;
+  readonly setupHold: BillingSetupHold | null;
 }
 const atMostOne = (rows: readonly Row[]): Row | null =>
   rows.length === 0 ? null : rows.length === 1 ? rows[0]! : invalid();
@@ -330,6 +349,8 @@ export function createBillingFactsReader(query: BillingQuery) {
     const intent = intentRow ? intentFromRow(intentRow) : null;
     const periodRow = atMostOne(await query("billingPeriodLatest", [ws]));
     const billingPeriod = periodRow ? periodFromRow(periodRow) : null;
+    const holdRow = atMostOne(await query("billingSetupHold", [ws]));
+    const setupHold = holdRow ? setupHoldFromRow(holdRow) : null;
     const facts = billingFactsInput(
       { route, associations, account, snapshot, conflicts, checkoutIntentPending: intent !== null },
       scope,
@@ -341,6 +362,7 @@ export function createBillingFactsReader(query: BillingQuery) {
       wallet: wallet?.wallet ?? null,
       billingPeriod,
       intent,
+      setupHold,
     });
   }
   const facts: BillingFactsReader = async (scope) => (await read(scope)).facts;

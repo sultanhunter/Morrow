@@ -4,8 +4,10 @@
 // SQL itself runs in lab:billing (section G drives this same code over PostgreSQL 17).
 // Covers: closed request builders on the pinned version, the operation-bound
 // Idempotency-Key, the request digest recomputed from the database's parameters, outcome
-// mapping (2xx readback, 4xx, one 429 resend, 5xx, transport loss), and reconciliation by
-// readback first, then a same-key replay only within 23 hours, never a new key.
+// mapping (2xx readback, 4xx, one 429 resend, 5xx, transport loss), reconciliation by
+// readback first, then a same-key replay only within 23 hours, never a new key; after 24
+// hours the customer list settles a customer operation verified or absent, or holds it for
+// the operator; and one deadline per method.
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -62,20 +64,29 @@ function operation(purpose, params = {}, { createdAtMs = Date.now() } = {}) {
     attempts: 0,
     providerObjectId: null,
     createdAtMs,
+    sendStartedAtMs: null,
+    heldAtMs: null,
     digest: null,
     settles: [],
   };
 }
-function vault(ops, { digestOverride = null, settleFails = false } = {}) {
+const hour = 3600 * 1000;
+function vault(
+  ops,
+  { digestOverride = null, settleFails = false, now = () => Date.now(), hook = () => {} } = {},
+) {
   const calls = [];
+  const budgets = [];
   const byId = new Map(ops.map((op) => [op.id, op]));
   const transaction = async (budgetMs, body) => {
     assert.ok(Number.isSafeInteger(budgetMs) && budgetMs > 0);
+    budgets.push(budgetMs);
     return body(async (text, values) => {
       // Only registered statements, text values only (the transport's rule).
       assert.ok(Object.values(vaultStatements).includes(text), text);
       assert.ok(values.every((v) => typeof v === "string"));
       calls.push([text, values]);
+      hook(text);
       const op = byId.get(values[0]);
       if (text === billingVaultStatements.stripeOpBegin) {
         if (!op) return [{ ...emptyBegin, outcome: "not_found" }];
@@ -83,6 +94,7 @@ function vault(ops, { digestOverride = null, settleFails = false } = {}) {
         if (op.status === "authorized") {
           op.status = "dispatching";
           op.fenced = true;
+          op.sendStartedAtMs = now();
           op.attempts++;
           outcome = "send";
         } else if (op.status === "dispatching" && op.fenced) {
@@ -90,8 +102,11 @@ function vault(ops, { digestOverride = null, settleFails = false } = {}) {
           outcome = "reconcile";
         } else
           outcome =
-            { uncertain: "reconcile", verified: "verified", failed: "failed" }[op.status] ??
-            "state_conflict";
+            {
+              uncertain: op.heldAtMs === null ? "reconcile" : "held",
+              verified: "verified",
+              failed: "failed",
+            }[op.status] ?? "state_conflict";
         if (op.purpose === "checkout_session_create" && !op.params.customerId)
           outcome = "customer_pending";
         op.digest ??= await stripeRequestDigest([
@@ -107,6 +122,7 @@ function vault(ops, { digestOverride = null, settleFails = false } = {}) {
             params: JSON.stringify(op.params),
             provider_object_id: op.providerObjectId,
             created_at_ms: String(op.createdAtMs),
+            send_started_at_ms: op.sendStartedAtMs === null ? null : String(op.sendStartedAtMs),
           },
         ];
       }
@@ -123,6 +139,28 @@ function vault(ops, { digestOverride = null, settleFails = false } = {}) {
         }
         if (result === "failed") {
           if (op.status === "failed") return [{ outcome: "already_failed" }];
+          // A first send's refusal speaks for that send only (dispatching).
+          if (op.status !== "dispatching") return [{ outcome: "state_conflict" }];
+          op.status = "failed";
+          return [{ outcome: "failed" }];
+        }
+        if (result === "absent" || result === "held") {
+          if (op.status === "failed" && result === "absent") return [{ outcome: "already_failed" }];
+          // The window, on the database's clock: 24 hours after creation, an hour after the
+          // send fence, an uncertain customer operation.
+          if (
+            op.status !== "uncertain" ||
+            op.purpose !== "customer_create" ||
+            op.sendStartedAtMs === null ||
+            now() - op.createdAtMs < 24 * hour ||
+            now() - op.sendStartedAtMs < hour
+          )
+            return [{ outcome: "state_conflict" }];
+          if (result === "held") {
+            if (op.heldAtMs !== null) return [{ outcome: "already_held" }];
+            op.heldAtMs = now();
+            return [{ outcome: "held" }];
+          }
           op.status = "failed";
           return [{ outcome: "failed" }];
         }
@@ -132,7 +170,7 @@ function vault(ops, { digestOverride = null, settleFails = false } = {}) {
       throw Error("UNEXPECTED_STATEMENT");
     });
   };
-  return { calls, transaction };
+  return { calls, budgets, transaction };
 }
 const emptyBegin = {
   purpose: null,
@@ -141,6 +179,7 @@ const emptyBegin = {
   params: null,
   provider_object_id: null,
   created_at_ms: null,
+  send_started_at_ms: null,
 };
 function deps(fake, v, now = () => Date.now()) {
   return {
@@ -285,7 +324,8 @@ test("reconcile: readback first, a same-key replay only after proven absence and
     ["morrow-development-" + op2.id, "morrow-development-" + op2.id],
   );
 
-  // Older than 23 hours: no replay; the operation stays uncertain.
+  // Older than 23 hours (and not yet 24): no replay and no absence proof yet; the operation
+  // stays uncertain (the next test settles it once the proof can run).
   const old = createStripeFake();
   old.options.searchLag = true;
   old.faults.push({ method: "POST", path: "/v1/customers", kind: "lost_before" });
@@ -310,6 +350,135 @@ test("reconcile: readback first, a same-key replay only after proven absence and
     assert.equal(op4.status, "uncertain", kind);
     assert.ok(!op4.settles.some(([result]) => result === "failed"), kind);
   }
+});
+
+test("after 24 hours the customer list settles a lost first send: absent, verified, or held for the operator", async () => {
+  const day = 24 * hour;
+  const setup = (kind) => {
+    const clock = { now: Date.now() - 3 * day };
+    const fake = createStripeFake({ now: () => clock.now });
+    fake.options.searchLag = true;
+    fake.faults.push({ method: "POST", path: "/v1/customers", kind });
+    const op = operation("customer_create", {}, { createdAtMs: clock.now });
+    const v = vault([op], { now: () => clock.now });
+    return { clock, fake, op, v, d: deps(fake, v, () => clock.now) };
+  };
+  const lists = (fake) =>
+    fake.requests.filter((r) => r.method === "GET" && r.path === "/v1/customers");
+
+  // (a) Nothing was created (the send never reached Stripe). Between 23 and 24 hours there
+  // is neither a replay nor a proof; past 24 hours the list proves absence: the operation
+  // fails (its intents with it), so the next checkout starts a new customer operation.
+  const a = setup("lost_before");
+  assert.equal((await stripeCustomerEnsure(a.d, a.op.id, 5000)).outcome, "uncertain");
+  a.clock.now += 23.5 * hour;
+  assert.equal((await stripeCustomerEnsure(a.d, a.op.id, 5000)).outcome, "uncertain");
+  assert.equal(lists(a.fake).length, 0);
+  assert.equal(a.op.status, "uncertain");
+  a.clock.now += hour;
+  assert.deepEqual(await stripeCustomerEnsure(a.d, a.op.id, 5000), { outcome: "failed" });
+  assert.equal(a.op.status, "failed");
+  assert.deepEqual(a.op.settles.at(-1), ["absent", ""]);
+  assert.equal(posts(a.fake).length, 1, "never a replay past 23 hours");
+  // The list spans every time the operation could have created a customer: five minutes
+  // before its send to an hour after its last possible replay.
+  const query = new URLSearchParams(lists(a.fake)[0].query);
+  assert.equal(query.get("created[gte]"), String(Math.floor(a.op.sendStartedAtMs / 1000) - 300));
+  assert.equal(
+    query.get("created[lte]"),
+    String(Math.floor((a.op.createdAtMs + 23 * hour) / 1000) + 3600),
+  );
+  assert.equal(query.get("limit"), "100");
+  // Settled: a later call answers failed without any request.
+  const requests = a.fake.requests.length;
+  assert.deepEqual(await stripeCustomerEnsure(a.d, a.op.id, 5000), { outcome: "failed" });
+  assert.equal(a.fake.requests.length, requests);
+
+  // (b) The first send created the customer but its reply was lost, and search lags: the
+  // strongly consistent list finds it, it is read back, and the operation is verified.
+  const b = setup("lost_after");
+  await stripeCustomerEnsure(b.d, b.op.id, 5000);
+  b.clock.now += 25 * hour;
+  assert.deepEqual(await stripeCustomerEnsure(b.d, b.op.id, 5000), { outcome: "verified" });
+  assert.equal(b.op.status, "verified");
+  assert.equal(b.op.providerObjectId, [...b.fake.state.customers.keys()][0]);
+  assert.equal(posts(b.fake).length, 1);
+  assert.ok(b.fake.requests.some((r) => r.path === "/v1/customers/" + b.op.providerObjectId));
+
+  // (c) Two customers name the operation (Stripe proves neither): held for the operator,
+  // never promoted either way; a held operation is not reconciled again.
+  const c = setup("lost_after");
+  await stripeCustomerEnsure(c.d, c.op.id, 5000);
+  const [first] = c.fake.state.customers.values();
+  c.fake.state.customers.set("cus_DuplicateLab01", { ...first, id: "cus_DuplicateLab01" });
+  c.clock.now += 25 * hour;
+  assert.deepEqual(await stripeCustomerEnsure(c.d, c.op.id, 5000), { outcome: "held" });
+  assert.equal(c.op.status, "uncertain");
+  assert.ok(c.op.heldAtMs !== null);
+  assert.deepEqual(c.op.settles.at(-1), ["held", ""]);
+  const heldRequests = c.fake.requests.length;
+  assert.deepEqual(await stripeCustomerEnsure(c.d, c.op.id, 5000), { outcome: "held" });
+  assert.equal(c.fake.requests.length, heldRequests);
+
+  // (d) More customers in the range than the bounded list holds (five pages of 100): the
+  // list proves nothing, so the operation is held, not settled absent.
+  const d = setup("lost_before");
+  await stripeCustomerEnsure(d.d, d.op.id, 5000);
+  for (let n = 0; n < 501; n++) {
+    const id = "cus_Crowd" + String(n).padStart(6, "0");
+    d.fake.state.customers.set(id, {
+      id,
+      object: "customer",
+      created: Math.floor(d.clock.now / 1000),
+      email: null,
+      livemode: false,
+      metadata: {},
+    });
+  }
+  d.clock.now += 25 * hour;
+  assert.deepEqual(await stripeCustomerEnsure(d.d, d.op.id, 5000), { outcome: "held" });
+  assert.equal(lists(d.fake).length, 5);
+  assert.equal(d.op.status, "uncertain");
+
+  // (e) A failing list proves nothing either: uncertain, not held, retried next time.
+  const e = setup("lost_before");
+  await stripeCustomerEnsure(e.d, e.op.id, 5000);
+  e.clock.now += 25 * hour;
+  e.fake.faults.push({ method: "GET", path: "/v1/customers", kind: "500_before" });
+  assert.deepEqual(await stripeCustomerEnsure(e.d, e.op.id, 5000), { outcome: "uncertain" });
+  assert.equal(e.op.heldAtMs, null);
+  assert.deepEqual(await stripeCustomerEnsure(e.d, e.op.id, 5000), { outcome: "failed" });
+});
+
+test("one deadline per method: each transaction and call gets only what remains of it", async () => {
+  // A begin that takes most of the budget leaves too little to send: no request, and the
+  // operation is settled uncertain (a possible send, never "no effect") with what remains.
+  const clock = { now: Date.now() };
+  const fake = createStripeFake();
+  const op = operation("customer_create");
+  const v = vault([op], {
+    now: () => clock.now,
+    hook: (text) => {
+      if (text === billingVaultStatements.stripeOpBegin) clock.now += 4500;
+    },
+  });
+  const result = await stripeCustomerEnsure(
+    deps(fake, v, () => clock.now),
+    op.id,
+    5000,
+  );
+  assert.deepEqual(result, { outcome: "uncertain" });
+  assert.equal(fake.requests.length, 0);
+  assert.equal(op.status, "uncertain");
+  assert.deepEqual(v.budgets, [5000, 500]);
+  // Too little left to start a transaction at all: held before any database work.
+  const shortOp = operation("customer_create");
+  const short = vault([shortOp]);
+  assert.equal(
+    await stateCode(stripeCustomerEnsure(deps(fake, short), shortOp.id, 150)),
+    "PROVIDER_HELD",
+  );
+  assert.deepEqual(short.budgets, []);
 });
 
 test("a lost settle acknowledgement leaves the outcome uncertain for the caller", async () => {
@@ -362,6 +531,8 @@ test("checkout: subscription mode on the mapped customer, the terms' price, both
     billing_address_collection: "auto",
     "automatic_tax[enabled]": "false",
     allow_promotion_codes: "false",
+    // Card only: a completed session's first invoice is decided within minutes.
+    "payment_method_types[0]": "card",
   });
   // Never an email, a trial or a client-chosen URL.
   assert.ok(!Object.keys(post.form).some((k) => /email|trial|discount|coupon/.test(k)));
@@ -418,7 +589,14 @@ test("checkout: a pending customer sends nothing; reconcile lists the customer's
   const reconciled = await stripeCheckoutCreate(deps(fake, v), op.id, 5000);
   assert.equal(reconciled.outcome, "verified");
   assert.equal(posts(fake).length, sends, "readback found the session: no replay");
-  assert.ok(fake.requests.some((r) => r.path === "/v1/checkout/sessions" && r.method === "GET"));
+  // The readback lists only the customer's sessions created since the operation.
+  const listed = fake.requests.find(
+    (r) => r.path === "/v1/checkout/sessions" && r.method === "GET",
+  );
+  assert.equal(
+    new URLSearchParams(listed.query).get("created[gte]"),
+    String(Math.floor(op.createdAtMs / 1000) - 60),
+  );
   assert.equal(fake.state.sessions.size, 1);
 
   // A live-mode intent is never sent from development or staging.

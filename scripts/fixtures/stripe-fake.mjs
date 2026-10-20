@@ -12,7 +12,9 @@
 //     500), `500_before` (no effect), `lost_after` (the effect happens and is saved, the
 //     reply is lost: a transport error), `lost_before`, `429` (no effect, Retry-After 0),
 //     `400` (no effect);
-//   * `searchLag` hides new customers from search, as Stripe's search index lags.
+//   * `searchLag` hides new customers from search, as Stripe's search index lags; the
+//     customer list (GET /v1/customers, newest first, `created[gte|lte]`, `limit`,
+//     `starting_after`, `has_more`) is strongly consistent, as Stripe's lists are.
 // Every request is recorded (method, path, query, Idempotency-Key, form, authorised).
 import { createHmac, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
@@ -108,15 +110,23 @@ export function createStripeFake({
       url: "https://checkout.stripe.com/c/pay/" + id,
       _subscriptionMetadata: nested(form, "subscription_data[metadata]"),
       _form: form,
+      _created: seconds(),
     };
     sessions.set(id, session);
     return [200, publicSession(session)];
   }
   const publicSession = (s) => {
-    const { _subscriptionMetadata, _form, ...rest } = s;
+    const { _subscriptionMetadata, _form, _created, ...rest } = s;
     void _subscriptionMetadata;
     void _form;
+    void _created;
     return { ...rest, url: s.status === "open" ? s.url : null };
+  };
+  // A `created[gte]` / `created[lte]` filter of a list request (whole seconds).
+  const createdWithin = (url, created) => {
+    const gte = url.searchParams.get("created[gte]");
+    const lte = url.searchParams.get("created[lte]");
+    return (gte === null || created >= Number(gte)) && (lte === null || created <= Number(lte));
   };
   function createPortal(form) {
     if (!customers.has(form.customer) || !/^bpc_/.test(form.configuration ?? ""))
@@ -196,13 +206,28 @@ export function createStripeFake({
         : [...customers.values()].filter((c) => c.metadata.morrow_operation_id === match[1]);
       return json(200, { object: "search_result", data, has_more: false });
     }
+    if (collection === "customers" && id === undefined) {
+      // The strongly consistent list: newest first, then by id, paged by starting_after.
+      const limit = Number(url.searchParams.get("limit") ?? "10");
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+        return error(400, "invalid_request_error", "parameter_invalid");
+      const all = [...customers.values()]
+        .filter((c) => createdWithin(url, c.created))
+        .sort((a, b) => b.created - a.created || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      const after = url.searchParams.get("starting_after");
+      const start = after === null ? 0 : all.findIndex((c) => c.id === after) + 1;
+      if (after !== null && start === 0)
+        return error(400, "invalid_request_error", "resource_missing");
+      const data = all.slice(start, start + limit);
+      return json(200, { object: "list", data, has_more: start + limit < all.length });
+    }
     if (collection === "customers" && extra === undefined) return found(customers);
     if (collection === "checkout" && id === "sessions") {
       const sessionId = extra;
       if (sessionId === undefined) {
         const customer = url.searchParams.get("customer");
         const data = [...sessions.values()]
-          .filter((s) => s.customer === customer)
+          .filter((s) => s.customer === customer && createdWithin(url, s._created))
           .map(publicSession);
         return json(200, { object: "list", data, has_more: false });
       }

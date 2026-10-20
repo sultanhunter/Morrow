@@ -33,9 +33,11 @@ import {
 import {
   billingTermsSeedRows,
   connectionCensus,
+  customerResolutionInput,
   neonConnector,
   platformSeedRows,
   provisionRoles,
+  resolveHeldCustomerOperation,
   roleControlFacts,
   runMigrations,
   seedBillingTerms,
@@ -678,6 +680,54 @@ command("seed-platform", {
       rows: terms,
     });
     return { ...written, ...billing, origin: configuration.origin };
+  },
+});
+
+// M5 PR-1 (review): the operator path for a customer operation the broker held (Stripe
+// proved neither outcome). Under the active staging card, only with the live-evidence
+// record of the operator's Stripe inspection or correction committed at --evidence; the
+// definer re-checks the hold and the window. Prints the outcome only.
+command("billing-customer-resolve", {
+  usage:
+    "billing-customer-resolve --operation <uuid> --resolution retry|abandon --evidence-code <code> --evidence <docs/evidence/live/....md> --operator <id>",
+  parse(args) {
+    const flags = {};
+    for (let i = 0; i < args.length; i += 2) {
+      const [flag, value] = [args[i], args[i + 1]];
+      if (
+        !["--operation", "--resolution", "--evidence-code", "--evidence", "--operator"].includes(
+          flag,
+        ) ||
+        typeof value !== "string" ||
+        Object.hasOwn(flags, flag)
+      )
+        throw new StagingError("STAGING_USAGE");
+      flags[flag] = value;
+    }
+    const input = {
+      operatorId: flags["--operator"],
+      operationId: flags["--operation"],
+      resolution: flags["--resolution"],
+      evidenceCode: flags["--evidence-code"],
+      evidenceRef: flags["--evidence"],
+    };
+    customerResolutionInput(input);
+    return { input };
+  },
+  async run(ctx, { input }) {
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    if (!existsSync(join(ctx.root, input.evidenceRef)))
+      throw new StagingError("STAGING_EVIDENCE_MISSING");
+    const binding = await stagingBinding(ctx, config);
+    await mainPreconditions(ctx, repositoryOf(config.staging));
+    const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
+    return resolveHeldCustomerOperation({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      input,
+    });
   },
 });
 

@@ -292,6 +292,29 @@ test("mode, account and shape: live events, another account's object and unknown
     assert.equal(error.code, "PROVIDER_HELD");
     return true;
   });
+  // A subscribed event whose read-back object is outside the closed shape is never
+  // acknowledged and dropped: it is held (the api answers 503, Stripe keeps retrying and
+  // its dashboard shows the failures) with its own fixed reason and the event type, and
+  // nothing is recorded.
+  const recorded = r.calls.length;
+  const stored = fake.state.invoices.get(invoice.id);
+  const amountPaid = stored.amount_paid;
+  stored.amount_paid = String(amountPaid);
+  const logged = [];
+  const outOfShape = fake.signedEvent("invoice.paid", invoice);
+  await assert.rejects(
+    stripeWebhookVerify(
+      deps(fake, r),
+      b64(outOfShape.body),
+      outOfShape.signature,
+      5000,
+      (reason, eventType) => logged.push([reason, eventType]),
+    ),
+    (error) => error instanceof StripeHold && error.code === "PROVIDER_HELD",
+  );
+  assert.deepEqual(logged, [["object_invalid", "invoice.paid"]]);
+  assert.equal(r.calls.length, recorded);
+  stored.amount_paid = amountPaid;
   // A body over 256 KiB or not base64 is refused before any check.
   const big = fake.signedEvent("invoice.paid", invoice);
   assert.deepEqual(

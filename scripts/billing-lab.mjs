@@ -22,6 +22,12 @@
 //      this engine's broker login: checkout end to end, signed webhooks (bad signature,
 //      a held readback, redelivery, a lost commit read back), the portal, an unknown
 //      Stripe outcome read back and never resent, and zero unexpected outbound requests.
+//   H  the review fixes on the persisted path: a failed customer operation fails every
+//      intent it serves; a completed intent that never verifies is closed; a refused plan
+//      commits nothing; a stale observation never folds; and, through the real broker, a
+//      customer operation uncertain past 24 hours is settled absent or verified by the
+//      customer list, or held for the operator (the billing view shows it, checkout refuses
+//      it, and the operator's retry or abandon resolves it).
 // Sections B-F drive the broker definers through a fake broker port with synthetic
 // provider results; G runs the real broker. Owner-seeded synthetic fixtures only.
 import { createHash, randomUUID } from "node:crypto";
@@ -688,16 +694,25 @@ INSERT INTO morrow_billing.checkout_intents VALUES(${lit(P.A2.org)},${lit(P.A2.w
     const fenceCase = await call(P.A2, "POST", "/morrow/checkout", { priceKey: PRICE });
     broker.faults.checkout = undefined;
     check("C_setup_fence_case", fenced.status === 201 && fenceCase.status === 503);
-    // A failed provider result (verified_no_effect) fails the operation and its intent.
+    // A first send's refusal (verified_no_effect) speaks for that send only: once the
+    // operation is uncertain it is never failed by one (H1 fails one from dispatching).
     const failOp = fenceCase.body.operationId;
     check(
-      "C_a_definite_failure_fails_the_operation_and_its_open_intent",
-      (await opSettle(failOp, "failed")) === "failed" &&
+      "C_a_first_send_refusal_never_fails_an_uncertain_operation",
+      (await opSettle(failOp, "failed")) === "state_conflict" &&
         one(`SELECT status FROM morrow_work.operations WHERE id=${lit(failOp)}`)?.status ===
-          "failed" &&
+          "uncertain" &&
         one(
           `SELECT i.status FROM morrow_billing.checkout_intents i WHERE i.checkout_operation_id=${lit(failOp)}`,
-        )?.status === "failed",
+        )?.status === "open",
+    );
+    // absent and held: customer operations only, and only past the window.
+    check(
+      "C_absent_and_held_need_an_uncertain_customer_operation_past_24_hours",
+      (await opSettle(failOp, "absent")) === "state_conflict" &&
+        (await opSettle(failOp, "held")) === "state_conflict" &&
+        one(`SELECT status FROM morrow_work.operations WHERE id=${lit(failOp)}`)?.status ===
+          "uncertain",
     );
     check(
       "C_settle_refuses_a_malformed_provider_id",
@@ -764,6 +779,13 @@ INSERT INTO morrow_billing.checkout_intents VALUES(${lit(P.A2.org)},${lit(P.A2.w
         fenceRow().status === "uncertain" &&
         fenceRow().uncertainty_reason === "unknown_submission" &&
         fenceRow().attempt === "1",
+    );
+    // The race of two requests on one operation: X began the send, Y's begin moved it to
+    // uncertain (and may replay with the same key); X's refusal then cannot fail it.
+    check(
+      "C_a_concurrent_first_send_refusal_cannot_fail_a_reconciling_operation",
+      (await opSettle(fenceIntent, "failed")) === "state_conflict" &&
+        fenceRow().status === "uncertain",
     );
     const replayFence = await call(
       P.A2,
@@ -983,6 +1005,18 @@ INSERT INTO morrow_billing.checkout_intents VALUES(${lit(P.A2.org)},${lit(P.A2.w
       revive.status === 200 &&
         latest().status === "cancelled" &&
         applicationOf(revive.eventId)?.outcome === "ignored",
+    );
+    // After a terminal subscription on a fixed route, /plans offers only what checkout can
+    // perform: no subscribe (the route is fixed, so the checkout command refuses it).
+    const terminalPlans = await call(P.A, "GET", "/morrow/plans");
+    const terminalCheckout = await call(P.A, "POST", "/morrow/checkout", { priceKey: PRICE });
+    check(
+      "D_plans_after_a_terminal_subscription_offer_no_subscribe",
+      terminalPlans.status === 200 &&
+        terminalPlans.body.actions.subscribe === false &&
+        terminalPlans.body.offers.length === 0 &&
+        terminalPlans.body.actions.billingPortal === true &&
+        terminalCheckout.status === 403,
     );
     // D7. Unattributed, not Morrow-initiated, terms mismatch and no charge.
     const stranger = await deliver(
@@ -1222,6 +1256,36 @@ UPDATE morrow_billing.workspace_billing_routes SET route='morrow_direct',mode='t
       "E_the_command_role_cannot_fix_a_route_outside_a_receipt_context",
       !sessionFix.ok && /BILLING_ROUTE_FIX_DENIED/.test(sessionFix.stderr),
     );
+    // tenant_command is FOR SELECT on the customer mapping and the ledger: no session
+    // definer can insert a mapping, an account, a snapshot, a payment, a grant or a wallet
+    // (rows each table's own guard would accept, so the refusal is the policy's).
+    const ledgerA = one(
+      `SELECT a.id::text AS account,(SELECT max(s.revision)::text FROM morrow_billing.entitlement_snapshots s WHERE s.billing_account_id=a.id) AS snapshot,(SELECT w.revision::text FROM morrow_billing.credit_wallets w WHERE w.billing_account_id=a.id) AS wallet,(SELECT v.payment_key FROM morrow_billing.verified_payment_events v WHERE v.workspace_id=a.workspace_id AND v.outcome='granted' ORDER BY v.recorded_at LIMIT 1) AS payment FROM morrow_billing.billing_accounts a WHERE a.workspace_id=${lit(P.A.workspace)}`,
+    );
+    const nowSql = "date_trunc('milliseconds',clock_timestamp())";
+    const sessionInserts = {
+      stripe_customers: `INSERT INTO morrow_billing.stripe_customers VALUES(${lit(P.A.org)},${lit(P.A.workspace)},'cus_SessionForged01','test',${lit(opA)},${nowSql})`,
+      billing_accounts: `INSERT INTO morrow_billing.billing_accounts VALUES(${lit(P.A.org)},${lit(P.A.workspace)},${lit(randomUUID())},'morrow_direct','test','USD','active',1,${nowSql},${nowSql})`,
+      entitlement_snapshots: `INSERT INTO morrow_billing.entitlement_snapshots(organization_id,workspace_id,billing_account_id,revision,route,mode,subscription_key,status,provider_evidence_ref,verified_at,valid_until,receipt_id,recorded_at) SELECT organization_id,workspace_id,billing_account_id,revision+1,route,mode,subscription_key,'cancelled',repeat('9',64),${nowSql},${nowSql}+interval '1 day',receipt_id,${nowSql} FROM morrow_billing.entitlement_snapshots WHERE billing_account_id=${lit(ledgerA?.account)} ORDER BY revision DESC LIMIT 1`,
+      verified_payment_events: `INSERT INTO morrow_billing.verified_payment_events(organization_id,workspace_id,id,route,mode,payment_key,kind,subscription_key,price_key,period_start,period_end,operation_id,amount,currency,provider_evidence_ref,verified_at,outcome,outcome_code,receipt_id,recorded_at) SELECT organization_id,workspace_id,${lit(randomUUID())},route,mode,'stripe:invoice:in_SessionForged01',kind,subscription_key,price_key,period_start,period_end,operation_id,amount,currency,provider_evidence_ref,verified_at,outcome,outcome_code,receipt_id,${nowSql} FROM morrow_billing.verified_payment_events WHERE payment_key=${lit(ledgerA?.payment)}`,
+      credit_grants: `INSERT INTO morrow_billing.credit_grants(organization_id,workspace_id,id,billing_account_id,route,mode,payment_key,kind,credit_units,terms_revision,purchase_evidence_ref,effective_at,expires_at,funded_wallet_revision,recorded_at) VALUES(${lit(P.A.org)},${lit(P.A.workspace)},${lit(randomUUID())},${lit(ledgerA?.account)},'morrow_direct','test',${lit(ledgerA?.payment)},'included',300,1,repeat('9',64),${nowSql},NULL,${Number(ledgerA?.wallet ?? 0) + 1},${nowSql})`,
+      credit_wallets: `INSERT INTO morrow_billing.credit_wallets VALUES(${lit(P.A.org)},${lit(P.A.workspace)},${lit(randomUUID())},0,0,0,1,1,1,${nowSql},${nowSql})`,
+    };
+    const refusedInserts = Object.entries(sessionInserts).filter(([, insert]) => {
+      const attempt = db.tryRun(
+        `BEGIN; SELECT set_config('morrow.work_session_digest',${lit(P.A.digest)},true),set_config('morrow.work_workspace',${lit(P.A.workspace)},true);
+SET LOCAL ROLE morrow_work_command;
+${insert}; ROLLBACK;`,
+      );
+      return !attempt.ok && /violates row-level security policy/.test(attempt.stderr);
+    });
+    check(
+      "E_a_session_context_cannot_insert_a_mapping_or_ledger_row",
+      ledgerA?.account !== undefined &&
+        refusedInserts.length === Object.keys(sessionInserts).length,
+    );
+    if (refusedInserts.length !== Object.keys(sessionInserts).length)
+      console.log(JSON.stringify({ refusedInserts: refusedInserts.map(([t]) => t) }));
 
     // -----------------------------------------------------------------------------
     // F. The P01.T04a decision tables, row by row, against the persisted path.
@@ -1730,6 +1794,417 @@ INSERT INTO morrow_billing.billing_accounts VALUES(${lit(p.org)},${lit(p.workspa
               r.path,
             ),
         ),
+    );
+
+    // -----------------------------------------------------------------------------
+    // H. The review fixes on the persisted path.
+    const handlerWith = (port) =>
+      createBillingApiHandler({
+        origin: workFixtureOrigin,
+        connector: db.connector(),
+        environment: "development",
+        broker: port,
+        now: () => Date.now(),
+      });
+    const callWith = async (handler, p, key = randomUUID()) => {
+      const response = await handler.fetch(
+        new Request(workFixtureOrigin + "/workspace/" + p.workspace + "/billing/morrow/checkout", {
+          method: "POST",
+          headers: {
+            Cookie: "__Host-morrow_session=" + p.secret,
+            Origin: workFixtureOrigin,
+            "Content-Type": "application/json",
+            "X-Morrow-Request": "1",
+            "Idempotency-Key": key,
+            "Sec-Fetch-Site": "same-origin",
+          },
+          body: JSON.stringify({ priceKey: PRICE }),
+        }),
+        {},
+        ctx,
+      );
+      return { status: response.status, body: await response.json() };
+    };
+    const opStatus = (id) =>
+      one(`SELECT status FROM morrow_work.operations WHERE id=${lit(id)}`)?.status;
+    const intentStatus = (id) =>
+      one(`SELECT status FROM morrow_billing.checkout_intents WHERE id=${lit(id)}`)?.status;
+
+    // H1. A failed customer operation fails every open intent it serves: intent 1 created
+    // customer operation C and its broker call never began, intent 1 expired, intent 2
+    // reused C, and C's first send was refused. Intent 2 fails with it, and a new checkout
+    // is accepted at once with a new customer operation.
+    const h1 = tenant("billing_h1");
+    const unreachable = handlerWith({
+      ...broker,
+      async customerEnsure() {
+        throw Error("BROKER_UNREACHABLE");
+      },
+    });
+    const h1First = await callWith(unreachable, h1);
+    const [h1Intent1] = intents(h1);
+    db.workOwner(
+      `UPDATE morrow_billing.checkout_intents SET status='expired',revision=revision+1 WHERE id=${lit(h1Intent1.id)};`,
+    );
+    await callWith(unreachable, h1);
+    const h1Intent2 = intents(h1).find((i) => i.status === "open");
+    const h1Customer = h1Intent1.customer_op;
+    const h1Begin = await opBegin(h1Customer);
+    const h1Failed = await opSettle(h1Customer, "failed");
+    const h1Next = await call(h1, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const h1Open = intents(h1).filter((i) => i.status === "open");
+    check(
+      "H_a_failed_customer_operation_fails_every_intent_it_serves_and_checkout_reopens",
+      h1First.status === 503 &&
+        h1Intent2?.customer_op === h1Customer &&
+        h1Begin.outcome === "send" &&
+        h1Failed === "failed" &&
+        intentStatus(h1Intent2.id) === "failed" &&
+        h1Next.status === 201 &&
+        h1Open.length === 1 &&
+        h1Open[0].customer_op !== h1Customer,
+    );
+
+    // H2. A completed intent whose payment never verifies blocks checkout for a day after
+    // its session's expiry, then the lazy close fails it and a new checkout opens.
+    const h2 = tenant("billing_h2");
+    await call(h2, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const [h2Intent] = intents(h2);
+    db.workOwner(
+      `UPDATE morrow_billing.checkout_intents SET status='completed',revision=revision+1 WHERE id=${lit(h2Intent.id)};`,
+    );
+    const h2Blocked = await call(h2, "POST", "/morrow/checkout", { priceKey: PRICE });
+    db.sql(`SET session_replication_role=replica;
+UPDATE morrow_billing.checkout_intents SET created_at=created_at-interval '27 hours',updated_at=updated_at-interval '27 hours',expires_at=expires_at-interval '27 hours' WHERE id=${lit(h2Intent.id)};`);
+    const h2Reopened = await call(h2, "POST", "/morrow/checkout", { priceKey: PRICE });
+    check(
+      "H_a_completed_intent_that_never_verifies_is_failed_a_day_after_its_expiry",
+      h2Blocked.status === 409 &&
+        h2Blocked.body.safeMessage === "A checkout is already in progress for this workspace." &&
+        h2Reopened.status === 201 &&
+        intentStatus(h2Intent.id) === "failed" &&
+        intents(h2).filter((i) => i.status === "open").length === 1,
+    );
+
+    // H3. receipt_apply checks the whole plan before its first write: a plan it refuses
+    // after the payment checks (a wrong snapshot revision), committed by the caller,
+    // leaves no route fix, account, wallet, payment, grant or application.
+    const h3 = tenant("billing_h3");
+    await call(h3, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const h3Ids = ids(h3, { invoice: "in_LabPartialH3001" });
+    const h3Invoice = invoiceFor("invoice.paid.subscription_create", h3Ids);
+    const h3Subscription = subscriptionFor("subscription.active", h3Ids);
+    const h3Object = normalizeInvoice(h3Invoice, h3Subscription);
+    const h3Digest = await stripeObjectDigest(h3Object);
+    const h3EventId = "evt_labpartial" + randomUUID().replaceAll("-", "").slice(0, 16);
+    const recordReceipt = async (eventId, type, object, digest, observedAtMs) =>
+      (
+        await vault([
+          [
+            "SELECT * FROM morrow_billing.stripe_receipt_record($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+            [
+              eventId,
+              type,
+              "false",
+              object.kind,
+              object.id,
+              object.customer,
+              JSON.stringify(object),
+              digest,
+              String(observedAtMs),
+            ],
+          ],
+        ])
+      )[0][0];
+    const h3Receipt = await recordReceipt(
+      h3EventId,
+      "invoice.paid",
+      h3Object,
+      h3Digest,
+      observed(),
+    );
+    const termsNow = Number(
+      scalar("SELECT max(terms_revision) FROM morrow_billing.billing_terms;"),
+    );
+    const h3Plan = {
+      schemaVersion: 1,
+      outcome: "applied",
+      code: null,
+      payment: {
+        action: "fix_route_and_grant",
+        outcome: "granted",
+        code: null,
+        termsRevision: termsNow,
+      },
+      snapshot: { revision: 2 },
+      intent: null,
+    };
+    const committedRefusal = db.tryRun(
+      `BEGIN; SET LOCAL ROLE morrow_work_api; SELECT outcome FROM morrow_billing.receipt_begin(${lit(h3Receipt.receipt_id)},${lit(h3Digest)});
+SELECT outcome FROM morrow_billing.receipt_apply(${lit(h3Receipt.receipt_id)},${lit(h3Digest)},${lit(JSON.stringify(h3Plan))}); COMMIT;`,
+      { user: "morrow_api_worker" },
+    );
+    const h3Untouched = () =>
+      routeOf(h3).route === null &&
+      count(
+        `SELECT 1 FROM morrow_billing.billing_accounts WHERE workspace_id=${lit(h3.workspace)}`,
+      ) === 0 &&
+      walletOf(h3) === null &&
+      count(
+        `SELECT 1 FROM morrow_billing.verified_payment_events WHERE workspace_id=${lit(h3.workspace)}`,
+      ) === 0 &&
+      grantFor("stripe:invoice:" + h3Invoice.id) === 0 &&
+      count(
+        `SELECT 1 FROM morrow_billing.receipt_applications WHERE receipt_id=${lit(h3Receipt.receipt_id)}`,
+      ) === 0;
+    check(
+      "H_a_refused_plan_committed_by_its_caller_writes_nothing",
+      committedRefusal.ok &&
+        committedRefusal.stdout.split("\n").at(-1) === "conflict" &&
+        h3Untouched(),
+    );
+    // The same receipt then applies normally through the webhook (Stripe's redelivery).
+    const h3Applied = await deliverEvent(h3EventId, "invoice.paid", h3Invoice, h3Subscription);
+    check(
+      "H_the_refused_receipt_then_applies_whole",
+      h3Applied.status === 200 &&
+        routeOf(h3).route === "morrow_direct" &&
+        walletOf(h3).available === "300" &&
+        grantFor("stripe:invoice:" + h3Invoice.id) === 1,
+    );
+
+    // H4. The SQL fold orders observations as foldEntitlementEvidence does: after a newer
+    // unpaid read (suspended), an older active read is refused even with a well-formed
+    // plan for the next revision; the honest path folds nothing either.
+    const h3Snapshot = () =>
+      one(
+        `SELECT status,revision::text AS revision FROM morrow_billing.entitlement_snapshots WHERE workspace_id=${lit(h3.workspace)} ORDER BY revision DESC LIMIT 1`,
+      );
+    const newer = Date.now() - 5000;
+    const unpaid = await deliver(
+      "customer.subscription.updated",
+      subscriptionFor("subscription.active", h3Ids, periodNow, (o) => (o.status = "unpaid")),
+      null,
+      newer,
+    );
+    const afterUnpaid = h3Snapshot();
+    const staleRaw = subscriptionFor("subscription.active", h3Ids);
+    const staleObject = normalizeSubscription(staleRaw);
+    const staleDigest = await stripeObjectDigest(staleObject);
+    const staleEventId = "evt_labstale" + randomUUID().replaceAll("-", "").slice(0, 16);
+    const staleReceipt = await recordReceipt(
+      staleEventId,
+      "customer.subscription.updated",
+      staleObject,
+      staleDigest,
+      newer - 20000,
+    );
+    const forcedStale = db.tryRun(
+      `BEGIN; SET LOCAL ROLE morrow_work_api; SELECT outcome FROM morrow_billing.receipt_begin(${lit(staleReceipt.receipt_id)},${lit(staleDigest)});
+SELECT outcome FROM morrow_billing.receipt_apply(${lit(staleReceipt.receipt_id)},${lit(staleDigest)},${lit(JSON.stringify({ schemaVersion: 1, outcome: "applied", code: null, payment: null, snapshot: { revision: Number(afterUnpaid?.revision) + 1 }, intent: null }))}); COMMIT;`,
+      { user: "morrow_api_worker" },
+    );
+    const honestStale = await deliverEvent(
+      staleEventId,
+      "customer.subscription.updated",
+      staleRaw,
+      null,
+    );
+    check(
+      "H_a_stale_observation_never_folds_over_a_newer_one",
+      unpaid.status === 200 &&
+        afterUnpaid?.status === "suspended" &&
+        forcedStale.stdout.split("\n").at(-1) === "conflict" &&
+        honestStale.status === 200 &&
+        JSON.stringify(h3Snapshot()) === JSON.stringify(afterUnpaid),
+    );
+
+    // H5-H7 (the real broker): a customer operation uncertain past 24 hours. The lab moves
+    // the operation's clock (creation and send fence) and the fake Stripe's customers back
+    // 25 hours together, as time passing would.
+    const age = (opId, workspace, hours) => {
+      db.sql(`SET session_replication_role=replica;
+UPDATE morrow_work.operations SET created_at=created_at-interval '${hours} hours',updated_at=updated_at-interval '${hours} hours',send_started_at=send_started_at-interval '${hours} hours' WHERE id=${lit(opId)};
+UPDATE morrow_billing.stripe_operations SET created_at=created_at-interval '${hours} hours' WHERE operation_id=${lit(opId)};`);
+      for (const c of fake.state.customers.values())
+        if (c.metadata.morrow_workspace_id === workspace) c.created -= hours * 3600;
+    };
+    const customerPosts = (opId) =>
+      fake.requests.filter(
+        (r) =>
+          r.method === "POST" &&
+          r.path === "/v1/customers" &&
+          r.idempotencyKey === "morrow-development-" + opId,
+      ).length;
+    const stripeCustomersOf = (p) =>
+      [...fake.state.customers.values()].filter(
+        (c) => c.metadata.morrow_workspace_id === p.workspace,
+      );
+    const resolve = (opId, resolution, code, role = "morrow_work_owner") =>
+      db
+        .tryRun(
+          `SET ROLE ${role}; SELECT outcome FROM morrow_billing.operator_customer_operation_resolve('operator_lab',${lit(opId)},${lit(resolution)},${lit(code)},'docs/evidence/live/2026-10-21-lab-stripe-customer.md');`,
+        )
+        .stdout.split("\n")
+        .at(-1);
+
+    // H5. The first send never reached Stripe (lost before): after 24 hours the customer
+    // list proves absence, the operation fails with its intent (never replayed), and the
+    // next checkout starts a new customer operation that works.
+    const h5 = tenant("billing_h5");
+    fake.faults.push({ method: "POST", path: "/v1/customers", kind: "lost_before" });
+    const h5First = await realCall(h5, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const [h5Intent] = intents(h5);
+    const h5Op = h5Intent.customer_op;
+    age(h5Op, h5.workspace, 25);
+    const h5Proven = await realCall(h5, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const h5Transition = one(
+      `SELECT from_status,to_status,actor,guard FROM morrow_work.operation_transitions WHERE operation_id=${lit(h5Op)} ORDER BY revision DESC LIMIT 1`,
+    );
+    const h5Again = await realCall(h5, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const h5Open = intents(h5).find((i) => i.status === "open");
+    check(
+      "H_a_lost_first_send_is_proven_absent_after_24_hours_and_checkout_reopens",
+      h5First.status === 503 &&
+        h5First.body.code === "uncertain" &&
+        h5Proven.status === 409 &&
+        h5Proven.body.code === "conflict" &&
+        opStatus(h5Op) === "failed" &&
+        JSON.stringify(h5Transition) ===
+          JSON.stringify({
+            from_status: "uncertain",
+            to_status: "failed",
+            actor: "action_service",
+            guard: "verified_no_effect",
+          }) &&
+        intentStatus(h5Intent.id) === "failed" &&
+        customerPosts(h5Op) === 1 &&
+        fake.requests.some((r) => r.method === "GET" && r.path === "/v1/customers") &&
+        h5Again.status === 201 &&
+        h5Open?.customer_op !== h5Op &&
+        stripeCustomersOf(h5).length === 1,
+    );
+
+    // H6. Stripe proves neither (two customers name the operation): the operation is held,
+    // checkout answers customer_held, the billing view shows the hold and /plans offers no
+    // subscribe; a new checkout refuses before any broker call. The operator corrects
+    // Stripe (removes the duplicate) and retries: the next checkout's proof verifies the
+    // remaining customer and the checkout works.
+    const h6 = tenant("billing_h6");
+    fake.faults.push({ method: "POST", path: "/v1/customers", kind: "lost_after" });
+    const h6First = await realCall(h6, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const [h6Intent] = intents(h6);
+    const h6Op = h6Intent.customer_op;
+    const [h6Customer] = stripeCustomersOf(h6);
+    fake.state.customers.set("cus_LabDuplicateH6", { ...h6Customer, id: "cus_LabDuplicateH6" });
+    age(h6Op, h6.workspace, 25);
+    const h6Held = await realCall(h6, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const h6View = await realCall(h6, "GET", "");
+    const h6Plans = await realCall(h6, "GET", "/morrow/plans");
+    const requestsBefore = fake.requests.length;
+    const h6Refused = await realCall(h6, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const h6Quiet = fake.requests.length === requestsBefore;
+    const heldAt = one(
+      `SELECT held_at IS NOT NULL AS held FROM morrow_billing.stripe_operations WHERE operation_id=${lit(h6Op)}`,
+    )?.held;
+    check(
+      "H_an_unprovable_customer_operation_is_held_and_shown_to_the_owner",
+      h6First.status === 503 &&
+        h6Held.status === 409 &&
+        h6Held.body.code === "conflict" &&
+        h6Held.body.retryClass === "never" &&
+        h6Held.body.safeMessage ===
+          "Billing setup for this workspace needs attention from Morrow support." &&
+        heldAt === true &&
+        opStatus(h6Op) === "uncertain" &&
+        h6View.status === 200 &&
+        h6View.body.setupHold?.operationId === h6Op &&
+        typeof h6View.body.setupHold?.heldAt === "string" &&
+        h6Plans.status === 200 &&
+        h6Plans.body.actions.subscribe === false &&
+        h6Refused.status === 409 &&
+        h6Refused.body.safeMessage === h6Held.body.safeMessage &&
+        h6Quiet &&
+        customerPosts(h6Op) === 1,
+    );
+    // The operator path: owner only, a held operation only, closed evidence.
+    check(
+      "H_the_operator_path_is_the_owner_s_and_closed",
+      !db.tryRun(
+        `SET ROLE morrow_work_command; SELECT outcome FROM morrow_billing.operator_customer_operation_resolve('operator_lab',${lit(h6Op)},'retry','stripe_corrected','docs/evidence/live/2026-10-21-lab-stripe-customer.md');`,
+      ).ok &&
+        !db.tryRun(
+          `SELECT outcome FROM morrow_billing.operator_customer_operation_resolve('operator_lab',${lit(h6Op)},'retry','stripe_corrected','docs/evidence/live/2026-10-21-lab-stripe-customer.md');`,
+          { user: "morrow_vault_broker" },
+        ).ok &&
+        resolve(h6Op, "retry", "customers_deleted") === "invalid" &&
+        resolve(h5Op, "abandon", "none_found") === "not_held" &&
+        resolve(h1Customer, "abandon", "none_found") === "not_held",
+    );
+    fake.state.customers.delete("cus_LabDuplicateH6");
+    const h6Released = resolve(h6Op, "retry", "stripe_corrected");
+    const h6Retried = await realCall(h6, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const h6Mapped = one(
+      `SELECT stripe_customer_id FROM morrow_billing.stripe_customers WHERE workspace_id=${lit(h6.workspace)}`,
+    )?.stripe_customer_id;
+    const h6After = await realCall(h6, "GET", "");
+    check(
+      "H_the_operator_retry_reruns_the_proof_which_verifies_the_customer",
+      h6Released === "released" &&
+        h6Retried.status === 200 &&
+        h6Retried.body.checkoutUrl?.startsWith("https://checkout.stripe.com/") &&
+        opStatus(h6Op) === "verified" &&
+        h6Mapped === h6Customer.id &&
+        h6After.body.setupHold === null &&
+        customerPosts(h6Op) === 1 &&
+        count(
+          `SELECT 1 FROM morrow_billing.stripe_operation_resolutions WHERE operation_id=${lit(h6Op)} AND resolution='retry' AND evidence_code='stripe_corrected' AND operator_id='operator_lab'`,
+        ) === 1,
+    );
+
+    // H7. Held, then abandoned: the operator deletes every customer of the operation in
+    // Stripe and abandons it; it fails (verified_no_effect, the operator's reason) with
+    // its intent, and the next checkout starts a new customer operation.
+    const h7 = tenant("billing_h7");
+    fake.faults.push({ method: "POST", path: "/v1/customers", kind: "lost_after" });
+    await realCall(h7, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const [h7Intent] = intents(h7);
+    const h7Op = h7Intent.customer_op;
+    const [h7Customer] = stripeCustomersOf(h7);
+    fake.state.customers.set("cus_LabDuplicateH7", { ...h7Customer, id: "cus_LabDuplicateH7" });
+    age(h7Op, h7.workspace, 25);
+    const h7Held = await realCall(h7, "POST", "/morrow/checkout", { priceKey: PRICE });
+    for (const c of stripeCustomersOf(h7)) fake.state.customers.delete(c.id);
+    const h7Abandoned = resolve(h7Op, "abandon", "customers_deleted");
+    const h7Reason = one(
+      `SELECT to_status,guard,reason FROM morrow_work.operation_transitions WHERE operation_id=${lit(h7Op)} ORDER BY revision DESC LIMIT 1`,
+    );
+    const h7Next = await realCall(h7, "POST", "/morrow/checkout", { priceKey: PRICE });
+    check(
+      "H_the_operator_abandon_fails_the_operation_and_checkout_reopens",
+      h7Held.status === 409 &&
+        h7Abandoned === "abandoned" &&
+        opStatus(h7Op) === "failed" &&
+        JSON.stringify(h7Reason) ===
+          JSON.stringify({
+            to_status: "failed",
+            guard: "verified_no_effect",
+            reason: "operator_verified_no_effect",
+          }) &&
+        intentStatus(h7Intent.id) === "failed" &&
+        h7Next.status === 201 &&
+        intents(h7).find((i) => i.status === "open")?.customer_op !== h7Op &&
+        resolve(h7Op, "abandon", "none_found") === "not_held",
+    );
+    check(
+      "H_zero_unexpected_outbound_requests",
+      fake.requests.every(
+        (r) =>
+          r.authorised &&
+          /^\/v1\/(customers|checkout\/sessions|billing_portal\/sessions|invoices|subscriptions)(\/|$)/.test(
+            r.path,
+          ),
+      ),
     );
   },
   { stopBefore: firstBilling.sequence },

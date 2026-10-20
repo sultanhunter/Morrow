@@ -152,6 +152,8 @@ const extraPolicies = {
   ],
   platform_command_read: ["SELECT", "{morrow_work_command}", "true", null],
   platform_api_read: ["SELECT", "{morrow_work_api}", "true", null],
+  // M5 PR-1: the wallet's session UPDATE for M3 PR-1's sum-preserving moves (no INSERT).
+  tenant_command_update: ["UPDATE", "{morrow_work_command}", tenantPredicate, tenantPredicate],
 };
 // One table's policies against the template of its class and its registry extras.
 function checkPolicies(schema, table, spec) {
@@ -160,9 +162,12 @@ function checkPolicies(schema, table, spec) {
   );
   const mixed = spec.class === "tenant_or_platform";
   const vault = spec.class === "vault_platform" || spec.class === "vault_tenant";
-  // M5 PR-1: platform tables of morrow_billing, and the ingress receipts, carry only the
-  // owner's maintenance policy and their registered extras (no session template).
-  const ownOnly = ["platform", "platform_readable", "ingress"].includes(spec.class);
+  // M5 PR-1: platform tables of morrow_billing, the ingress receipts and the operator's
+  // records carry only the owner's maintenance policy and their registered extras (no
+  // session template).
+  const ownOnly = ["platform", "platform_readable", "ingress", "operator_record"].includes(
+    spec.class,
+  );
   const expected = ["work_owner"]
     .concat(vault ? ["vault_broker"] : ownOnly ? [] : ["tenant_command"])
     .concat(spec.class === "tenant_readable" || mixed ? ["tenant_read"] : [])
@@ -176,12 +181,14 @@ function checkPolicies(schema, table, spec) {
     else if (policy.policyname === "tenant_command")
       assert.deepEqual(
         shape,
-        [
-          "ALL",
-          "{morrow_work_command}",
-          mixed ? orPlatform(tenantPredicate) : tenantPredicate,
-          tenantPredicate,
-        ],
+        spec.commandRead
+          ? ["SELECT", "{morrow_work_command}", tenantPredicate, null]
+          : [
+              "ALL",
+              "{morrow_work_command}",
+              mixed ? orPlatform(tenantPredicate) : tenantPredicate,
+              tenantPredicate,
+            ],
         table,
       );
     else if (policy.policyname === "tenant_lease")

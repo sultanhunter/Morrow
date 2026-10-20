@@ -8,7 +8,9 @@ BEGIN;
 --     offers, seeded by the owner (staging:seed-platform); append-only and immutable.
 --   * Stripe operations: the purpose of each stripe_write operation (morrow_work.operations,
 --     0020; kind stripe_write, task null, capability governance.billing.manage), the
---     workspace's Stripe customer mapping and its checkout intents (one open per workspace).
+--     workspace's Stripe customer mapping and its checkout intents (one open per workspace);
+--     a customer operation the broker could not prove either way once no replay or send
+--     can still run is held for the operator, whose resolutions are recorded.
 --   * Receipts: verified Stripe events recorded by the broker's own login with the
 --     normalised object and its digest; their application records; the entry proof of the
 --     receipt context.
@@ -118,6 +120,9 @@ CREATE UNIQUE INDEX checkout_intents_one_open ON morrow_billing.checkout_intents
 
 -- The purpose of one stripe_write operation. Checkout and customer operations name the
 -- intent they serve; a portal operation carries its own command key and digest (replay).
+-- held_at: a customer operation still uncertain after the broker's bounded absence proof
+-- (stripe_op_settle 'held'); the workspace's checkout then waits for the operator
+-- (operator_customer_operation_resolve), and the billing view shows the hold.
 CREATE TABLE morrow_billing.stripe_operations (
  organization_id morrow_work.record_id NOT NULL,
  workspace_id morrow_work.record_id NOT NULL,
@@ -130,6 +135,7 @@ CREATE TABLE morrow_billing.stripe_operations (
  request_digest morrow_work.digest,
  correlation_id morrow_work.record_id NOT NULL,
  provider_object_id text CHECK (provider_object_id ~ '^(cus|cs|bps)_[A-Za-z0-9_]{8,250}$'),
+ held_at timestamptz CHECK (held_at=date_trunc('milliseconds',held_at) AND isfinite(held_at)),
  created_at timestamptz NOT NULL CHECK (created_at=date_trunc('milliseconds',created_at) AND created_at>=timestamptz '2000-01-01T00:00:00Z' AND created_at<timestamptz '9000-01-01T00:00:00Z'),
  PRIMARY KEY (organization_id,workspace_id,operation_id),
  UNIQUE (organization_id,workspace_id,actor_principal_id,idempotency_key),
@@ -143,7 +149,29 @@ CREATE TABLE morrow_billing.stripe_operations (
   WHEN 'checkout_session_create' THEN checkout_intent_id IS NOT NULL AND idempotency_key IS NULL AND request_digest IS NULL
    AND (provider_object_id IS NULL OR provider_object_id ~ '^cs_')
   ELSE checkout_intent_id IS NOT NULL AND idempotency_key IS NULL AND request_digest IS NULL
-   AND (provider_object_id IS NULL OR provider_object_id ~ '^cus_') END)
+   AND (provider_object_id IS NULL OR provider_object_id ~ '^cus_') END),
+ CONSTRAINT stripe_operations_hold CHECK (held_at IS NULL OR purpose='customer_create')
+);
+
+-- The operator's resolutions of held customer operations (append-only; the owner's audited
+-- script only): retry clears the hold so the broker's proof runs again after the operator
+-- corrected Stripe; abandon fails the operation (verified_no_effect, attested by the
+-- operator after deleting every customer of the operation in Stripe, or finding none).
+-- Fixed codes and the live-evidence record's path only; no free text.
+CREATE TABLE morrow_billing.stripe_operation_resolutions (
+ organization_id morrow_work.record_id NOT NULL,
+ workspace_id morrow_work.record_id NOT NULL,
+ id morrow_work.record_id NOT NULL CHECK (id::text ~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'),
+ operation_id morrow_work.record_id NOT NULL,
+ operator_id morrow_work.record_id NOT NULL,
+ resolution text NOT NULL CHECK (resolution IN ('retry','abandon')),
+ evidence_code text NOT NULL CHECK (evidence_code IN ('stripe_corrected','customers_deleted','none_found')),
+ evidence_ref text NOT NULL CHECK (evidence_ref ~ '^docs/evidence/live/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]{1,80}[.]md$'),
+ held_at timestamptz NOT NULL,
+ recorded_at timestamptz NOT NULL CHECK (recorded_at=date_trunc('milliseconds',recorded_at) AND recorded_at>=timestamptz '2000-01-01T00:00:00Z' AND recorded_at<timestamptz '9000-01-01T00:00:00Z'),
+ PRIMARY KEY (organization_id,workspace_id,id),
+ FOREIGN KEY (organization_id,workspace_id,operation_id) REFERENCES morrow_billing.stripe_operations(organization_id,workspace_id,operation_id),
+ CONSTRAINT stripe_operation_resolutions_evidence CHECK ((resolution='retry')=(evidence_code='stripe_corrected'))
 );
 
 -- One verified Stripe event (ADR-0022 item 12's six types), recorded by the broker after
@@ -332,8 +360,9 @@ CREATE TABLE morrow_billing.credit_wallets (
 -- ---------------------------------------------------------------------------
 -- Row security. Every table: ENABLE + FORCE and the maintenance-only owner policy.
 DO $$ DECLARE t text; BEGIN
- FOREACH t IN ARRAY ARRAY['billing_terms','stripe_customers','checkout_intents','stripe_operations','stripe_event_receipts','receipt_applications',
-  'receipt_entries','billing_accounts','entitlement_snapshots','verified_payment_events','credit_grants','credit_wallets'] LOOP
+ FOREACH t IN ARRAY ARRAY['billing_terms','stripe_customers','checkout_intents','stripe_operations','stripe_operation_resolutions',
+  'stripe_event_receipts','receipt_applications','receipt_entries','billing_accounts','entitlement_snapshots','verified_payment_events',
+  'credit_grants','credit_wallets'] LOOP
   EXECUTE format('ALTER TABLE morrow_billing.%I ENABLE ROW LEVEL SECURITY',t);
   EXECUTE format('ALTER TABLE morrow_billing.%I FORCE ROW LEVEL SECURITY',t);
   EXECUTE format('CREATE POLICY work_owner ON morrow_billing.%I TO morrow_work_owner USING (true) WITH CHECK (true)',t);
@@ -368,17 +397,33 @@ LANGUAGE sql STABLE SET search_path=pg_catalog,pg_temp AS $$
 $$;
 
 -- Policies. tenant_command and tenant_read are the P06.T01a template (session context).
+-- The session commands write only their intents and Stripe operations (tenant_command FOR
+-- ALL); on the customer mapping and the ledger tenant_command is FOR SELECT only, so no
+-- session definer can insert a mapping, an account, a snapshot, a payment, a grant or a
+-- wallet (ADR-0022 item 9 amendment: written only by the broker's definers and in the
+-- receipt context). The wallet adds tenant_command_update for M3 PR-1's moves, which
+-- wallet_guard keeps sum-preserving; there is no session INSERT.
 -- broker_billing: the broker's login, through its own definers only (the vault_broker
--- idiom of 0020). receipt_apply: the receipt context of the receipt's own tenant.
+-- idiom of 0020). receipt_apply: the receipt context of the receipt's own tenant. The api
+-- reads a Stripe operation's purpose and hold (the billing view's setup hold), never its
+-- provider object or command key. stripe_operation_resolutions: the owner only.
 -- platform_command_read and platform_api_read: the terms table, readable by both roles.
 DO $$ DECLARE t text; BEGIN
- FOREACH t IN ARRAY ARRAY['stripe_customers','checkout_intents','stripe_operations','billing_accounts','entitlement_snapshots',
-  'verified_payment_events','credit_grants','credit_wallets'] LOOP
+ FOREACH t IN ARRAY ARRAY['checkout_intents','stripe_operations'] LOOP
   EXECUTE format('CREATE POLICY tenant_command ON morrow_billing.%I TO morrow_work_command
    USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c))
    WITH CHECK ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c))',t);
  END LOOP;
- FOREACH t IN ARRAY ARRAY['checkout_intents','billing_accounts','entitlement_snapshots','verified_payment_events','credit_grants','credit_wallets'] LOOP
+ FOREACH t IN ARRAY ARRAY['stripe_customers','billing_accounts','entitlement_snapshots','verified_payment_events','credit_grants',
+  'credit_wallets'] LOOP
+  EXECUTE format('CREATE POLICY tenant_command ON morrow_billing.%I FOR SELECT TO morrow_work_command
+   USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c))',t);
+ END LOOP;
+ EXECUTE 'CREATE POLICY tenant_command_update ON morrow_billing.credit_wallets FOR UPDATE TO morrow_work_command
+   USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c))
+   WITH CHECK ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c))';
+ FOREACH t IN ARRAY ARRAY['checkout_intents','stripe_operations','billing_accounts','entitlement_snapshots','verified_payment_events',
+  'credit_grants','credit_wallets'] LOOP
   EXECUTE format('CREATE POLICY tenant_read ON morrow_billing.%I FOR SELECT TO morrow_work_api
    USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c))',t);
  END LOOP;
@@ -421,7 +466,7 @@ GRANT SELECT,INSERT ON morrow_billing.stripe_customers,morrow_billing.checkout_i
  morrow_billing.stripe_event_receipts,morrow_billing.receipt_applications,morrow_billing.receipt_entries,morrow_billing.billing_accounts,
  morrow_billing.entitlement_snapshots,morrow_billing.verified_payment_events,morrow_billing.credit_grants,morrow_billing.credit_wallets TO morrow_work_command;
 GRANT UPDATE (status,revision,stripe_session_id,updated_at) ON morrow_billing.checkout_intents TO morrow_work_command;
-GRANT UPDATE (provider_object_id) ON morrow_billing.stripe_operations TO morrow_work_command;
+GRANT UPDATE (provider_object_id,held_at) ON morrow_billing.stripe_operations TO morrow_work_command;
 GRANT UPDATE (xact_id,receipt_id,receipt_organization_id,receipt_workspace_id,nonce) ON morrow_billing.receipt_entries TO morrow_work_command;
 GRANT UPDATE (status,revision,updated_at) ON morrow_billing.billing_accounts TO morrow_work_command;
 GRANT UPDATE (available,reserved,consumed,revision,updated_at) ON morrow_billing.credit_wallets TO morrow_work_command;
@@ -429,6 +474,7 @@ GRANT UPDATE (route,mode,route_fixed_at,fixing_payment_key,revision,updated_at) 
 GRANT SELECT (terms_revision,terms,offers,digest,recorded_at) ON morrow_billing.billing_terms TO morrow_work_api;
 GRANT SELECT (organization_id,workspace_id,id,revision,status,price_key,terms_revision,route_revision,mode,actor_principal_id,actor_membership_id,
  customer_operation_id,checkout_operation_id,expires_at,created_at,updated_at) ON morrow_billing.checkout_intents TO morrow_work_api;
+GRANT SELECT (organization_id,workspace_id,operation_id,purpose,checkout_intent_id,held_at,created_at) ON morrow_billing.stripe_operations TO morrow_work_api;
 GRANT SELECT (organization_id,workspace_id,id,route,mode,currency,status,revision,created_at,updated_at) ON morrow_billing.billing_accounts TO morrow_work_api;
 GRANT SELECT (organization_id,workspace_id,billing_account_id,revision,route,mode,subscription_key,status,provider_evidence_ref,verified_at,valid_until,
  recorded_at) ON morrow_billing.entitlement_snapshots TO morrow_work_api;
@@ -496,16 +542,24 @@ BEGIN
  END IF;
  RETURN NEW;
 END $$;
--- A Stripe operation's provider object id is set once; nothing else changes.
+-- A Stripe operation's provider object id is set once. Each update changes exactly one
+-- of: the provider object id (once), or the hold, which only the broker's login sets and
+-- only the owner (the operator's resolution) clears; nothing else changes.
 CREATE FUNCTION morrow_billing.stripe_operation_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
+DECLARE v_object boolean; v_hold boolean;
 BEGIN
  IF TG_OP='INSERT' THEN
-  IF NEW.provider_object_id IS NOT NULL THEN RAISE EXCEPTION 'BILLING_OPERATION_INVALID'; END IF;
+  IF NEW.provider_object_id IS NOT NULL OR NEW.held_at IS NOT NULL THEN RAISE EXCEPTION 'BILLING_OPERATION_INVALID'; END IF;
   RETURN NEW;
  END IF;
- IF TG_OP<>'UPDATE' OR OLD.provider_object_id IS NOT NULL OR NEW.provider_object_id IS NULL
-  OR (to_jsonb(NEW)-'provider_object_id') IS DISTINCT FROM (to_jsonb(OLD)-'provider_object_id') THEN
+ v_object:=NEW.provider_object_id IS DISTINCT FROM OLD.provider_object_id;
+ v_hold:=NEW.held_at IS DISTINCT FROM OLD.held_at;
+ IF TG_OP<>'UPDATE' OR v_object=v_hold
+  OR (to_jsonb(NEW)-ARRAY['provider_object_id','held_at']) IS DISTINCT FROM (to_jsonb(OLD)-ARRAY['provider_object_id','held_at'])
+  OR (v_object AND (OLD.provider_object_id IS NOT NULL OR NEW.provider_object_id IS NULL))
+  OR (v_hold AND NEW.held_at IS NOT NULL AND (OLD.held_at IS NOT NULL OR session_user<>'morrow_vault_broker'))
+  OR (v_hold AND NEW.held_at IS NULL AND current_user<>'morrow_work_owner') THEN
   RAISE EXCEPTION 'BILLING_OPERATION_INVALID';
  END IF;
  RETURN NEW;
@@ -630,14 +684,15 @@ CREATE TRIGGER grant_guard BEFORE INSERT OR UPDATE OR DELETE ON morrow_billing.c
 CREATE TRIGGER application_guard BEFORE INSERT OR UPDATE OR DELETE ON morrow_billing.receipt_applications FOR EACH ROW EXECUTE FUNCTION morrow_billing.application_guard();
 CREATE TRIGGER route_fix_guard BEFORE UPDATE ON morrow_billing.workspace_billing_routes FOR EACH ROW EXECUTE FUNCTION morrow_billing.route_fix_guard();
 DO $$ DECLARE t text; BEGIN
- FOREACH t IN ARRAY ARRAY['stripe_customers','stripe_event_receipts','verified_payment_events'] LOOP
+ FOREACH t IN ARRAY ARRAY['stripe_customers','stripe_operation_resolutions','stripe_event_receipts','verified_payment_events'] LOOP
   EXECUTE format('CREATE TRIGGER append_only BEFORE UPDATE OR DELETE ON morrow_billing.%I FOR EACH ROW EXECUTE FUNCTION morrow_work.append_only()',t);
  END LOOP;
  FOREACH t IN ARRAY ARRAY['checkout_intents','stripe_operations','billing_accounts','credit_wallets'] LOOP
   EXECUTE format('CREATE TRIGGER append_only BEFORE DELETE ON morrow_billing.%I FOR EACH ROW EXECUTE FUNCTION morrow_work.append_only()',t);
  END LOOP;
- FOREACH t IN ARRAY ARRAY['billing_terms','stripe_customers','checkout_intents','stripe_operations','stripe_event_receipts','receipt_applications',
-  'billing_accounts','entitlement_snapshots','verified_payment_events','credit_grants','credit_wallets'] LOOP
+ FOREACH t IN ARRAY ARRAY['billing_terms','stripe_customers','checkout_intents','stripe_operations','stripe_operation_resolutions',
+  'stripe_event_receipts','receipt_applications','billing_accounts','entitlement_snapshots','verified_payment_events','credit_grants',
+  'credit_wallets'] LOOP
   EXECUTE format('CREATE TRIGGER no_truncate BEFORE TRUNCATE ON morrow_billing.%I FOR EACH STATEMENT EXECUTE FUNCTION morrow_work.append_only()',t);
  END LOOP;
 END $$;
@@ -663,13 +718,17 @@ END $$;
 -- Opens one Morrow checkout (P18.T01a; ADR-0022 item 12): replay by the actor's key, the
 -- locked freshness recheck, then under the route row's lock the route must still be
 -- unfixed, website, never bound and without any association, the terms revision current
--- and the price a morrow_direct subscription entry. Lazily expires open intents past
--- expires_at plus five minutes, reuses the workspace's open intent for the same price (a
--- later terms revision credits it at payment time, R10), and
--- otherwise records the intent with its customer operation (unless mapped, or one is
--- already in flight) and its checkout operation, both planned -> authorized. Outcomes:
--- applied, replayed, reused, invalid, ineligible, command_conflict, stale_authority,
--- route_conflict, terms_conflict, checkout_conflict.
+-- and the price a morrow_direct subscription entry. The lazy close: expires open intents
+-- past expires_at plus five minutes, fails an open intent whose customer operation failed,
+-- and fails a completed intent whose payment never verified 24 hours after its session's
+-- expiry (an abandoned or failed payment must not block checkout forever). Then reuses the
+-- workspace's open intent for the same price (a later terms revision credits it at payment
+-- time, R10), and otherwise records the intent with its customer operation (unless mapped,
+-- or one is already in flight) and its checkout operation, both planned -> authorized. A
+-- customer operation the broker has held for the operator refuses both (customer_held)
+-- until the operator resolves it. Outcomes: applied, replayed, reused, invalid, ineligible,
+-- command_conflict, stale_authority, route_conflict, terms_conflict, checkout_conflict,
+-- customer_held.
 CREATE FUNCTION morrow_billing.cmd_checkout_open(p_key text,p_request_digest text,p_correlation_id text,p_price_key text,
  p_terms_revision text,p_route_revision text)
 RETURNS TABLE(outcome text,result text)
@@ -734,13 +793,30 @@ BEGIN
  IF v_count<>1 THEN RETURN QUERY SELECT 'terms_conflict'::text,NULL::text; RETURN; END IF;
  v_mode:=v_entry->>'mode';
  v_at:=morrow_work.db_now();
- -- The lazy close: an open intent past its Stripe expiry plus a margin is expired.
+ -- The lazy close: an open intent past its Stripe expiry plus a margin is expired, and an
+ -- open intent whose customer operation has failed can never reach Checkout, so it fails
+ -- (stripe_op_settle fails it too; this is the defence for an intent it did not reach). A
+ -- completed intent (the customer finished Checkout) whose payment was never verified a
+ -- day after the session's expiry fails: a held, refused or failed first payment no longer
+ -- blocks the workspace, and a payment that verifies later still applies by its receipt.
  UPDATE morrow_billing.checkout_intents x SET status='expired',revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
   WHERE x.organization_id=t.organization_id AND x.workspace_id=t.workspace_id AND x.status='open' AND x.expires_at+interval '5 minutes'<=v_at;
+ UPDATE morrow_billing.checkout_intents x SET status='failed',revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
+  WHERE x.organization_id=t.organization_id AND x.workspace_id=t.workspace_id AND x.status='completed' AND x.expires_at+interval '24 hours'<=v_at;
+ UPDATE morrow_billing.checkout_intents x SET status='failed',revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
+  WHERE x.organization_id=t.organization_id AND x.workspace_id=t.workspace_id AND x.status='open' AND x.customer_operation_id IS NOT NULL
+   AND EXISTS(SELECT 1 FROM morrow_work.operations o3 WHERE o3.organization_id=x.organization_id AND o3.workspace_id=x.workspace_id
+    AND o3.id=x.customer_operation_id AND o3.status='failed');
  SELECT x.* INTO i FROM morrow_billing.checkout_intents x WHERE x.organization_id=t.organization_id AND x.workspace_id=t.workspace_id
   AND x.status IN ('open','completed');
  IF FOUND THEN
   IF i.status='open' AND i.price_key=p_price_key THEN
+   IF i.customer_operation_id IS NOT NULL AND EXISTS(SELECT 1 FROM morrow_billing.stripe_operations s JOIN morrow_work.operations o2
+     ON o2.organization_id=s.organization_id AND o2.workspace_id=s.workspace_id AND o2.id=s.operation_id
+     WHERE s.organization_id=t.organization_id AND s.workspace_id=t.workspace_id AND s.operation_id=i.customer_operation_id
+      AND s.held_at IS NOT NULL AND o2.status='uncertain') THEN
+    RETURN QUERY SELECT 'customer_held'::text,NULL::text; RETURN;
+   END IF;
    RETURN QUERY SELECT 'reused'::text,jsonb_build_object('intentId',i.id::text,'status',i.status,'customerOperationId',i.customer_operation_id::text,
     'checkoutOperationId',i.checkout_operation_id::text,'expiresAt',morrow_work.utc_text(i.expires_at))::text;
    RETURN;
@@ -751,12 +827,15 @@ BEGIN
  IF NOT v_mapped THEN
   -- One customer per workspace: an earlier customer operation that has not failed is
   -- reused (its idempotency key is bound to it), never a second one.
-  SELECT s.operation_id::text INTO v_customer_op FROM morrow_billing.stripe_operations s JOIN morrow_work.operations o2
+  SELECT s.operation_id::text AS operation_id,s.held_at,o2.status INTO o FROM morrow_billing.stripe_operations s JOIN morrow_work.operations o2
    ON o2.organization_id=s.organization_id AND o2.workspace_id=s.workspace_id AND o2.id=s.operation_id
    WHERE s.organization_id=t.organization_id AND s.workspace_id=t.workspace_id AND s.purpose='customer_create'
     AND o2.status NOT IN ('failed','cancelled','rejected','conflict')
    ORDER BY o2.created_at DESC,s.operation_id::text COLLATE "C" LIMIT 1;
-  IF NOT FOUND THEN v_customer_op:=gen_random_uuid()::text; v_new_customer:=true; END IF;
+  IF NOT FOUND THEN v_customer_op:=gen_random_uuid()::text; v_new_customer:=true;
+  ELSIF o.held_at IS NOT NULL AND o.status='uncertain' THEN RETURN QUERY SELECT 'customer_held'::text,NULL::text; RETURN;
+  ELSE v_customer_op:=o.operation_id;
+  END IF;
  END IF;
  v_intent:=gen_random_uuid()::text; v_checkout:=gen_random_uuid()::text;
  v_expires:=date_trunc('second',v_at)+interval '1 hour';
@@ -871,33 +950,41 @@ END $$;
 -- lease and no grant to recheck after the session command), then the send fence
 -- (send_started_at, attempt+1) before any HTTP call: 'send'. dispatching with the fence
 -- set (a send may have happened): -> uncertain (unknown_submission): 'reconcile'.
--- uncertain: 'reconcile'. verified, failed: as they are. A checkout waits for its customer
--- and for an open intent. Outcomes: send, reconcile, verified, failed, customer_pending,
--- intent_closed, state_conflict, not_found, invalid, denied.
+-- uncertain: 'reconcile', or 'held' for a customer operation held for the operator (no
+-- reconciliation until the operator's resolution). verified, failed: as they are. A
+-- checkout waits for its customer and for an open intent. Every row carries the
+-- operation's creation time and its send fence time (null before the first send), which
+-- bound the broker's replay window and its absence proof. Outcomes: send, reconcile, held,
+-- verified, failed, customer_pending, intent_closed, state_conflict, not_found, invalid,
+-- denied.
 CREATE FUNCTION morrow_billing.stripe_op_begin(p_operation_id text)
-RETURNS TABLE(outcome text,purpose text,status text,request_digest text,params text,provider_object_id text,created_at_ms text)
+RETURNS TABLE(outcome text,purpose text,status text,request_digest text,params text,provider_object_id text,created_at_ms text,
+ send_started_at_ms text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
 #variable_conflict use_column
 DECLARE
- op record; so record; i record; v_customer text; v_params jsonb; v_at timestamptz; x record; v_status text;
+ op record; so record; i record; v_customer text; v_params jsonb; v_at timestamptz; x record; v_status text; v_created text; v_sent text;
+ v_fence timestamptz;
 BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_vault_broker') THEN
-  RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
+  RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
  END IF;
  IF p_operation_id IS NULL OR p_operation_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$' THEN
-  RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
+  RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
  END IF;
  SELECT o.organization_id::text AS organization_id,o.workspace_id::text AS workspace_id,o.status,o.revision::bigint AS revision,
   o.request_digest::text AS request_digest,o.send_started_at,o.created_at INTO op
   FROM morrow_work.operations o WHERE o.id=p_operation_id AND o.kind='stripe_write' FOR UPDATE;
  IF NOT FOUND THEN
-  RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
+  RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
  END IF;
- SELECT s.purpose,s.checkout_intent_id::text AS checkout_intent_id,s.provider_object_id INTO so FROM morrow_billing.stripe_operations s
+ SELECT s.purpose,s.checkout_intent_id::text AS checkout_intent_id,s.provider_object_id,s.held_at INTO so FROM morrow_billing.stripe_operations s
   WHERE s.organization_id=op.organization_id AND s.workspace_id=op.workspace_id AND s.operation_id=p_operation_id FOR UPDATE;
  IF NOT FOUND THEN
-  RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
+  RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text; RETURN;
  END IF;
+ v_created:=(extract(epoch FROM op.created_at)*1000)::bigint::text;
+ v_sent:=CASE WHEN op.send_started_at IS NULL THEN NULL ELSE (extract(epoch FROM op.send_started_at)*1000)::bigint::text END;
  SELECT c.stripe_customer_id INTO v_customer FROM morrow_billing.stripe_customers c
   WHERE c.organization_id=op.organization_id AND c.workspace_id=op.workspace_id;
  IF so.purpose='customer_create' THEN
@@ -909,13 +996,11 @@ BEGIN
    'intentId',i.id,'priceKey',i.price_key,'mode',i.mode,'expiresAt',(extract(epoch FROM i.expires_at))::bigint::text,
    'termsRevision',i.terms_revision,'customerId',v_customer);
   IF op.status='authorized' AND i.status<>'open' THEN
-   RETURN QUERY SELECT 'intent_closed'::text,so.purpose,op.status,op.request_digest,v_params::text,so.provider_object_id,
-    (extract(epoch FROM op.created_at)*1000)::bigint::text;
+   RETURN QUERY SELECT 'intent_closed'::text,so.purpose,op.status,op.request_digest,v_params::text,so.provider_object_id,v_created,v_sent;
    RETURN;
   END IF;
   IF v_customer IS NULL THEN
-   RETURN QUERY SELECT 'customer_pending'::text,so.purpose,op.status,op.request_digest,v_params::text,so.provider_object_id,
-    (extract(epoch FROM op.created_at)*1000)::bigint::text;
+   RETURN QUERY SELECT 'customer_pending'::text,so.purpose,op.status,op.request_digest,v_params::text,so.provider_object_id,v_created,v_sent;
    RETURN;
   END IF;
  ELSE
@@ -930,9 +1015,10 @@ BEGIN
   v_at:=morrow_work.db_now();
   UPDATE morrow_work.operations o SET attempt=o.attempt+1,send_started_at=greatest(v_at,o.updated_at),revision=o.revision+1,
    updated_at=greatest(v_at,o.updated_at)
-   WHERE o.organization_id=op.organization_id AND o.workspace_id=op.workspace_id AND o.id=p_operation_id;
-  RETURN QUERY SELECT 'send'::text,so.purpose,'dispatching'::text,op.request_digest,v_params::text,NULL::text,
-   (extract(epoch FROM op.created_at)*1000)::bigint::text;
+   WHERE o.organization_id=op.organization_id AND o.workspace_id=op.workspace_id AND o.id=p_operation_id
+   RETURNING o.send_started_at INTO v_fence;
+  RETURN QUERY SELECT 'send'::text,so.purpose,'dispatching'::text,op.request_digest,v_params::text,NULL::text,v_created,
+   (extract(epoch FROM v_fence)*1000)::bigint::text;
   RETURN;
  END IF;
  IF op.status='dispatching' AND op.send_started_at IS NOT NULL THEN
@@ -941,18 +1027,28 @@ BEGIN
   IF x.outcome IS DISTINCT FROM 'applied' THEN RAISE EXCEPTION 'BILLING_OPERATION_INVALID'; END IF;
   v_status:='uncertain';
  END IF;
- RETURN QUERY SELECT CASE v_status WHEN 'uncertain' THEN 'reconcile' WHEN 'verified' THEN 'verified' WHEN 'failed' THEN 'failed'
-   ELSE 'state_conflict' END,so.purpose,v_status,op.request_digest,v_params::text,so.provider_object_id,
-  (extract(epoch FROM op.created_at)*1000)::bigint::text;
+ RETURN QUERY SELECT CASE v_status WHEN 'uncertain' THEN CASE WHEN so.held_at IS NULL THEN 'reconcile' ELSE 'held' END
+   WHEN 'verified' THEN 'verified' WHEN 'failed' THEN 'failed'
+   ELSE 'state_conflict' END,so.purpose,v_status,op.request_digest,v_params::text,so.provider_object_id,v_created,v_sent;
 END $$;
 
 -- Settles one stripe_write operation from the broker's provider result, under its row
 -- lock. verified (dispatching -> submitted -> verifying -> verified, or uncertain ->
 -- verifying -> verified): records the provider object once, and the customer mapping or
--- the intent's session id; failed (verified_no_effect, from dispatching or uncertain):
--- fails the operation's open intent; uncertain (from dispatching). Never promotes an
--- uncertain operation without a provider result. Outcomes: verified, already_verified,
--- failed, already_failed, uncertain, conflict, state_conflict, not_found, invalid, denied.
+-- the intent's session id. failed (verified_no_effect, from dispatching only): a first
+-- send's own refusal speaks only for that send, so once a concurrent begin has moved the
+-- operation to uncertain (and may be replaying with the same key) it is state_conflict.
+-- absent (verified_no_effect, from uncertain, customer_create only): the broker proved by
+-- a strongly consistent readback, after the replay window and the send have ended, that
+-- no customer of this operation exists. Both fail every open intent this operation
+-- serves (a customer operation can serve a later intent than the one that created it).
+-- held (from uncertain, customer_create only): the same window, but Stripe proved neither
+-- (several customers of the operation, or more than the bounded list): the operation stays
+-- uncertain and is held for the operator. The window (24 hours after creation, an hour
+-- after the send) is re-checked here on the database clock. uncertain (from dispatching).
+-- Never promotes an uncertain operation without a provider result. Outcomes: verified,
+-- already_verified, failed, already_failed, held, already_held, uncertain, conflict,
+-- state_conflict, not_found, invalid, denied.
 CREATE FUNCTION morrow_billing.stripe_op_settle(p_operation_id text,p_result text,p_provider_object_id text,p_provider_request_id text)
 RETURNS text
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
@@ -960,18 +1056,34 @@ DECLARE op record; so record; x record; i record; v_at timestamptz; v_mode text;
 BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_vault_broker') THEN RETURN 'denied'; END IF;
  IF p_operation_id IS NULL OR p_operation_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
-  OR p_result IS NULL OR p_result NOT IN ('verified','failed','uncertain')
+  OR p_result IS NULL OR p_result NOT IN ('verified','failed','absent','held','uncertain')
   OR (p_result='verified')<>(p_provider_object_id IS NOT NULL)
   OR (p_provider_object_id IS NOT NULL AND p_provider_object_id !~ '^(cus|cs|bps)_[A-Za-z0-9_]{8,250}$')
   OR (p_provider_request_id IS NOT NULL AND p_provider_request_id !~ '^req_[A-Za-z0-9]{8,64}$') THEN
   RETURN 'invalid';
  END IF;
  SELECT o.organization_id::text AS organization_id,o.workspace_id::text AS workspace_id,o.status,o.revision::bigint AS revision,
-  o.provider_request_id INTO op FROM morrow_work.operations o WHERE o.id=p_operation_id AND o.kind='stripe_write' FOR UPDATE;
+  o.provider_request_id,o.created_at,o.send_started_at INTO op FROM morrow_work.operations o WHERE o.id=p_operation_id AND o.kind='stripe_write' FOR UPDATE;
  IF NOT FOUND THEN RETURN 'not_found'; END IF;
- SELECT s.purpose,s.checkout_intent_id::text AS checkout_intent_id,s.provider_object_id INTO so FROM morrow_billing.stripe_operations s
+ SELECT s.purpose,s.checkout_intent_id::text AS checkout_intent_id,s.provider_object_id,s.held_at INTO so FROM morrow_billing.stripe_operations s
   WHERE s.organization_id=op.organization_id AND s.workspace_id=op.workspace_id AND s.operation_id=p_operation_id FOR UPDATE;
  IF NOT FOUND THEN RETURN 'not_found'; END IF;
+ -- absent and held: an uncertain customer operation once no replay (23 hours from its
+ -- creation) and no send (its fence) can still create anything, on this clock.
+ IF p_result IN ('absent','held') THEN
+  v_at:=morrow_work.db_now();
+  IF op.status='failed' AND p_result='absent' THEN RETURN 'already_failed'; END IF;
+  IF op.status<>'uncertain' OR so.purpose<>'customer_create' OR op.send_started_at IS NULL
+   OR op.created_at>v_at-interval '24 hours' OR op.send_started_at>v_at-interval '1 hour' THEN
+   RETURN 'state_conflict';
+  END IF;
+  IF p_result='held' THEN
+   IF so.held_at IS NOT NULL THEN RETURN 'already_held'; END IF;
+   UPDATE morrow_billing.stripe_operations s SET held_at=v_at
+    WHERE s.organization_id=op.organization_id AND s.workspace_id=op.workspace_id AND s.operation_id=p_operation_id;
+   RETURN 'held';
+  END IF;
+ END IF;
  IF p_result='verified' AND p_provider_object_id !~ (CASE so.purpose WHEN 'customer_create' THEN '^cus_[A-Za-z0-9]{8,100}$'
    WHEN 'checkout_session_create' THEN '^cs_' ELSE '^bps_' END) THEN
   RETURN 'invalid';
@@ -1017,17 +1129,16 @@ BEGIN
   END IF;
   RETURN 'verified';
  END IF;
- IF p_result='failed' THEN
+ IF p_result IN ('failed','absent') THEN
   IF op.status='failed' THEN RETURN 'already_failed'; END IF;
-  IF op.status NOT IN ('dispatching','uncertain') THEN RETURN 'state_conflict'; END IF;
+  IF p_result='failed' AND op.status<>'dispatching' THEN RETURN 'state_conflict'; END IF;
   SELECT * INTO x FROM morrow_work.operation_transition(op.organization_id,op.workspace_id,p_operation_id,v_rev,'failed',
    CASE op.status WHEN 'dispatching' THEN 'connector' ELSE 'action_service' END,'verified_no_effect',NULL,NULL,NULL);
   IF x.outcome IS DISTINCT FROM 'applied' THEN RAISE EXCEPTION 'BILLING_OPERATION_INVALID'; END IF;
-  IF so.checkout_intent_id IS NOT NULL THEN
-   v_at:=morrow_work.db_now();
-   UPDATE morrow_billing.checkout_intents x2 SET status='failed',revision=x2.revision+1,updated_at=greatest(v_at,x2.updated_at)
-    WHERE x2.organization_id=op.organization_id AND x2.workspace_id=op.workspace_id AND x2.id=so.checkout_intent_id AND x2.status='open';
-  END IF;
+  v_at:=morrow_work.db_now();
+  UPDATE morrow_billing.checkout_intents x2 SET status='failed',revision=x2.revision+1,updated_at=greatest(v_at,x2.updated_at)
+   WHERE x2.organization_id=op.organization_id AND x2.workspace_id=op.workspace_id AND x2.status='open'
+    AND (x2.id=so.checkout_intent_id OR (so.purpose='customer_create' AND x2.customer_operation_id=p_operation_id));
   RETURN 'failed';
  END IF;
  IF op.status='uncertain' THEN RETURN 'uncertain'; END IF;
@@ -1234,9 +1345,12 @@ END $$;
 -- amount, price, period, operation and credit units; the route fix only for a workspace in
 -- phase open; a grant only for a paid, non-zero, Morrow-initiated subscription-period
 -- invoice whose price is in the current terms; the snapshot's status and validity from the
--- read-back subscription. The plan only chooses among outcomes the receipt allows, and a
--- plan that withholds a grant can only deny. Outcomes: applied, already_applied, invalid,
--- denied, conflict.
+-- read-back subscription, and its order as foldEntitlementEvidence orders observations (a
+-- stale or unchanged read, an identity change or a revival is refused). The plan only
+-- chooses among outcomes the receipt allows, and a plan that withholds a grant can only
+-- deny. The whole plan (payment, snapshot and intent) is checked before the first write,
+-- so a refusal never leaves a partial application, whatever the caller then does with the
+-- transaction. Outcomes: applied, already_applied, invalid, denied, conflict.
 CREATE FUNCTION morrow_billing.receipt_apply(p_receipt_id text,p_object_digest text,p_plan text)
 RETURNS TABLE(outcome text,result text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
@@ -1246,7 +1360,8 @@ DECLARE
  v_org text; v_ws text; v_mode text; v_key text; v_kind text; v_sub text; v_price text; v_cents bigint; v_amount text; v_currency text;
  v_start timestamptz; v_end timestamptz; v_op text; v_units bigint; v_count integer; v_entry jsonb; v_terms record; r record; a record; s record;
  w record; i record; v_action text; v_vpe_outcome text; v_vpe_code text; v_account text; v_state jsonb; v_status text; v_valid timestamptz;
- v_snap_sub text; v_granted bigint; v_fixed boolean:=false; v_linked boolean; v_new_account boolean:=false;
+ v_snap_sub text; v_snap_revision bigint; v_granted bigint; v_grant boolean:=false; v_fix boolean:=false; v_linked boolean; v_newer boolean;
+ v_rank_new integer; v_rank_old integer;
 BEGIN
  IF p_receipt_id IS NULL OR p_receipt_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
   OR p_object_digest IS NULL OR p_object_digest !~ '^[a-f0-9]{64}$' OR p_plan IS NULL OR octet_length(p_plan)>4096 THEN
@@ -1272,6 +1387,17 @@ BEGIN
  END IF;
  v_outcome:=v_plan->>'outcome'; v_code:=v_plan->>'code'; v_pay:=v_plan->'payment'; v_snap:=v_plan->'snapshot'; v_int:=v_plan->'intent';
  o:=rc.object; v_org:=rc.organization_id; v_ws:=rc.workspace_id; v_mode:=rc.mode; v_at:=morrow_work.db_now();
+ -- The shape of every part first.
+ IF (v_pay<>'null'::jsonb AND (jsonb_typeof(v_pay)<>'object'
+    OR (SELECT array_agg(k ORDER BY k COLLATE "C") FROM jsonb_object_keys(v_pay) k) IS DISTINCT FROM ARRAY['action','code','outcome','termsRevision']
+    OR v_pay->>'action' NOT IN ('fix_route_and_grant','grant','record')))
+  OR (v_snap<>'null'::jsonb AND (jsonb_typeof(v_snap)<>'object'
+    OR (SELECT array_agg(k ORDER BY k COLLATE "C") FROM jsonb_object_keys(v_snap) k) IS DISTINCT FROM ARRAY['revision']))
+  OR (v_int<>'null'::jsonb AND (jsonb_typeof(v_int)<>'object'
+    OR (SELECT array_agg(k ORDER BY k COLLATE "C") FROM jsonb_object_keys(v_int) k) IS DISTINCT FROM ARRAY['intentId','to']
+    OR v_int->>'to' NOT IN ('completed','expired','verified'))) THEN
+  RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
+ END IF;
  -- An unattributed receipt (no customer mapping) is only recorded as held.
  IF v_org IS NULL THEN
   IF v_outcome<>'held' OR v_code IS DISTINCT FROM 'CUSTOMER_NOT_MAPPED' OR v_pay<>'null'::jsonb OR v_snap<>'null'::jsonb OR v_int<>'null'::jsonb THEN
@@ -1287,6 +1413,10 @@ BEGIN
  SELECT x.id::text AS id,x.status,x.mode INTO a FROM morrow_billing.billing_accounts x WHERE x.organization_id=v_org AND x.workspace_id=v_ws
   AND x.route='morrow_direct';
  v_account:=a.id;
+ -- The account's latest snapshot, before this receipt.
+ SELECT x.revision::bigint AS revision,x.subscription_key,x.status,x.verified_at,x.provider_evidence_ref::text AS provider_evidence_ref INTO s
+  FROM morrow_billing.entitlement_snapshots x WHERE x.organization_id=v_org AND x.workspace_id=v_ws AND x.billing_account_id=v_account
+  ORDER BY x.revision DESC LIMIT 1;
  -- The operation a Stripe object traces to: its metadata names this workspace (and
  -- organization, when present) and a checkout operation of this tenant; otherwise none.
  v_op:=o->'metadata'->>'operationId';
@@ -1296,13 +1426,9 @@ BEGIN
     AND x.purpose='checkout_session_create')) THEN
   v_op:=NULL;
  END IF;
- -- Payment (invoice.paid only).
+ -- Payment (invoice.paid only): its preconditions. Nothing is written yet.
  IF v_pay<>'null'::jsonb THEN
-  IF rc.event_type<>'invoice.paid' OR rc.object_type<>'invoice' OR jsonb_typeof(v_pay)<>'object'
-   OR (SELECT array_agg(k ORDER BY k COLLATE "C") FROM jsonb_object_keys(v_pay) k) IS DISTINCT FROM ARRAY['action','code','outcome','termsRevision']
-   OR v_pay->>'action' NOT IN ('fix_route_and_grant','grant','record') THEN
-   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
-  END IF;
+  IF rc.event_type<>'invoice.paid' OR rc.object_type<>'invoice' THEN RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN; END IF;
   v_action:=v_pay->>'action'; v_vpe_outcome:=v_pay->>'outcome'; v_vpe_code:=v_pay->>'code';
   v_key:='stripe:invoice:'||(o->>'id');
   v_kind:=CASE WHEN o->>'billingReason' IN ('subscription_create','subscription_cycle') THEN 'subscription_period' END;
@@ -1336,25 +1462,15 @@ BEGIN
      OR v_snap='null'::jsonb THEN
      RETURN QUERY SELECT 'conflict'::text,NULL::text; RETURN;
     END IF;
-    v_account:=gen_random_uuid()::text; v_new_account:=true;
-    INSERT INTO morrow_billing.billing_accounts(organization_id,workspace_id,id,route,mode,currency,status,revision,created_at,updated_at)
-    VALUES (v_org,v_ws,v_account,'morrow_direct',v_mode,v_currency,'active',1,v_at,v_at);
-    INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_account_id,available,reserved,consumed,rate_revision,
-     terms_revision,revision,created_at,updated_at)
-    VALUES (v_org,v_ws,v_account,0,0,0,1,v_terms.terms_revision,1,v_at,v_at);
-    UPDATE morrow_billing.workspace_billing_routes x SET route='morrow_direct',mode=v_mode,route_fixed_at=greatest(v_at,x.created_at),
-     fixing_payment_key=v_key,revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
-     WHERE x.organization_id=v_org AND x.workspace_id=v_ws;
-    v_fixed:=true;
+    v_fix:=true;
    ELSE
     -- A later period of the current subscription on the morrow_direct route.
-    SELECT x.subscription_key,x.status INTO s FROM morrow_billing.entitlement_snapshots x WHERE x.organization_id=v_org AND x.workspace_id=v_ws
-     AND x.billing_account_id=v_account ORDER BY x.revision DESC LIMIT 1;
     IF r.route IS DISTINCT FROM 'morrow_direct' OR r.mode IS DISTINCT FROM v_mode OR v_account IS NULL
      OR s.subscription_key IS DISTINCT FROM v_sub OR s.status='cancelled' THEN
      RETURN QUERY SELECT 'conflict'::text,NULL::text; RETURN;
     END IF;
    END IF;
+   v_grant:=true;
   ELSE
    -- Recorded without a grant: only a non-granting classification of this payment.
    IF v_vpe_outcome NOT IN ('held','no_charge','conflict') OR v_outcome NOT IN ('held','no_charge','conflict')
@@ -1366,30 +1482,16 @@ BEGIN
     RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
    END IF;
   END IF;
-  INSERT INTO morrow_billing.verified_payment_events(organization_id,workspace_id,id,route,mode,payment_key,kind,subscription_key,price_key,
-   period_start,period_end,operation_id,amount,currency,provider_evidence_ref,verified_at,outcome,outcome_code,receipt_id,recorded_at)
-  VALUES (v_org,v_ws,gen_random_uuid()::text,'morrow_direct',v_mode,v_key,v_kind,v_sub,v_price,v_start,v_end,v_op,v_amount,v_currency,
-   rc.object_digest,rc.observed_at,v_vpe_outcome,v_vpe_code,p_receipt_id,v_at);
-  IF v_vpe_outcome='granted' THEN
-   SELECT x.revision::bigint AS revision INTO w FROM morrow_billing.credit_wallets x WHERE x.organization_id=v_org AND x.workspace_id=v_ws
-    AND x.billing_account_id=v_account FOR UPDATE;
-   INSERT INTO morrow_billing.credit_grants(organization_id,workspace_id,id,billing_account_id,route,mode,payment_key,kind,credit_units,
-    terms_revision,purchase_evidence_ref,effective_at,expires_at,funded_wallet_revision,recorded_at)
-   VALUES (v_org,v_ws,gen_random_uuid()::text,v_account,'morrow_direct',v_mode,v_key,'included',v_units,v_terms.terms_revision,rc.object_digest,
-    rc.observed_at,NULL,w.revision+1,v_at);
-   UPDATE morrow_billing.credit_wallets x SET available=x.available+v_units,revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
-    WHERE x.organization_id=v_org AND x.workspace_id=v_ws AND x.billing_account_id=v_account;
-   v_granted:=v_units;
-  END IF;
  ELSIF rc.event_type='invoice.paid' AND v_outcome NOT IN ('held','refused','already_granted','ignored') THEN
   -- An invoice.paid without its payment record is only held (no derivable period),
   -- refused (mode), already granted or already recorded.
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END IF;
- -- The entitlement fold: the next snapshot from the read-back subscription.
+ -- The entitlement fold: the next snapshot from the read-back subscription, ordered as
+ -- foldEntitlementEvidence orders it. A route fixed by this receipt starts a new account,
+ -- whose first snapshot is revision 1.
  IF v_snap<>'null'::jsonb THEN
-  IF jsonb_typeof(v_snap)<>'object' OR (SELECT array_agg(k ORDER BY k COLLATE "C") FROM jsonb_object_keys(v_snap) k) IS DISTINCT FROM ARRAY['revision']
-   OR v_account IS NULL OR rc.object_type='checkout_session' THEN
+  IF (v_account IS NULL AND NOT v_fix) OR rc.object_type='checkout_session' THEN
    RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
   END IF;
   IF rc.object_type='invoice' THEN
@@ -1403,42 +1505,89 @@ BEGIN
    WHEN 'canceled' THEN 'cancelled' END;
   v_valid:=COALESCE(least(timestamptz 'epoch'+((v_state->>'currentPeriodEnd')||' seconds')::interval,
    timestamptz 'epoch'+((v_state->>'cancelAt')||' seconds')::interval),rc.observed_at);
-  SELECT x.revision::bigint AS revision,x.subscription_key,x.status INTO s FROM morrow_billing.entitlement_snapshots x
-   WHERE x.organization_id=v_org AND x.workspace_id=v_ws AND x.billing_account_id=v_account ORDER BY x.revision DESC LIMIT 1;
-  IF v_status IS NULL OR v_snap->'revision'<>to_jsonb(COALESCE(s.revision,0)+1)
-   OR (s.subscription_key IS NOT NULL AND s.subscription_key<>v_snap_sub AND s.status<>'cancelled') THEN
+  IF v_fix THEN
+   v_snap_revision:=1;
+   v_newer:=true;
+  ELSE
+   v_snap_revision:=COALESCE(s.revision,0)+1;
+   -- foldEntitlementEvidence: the first read is next; the same evidence is unchanged; a
+   -- new subscription needs a terminal current one; a terminal subscription is never
+   -- revived and a terminal read of the current one always folds; otherwise the later
+   -- observation, then the more restrictive status, then the greater evidence digest.
+   v_rank_new:=CASE v_status WHEN 'active' THEN 0 WHEN 'pending' THEN 1 WHEN 'past_due' THEN 2 WHEN 'suspended' THEN 3 ELSE 4 END;
+   v_rank_old:=CASE s.status WHEN 'active' THEN 0 WHEN 'pending' THEN 1 WHEN 'past_due' THEN 2 WHEN 'suspended' THEN 3 ELSE 4 END;
+   v_newer:=CASE
+    WHEN s.revision IS NULL THEN true
+    WHEN s.provider_evidence_ref=rc.object_digest THEN false
+    WHEN s.subscription_key<>v_snap_sub AND s.status<>'cancelled' THEN false
+    WHEN s.subscription_key=v_snap_sub AND s.status='cancelled' AND v_status<>'cancelled' THEN false
+    WHEN s.subscription_key=v_snap_sub AND s.status<>'cancelled' AND v_status='cancelled' THEN true
+    WHEN rc.observed_at<>s.verified_at THEN rc.observed_at>s.verified_at
+    WHEN v_rank_new<>v_rank_old THEN v_rank_new>v_rank_old
+    ELSE rc.object_digest COLLATE "C">s.provider_evidence_ref COLLATE "C" END;
+  END IF;
+  IF v_status IS NULL OR v_snap->'revision'<>to_jsonb(v_snap_revision) OR NOT v_newer THEN
    RETURN QUERY SELECT 'conflict'::text,NULL::text; RETURN;
   END IF;
-  INSERT INTO morrow_billing.entitlement_snapshots(organization_id,workspace_id,billing_account_id,revision,route,mode,subscription_key,status,
-   provider_evidence_ref,verified_at,valid_until,receipt_id,recorded_at)
-  VALUES (v_org,v_ws,v_account,COALESCE(s.revision,0)+1,'morrow_direct',v_mode,v_snap_sub,v_status,rc.object_digest,rc.observed_at,v_valid,
-   p_receipt_id,v_at);
-  -- The account follows its subscription: past_due stays active (the snapshot says so).
-  UPDATE morrow_billing.billing_accounts x SET status=CASE v_status WHEN 'past_due' THEN 'active' ELSE v_status END,revision=x.revision+1,
-   updated_at=greatest(v_at,x.updated_at)
-   WHERE x.organization_id=v_org AND x.workspace_id=v_ws AND x.id=v_account AND x.status<>CASE v_status WHEN 'past_due' THEN 'active' ELSE v_status END;
  END IF;
  -- The intent this receipt traces to.
  IF v_int<>'null'::jsonb THEN
-  IF jsonb_typeof(v_int)<>'object' OR (SELECT array_agg(k ORDER BY k COLLATE "C") FROM jsonb_object_keys(v_int) k) IS DISTINCT FROM ARRAY['intentId','to']
-   OR v_int->>'to' NOT IN ('completed','expired','verified') THEN
-   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
-  END IF;
   SELECT x.id::text AS id,x.status,x.stripe_session_id,x.checkout_operation_id::text AS checkout_operation_id INTO i
    FROM morrow_billing.checkout_intents x WHERE x.organization_id=v_org AND x.workspace_id=v_ws AND x.id=v_int->>'intentId' FOR UPDATE;
   IF NOT FOUND
    OR NOT (i.checkout_operation_id=o->'metadata'->>'operationId' OR (rc.object_type='checkout_session' AND i.stripe_session_id=rc.object_id))
    OR (v_int->>'to'='completed' AND NOT (rc.event_type='checkout.session.completed' AND o->>'status'='complete' AND i.status='open'))
    OR (v_int->>'to'='expired' AND NOT (rc.event_type='checkout.session.expired' AND o->>'status'='expired' AND i.status='open'))
-   OR (v_int->>'to'='verified' AND NOT (v_granted IS NOT NULL AND v_op=i.checkout_operation_id AND i.status IN ('open','completed'))) THEN
+   OR (v_int->>'to'='verified' AND NOT (v_grant AND v_op=i.checkout_operation_id AND i.status IN ('open','completed'))) THEN
    RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
   END IF;
+ END IF;
+ -- The plan is accepted: the writes, in one statement's effect.
+ IF v_fix THEN
+  v_account:=gen_random_uuid()::text;
+  INSERT INTO morrow_billing.billing_accounts(organization_id,workspace_id,id,route,mode,currency,status,revision,created_at,updated_at)
+  VALUES (v_org,v_ws,v_account,'morrow_direct',v_mode,v_currency,'active',1,v_at,v_at);
+  INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_account_id,available,reserved,consumed,rate_revision,
+   terms_revision,revision,created_at,updated_at)
+  VALUES (v_org,v_ws,v_account,0,0,0,1,v_terms.terms_revision,1,v_at,v_at);
+  UPDATE morrow_billing.workspace_billing_routes x SET route='morrow_direct',mode=v_mode,route_fixed_at=greatest(v_at,x.created_at),
+   fixing_payment_key=v_key,revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
+   WHERE x.organization_id=v_org AND x.workspace_id=v_ws;
+ END IF;
+ IF v_pay<>'null'::jsonb THEN
+  INSERT INTO morrow_billing.verified_payment_events(organization_id,workspace_id,id,route,mode,payment_key,kind,subscription_key,price_key,
+   period_start,period_end,operation_id,amount,currency,provider_evidence_ref,verified_at,outcome,outcome_code,receipt_id,recorded_at)
+  VALUES (v_org,v_ws,gen_random_uuid()::text,'morrow_direct',v_mode,v_key,v_kind,v_sub,v_price,v_start,v_end,v_op,v_amount,v_currency,
+   rc.object_digest,rc.observed_at,v_vpe_outcome,v_vpe_code,p_receipt_id,v_at);
+ END IF;
+ IF v_grant THEN
+  SELECT x.revision::bigint AS revision INTO w FROM morrow_billing.credit_wallets x WHERE x.organization_id=v_org AND x.workspace_id=v_ws
+   AND x.billing_account_id=v_account FOR UPDATE;
+  INSERT INTO morrow_billing.credit_grants(organization_id,workspace_id,id,billing_account_id,route,mode,payment_key,kind,credit_units,
+   terms_revision,purchase_evidence_ref,effective_at,expires_at,funded_wallet_revision,recorded_at)
+  VALUES (v_org,v_ws,gen_random_uuid()::text,v_account,'morrow_direct',v_mode,v_key,'included',v_units,v_terms.terms_revision,rc.object_digest,
+   rc.observed_at,NULL,w.revision+1,v_at);
+  UPDATE morrow_billing.credit_wallets x SET available=x.available+v_units,revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
+   WHERE x.organization_id=v_org AND x.workspace_id=v_ws AND x.billing_account_id=v_account;
+  v_granted:=v_units;
+ END IF;
+ IF v_snap<>'null'::jsonb THEN
+  INSERT INTO morrow_billing.entitlement_snapshots(organization_id,workspace_id,billing_account_id,revision,route,mode,subscription_key,status,
+   provider_evidence_ref,verified_at,valid_until,receipt_id,recorded_at)
+  VALUES (v_org,v_ws,v_account,v_snap_revision,'morrow_direct',v_mode,v_snap_sub,v_status,rc.object_digest,rc.observed_at,v_valid,
+   p_receipt_id,v_at);
+  -- The account follows its subscription: past_due stays active (the snapshot says so).
+  UPDATE morrow_billing.billing_accounts x SET status=CASE v_status WHEN 'past_due' THEN 'active' ELSE v_status END,revision=x.revision+1,
+   updated_at=greatest(v_at,x.updated_at)
+   WHERE x.organization_id=v_org AND x.workspace_id=v_ws AND x.id=v_account AND x.status<>CASE v_status WHEN 'past_due' THEN 'active' ELSE v_status END;
+ END IF;
+ IF v_int<>'null'::jsonb THEN
   UPDATE morrow_billing.checkout_intents x SET status=v_int->>'to',revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
    WHERE x.organization_id=v_org AND x.workspace_id=v_ws AND x.id=i.id;
  END IF;
  INSERT INTO morrow_billing.receipt_applications(organization_id,workspace_id,receipt_id,outcome,outcome_code,applied_at)
  VALUES (v_org,v_ws,p_receipt_id,v_outcome,v_code,v_at);
- RETURN QUERY SELECT 'applied'::text,jsonb_build_object('outcome',v_outcome,'code',v_code,'creditUnits',v_granted::text,'routeFixed',v_fixed)::text;
+ RETURN QUERY SELECT 'applied'::text,jsonb_build_object('outcome',v_outcome,'code',v_code,'creditUnits',v_granted::text,'routeFixed',v_fix)::text;
 END $$;
 
 -- The unknown-commit readback of one receipt's application. Outcomes: applied (with its
@@ -1462,12 +1611,78 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
+-- The operator path (the 0020 operator-function idiom): owned by the owner, INVOKER,
+-- granted to nobody; only the owner's audited script runs it, as morrow_work_owner inside
+-- the administrator's own transaction (staging:billing-customer-resolve, under per-action
+-- approval and a live-evidence record). It resolves one held customer operation:
+--   retry (evidence stripe_corrected): the operator corrected Stripe (for example removed
+--     a duplicate customer); the hold is cleared and the workspace's next checkout runs
+--     the broker's absence proof again, which settles it verified or absent from Stripe.
+--   abandon (evidence customers_deleted or none_found): once no replay or send can run,
+--     the operator attests that no customer of the operation exists in Stripe (deleted, or
+--     none found); the operation fails (verified_no_effect, reason
+--     operator_verified_no_effect) with every open intent it serves, so the next checkout
+--     starts a new customer operation. Never a success: only a provider result verifies.
+-- Each resolution is recorded with the operator and the evidence record's path.
+-- Outcomes: released, abandoned, not_held, not_found, invalid, denied.
+CREATE FUNCTION morrow_billing.operator_customer_operation_resolve(p_operator_id text,p_operation_id text,p_resolution text,
+ p_evidence_code text,p_evidence_ref text)
+RETURNS TABLE(outcome text,operation_status text)
+LANGUAGE plpgsql SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
+#variable_conflict use_column
+DECLARE op record; so record; v_at timestamptz;
+BEGIN
+ IF current_user<>'morrow_work_owner' THEN RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN; END IF;
+ IF p_operator_id IS NULL OR p_operator_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_operation_id IS NULL OR p_operation_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
+  OR p_resolution IS NULL OR p_resolution NOT IN ('retry','abandon')
+  OR p_evidence_code IS NULL OR (p_resolution='retry')<>(p_evidence_code='stripe_corrected')
+  OR p_evidence_code NOT IN ('stripe_corrected','customers_deleted','none_found')
+  OR p_evidence_ref IS NULL OR p_evidence_ref !~ '^docs/evidence/live/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]{1,80}[.]md$' THEN
+  RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
+ END IF;
+ SELECT o.organization_id::text AS organization_id,o.workspace_id::text AS workspace_id,o.status,o.revision::bigint AS revision,
+  o.created_at,o.send_started_at,o.updated_at INTO op
+  FROM morrow_work.operations o WHERE o.id=p_operation_id AND o.kind='stripe_write' FOR UPDATE;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
+ SELECT s.purpose,s.held_at INTO so FROM morrow_billing.stripe_operations s
+  WHERE s.organization_id=op.organization_id AND s.workspace_id=op.workspace_id AND s.operation_id=p_operation_id FOR UPDATE;
+ IF NOT FOUND OR so.purpose<>'customer_create' THEN RETURN QUERY SELECT 'not_found'::text,NULL::text; RETURN; END IF;
+ IF op.status<>'uncertain' OR so.held_at IS NULL THEN RETURN QUERY SELECT 'not_held'::text,op.status; RETURN; END IF;
+ v_at:=date_trunc('milliseconds',clock_timestamp());
+ -- The broker held it only past the window; abandon re-checks it on this clock.
+ IF p_resolution='abandon' AND (op.send_started_at IS NULL OR op.created_at>v_at-interval '24 hours'
+   OR op.send_started_at>v_at-interval '1 hour') THEN
+  RETURN QUERY SELECT 'not_held'::text,op.status; RETURN;
+ END IF;
+ INSERT INTO morrow_billing.stripe_operation_resolutions(organization_id,workspace_id,id,operation_id,operator_id,resolution,evidence_code,
+  evidence_ref,held_at,recorded_at)
+ VALUES (op.organization_id,op.workspace_id,gen_random_uuid()::text,p_operation_id,p_operator_id,p_resolution,p_evidence_code,p_evidence_ref,
+  so.held_at,v_at);
+ IF p_resolution='retry' THEN
+  UPDATE morrow_billing.stripe_operations s SET held_at=NULL
+   WHERE s.organization_id=op.organization_id AND s.workspace_id=op.workspace_id AND s.operation_id=p_operation_id;
+  RETURN QUERY SELECT 'released'::text,op.status; RETURN;
+ END IF;
+ v_at:=greatest(v_at,op.updated_at);
+ INSERT INTO morrow_work.operation_transitions(organization_id,workspace_id,operation_id,revision,machine,from_status,to_status,actor,guard,reason,
+  lease_id,occurred_at)
+ VALUES (op.organization_id,op.workspace_id,p_operation_id,op.revision+1,'operation','uncertain','failed','action_service','verified_no_effect',
+  'operator_verified_no_effect',NULL,v_at);
+ UPDATE morrow_work.operations o SET status='failed',revision=op.revision+1,updated_at=v_at
+  WHERE o.organization_id=op.organization_id AND o.workspace_id=op.workspace_id AND o.id=p_operation_id;
+ UPDATE morrow_billing.checkout_intents x SET status='failed',revision=x.revision+1,updated_at=greatest(v_at,x.updated_at)
+  WHERE x.organization_id=op.organization_id AND x.workspace_id=op.workspace_id AND x.status='open' AND x.customer_operation_id=p_operation_id;
+ RETURN QUERY SELECT 'abandoned'::text,'failed'::text;
+END $$;
+
+-- ---------------------------------------------------------------------------
 -- Explicit ACLs per function (S7 reads proacl), then the ownership transfer.
 DO $$ DECLARE f text; BEGIN
  FOREACH f IN ARRAY ARRAY['workspace_associations()','cmd_checkout_open(text,text,text,text,text,text)','cmd_portal_open(text,text,text)',
   'stripe_op_begin(text)','stripe_op_settle(text,text,text,text)','receipt_object_valid(text,jsonb)',
   'stripe_receipt_record(text,text,text,text,text,text,text,text,text)','receipt_begin(text,text)','receipt_apply(text,text,text)',
-  'receipt_status(text)'] LOOP
+  'receipt_status(text)','operator_customer_operation_resolve(text,text,text,text,text)'] LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION morrow_billing.%s FROM PUBLIC',f);
  END LOOP;
 END $$;

@@ -115,12 +115,15 @@ export function brokerStripeWebhookVerify(
           rawBodyBase64,
           signatureHeader,
           budgetMs as number,
-          (reason) =>
+          // One fixed line per refusal or hold: the reason and, once known, the subscribed
+          // event type (object_invalid is held, so Stripe retries); never provider text.
+          (reason, eventType) =>
             console.log(
               JSON.stringify({
                 event: "morrow_broker_stripe_webhook",
-                verdict: "rejected",
+                verdict: reason === "object_invalid" ? "held" : "rejected",
                 reason,
+                eventType,
               }),
             ),
         ),

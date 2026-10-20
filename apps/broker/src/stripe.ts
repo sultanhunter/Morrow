@@ -10,6 +10,7 @@ import {
   stripeRequestDigest,
   isStripeEventType,
   type NormalizedStripeObject,
+  type StripeEventType,
 } from "../../../packages/work/src/billing/stripe-objects.js";
 import type {
   StripeCheckoutResult,
@@ -27,21 +28,44 @@ import type { VaultQuery } from "./vault.js";
 // authorized stripe_write operation; its parameters come from the database
 // (stripe_op_begin), whose send fence is set before any HTTP call, and whose request
 // digest the broker recomputes before sending. Outcomes (invariant 10): a 2xx is read back
-// and settled verified; a 4xx proves nothing ran (failed); one 429 is resent with the same
-// key within the budget; a 5xx, timeout or transport loss after sending is uncertain. An
-// uncertain operation is reconciled by readback first, then a replay with the same key
-// only within 23 hours; never a new key, never promoted without a provider result.
+// and settled verified; a first send's 4xx proves nothing ran (failed); one 429 is resent
+// with the same key within the budget; a 5xx, timeout or transport loss after sending is
+// uncertain. An uncertain operation is reconciled by readback first, then a replay with the
+// same key only within 23 hours; never a new key, never promoted without a provider result.
+// A customer operation still uncertain once no replay or send can be running (24 hours
+// after it was created, an hour after its send) is reconciled by the strongly consistent
+// customer list over every time it could have been created: one customer of the operation
+// settles it verified (read back), none settles it absent (its intents fail, so the next
+// checkout starts a new customer operation), and anything Stripe cannot prove either way
+// (several customers, or more than the bounded list) holds it for the operator.
+// One deadline per method: every transaction and HTTP call gets only what remains of it.
 // Webhooks: the signature over the raw bytes (WebCrypto HMAC-SHA256, constant time, 300 s
 // tolerance), livemode equal to the environment's mode, a readback of the object with the
-// broker's own key (another account's object is a 404), then the receipt. No provider text
-// is ever logged or returned.
+// broker's own key (another account's object is a 404), then the receipt. A subscribed
+// event whose read-back object is outside the closed shape is held with its own fixed
+// reason (Stripe retries; nothing is dropped silently). No provider text is ever logged or
+// returned.
 
 export const stripeOrigin = "https://api.stripe.com";
 export const stripeTimings = Object.freeze({
   toleranceSeconds: 300,
   replayWindowMs: 23 * 3600 * 1000,
+  // The absence proof of a customer operation: only once Stripe's 24-hour idempotency
+  // window has closed on the last possible replay (replays stop at 23 hours, so an hour of
+  // margin) and an hour after its own send, over created times from five minutes before
+  // the send to an hour after the last possible replay, at most this many list pages.
+  absenceAfterMs: 24 * 3600 * 1000,
+  absenceSendMarginMs: 3600 * 1000,
+  absenceListMarginSeconds: { before: 300, after: 3600 },
+  absenceListPages: 5,
   retryAfterMaxMs: 2000,
   replyMaxBytes: 262144,
+  // One deadline per method: a transaction never starts with less than this left, an HTTP
+  // call never with less than callFloorMs, and the HTTP calls stop settleReserveMs before
+  // the deadline so the settle still fits.
+  transactionFloorMs: 200,
+  callFloorMs: 250,
+  settleReserveMs: 1000,
 });
 export interface BrokerStripe {
   readonly environment: "development" | "staging";
@@ -95,7 +119,8 @@ async function stripeCall(
   deadlineMs: number,
 ): Promise<Reply> {
   const remaining = deadlineMs - deps.now();
-  if (remaining <= 0) return { kind: "timeout" };
+  // Too little time to send: treated as a possible send (uncertain), never as no effect.
+  if (remaining < stripeTimings.callFloorMs) return { kind: "timeout" };
   const headers: Record<string, string> = {
     Authorization: "Bearer " + deps.stripe.restrictedKey,
     "Stripe-Version": stripeApiVersion,
@@ -206,26 +231,40 @@ interface Begun {
   readonly params: Record<string, string>;
   readonly providerObjectId: string | null;
   readonly createdAtMs: number;
+  /** The send fence (null before the first send). */
+  readonly sendStartedAtMs: number | null;
 }
 const beginColumns =
-  "created_at_ms,outcome,params,provider_object_id,purpose,request_digest,status";
+  "created_at_ms,outcome,params,provider_object_id,purpose,request_digest,send_started_at_ms,status";
+// What remains of the method's deadline for one transaction, or a hold before it starts.
+function transactionBudget(deps: StripeDependencies, deadlineMs: number): number | null {
+  const remaining = Math.floor(deadlineMs - deps.now());
+  return remaining >= stripeTimings.transactionFloorMs ? remaining : null;
+}
 async function begin(
   deps: StripeDependencies,
   operationId: string,
   purpose: string,
-  budgetMs: number,
+  deadlineMs: number,
   digestParts: (params: Record<string, string>) => string[],
 ): Promise<Begun> {
-  const row = await deps.transaction(budgetMs, async (query) => {
+  const budget = transactionBudget(deps, deadlineMs) ?? hold("PROVIDER_HELD");
+  const row = await deps.transaction(budget, async (query) => {
     const rows = await query(billingVaultStatements.stripeOpBegin, [operationId]);
     return rows.length === 1 ? rows[0]! : hold();
   });
   if (Object.keys(row).sort().join(",") !== beginColumns || typeof row.outcome !== "string")
     return hold();
   if (
-    !["send", "reconcile", "verified", "failed", "customer_pending", "intent_closed"].includes(
-      row.outcome,
-    )
+    ![
+      "send",
+      "reconcile",
+      "held",
+      "verified",
+      "failed",
+      "customer_pending",
+      "intent_closed",
+    ].includes(row.outcome)
   )
     return hold(
       row.outcome === "invalid" || row.outcome === "not_found" ? "INPUT_INVALID" : "STATE_INVALID",
@@ -241,26 +280,55 @@ async function begin(
   if ((await stripeRequestDigest(digestParts(params))) !== row.request_digest) return hold();
   const createdAtMs = Number(row.created_at_ms);
   if (!Number.isSafeInteger(createdAtMs)) return hold();
+  const sendStartedAtMs = row.send_started_at_ms === null ? null : Number(row.send_started_at_ms);
+  if (sendStartedAtMs !== null && !Number.isSafeInteger(sendStartedAtMs)) return hold();
+  // A send or a reconciliation always follows the fence.
+  if ((row.outcome === "send" || row.outcome === "reconcile") && sendStartedAtMs === null)
+    return hold();
   return {
     outcome: row.outcome,
     purpose,
     params,
     providerObjectId: typeof row.provider_object_id === "string" ? row.provider_object_id : null,
     createdAtMs,
+    sendStartedAtMs,
   };
 }
-type Settle = "verified" | "failed" | "uncertain";
-// Settles the operation; an unknown commit, or any refusal, leaves it for reconciliation.
+// verified: a provider object read back; failed: a first send's own refusal (dispatching
+// only); absent: a customer proven never created (uncertain only); held: a customer Stripe
+// proved neither way (uncertain only; for the operator); uncertain: unknown.
+type Settle = "verified" | "failed" | "absent" | "held" | "uncertain";
+// Settles the operation; an unknown commit, too little time left, or any refusal (such as
+// a concurrent reconciliation that moved it on) leaves it for reconciliation.
+type Settled = "verified" | "failed" | "uncertain";
+async function settle(
+  deps: StripeDependencies,
+  operationId: string,
+  result: "held",
+  objectId: null,
+  requestId: null,
+  deadlineMs: number,
+): Promise<"held" | "uncertain">;
+async function settle(
+  deps: StripeDependencies,
+  operationId: string,
+  result: Exclude<Settle, "held">,
+  objectId: string | null,
+  requestId: string | null,
+  deadlineMs: number,
+): Promise<Settled>;
 async function settle(
   deps: StripeDependencies,
   operationId: string,
   result: Settle,
   objectId: string | null,
   requestId: string | null,
-  budgetMs: number,
-): Promise<Settle> {
+  deadlineMs: number,
+): Promise<Settled | "held"> {
   try {
-    const outcome = await deps.transaction(budgetMs, async (query) => {
+    const budget = transactionBudget(deps, deadlineMs);
+    if (budget === null) return "uncertain";
+    const outcome = await deps.transaction(budget, async (query) => {
       const rows = await query(billingVaultStatements.stripeOpSettle, [
         operationId,
         result,
@@ -271,14 +339,18 @@ async function settle(
     });
     if (result === "verified")
       return outcome === "verified" || outcome === "already_verified" ? "verified" : "uncertain";
-    if (result === "failed")
+    if (result === "failed" || result === "absent")
       return outcome === "failed" || outcome === "already_failed" ? "failed" : "uncertain";
+    if (result === "held")
+      return outcome === "held" || outcome === "already_held" ? "held" : "uncertain";
     return "uncertain";
   } catch {
     return "uncertain";
   }
 }
+// The method's one deadline, and the earlier one its HTTP calls stop at.
 const budgetDeadline = (deps: StripeDependencies, budgetMs: number) => deps.now() + budgetMs;
+const httpDeadline = (deadlineMs: number) => deadlineMs - stripeTimings.settleReserveMs;
 // What a first send's non-2xx reply proves: a 4xx (other than 409, a request still in
 // flight) or a 429 after the one resend means Stripe executed nothing, so the operation
 // failed. A reconciliation's replay proves nothing about the first send (a changed
@@ -288,6 +360,12 @@ const provesNoEffect = (reply: Reply) =>
   (reply.kind === "client_error" && reply.status !== 409) || reply.kind === "rate_limited";
 const withinReplayWindow = (deps: StripeDependencies, begun: Begun) =>
   deps.now() - begun.createdAtMs < stripeTimings.replayWindowMs;
+// No same-key replay (23 hours from creation, plus an hour) and no first send (an hour
+// after its fence) can still create anything for this operation.
+const absenceProvable = (deps: StripeDependencies, begun: Begun) =>
+  begun.sendStartedAtMs !== null &&
+  deps.now() - begun.createdAtMs >= stripeTimings.absenceAfterMs &&
+  deps.now() - begun.sendStartedAtMs >= stripeTimings.absenceSendMarginMs;
 const key = (deps: StripeDependencies, operationId: string) =>
   stripeIdempotencyKey(deps.stripe.environment, operationId);
 const priceId = (priceKey: string) => {
@@ -304,8 +382,9 @@ export async function stripeCustomerEnsure(
   operationId: string,
   budgetMs: number,
 ): Promise<StripeCustomerResult> {
-  const deadline = budgetDeadline(deps, budgetMs);
-  const b = await begin(deps, operationId, "customer_create", budgetMs, (p) => [
+  const deadlineMs = budgetDeadline(deps, budgetMs);
+  const deadline = httpDeadline(deadlineMs);
+  const b = await begin(deps, operationId, "customer_create", deadlineMs, (p) => [
     "customer_create",
     operationId,
     p.organizationId ?? "",
@@ -313,13 +392,15 @@ export async function stripeCustomerEnsure(
   ]);
   if (b.outcome === "verified") return { outcome: "verified" };
   if (b.outcome === "failed") return { outcome: "failed" };
+  // Held for the operator: no reconciliation until the operator's resolution.
+  if (b.outcome === "held") return { outcome: "held" };
   const confirm = async (customer: unknown): Promise<StripeCustomerResult> => {
     if (typeof customer !== "string" || !stripeIdPatterns.customer.test(customer))
-      return { outcome: await settle(deps, operationId, "uncertain", null, null, budgetMs) };
+      return { outcome: await settle(deps, operationId, "uncertain", null, null, deadlineMs) };
     const read = await stripeCall(deps, "GET", "/v1/customers/" + customer, null, null, deadline);
     if (read.kind !== "ok" || metadataOf(read.json).morrow_operation_id !== operationId)
       return { outcome: "uncertain" };
-    return { outcome: await settle(deps, operationId, "verified", customer, null, budgetMs) };
+    return { outcome: await settle(deps, operationId, "verified", customer, null, deadlineMs) };
   };
   const form: Form = [
     ["metadata[morrow_operation_id]", operationId],
@@ -338,14 +419,26 @@ export async function stripeCustomerEnsure(
       null,
       deadline,
     );
+    const within = withinReplayWindow(deps, b);
     if (found.kind === "ok" && Array.isArray(found.json.data)) {
       const match = (found.json.data as Record<string, unknown>[]).filter(
         (c) => metadataOf(c).morrow_operation_id === operationId,
       );
       if (match.length === 1) return confirm(match[0]!.id);
-      if (match.length > 1) return { outcome: "uncertain" };
+      if (match.length > 1 && within) return { outcome: "uncertain" };
     }
-    if (!withinReplayWindow(deps, b)) return { outcome: "uncertain" };
+    if (!within) {
+      if (!absenceProvable(deps, b)) return { outcome: "uncertain" };
+      // Past every replay and send: the strongly consistent list, not the lagging search.
+      const listed = await customersOfOperation(deps, operationId, b, deadline);
+      if (listed.kind === "unavailable") return { outcome: "uncertain" };
+      if (listed.kind === "found" && listed.ids.length === 1) return confirm(listed.ids[0]);
+      if (listed.kind === "found" && listed.ids.length === 0)
+        return { outcome: await settle(deps, operationId, "absent", null, null, deadlineMs) };
+      // Several customers of one operation, or more than the bounded list: Stripe proves
+      // neither, so the operation is held for the operator (never promoted either way).
+      return { outcome: await settle(deps, operationId, "held", null, null, deadlineMs) };
+    }
   } else if (b.outcome !== "send") return hold();
   const reply = await stripeWrite(deps, "/v1/customers", form, key(deps, operationId), deadline);
   if (reply.kind === "ok") return confirm(reply.json.id);
@@ -357,9 +450,66 @@ export async function stripeCustomerEnsure(
       provesNoEffect(reply) ? "failed" : "uncertain",
       null,
       null,
-      budgetMs,
+      deadlineMs,
     ),
   };
+}
+// Every customer this operation could have created: GET /v1/customers (strongly
+// consistent, unlike search) over created times from just before its send to an hour after
+// its last possible replay, filtered on the operation in the metadata. "incomplete" when
+// more customers were created in that range than the bounded pages hold (Stripe proves
+// nothing then); "unavailable" for a failed or malformed page or the deadline (retried).
+type Listed =
+  | { readonly kind: "found"; readonly ids: readonly string[] }
+  | { readonly kind: "incomplete" }
+  | { readonly kind: "unavailable" };
+async function customersOfOperation(
+  deps: StripeDependencies,
+  operationId: string,
+  b: Begun,
+  deadline: number,
+): Promise<Listed> {
+  const margin = stripeTimings.absenceListMarginSeconds;
+  const sent = Math.floor(b.sendStartedAtMs! / 1000);
+  const lastReplay = Math.floor((b.createdAtMs + stripeTimings.replayWindowMs) / 1000);
+  const range =
+    "created[gte]=" +
+    (sent - margin.before) +
+    "&created[lte]=" +
+    (Math.max(sent, lastReplay) + margin.after);
+  const found: string[] = [];
+  let after: string | null = null;
+  for (let page = 0; page < stripeTimings.absenceListPages; page++) {
+    const list = await stripeCall(
+      deps,
+      "GET",
+      "/v1/customers?limit=100&" +
+        range +
+        (after ? "&starting_after=" + encodeURIComponent(after) : ""),
+      null,
+      null,
+      deadline,
+    );
+    if (
+      list.kind !== "ok" ||
+      !Array.isArray(list.json.data) ||
+      typeof list.json.has_more !== "boolean"
+    )
+      return { kind: "unavailable" };
+    const data = list.json.data as Record<string, unknown>[];
+    for (const c of data)
+      if (metadataOf(c).morrow_operation_id === operationId) {
+        if (typeof c.id !== "string" || !stripeIdPatterns.customer.test(c.id))
+          return { kind: "unavailable" };
+        found.push(c.id);
+      }
+    if (!list.json.has_more) return { kind: "found", ids: found };
+    const last = data.at(-1)?.id;
+    if (typeof last !== "string" || !stripeIdPatterns.customer.test(last))
+      return { kind: "unavailable" };
+    after = last;
+  }
+  return { kind: "incomplete" };
 }
 
 // ---------------------------------------------------------------------------
@@ -369,13 +519,14 @@ export async function stripeCheckoutCreate(
   operationId: string,
   budgetMs: number,
 ): Promise<StripeCheckoutResult> {
-  const deadline = budgetDeadline(deps, budgetMs);
+  const deadlineMs = budgetDeadline(deps, budgetMs);
+  const deadline = httpDeadline(deadlineMs);
   const none = (outcome: StripeCheckoutResult["outcome"]): StripeCheckoutResult => ({
     outcome,
     checkoutUrl: null,
     expiresAtMs: null,
   });
-  const b = await begin(deps, operationId, "checkout_session_create", budgetMs, (p) => [
+  const b = await begin(deps, operationId, "checkout_session_create", deadlineMs, (p) => [
     "checkout_session_create",
     operationId,
     p.organizationId ?? "",
@@ -417,19 +568,23 @@ export async function stripeCheckoutCreate(
     return (await session(b.providerObjectId ?? hold())) ?? none("uncertain");
   const confirm = async (id: unknown): Promise<StripeCheckoutResult> => {
     if (typeof id !== "string" || !stripeIdPatterns.session.test(id))
-      return none(await settle(deps, operationId, "uncertain", null, null, budgetMs));
+      return none(await settle(deps, operationId, "uncertain", null, null, deadlineMs));
     const read = await session(id);
     if (!read) return none("uncertain");
-    const settled = await settle(deps, operationId, "verified", id, null, budgetMs);
+    const settled = await settle(deps, operationId, "verified", id, null, deadlineMs);
     return settled === "verified" ? read : none("uncertain");
   };
   const customer = b.params.customerId ?? hold();
   if (b.outcome === "reconcile") {
-    // Readback first: the customer's sessions, matched by the operation in their metadata.
+    // Readback first: the customer's sessions created since this operation (a session of
+    // it cannot be older), matched by the operation in their metadata.
     const list = await stripeCall(
       deps,
       "GET",
-      "/v1/checkout/sessions?limit=100&customer=" + encodeURIComponent(customer),
+      "/v1/checkout/sessions?limit=100&customer=" +
+        encodeURIComponent(customer) +
+        "&created[gte]=" +
+        (Math.floor(b.createdAtMs / 1000) - 60),
       null,
       null,
       deadline,
@@ -462,6 +617,9 @@ export async function stripeCheckoutCreate(
     ["automatic_tax[enabled]", String(c.automaticTax)],
     ...(c.automaticTax ? ([["customer_update[address]", "auto"]] as const) : []),
     ["allow_promotion_codes", "false"],
+    // Card only: no delayed payment method, so a completed session's first invoice is
+    // decided within minutes (an open or completed intent never waits days for it).
+    ["payment_method_types[0]", "card"],
   ];
   const reply = await stripeWrite(
     deps,
@@ -479,7 +637,7 @@ export async function stripeCheckoutCreate(
       provesNoEffect(reply) ? "failed" : "uncertain",
       null,
       null,
-      budgetMs,
+      deadlineMs,
     ),
   );
 }
@@ -492,8 +650,9 @@ export async function stripePortalCreate(
   operationId: string,
   budgetMs: number,
 ): Promise<StripePortalResult> {
-  const deadline = budgetDeadline(deps, budgetMs);
-  const b = await begin(deps, operationId, "portal_session_create", budgetMs, (p) => [
+  const deadlineMs = budgetDeadline(deps, budgetMs);
+  const deadline = httpDeadline(deadlineMs);
+  const b = await begin(deps, operationId, "portal_session_create", deadlineMs, (p) => [
     "portal_session_create",
     operationId,
     p.organizationId ?? "",
@@ -526,14 +685,14 @@ export async function stripePortalCreate(
       reply.json.customer !== b.params.customerId
     )
       return {
-        outcome: await settle(deps, operationId, "uncertain", null, null, budgetMs),
+        outcome: await settle(deps, operationId, "uncertain", null, null, deadlineMs),
         portalUrl: null,
       };
     if (b.outcome === "verified")
       return b.providerObjectId === id
         ? { outcome: "verified", portalUrl: url }
         : { outcome: "uncertain", portalUrl: null };
-    const settled = await settle(deps, operationId, "verified", id, reply.requestId, budgetMs);
+    const settled = await settle(deps, operationId, "verified", id, reply.requestId, deadlineMs);
     return settled === "verified"
       ? { outcome: "verified", portalUrl: url }
       : { outcome: "uncertain", portalUrl: null };
@@ -546,7 +705,7 @@ export async function stripePortalCreate(
       provesNoEffect(reply) ? "failed" : "uncertain",
       null,
       null,
-      budgetMs,
+      deadlineMs,
     ),
     portalUrl: null,
   };
@@ -633,25 +792,34 @@ const ignored: StripeWebhookResult = Object.freeze({
   objectDigest: null,
   attributed: null,
 });
-/** The webhook's fixed refusal reason, for the broker's one log line (never provider text). */
+/**
+ * The webhook's fixed reason, for the broker's one log line (never provider text): a
+ * refusal (rejected), or object_invalid, a subscribed event whose read-back object is
+ * outside the closed shape (held, so Stripe retries and its dashboard shows the failures).
+ */
 export type WebhookRefusal =
   | "body_invalid"
   | "signature_invalid"
   | "timestamp_outside_tolerance"
   | "event_invalid"
   | "mode_mismatch"
-  | "object_not_found";
+  | "object_not_found"
+  | "object_invalid";
+/** The subscribed event type a refusal concerns, once known (one of the six). */
+export type WebhookLog = (reason: WebhookRefusal, eventType: StripeEventType | null) => void;
 
 export async function stripeWebhookVerify(
   deps: StripeDependencies,
   rawBodyBase64: string,
   signatureHeader: string,
   budgetMs: number,
-  log: (reason: WebhookRefusal) => void = () => {},
+  log: WebhookLog = () => {},
 ): Promise<StripeWebhookResult> {
-  const deadline = budgetDeadline(deps, budgetMs);
+  const deadlineMs = budgetDeadline(deps, budgetMs);
+  const deadline = httpDeadline(deadlineMs);
+  let eventType: StripeEventType | null = null;
   const refuse = (reason: WebhookRefusal) => {
-    log(reason);
+    log(reason, eventType);
     return rejected;
   };
   const raw = decodeBase64(rawBodyBase64, 262144);
@@ -687,6 +855,7 @@ export async function stripeWebhookVerify(
   )
     return refuse("event_invalid");
   if (!isStripeEventType(type)) return ignored;
+  eventType = type;
   // livemode must be the environment's (development and staging: test only).
   if (event.livemode !== false) return refuse("mode_mismatch");
   const data = event.data;
@@ -752,12 +921,17 @@ export async function stripeWebhookVerify(
     }
   } catch (error) {
     if (error instanceof StripeHold) throw error;
-    // A read-back object outside the closed shape (no customer, say): nothing to attribute.
-    return ignored;
+    // A subscribed event whose read-back object is outside the closed shape (no customer,
+    // or a field of another shape): never acknowledged and dropped. It is held with its own
+    // fixed reason, so the api answers 503, Stripe keeps retrying and the endpoint shows the
+    // failures, and the broker's log line names the event type.
+    log("object_invalid", eventType);
+    return hold("PROVIDER_HELD");
   }
   if (normalized.id !== objectId || normalized.livemode !== false) return refuse("mode_mismatch");
   const digest = await stripeObjectDigest(normalized);
-  const row = await deps.transaction(budgetMs, async (query) => {
+  const budget = transactionBudget(deps, deadlineMs) ?? hold("PROVIDER_HELD");
+  const row = await deps.transaction(budget, async (query) => {
     const rows = await query(billingVaultStatements.stripeReceiptRecord, [
       event.id as string,
       type,

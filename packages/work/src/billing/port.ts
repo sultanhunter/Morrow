@@ -5,10 +5,11 @@ export type BillingEnvironmentName = "development" | "staging" | "production";
 
 /** The broker's Stripe methods as the api sees them (apps/api/src/broker-client.ts). */
 export interface BillingBrokerPort {
+  /** "held": Stripe proved neither outcome after the window; the operator resolves it. */
   customerEnsure(
     operationId: string,
     signal: AbortSignal,
-  ): Promise<{ readonly outcome: "verified" | "failed" | "uncertain" }>;
+  ): Promise<{ readonly outcome: "verified" | "failed" | "uncertain" | "held" }>;
   checkoutCreate(
     operationId: string,
     signal: AbortSignal,

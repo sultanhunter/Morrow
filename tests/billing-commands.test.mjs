@@ -3,8 +3,9 @@
 // unmapped path 404 and every malformed request refused before any connection opens or
 // any broker method runs; the closed bodies; the generalised workspace request guard with
 // PUT under the POST rules; and the api Worker's ordered dispatch table. The denials that
-// need a session (agent, member without the grant, Shopify-bound) are lab:billing B, where
-// the broker spy also counts zero calls.
+// need a session are in lab:billing, where the broker spy also counts zero calls: a member
+// without the grant (B) and a Shopify-bound workspace (D8, F). These routes take a browser
+// session only, which no agent principal holds.
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
@@ -29,6 +30,8 @@ import {
   workspaceBillingState,
 } from "../packages/policy/src/billing-state.ts";
 import { billingFactsInput } from "../packages/work/src/billing/facts.ts";
+import { billingRequestAbortMs } from "../packages/work/src/billing/http.ts";
+import { brokerStripeBudgetMs } from "../apps/api/src/broker-client.ts";
 
 const origin = "https://work.morrow.test";
 const ws = "ws_cmd";
@@ -458,4 +461,12 @@ test("the api dispatch table: work, billing and the exact webhook path; everythi
   );
   assert.equal(heldResponse.status, 503);
   assert.equal(touched.opens, 0);
+});
+
+test("the request's abort covers the database phase and both broker calls of a first checkout", () => {
+  // 5 s of database, then the customer and the session, each the broker's budget plus the
+  // RPC allowance the api races it with, and a second to spare: a slow but successful
+  // pair is never cut short into "uncertain".
+  assert.equal(brokerStripeBudgetMs, 8000);
+  assert.equal(billingRequestAbortMs, 5000 + 2 * (brokerStripeBudgetMs + 500) + 1000);
 });

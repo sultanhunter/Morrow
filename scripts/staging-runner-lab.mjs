@@ -34,6 +34,7 @@ import { localPostgresLab } from "./local-postgres-lab.mjs";
 import { loadMigrationChain, schemaHead } from "./migration-chain.mjs";
 import { identityConstants, main, stagingBillingTermsRows } from "./staging.mjs";
 import {
+  resolveHeldCustomerOperation,
   runMigrations,
   runnerSetRows,
   scramVerifier,
@@ -1002,6 +1003,31 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
       db(
         "SELECT string_agg(digest::text, ',' ORDER BY terms_revision) FROM morrow_billing.billing_terms;",
       ) === termsRows.map((row) => row[3]).join(",") &&
+      morrowSetRows(id) === 0 &&
+      closed(),
+  );
+  // M5 PR-1 (review): the operator path for a held customer operation runs as the work
+  // owner under D4 too. On an operation that does not exist the definer refuses
+  // (not_found): nothing commits and no SET row persists.
+  const resolution = await rejection(
+    resolveHeldCustomerOperation({
+      connect: psqlConnector(id, { user: "neondb_owner", database: "morrow" }).connect,
+      binding: labBinding,
+      administrator: neon,
+      input: {
+        operatorId: "operator_lab",
+        operationId: "00000000-0000-4000-8000-00000000abcd",
+        resolution: "abandon",
+        evidenceCode: "none_found",
+        evidenceRef: "docs/evidence/live/2026-10-21-lab-stripe-customer.md",
+      },
+    }),
+  );
+  check(
+    "createrole_customer_resolution_runs_as_the_work_owner_and_commits_nothing_refused",
+    resolution?.code === "STAGING_RESOLVE_REFUSED" &&
+      resolution.details.outcome === "not_found" &&
+      db("SELECT count(*) FROM morrow_billing.stripe_operation_resolutions;") === "0" &&
       morrowSetRows(id) === 0 &&
       closed(),
   );

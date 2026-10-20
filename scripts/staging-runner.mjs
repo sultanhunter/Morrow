@@ -871,6 +871,78 @@ export async function seedBillingTerms({ connect, binding, administrator, rows }
 }
 
 // ---------------------------------------------------------------------------
+// M5 PR-1 (review): the operator path for a held customer operation
+// (`billing-customer-resolve`). The broker holds a customer operation when, once no replay
+// or send can run, Stripe proves neither outcome (several customers of the operation, or
+// more than its bounded list); the workspace's checkout then answers customer_held. After
+// correcting or inspecting Stripe (a per-action approval and a docs/evidence/live record,
+// whose path is recorded), the operator runs morrow_billing.operator_customer_operation_resolve
+// as morrow_work_owner under the D4 SET-row protocol: retry (stripe_corrected) clears the
+// hold so the broker's proof runs again; abandon (customers_deleted or none_found) fails the
+// operation and the intents it serves. Anything but released or abandoned commits nothing.
+export const customerResolutionEvidence = Object.freeze({
+  retry: Object.freeze(["stripe_corrected"]),
+  abandon: Object.freeze(["customers_deleted", "none_found"]),
+});
+const resolveOutcomes = ["released", "abandoned", "not_held", "not_found", "invalid", "denied"];
+const resolveStatement =
+  "SELECT outcome, operation_status FROM morrow_billing.operator_customer_operation_resolve($1, $2, $3, $4, $5)";
+export function customerResolutionInput({
+  operatorId,
+  operationId,
+  resolution,
+  evidenceCode,
+  evidenceRef,
+}) {
+  if (
+    typeof operatorId !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(operatorId) ||
+    typeof operationId !== "string" ||
+    !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(operationId) ||
+    !Object.hasOwn(customerResolutionEvidence, resolution ?? "") ||
+    !customerResolutionEvidence[resolution].includes(evidenceCode) ||
+    typeof evidenceRef !== "string" ||
+    !/^docs\/evidence\/live\/\d{4}-\d{2}-\d{2}-[a-z0-9-]{1,80}\.md$/.test(evidenceRef)
+  )
+    throw new StagingError("STAGING_USAGE");
+  return Object.freeze([operatorId, operationId, resolution, evidenceCode, evidenceRef]);
+}
+export async function resolveHeldCustomerOperation({ connect, binding, administrator, input }) {
+  checkAdministrator(administrator);
+  const values = customerResolutionInput(input ?? {});
+  const connection = await connectChecked(connect, binding, administrator);
+  const admin = administrator.name;
+  try {
+    let row;
+    try {
+      await connection.exec("BEGIN");
+      if (administrator.mode === "createrole")
+        await connection.exec(
+          `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+        );
+      await connection.exec("SET LOCAL ROLE morrow_work_owner");
+      [row] = await connection.query(resolveStatement, [...values]);
+      const outcome = resolveOutcomes.includes(row?.outcome) ? row.outcome : "unknown";
+      if (outcome !== "released" && outcome !== "abandoned")
+        throw new StagingError("STAGING_RESOLVE_REFUSED", { outcome });
+      await connection.exec("RESET ROLE");
+      if (administrator.mode === "createrole")
+        await connection.exec(`REVOKE morrow_work_owner FROM ${admin} GRANTED BY ${admin}`);
+      await connection.exec("COMMIT");
+    } catch (error) {
+      throw sqlFailure("STAGING_RESOLVE_FAILED", error);
+    }
+    await assertNoSetRows(connection);
+    return Object.freeze({
+      outcome: row.outcome,
+      operationStatus: typeof row.operation_status === "string" ? row.operation_status : null,
+    });
+  } finally {
+    await connection.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Connections (D6): counts by role and by application_name class. Raw application names
 // are client-chosen text and are never printed; unknown ones are only counted.
 export const applicationClasses = Object.freeze([

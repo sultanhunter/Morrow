@@ -83,6 +83,28 @@ export function base64Bytes(bytes: Uint8Array): string {
 }
 
 type Applied = { readonly outcome: string; readonly code: string | null };
+/**
+ * A receipt that could not be applied for a decided reason: receipt_apply's own refusal of
+ * the plan, or a planner or facts failure. Nothing persists and Stripe retries; the
+ * handler logs the internal receipt id with this fixed code (never provider text), so a
+ * deterministic disagreement is visible to the owner instead of a bare 503.
+ */
+export type ReceiptUnappliedCode =
+  | "APPLY_INVALID"
+  | "APPLY_DENIED"
+  | "APPLY_CONFLICT"
+  | "PLAN_ERROR";
+class ReceiptUnapplied extends WorkReject {
+  constructor(readonly code: ReceiptUnappliedCode) {
+    super(code === "APPLY_CONFLICT" ? "state_conflict" : "unavailable");
+    this.name = "ReceiptUnapplied";
+  }
+}
+const applyRefusals: Readonly<Record<string, ReceiptUnappliedCode>> = Object.freeze({
+  invalid: "APPLY_INVALID",
+  denied: "APPLY_DENIED",
+  conflict: "APPLY_CONFLICT",
+});
 async function apply(
   tx: WorkTx,
   receiptId: string,
@@ -98,12 +120,19 @@ async function apply(
     return { outcome: "already_applied", code: null };
   }
   if (row.outcome !== "begun") throw new WorkReject("unavailable");
-  const facts = parseReceiptFacts(row.facts);
-  if (facts.receipt.id !== receiptId || facts.receipt.objectDigest !== objectDigest)
-    throw new WorkReject("unavailable");
-  // The broker already refuses the other mode; a receipt of it is never applied here.
-  if (!receiptModeAccepted(facts.receipt, environment)) throw new WorkReject("unavailable");
-  const plan = planReceiptApplication(facts, environment, now);
+  let plan: ReturnType<typeof planReceiptApplication>;
+  try {
+    const facts = parseReceiptFacts(row.facts);
+    if (facts.receipt.id !== receiptId || facts.receipt.objectDigest !== objectDigest)
+      throw new WorkReject("unavailable");
+    // The broker already refuses the other mode; a receipt of it is never applied here.
+    if (!receiptModeAccepted(facts.receipt, environment)) throw new WorkReject("unavailable");
+    plan = planReceiptApplication(facts, environment, now);
+  } catch (error) {
+    if (error instanceof WorkReject) throw error;
+    tx.rollbackOnly();
+    throw new ReceiptUnapplied("PLAN_ERROR");
+  }
   tx.markSubmitted();
   const applied = await tx.run("receiptApply", [receiptId, objectDigest, JSON.stringify(plan)]);
   const result = applied.length === 1 ? applied[0]! : null;
@@ -113,9 +142,10 @@ async function apply(
     return { outcome: "already_applied", code: null };
   }
   if (result.outcome !== "applied") {
-    // A decided refusal: nothing persists; Stripe retries the event.
+    // A decided refusal: nothing persists (receipt_apply checks the whole plan before its
+    // first write); Stripe retries the event, and the handler logs the fixed code.
     tx.rollbackOnly();
-    throw new WorkReject(result.outcome === "conflict" ? "state_conflict" : "unavailable");
+    throw new ReceiptUnapplied(applyRefusals[result.outcome] ?? "APPLY_INVALID");
   }
   return { outcome: plan.outcome, code: plan.code };
 }
@@ -234,6 +264,10 @@ export function createStripeWebhookHandler(d?: StripeWebhookDependencies) {
         logReceipt(receiptId, applied);
         return { outcome: applied.outcome, response: reply(200, true) };
       } catch (error) {
+        if (error instanceof ReceiptUnapplied) {
+          logUnapplied(receiptId, error.code);
+          return { outcome: "unapplied", response: reply(503, false) };
+        }
         if (!(error instanceof WorkOutcomeUnknown))
           return { outcome: "unavailable", response: reply(503, false) };
       } finally {
@@ -278,6 +312,13 @@ export function createStripeWebhookHandler(d?: StripeWebhookDependencies) {
   });
 }
 
+// A receipt that was not applied for a decided reason (503, so Stripe retries): one fixed
+// line with the internal receipt id and the code, never provider text.
+function logUnapplied(receiptId: string, code: ReceiptUnappliedCode) {
+  console.log(
+    JSON.stringify({ event: "morrow_billing_receipt", receiptId, outcome: "unapplied", code }),
+  );
+}
 // Held, unattributed and conflicting payments are recorded on the receipt and logged once
 // for the owner: the internal receipt id and the fixed code, never provider text.
 function logReceipt(receiptId: string, applied: Applied) {

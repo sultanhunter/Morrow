@@ -1987,6 +1987,8 @@ test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, nev
 
 test("cli: the trimmed PR-B's subcommands, and nothing for rollback, rotation drills or the keyring deploy", () => {
   assert.deepEqual([...commands.keys()].sort(), [
+    // M5 PR-1 (review): the operator path for a held customer operation.
+    "billing-customer-resolve",
     "census",
     "ci-gates",
     "connections",

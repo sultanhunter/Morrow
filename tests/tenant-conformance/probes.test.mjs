@@ -5,6 +5,11 @@ import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import { createWorkApiHandler } from "../../packages/work/src/http.ts";
 import {
+  normalizeInvoice,
+  stripeObjectDigest,
+} from "../../packages/work/src/billing/stripe-objects.ts";
+import { stripeFixture } from "../fixtures/stripe-fixtures.mjs";
+import {
   asApi,
   asCommandRole,
   literal,
@@ -660,9 +665,24 @@ test("P8: a lease context calling a session definer is refused, and a session ne
 // receipt context reads and writes nothing; the ingress definers refuse a session context
 // and every other login; the broker definers run only as the vault login. lab:billing E
 // probes the same edges with recorded receipts.
-test("P9: a forged receipt context confers nothing; ingress and broker definers refuse every other caller", () => {
-  const receipt = randomUUID();
-  const digest = "a".repeat(64);
+test("P9: a forged receipt context confers nothing; ingress and broker definers refuse every other caller", async () => {
+  // A receipt the broker's own login really recorded (unattributed: no customer mapping),
+  // so a wrongly accepted forged context would reach the receipt and its plan.
+  const ids = { customer: "cus_ProbeUnmapped01", invoice: "in_ProbeForged00001" };
+  const object = normalizeInvoice(
+    stripeFixture("invoice.paid.subscription_create", ids),
+    stripeFixture("subscription.active", ids),
+  );
+  const digest = await stripeObjectDigest(object);
+  const [recorded, receipt] = db
+    .sql(
+      `SELECT outcome||'|'||receipt_id FROM morrow_billing.stripe_receipt_record(${literal("evt_probeforged" + randomUUID().replaceAll("-", ""))},'invoice.paid','false','invoice',${literal(object.id)},${literal(object.customer)},${literal(JSON.stringify(object))},${literal(digest)},${literal(String(Date.now()))});`,
+      { user: "morrow_vault_broker" },
+    )
+    .split("\n")
+    .at(-1)
+    .split("|");
+  assert.equal(recorded, "recorded");
   const plan = JSON.stringify({
     schemaVersion: 1,
     outcome: "applied",
@@ -682,16 +702,17 @@ SELECT (SELECT count(*) FROM morrow_billing.workspace_billing_routes)+(SELECT co
     .split("\n")
     .at(-1);
   assert.equal(reads, "0");
-  // The forged context reaching receipt_apply directly (no receipt_begin): refused.
+  // The forged context reaching receipt_apply directly on the recorded receipt (no
+  // receipt_begin, so no entry proof): denied, exactly; never the plan's own refusal.
   const applied = db
     .sql(
       `BEGIN; SET LOCAL ROLE morrow_work_api; ${forge}
-SELECT outcome FROM morrow_billing.receipt_apply(${literal(receipt)},${literal(digest)},${literal(plan)}); ROLLBACK;`,
+SELECT outcome FROM morrow_billing.receipt_apply(${literal(receipt)},${literal(digest)},${literal(plan)}); COMMIT;`,
       { user: "morrow_api_worker" },
     )
     .split("\n")
     .at(-1);
-  assert.ok(["denied", "not_found"].includes(applied), applied);
+  assert.equal(applied, "denied");
   // Under a session context every ingress definer refuses.
   for (const call of [
     `SELECT outcome FROM morrow_billing.receipt_begin(${literal(receipt)},${literal(digest)})`,

@@ -26,6 +26,9 @@ export const billingStatements = Object.freeze({
     "SELECT DISTINCT ON (v.subscription_key) v.route,v.subscription_key,v.outcome_code AS code FROM morrow_billing.verified_payment_events v WHERE v.workspace_id=$1::text AND v.outcome='conflict' ORDER BY v.subscription_key,v.recorded_at DESC,v.id::text COLLATE \"C\" DESC LIMIT 101",
   // The workspace's open or completed checkout intent, if any (§8.7).
   billingIntentCurrent: `SELECT i.id::text AS id,i.status,i.price_key,${utc("i.expires_at")} AS expires_at FROM morrow_billing.checkout_intents i WHERE i.workspace_id=$1::text AND i.status IN ('open','completed')`,
+  // The workspace's customer operation held for the operator, if any (the setup hold):
+  // still uncertain, its hold set, and no customer mapped.
+  billingSetupHold: `SELECT s.operation_id::text AS operation_id,${utc("s.held_at")} AS held_at FROM morrow_billing.stripe_operations s JOIN morrow_work.operations o ON o.organization_id=s.organization_id AND o.workspace_id=s.workspace_id AND o.id=s.operation_id WHERE s.workspace_id=$1::text AND s.purpose='customer_create' AND s.held_at IS NOT NULL AND o.status='uncertain' ORDER BY s.held_at DESC,s.operation_id::text COLLATE "C" LIMIT 2`,
   // The billing period: the line period of the latest granted subscription invoice.
   billingPeriodLatest: `SELECT ${utc("v.period_start")} AS period_start,${utc("v.period_end")} AS period_end FROM morrow_billing.verified_payment_events v WHERE v.workspace_id=$1::text AND v.outcome='granted' AND v.kind='subscription_period' ORDER BY v.period_end DESC,v.recorded_at DESC LIMIT 1`,
   cmdCheckoutOpen: "SELECT outcome,result FROM morrow_billing.cmd_checkout_open($1,$2,$3,$4,$5,$6)",

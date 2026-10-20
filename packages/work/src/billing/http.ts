@@ -73,8 +73,13 @@ export const billingRoutes: readonly BillingRoute[] = Object.freeze([
   route("POST", "/morrow/portal"),
 ]);
 export const billingBodyLimitBytes = 1024;
-// The broker's own budget for one Stripe method, below the request's.
+// The broker's own budget for one Stripe method (apps/api/src/broker-client.ts races it
+// with a 500 ms RPC allowance). The request's abort covers the 5 s database phase and the
+// two sequential broker calls of a first checkout (the customer, then the session) with a
+// second to spare, so a slow but successful pair is never cut short into "uncertain".
 const brokerBudgetMs = 8000;
+const databaseMs = 5000;
+export const billingRequestAbortMs = databaseMs + 2 * (brokerBudgetMs + 500) + 1000;
 
 type Envelope = readonly [
   number,
@@ -119,6 +124,14 @@ const fixed = Object.freeze({
     "conflict",
     "recheck_before_retry",
     "Billing is not set up for this workspace yet.",
+  ],
+  // The workspace's Stripe customer setup is held for the operator (Stripe proved neither
+  // outcome): retrying cannot help until Morrow support resolves it.
+  customer_held: [
+    409,
+    "conflict",
+    "never",
+    "Billing setup for this workspace needs attention from Morrow support.",
   ],
   provider_failed: [
     409,
@@ -180,6 +193,7 @@ const rejectionKind: Readonly<Record<BillingCommandRejection, FixedKind>> = Obje
   terms_conflict: "terms_conflict",
   checkout_conflict: "checkout_conflict",
   customer_missing: "customer_missing",
+  customer_held: "customer_held",
 });
 
 function dependencies(value: BillingApiDependencies): BillingApiDependencies {
@@ -221,9 +235,9 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
     if (!configured) return { log, response: envelope(fixed.unauthenticated, correlationId) };
     const start = configured.now();
     if (!Number.isSafeInteger(start)) throw Error("BILLING_CLOCK_INVALID");
-    const deadlineMs = start + 5000;
+    const deadlineMs = start + databaseMs;
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), 15000);
+    const timer = setTimeout(() => abort.abort(), billingRequestAbortMs);
     const stop = () => abort.abort();
     request.signal?.addEventListener("abort", stop, { once: true });
     let read = request.method === "GET";
@@ -313,15 +327,18 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
               throw new WorkReject("denied");
             const c = await readBillingContext(tx, a, configured.environment);
             const actions = requirePurchase(c, "GET /morrow/plans");
+            // Only what POST /morrow/checkout can perform: the guard's subscribe, and
+            // cmd_checkout_open's own precondition (an unfixed website route, never bound,
+            // with no association) and no customer setup held for the operator.
+            const subscribe =
+              actions.includes("subscribe") && checkoutAdmissible(c) && !c.read.setupHold;
             return {
               kind: "view" as const,
               body: {
                 termsRevision: c.terms?.termsRevision ?? null,
-                offers: actions.includes("subscribe")
-                  ? currentOffers(c.terms, configured.environment)
-                  : [],
+                offers: subscribe ? currentOffers(c.terms, configured.environment) : [],
                 actions: {
-                  subscribe: actions.includes("subscribe"),
+                  subscribe,
                   billingPortal: actions.includes("billing_portal"),
                 },
               },
@@ -338,9 +355,9 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
               : null;
             if (!c.terms || !entry || !route) {
               tx.rollbackOnly();
-              throw new BillingCommandRejected(
-                c.terms && route ? "terms_conflict" : "route_conflict",
-              );
+              // No route row is a route refusal; no terms revision, or a price outside it,
+              // is a terms conflict (recheck the plans), never a route refusal.
+              throw new BillingCommandRejected(route ? "terms_conflict" : "route_conflict");
             }
             const opened = await openCheckout(tx, {
               key: g.commandId!,
@@ -392,6 +409,7 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
             );
             if (customer.outcome === "failed")
               return respond("provider_failed", "customer_failed", opId);
+            if (customer.outcome === "held") return respond("customer_held", "customer_held", opId);
             if (customer.outcome !== "verified")
               return respond("uncertain", "customer_" + customer.outcome, opId);
           }
@@ -490,9 +508,26 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
 }
 
 /**
+ * cmd_checkout_open's route precondition, as the facts show it: the workspace's route row
+ * exists and is unfixed, its origin is the website, it was never bound to a store, and no
+ * store is associated. Anything else the definer refuses as route_conflict.
+ */
+function checkoutAdmissible(c: Awaited<ReturnType<typeof readBillingContext>>): boolean {
+  const route = c.read.facts.route;
+  return (
+    route !== null &&
+    route.route === null &&
+    route.origin === "website" &&
+    route.shopifyBoundAt === null &&
+    c.read.facts.associations.length === 0
+  );
+}
+
+/**
  * The billing view: the phase and state, the plan's status and validity, the credits and
- * the billing period, any checkout in progress, and the one call to action, which comes
- * only from billingCallToAction (P01.T04a §9). No provider id, price or URL.
+ * the billing period, any checkout in progress, a customer setup held for the operator
+ * (its operation id, the reference for Morrow support), and the one call to action, which
+ * comes only from billingCallToAction (P01.T04a §9). No provider id, price or URL.
  */
 function billingView(c: Awaited<ReturnType<typeof readBillingContext>>, mayPurchase: boolean) {
   const s = c.state;
@@ -512,6 +547,9 @@ function billingView(c: Awaited<ReturnType<typeof readBillingContext>>, mayPurch
     billingPeriod: c.read.billingPeriod,
     checkout: c.read.intent
       ? { status: c.read.intent.status, expiresAt: c.read.intent.expiresAt }
+      : null,
+    setupHold: c.read.setupHold
+      ? { operationId: c.read.setupHold.operationId, heldAt: c.read.setupHold.heldAt }
       : null,
     callToAction: mayPurchase ? billingCallToAction(s) : { kind: "none" },
   };

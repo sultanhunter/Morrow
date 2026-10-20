@@ -172,6 +172,7 @@ function reader(overrides = {}) {
     billingConflicts: [],
     billingIntentCurrent: [],
     billingPeriodLatest: [rows.period],
+    billingSetupHold: [],
     ...overrides,
   };
   return {
@@ -226,6 +227,13 @@ test("the reader: the facts input, the wallet and the billing period; any foreig
   assert.equal(open.facts.payers.length, 0);
   assert.equal(open.billingPeriod, null);
   assert.equal(open.facts.checkoutIntentPending, true);
+  assert.equal(open.setupHold, null);
+  // A customer operation held for the operator: its id and hold time (no provider id).
+  const hold = { operation_id: "00000000-0000-4000-8000-0000000000aa", held_at: later(-1) };
+  assert.deepEqual((await reader({ billingSetupHold: [hold] }).reader.read(scope)).setupHold, {
+    operationId: hold.operation_id,
+    heldAt: hold.held_at,
+  });
   for (const overrides of [
     { workspaceBillingRoute: [{ ...rows.route, workspace_id: "ws_other" }] },
     { billingAccount: [{ ...rows.account, organization_id: "org_other" }] },
@@ -237,6 +245,19 @@ test("the reader: the facts input, the wallet and the billing period; any foreig
     { billingWallet: [{ ...rows.wallet, workspace_id: "ws_other" }] },
     { billingAccount: [rows.account, rows.account] },
     { billingAssociations: Array(101).fill({}) },
+    // More than one held customer operation, or a malformed one, fails closed.
+    {
+      billingSetupHold: [
+        { operation_id: "00000000-0000-4000-8000-0000000000aa", held_at: later(-1) },
+        { operation_id: "00000000-0000-4000-8000-0000000000ab", held_at: later(-1) },
+      ],
+    },
+    { billingSetupHold: [{ operation_id: "cus_NotAnOperation1", held_at: later(-1) }] },
+    {
+      billingSetupHold: [
+        { operation_id: "00000000-0000-4000-8000-0000000000aa", held_at: "yesterday" },
+      ],
+    },
   ])
     await assert.rejects(
       reader(overrides).reader.read(scope),

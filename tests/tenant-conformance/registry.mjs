@@ -293,9 +293,10 @@ export const bridgeFunctions = Object.freeze([
 //
 // S7 per-table spec (M2 PR-2a). Every billingTables and vaultTables entry carries exactly
 // {class, parents, policies, content, commandPrivileges, commandColumnUpdates, apiColumns},
-// plus an optional `lease: true`: class, parents, policies, content and lease as in
-// workTables (`lease: true` expects tenant_lease, the lease-context command policy), and
-// the table's whole ACL:
+// plus an optional `lease: true` and (M5 PR-1) an optional `commandRead: true`: class,
+// parents, policies, content and lease as in workTables (`lease: true` expects tenant_lease,
+// the lease-context command policy; `commandRead: true` expects tenant_command FOR SELECT
+// instead of FOR ALL, so no session definer writes the table), and the table's whole ACL:
 //   commandPrivileges     the table privileges morrow_work_command holds (never DELETE,
 //                         TRUNCATE, REFERENCES or TRIGGER);
 //   commandColumnUpdates  the columns morrow_work_command may UPDATE (column grants);
@@ -309,9 +310,11 @@ const aclSpec = (commandPrivileges, commandColumnUpdates = [], apiColumns = []) 
   apiColumns,
 });
 // Billing classes beside the shared ones: platform_readable (no tenant columns, read by both
-// runtime roles, written only by the owner) and ingress (the broker-recorded receipts and
+// runtime roles, written only by the owner), ingress (the broker-recorded receipts and
 // their applications: nullable tenant keys, reached only through the broker's and the
-// receipt ingress's own policies, never the session template).
+// receipt ingress's own policies, never the session template) and operator_record (tenant
+// keys and composite parents, written only by the owner's operator functions; no runtime
+// role holds anything).
 export const billingTables = Object.freeze({
   workspace_billing_routes: {
     class: "tenant_readable",
@@ -345,10 +348,14 @@ export const billingTables = Object.freeze({
     content: "none",
     ...aclSpec(["SELECT"], [], ["digest", "offers", "recorded_at", "terms", "terms_revision"]),
   },
+  // The mapping and the ledger: tenant_command FOR SELECT (commandRead), so no session
+  // definer inserts a mapping, an account, a snapshot, a payment, a grant or a wallet; they
+  // are written by the broker's definers and in the receipt context only.
   stripe_customers: {
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces", "morrow_work.operations"],
     policies: ["broker_billing"],
+    commandRead: true,
     content: "none",
     ...aclSpec(["INSERT", "SELECT"]),
   },
@@ -380,12 +387,34 @@ export const billingTables = Object.freeze({
       ],
     ),
   },
+  // The api reads a Stripe operation's purpose and hold (the billing view's setup hold).
   stripe_operations: {
-    class: "tenant_internal",
+    class: "tenant_readable",
     parents: ["morrow_billing.checkout_intents", "morrow_work.operations"],
     policies: ["broker_billing", "receipt_apply"],
     content: "none",
-    ...aclSpec(["INSERT", "SELECT"], ["provider_object_id"]),
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["held_at", "provider_object_id"],
+      [
+        "checkout_intent_id",
+        "created_at",
+        "held_at",
+        "operation_id",
+        "organization_id",
+        "purpose",
+        "workspace_id",
+      ],
+    ),
+  },
+  // The operator's resolutions of held customer operations (fixed codes, the evidence
+  // record's path).
+  stripe_operation_resolutions: {
+    class: "operator_record",
+    parents: ["morrow_billing.stripe_operations"],
+    policies: [],
+    content: "none",
+    ...aclSpec([]),
   },
   stripe_event_receipts: {
     class: "ingress",
@@ -416,6 +445,7 @@ export const billingTables = Object.freeze({
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
     policies: ["receipt_apply"],
+    commandRead: true,
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -438,6 +468,7 @@ export const billingTables = Object.freeze({
     class: "tenant_readable",
     parents: ["morrow_billing.billing_accounts", "morrow_billing.stripe_event_receipts"],
     policies: ["receipt_apply"],
+    commandRead: true,
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -462,6 +493,7 @@ export const billingTables = Object.freeze({
     class: "tenant_readable",
     parents: ["morrow_billing.stripe_event_receipts", "morrow_identity.workspaces"],
     policies: ["receipt_apply"],
+    commandRead: true,
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -493,6 +525,7 @@ export const billingTables = Object.freeze({
     class: "tenant_readable",
     parents: ["morrow_billing.billing_accounts"],
     policies: ["receipt_apply"],
+    commandRead: true,
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -516,10 +549,13 @@ export const billingTables = Object.freeze({
       ],
     ),
   },
+  // The wallet's session UPDATE (tenant_command_update) is for M3 PR-1's moves, which
+  // wallet_guard keeps sum-preserving; there is no session INSERT.
   credit_wallets: {
     class: "tenant_readable",
     parents: ["morrow_billing.billing_accounts"],
-    policies: ["receipt_apply"],
+    policies: ["receipt_apply", "tenant_command_update"],
+    commandRead: true,
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -567,6 +603,11 @@ export const billingFunctions = Object.freeze({
   "stripe_receipt_record(text,text,text,text,text,text,text,text,text)": {
     kind: "broker",
     grantees: ["morrow_vault_broker"],
+  },
+  // The operator path: INVOKER, owned by the owner, granted to nobody.
+  "operator_customer_operation_resolve(text,text,text,text,text)": {
+    kind: "operator",
+    grantees: [],
   },
   // INVOKER helpers the policies and definers evaluate as the command role.
   "receipt_ingress()": { kind: "check", grantees: ["morrow_work_command"] },

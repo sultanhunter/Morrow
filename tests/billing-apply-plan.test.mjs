@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  createStripeWebhookHandler,
   normalizeCheckoutSession,
   normalizeInvoice,
   normalizeSubscription,
@@ -364,4 +365,93 @@ test("receipt facts are closed: shape, mode and digest are checked before planni
   assert.throws(() => parseReceiptFacts(JSON.stringify({ receipt: r, route: null })), {
     code: "RECEIPT_FACTS_INVALID",
   });
+});
+
+// The webhook handler around the planner: a receipt that receipt_apply refuses, or that the
+// planner cannot plan, is 503 (Stripe retries), commits nothing and is logged once with the
+// internal receipt id and a fixed code (never provider text), instead of a bare 503.
+test("an unapplied receipt is 503 with one fixed log line naming the receipt and the code", async () => {
+  const lines = [];
+  const original = console.log;
+  console.log = (line) => lines.push(String(line));
+  try {
+    const r = await receipt("invoice.paid", invoice());
+    const run = async (beginFacts, applyOutcome) => {
+      const sent = [];
+      const connector = {
+        open: async () => ({
+          async query(text) {
+            sent.push(text);
+            if (/receipt_begin/.test(text))
+              return { rows: [{ outcome: "begun", facts: beginFacts }] };
+            if (/receipt_apply/.test(text))
+              return { rows: [{ outcome: applyOutcome, result: null }] };
+            return { rows: [] };
+          },
+          async close() {},
+        }),
+      };
+      const handler = createStripeWebhookHandler({
+        connector,
+        environment: "development",
+        now: () => Date.now(),
+        broker: {
+          customerEnsure: async () => assert.fail(),
+          checkoutCreate: async () => assert.fail(),
+          portalCreate: async () => assert.fail(),
+          webhookVerify: async () => ({
+            verdict: "recorded",
+            receiptId: r.id,
+            objectDigest: r.objectDigest,
+            attributed: true,
+          }),
+        },
+      });
+      lines.length = 0;
+      const response = await handler.fetch(
+        new Request("https://work.morrow.test/api/billing/stripe/webhook", {
+          method: "POST",
+          headers: { "stripe-signature": "t=1,v1=" + "a".repeat(64) },
+          body: "{}",
+        }),
+        {},
+        { waitUntil() {} },
+      );
+      const logged = lines.map((line) => JSON.parse(line));
+      return { status: response.status, logged, sent };
+    };
+    for (const [outcome, code] of [
+      ["invalid", "APPLY_INVALID"],
+      ["denied", "APPLY_DENIED"],
+      ["conflict", "APPLY_CONFLICT"],
+    ]) {
+      const { status, logged, sent } = await run(facts(r), outcome);
+      assert.equal(status, 503, outcome);
+      assert.deepEqual(
+        logged.find((l) => l.event === "morrow_billing_receipt"),
+        { event: "morrow_billing_receipt", receiptId: r.id, outcome: "unapplied", code },
+        outcome,
+      );
+      assert.equal(logged.find((l) => l.event === "morrow_billing_webhook").outcome, "unapplied");
+      assert.ok(!sent.some((text) => /^COMMIT/i.test(text)), outcome);
+    }
+    // Facts the planner cannot read (a malformed account row): PLAN_ERROR, before any
+    // receipt_apply.
+    const broken = JSON.parse(facts(r));
+    broken.account = { id: "not an account" };
+    const planError = await run(JSON.stringify(broken), "applied");
+    assert.equal(planError.status, 503);
+    assert.deepEqual(
+      planError.logged.find((l) => l.event === "morrow_billing_receipt"),
+      {
+        event: "morrow_billing_receipt",
+        receiptId: r.id,
+        outcome: "unapplied",
+        code: "PLAN_ERROR",
+      },
+    );
+    assert.ok(!planError.sent.some((text) => /receipt_apply/.test(text)));
+  } finally {
+    console.log = original;
+  }
 });
