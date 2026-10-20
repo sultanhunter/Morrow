@@ -440,11 +440,12 @@ export const committedIdentifierPatterns = Object.freeze([
   ["neon_branch", /\bbr-[a-z0-9-]+/],
   ["neon_password", /\bnpg_[A-Za-z0-9]/],
   ["workos_key", /\bsk_(?:test|live)_/],
-  // M5 PR-1: a Stripe restricted key, a webhook signing secret or a portal configuration
-  // is never committed (the last arrives on the reviewed staging-identifier path).
+  // M5 PR-1: a Stripe restricted key or a webhook signing secret is never committed; a
+  // portal configuration only as the reviewed id of docs/decisions/stripe-staging.json,
+  // inside the staging broker's STRIPE_CONFIGURATION_JSON and nowhere else.
   ["stripe_restricted_key", /\brk_(?:test|live)_/],
   ["stripe_webhook_secret", /\bwhsec_/],
-  ["stripe_portal_configuration", /\bbpc_[A-Za-z0-9]/],
+  ["stripe_portal_configuration", /\bbpc_[A-Za-z0-9]+/],
   ["cloudflare_account", /"account_id"|\b[0-9a-f]{32}\b/],
   ["route", /"routes?"\s*:/],
 ]);
@@ -504,6 +505,45 @@ export function edgeVarNames(worker, environment) {
         "TURNSTILE_CONFIGURATION_JSON",
       ];
 }
+// M5 PR-1: the optional staging vars, each admitted only with its reviewed record. The
+// staging broker may carry STRIPE_CONFIGURATION_JSON (docs/decisions/stripe-staging.json);
+// without it the broker holds Stripe and billing answers 503.
+export function edgeOptionalVarNames(worker, environment) {
+  return worker === "broker" && environment === "staging" ? ["STRIPE_CONFIGURATION_JSON"] : [];
+}
+// The reviewed staging Stripe record: test mode, the portal configuration id (null until
+// the owner creates it) and the tax flags. Returns the exact STRIPE_CONFIGURATION_JSON
+// text the record admits (null while it names no portal configuration), or throws.
+export function reviewedStripeConfiguration(record) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !==
+      "automatic_tax,billing_address_collection,environment_kind,mode,observed_on,portal_configuration_id,schema_version,scope" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    record.mode !== "test" ||
+    typeof record.automatic_tax !== "boolean" ||
+    !["auto", "required"].includes(record.billing_address_collection) ||
+    typeof record.scope !== "string" ||
+    (record.portal_configuration_id !== null &&
+      (typeof record.portal_configuration_id !== "string" ||
+        !/^bpc_[A-Za-z0-9]{8,64}$/.test(record.portal_configuration_id) ||
+        typeof record.observed_on !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(record.observed_on))) ||
+    (record.portal_configuration_id === null && record.observed_on !== null)
+  )
+    throw Error("EDGE_STAGING_STRIPE_RECORD");
+  return record.portal_configuration_id === null
+    ? null
+    : JSON.stringify({
+        schemaVersion: 1,
+        portalConfigurationId: record.portal_configuration_id,
+        automaticTax: record.automatic_tax,
+        billingAddressCollection: record.billing_address_collection,
+      });
+}
 // Key-order-free comparison for the observability blocks.
 const canonicalJson = (value) =>
   JSON.stringify(value, (_key, child) =>
@@ -543,6 +583,7 @@ const loadStagingParsers = () =>
       parseLoginConfiguration: login.parseLoginConfiguration,
       parseBrokerDatabaseBinding: protocol.parseBrokerDatabaseBinding,
       parseTurnstileConfiguration: protocol.parseTurnstileConfiguration,
+      parseStripeConfiguration: protocol.parseStripeConfiguration,
       turnstileHostnameMismatch: protocol.turnstileHostnameMismatch,
       parseLoginChallengeConfiguration: guard.parseLoginChallengeConfiguration,
     });
@@ -556,14 +597,18 @@ const loadStagingParsers = () =>
 // the origin. Every origin use is D1's
 // `https://${env.staging.name}.${workers_dev_subdomain}.workers.dev`, with the subdomain read
 // from staging.json; the only other URLs are its callback and the WorkOS issuer, which the
-// login parser fixes to the client. Returns the problems and the identifiers a committed
-// file may name.
-async function stagingValueChecks({ vars, apiName, staging, workos }) {
+// login parser fixes to the client. M5 PR-1: the broker's optional STRIPE_CONFIGURATION_JSON
+// must be byte-equal to the text docs/decisions/stripe-staging.json admits (its portal
+// configuration id and tax flags) and parse with the broker's own parser; that id is then
+// admitted inside that one var only. Returns the problems, the identifiers a committed file
+// may name, and `allowedIn(worker, name)`, the identifiers admitted in one var.
+async function stagingValueChecks({ vars, apiName, staging, workos, stripe }) {
   const {
     captureManagedWorkspaceBinding,
     parseLoginConfiguration,
     parseBrokerDatabaseBinding,
     parseTurnstileConfiguration,
+    parseStripeConfiguration,
     turnstileHostnameMismatch,
     parseLoginChallengeConfiguration,
   } = await loadStagingParsers();
@@ -656,6 +701,27 @@ async function stagingValueChecks({ vars, apiName, staging, workos }) {
   }
   if (apiActions !== null && brokerActions !== null && apiActions !== brokerActions)
     problem("EDGE_STAGING_CHALLENGE_ACTIONS", "staging");
+  // M5 PR-1: the Stripe configuration, pinned to its reviewed record.
+  const scoped = new Map();
+  let reviewedStripe = null;
+  try {
+    reviewedStripe = reviewedStripeConfiguration(stripe);
+  } catch {
+    problem("EDGE_STAGING_STRIPE_RECORD", "stripe-staging.json");
+  }
+  const stripeJson = vars.broker?.STRIPE_CONFIGURATION_JSON;
+  if (stripeJson !== undefined) {
+    let parsed = null;
+    try {
+      parsed = parseStripeConfiguration(stripeJson);
+    } catch {
+      parsed = null;
+    }
+    if (parsed === null || reviewedStripe === null || stripeJson !== reviewedStripe)
+      problem("EDGE_STAGING_STRIPE_CONFIGURATION", "broker:staging");
+    else scoped.set("broker:STRIPE_CONFIGURATION_JSON", new Set([parsed.portalConfigurationId]));
+  }
+  const allowedIn = (worker, name) => scoped.get(worker + ":" + name) ?? new Set();
   // Every value of every staging Worker: identifiers, URLs, workers.dev hosts and keys.
   const urls = new Set(
     origin === null
@@ -672,7 +738,11 @@ async function stagingValueChecks({ vars, apiName, staging, workos }) {
       if (typeof value !== "string") continue;
       const where = worker + ":staging:" + name;
       for (const [kind, pattern] of committedIdentifierPatterns)
-        if (matchesOf(pattern, value).some((match) => !allowed.has(match)))
+        if (
+          matchesOf(pattern, value).some(
+            (match) => !allowed.has(match) && !allowedIn(worker, name).has(match),
+          )
+        )
           problem("EDGE_STAGING_VALUE_" + kind.toUpperCase(), where);
       if (matchesOf(/https?:\/\/[^\s"\\]*/i, value).some((url) => !urls.has(url)))
         problem("EDGE_STAGING_VALUE_URL", where);
@@ -688,7 +758,7 @@ async function stagingValueChecks({ vars, apiName, staging, workos }) {
       )
         problem("EDGE_STAGING_VALUE_SITE_KEY", where);
     }
-  return { problems, allowed };
+  return { problems, allowed, allowedIn };
 }
 
 // One Worker's resolved wrangler configuration (no account, credential or network).
@@ -714,6 +784,7 @@ export async function verifyEdgeConfig({
   routesPath = join(repositoryRoot, "docs/contracts/workspace-routes.json"),
   stagingPath = join(repositoryRoot, "infra/environments/staging.json"),
   workosPath = join(repositoryRoot, "docs/decisions/workos-staging.json"),
+  stripePath = join(repositoryRoot, "docs/decisions/stripe-staging.json"),
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
@@ -787,13 +858,20 @@ export async function verifyEdgeConfig({
         names.some((name) => providerCredentialName.test(name) || credentialWord.test(name))
       )
         problem("EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER", where);
-      // The var allowlist (P04.T01i AC01): exactly these names, string values, and the
-      // Worker's own environment.
+      // The var allowlist (P04.T01i AC01): exactly these names (plus, M5 PR-1, the optional
+      // ones each admitted with its reviewed record), string values, and the Worker's own
+      // environment.
       const varNames = edgeVarNames(worker.key, environment);
+      const optionalNames = edgeOptionalVarNames(worker.key, environment);
       if (
         vars === null ||
         typeof vars !== "object" ||
-        !same(Object.keys(vars).sort(), [...varNames].sort()) ||
+        !same(
+          Object.keys(vars)
+            .filter((name) => !optionalNames.includes(name))
+            .sort(),
+          [...varNames].sort(),
+        ) ||
         Object.values(vars).some((value) => typeof value !== "string") ||
         (varNames.includes("MORROW_ENVIRONMENT") && vars.MORROW_ENVIRONMENT !== environment)
       )
@@ -865,13 +943,16 @@ export async function verifyEdgeConfig({
   // a second copy) is refused; the other Workers' files name none.
   const staging = readJson(stagingPath);
   const workos = readJson(workosPath);
+  const stripe = readJson(stripePath);
   if (staging === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "staging.json");
   if (workos === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "workos-staging.json");
+  if (stripe === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "stripe-staging.json");
   const checked = await stagingValueChecks({
     vars: stagingVars,
     apiName: apiStagingName ?? selectedConfiguration("staging").cloudflare.workers.api,
     staging,
     workos,
+    stripe,
   });
   problems.push(...checked.problems);
   for (const worker of edgeWorkers)
@@ -880,10 +961,11 @@ export async function verifyEdgeConfig({
       for (const match of matchesOf(pattern, texts[worker.key]))
         remaining.set(match, (remaining.get(match) ?? 0) + 1);
       if (["api", "broker"].includes(worker.key))
-        for (const value of Object.values(stagingVars[worker.key] ?? {}))
+        for (const [name, value] of Object.entries(stagingVars[worker.key] ?? {}))
           if (typeof value === "string")
             for (const match of matchesOf(pattern, value))
-              if (checked.allowed.has(match)) remaining.set(match, (remaining.get(match) ?? 0) - 1);
+              if (checked.allowed.has(match) || checked.allowedIn(worker.key, name).has(match))
+                remaining.set(match, (remaining.get(match) ?? 0) - 1);
       if ([...remaining.values()].some((count) => count > 0))
         problem("EDGE_COMMITTED_IDENTIFIER_" + kind.toUpperCase(), worker.key);
     }

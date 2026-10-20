@@ -18,11 +18,13 @@ import {
   edgeEnvironments,
   devBindingTables,
   edgeObservability,
+  edgeOptionalVarNames,
   edgeRateLimits,
   edgeRefusals,
   edgeVarNames,
   edgeWorkers,
   resolvedEdgeConfig,
+  reviewedStripeConfiguration,
   runWrangler,
   verifyEdgeConfig,
   wranglerInvocation,
@@ -240,6 +242,9 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
       { broker: (c) => (c.env.staging.vars.NOTE = "bpc_" + "A".repeat(24)) },
       "EDGE_COMMITTED_IDENTIFIER_STRIPE_PORTAL_CONFIGURATION",
     ],
+    // The reviewed portal configuration var is the staging broker's only.
+    [{ broker: (c) => (c.vars.STRIPE_CONFIGURATION_JSON = "{}") }, "EDGE_VARS"],
+    [{ broker: (c) => (c.env.production.vars.STRIPE_CONFIGURATION_JSON = "{}") }, "EDGE_VARS"],
     [
       { api: (c) => (c.routes = [{ pattern: "example.test/*", zone_name: "example.test" }]) },
       "EDGE_ROUTES",
@@ -529,6 +534,7 @@ test("P05.T01ab: the api's limiter bindings are the packet's D1 values", () => {
 // reviewed staging values. Every case starts from the committed configuration.
 const committedStaging = JSON.parse(readFileSync("infra/environments/staging.json", "utf8"));
 const committedWorkos = JSON.parse(readFileSync("docs/decisions/workos-staging.json", "utf8"));
+const committedStripe = JSON.parse(readFileSync("docs/decisions/stripe-staging.json", "utf8"));
 const stagingOrigin = committedStaging.cloudflare.origin;
 const reviewedClient = committedWorkos.client_id;
 // Rewrites one JSON var: `patch` replaces members, keeping the others in place.
@@ -552,9 +558,16 @@ const records = (patch = {}) => {
   patch.staging?.(staging);
   const workos = structuredClone(committedWorkos);
   patch.workos?.(workos);
+  const stripe = structuredClone(committedStripe);
+  patch.stripe?.(stripe);
   writeFileSync(join(path, "staging.json"), JSON.stringify(staging));
   writeFileSync(join(path, "workos-staging.json"), JSON.stringify(workos));
-  return { stagingPath: join(path, "staging.json"), workosPath: join(path, "workos-staging.json") };
+  writeFileSync(join(path, "stripe-staging.json"), JSON.stringify(stripe));
+  return {
+    stagingPath: join(path, "staging.json"),
+    workosPath: join(path, "workos-staging.json"),
+    stripePath: join(path, "stripe-staging.json"),
+  };
 };
 
 test("P04.T01i AC01/AC02: the committed staging blocks are D1's and pass every value rule", async () => {
@@ -1014,4 +1027,167 @@ test("P04.T01i AC01 (P04.T02a AC24 narrowed): staging vars name only the reviewe
   assert.deepEqual((await verify(appended(api, "79ff672d013b8f0956437af6eea3c213"))).problems, [
     "EDGE_COMMITTED_IDENTIFIER_CLOUDFLARE_ACCOUNT:api",
   ]);
+});
+
+// ---------------------------------------------------------------------------
+// M5 PR-1: the staging broker's STRIPE_CONFIGURATION_JSON arrives on the reviewed
+// identifier path. docs/decisions/stripe-staging.json pins the portal configuration id and
+// the tax flags; the var must be byte-equal to the text that record admits, and that id is
+// admitted inside that one var only (never another var, block, Worker or comment).
+const reviewedPortal = "bpc_" + "1Rv" + "S".repeat(21);
+const withPortal = (stripe) => {
+  stripe.portal_configuration_id = reviewedPortal;
+  stripe.observed_on = "2026-10-21";
+};
+const stripeVar = (patch = {}) =>
+  JSON.stringify({
+    schemaVersion: 1,
+    portalConfigurationId: reviewedPortal,
+    automaticTax: false,
+    billingAddressCollection: "auto",
+    ...patch,
+  });
+const withStripeVar = (value) => ({
+  broker: (c) => (c.env.staging.vars.STRIPE_CONFIGURATION_JSON = value),
+});
+
+test("M5 PR-1: the committed Stripe record is test mode with no portal configuration yet", () => {
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(committedStripe).filter(([key]) => !["scope"].includes(key))),
+    {
+      schema_version: 1,
+      environment_kind: "staging",
+      mode: "test",
+      portal_configuration_id: null,
+      automatic_tax: false,
+      billing_address_collection: "auto",
+      observed_on: null,
+    },
+  );
+  assert.deepEqual(edgeOptionalVarNames("broker", "staging"), ["STRIPE_CONFIGURATION_JSON"]);
+  for (const [worker, environment] of [
+    ["broker", "development"],
+    ["broker", "production"],
+    ["api", "staging"],
+    ["connector", "staging"],
+    ["orchestrator", "staging"],
+  ])
+    assert.deepEqual(edgeOptionalVarNames(worker, environment), [], worker + ":" + environment);
+  // The admitted text is exactly the record's id and flags, in the parser's member order.
+  const record = structuredClone(committedStripe);
+  assert.equal(reviewedStripeConfiguration(record), null);
+  withPortal(record);
+  assert.equal(reviewedStripeConfiguration(record), stripeVar());
+  for (const edit of [
+    (r) => (r.mode = "live"),
+    (r) => (r.portal_configuration_id = "bpc_short"),
+    (r) => (r.portal_configuration_id = "bps_" + "S".repeat(24)),
+    (r) => (r.observed_on = null),
+    (r) => (r.automatic_tax = "false"),
+    (r) => (r.billing_address_collection = "never"),
+    (r) => (r.extra = true),
+  ]) {
+    const bad = structuredClone(record);
+    edit(bad);
+    assert.throws(() => reviewedStripeConfiguration(bad), /EDGE_STAGING_STRIPE_RECORD/);
+  }
+});
+
+test("M5 PR-1: a reviewed STRIPE_CONFIGURATION_JSON passes; any other value or place fails", async () => {
+  const reviewed = records({ stripe: withPortal });
+  // Absent, the broker holds Stripe: nothing to check (the committed state).
+  assert.deepEqual((await verify(tree(), undefined, reviewed)).problems, []);
+  // Byte-equal to the reviewed record's text: admitted, the id in that var only.
+  assert.deepEqual(
+    (await verify(tree(withStripeVar(stripeVar())), undefined, reviewed)).problems,
+    [],
+  );
+  const cases = [
+    // No reviewed id yet (the committed record): the var cannot be committed.
+    [withStripeVar(stripeVar()), records(), ["EDGE_STAGING_STRIPE_CONFIGURATION"]],
+    // Malformed: the broker's own parser refuses it.
+    [withStripeVar("{}"), reviewed, ["EDGE_STAGING_STRIPE_CONFIGURATION"]],
+    [withStripeVar("not json"), reviewed, ["EDGE_STAGING_STRIPE_CONFIGURATION"]],
+    // Another well-formed portal configuration than the reviewed one.
+    [
+      withStripeVar(stripeVar({ portalConfigurationId: "bpc_" + "Other".repeat(5) })),
+      reviewed,
+      [
+        "EDGE_STAGING_STRIPE_CONFIGURATION",
+        "EDGE_STAGING_VALUE_STRIPE_PORTAL_CONFIGURATION",
+        "EDGE_COMMITTED_IDENTIFIER_STRIPE_PORTAL_CONFIGURATION",
+      ],
+    ],
+    // The tax flags are pinned too.
+    [
+      withStripeVar(stripeVar({ automaticTax: true })),
+      reviewed,
+      ["EDGE_STAGING_STRIPE_CONFIGURATION"],
+    ],
+    [
+      withStripeVar(stripeVar({ billingAddressCollection: "required" })),
+      reviewed,
+      ["EDGE_STAGING_STRIPE_CONFIGURATION"],
+    ],
+    // Same members, other bytes (spacing): pinned to the exact text.
+    [
+      withStripeVar(JSON.stringify(JSON.parse(stripeVar()), null, 1)),
+      reviewed,
+      ["EDGE_STAGING_STRIPE_CONFIGURATION"],
+    ],
+    // The reviewed id outside its var: another broker staging var, or the api's.
+    [
+      {
+        broker: (c) => {
+          c.env.staging.vars.STRIPE_CONFIGURATION_JSON = stripeVar();
+          patchVar(c.env.staging.vars, "TURNSTILE_CONFIGURATION_JSON", { note: reviewedPortal });
+        },
+      },
+      reviewed,
+      ["EDGE_STAGING_VALUE_STRIPE_PORTAL_CONFIGURATION"],
+    ],
+    [
+      { api: (c) => (c.env.staging.vars.STRIPE_CONFIGURATION_JSON = stripeVar()) },
+      reviewed,
+      [
+        "EDGE_VARS",
+        "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+        "EDGE_STAGING_VALUE_STRIPE_PORTAL_CONFIGURATION",
+        "EDGE_COMMITTED_IDENTIFIER_STRIPE_PORTAL_CONFIGURATION",
+      ],
+    ],
+    // Development or production: not an optional var there.
+    [
+      {
+        broker: (c) => {
+          c.env.staging.vars.STRIPE_CONFIGURATION_JSON = stripeVar();
+          c.env.production.vars.STRIPE_CONFIGURATION_JSON = stripeVar();
+        },
+      },
+      reviewed,
+      ["EDGE_VARS", "EDGE_COMMITTED_IDENTIFIER_STRIPE_PORTAL_CONFIGURATION"],
+    ],
+    // A record that is not the reviewed shape fails on its own.
+    [{}, records({ stripe: (r) => (r.mode = "live") }), ["EDGE_STAGING_STRIPE_RECORD"]],
+  ];
+  for (const [index, [mutate, paths, expected]] of cases.entries()) {
+    const found = codes(await verify(tree(mutate), undefined, paths));
+    for (const code of expected)
+      assert.ok(found.includes(code), index + ": " + code + " not in " + found.join(","));
+  }
+  // A second copy of the reviewed id in the file (a comment) is a remainder.
+  const root = tree(withStripeVar(stripeVar()));
+  const path = join(root, "apps/broker/wrangler.jsonc");
+  writeFileSync(path, readFileSync(path, "utf8") + "\n// " + reviewedPortal + "\n");
+  assert.deepEqual((await verify(root, undefined, reviewed)).problems, [
+    "EDGE_COMMITTED_IDENTIFIER_STRIPE_PORTAL_CONFIGURATION:broker",
+  ]);
+  // An unreadable record is its own problem.
+  const missing = records();
+  rmSync(missing.stripePath);
+  assert.ok(
+    (await verify(tree(), undefined, missing)).problems.includes(
+      "EDGE_STAGING_RECORD_UNREADABLE:stripe-staging.json",
+    ),
+  );
 });
