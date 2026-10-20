@@ -55,7 +55,7 @@ export const edgeWorkers = Object.freeze(
     {
       key: "connector",
       dir: "apps/shopify-connector",
-      entry: "worker/placeholder.ts",
+      entry: "worker/index.ts",
       tsconfig: "tsconfig.worker.json",
     },
   ].map((worker) => Object.freeze(worker)),
@@ -421,8 +421,18 @@ const allowedBindings = Object.freeze({
   api: ["vars", "services", "secrets", "assets", "ratelimits"],
   broker: ["vars", "secrets"],
   orchestrator: ["workflows", "queues", "secrets"],
-  connector: ["vars", "secrets"],
+  // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint (and nothing else).
+  connector: ["vars", "services", "secrets"],
 });
+// The reviewed packages/ files the connector bundle may include (M2 PR-2): the shared
+// broker protocol and the role preflight text, with the JSON helpers they import. No
+// pool, SQL module, validator or policy code.
+export const connectorPackageAllowlist = Object.freeze([
+  "packages/identity/src/broker-protocol.ts",
+  "packages/identity/src/executor-role-preflight.ts",
+  "packages/identity/src/standalone-login-protocol.ts",
+  "packages/identity/src/workos-session-status-json.ts",
+]);
 // MORROW_VAULT_ (the vault KEKs, ADR-0022 item 7) binds only to the broker as well.
 const providerCredentialName =
   /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG)/i;
@@ -549,6 +559,13 @@ export async function verifyEdgeConfig({
         )
           problem("EDGE_BROKER_SECRETS", where);
       } else if (!same(required, [])) problem("EDGE_SECRETS_REQUIRED_NOT_EMPTY", where);
+      if (
+        worker.key === "connector" &&
+        !same(config.services, [
+          { binding: "BROKER", service: expected.broker, entrypoint: "ConnectorBroker" },
+        ])
+      )
+        problem("EDGE_CONNECTOR_BROKER_BINDING", where);
       if (worker.key === "api") {
         if (
           !same(config.services, [
@@ -622,14 +639,29 @@ export function bundleExclusions(worker, inputs, bundleText) {
         ]
       : worker.key === "broker"
         ? [
-            [/@neondatabase\/serverless/, "neon_driver"],
+            // M2 PR-2: the Neon driver is allowed (the vault login's transport,
+            // vault-database.ts); the pool, the validators and the api stay out.
             [/controlled-neon-login-pool\.ts$/, "neon_pool"],
             [/runtime-validators\.mjs$/, "runtime_validators"],
             [/^apps\/api\//, "api_source"],
           ]
-        : [[/^packages\//, "package_source"]];
+        : worker.key === "connector"
+          ? [
+              [/^apps\/(api|broker|workers|workspace-web)\//, "other_worker_source"],
+              [/runtime-validators\.mjs$/, "runtime_validators"],
+              [/(^|\/)@shopify\//, "shopify_library"],
+            ]
+          : [[/^packages\//, "package_source"]];
   for (const [pattern, name] of banned)
     if (inputs.some((input) => pattern.test(input))) failures.push(name);
+  // The connector may include only its reviewed packages/ allowlist.
+  if (
+    worker.key === "connector" &&
+    inputs.some(
+      (input) => input.startsWith("packages/") && !connectorPackageAllowlist.includes(input),
+    )
+  )
+    failures.push("package_source");
   if (
     worker.key === "api" &&
     /(?:from\s*|import\s*\(?\s*|require\s*\(\s*)["'](?:node:)?https?["']/.test(bundleText)
