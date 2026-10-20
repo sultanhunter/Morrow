@@ -482,6 +482,8 @@ export const entitlementWriterAllowlist = Object.freeze({
     "createHumanPolicyService",
     "createWorkspacePermissionBoundary",
   ]),
+  // M3 PR-1: the agent kernel's facts reader sets it only from entitlementFor over billing facts.
+  "packages/work/src/agents/delegation-reader.ts": Object.freeze(["createLeaseDelegationReader"]),
 });
 const entitlementField = "entitlementAllowed";
 export function inspectEntitlementWriters(file, code) {

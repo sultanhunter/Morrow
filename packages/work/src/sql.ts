@@ -1,3 +1,4 @@
+import { agentStatements } from "./agents/sql.js";
 import { approvalStatements } from "./approvals/sql.js";
 import { spineStatements } from "./spine-sql.js";
 
@@ -65,5 +66,7 @@ export const workStatements = Object.freeze({
   ...approvalStatements,
   // The M2 PR-1 spine reads: the billing route row and the stop state (migration 0020).
   ...spineStatements,
+  // M3 PR-1: the Listings agent, Stop AI work and the model default.
+  ...agentStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;
