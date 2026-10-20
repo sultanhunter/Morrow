@@ -18,6 +18,7 @@ test("every registered table is classified, and every store table has exactly on
     [
       ["morrow_vault.credentials", "uninstall_or_disconnect", "destroy_credential", "M2 PR-3"],
       ["morrow_identity.linking_candidates", "shop_redact", "pseudonymise", "M2 PR-3"],
+      ["morrow_identity.store_installations", "shop_redact", "pseudonymise", "M2 PR-3"],
       ["morrow_work.proposal_parameters", "shop_redact", "empty_keep_digest", "M3 PR-1"],
     ],
   );
@@ -28,27 +29,39 @@ test("every registered table is classified, and every store table has exactly on
 // tables later (spine §6 and §11), is classified table by table like the others.
 test("every morrow_identity table is classified; the shop identity is store content", () => {
   const identity = registeredTables().filter(([name]) => name.startsWith("morrow_identity."));
-  assert.equal(identity.length, 39);
+  assert.equal(identity.length, 43);
   assert.deepEqual(
     identity.filter(([, spec]) => spec.content === "store").map(([name]) => name),
-    ["morrow_identity.linking_candidates"],
+    ["morrow_identity.linking_candidates", "morrow_identity.store_installations"],
   );
+  // M2 PR-2: the other three new identity tables hold digests, ids and the app registry.
+  for (const name of ["install_continuations", "shopify_apps", "shopify_oauth_states"])
+    assert.equal(identityTables[name].content, "none", name);
   // The linking records that only point at a candidate hold no shop content of their own.
   for (const name of ["linking_reviews", "linking_handoffs", "workspace_store_links"])
     assert.equal(identityTables[name].content, "none", name);
-  // A new identity store table (an M2 PR-2 table registered without its handler) fails.
+  // A new identity store table registered without its handler fails, and so does dropping
+  // the installation's handler (M2 PR-2).
   const tables = {
     workTables,
     billingTables,
     vaultTables,
-    identityTables: { ...identityTables, store_installations: { content: "store" } },
+    identityTables: { ...identityTables, shopify_webhook_inbox: { content: "store" } },
   };
   assert.deepEqual(contentProblems(storeContentHandlers, tables), [
-    "STORE_CONTENT_WITHOUT_HANDLER:morrow_identity.store_installations",
+    "STORE_CONTENT_WITHOUT_HANDLER:morrow_identity.shopify_webhook_inbox",
   ]);
-  // So does dropping the shop-identity handler.
   assert.deepEqual(
-    contentProblems(storeContentHandlers.filter((h) => h.dataClass !== "shop_identity")),
+    contentProblems(
+      storeContentHandlers.filter((h) => h.table !== "morrow_identity.store_installations"),
+    ),
+    ["STORE_CONTENT_WITHOUT_HANDLER:morrow_identity.store_installations"],
+  );
+  // So does dropping the candidates' shop-identity handler.
+  assert.deepEqual(
+    contentProblems(
+      storeContentHandlers.filter((h) => h.table !== "morrow_identity.linking_candidates"),
+    ),
     ["STORE_CONTENT_WITHOUT_HANDLER:morrow_identity.linking_candidates"],
   );
 });

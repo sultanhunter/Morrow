@@ -11,7 +11,8 @@
     "./paid-work": "./src/paid-work.ts",
     "./review-facts": "./src/review-facts.ts",
     "./review": "./src/review.ts",
-    "./store-resource": "./src/store-resource.ts"
+    "./store-resource": "./src/store-resource.ts",
+    "./store-link-template": "./src/store-link-template.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

@@ -21,6 +21,12 @@ export {
   StoreResourceError,
 } from "./store-resource";
 export type { ListingFieldPath, StoreResource } from "./store-resource";
+export {
+  storeLinkGrantTemplate,
+  storeLinkIssuer,
+  storeLinkTemplateId,
+} from "./store-link-template";
+export type { StoreLinkGrantRow } from "./store-link-template";
 export type PermissionVerb = Current_Grant["verbs"][number];
 export interface PermissionRequest {
   readonly capabilityId: CapabilityId;

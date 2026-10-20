@@ -71,10 +71,19 @@ test("S7 registry: every billing and vault table carries a well-formed per-table
   // The reviewed 0020 shape, as the old hard-coded S7 asserted it.
   assert.deepEqual(billingTables.workspace_billing_routes.commandPrivileges, ["INSERT", "SELECT"]);
   assert.equal(billingTables.workspace_billing_routes.apiColumns.length, 11);
-  for (const table of ["app_secrets", "credentials"]) {
-    assert.deepEqual(vaultTables[table].commandPrivileges, ["SELECT"], table);
+  for (const table of ["app_secrets", "credentials"])
     assert.deepEqual(vaultTables[table].apiColumns, [], table);
-  }
+  assert.deepEqual(vaultTables.app_secrets.commandPrivileges, ["SELECT"]);
+  // M2 PR-2 (0027): the broker's install definer is the first credentials writer: insert a
+  // version, and destroy the active one (erasing its key material); never DELETE.
+  assert.deepEqual(vaultTables.credentials.commandPrivileges, ["INSERT", "SELECT"]);
+  assert.deepEqual(vaultTables.credentials.commandColumnUpdates, [
+    "destroy_reason",
+    "destroyed_at",
+    "sealed_value",
+    "status",
+    "wrapped_key",
+  ]);
   // Planted malformed specs are reported.
   const good = billingTables.workspace_billing_routes;
   for (const [name, change] of [

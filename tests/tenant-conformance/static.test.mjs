@@ -93,6 +93,13 @@ const extraPolicies = {
     "((current_setting('morrow.work_member_revocation'::text, true) = (((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (initiator_membership_id)::text)) AND (NOT morrow_identity.work_lease_member_current((organization_id)::text, (workspace_id)::text, (initiator_principal_id)::text, (initiator_membership_id)::text)))",
     "((status = 'revoked'::text) AND (revoked_reason = 'membership'::text) AND (current_setting('morrow.work_member_revocation'::text, true) = (((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (initiator_membership_id)::text)))",
   ],
+  // M2 PR-2 (0025): the linking rule's route read, one named row, SELECT only.
+  route_link_read: [
+    "SELECT",
+    "{morrow_work_command}",
+    "(current_setting('morrow.billing_route_read'::text, true) = (((organization_id)::text || '|'::text) || (workspace_id)::text))",
+    null,
+  ],
   // The signup bridge's policy, bound to the website signup (0022-0023).
   route_signup: [
     "INSERT",
@@ -421,7 +428,8 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
   const identityFunctions = rows(
     "SELECT p.oid::regprocedure::text AS signature, has_function_privilege('morrow_work_command',p.oid,'EXECUTE') AS c, has_function_privilege('morrow_work_api',p.oid,'EXECUTE') AS a, has_function_privilege('morrow_work_owner',p.oid,'EXECUTE') AS o, has_function_privilege('morrow_api_worker',p.oid,'EXECUTE') AS l FROM pg_proc p WHERE p.pronamespace='morrow_identity'::regnamespace",
   );
-  // No executor login executes any identity function (ADR-0022 item 8).
+  // No executor login executes an identity function beyond its registered ones (ADR-0022
+  // item 8): M2 PR-2's connector OAuth-state definer is the only one.
   const loginIdentity = rows(
     `SELECT r.rolname, p.oid::regprocedure::text AS signature FROM pg_roles r, pg_proc p WHERE r.rolname IN (${Object.keys(
       executorLogins,
@@ -431,7 +439,14 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
         ",",
       )}) AND p.pronamespace='morrow_identity'::regnamespace AND has_function_privilege(r.oid,p.oid,'EXECUTE')`,
   );
-  assert.deepEqual(loginIdentity, []);
+  assert.deepEqual(
+    loginIdentity.map((r) => r.rolname + " " + r.signature).sort(),
+    Object.entries(executorLogins)
+      .flatMap(([login, allowed]) =>
+        allowed.filter((f) => f.startsWith("morrow_identity.")).map((f) => login + " " + f),
+      )
+      .sort(),
+  );
   for (const f of identityFunctions) {
     const bridge = bridgeFunctions.includes(f.signature.replace("morrow_identity.", ""));
     assert.equal(f.c, bridge, f.signature);

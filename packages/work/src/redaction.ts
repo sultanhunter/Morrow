@@ -56,6 +56,16 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       executor: null,
       executable: "M2 PR-3",
     },
+    // M2 PR-2 (0026): StoreInstallation@1 rows hold the shop domain and id (spine §11).
+    {
+      table: "morrow_identity.store_installations",
+      dataClass: "shop_identity",
+      trigger: "shop_redact",
+      action: "pseudonymise",
+      storeKey: "id: the store installation itself (shop_id kept)",
+      executor: null,
+      executable: "M2 PR-3",
+    },
     {
       table: "morrow_work.proposal_parameters",
       dataClass: "product_content_proposed",
