@@ -78,26 +78,11 @@ test("S7 registry: every billing and vault table carries a well-formed per-table
     ...Object.entries(vaultTables).flatMap(([t, s]) => s7SpecProblems("morrow_vault", t, s)),
   ];
   assert.deepEqual(problems, []);
-  // The reviewed 0020 shape, as the old hard-coded S7 asserted it (migration 0020: the
-  // api role's column SELECT on the route; no column UPDATE for the command role).
+  // The reviewed 0020 shape, as the old hard-coded S7 asserted it.
   assert.deepEqual(billingTables.workspace_billing_routes.commandPrivileges, ["INSERT", "SELECT"]);
-  assert.deepEqual(billingTables.workspace_billing_routes.apiColumns, [
-    "created_at",
-    "fixing_payment_key",
-    "mode",
-    "organization_id",
-    "origin",
-    "revision",
-    "route",
-    "route_fixed_at",
-    "shopify_bound_at",
-    "updated_at",
-    "workspace_id",
-  ]);
-  assert.deepEqual(billingTables.workspace_billing_routes.commandColumnUpdates, []);
+  assert.equal(billingTables.workspace_billing_routes.apiColumns.length, 11);
   for (const table of ["app_secrets", "credentials"]) {
     assert.deepEqual(vaultTables[table].commandPrivileges, ["SELECT"], table);
-    assert.deepEqual(vaultTables[table].commandColumnUpdates, [], table);
     assert.deepEqual(vaultTables[table].apiColumns, [], table);
   }
   // Planted malformed specs are reported.
@@ -156,4 +141,30 @@ test("S7 registry: schema USAGE agrees with the command role and each executor l
           signature,
         );
     }
+});
+
+// The reviewed 0020 column grants, pinned by name as the old hard-coded S7 implied them
+// (migration 0020): the api role reads exactly the route's eleven columns, and the command
+// role holds no column UPDATE on the route or either vault table. A later PR that widens
+// one of these tables changes this expectation beside its registry entry and migration.
+test("S7 registry: the reviewed 0020 column grants", () => {
+  assert.deepEqual(billingTables.workspace_billing_routes.apiColumns, [
+    "created_at",
+    "fixing_payment_key",
+    "mode",
+    "organization_id",
+    "origin",
+    "revision",
+    "route",
+    "route_fixed_at",
+    "shopify_bound_at",
+    "updated_at",
+    "workspace_id",
+  ]);
+  for (const [tables, table] of [
+    [billingTables, "workspace_billing_routes"],
+    [vaultTables, "app_secrets"],
+    [vaultTables, "credentials"],
+  ])
+    assert.deepEqual(tables[table].commandColumnUpdates, [], table);
 });
