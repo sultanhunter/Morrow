@@ -234,7 +234,7 @@ export function fakeCloudflare(options = {}) {
         name: "morrow-staging-api",
         enabled: true,
         previews: false,
-        bindings: ["morrow-staging-broker"],
+        bindings: [{ service: "morrow-staging-broker", entrypoint: "ApiBroker" }],
       },
       { name: "morrow-staging-broker", enabled: false, previews: false, bindings: [] },
       { name: "morrow-staging-orchestrator", enabled: false, previews: false, bindings: [] },
@@ -270,11 +270,12 @@ export function fakeCloudflare(options = {}) {
         return match[2] === "subdomain"
           ? { enabled: script.enabled, previews_enabled: script.previews }
           : {
-              bindings: script.bindings.map((service) => ({
-                type: "service",
-                name: "BROKER",
-                service,
-              })),
+              // A binding is a service name, or {service, entrypoint} (M2 PR-2).
+              bindings: script.bindings.map((binding) =>
+                typeof binding === "string"
+                  ? { type: "service", name: "BROKER", service: binding }
+                  : { type: "service", name: "BROKER", ...binding },
+              ),
             };
       }
       if (path === "workers/dispatch/namespaces") return options.namespaces ?? [];
@@ -342,7 +343,12 @@ export function fakeCloudflare(options = {}) {
         scripts.push(script);
       }
       if (workersDev) script.enabled = true;
-      if (name === "morrow-staging-api") script.bindings = ["morrow-staging-broker"];
+      // The committed wrangler configurations: the api binds ApiBroker and, from M2 PR-2,
+      // the connector binds ConnectorBroker (the census allow table admits exactly these).
+      if (name === "morrow-staging-api")
+        script.bindings = [{ service: "morrow-staging-broker", entrypoint: "ApiBroker" }];
+      if (name === "morrow-staging-connector")
+        script.bindings = [{ service: "morrow-staging-broker", entrypoint: "ConnectorBroker" }];
       deployments[name] = versionId;
     },
     workersDev: (name) => scriptNamed(name)?.enabled ?? null,
