@@ -195,7 +195,22 @@ export async function collectCensus(api, staging) {
       servicesBind(project?.deployment_configs?.production?.services, broker) ||
       servicesBind(project?.deployment_configs?.preview?.services, broker),
   }));
-  const namespaces = await api.get(["workers", "dispatch", "namespaces"]);
+  // An account without Workers for Platforms cannot hold a dispatch namespace: Cloudflare
+  // answers 403 with error 10121 ("You do not have access to dispatch namespaces"), which
+  // the census reads as zero namespaces. Any other failure still stops the census.
+  let namespaces;
+  try {
+    namespaces = await api.get(["workers", "dispatch", "namespaces"]);
+  } catch (error) {
+    if (
+      error?.code === "STAGING_CLOUDFLARE_REQUEST_FAILED" &&
+      error.details?.status === 403 &&
+      Array.isArray(error.details?.codes) &&
+      error.details.codes.includes(10121)
+    )
+      namespaces = [];
+    else throw error;
+  }
   const members = await api.list(["members"]);
   const snapshot = {
     scripts,

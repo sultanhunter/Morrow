@@ -35,6 +35,7 @@ import {
   labSiteKey,
   plantedHome,
   scriptOf,
+  unsetStaging,
 } from "./fixtures/staging-fakes.mjs";
 
 const head = schemaHead(loadMigrationChain());
@@ -1263,11 +1264,7 @@ test("smoke: no guard means no login start; failures name the check; --acceptanc
   } finally {
     unlimited.planted.cleanup();
   }
-  const unset = await world({
-    staging: {
-      ...JSON.parse(readFileSync("infra/environments/staging.json", "utf8")),
-    },
-  });
+  const unset = await world({ staging: unsetStaging() });
   try {
     assert.equal((await unset.run(["smoke"])).result.code, "STAGING_IDENTIFIERS_UNSET");
   } finally {
@@ -1773,7 +1770,7 @@ test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, nev
   } finally {
     f.planted.cleanup();
   }
-  const unset = await world();
+  const unset = await world({ staging: unsetStaging() });
   try {
     assert.equal((await unset.run(["neon-probe"])).result.code, "STAGING_IDENTIFIERS_UNSET");
   } finally {

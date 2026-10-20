@@ -6,7 +6,15 @@
 // on stdout and stderr, and `fail` makes it exit non-zero, so tests can show that tool
 // output never reaches the staging tool's own output.
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { StagingError } from "../../scripts/staging-common.mjs";
@@ -277,7 +285,11 @@ export function fakeCloudflare(options = {}) {
               })),
             };
       }
-      if (path === "workers/dispatch/namespaces") return options.namespaces ?? [];
+      if (path === "workers/dispatch/namespaces") {
+        if (options.namespacesError)
+          throw new StagingError("STAGING_CLOUDFLARE_REQUEST_FAILED", options.namespacesError);
+        return options.namespaces ?? [];
+      }
       if (path === "queues") {
         if (options.queueListFails) throw notFound();
         return queues;
@@ -533,6 +545,24 @@ export const labLoginConfigurationJson = JSON.stringify({
 
 // A context for scripts/staging.mjs over fakes. Every seam is replaceable through
 // `overrides`; nothing reaches a real tool, provider or the operator's HOME.
+// The committed staging file with every identifier unset, independent of the values
+// PR-D commits.
+export function unsetStaging() {
+  const root = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+  const base = JSON.parse(readFileSync(join(root, "infra/environments/staging.json"), "utf8"));
+  return {
+    ...base,
+    cloudflare: { ...base.cloudflare, account_id: null, workers_dev_subdomain: null, origin: null },
+    neon: {
+      ...base.neon,
+      project_id: null,
+      root_branch_id: null,
+      branch_id: null,
+      region_id: null,
+    },
+  };
+}
+
 export async function fakeContext({
   home,
   root,
@@ -560,7 +590,6 @@ export async function fakeContext({
   );
   const { stagingFileSpecs, credentialDirectory } = await import("../../scripts/staging-files.mjs");
   const { loadMigrationChain } = await import("../../scripts/migration-chain.mjs");
-  const { readFileSync } = await import("node:fs");
   const constants = await identityConstants();
   const realRoot = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
   const repoRoot = root ?? realRoot;
@@ -578,6 +607,10 @@ export async function fakeContext({
     neon: {
       ...baseStaging.neon,
       project_id: binding?.projectId ?? null,
+      // The committed file carries real identifiers (PR-D part 1); the default world keeps
+      // the root and region unset so the pending-identifier paths stay exercised.
+      root_branch_id: null,
+      region_id: null,
       branch_id: binding?.branchId ?? null,
     },
   };

@@ -1094,6 +1094,21 @@ test("census: findings for anything that is not exactly Morrow's staging", async
       JSON.parse(second.out.at(-1)).findings.map((f) => f.code),
       ["PAGES_PROJECT", "BROKER_BOUND_ELSEWHERE"],
     );
+    // An account without Workers for Platforms: 403 with Cloudflare error 10121 reads as
+    // zero dispatch namespaces (2026-10-20, the staging account). Any other refusal fails.
+    const noWfp = await fakeContext({
+      home: planted.home,
+      tools: fakeTools().tools,
+      cloudflare: fakeCloudflare({ namespacesError: { status: 403, codes: [10121] } }).api,
+    });
+    assert.equal(await main(["census"], noWfp.ctx), 0);
+    assert.deepEqual(JSON.parse(noWfp.out.at(-1)).findings, []);
+    const refused = await fakeContext({
+      home: planted.home,
+      tools: fakeTools().tools,
+      cloudflare: fakeCloudflare({ namespacesError: { status: 403, codes: [10000] } }).api,
+    });
+    assert.notEqual(await main(["census"], refused.ctx), 0);
   } finally {
     planted.cleanup();
   }
@@ -1296,18 +1311,26 @@ test("token: staging-token.mjs is the first import and removes the token before 
 
 // ---------------------------------------------------------------------------
 // Shapes the rest of PR-B and PR-D build on.
-test("staging.json: the D1 shape with every identifier still null", () => {
+test("staging.json: the D1 shape; each identifier is null or well-formed (PR-D part 1)", () => {
   const staging = JSON.parse(read("infra/environments/staging.json"));
-  for (const value of [
-    staging.cloudflare.account_id,
-    staging.cloudflare.workers_dev_subdomain,
-    staging.cloudflare.origin,
-    staging.neon.project_id,
-    staging.neon.root_branch_id,
-    staging.neon.branch_id,
-    staging.neon.region_id,
+  const { cloudflare, neon } = staging;
+  for (const [value, shape] of [
+    [cloudflare.account_id, /^[0-9a-f]{32}$/],
+    [cloudflare.workers_dev_subdomain, /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/],
+    [neon.project_id, /^[a-z]+-[a-z]+-[0-9]{8}$/],
+    [neon.root_branch_id, /^br-[a-z]+-[a-z]+-[a-z0-9]{8}$/],
+    [neon.branch_id, /^br-[a-z]+-[a-z]+-[a-z0-9]{8}$/],
+    [neon.region_id, /^aws-[a-z]+-[a-z]+-[0-9]$/],
   ])
-    assert.equal(value, null);
+    if (value !== null) assert.match(value, shape);
+  // The origin is derived from the subdomain, and the bound branch is never the root.
+  assert.equal(
+    cloudflare.origin,
+    cloudflare.workers_dev_subdomain === null
+      ? null
+      : `https://morrow-staging-api.${cloudflare.workers_dev_subdomain}.workers.dev`,
+  );
+  if (neon.branch_id !== null) assert.notEqual(neon.branch_id, neon.root_branch_id);
   assert.equal(staging.neon.plan, "Free");
   assert.equal(staging.neon.branch_name, "staging");
   assert.equal(staging.neon.history_window_hours, 6);
