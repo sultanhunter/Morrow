@@ -48,23 +48,6 @@
 - **The connector binds the HMAC secret.** This places a provider secret outside the broker, contrary to invariant 11. It is allowed only by a separate owner-signed deviation.
 - **React Router on Workers through an unofficial adapter.** Rejected: 3.0.1 ships no Workers adapter, and an unofficial one would be unsupported security-critical code.
 
-## Amendments
-
-### 2026-10-20: item 1, no Shopify library in deployed code (M2 PR-2)
-
-Item 1's second bullet now reads:
-
-> Deployed code uses no Shopify library. The broker implements by hand, behind the item 2 boundary:
-> - the query HMAC and webhook `X-Shopify-Hmac-Sha256` checks (WebCrypto, constant time, over the raw bytes);
-> - the authorization-code exchange;
-> - one fixed Admin GraphQL document per read.
->
-> The connector Worker holds no secret and imports no Shopify package. `@shopify/shopify-api` may remain a development dependency for fixtures and contract checks only.
-
-Reason: in the locked `@shopify/shopify-api` 15.0.0, `shopifyApi()` will not initialise without `apiSecretKey` (Consequences). The secret stays in the broker (item 2), and the broker bundle is capped at 256 KiB, so the library would have to run inside the broker. The broker must also leave room for the Neon driver, Stripe (M5) and the Claude adapter (M3 PR-2). The hand-written surface is small and pinned by tests against Shopify's documented HMAC and OAuth examples. Items 2–6 are unchanged.
-
-Owner decision, 2026-10-20, in chat. The question was: "Your earlier decision (ADR-0008 item 1) says deployed code uses the official @shopify/shopify-api library. The library needs the app secret wherever it runs, the secret must stay in the broker, and the broker's bundle is capped at 256 KiB. What should we do?" The owner answered: "Hand-written checks (Recommended)".
-
 ## Approval
 
 Owner approval, 2026-10-18, in chat. The owner selected **"Cloudflare Worker (Recommended)"** in answer to:
@@ -80,3 +63,22 @@ Scope of the approval:
 - **Not covered by the question:** item 4. Neon-backed session storage follows the selected stack. Its token-custody details stay subject to the owner-approved P08 credential-custody ADR, which is not yet written (see ADR-0007 item 4).
 
 Shopify credentials, routes, broker methods and deployment still need that P08 ADR and the P08.T02 broker trust model. Each hosted effect still needs its own approval.
+
+## Amendments
+
+### 2026-10-20: item 1, no Shopify library in deployed code (M2 PR-2)
+
+Item 1's second bullet now reads:
+
+> Deployed code uses no Shopify library. The broker implements, by hand and behind the item 2 boundary:
+> - the query HMAC and webhook `X-Shopify-Hmac-Sha256` checks (WebCrypto, constant time, over the raw bytes);
+> - the authorization-code exchange;
+> - fixed Admin GraphQL documents, starting with one product query.
+>
+> Any later Admin API call (M4's product update and its readback) is likewise a fixed document in the broker, reviewed with its PR. The connector Worker holds no secret and imports no Shopify package. `@shopify/shopify-api` may stay a development dependency for fixtures and contract checks only.
+
+Reason: in the locked `@shopify/shopify-api` 15.0.0, `shopifyApi()` will not initialise without `apiSecretKey` (Consequences). The secret stays in the broker (item 2), and the broker bundle is capped at 256 KiB, so the library would have to run inside the broker. The broker must also leave room for the Neon driver, Stripe (M5) and the Claude adapter (M3 PR-2). M2 PR-2 pins the hand-written checks with tests against Shopify's documented HMAC and OAuth examples.
+
+Items 2–6 are unchanged. The title and the Consequences bullets that name `@shopify/shopify-api` as the deployed runtime describe item 1 before this amendment.
+
+Owner decision, 2026-10-20, in chat. The question was: "Your earlier decision (ADR-0008 item 1) says deployed code uses the official @shopify/shopify-api library. The library needs the app secret wherever it runs, the secret must stay in the broker, and the broker's bundle is capped at 256 KiB. What should we do?" The owner answered: "Hand-written checks (Recommended)". The option read: "The broker does Shopify's signature checks, the install code exchange and one fixed product query itself. That's small and easy to audit, and the connector holds no secret. Amends ADR-0008 item 1."
