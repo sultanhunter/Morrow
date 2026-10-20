@@ -1,10 +1,12 @@
 // morrow-<env>-broker (ADR-0007): no public route, no workers.dev or preview
-// URL; reachable only through the ApiBroker service-binding entrypoint. It is
-// the only Worker that binds provider credentials: the WorkOS API key and the
-// eight Neon runtime-role passwords (`brokerRequiredSecrets`). No identifier is
-// committed; the first hosted deploy fails closed until P04.T01i supplies
-// `wrangler deploy --secrets-file`. Never add merchant or model credentials
-// under the v0 trust model.
+// URL; reachable only through its service-binding entrypoints (ApiBroker, and under
+// trust model v1 ConnectorBroker and RuntimeBroker, ADR-0022 item 7). It is the only
+// Worker that binds provider credentials (`brokerRequiredSecrets`): the WorkOS API
+// key, the ten leased Neon role passwords, its own vault login's password and the
+// vault KEK (MORROW_VAULT_KEK_V1). No identifier is committed; the first hosted
+// deploy fails closed until P04.T01i supplies `wrangler deploy --secrets-file`.
+// Merchant and model credentials come only under trust model v1, as vault rows or
+// the secrets ADR-0022 item 7 admits, each with the PR that uses it.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "morrow-development-broker",
@@ -30,6 +32,10 @@
       "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGOUT",
       "MORROW_DB_PASSWORD_MORROW_IDENTITY_ONBOARDING",
       "MORROW_DB_PASSWORD_MORROW_API_WORKER",
+      "MORROW_DB_PASSWORD_MORROW_CONNECTOR_INGRESS",
+      "MORROW_DB_PASSWORD_MORROW_RUNTIME_EXECUTOR",
+      "MORROW_DB_PASSWORD_MORROW_VAULT_BROKER",
+      "MORROW_VAULT_KEK_V1",
     ],
   },
   "env": {
@@ -47,6 +53,10 @@
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGOUT",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_ONBOARDING",
           "MORROW_DB_PASSWORD_MORROW_API_WORKER",
+          "MORROW_DB_PASSWORD_MORROW_CONNECTOR_INGRESS",
+          "MORROW_DB_PASSWORD_MORROW_RUNTIME_EXECUTOR",
+          "MORROW_DB_PASSWORD_MORROW_VAULT_BROKER",
+          "MORROW_VAULT_KEK_V1",
         ],
       },
     },
@@ -64,6 +74,10 @@
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_LOGOUT",
           "MORROW_DB_PASSWORD_MORROW_IDENTITY_ONBOARDING",
           "MORROW_DB_PASSWORD_MORROW_API_WORKER",
+          "MORROW_DB_PASSWORD_MORROW_CONNECTOR_INGRESS",
+          "MORROW_DB_PASSWORD_MORROW_RUNTIME_EXECUTOR",
+          "MORROW_DB_PASSWORD_MORROW_VAULT_BROKER",
+          "MORROW_VAULT_KEK_V1",
         ],
       },
     },

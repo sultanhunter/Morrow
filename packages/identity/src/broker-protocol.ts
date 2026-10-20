@@ -8,7 +8,8 @@ import { loginJson } from "./standalone-login-protocol.js";
 // THE single role/purpose table. The broker's `secrets.required` and the pools'
 // borrowed namespaces must follow it. P05.T01x (ADR-0009 item 4) dropped the login
 // selection role and added the first-owner signup executor; P06.T01a (ADR-0010
-// item 2) added the api Worker's work login, so it holds eight.
+// item 2) added the api Worker's work login. M2 PR-1 (ADR-0022 items 7-8) adds the
+// connector's and the orchestrator's membership-free executor logins, so it holds ten.
 export const brokerNeonRoles = Object.freeze({
   morrow_identity_login: "primary_and_one_same_role_observer",
   morrow_identity_preauth: "primary_and_one_same_role_observer",
@@ -19,14 +20,43 @@ export const brokerNeonRoles = Object.freeze({
   morrow_identity_onboarding: "workspace_primary_and_one_same_role_observer",
   // P06.T01a (ADR-0010 item 2): the api Worker's work login, one connection per request.
   morrow_api_worker: "work_request_transaction",
+  // M2 PR-1: the connector Worker's login, one connection per request (M2 PR-2/PR-3).
+  morrow_connector_ingress: "connector_request_transaction",
+  // M2 PR-1: the orchestrator's login, one connection per Workflow step (spine §5).
+  morrow_runtime_executor: "runtime_step_transaction",
 } as const);
 export type BrokerNeonRole = keyof typeof brokerNeonRoles;
 export const brokerNeonRoleNames = Object.freeze(Object.keys(brokerNeonRoles) as BrokerNeonRole[]);
-export const brokerPasswordSecret = (role: BrokerNeonRole) =>
+// Broker trust model v1 (ADR-0022 item 7): each caller binds its own entrypoint, and
+// neonLease serves only that caller's roles. The api keeps the eight roles of v0.
+export type BrokerCaller = "api" | "connector" | "runtime";
+export const brokerCallerRoles: Readonly<Record<BrokerCaller, readonly BrokerNeonRole[]>> =
+  Object.freeze({
+    api: Object.freeze([
+      "morrow_identity_login",
+      "morrow_identity_preauth",
+      "morrow_identity_sessions",
+      "morrow_api",
+      "morrow_identity_linking",
+      "morrow_identity_logout",
+      "morrow_identity_onboarding",
+      "morrow_api_worker",
+    ] as const),
+    connector: Object.freeze(["morrow_connector_ingress"] as const),
+    runtime: Object.freeze(["morrow_runtime_executor"] as const),
+  });
+// The broker's own database login (the vault definers), never leased to any caller.
+export const brokerVaultRole = "morrow_vault_broker";
+// The vault key-encryption keys the broker holds, one secret per KEK version
+// (ADR-0022 item 7). A rotation adds the next version here before any row uses it.
+export const brokerVaultKekSecrets: readonly string[] = Object.freeze(["MORROW_VAULT_KEK_V1"]);
+export const brokerPasswordSecret = (role: BrokerNeonRole | typeof brokerVaultRole) =>
   `MORROW_DB_PASSWORD_${role.toUpperCase()}`;
 export const brokerRequiredSecrets: readonly string[] = Object.freeze([
   "WORKOS_API_KEY",
   ...brokerNeonRoleNames.map(brokerPasswordSecret),
+  brokerPasswordSecret(brokerVaultRole),
+  ...brokerVaultKekSecrets,
 ]);
 export const brokerLimits = Object.freeze({
   namespaceMaxBytes: 1024,
@@ -48,6 +78,17 @@ export interface ApiBrokerRpc {
   health(): Promise<boolean>;
   neonLease(namespaceJson: string): Promise<string>;
   workosSessionPage(namespaceJson: string, selectorJson: string, budgetMs: number): Promise<string>;
+}
+// M2 PR-1 (ADR-0022 item 7, spine §4): the connector's and the orchestrator's own
+// entrypoints. PR-1 gives each its health and its own role lease; the Shopify and model
+// methods join with the PRs that add their database definers (M2 PR-2/PR-3, M3, M4).
+export interface ConnectorBrokerRpc {
+  health(): Promise<boolean>;
+  neonLease(namespaceJson: string): Promise<string>;
+}
+export interface RuntimeBrokerRpc {
+  health(): Promise<boolean>;
+  neonLease(namespaceJson: string): Promise<string>;
 }
 
 const invalid = () => Error("BROKER_PROTOCOL_INVALID");

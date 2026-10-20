@@ -18,6 +18,7 @@ import {
   workRoles,
   workTables,
 } from "./registry.mjs";
+import { contentProblems, registeredTables } from "./content.mjs";
 import { conformanceReport, recordConformance } from "./report.mjs";
 import { morrowSetRowsSql } from "../../scripts/fixtures/createrole-administrator.mjs";
 
@@ -646,4 +647,25 @@ test("S7: the billing and vault schemas, and what each executor login may execut
     );
   }
   recordConformance("S7", true);
+});
+
+// M2 PR-1 (P09.T05a; mvp-architecture §11): every registered table, which S1 and S7 tie to
+// the live catalog, declares its content class, and every store-content table has exactly
+// one cleanup handler in packages/work/src/redaction.ts.
+test("S8: content classes and the store-content cleanup handlers", () => {
+  const live = new Set(
+    db
+      .rows(
+        "SELECT n.nspname||'.'||c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname IN ('morrow_work','morrow_billing','morrow_vault')",
+      )
+      .map((r) => r.name),
+  );
+  assert.deepEqual(
+    registeredTables()
+      .map(([name]) => name)
+      .sort(),
+    [...live].sort(),
+  );
+  assert.deepEqual(contentProblems(), []);
+  recordConformance("S8", true);
 });

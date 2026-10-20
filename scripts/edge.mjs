@@ -423,8 +423,9 @@ const allowedBindings = Object.freeze({
   orchestrator: ["workflows", "queues", "secrets"],
   connector: ["vars", "secrets"],
 });
+// MORROW_VAULT_ (the vault KEKs, ADR-0022 item 7) binds only to the broker as well.
 const providerCredentialName =
-  /^(WORKOS_|MORROW_DB_PASSWORD_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG)/i;
+  /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG)/i;
 const credentialWord = /KEY|SECRET|PASSWORD|TOKEN/i;
 // Hosted identifiers that P04.T02a must not commit (P04.T01i later allows only the
 // reviewed staging identifiers in env.staging.vars).

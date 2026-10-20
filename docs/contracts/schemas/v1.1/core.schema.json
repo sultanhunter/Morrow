@@ -5016,6 +5016,262 @@
         "absoluteRemainingMs"
       ],
       "additionalProperties": false
+    },
+    "SystemStopActor": {
+      "description": "The system as the setter of a stop (StopRecord@1): an automatic stop such as the connection stop of the app/uninstalled webhook. It names no person.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "system"
+        },
+        "operatorId": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "kind",
+        "operatorId"
+      ],
+      "additionalProperties": false
+    },
+    "OperatorStopActor": {
+      "description": "The platform operator (the owner, through an audited script) as the setter or lifter of a stop (StopRecord@1).",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "operator"
+        },
+        "operatorId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "kind",
+        "operatorId"
+      ],
+      "additionalProperties": false
+    },
+    "StopRecord": {
+      "description": "StopRecord@1 (ADR-0022 items 2 and 15; mvp-architecture section 10; morrow_work.stop_records, migration 0020): the append-only, content-free record of one system or operator stop event, committed with its stop control. The app/uninstalled webhook writes a system record for its connection stop; the owner's audited script writes operator records for the platform stop. Human kill switches (Stop AI work, Disconnect store) write a KillSwitchRecord instead. A platform record has null tenant, store and target keys; any other record names all four, its target being the installation or connection id. Only a person lifts a stop, so a lift record is always an operator's.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "id": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "stopControlId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "action": {
+              "type": "string",
+              "enum": [
+                "set",
+                "lift"
+              ]
+            },
+            "scope": {
+              "const": "platform"
+            },
+            "organizationId": {
+              "type": "null"
+            },
+            "workspaceId": {
+              "type": "null"
+            },
+            "storeId": {
+              "type": "null"
+            },
+            "targetId": {
+              "type": "null"
+            },
+            "actor": {
+              "$ref": "#/$defs/OperatorStopActor"
+            },
+            "reasonCode": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]{2,63}$"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "\\S"
+            },
+            "recordedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "id",
+            "stopControlId",
+            "action",
+            "scope",
+            "organizationId",
+            "workspaceId",
+            "storeId",
+            "targetId",
+            "actor",
+            "reasonCode",
+            "reason",
+            "recordedAt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "id": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "stopControlId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "action": {
+              "const": "set"
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "installation",
+                "connection"
+              ]
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "storeId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "targetId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "actor": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SystemStopActor"
+                },
+                {
+                  "$ref": "#/$defs/OperatorStopActor"
+                }
+              ]
+            },
+            "reasonCode": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]{2,63}$"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "\\S"
+            },
+            "recordedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "id",
+            "stopControlId",
+            "action",
+            "scope",
+            "organizationId",
+            "workspaceId",
+            "storeId",
+            "targetId",
+            "actor",
+            "reasonCode",
+            "reason",
+            "recordedAt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schemaVersion": {
+              "const": 1
+            },
+            "id": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "stopControlId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "action": {
+              "const": "lift"
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "installation",
+                "connection"
+              ]
+            },
+            "organizationId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "workspaceId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "storeId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "targetId": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            "actor": {
+              "$ref": "#/$defs/OperatorStopActor"
+            },
+            "reasonCode": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_]{2,63}$"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "\\S"
+            },
+            "recordedAt": {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            }
+          },
+          "required": [
+            "schemaVersion",
+            "id",
+            "stopControlId",
+            "action",
+            "scope",
+            "organizationId",
+            "workspaceId",
+            "storeId",
+            "targetId",
+            "actor",
+            "reasonCode",
+            "reason",
+            "recordedAt"
+          ],
+          "additionalProperties": false
+        }
+      ]
     }
   }
 }

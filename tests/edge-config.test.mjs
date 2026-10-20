@@ -65,8 +65,9 @@ test("AC01/AC04: the committed configuration resolves cleanly for 4 Workers x 3 
     ]);
     assert.deepEqual(verdict.resolved["connector:" + environment].bindings, ["MORROW_ENVIRONMENT"]);
     // MORROW_ENVIRONMENT, WORKOS_API_KEY and the eight role passwords (P06.T01a adds
-    // morrow_api_worker).
-    assert.equal(verdict.resolved["broker:" + environment].bindings.length, 10);
+    // morrow_api_worker); M2 PR-1 adds the connector's and the orchestrator's role
+    // passwords, the vault login's password and the vault KEK (ADR-0022 items 7-8).
+    assert.equal(verdict.resolved["broker:" + environment].bindings.length, 14);
   }
   assert.deepEqual(verdict.reservedWorkerPaths, [...reservedWorkerPaths]);
   assert.deepEqual((await verify(tree())).problems, []);
@@ -123,6 +124,22 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
       "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
     ],
     [{ api: (c) => (c.vars.ANTHROPIC_BASE_URL = "x") }, "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER"],
+    // M2 PR-1: the vault KEK is broker-only (ADR-0022 item 7).
+    [
+      { connector: (c) => c.env.staging.secrets.required.push("MORROW_VAULT_KEK_V1") },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    [
+      { orchestrator: (c) => (c.secrets.required = ["MORROW_VAULT_KEK_V1"]) },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    [
+      {
+        broker: (c) =>
+          c.secrets.required.splice(c.secrets.required.indexOf("MORROW_VAULT_KEK_V1"), 1),
+      },
+      "EDGE_BROKER_SECRETS",
+    ],
     [{ api: (c) => (c.workers_dev = true) }, "EDGE_FLAG_WORKERS_DEV"],
     [{ connector: (c) => (c.env.production.preview_urls = true) }, "EDGE_FLAG_PREVIEW_URLS"],
     [{ broker: (c) => (c.observability.enabled = true) }, "EDGE_FLAG_OBSERVABILITY"],

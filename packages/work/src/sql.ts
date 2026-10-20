@@ -1,4 +1,5 @@
 import { approvalStatements } from "./approvals/sql.js";
+import { spineStatements } from "./spine-sql.js";
 
 // Every statement the work API sends (ADR-0010 item 2). Source-fixed: no caller
 // SQL, role, option or identifier is ever interpolated; values travel only as
@@ -62,5 +63,7 @@ export const workStatements = Object.freeze({
   answerOfQuestion: `SELECT a.id::text AS id,a.organization_id::text AS organization_id,a.workspace_id::text AS workspace_id,a.question_id::text AS question_id,a.body,a.body_digest::text AS body_digest,a.answered_by_principal_id::text AS answered_by_principal_id,a.answered_by_membership_id::text AS answered_by_membership_id,${utc("a.created_at")} AS created_at FROM morrow_work.question_answers a WHERE a.question_id=$1::text`,
   // The approval records (P06.T01b), from their own fixed table.
   ...approvalStatements,
+  // The M2 PR-1 spine reads: the billing route row and the stop state (migration 0020).
+  ...spineStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

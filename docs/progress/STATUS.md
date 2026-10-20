@@ -22,6 +22,7 @@ Updated 2026-10-20. Rewrite this file in place (at most 80 lines). The pre-overh
 In progress:
 - **MVP design** (`claude/mvp-briefs`, PR #25): ADR-0022 Accepted with the owner's answers; Claude behind a provider-neutral model gateway; model catalogue v1 active (2026-10-19); briefs M2–M5 in `docs/briefs/`.
 - Built branches waiting for the merge train (next actions): P05.T01ab, P04.T01i PR-B.
+- **M2 PR-1, spine foundation** (`claude/m2-foundation`, on `claude/mvp-briefs`; no PR yet): part 1 (migrations 0019–0021, `12fd316`) and part 2 (`ConnectorBroker`/`RuntimeBroker` with vault envelopes, the vault script, runtime lease, operation-ledger, stop and billing-route helpers, `StopRecord@1`, the redaction-handler list) are committed; local checks green; hosted CI and the AI review are pending. It adds four broker secrets (two role passwords, the vault login's password, `MORROW_VAULT_KEK_V1`) that every deploy after its merge needs, so P04.T01i PR-B's `provision-roles` and `secrets-status` (broker 10 → 14) must follow it.
 
 ## Decisions recorded 2026-10-18 and 2026-10-19 (owner, in chat)
 
@@ -62,6 +63,7 @@ None for local work. The first staging deploy waits on the trimmed P04.T01i PR-B
   - GitHub: suspend the ChatGPT Codex Connector app (GitHub's sudo re-authentication stopped Claude's attempt) and delete the classic token "AppForge Github Actions". The platform apps AWS Connector, Codemagic, DigitalOcean, Expo, Netlify, Render and Vercel stay (ADR-0019 item 5 exception).
   - Cloudflare usage alerts at about 10% of each allowance (D9 5(c)), or confirm the D6 fallback: the $5 billable-usage alert (exists) plus your weekly check of Billing → Usage.
   - D9: delete Neon `cool-butterfly-64820147` and create the project key; change the Cloudflare Global API Key and create the two tokens (TTL 2026-11-18); a new WorkOS key, revoking old ones; `gh secret set CLOUDFLARE_API_TOKEN --env staging`; `tmutil addexclusion ~/.config/morrow`.
+- **For M2:** generate the vault KEK with `npm run vault -- kek --out ~/.config/morrow/<env>/vault-kek-v1` and place it with `morrow_put` (`infra/README.md`); later, each beta app's client secret with `npm run vault -- seal-app-secret`.
 - **For M3:** an Anthropic Console workspace for staging with a monthly spend limit; its workspace-scoped API key placed with `morrow_put`.
 - **Sign-off:** Plan R1 (Tier 3), which also freezes the P01 contract v1.1 billing layer (Shopify-route money is USD-only; `AllocationShare@2` is a declared superset of v1).
 - **Credential rotation:** the E2B key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.

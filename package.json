@@ -40,6 +40,7 @@
     "contracts:generate": "node scripts/generate-contracts.mjs && node scripts/generate-runtime-validators.mjs",
     "verify:boundaries": "node scripts/generate-contracts.mjs --check && node scripts/generate-runtime-validators.mjs --check && node scripts/verify-boundaries.mjs",
     "smoke:scaffold": "node scripts/smoke-scaffold.mjs",
+    "vault": "node --import tsx scripts/vault.mjs",
     "smoke:edge-dev": "node scripts/edge.mjs smoke-dev",
     "lab": "node --import tsx scripts/lab.mjs",
     "format": "prettier --write .",

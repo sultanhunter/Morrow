@@ -45,15 +45,34 @@ Install-first and Shopify-route workspaces (refused, ADR-0022 item 5); public di
 
 ## Test checklist
 
-- [ ] Vault: AES-256-GCM round trip; wrong AAD, KEK version or environment fails; ciphertext never logged; rotating one app secret leaves the others working.
+- [x] Vault: AES-256-GCM round trip; wrong AAD, KEK version or environment fails; ciphertext never logged; rotating one app secret leaves the others working (PR-1: `tests/broker-vault.test.mjs`, `lab:spine-foundation` V1–V5).
 - [ ] Launch and callback: bad HMAC, foreign shop, replayed or expired state, missing cookie, unknown app key → no candidate, no token; launch with an active installation → no OAuth; re-authorisation → one installation, new credential version.
 - [ ] Scopes: `write_products` alone satisfies `read_products`.
 - [ ] Link: wrong workspace, missing grant, unpaid workspace, replayed continuation, two workspaces racing → one link at most (P05.T03a cases rerun with `shopify_oauth`); a link issues exactly the store-link grants.
-- [ ] Lease context: forged setting, expired or revoked lease, removed member → zero rows; a lease context calling a session definer → refused.
+- [x] Lease context: forged setting, expired or revoked lease, removed member → zero rows; a lease context calling a session definer → refused (PR-1: conformance P7/P8, `lab:spine-foundation` L1–L5 and T1–T2).
 - [ ] Webhooks: duplicate id → one row; bad HMAC → 401 and no row; `customers/*` fixtures store no email, phone or order id; a slow insert past the budget → 5xx; uninstall destroys the credential and revokes leases.
 - [ ] `shop/redact` empties snapshots, drafts and parameters for that store only.
 - [ ] One workerd plus PostgreSQL 17 end-to-end lab with recorded Shopify fixtures; zero real provider calls in CI.
 - [ ] Development-store smoke under owner approval, recorded in `docs/evidence/live/`.
+
+## PR-1 checklist (spine foundation, branch `claude/m2-foundation`)
+
+Part 1 (database, commit `12fd316`) and part 2 (TypeScript and broker). No provider call; synthetic fixtures only.
+
+- [x] Migrations 0019–0021 and `infra/spine-executor-role-prerequisites.sql`: `work_leases`, `stop_controls`, `stop_records`, `operations`, `operation_transitions`, `morrow_billing.workspace_billing_routes`, `morrow_vault.app_secrets` and `credentials`; `enter_lease`, `current_lease()`, `pending_starts()`; the three membership-free executor logins; FORCE RLS and registry entries for every table (`lab:spine-foundation`, `lab:tenant-conformance`, `lab:createrole-administrator`).
+- [x] Broker trust model v1: `ConnectorBroker` and `RuntimeBroker` entrypoints, each with `health` and a `neonLease` that serves only its own role; the api's `ApiBroker` unchanged and unable to lease the new roles (`tests/broker.test.mjs`, `lab:edge-workers` M2 cases).
+- [x] Broker role table and secrets: `morrow_connector_ingress` and `morrow_runtime_executor` in `brokerNeonRoles` with `brokerCallerRoles`; `MORROW_DB_PASSWORD_MORROW_VAULT_BROKER` and `MORROW_VAULT_KEK_V1` required in every environment; `MORROW_VAULT_` refused outside the broker (`tests/broker-protocol.test.mjs`, `tests/edge-config.test.mjs`, `tests/api-environment.test.mjs`).
+- [x] Vault envelopes in the broker only (`apps/broker/src/vault.ts`): AES-256-GCM, a per-record data key under a versioned KEK, additional data binding environment, tenant, record, subject, provider, version and KEK version; `readAppSecret` on the one fixed `app_secret_get` statement.
+- [x] The owner-run vault script (`npm run vault -- kek | seal-app-secret | check-envelope`): 0600 files outside the repository, the secret from stdin, nothing printed but a fingerprint; `appSecretPutStatement` for the administrator runner (`tests/vault-script.test.mjs`, lab V5).
+- [x] Runtime lease helpers (`@morrow/work/runtime`): one connection per transaction as `morrow_runtime_executor`, the ADR-0020 D5 role preflight, `enter_lease` first, `lease_mark_started`, `lease_release`, `pending_starts` ids only (`tests/runtime-leases.test.mjs`, lab T1–T2).
+- [x] OperationLedger helpers (`@morrow/work/operations`) on the unchanged operation rows of `state-transitions.json`: bind values for `operation_transition`, its five outcomes, and the spine §8 write and readback edges; no edge promotes `uncertain` (`tests/operation-ledger.test.mjs`).
+- [x] Stops (`@morrow/work/stops`): "Stop AI work" on the ADR-0005 path (`checkKillSwitchTarget`, human actor only, KillSwitchRecord), the system uninstall connection stop, `StopRecord@1` from rows, and `stopBlocks`, equal to `stop_active` over a matrix (`tests/stops.test.mjs`, lab T3).
+- [x] Billing route row (`@morrow/work/billing-route`): `billingRouteForCreation` from `originForCreation`, the api's reader and row mapping; 0021's signup trigger writes exactly that row (`tests/billing-route-row.test.mjs`, lab R6).
+- [x] Contract: `StopRecord@1` with `SystemStopActor` and `OperatorStopActor` in core v1.1 (an addition; `npm run contracts:generate`).
+- [x] The redaction-handler list (`packages/work/src/redaction.ts`): every registered table has a content class; every store-content table has exactly one handler (`tests/redaction-handlers.test.mjs`, conformance S8).
+- [ ] Commands that write stops: "Stop AI work" lands with the installation records in M3 PR-1 and the disconnect command in M2 PR-3 (spine §10); the uninstall stop's connector definer in M2 PR-3.
+- [ ] The broker's database transport for the vault login and the connector and orchestrator service bindings land with their first callers (M2 PR-2, M3 PR-1).
+- [ ] Hosted CI on the PR head; one AI review (separate context, same model family) with the security lens.
 
 ## Owner actions
 

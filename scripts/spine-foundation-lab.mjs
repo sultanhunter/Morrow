@@ -3,16 +3,40 @@
 // non-superuser CREATEROLE administrator (ADR-0020 D4, the hosted shape). It proves the
 // lease context, that stops block admission (including both race orders), the operation
 // state machine and its send fence, that vault rows are unreadable to every role but the
-// broker's login (with an AES-256-GCM envelope round trip), and the billing route's
-// creation and immutability rules. Owner-seeded synthetic fixtures only; no provider,
+// broker's login (with the broker's own AES-256-GCM envelopes and the owner script's
+// apply statement), and the billing route's creation and immutability rules. Part 2's
+// TypeScript helpers run here too: the runtime lease steps as morrow_runtime_executor,
+// StopRecord@1 and the stop_active twin, and the billing route row mapping (T, R6).
+// Owner-seeded synthetic fixtures only; no provider,
 // credential or merchant data. Runs in the CI pg-work group. The local superuser is used
 // only for fixtures, the lab-only probe definers and the shapes marked "sim".
 import { spawn } from "node:child_process";
-import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { randomBytes, randomUUID } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  createVaultKeyring,
+  openVaultRecord,
+  readAppSecret,
+  sealVaultRecord,
+} from "../apps/broker/src/vault.ts";
+import {
+  billingRouteForCreation,
+  effectiveBillingOrigin,
+  workspaceBillingRouteFromRow,
+} from "../packages/work/src/billing-route.ts";
+import {
+  createRuntimeAttempt,
+  listPendingStarts,
+  runLeaseStep,
+} from "../packages/work/src/runtime/leases.ts";
+import { spineStatements } from "../packages/work/src/spine-sql.ts";
+import { stopBlocks, stopRecordFromRow } from "../packages/work/src/stops.ts";
 import {
   asApi,
   asCommandRole,
+  createLocalWorkConnector,
   literal,
   restoreSql,
   revocationSql,
@@ -21,6 +45,7 @@ import {
   withWorkDatabase,
 } from "../tests/tenant-conformance/harness.mjs";
 import { writeArtifact } from "./artifacts.mjs";
+import { appSecretPutStatement, sealAppSecret } from "./vault.mjs";
 
 const transitionsJson = JSON.parse(readFileSync("docs/contracts/state-transitions.json", "utf8"));
 const checks = [];
@@ -38,6 +63,9 @@ function check(name, passed, detail) {
 }
 const last = (out) => (Array.isArray(out) ? out : out.split("\n")).at(-1);
 const ms = "date_trunc('milliseconds',clock_timestamp())";
+// One instant per transaction, for inserts whose triggers require created_at=updated_at:
+// two clock_timestamp() calls can straddle a millisecond on a loaded host.
+const txMs = "date_trunc('milliseconds',transaction_timestamp())";
 const marker =
   "(extract(epoch FROM transaction_timestamp())*1000000)::bigint::text||':'||pg_backend_pid()::text";
 const uuid = () => randomUUID();
@@ -639,7 +667,7 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
       JSON.stringify(rules) === JSON.stringify(contract),
     );
     const insert = (p, id, extra = "") =>
-      `INSERT INTO morrow_work.operations(organization_id,workspace_id,id,revision,kind,capability_id,status,request_digest,attempt,created_at,updated_at${extra ? "," + extra.split("=")[0] : ""}) VALUES(${literal(p.org)},${literal(p.workspace)},${literal(id)},1,'stripe_write','governance.billing.manage','planned',${literal("e".repeat(64))},0,${ms},${ms}${extra ? "," + extra.split("=")[1] : ""});`;
+      `INSERT INTO morrow_work.operations(organization_id,workspace_id,id,revision,kind,capability_id,status,request_digest,attempt,created_at,updated_at${extra ? "," + extra.split("=")[0] : ""}) VALUES(${literal(p.org)},${literal(p.workspace)},${literal(id)},1,'stripe_write','governance.billing.manage','planned',${literal("e".repeat(64))},0,${txMs},${txMs}${extra ? "," + extra.split("=")[1] : ""});`;
     const step = (id, expected, to, actor, guard, reason = null, uncertainty = null) =>
       `SELECT outcome FROM morrow_work.operation_transition(${literal(P.A.org)},${literal(P.A.workspace)},${literal(id)},${expected},${literal(to)},${literal(actor)},${literal(guard)},${literal(reason)},${literal(uncertainty)},NULL);`;
     const fence = (id, revision) =>
@@ -818,7 +846,7 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
       refused(
         asCommandRole(
           P.A,
-          `INSERT INTO morrow_work.operations(organization_id,workspace_id,id,revision,kind,capability_id,status,request_digest,attempt,created_at,updated_at) VALUES(${literal(P.A.org)},${literal(P.A.workspace)},'o_catalog',1,'catalog_write','catalog.content.publish','planned',${literal("e".repeat(64))},0,${ms},${ms});`,
+          `INSERT INTO morrow_work.operations(organization_id,workspace_id,id,revision,kind,capability_id,status,request_digest,attempt,created_at,updated_at) VALUES(${literal(P.A.org)},${literal(P.A.workspace)},'o_catalog',1,'catalog_write','catalog.content.publish','planned',${literal("e".repeat(64))},0,${txMs},${txMs});`,
         ),
         "operations_kind",
       ) &&
@@ -829,7 +857,7 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
         refused(
           asCommandRole(
             P.A,
-            `INSERT INTO morrow_work.operations(organization_id,workspace_id,id,revision,kind,capability_id,status,request_digest,attempt,created_at,updated_at) VALUES(${literal(P.A.org)},${literal(P.A.workspace)},'o_cap',1,'stripe_write','catalog.content.publish','planned',${literal("e".repeat(64))},0,${ms},${ms});`,
+            `INSERT INTO morrow_work.operations(organization_id,workspace_id,id,revision,kind,capability_id,status,request_digest,attempt,created_at,updated_at) VALUES(${literal(P.A.org)},${literal(P.A.workspace)},'o_cap',1,'stripe_write','catalog.content.publish','planned',${literal("e".repeat(64))},0,${txMs},${txMs});`,
           ),
           "operations_kind",
         ) &&
@@ -881,40 +909,19 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
   // V: the vault (ADR-0022 item 7). Every role but the broker's login is denied, and the
   // envelope the broker reads decrypts only with its KEK and the exact AAD.
   {
-    const kek = randomBytes(32);
-    const aad = (environment, version, kekVersion = 1) =>
-      Buffer.from(
-        JSON.stringify([
-          "morrow.vault.v1",
-          environment,
-          "platform",
-          "app_secret",
-          "lab-app",
-          "shopify",
-          version,
-          kekVersion,
-        ]),
-      );
-    const seal = (key, plaintext, ad) => {
-      const iv = randomBytes(12);
-      const cipher = createCipheriv("aes-256-gcm", key, iv);
-      cipher.setAAD(ad);
-      const body = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-      return Buffer.concat([iv, body, cipher.getAuthTag()]);
-    };
-    const open = (key, sealed, ad) => {
-      const decipher = createDecipheriv("aes-256-gcm", key, sealed.subarray(0, 12));
-      decipher.setAAD(ad);
-      decipher.setAuthTag(sealed.subarray(sealed.length - 16));
-      return Buffer.concat([
-        decipher.update(sealed.subarray(12, sealed.length - 16)),
-        decipher.final(),
-      ]);
-    };
-    const envelope = (secret, version) => {
-      const dek = randomBytes(32);
-      const ad = aad("development", version);
-      return { wrapped: seal(kek, dek, ad), sealed: seal(dek, Buffer.from(secret, "utf8"), ad) };
+    // Every envelope is sealed and opened by the broker's own vault module
+    // (apps/broker/src/vault.ts), with its additional data.
+    const kek = randomBytes(32).toString("hex");
+    const keyring = await createVaultKeyring("development", new Map([[1, kek]]));
+    const appRef = (appKey, version) => ({
+      kind: "app_secret",
+      appKey,
+      provider: "shopify",
+      version,
+    });
+    const envelope = async (app, secret, version) => {
+      const e = await sealVaultRecord(keyring, appRef(app, version), Buffer.from(secret, "utf8"));
+      return { wrapped: Buffer.from(e.wrappedKey), sealed: Buffer.from(e.sealedValue) };
     };
     const put = (app, e) =>
       last(
@@ -922,9 +929,9 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
           `SELECT outcome||'|'||version FROM morrow_vault.app_secret_put(${literal(app)},'1',${literal(e.wrapped.toString("hex"))},${literal(e.sealed.toString("hex"))});`,
         ),
       );
-    const first = envelope("lab-client-secret-1", 1);
-    const second = envelope("lab-client-secret-2", 2);
-    const other = envelope("other-client-secret", 1);
+    const first = await envelope("lab-app", "lab-client-secret-1", 1);
+    const second = await envelope("lab-app", "lab-client-secret-2", 2);
+    const other = await envelope("other-app", "other-client-secret", 1);
     check(
       "V1:rotation_versions",
       put("lab-app", first) === "stored|1" &&
@@ -943,42 +950,56 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
           "other-app|1|active|false",
         ]),
     );
-    const got = last(
-      as("morrow_vault_broker")(
-        "SELECT concat_ws('|',outcome,version,kek_version,wrapped_key,sealed_value) FROM morrow_vault.app_secret_get('lab-app');",
-      ),
-    ).split("|");
-    let plaintext = null;
-    try {
-      const dek = open(kek, Buffer.from(got[3], "hex"), aad("development", 2));
-      plaintext = open(dek, Buffer.from(got[4], "hex"), aad("development", 2)).toString("utf8");
-    } catch {
-      plaintext = null;
-    }
+    // The broker's read path: its one fixed statement on a connection logged in as
+    // morrow_vault_broker, then readAppSecret opens the envelope.
+    const brokerConnector = createLocalWorkConnector(db.id, { user: "morrow_vault_broker" });
+    const brokerQuery = async (text, values) => {
+      const connection = await brokerConnector.open({
+        signal: new AbortController().signal,
+        deadlineMs: Date.now() + 60000,
+        waitUntil() {},
+      });
+      try {
+        return (await connection.query(text, values, new AbortController().signal)).rows;
+      } finally {
+        await connection.close();
+      }
+    };
+    const readSecret = (app) => readAppSecret(keyring, brokerQuery, app).catch(() => null);
+    const got = await readSecret("lab-app");
+    const otherGot = await readSecret("other-app");
     check(
       "V2:broker_reads_the_active_envelope_and_it_decrypts",
-      got[0] === "found" && got[1] === "2" && got[2] === "1" && plaintext === "lab-client-secret-2",
+      got?.outcome === "found" &&
+        got.version === 2 &&
+        got.secret === "lab-client-secret-2" &&
+        otherGot?.secret === "other-client-secret",
     );
-    const fails = (fn) => {
+    const stored = { kekVersion: 1, wrappedKey: second.wrapped, sealedValue: second.sealed };
+    const fails = async (k, ref) => {
       try {
-        fn();
+        await openVaultRecord(k, ref, stored);
         return false;
-      } catch {
-        return true;
+      } catch (error) {
+        return error?.code === "VAULT_OPEN_FAILED";
       }
     };
     check(
       "V2:wrong_aad_environment_version_or_kek_fails",
-      fails(() => open(kek, Buffer.from(got[3], "hex"), aad("staging", 2))) &&
-        fails(() => open(kek, Buffer.from(got[3], "hex"), aad("development", 1))) &&
-        fails(() => open(kek, Buffer.from(got[3], "hex"), aad("development", 2, 2))) &&
-        fails(() => open(randomBytes(32), Buffer.from(got[3], "hex"), aad("development", 2))),
+      (await fails(
+        await createVaultKeyring("staging", new Map([[1, kek]])),
+        appRef("lab-app", 2),
+      )) &&
+        (await fails(keyring, appRef("lab-app", 1))) &&
+        (await fails(keyring, appRef("other-app", 2))) &&
+        (await fails(
+          await createVaultKeyring("development", new Map([[1, randomBytes(32).toString("hex")]])),
+          appRef("lab-app", 2),
+        )),
     );
     check(
       "V2:get_outcomes",
-      last(
-        as("morrow_vault_broker")("SELECT outcome FROM morrow_vault.app_secret_get('absent-app');"),
-      ) === "not_found" &&
+      (await readSecret("absent-app"))?.outcome === "not_found" &&
         last(
           as("morrow_vault_broker")("SELECT outcome FROM morrow_vault.app_secret_get('Bad App');"),
         ) === "invalid",
@@ -1083,6 +1104,37 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
           `UPDATE morrow_vault.credentials SET destroy_reason='disconnected' WHERE id='credential_1';`,
         ),
     );
+    // The owner script (scripts/vault.mjs): an envelope sealed from a 0600 KEK file is
+    // applied with the runner's one statement as the work owner, stores exactly its
+    // version, and the broker opens it.
+    const scratch = mkdtempSync(join(tmpdir(), "morrow-spine-vault-"));
+    try {
+      writeFileSync(join(scratch, "kek"), kek + "\n", { mode: 0o600 });
+      const scripted = await sealAppSecret(
+        {
+          environment: "development",
+          "app-key": "script-app",
+          version: "1",
+          "kek-file": join(scratch, "kek"),
+        },
+        "script-client-secret",
+      );
+      const statement = appSecretPutStatement(scripted);
+      const bound = statement.text.replace(/\$(\d+)/g, (_, n) =>
+        literal(statement.values[Number(n) - 1]),
+      );
+      const applied = db.rows(bound, { prefix: "SET ROLE morrow_work_owner;\n" })[0];
+      const opened = await readSecret("script-app");
+      check(
+        "V5:owner_script_envelope_applies_at_its_version_and_opens",
+        applied?.outcome === "stored" &&
+          applied.version === statement.expectedVersion &&
+          opened?.outcome === "found" &&
+          opened.secret === "script-client-secret",
+      );
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1119,6 +1171,28 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
       "R1:other_workspaces_have_no_row",
       routeOf(P.A.workspace) === null && routeOf("ws_w2") === null,
     );
+    // Part 2: the api's fixed statement and row mapping give exactly the row
+    // billingRouteForCreation defines for a website signup (originForCreation).
+    const routeRow = (ws) =>
+      db.rows(
+        spineStatements.workspaceBillingRoute.replace(/\$1::text/, literal(ws) + "::text"),
+      )[0] ?? null;
+    let mapped = null;
+    try {
+      mapped = workspaceBillingRouteFromRow(routeRow("ws_r1"));
+    } catch {
+      mapped = null;
+    }
+    check(
+      "R6:signup_row_is_the_creation_plan",
+      JSON.stringify(mapped) ===
+        JSON.stringify(
+          billingRouteForCreation(
+            { kind: "website_signup", installHandoffPending: false },
+            { organizationId: "org_r1", workspaceId: "ws_r1" },
+          ),
+        ),
+    );
     // The signup bridge: the identity owner only (its owner, the command role, runs it as
     // a definer; no login and neither work role may call it).
     check(
@@ -1152,7 +1226,7 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
     // existing row is unchanged.
     db.admin(tenantSql(3));
     db.workOwner(
-      `INSERT INTO morrow_billing.workspace_billing_routes VALUES('org_r3','ws_r3','shopify_install',NULL,NULL,NULL,NULL,NULL,1,${ms},${ms});`,
+      `INSERT INTO morrow_billing.workspace_billing_routes VALUES('org_r3','ws_r3','shopify_install',NULL,NULL,NULL,NULL,NULL,1,${txMs},${txMs});`,
     );
     const preexisting = attempt("SET ROLE morrow_identity_owner; " + signupRowSql(3));
     check(
@@ -1236,6 +1310,27 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
           "BILLING_ROUTE_IMMUTABLE",
         ),
     );
+    const fixedVariants = ["ws_r1", "ws_r2"].map((ws) => {
+      try {
+        return workspaceBillingRouteFromRow(routeRow(ws)).route;
+      } catch {
+        return null;
+      }
+    });
+    const apiRows = db.rows(
+      spineStatements.workspaceBillingRoute.replace(/\$1::text/, literal(P.A.workspace) + "::text"),
+      {
+        user: "morrow_api_worker",
+        prefix: asApi(P.A, "").replace(/\nROLLBACK;$/, "\n"),
+        suffix: "\nROLLBACK;",
+      },
+    );
+    check(
+      "R6:fixed_rows_map_and_a_missing_row_reads_shopify_install",
+      JSON.stringify(fixedVariants) === JSON.stringify(["morrow_direct", "shopify_app_pricing"]) &&
+        apiRows.length === 0 &&
+        effectiveBillingOrigin(null) === "shopify_install",
+    );
     // The api reads only its own tenant's row; the command role inserts only the unfixed
     // website shape outside its tenant (the signup bridge's policy).
     check(
@@ -1256,7 +1351,7 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
       refused(
         asCommandRole(
           P.A,
-          `INSERT INTO morrow_billing.workspace_billing_routes VALUES('org_r2','ws_r2','website',NULL,'morrow_direct','test',${ms},'stripe:invoice:in_ABCDEFGH12',1,${ms},${ms});`,
+          `INSERT INTO morrow_billing.workspace_billing_routes VALUES('org_r2','ws_r2','website',NULL,'morrow_direct','test',${ms},'stripe:invoice:in_ABCDEFGH12',1,${txMs},${txMs});`,
         ),
         "row-level security|BILLING_ROUTE_INVALID",
       ) &&
@@ -1267,6 +1362,237 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
           ),
           "permission denied",
         ),
+    );
+  }
+  // ---------------------------------------------------------------------------
+  // T: the part-2 TypeScript helpers against this database. The runtime lease steps run
+  // on a psql connection logged in as morrow_runtime_executor (the shape of the
+  // orchestrator's leased connection), through the same runFixedSqlTransaction runner and
+  // ADR-0020 D5 preflight; stop rows and the stop_active twin use the api's fixed
+  // statements.
+  {
+    const fixedPool = (user) => {
+      const connector = createLocalWorkConnector(db.id, { user });
+      return {
+        async connect(control) {
+          const connection = await connector.open({
+            signal: control.signal,
+            deadlineMs: control.deadlineMs,
+            waitUntil() {},
+          });
+          return {
+            query: (text, values, c) => connection.query(text, [...values], c.signal),
+            release: () => connection.close(),
+          };
+        },
+      };
+    };
+    const runtimePool = fixedPool("morrow_runtime_executor");
+    const attempt = () => createRuntimeAttempt(30000, new AbortController().signal);
+    const where = { store: "store_t", connection: "connection_t", installation: "installation_t" };
+    const run = openLease(P.A, "run", "t_run_1", where);
+    const operation = openLease(P.A, "operation", "t_claim_1", where);
+    const read = openLease(P.A, "read", "t_read_1", { ...where, installation: null });
+    const step = (l, body = async (s) => s.lease, pool = runtimePool) =>
+      runLeaseStep(pool, attempt(), { leaseId: l.id, generation: 1 }, body).catch(() => ({
+        ok: false,
+      }));
+    const first = await step(run, async (s) => ({
+      lease: s.lease,
+      started: await s.markStarted(),
+    }));
+    const l = first.value?.lease;
+    check(
+      "T1:runtime_step_enters_with_the_lease_ids_and_marks_started",
+      first.ok === true &&
+        first.value.entered === true &&
+        l.organizationId === P.A.org &&
+        l.workspaceId === P.A.workspace &&
+        l.kind === "run" &&
+        l.subjectId === "t_run_1" &&
+        l.storeId === "store_t" &&
+        l.connectionId === "connection_t" &&
+        l.installationId === "installation_t" &&
+        l.initiatorPrincipalId === P.A.principal &&
+        l.initiatorMembershipId === P.A.membership &&
+        first.value.value.started === "started" &&
+        lease(run.id).started === true,
+      first,
+    );
+    const again = await step(run, async (s) => s.markStarted());
+    const readStep = await step(read);
+    const operationStep = await step(operation);
+    check(
+      "T1:later_steps_and_every_kind",
+      again.value?.value === "already_started" &&
+        readStep.value?.entered === true &&
+        readStep.value.lease.kind === "read" &&
+        readStep.value.lease.installationId === null &&
+        operationStep.value?.lease?.kind === "operation",
+    );
+    const refusal = async (ref) =>
+      (
+        await runLeaseStep(runtimePool, attempt(), ref, async () => "ran").catch(() => ({
+          ok: false,
+        }))
+      ).value?.refusal ?? null;
+    check(
+      "T1:forged_or_stale_references_are_refused_without_a_body",
+      (await refusal({ leaseId: uuid(), generation: 1 })) === "not_found" &&
+        (await refusal({ leaseId: run.id, generation: 2 })) === "not_found" &&
+        (await refusal({ leaseId: "not-a-uuid", generation: 1 })) === "denied",
+    );
+    // The D5 preflight: any login but the runtime executor is refused before enter_lease.
+    const wrongLogins = [];
+    for (const user of ["morrow_api_worker", "morrow_connector_ingress", "morrow_vault_broker"])
+      wrongLogins.push((await step(operation, async (s) => s.lease, fixedPool(user))).ok);
+    check(
+      "T1:the_role_preflight_admits_only_the_runtime_executor",
+      wrongLogins.every((ok) => ok === false),
+    );
+    // Pending starts: exactly what the definer's own query selects, ids only.
+    const pending = await listPendingStarts(runtimePool, attempt()).catch(() => ({ ok: false }));
+    const expected = db
+      .rows(
+        "SELECT l.id::text AS id FROM morrow_work.work_leases l WHERE l.status='active' AND l.started_at IS NULL AND l.kind IN ('run','operation') AND l.expires_at>clock_timestamp() ORDER BY l.created_at,l.id LIMIT 100",
+      )
+      .map((r) => r.id);
+    check(
+      "T2:pending_starts_through_the_helper",
+      pending.ok === true &&
+        JSON.stringify(pending.value.map((p) => p.leaseId)) === JSON.stringify(expected) &&
+        pending.value.some((p) => p.leaseId === operation.id && p.kind === "operation") &&
+        !pending.value.some((p) => p.leaseId === run.id || p.leaseId === read.id) &&
+        pending.value.every(
+          (p) => Object.keys(p).sort().join(",") === "generation,kind,leaseId,subjectId",
+        ),
+    );
+    const released = await step(run, async (s) => s.release());
+    check(
+      "T2:release_then_ended",
+      released.value?.value === "released" &&
+        (await refusal({ leaseId: run.id, generation: 1 })) === "ended",
+    );
+    // StopRecord@1 from real rows, and stopBlocks equal to stop_active over a matrix.
+    const records = (stopId) =>
+      db.rows(
+        spineStatements.stopRecordsOfControl.replace(/\$1::text/, literal(stopId) + "::text"),
+      );
+    const active = () =>
+      db.rows(spineStatements.activeStops).map((r) => ({
+        scope: r.scope,
+        organizationId: r.organization_id,
+        workspaceId: r.workspace_id,
+        targetId: r.target_id,
+      }));
+    const twins = (stops) => {
+      const tenants = [
+        [P.A.org, P.A.workspace],
+        [P.Y.org, P.Y.workspace],
+      ];
+      const connections = [
+        ...new Set([...stops.map((x) => x.targetId), "connection_t", "connection_none"]),
+      ].filter(Boolean);
+      const installations = [
+        ...new Set([...stops.map((x) => x.targetId), "installation_t", "installation_none"]),
+      ].filter(Boolean);
+      const mismatches = [];
+      const queries = [];
+      const cases = [];
+      for (const [org, ws] of tenants)
+        for (const kind of ["read", "run", "operation"])
+          for (const connection of connections)
+            for (const installation of kind === "read" ? [null] : installations) {
+              cases.push({
+                organizationId: org,
+                workspaceId: ws,
+                kind,
+                connectionId: connection,
+                installationId: installation,
+              });
+              queries.push(
+                `SELECT morrow_work.stop_active(${literal(org)},${literal(ws)},${literal(kind)},${literal(connection)},${literal(installation)})::text AS blocked`,
+              );
+            }
+      const sql = db.rows(queries.join(" UNION ALL "));
+      cases.forEach((work, i) => {
+        if (String(stopBlocks(stops, work)) !== sql[i]?.blocked) mismatches.push(work);
+      });
+      return { cases: cases.length, mismatches };
+    };
+    const before = twins(active());
+    check(
+      "T3:stop_blocks_equals_stop_active",
+      before.cases > 50 && before.mismatches.length === 0,
+      before.mismatches.slice(0, 3),
+    );
+    const [setOutcome, platformId] = last(
+      db.workOwner(
+        "SELECT outcome||'|'||stop_id FROM morrow_work.platform_stop_set('morrow_owner','T platform stop');",
+      ),
+    ).split("|");
+    const during = twins(active());
+    db.workOwner("SELECT outcome FROM morrow_work.platform_stop_lift('morrow_owner','T lift');");
+    let mappedRecords = [];
+    try {
+      mappedRecords = records(platformId).map(stopRecordFromRow);
+    } catch {
+      mappedRecords = [];
+    }
+    check(
+      "T3:platform_stop_records_map_to_stop_record_v1",
+      setOutcome === "applied" &&
+        during.mismatches.length === 0 &&
+        JSON.stringify(
+          mappedRecords.map((r) => [
+            r.action,
+            r.scope,
+            r.actor.kind,
+            r.actor.operatorId,
+            r.reasonCode,
+          ]),
+        ) ===
+          JSON.stringify([
+            ["set", "platform", "operator", "morrow_owner", "operator_platform_stop"],
+            ["lift", "platform", "operator", "morrow_owner", "operator_platform_lift"],
+          ]),
+      mappedRecords,
+    );
+    check("T3:after_lift_twins_agree", twins(active()).mismatches.length === 0);
+    // The api reads both through its own column grants and tenant_read: its tenant's and
+    // the platform's rows, never another tenant's.
+    const asApiRows = (p, text) =>
+      db.rows(text, {
+        user: "morrow_api_worker",
+        prefix: asApi(p, "").replace(/\nROLLBACK;$/, "\n"),
+        suffix: "\nROLLBACK;",
+      });
+    const apiActive = asApiRows(P.A, spineStatements.activeStops);
+    const apiRecords = asApiRows(
+      P.Y,
+      spineStatements.stopRecordsOfControl.replace(/\$1::text/, literal(platformId) + "::text"),
+    );
+    check(
+      "T3:api_reads_stops_with_its_column_grants",
+      apiActive.length ===
+        Math.min(
+          100,
+          Number(
+            last(
+              db.sql(
+                `SELECT count(*) FROM morrow_work.stop_controls WHERE lifted_at IS NULL AND (organization_id IS NULL OR (organization_id=${literal(P.A.org)} AND workspace_id=${literal(P.A.workspace)}));`,
+              ),
+            ),
+          ),
+        ) &&
+        apiActive.every(
+          (r) =>
+            r.organization_id === null ||
+            (r.organization_id === P.A.org && r.workspace_id === P.A.workspace),
+        ) &&
+        apiRecords.length === 2 &&
+        apiRecords.every((r) => stopRecordFromRow(r).scope === "platform"),
+      { apiActive: apiActive.length, apiRecords: apiRecords.length },
     );
   }
   return { checks, failures };
@@ -1293,7 +1619,8 @@ async function main() {
     limitations: [
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
       "Runtime and vault definers of later packets are stood in for by lab-only command-owned definers (lab_probe), created by the local superuser.",
-      "The vault envelope round trip uses node:crypto in the lab; the broker's implementation and its AAD encoder land in M2 PR-1 part 2.",
+      "The vault envelopes are sealed and opened by the broker's own module (apps/broker/src/vault.ts) in Node, not in workerd; the broker reads app_secret_get over a psql connection logged in as morrow_vault_broker, not the Neon transport (wired in M2 PR-2).",
+      "The runtime lease helpers run over a psql connection logged in as morrow_runtime_executor, not the Neon transport the orchestrator will lease from RuntimeBroker (M3).",
       "Credential rows are owner-seeded: their writers (install, re-authorisation, destroy) land with M2 PR-2 and PR-3.",
     ],
   });

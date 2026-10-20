@@ -5,7 +5,9 @@
 // outbound request is routed to an in-process oracle or counted and refused.
 // Covers AC06, AC08, AC10, AC11, AC13-AC15 (broker side), AC18 (first half),
 // AC22, AC26, AC28, AC29 and AC30. The PostgreSQL-backed journeys (AC17, AC19,
-// AC20, AC27 and the rest of AC13/AC18/AC26) are in edge-postgresql-lab.mjs.
+// AC20, AC27 and the rest of AC13/AC18/AC26) are in edge-postgresql-lab.mjs. M2 PR-1
+// adds the trust model v1 entrypoints (ConnectorBroker, RuntimeBroker): each serves only
+// its own role lease and health, and a bad vault KEK disables the vault only.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -128,10 +130,17 @@ const roles = [
   "morrow_identity_onboarding",
   "morrow_api_worker",
 ];
+// M2 PR-1 (ADR-0022 items 7-8): the connector's and the orchestrator's leased logins, the
+// broker's own vault login and the vault KEK.
+const callerRoles = { connector: "morrow_connector_ingress", runtime: "morrow_runtime_executor" };
 const passwords = Object.fromEntries(
-  roles.map((role) => [role, "Edge-" + randomBytes(18).toString("base64url")]),
+  [...roles, ...Object.values(callerRoles), "morrow_vault_broker"].map((role) => [
+    role,
+    "Edge-" + randomBytes(18).toString("base64url"),
+  ]),
 );
-privateMarkers.push(...Object.values(passwords));
+const vaultKek = randomBytes(32).toString("hex");
+privateMarkers.push(...Object.values(passwords), vaultKek);
 const day = 86400000;
 function keyring({ fromMs, untilMs }) {
   const keyId = randomUUID();
@@ -181,8 +190,12 @@ function brokerBindings(change = {}) {
     MORROW_DATABASE_BINDING_JSON: JSON.stringify(databaseBinding),
     WORKOS_API_KEY: keyMarker,
     ...Object.fromEntries(
-      roles.map((role) => ["MORROW_DB_PASSWORD_" + role.toUpperCase(), passwords[role]]),
+      Object.keys(passwords).map((role) => [
+        "MORROW_DB_PASSWORD_" + role.toUpperCase(),
+        passwords[role],
+      ]),
     ),
+    MORROW_VAULT_KEK_V1: vaultKek,
     ...change,
   };
 }
@@ -199,14 +212,18 @@ const neonNamespace = (role, binding = databaseBinding) =>
     purpose:
       role === "morrow_api_worker"
         ? "work_request_transaction"
-        : [
-              "morrow_api",
-              "morrow_identity_linking",
-              "morrow_identity_logout",
-              "morrow_identity_onboarding",
-            ].includes(role)
-          ? "workspace_primary_and_one_same_role_observer"
-          : "primary_and_one_same_role_observer",
+        : role === "morrow_connector_ingress"
+          ? "connector_request_transaction"
+          : role === "morrow_runtime_executor"
+            ? "runtime_step_transaction"
+            : [
+                  "morrow_api",
+                  "morrow_identity_linking",
+                  "morrow_identity_logout",
+                  "morrow_identity_onboarding",
+                ].includes(role)
+              ? "workspace_primary_and_one_same_role_observer"
+              : "primary_and_one_same_role_observer",
   });
 const sessionNamespace = JSON.stringify({
   schemaVersion: 1,
@@ -226,7 +243,7 @@ const describe = (value) => ({
 });
 export default {
   async fetch(request, env) {
-    const { op, args = [], count = 1, path = "/", method = "GET" } = await request.json();
+    const { op, args = [], count = 1, path = "/", method = "GET", binding = "BROKER" } = await request.json();
     if (op === "processEnv") return Response.json(Object.keys(globalThis.process?.env ?? {}));
     const call = async () => {
       try {
@@ -238,8 +255,8 @@ export default {
           const response = await env.BROKER.fetch("https://broker.internal/");
           return { ok: true, status: response.status };
         }
-        if (op === "unknown") return { ok: true, ...describe(await env.BROKER.unknownMethod()) };
-        return { ok: true, ...describe(await env.BROKER[op](...args)) };
+        if (op === "unknown") return { ok: true, ...describe(await env[binding].unknownMethod()) };
+        return { ok: true, ...describe(await env[binding][op](...args)) };
       } catch (error) {
         return { ok: false, name: error?.name ?? null, message: error?.message ?? null, keys: Object.keys(error ?? {}) };
       }
@@ -310,6 +327,14 @@ async function instance(name, { api = {}, broker = {}, extra = [], assets } = {}
       serviceBindings: {
         BROKER: { name: names.broker, entrypoint: "ApiBroker" },
         BROKER_DEFAULT: { name: names.broker },
+        // M2 PR-1: test-only holders of the connector's and the orchestrator's bindings,
+        // on the real broker bundle only (the stand-in brokers export ApiBroker alone).
+        ...(broker.script
+          ? {}
+          : {
+              BROKER_CONNECTOR: { name: names.broker, entrypoint: "ConnectorBroker" },
+              BROKER_RUNTIME: { name: names.broker, entrypoint: "RuntimeBroker" },
+            }),
       },
     },
     ...extra,
@@ -880,6 +905,79 @@ await instance(
     check(
       "AC28:never_falls_back_to_fetch",
       events("partial_broker_fetch").length === 0 && observed.neon === 0,
+    );
+  },
+);
+
+// M2 PR-1 (ADR-0022 item 7, trust model v1): each caller's entrypoint in workerd serves
+// only its own role lease and health; no other caller's role, and no v0 method.
+await instance("M2_connector_and_runtime_entrypoints", {}, async ({ probe, events }) => {
+  for (const [caller, binding, entrypoint] of [
+    ["connector", "BROKER_CONNECTOR", "ConnectorBroker"],
+    ["runtime", "BROKER_RUNTIME", "RuntimeBroker"],
+  ]) {
+    const role = callerRoles[caller];
+    const [health] = await probe({ op: "health", binding });
+    check(`M2:${caller}_health`, health.ok && health.value === true);
+    const [own] = await probe({ op: "neonLease", binding, args: [neonNamespace(role)] });
+    const grant = own.ok && typeof own.value === "string" ? json(own.value) : null;
+    check(
+      `M2:${caller}_leases_its_own_role`,
+      grant?.schemaVersion === 1 &&
+        Object.keys(grant).join() === "schemaVersion,password" &&
+        grant.password === passwords[role],
+    );
+    const others = [
+      ...roles,
+      ...Object.values(callerRoles).filter((other) => other !== role),
+      "morrow_vault_broker",
+    ];
+    const denied = [];
+    for (const other of others)
+      denied.push((await probe({ op: "neonLease", binding, args: [neonNamespace(other)] }))[0]);
+    check(
+      `M2:${caller}_denied_every_other_role`,
+      denied.every((r) => r.ok === false && r.message === "BROKER_HELD" && remoteOnly(r.keys)),
+    );
+    const [v0] = await probe({
+      op: "workosSessionPage",
+      binding,
+      args: [sessionNamespace, "{}", 1000],
+    });
+    check(`M2:${caller}_has_no_v0_session_method`, v0.ok === false && v0.name === "TypeError");
+    const codes = events("morrow_broker").filter((row) => row.entrypoint === entrypoint);
+    check(
+      `M2:${caller}_denials_logged_under_its_entrypoint`,
+      codes.length === others.length && codes.every((row) => row.code === "NAMESPACE_DENIED"),
+    );
+  }
+  // The api's entrypoint never leases the new roles.
+  const apiDenied = [];
+  for (const role of [...Object.values(callerRoles), "morrow_vault_broker"])
+    apiDenied.push((await probe({ op: "neonLease", args: [neonNamespace(role)] }))[0]);
+  check(
+    "M2:api_never_leases_the_executor_roles",
+    apiDenied.every((r) => r.ok === false),
+  );
+});
+await instance(
+  "M2_vault_kek_missing",
+  { broker: { bindings: brokerBindings({ MORROW_VAULT_KEK_V1: "not-a-kek" }) } },
+  async ({ probe, events }) => {
+    const [connector] = await probe({ op: "health", binding: "BROKER_CONNECTOR" });
+    const [runtime] = await probe({ op: "health", binding: "BROKER_RUNTIME" });
+    const [api] = await probe({ op: "health" });
+    check(
+      "M2:a_bad_kek_disables_the_vault_only",
+      connector.value === false && runtime.value === false && api.value === true,
+    );
+    const init = events("morrow_broker_init")[0];
+    check(
+      "M2:init_reports_each_capability",
+      init?.vault === false &&
+        init.connector === true &&
+        init.runtime === true &&
+        init.database === true,
     );
   },
 );

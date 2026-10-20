@@ -7,13 +7,19 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import {
+  brokerCallerRoles,
   brokerNeonRoleNames,
   brokerPasswordSecret,
+  brokerRequiredSecrets,
   neonLeaseNamespace,
   parseBrokerDatabaseBinding,
   workosSessionNamespace,
 } from "../packages/identity/src/broker-protocol.ts";
-import { brokerCapabilities, brokerHealth } from "../apps/broker/src/capabilities.ts";
+import {
+  brokerCallerHealth,
+  brokerCapabilities,
+  brokerHealth,
+} from "../apps/broker/src/capabilities.ts";
 import { brokerNeonLease } from "../apps/broker/src/neon-lease.ts";
 import { brokerWorkosSessionPage } from "../apps/broker/src/workos-session.ts";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
@@ -34,7 +40,10 @@ const binding = (environment) => ({
 const marker = (prefix) => prefix + randomBytes(16).toString("hex");
 function brokerEnv(environment = "development", change = {}) {
   const passwords = Object.fromEntries(
-    brokerNeonRoleNames.map((role) => [role, marker("role-" + role.slice(-6) + "-")]),
+    [...brokerNeonRoleNames, "morrow_vault_broker"].map((role) => [
+      role,
+      marker("role-" + role.slice(-6) + "-"),
+    ]),
   );
   const env = {
     MORROW_ENVIRONMENT: environment,
@@ -46,8 +55,12 @@ function brokerEnv(environment = "development", change = {}) {
     MORROW_DATABASE_BINDING_JSON: JSON.stringify(binding(change.bindingEnvironment ?? environment)),
     WORKOS_API_KEY: change.key ?? marker("sk_test_"),
     ...Object.fromEntries(
-      brokerNeonRoleNames.map((role) => [brokerPasswordSecret(role), passwords[role]]),
+      [...brokerNeonRoleNames, "morrow_vault_broker"].map((role) => [
+        brokerPasswordSecret(role),
+        passwords[role],
+      ]),
     ),
+    MORROW_VAULT_KEK_V1: change.kek ?? randomBytes(32).toString("hex"),
   };
   return { env, passwords };
 }
@@ -87,15 +100,89 @@ async function failure(pending) {
 const selector = (subject = "user_" + "B".repeat(26)) =>
   JSON.stringify({ schemaVersion: 1, subjectId: subject, after: null, limit: 100, order: "asc" });
 
-test("AC11: neonLease returns each role's own password for exactly its namespace (7x7)", async () => {
+test("AC11: neonLease returns each api role's own password for exactly its namespace (8x10)", async () => {
   const { env, passwords } = brokerEnv();
   const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
-  for (const role of brokerNeonRoleNames) {
+  for (const role of brokerCallerRoles.api) {
     const grant = JSON.parse(await brokerNeonLease(env, neonLeaseNamespace(parsed, role)));
     assert.deepEqual(Object.keys(grant), ["schemaVersion", "password"]);
     for (const other of brokerNeonRoleNames)
       assert.equal(grant.password === passwords[other], other === role, role + " vs " + other);
   }
+});
+
+// M2 PR-1 (ADR-0022 item 7): each caller's entrypoint leases only its own roles.
+test("trust model v1: each caller leases exactly its own roles and no other caller's", async () => {
+  const { env, passwords } = brokerEnv();
+  const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
+  logs.length = 0;
+  for (const caller of ["api", "connector", "runtime"])
+    for (const role of brokerNeonRoleNames) {
+      const namespace = neonLeaseNamespace(parsed, role);
+      if (brokerCallerRoles[caller].includes(role)) {
+        const grant = JSON.parse(await brokerNeonLease(env, namespace, caller));
+        assert.equal(grant.password, passwords[role], caller + ":" + role);
+      } else await failure(brokerNeonLease(env, namespace, caller));
+    }
+  const denied = logs.map((line) => JSON.parse(line)).filter((r) => r.event === "morrow_broker");
+  assert.equal(denied.length, 3 * 10 - 10);
+  assert.deepEqual(new Set(denied.map((r) => r.code)), new Set(["NAMESPACE_DENIED"]));
+  assert.deepEqual(
+    new Set(denied.map((r) => r.entrypoint)),
+    new Set(["ApiBroker", "ConnectorBroker", "RuntimeBroker"]),
+  );
+  // The broker's own vault login is never leased, to any caller.
+  const vaultNamespace = JSON.stringify({
+    ...JSON.parse(neonLeaseNamespace(parsed, "morrow_api_worker")),
+    role: "morrow_vault_broker",
+  });
+  for (const caller of ["api", "connector", "runtime"])
+    await failure(brokerNeonLease(env, vaultNamespace, caller));
+  for (const line of logs)
+    for (const value of Object.values(passwords)) assert.ok(!line.includes(value));
+});
+
+test("trust model v1: connector and runtime health need their own lease and the vault only", async () => {
+  const ready = brokerEnv().env;
+  assert.equal(await brokerCallerHealth(ready, "connector"), true);
+  assert.equal(await brokerCallerHealth(ready, "runtime"), true);
+  // A missing or malformed KEK disables the vault only: the api keeps its leases.
+  for (const kek of ["", "00", "A".repeat(64), "0".repeat(63) + "g", undefined]) {
+    const { env } = brokerEnv("development", { kek });
+    if (kek === undefined) delete env.MORROW_VAULT_KEK_V1;
+    assert.equal(await brokerCallerHealth(env, "connector"), false);
+    assert.equal(await brokerCallerHealth(env, "runtime"), false);
+    assert.equal(await brokerHealth(env), true);
+    const capabilities = await brokerCapabilities(env);
+    assert.equal(capabilities.vault, null);
+    assert.notEqual(capabilities.connector, null);
+  }
+  // A missing connector password disables the connector only.
+  const noConnector = brokerEnv().env;
+  delete noConnector.MORROW_DB_PASSWORD_MORROW_CONNECTOR_INGRESS;
+  assert.equal(await brokerCallerHealth(noConnector, "connector"), false);
+  assert.equal(await brokerCallerHealth(noConnector, "runtime"), true);
+  assert.equal(await brokerHealth(noConnector), true);
+  // A missing vault login password disables the vault, never a lease.
+  const noVaultLogin = brokerEnv().env;
+  delete noVaultLogin.MORROW_DB_PASSWORD_MORROW_VAULT_BROKER;
+  assert.equal(await brokerCallerHealth(noVaultLogin, "runtime"), false);
+  assert.equal((await brokerCapabilities(noVaultLogin)).runtime !== null, true);
+  // A database binding from another environment disables every lease and the vault.
+  const foreign = brokerEnv("staging", { bindingEnvironment: "development" }).env;
+  const held = await brokerCapabilities(foreign);
+  assert.deepEqual(
+    [held.database, held.connector, held.runtime, held.vault],
+    [null, null, null, null],
+  );
+  // The required secret set names every one of them.
+  for (const name of [
+    "MORROW_DB_PASSWORD_MORROW_CONNECTOR_INGRESS",
+    "MORROW_DB_PASSWORD_MORROW_RUNTIME_EXECUTOR",
+    "MORROW_DB_PASSWORD_MORROW_VAULT_BROKER",
+    "MORROW_VAULT_KEK_V1",
+  ])
+    assert.ok(brokerRequiredSecrets.includes(name), name);
 });
 
 test("AC11: neonLease denies other roles, purposes, bindings and encodings", async () => {
@@ -315,6 +402,19 @@ test("AC10: ApiBroker has exactly three prototype methods, arity checks and a 40
     "neonLease",
     "workosSessionPage",
   ]);
+  // Trust model v1: one class per caller, exactly its own methods.
+  for (const name of ["ConnectorBroker", "RuntimeBroker"])
+    assert.deepEqual(Object.getOwnPropertyNames(module[name].prototype).sort(), [
+      "constructor",
+      "health",
+      "neonLease",
+    ]);
+  assert.deepEqual(Object.keys(module).sort(), [
+    "ApiBroker",
+    "ConnectorBroker",
+    "RuntimeBroker",
+    "default",
+  ]);
   assert.deepEqual(Object.keys(module.default), ["fetch"]);
   for (const method of ["GET", "POST", "DELETE"]) {
     const response = await module.default.fetch(new Request("https://broker.test/x", { method }));
@@ -333,4 +433,31 @@ test("AC10: ApiBroker has exactly three prototype methods, arity checks and a 40
     ["INPUT_INVALID", "INPUT_INVALID", "INPUT_INVALID", "INPUT_INVALID"],
   );
   assert.equal(await entry.health(), true);
+  const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
+  for (const [name, role, other] of [
+    ["ConnectorBroker", "morrow_connector_ingress", "morrow_runtime_executor"],
+    ["RuntimeBroker", "morrow_runtime_executor", "morrow_connector_ingress"],
+  ]) {
+    const caller = new module[name]({}, env);
+    logs.length = 0;
+    await failure(caller.health(1));
+    await failure(caller.neonLease());
+    await failure(caller.neonLease("a", "b"));
+    await failure(caller.neonLease(neonLeaseNamespace(parsed, other)));
+    await failure(caller.neonLease(neonLeaseNamespace(parsed, "morrow_api_worker")));
+    assert.deepEqual(
+      logs.map((line) => [JSON.parse(line).entrypoint, JSON.parse(line).code]),
+      [
+        [name, "INPUT_INVALID"],
+        [name, "INPUT_INVALID"],
+        [name, "INPUT_INVALID"],
+        [name, "NAMESPACE_DENIED"],
+        [name, "NAMESPACE_DENIED"],
+      ],
+    );
+    assert.equal(await caller.health(), true);
+    assert.ok(JSON.parse(await caller.neonLease(neonLeaseNamespace(parsed, role))).password);
+    assert.equal(typeof caller.workosSessionPage, "undefined");
+  }
+  await failure(entry.neonLease(neonLeaseNamespace(parsed, "morrow_runtime_executor")));
 });

@@ -18,36 +18,71 @@ export const workRoles = Object.freeze({
 // are both null; readable like tenant_readable, platform rows visible to every tenant).
 // `lease: true` adds the lease-context twin of the command policy (tenant_lease, through
 // current_lease()); `policies` names a table's extra, exactly-checked policies.
+// `content` classifies what a row may hold (P09.T05a, spine §11): "none" (ids, digests,
+// codes and times only), "workspace" (text people write in the workspace, deleted with
+// it) or "store" (a store's content or credential): every "store" table has exactly one
+// cleanup handler in packages/work/src/redaction.ts (S8).
 export const workTables = Object.freeze({
-  goals: { class: "tenant_readable", parents: ["workspace_streams"] },
-  tasks: { class: "tenant_readable", parents: ["goals"] },
-  questions: { class: "tenant_readable", parents: ["tasks"] },
-  question_answers: { class: "tenant_readable", parents: ["questions"] },
-  workspace_streams: { class: "tenant_internal", parents: ["morrow_identity.workspaces"] },
-  task_assignments: { class: "tenant_internal", parents: ["tasks"] },
-  commands: { class: "tenant_internal", parents: ["workspace_streams"] },
-  outbox_events: { class: "tenant_internal", parents: ["workspace_streams"] },
-  transition_rules: { class: "platform", parents: [] },
+  goals: { class: "tenant_readable", parents: ["workspace_streams"], content: "workspace" },
+  tasks: { class: "tenant_readable", parents: ["goals"], content: "workspace" },
+  questions: { class: "tenant_readable", parents: ["tasks"], content: "workspace" },
+  question_answers: { class: "tenant_readable", parents: ["questions"], content: "workspace" },
+  workspace_streams: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    content: "none",
+  },
+  task_assignments: { class: "tenant_internal", parents: ["tasks"], content: "none" },
+  commands: { class: "tenant_internal", parents: ["workspace_streams"], content: "none" },
+  outbox_events: { class: "tenant_internal", parents: ["workspace_streams"], content: "none" },
+  transition_rules: { class: "platform", parents: [], content: "none" },
   // P06.T01b approval records (migration 0018).
-  review_policies: { class: "tenant_readable", parents: ["workspace_streams"] },
-  proposal_parameters: { class: "tenant_readable", parents: ["workspace_streams"] },
-  proposals: { class: "tenant_readable", parents: ["proposal_parameters", "review_policies"] },
-  approvals: { class: "tenant_readable", parents: ["proposals"] },
-  approval_decisions: { class: "tenant_readable", parents: ["approvals"] },
-  approval_claims: { class: "tenant_internal", parents: ["approvals"] },
-  review_capabilities: { class: "platform", parents: [] },
-  review_risk_by_effect: { class: "platform", parents: [] },
-  review_policy_defaults: { class: "platform", parents: [] },
+  review_policies: {
+    class: "tenant_readable",
+    parents: ["workspace_streams"],
+    content: "workspace",
+  },
+  proposal_parameters: {
+    class: "tenant_readable",
+    parents: ["workspace_streams"],
+    content: "store",
+  },
+  proposals: {
+    class: "tenant_readable",
+    parents: ["proposal_parameters", "review_policies"],
+    content: "workspace",
+  },
+  approvals: { class: "tenant_readable", parents: ["proposals"], content: "none" },
+  approval_decisions: { class: "tenant_readable", parents: ["approvals"], content: "workspace" },
+  approval_claims: { class: "tenant_internal", parents: ["approvals"], content: "none" },
+  review_capabilities: { class: "platform", parents: [], content: "none" },
+  review_risk_by_effect: { class: "platform", parents: [], content: "none" },
+  review_policy_defaults: { class: "platform", parents: [], content: "none" },
   // M2 PR-1 spine foundation (migration 0020).
   work_leases: {
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
     policies: ["lease_pending", "lease_self"],
+    content: "none",
   },
-  stop_controls: { class: "tenant_or_platform", parents: ["morrow_identity.workspaces"] },
-  stop_records: { class: "tenant_or_platform", parents: ["stop_controls"] },
-  operations: { class: "tenant_readable", parents: ["morrow_identity.workspaces"], lease: true },
-  operation_transitions: { class: "tenant_readable", parents: ["operations"], lease: true },
+  stop_controls: {
+    class: "tenant_or_platform",
+    parents: ["morrow_identity.workspaces"],
+    content: "workspace",
+  },
+  stop_records: { class: "tenant_or_platform", parents: ["stop_controls"], content: "none" },
+  operations: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces"],
+    lease: true,
+    content: "none",
+  },
+  operation_transitions: {
+    class: "tenant_readable",
+    parents: ["operations"],
+    lease: true,
+    content: "none",
+  },
 });
 
 // API functions: SECURITY DEFINER, owned by the command role, EXECUTE for the api
@@ -240,6 +275,7 @@ export const billingTables = Object.freeze({
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
     policies: ["route_signup"],
+    content: "none",
   },
 });
 export const billingFunctions = Object.freeze({
@@ -253,8 +289,8 @@ export const billingFunctions = Object.freeze({
   "route_guard()": { kind: "trigger", grantees: [] },
 });
 export const vaultTables = Object.freeze({
-  app_secrets: { class: "vault_platform", parents: [] },
-  credentials: { class: "vault_tenant", parents: ["morrow_identity.workspaces"] },
+  app_secrets: { class: "vault_platform", parents: [], content: "none" },
+  credentials: { class: "vault_tenant", parents: ["morrow_identity.workspaces"], content: "store" },
 });
 export const vaultFunctions = Object.freeze({
   "app_secret_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
