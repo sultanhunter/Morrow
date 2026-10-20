@@ -73,30 +73,58 @@ const probeNeonctl = (args) => {
     };
   return null;
 };
-// A probe connection whose every failure carries markers in its message. The verifier is
-// refused with Neon's control-plane text around the markers (M-N3, 2026-10-20) and the
-// generated plaintext is accepted; every statement goes to the dump, so the parent can
-// check that the plaintext never reaches the output.
+// A probe connection whose every failure carries markers in its message, in Neon's
+// measured shape (M-N3, 2026-10-20): the verifier is refused with Neon's control-plane
+// text around the markers, the generated plaintext is accepted, and pg_stat_statements is
+// preloaded with utility tracking, so the probe wipes and verifies from neondb. Every
+// statement goes to the dump, so the parent can check that the plaintext never reaches
+// the output.
 const probeStatements = [];
-const probeConnection = async () => ({
+const probeScratch = { extension: false };
+const probeConnection = async (url) => ({
   async query(text, params = []) {
-    probeStatements.push({ text, params: [...params] });
+    probeStatements.push({ text, params: [...params], database: url.database });
     if (/session_role/.test(text))
-      return [{ session_role: "neondb_owner", current_role: "neondb_owner", superuser: false }];
-    if (/extname = 'pg_stat_statements'/.test(text))
       return [
         {
-          extension: false,
-          track: null,
-          track_utility: null,
-          password_encryption: "scram-sha-256",
-          log_statement: "none",
+          session_role: "neondb_owner",
+          current_role: "neondb_owner",
+          database: url.database,
+          version: 170011,
+          superuser: false,
+          createrole: true,
+          login: true,
         },
       ];
+    if (/AS extension, current_setting/.test(text))
+      return [
+        {
+          extension: url.database === "neondb" && probeScratch.extension,
+          track: "top",
+          track_utility: "on",
+          password_encryption: "scram-sha-256",
+          log_statement: "none",
+          log_min_duration_statement: "-1",
+          log_min_duration_sample: "-1",
+          log_statement_sample_rate: "1",
+          log_min_error_statement: "panic",
+          log_duration: "off",
+        },
+      ];
+    if (/FROM pg_catalog\.pg_database WHERE datname/.test(text)) return [{ present: true }];
+    if (/pg_catalog\.pg_extension e JOIN/.test(text))
+      return probeScratch.extension ? [{ schema: "public" }] : [];
+    if (/clock_timestamp/.test(text)) return [{ before: "2026-10-20 19:00:00.000001+00" }];
+    if (/pg_stat_statements_info/.test(text)) return [{ full_reset: true, remaining: 0 }];
+    if (/^SELECT EXISTS \(SELECT 1 FROM pg_catalog\.pg_extension WHERE/.test(text))
+      return [{ extension: url.database === "neondb" && probeScratch.extension }];
+    if (/has_table_privilege/.test(text)) throw markerError();
     return [];
   },
   async exec(text) {
-    probeStatements.push({ text, params: [] });
+    probeStatements.push({ text, params: [], database: url.database });
+    if (text === "CREATE EXTENSION pg_stat_statements") probeScratch.extension = true;
+    if (text === "DROP EXTENSION pg_stat_statements") probeScratch.extension = false;
     if (/PASSWORD 'SCRAM/.test(text)) {
       const error = markerError();
       error.server =
@@ -147,6 +175,28 @@ const scenarios = {
     argv: ["provision-roles", "--first"],
     tools: { emit },
     database: {},
+  }),
+  // Neon's measured shape (M-N3 as amended 2026-10-20): the module loaded with utility
+  // tracking, so the passwords are wiped from the scratch database and verified.
+  "provision-first-neon": () => ({
+    argv: ["provision-roles", "--first"],
+    tools: { emit },
+    database: { statementStats: { track: "top", track_utility: "on" } },
+  }),
+  // A residue after the wipe stops the rotation before `secret bulk`.
+  "provision-rotate-residue": (constants) => ({
+    argv: ["provision-roles", "--rotate", "all"],
+    tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
+    database: { statementStats: { track: "top", track_utility: "on" }, residue: 3 },
+  }),
+  // A reset that fails with markers in the server's text.
+  "provision-first-wipe-error": () => ({
+    argv: ["provision-roles", "--first"],
+    tools: { emit },
+    database: {
+      statementStats: { track: "top", track_utility: "on" },
+      rules: [[/pg_stat_statements_reset\(\)/, markerError()]],
+    },
   }),
   "provision-first-sql-error": () => ({
     argv: ["provision-roles", "--first"],

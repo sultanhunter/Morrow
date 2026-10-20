@@ -358,19 +358,25 @@ function oneLine(run, stream) {
   assert.equal(other, "");
   return JSON.parse(text);
 }
-// The one statement a role password may appear in (M-N3 as amended 2026-10-20, owner
-// decision "Plaintext over TLS"): its own role's ALTER ROLE, as a literal, sent once.
+// The one statement text a role password may appear in (M-N3 as amended 2026-10-20,
+// owner decision "Plaintext over TLS"): its own role's ALTER ROLE, as a literal, sent
+// once. When a loaded pg_stat_statements is wiped ("Plaintext, then wipe stats"), each
+// password is also the verification query's bind parameter in the scratch database,
+// once, and never in that query's text.
 const passwordStatement =
   /^ALTER ROLE (morrow_[a-z0-9_]+) WITH LOGIN CONNECTION LIMIT 10 PASSWORD '([A-Za-z0-9_-]{43})'$/;
+const verificationQuery = /pg_stat_statements_info/;
 // `passwords` maps role -> plaintext: each must be in exactly one statement, its own
-// ALTER ROLE, and nowhere else (stdout, stderr, argv, other SQL, the report).
-function noMarkers(run, extra = [], passwords = {}) {
+// ALTER ROLE, in the verification's parameter exactly `verified` times (0 or 1), and
+// nowhere else (stdout, stderr, argv, other SQL, the report).
+function noMarkers(run, extra = [], passwords = {}, { verified = 0 } = {}) {
   const secrets = [...everyMarker(), ...extra, ...Object.values(passwords)];
   assert.deepEqual(contains(run.stdout, secrets), [], "stdout");
   assert.deepEqual(contains(run.stderr, secrets), [], "stderr");
   for (const call of run.dump?.calls ?? [])
     assert.deepEqual(contains(call.args.join(" "), secrets), [], call.tool + " argv");
   const sent = Object.fromEntries(Object.keys(passwords).map((role) => [role, 0]));
+  const checked = Object.fromEntries(Object.keys(passwords).map((role) => [role, 0]));
   for (const statement of run.dump?.statements ?? []) {
     let text = statement.text + JSON.stringify(statement.params);
     const [, role, password] = passwordStatement.exec(statement.text) ?? [];
@@ -378,9 +384,17 @@ function noMarkers(run, extra = [], passwords = {}) {
       sent[role]++;
       text = statement.text.replace(password, "");
     }
+    if (statement.database === "neondb" && verificationQuery.test(statement.text)) {
+      const listed = JSON.parse(statement.params[1]);
+      for (const [name, value] of Object.entries(passwords))
+        if (listed.includes(value)) checked[name]++;
+      text = statement.text + JSON.stringify(statement.params[0]);
+    }
     assert.deepEqual(contains(text, secrets), [], "sql");
   }
   for (const [role, count] of Object.entries(sent)) assert.equal(count, 1, role + " sent once");
+  for (const [role, count] of Object.entries(checked))
+    assert.equal(count, verified, role + " verified");
   assert.deepEqual(contains(JSON.stringify(run.dump?.reports ?? []), secrets), [], "report");
 }
 const sentPasswords = (run) =>
@@ -463,6 +477,41 @@ test("AC07: role passwords reach only their ALTER ROLE, then the 0600 first-depl
   // plaintext stay out of every output.
   assert.equal(Object.keys(sentPasswords(failed)).length, 1);
   noMarkers(failed, [], sentPasswords(failed));
+
+  // Neon's shape: the wipe and its verification run from the scratch database; each
+  // password is that query's bind parameter once, and the report carries only counts.
+  const neon = runChild("provision-first-neon");
+  assert.equal(neon.status, 0, neon.stderr);
+  assert.deepEqual(oneLine(neon, "stdout").statementStats, {
+    recording: true,
+    wiped: true,
+    entriesRemaining: 0,
+  });
+  const neonSecrets = JSON.parse(neon.brokerFile);
+  noMarkers(neon, [], rolePasswords(constants, neonSecrets), { verified: 1 });
+  assert.deepEqual(sentPasswords(neon), rolePasswords(constants, neonSecrets));
+  // A residue stops the rotation before `secret bulk`; a failing reset's server text
+  // (with markers) never reaches the output.
+  const residue = runChild("provision-rotate-residue");
+  assert.equal(residue.status, 1);
+  assert.deepEqual(oneLine(residue, "stderr"), {
+    command: "provision-roles",
+    code: "STAGING_STATEMENT_STATS_RESIDUE",
+    stage: "verify",
+    entriesRemaining: 3,
+  });
+  assert.equal(residue.dump.bulkInputs.length, 0);
+  noMarkers(residue, [], sentPasswords(residue), { verified: 1 });
+  const wipeError = runChild("provision-first-wipe-error");
+  assert.equal(wipeError.status, 1);
+  assert.deepEqual(oneLine(wipeError, "stderr"), {
+    command: "provision-roles",
+    code: "STAGING_STATEMENT_STATS_RESIDUE",
+    stage: "reset",
+    entriesRemaining: null,
+  });
+  assert.equal(wipeError.brokerFile, null);
+  noMarkers(wipeError, [], sentPasswords(wipeError));
 
   const rotate = runChild("provision-rotate");
   assert.equal(rotate.status, 0, rotate.stderr);
@@ -572,6 +621,19 @@ test("AC07: turnstile-create, the Neon probe, the kill and the deploy never prin
   assert.equal(plaintexts.length, 1);
   noMarkers(probe, plaintexts);
   assert.ok(!(probe.stdout + probe.stderr).includes("control plane"));
+  // Neon's shape: the wipe from neondb verified the plaintext's absence with the plaintext
+  // as a bind parameter only; a failing stored-form read (with markers) is recorded as
+  // "error", and the measurements survive it.
+  assert.deepEqual(report.mN3.wipe, { wiped: true, entriesRemaining: 0 });
+  assert.equal(report.mN3.storedForm, "error");
+  assert.equal(report.mN3.targetExtension, false);
+  const carrying = probe.dump.probeStatements.filter((s) =>
+    (s.text + JSON.stringify(s.params)).includes(plaintexts[0]),
+  );
+  assert.equal(carrying.length, 2);
+  assert.equal(carrying[0].database, "morrow");
+  assert.equal(carrying[1].database, "neondb");
+  assert.ok(!carrying[1].text.includes(plaintexts[0]));
   // A kill with every tool failing and a failing fetch still prints one closed line.
   const kill = runChild("kill-failing");
   assert.equal(kill.status, 1);

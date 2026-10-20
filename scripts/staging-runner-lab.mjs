@@ -3,7 +3,8 @@
 // The staging CLI (`node scripts/staging.mjs migrate | provision-roles`) runs through its
 // real code with fake git and gh, a planted temporary HOME and a psql connector in place
 // of the Neon driver.
-// - Container 1, superuser mode: the real chain with the hosted-shape replay, the
+// - Container 1, superuser mode, started with shared_preload_libraries=pg_stat_statements
+//   (Neon's shape, measured 2026-10-20): the real chain with the hosted-shape replay, the
 //   refusals, drift, and the D4 SET-row protocol on synthetic chains (kill before COMMIT,
 //   lost acknowledgement, partial prerequisite, concurrency, a role changed by dynamic SQL).
 // - Container 2, createrole mode (ADR-0020, P04.T01j D4 and AC14): the real chain applied
@@ -15,8 +16,12 @@
 // broker logins, the vault login included, and the first-deploy file the fourteen broker
 // names, with the owner's vault KEK read from its planted file (`vault-kek-v1`).
 // Provisioning sends each generated plaintext once, in its own ALTER ROLE (P04.T01i M-N3
-// as amended 2026-10-20: Neon takes only plaintexts), after refusing a database where
-// pg_stat_statements could keep the statement or the server would not store SCRAM.
+// as amended 2026-10-20: Neon takes only plaintexts), after refusing a database whose
+// statistics cannot be read or hold the extension, non-SCRAM storage, statement logging
+// in either session, and a recording module with no usable scratch database. With the
+// module recording, the statistics are wiped and verified from the scratch database
+// `neondb` (owner decision "Plaintext, then wipe stats"): zero entries hold a password,
+// `morrow` never gains the extension, and the server log holds no plaintext.
 // No provider, credential, host port or merchant data; every secret is a synthetic marker.
 import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -173,9 +178,30 @@ function commitFault(sequence, action) {
   return { hooks, hit };
 }
 
-const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, version }) => {
+// Container 1 (superuser mode), started with pg_stat_statements preloaded.
+const superuserLab = async ({ id, sql, image, version }) => {
   const db = (text, database = "morrow") => sql(text, database);
   sql("CREATE DATABASE morrow;");
+  // The scratch database the statistics wipe runs from (Neon's default database).
+  sql("CREATE DATABASE neondb;");
+  // The measured premise of M-N3 as amended: the preloaded module records a password
+  // statement, literal included, in a database without the extension, and a full reset
+  // clears it. Read from morrow_lab, the only database that holds the extension here.
+  const premise = "labpremise" + hex(16);
+  sql("CREATE ROLE lab_stats_probe NOLOGIN;");
+  db(`ALTER ROLE lab_stats_probe PASSWORD '${premise}';`);
+  sql("CREATE EXTENSION pg_stat_statements;");
+  const holding = () =>
+    Number(sql(`SELECT count(*) FROM pg_stat_statements WHERE strpos(query, '${premise}') > 0;`));
+  check(
+    "preloaded_module_records_a_password_literal_without_the_extension",
+    holding() >= 1 &&
+      db("SELECT count(*) FROM pg_extension WHERE extname='pg_stat_statements';") === "0",
+  );
+  sql("SELECT pg_stat_statements_reset();");
+  check("full_reset_clears_the_recorded_password", holding() === 0);
+  sql("DROP EXTENSION pg_stat_statements;");
+  sql("DROP ROLE lab_stats_probe;");
   const chain = loadMigrationChain();
   // Hosted-shape replay (D3): apply up to the last sequence on origin/main, provision the
   // roles in hosted shape, then apply the rest. A PR that adds no migration replays N.
@@ -219,12 +245,13 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
     "vault-kek-v1": markers.kek,
   });
   const connector = psqlConnector(id, { user: "postgres", database: "morrow" });
+  const scratchConnector = psqlConnector(id, { user: "postgres", database: "neondb" });
   const fakes = fakeTools();
   const base = await fakeContext({
     home: planted.home,
     tools: fakes.tools,
     administrator: superuser,
-    database: () => connector,
+    database: ({ binding }) => (binding.database === "neondb" ? scratchConnector : connector),
   });
   const ctx = base.ctx;
   const run = async (argv, context = ctx) => {
@@ -296,7 +323,9 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
     ],
     [
       "wrong_database",
-      { home: home({ "neon-owner-url": ownerUrl("postgres", { database: "morrow_other" }) }).home },
+      {
+        home: home({ "neon-owner-url": ownerUrl("postgres", { database: "morrow_other" }) }).home,
+      },
       "STAGING_DATABASE_MISMATCH",
     ],
     [
@@ -419,54 +448,102 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
   );
 
   // --- Refusals before any password statement (M-N3 as amended 2026-10-20): the
-  // pg_stat_statements extension in the target database, then a server that would hash
-  // with md5. Each refusal opens a fresh session, sends no BEGIN, ALTER ROLE or password,
-  // and leaves no first-deploy file.
+  // pg_stat_statements extension in the binding's database, a server that would hash
+  // with md5, each statement-logging setting in the binding's session and in the scratch
+  // session, and an absent scratch database. Each refusal opens fresh sessions, sends no
+  // BEGIN, ALTER ROLE, password or extension statement on either, and leaves no
+  // first-deploy file. Setups and teardowns run from morrow_lab, except the extension's,
+  // which is created in morrow itself.
   const secretsFile = join(planted.directory, "tmp/broker-secrets.json");
-  const refusedBefore = async (name, setup, teardown, expected) => {
-    db(setup);
+  const passwordOrExtension = (text) => /^(BEGIN|ALTER ROLE)|PASSWORD|EXTENSION/.test(text);
+  const refusedBefore = async (name, setup, teardown, expected, database = "morrow_lab") => {
+    sql(setup, database);
     const sent = connector.statements.length;
+    const scratchSent = scratchConnector.statements.length;
     const refused = await run(["provision-roles", "--first"]);
-    db(teardown);
+    sql(teardown, database);
     check(
       name,
       refused.code === 1 &&
         JSON.stringify(refused.err[0]) === JSON.stringify(expected) &&
-        connector.statements
-          .slice(sent)
-          .every((text) => !/^(BEGIN|ALTER ROLE)|PASSWORD/.test(text)) &&
+        !connector.statements.slice(sent).some(passwordOrExtension) &&
+        !scratchConnector.statements.slice(scratchSent).some(passwordOrExtension) &&
         !existsSync(secretsFile),
     );
   };
-  await refusedBefore(
-    "statement_stats_extension_refuses_before_any_password_statement",
-    "CREATE EXTENSION pg_stat_statements;",
-    "DROP EXTENSION pg_stat_statements;",
-    {
-      command: "provision-roles",
-      code: "STAGING_STATEMENT_STATS_PRESENT",
-      reason: "extension",
-      extension: true,
-      module: false,
-    },
-  );
-  await refusedBefore(
-    "md5_password_encryption_refuses_before_any_password_statement",
-    "ALTER DATABASE morrow SET password_encryption = 'md5';",
-    "ALTER DATABASE morrow RESET password_encryption;",
-    { command: "provision-roles", code: "STAGING_PASSWORD_ENCRYPTION" },
-  );
+  const passwordRefusals = [
+    [
+      "statement_stats_extension",
+      "CREATE EXTENSION pg_stat_statements;",
+      "DROP EXTENSION pg_stat_statements;",
+      {
+        code: "STAGING_STATEMENT_STATS_PRESENT",
+        reason: "extension",
+        extension: true,
+        module: true,
+      },
+      "morrow",
+    ],
+    [
+      "md5_password_encryption",
+      "ALTER DATABASE morrow SET password_encryption = 'md5';",
+      "ALTER DATABASE morrow RESET password_encryption;",
+      { code: "STAGING_PASSWORD_ENCRYPTION" },
+    ],
+    ...[
+      ["log_statement", "'ddl'"],
+      ["log_min_duration_statement", "0"],
+      ["log_min_duration_sample", "0"],
+      ["log_min_error_statement", "'error'"],
+    ].map(([setting, value]) => [
+      setting + "_in_the_binding_session",
+      `ALTER DATABASE morrow SET ${setting} = ${value};`,
+      `ALTER DATABASE morrow RESET ${setting};`,
+      { code: "STAGING_STATEMENT_LOGGING", reason: setting, database: "binding" },
+    ]),
+    [
+      "log_statement_in_the_scratch_session",
+      "ALTER DATABASE neondb SET log_statement = 'all';",
+      "ALTER DATABASE neondb RESET log_statement;",
+      { code: "STAGING_STATEMENT_LOGGING", reason: "log_statement", database: "scratch" },
+    ],
+    [
+      "absent_scratch_database",
+      "DROP DATABASE neondb;",
+      "CREATE DATABASE neondb;",
+      {
+        code: "STAGING_STATEMENT_STATS_PRESENT",
+        reason: "module",
+        extension: false,
+        module: true,
+        scratch: "absent",
+      },
+    ],
+  ];
+  for (const [name, setup, teardown, expected, database] of passwordRefusals)
+    await refusedBefore(
+      name + "_refuses_before_any_password_statement",
+      setup,
+      teardown,
+      { command: "provision-roles", ...expected },
+      database,
+    );
 
-  // --- Hosted-shape provisioning (D3, AC07 SQL half). Every statement is logged by the
-  // server from here on, so the log can show where each plaintext reached the server:
-  // once, in its own role's ALTER ROLE statement, and nowhere else.
-  db("ALTER DATABASE morrow SET log_statement = 'all';", "morrow_lab");
+  // --- Hosted-shape provisioning (D3, AC07 SQL half) with the module recording and the
+  // container's own logging (log_statement none, log_min_error_statement panic): each
+  // plaintext reaches the server once in its own ALTER ROLE, then the statistics are
+  // wiped and verified from neondb.
   const provision = await run(["provision-roles", "--first"]);
   check(
     "provision_first_succeeds",
     provision.code === 0 &&
       provision.out[0]?.controls === "verified" &&
       provision.out[0]?.passwordStorage === "SCRAM-SHA-256",
+  );
+  check(
+    "provision_reports_the_verified_wipe",
+    JSON.stringify(provision.out[0]?.statementStats) ===
+      JSON.stringify({ recording: true, wiped: true, entriesRemaining: 0 }),
   );
   const constants = base.constants;
   const mode = statSync(secretsFile).mode & 0o777;
@@ -512,6 +589,47 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
       const password = secrets[constants.passwordSecret(f.r)];
       const salt = Buffer.from(/^SCRAM-SHA-256\$4096:([^$]+)\$/.exec(f.v)?.[1] ?? "", "base64");
       return salt.length === 16 && scramVerifier(password, { salt }) === f.v;
+    }),
+  );
+  // The wipe (owner decision 2026-10-20, "Plaintext, then wipe stats"). Read independently
+  // from morrow_lab: no entry holds any generated password. morrow never gained the
+  // extension, and neondb's, created by the run, is gone. The extension statements and
+  // the reset ran only in the scratch session, and each plaintext reached that session
+  // only as the verification query's parameter, never in a statement's text.
+  sql("CREATE EXTENSION pg_stat_statements;");
+  const holdingAny = Number(
+    sql(
+      `SELECT count(*) FROM pg_stat_statements WHERE ${passwords.map((p) => `strpos(query, '${p}') > 0`).join(" OR ")};`,
+    ),
+  );
+  sql("DROP EXTENSION pg_stat_statements;");
+  check("wipe_leaves_no_entry_holding_a_password", holdingAny === 0);
+  check(
+    "morrow_never_gains_the_extension_and_neondb_keeps_none",
+    db("SELECT count(*) FROM pg_extension WHERE extname='pg_stat_statements';") === "0" &&
+      sql("SELECT count(*) FROM pg_extension WHERE extname='pg_stat_statements';", "neondb") ===
+        "0",
+  );
+  check(
+    "extension_statements_and_the_reset_only_in_the_scratch_session",
+    !connector.statements.some((s) => /EXTENSION|pg_stat_statements_(reset|info)/.test(s)) &&
+      scratchConnector.statements.filter((s) => s === "CREATE EXTENSION pg_stat_statements;")
+        .length === 1 &&
+      scratchConnector.statements.filter((s) => s === "DROP EXTENSION pg_stat_statements;")
+        .length === 1 &&
+      scratchConnector.statements.filter((s) => /\.pg_stat_statements_reset\(\)/.test(s)).length ===
+        1,
+  );
+  check(
+    "each_plaintext_reaches_the_scratch_session_only_as_the_verification_parameter",
+    passwords.every((p) => {
+      const carrying = scratchConnector.statements.filter((s) => s.includes(p));
+      return (
+        carrying.length === 1 &&
+        /pg_stat_statements_info/.test(carrying[0]) &&
+        carrying[0].startsWith("PREPARE staging_lab_q AS ") &&
+        !carrying[0].split("\nEXECUTE ")[0].includes(p)
+      );
     }),
   );
   check(
@@ -791,7 +909,8 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
   );
 
   // --- AC07: no marker in the tool's output or argv; each plaintext only in its own
-  // ALTER ROLE, in the statements sent and in the server log; no other marker in either.
+  // ALTER ROLE among the statements sent; no plaintext and no other marker in the server
+  // log (log_statement none, log_min_error_statement panic, as the tool requires).
   const logs = spawnSync("docker", ["logs", id], {
     encoding: "utf8",
     timeout: 30000,
@@ -802,14 +921,8 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
   const secretsSeen = [...others, ...passwords];
   const sentPasswords = rolePasswords(constants, secrets);
   check(
-    "server_log_holds_each_plaintext_only_in_its_alter_role_statement",
-    Object.entries(sentPasswords).every(([role, password]) => {
-      const lines = serverLog.split("\n").filter((line) => line.includes(password));
-      return (
-        lines.length === 1 &&
-        lines[0].includes("statement: " + passwordStatement(role, password).slice(0, -1))
-      );
-    }),
+    "server_log_holds_no_plaintext",
+    serverLog.length > 0 && Object.values(sentPasswords).every((p) => !serverLog.includes(p)),
   );
   check(
     "no_other_marker_in_server_log",
@@ -821,7 +934,9 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
   );
   check(
     "no_other_marker_in_statements_sent",
-    others.every((m) => connector.statements.every((s) => !s.includes(m))),
+    others.every((m) =>
+      [...connector.statements, ...scratchConnector.statements].every((s) => !s.includes(m)),
+    ),
   );
   check(
     "no_plaintext_or_marker_in_tool_output",
@@ -838,7 +953,11 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
     loginsReady,
     mainManifest: mainLength === null ? "unavailable" : "origin/main",
     sentinels: secretsSeen.length,
+    sharedPreloadLibraries: ["pg_stat_statements"],
   };
+};
+const report = await localPostgresLab("P04.T01i", superuserLab, {
+  sharedPreloadLibraries: ["pg_stat_statements"],
 });
 
 // --- Container 2: the real chain as a Neon-shaped CREATEROLE administrator (ADR-0020;
@@ -933,6 +1052,7 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
     "createrole_provisions_roles_in_hosted_shape",
     provision.code === 0 &&
       provision.out[0]?.controls === "verified" &&
+      JSON.stringify(provision.out[0]?.statementStats) === JSON.stringify({ recording: false }) &&
       db(
         `SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (${base.constants.roles.map((r) => `'${r}'`).join(",")}) AND rolcanlogin AND rolconnlimit = 10;`,
       ) === String(base.constants.roles.length),
@@ -1051,7 +1171,7 @@ const reportText =
       task: "P04.T01i",
       observed_at: new Date().toISOString(),
       scope:
-        "Two isolated PostgreSQL 17.11 containers (network none): the staging migration runner in superuser mode over the real chain with the hosted-shape replay, hosted-shape role provisioning (generated plaintexts, each sent once in its own ALTER ROLE and stored by the server as SCRAM-SHA-256; refusals for the pg_stat_statements extension and md5 storage before any password statement), and the P04.T01j D4 SET-row protocol on synthetic chains; then the real chain applied by a Neon-shaped non-superuser CREATEROLE administrator with D4, hosted-shape provisioning, a kill before COMMIT, a lost acknowledgement, a superseded digest and a planted SET row (P04.T01j-AC14). Fake git and gh; no provider, credential or network.",
+        "Two isolated PostgreSQL 17.11 containers (network none): the staging migration runner in superuser mode over the real chain with the hosted-shape replay on a server that preloads pg_stat_statements, hosted-shape role provisioning (generated plaintexts, each sent once in its own ALTER ROLE and stored by the server as SCRAM-SHA-256; refusals for the extension in morrow, md5 storage, statement logging in either session and an absent scratch database before any password statement; the statistics wiped and verified from neondb, leaving no entry with a password, no extension in morrow and no plaintext in the server log), and the P04.T01j D4 SET-row protocol on synthetic chains; then the real chain applied by a Neon-shaped non-superuser CREATEROLE administrator with D4, hosted-shape provisioning, a kill before COMMIT, a lost acknowledgement, a superseded digest and a planted SET row (P04.T01j-AC14). Fake git and gh; no provider, credential or network.",
       ...report,
       createrole: createroleReport,
       checks,

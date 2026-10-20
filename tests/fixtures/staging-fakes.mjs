@@ -427,27 +427,41 @@ export function fakeSite({ cloud, ready = true, guard = true, limit = 10, csp, o
 }
 
 // A scriptable database for the commands' SQL paths without PostgreSQL. `rules` map a
-// statement pattern to rows (or a function returning rows, or an Error to throw). Every
-// statement and parameter list is recorded; the role passwords provisioning sends are
-// in the ALTER ROLE statements here, so tests check where they appear.
-// `statementStats` overrides the statement-statistics row; `storedForm` makes pg_authid
-// readable.
+// statement pattern to rows (or a function of (text, params, database) returning rows,
+// or an Error to throw). Every statement and parameter list is recorded with the database
+// its connection is bound to (`connector({binding})`, "morrow" by default); the role
+// passwords provisioning sends are in the ALTER ROLE statements here, so tests check
+// where they appear. `statementStats` overrides the statement-statistics row of the
+// binding's database and `scratchStats` that of any other database; `storedForm` makes
+// pg_authid readable. The scratch database (M-N3 wipe): `scratchPresent` (default true),
+// `scratchExtension` (an extension already there), `residue` (entries left after the
+// reset) and `partialReset` (stats_reset not moved).
 export function fakeDatabase(options = {}) {
   const statements = [];
   const roles = options.roles ?? [];
-  const identity = {
+  const identityFor = (database) => ({
     session_role: "neondb_owner",
     current_role: "neondb_owner",
-    database: "morrow",
+    database,
     version: 170011,
     superuser: false,
     createrole: true,
     login: true,
     ...(options.identity ?? {}),
+  });
+  const scratch = { extension: options.scratchExtension === true, created: 0, dropped: 0 };
+  const quiet = {
+    password_encryption: "scram-sha-256",
+    log_statement: "none",
+    log_min_duration_statement: "-1",
+    log_min_duration_sample: "-1",
+    log_statement_sample_rate: "1",
+    log_min_error_statement: "panic",
+    log_duration: "off",
   };
   const provisioned = new Set(options.provisioned ? roles : []);
   const rules = [
-    [/^SELECT session_user::text AS session_role/, () => [identity]],
+    [/^SELECT session_user::text AS session_role/, (text, params, db) => [identityFor(db)]],
     [
       /FROM pg_catalog\.pg_roles WHERE rolname IN/,
       () => [{ n: options.presentRoles ?? roles.length }],
@@ -467,19 +481,41 @@ export function fakeDatabase(options = {}) {
     [/privilege_type = 'TEMPORARY'/, () => [{ revoked: provisioned.size > 0 }]],
     [/pg_stat_activity WHERE datname/, () => options.activity ?? []],
     [/pg_auth_members/, () => [{ n: 0 }]],
-    // M-N3 as amended: no pg_stat_statements and SCRAM storage, unless a test says so.
+    // M-N3 as amended: no pg_stat_statements, SCRAM storage and no statement logging,
+    // unless a test says so.
     [
-      /extname = 'pg_stat_statements'/,
-      () => [
-        {
-          extension: false,
-          track: null,
-          track_utility: null,
-          password_encryption: "scram-sha-256",
-          log_statement: "none",
-          ...(options.statementStats ?? {}),
-        },
+      /^SELECT EXISTS \(SELECT 1 FROM pg_catalog\.pg_extension WHERE extname = 'pg_stat_statements'\) AS extension, current_setting/,
+      (text, params, db) => [
+        db === "morrow"
+          ? {
+              extension: false,
+              track: null,
+              track_utility: null,
+              ...quiet,
+              ...(options.statementStats ?? {}),
+            }
+          : {
+              extension: scratch.extension,
+              track: options.statementStats?.track ?? null,
+              track_utility: options.statementStats?.track_utility ?? null,
+              ...quiet,
+              ...(options.scratchStats ?? {}),
+            },
       ],
+    ],
+    [
+      /FROM pg_catalog\.pg_database WHERE datname = /,
+      () => [{ present: options.scratchPresent ?? true }],
+    ],
+    [
+      /FROM pg_catalog\.pg_extension e JOIN pg_catalog\.pg_namespace/,
+      () => (scratch.extension ? [{ schema: "public" }] : []),
+    ],
+    [/clock_timestamp\(\)::text AS before/, () => [{ before: "2026-10-20 12:00:00.000001+00" }]],
+    [/pg_stat_statements_reset\(\)/, () => [{ reset: "2026-10-20 12:00:00.000002+00" }]],
+    [
+      /pg_stat_statements_info/,
+      () => [{ full_reset: options.partialReset !== true, remaining: options.residue ?? 0 }],
     ],
     // pg_authid is unreadable here (a plain CREATEROLE role); `storedForm` makes it
     // readable, as for a superuser or Neon's neondb_owner (pg_read_all_data), with the
@@ -500,10 +536,10 @@ export function fakeDatabase(options = {}) {
       ],
     ],
   ];
-  const answer = (text) => {
+  const answer = (text, params, database) => {
     for (const [pattern, result] of [...(options.rules ?? []), ...rules]) {
       if (!pattern.test(text)) continue;
-      const value = typeof result === "function" ? result(text) : result;
+      const value = typeof result === "function" ? result(text, params, database) : result;
       if (value instanceof Error) throw value;
       return value;
     }
@@ -511,20 +547,31 @@ export function fakeDatabase(options = {}) {
   };
   return {
     statements,
-    connector: () => ({
+    scratch,
+    connector: ({ binding } = {}) => ({
       async connect() {
+        const database = binding?.database ?? "morrow";
         if (options.connectError) throw options.connectError;
+        if (database !== "morrow" && options.scratchConnectError) throw options.scratchConnectError;
         return {
           async query(text, params = []) {
-            statements.push({ text, params: [...params] });
-            return answer(text);
+            statements.push({ text, params: [...params], database });
+            return answer(text, params, database);
           },
           async exec(text) {
-            statements.push({ text, params: [] });
-            const role = /^ALTER ROLE (morrow_[a-z0-9_]+) WITH LOGIN/.exec(text)?.[1];
-            if (role) provisioned.add(role);
+            statements.push({ text, params: [], database });
             if (options.execError && options.execError.pattern.test(text))
               throw options.execError.error;
+            const role = /^ALTER ROLE (morrow_[a-z0-9_]+) WITH LOGIN/.exec(text)?.[1];
+            if (role) provisioned.add(role);
+            if (text === "CREATE EXTENSION pg_stat_statements") {
+              scratch.extension = true;
+              scratch.created++;
+            }
+            if (text === "DROP EXTENSION pg_stat_statements") {
+              scratch.extension = false;
+              scratch.dropped++;
+            }
           },
           async close() {},
         };

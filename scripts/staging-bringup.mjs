@@ -3,7 +3,8 @@
 //                     the GitHub names; exits non-zero when a card effect cannot start
 //   status            read-only: the deploy flag, the last deploy run, the deployed
 //                     versions, the api's workers.dev state and health
-//   neon-probe        M-N1, M-N3 and M-N4 on a throwaway child branch with an expiry (E3)
+//   neon-probe        M-N1, M-N3 (with the statistics wipe) and M-N4 on a throwaway
+//                     child branch with an expiry (E3)
 //   queues            E4: the two staging queues, created only when missing
 //   turnstile-create  E5: the invisible widget for the staging hostname; its secret goes
 //                     only to a new 0600 file
@@ -16,13 +17,18 @@ import { join } from "node:path";
 import { StagingError, failureRecord } from "./staging-common.mjs";
 import { createOwnerFile, parseOwnerUrl, recordRotation } from "./staging-files.mjs";
 import {
+  assertPasswordStatementSafe,
+  connectChecked,
   generatePassword,
+  openStatementStatsScratch,
   passwordLiteral,
   readStatementStats,
   scramVerifier,
   sessionIdentity,
   sqlFailure,
+  statementStatsScratchDatabase,
   storedPasswordForm,
+  wipeStatementStats,
 } from "./staging-runner.mjs";
 import { toolJson, toolOk } from "./staging-tools.mjs";
 import {
@@ -191,14 +197,17 @@ export async function status(ctx, p) {
 }
 
 // ---------------------------------------------------------------------------
-// M-N3 as amended 2026-10-20 (owner decision "Plaintext over TLS"): Neon refuses a
-// pre-hashed SCRAM verifier and takes only a plaintext, which it hashes and stores as
-// SCRAM-SHA-256 itself. On the probe's own throwaway role this records (1) whether a
-// verifier is accepted, the refusal reduced to a fixed reason, never the server's text;
-// (2) the statement-statistics facts provisioning refuses on, with password_encryption
-// and log_statement; (3) only when provisioning's own check would pass, whether a
-// generated plaintext (sent once, never kept) is accepted, and its stored form where
-// pg_authid is readable.
+// M-N3 as amended 2026-10-20 (owner decisions "Plaintext over TLS" and "Plaintext, then
+// wipe stats"): Neon refuses a pre-hashed SCRAM verifier and takes only a plaintext. On
+// the probe's own throwaway role this records (1) whether a verifier is accepted, the
+// refusal reduced to a fixed reason, never the server's text; (2) in the binding's
+// database on the probe branch, the facts provisioning decides on: the statement-
+// statistics module, password_encryption and the logging settings; (3) only when
+// provisioning's own gate would pass, whether a generated plaintext (sent once, never
+// kept) is accepted, its stored form where pg_authid is readable, the same wipe and
+// verification from the scratch database, and whether the binding's database gained the
+// extension. Each step after the plaintext records its own failure, so a failing step
+// never discards what was already measured.
 const neonPlaintextOnly = /Neon only supports being given plaintext passwords/;
 export function verifierRefusal(error) {
   const text = [error?.server, error?.message].filter((v) => typeof v === "string").join(" ");
@@ -206,18 +215,22 @@ export function verifierRefusal(error) {
 }
 const probeSqlstate = (error) =>
   failureRecord(sqlFailure("STAGING_PROBE_PASSWORD", error)).sqlstate ?? null;
-async function probePasswords(connection, role) {
+async function probePasswords(connection, role, p) {
   const record = {
     verifierAccepted: null,
     verifierSqlstate: null,
     verifierRefusal: null,
+    target: null,
     statementStats: null,
     passwordEncryption: null,
-    logStatement: null,
+    logging: null,
+    refusal: null,
     plaintextSent: false,
     plaintextAccepted: null,
     plaintextSqlstate: null,
     storedForm: null,
+    wipe: null,
+    targetExtension: null,
   };
   const verifier = scramVerifier(generatePassword());
   try {
@@ -228,42 +241,91 @@ async function probePasswords(connection, role) {
     record.verifierSqlstate = probeSqlstate(error);
     record.verifierRefusal = verifierRefusal(error);
   }
-  const stats = await readStatementStats(connection);
-  record.statementStats = {
-    checked: stats.checked,
-    extension: stats.extension,
-    module: stats.module,
-    track: stats.track,
-    trackUtility: stats.trackUtility,
-    recording: stats.recording,
-  };
-  record.passwordEncryption = stats.passwordEncryption;
-  record.logStatement = stats.logStatement;
-  if (stats.recording || stats.passwordEncryption !== "scram-sha-256") return record;
-  record.plaintextSent = true;
+  let target;
   try {
-    await connection.exec(
-      `ALTER ROLE ${role} WITH LOGIN PASSWORD ${passwordLiteral(generatePassword())}`,
-    );
-    record.plaintextAccepted = true;
-  } catch (error) {
-    record.plaintextAccepted = false;
-    record.plaintextSqlstate = probeSqlstate(error);
+    target = await connectChecked(p.connectTarget, { database: p.database }, p.administrator);
+  } catch {
+    record.target = "unavailable";
     return record;
   }
-  record.storedForm = await storedPasswordForm(connection, [role]);
-  return record;
+  record.target = "connected";
+  let scratch = null;
+  try {
+    const stats = await readStatementStats(target);
+    record.statementStats = {
+      checked: stats.checked,
+      extension: stats.extension,
+      module: stats.module,
+      track: stats.track,
+      trackUtility: stats.trackUtility,
+      recording: stats.recording,
+    };
+    record.passwordEncryption = stats.passwordEncryption;
+    record.logging = {
+      logStatement: stats.logStatement,
+      logMinDurationStatement: stats.logMinDurationStatement,
+      logMinDurationSample: stats.logMinDurationSample,
+      logStatementSampleRate: stats.logStatementSampleRate,
+      logMinErrorStatement: stats.logMinErrorStatement,
+      logDuration: stats.logDuration,
+    };
+    try {
+      if (assertPasswordStatementSafe(stats))
+        scratch = await openStatementStatsScratch(target, {
+          binding: { database: p.database },
+          administrator: p.administrator,
+          scratch: { database: statementStatsScratchDatabase, connect: p.connectScratch },
+        });
+    } catch (error) {
+      record.refusal = failureRecord(error);
+      return record;
+    }
+    const password = generatePassword();
+    record.plaintextSent = true;
+    try {
+      await target.exec(`ALTER ROLE ${role} WITH LOGIN PASSWORD ${passwordLiteral(password)}`);
+      record.plaintextAccepted = true;
+    } catch (error) {
+      record.plaintextAccepted = false;
+      record.plaintextSqlstate = probeSqlstate(error);
+    }
+    if (record.plaintextAccepted)
+      try {
+        record.storedForm = await storedPasswordForm(target, [role]);
+      } catch {
+        record.storedForm = "error";
+      }
+    if (scratch)
+      try {
+        record.wipe = await wipeStatementStats(scratch, [password]);
+      } catch (error) {
+        record.wipe = { wiped: false, ...failureRecord(error) };
+      }
+    try {
+      const [row] = await target.query(
+        "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'pg_stat_statements') AS extension",
+      );
+      record.targetExtension = typeof row?.extension === "boolean" ? row.extension : null;
+    } catch {
+      record.targetExtension = null;
+    }
+    return record;
+  } finally {
+    if (scratch) await scratch.close();
+    await target.close();
+  }
 }
 
 // ---------------------------------------------------------------------------
-// neon-probe (M-N1, M-N3, M-N4). `p`: {staging, administrator, connectProbe(url)}. Only
-// a branch it creates is touched: a fresh `morrow-probe-<hex>` child of the root branch
-// with an expiry, never the root or the bound `staging` branch. The probe's connection
-// strings are read in-process from neonctl's stdout and never printed.
+// neon-probe (M-N1, M-N3, M-N4). `p`: {staging, administrator, database (the binding's),
+// connectProbe(url)}. Only a branch it creates is touched: a fresh `morrow-probe-<hex>`
+// child of the root branch with an expiry, never the root or the bound `staging` branch.
+// The probe's connection strings are read in-process from neonctl's stdout and never
+// printed.
 const branchId = /^br-[a-z0-9-]{1,60}$/;
 export async function neonProbe(ctx, p) {
   const neon = p.staging.neon ?? {};
-  if (neon.project_id === null || neon.root_branch_id === null)
+  if (neon.project_id === null || neon.root_branch_id === null || typeof p.database !== "string")
     throw new StagingError("STAGING_IDENTIFIERS_UNSET");
   const project = neon.project_id;
   const name = "morrow-probe-" + randomBytes(4).toString("hex");
@@ -320,7 +382,7 @@ export async function neonProbe(ctx, p) {
       "--role-name",
       p.administrator.name,
       "--database-name",
-      "neondb",
+      statementStatsScratchDatabase,
     ]);
     return parseOwnerUrl(text.trim());
   };
@@ -361,8 +423,20 @@ export async function neonProbe(ctx, p) {
       revokeRefused: after !== null,
       revokeSqlstate,
     };
-    report.mN3 = await probePasswords(connection, role);
-    await connection.exec(`ALTER ROLE ${role} WITH NOLOGIN PASSWORD NULL`);
+    report.mN3 = await probePasswords(connection, role, {
+      administrator: p.administrator,
+      database: p.database,
+      connectTarget: () => p.connectProbe({ ...first, database: p.database }),
+      connectScratch: () => p.connectProbe(first),
+    });
+    // The role's password is cleared before the reset drops it. A failure here is
+    // recorded, so it never discards M-N1 or M-N3.
+    try {
+      await connection.exec(`ALTER ROLE ${role} WITH NOLOGIN PASSWORD NULL`);
+      report.mN3.roleCleanup = { done: true, sqlstate: null };
+    } catch (error) {
+      report.mN3.roleCleanup = { done: false, sqlstate: probeSqlstate(error) };
+    }
   } catch (error) {
     throw sqlFailure("STAGING_NEON_PROBE_SQL", error);
   } finally {

@@ -41,6 +41,7 @@ import {
   seedPlatform,
   sessionIdentity,
   checkIdentity,
+  statementStatsScratchDatabase,
 } from "./staging-runner.mjs";
 import { cloudflareCredential, githubCredential } from "./staging-token.mjs";
 import {
@@ -434,6 +435,15 @@ command("provision-roles", {
     const ownerUrl = ownerUrlFor(ctx, binding, specs);
     const roles = constants.roles;
     const connect = ctx.database({ ownerUrl, binding }).connect;
+    // The scratch database the statement-statistics wipe runs from (M-N3 as amended
+    // 2026-10-20): the same endpoint and administrator, never the binding database.
+    const scratch = {
+      database: statementStatsScratchDatabase,
+      connect: ctx.database({
+        ownerUrl,
+        binding: { ...binding, database: statementStatsScratchDatabase },
+      }).connect,
+    };
     if (options.mode === "first") {
       // One source of names: the file holds brokerRequiredSecrets exactly (the list gate 6
       // and the first deploy's file check use). The names are checked before any file is
@@ -471,6 +481,7 @@ command("provision-roles", {
           administrator: ctx.administrator,
           roles,
           passwordRoles: roles,
+          scratch,
         });
       } catch (error) {
         handle.abandon();
@@ -495,6 +506,7 @@ command("provision-roles", {
         file: "tmp/broker-secrets.json",
         controls: "verified",
         passwordStorage: provisioned.passwordStorage,
+        statementStats: provisioned.statementStats,
       };
     }
     const selected =
@@ -511,6 +523,7 @@ command("provision-roles", {
       administrator: ctx.administrator,
       roles,
       passwordRoles: selected,
+      scratch,
     });
     const status = await brokerBulk(
       ctx,
@@ -531,6 +544,7 @@ command("provision-roles", {
       versionId,
       controls: "verified",
       passwordStorage: provisioned.passwordStorage,
+      statementStats: provisioned.statementStats,
     };
   },
 });
@@ -1034,9 +1048,19 @@ command("neon-probe", {
   async run(ctx) {
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
+    // M-N3: the probe sends its plaintext in the binding's database (on the probe branch)
+    // and wipes the statistics from the scratch database, as provision-roles does.
+    let database = null;
+    if (config.bindingJson !== null)
+      try {
+        database = (await ctx.constants()).parseBinding(config.bindingJson).database;
+      } catch {
+        throw new StagingError("STAGING_BINDING_INVALID");
+      }
     return neonProbe(ctx, {
       staging: config.staging,
       administrator: ctx.administrator,
+      database,
       connectProbe: (url) => ctx.probeDatabase(url),
     });
   },
