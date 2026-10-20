@@ -520,14 +520,6 @@ const readJson = (path) => {
   }
 };
 
-// P04.T01i D1 "Rules" (AC01) on the staging vars, with the runtimes' own parsers, and the
-// narrowed P04.T02a AC24: a staging var may name only the reviewed WorkOS environment,
-// application and client (docs/decisions/workos-staging.json), the bound `br-…` branch of
-// staging.json, a direct `ep-….aws.neon.tech` endpoint, the `0x…` Turnstile site key (in
-// LOGIN_CHALLENGE_JSON only) and the origin. Every origin use is D1's
-// `https://${env.staging.name}.${workers_dev_subdomain}.workers.dev`, with the subdomain read
-// from staging.json; the only other URL is the WorkOS issuer the login parser fixes to the
-// client. Returns the problems and the identifiers a committed file may name.
 // The runtimes' own parsers, loaded once per process.
 let stagingParsers;
 const loadStagingParsers = () =>
@@ -549,6 +541,16 @@ const loadStagingParsers = () =>
       parseLoginChallengeConfiguration: guard.parseLoginChallengeConfiguration,
     });
   })());
+
+// P04.T01i D1 "Rules" (AC01) on the staging vars, with the runtimes' own parsers, and the
+// narrowed P04.T02a AC24: a staging var may name only the reviewed WorkOS environment,
+// application and client (docs/decisions/workos-staging.json), the bound `br-…` branch of
+// staging.json, a direct `ep-….aws.neon.tech` endpoint, the `0x…` Turnstile site key (in
+// LOGIN_CHALLENGE_JSON only) and the origin. Every origin use is D1's
+// `https://${env.staging.name}.${workers_dev_subdomain}.workers.dev`, with the subdomain read
+// from staging.json; the only other URLs are its callback and the WorkOS issuer, which the
+// login parser fixes to the client. Returns the problems and the identifiers a committed
+// file may name.
 async function stagingValueChecks({ vars, apiName, staging, workos }) {
   const {
     captureManagedWorkspaceBinding,
