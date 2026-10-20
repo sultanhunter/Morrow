@@ -5,7 +5,6 @@ import {
   billingEnvironments,
   environmentMode,
   type BillingDenial,
-  type BillingEnvironment,
 } from "@morrow/policy/billing-state";
 import {
   WorkOutcomeUnknown,
@@ -36,9 +35,9 @@ import {
   parsePortalBody,
   readBillingContext,
   requirePurchase,
-  type BillingBrokerPort,
   type BillingCommandRejection,
 } from "./commands.js";
+import type { BillingBrokerPort, BillingEnvironmentName } from "./port.js";
 import { subscriptionEntry } from "./terms.js";
 
 // The billing HTTP API (M5 PR-1; P18.T01a; docs/contracts/billing-api.md). Routes under
@@ -50,7 +49,7 @@ import { subscriptionEntry } from "./terms.js";
 export interface BillingApiDependencies {
   readonly origin: string;
   readonly connector: WorkSqlConnector;
-  readonly environment: BillingEnvironment;
+  readonly environment: BillingEnvironmentName;
   /** null: the api has no broker Stripe adapters; purchases answer 503. */
   readonly broker: BillingBrokerPort | null;
   readonly now: () => number;
@@ -167,7 +166,7 @@ function envelope(
   return json(status, body, allow ? { Allow: allow } : {});
 }
 /** A billing denial (§9): its fixed envelope; denied 403, conflicts 409, unavailable 503. */
-export function billingDenialResponse(denial: BillingDenial, correlationId: string): Response {
+function billingDenialResponse(denial: BillingDenial, correlationId: string): Response {
   const e = denial.envelope;
   const status = e.code === "denied" ? 403 : e.code === "unavailable" ? 503 : 409;
   return envelope([status, e.code, e.retryClass, e.safeMessage], correlationId);

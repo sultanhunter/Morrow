@@ -13,11 +13,15 @@ import {
   brokerVaultRole,
   neonLeaseNamespace,
   parseBrokerDatabaseBinding,
+  parseStripeConfiguration,
   parseTurnstileConfiguration,
+  stripeRestrictedKeyPattern,
+  stripeWebhookSecretPattern,
   turnstileKeyPattern,
   workosSessionNamespace,
   type BrokerCaller,
 } from "../../../packages/identity/src/broker-protocol.js";
+import type { BrokerStripe } from "./stripe.js";
 import { createVaultKeyring, type VaultKeyring } from "./vault.js";
 
 // Broker v0 trust model (ADR-0007 item 3): every holder of the ApiBroker binding
@@ -28,13 +32,24 @@ import { createVaultKeyring, type VaultKeyring } from "./vault.js";
 // its own role lease; the vault keys stay inside the broker and never cross RPC.
 
 export type BrokerEntrypoint = "ApiBroker" | "ConnectorBroker" | "RuntimeBroker";
-export type BrokerMethod = "health" | "neonLease" | "workosSessionPage" | "challengeVerify";
+// Append-only (integration: each PR adds only its own entrypoint's methods).
+export type BrokerMethod =
+  | "health"
+  | "neonLease"
+  | "workosSessionPage"
+  | "challengeVerify"
+  // M5 PR-1 (ApiBroker): Stripe on one pinned API version, ids only.
+  | "stripeCustomerEnsure"
+  | "stripeCheckoutCreate"
+  | "stripePortalCreate"
+  | "stripeWebhookVerify";
 export type BrokerFailureCode =
   | "INPUT_INVALID"
   | "NAMESPACE_DENIED"
   | "CAPABILITY_UNAVAILABLE"
   | "BUDGET_INVALID"
-  | "PROVIDER_HELD";
+  | "PROVIDER_HELD"
+  | "STATE_INVALID";
 export class BrokerHold extends Error {
   constructor(readonly code: BrokerFailureCode) {
     super("BROKER_HELD");
@@ -70,6 +85,8 @@ export interface BrokerCapabilities {
   readonly runtime: Readonly<BrokerDatabase> | null;
   readonly vault: Readonly<BrokerVault> | null;
   readonly challenge: Readonly<BrokerChallenge> | null;
+  /** M5 PR-1: the Stripe restricted test key, webhook secret and configuration (ApiBroker). */
+  readonly stripe: Readonly<BrokerStripe> | null;
   // Hosted environments sign in only behind the guard (ADR-0019 item 6), so their
   // health also needs the challenge capability; development may run without it.
   readonly challengeRequired: boolean;
@@ -82,6 +99,7 @@ const nothing: Readonly<BrokerCapabilities> = Object.freeze({
   runtime: null,
   vault: null,
   challenge: null,
+  stripe: null,
   challengeRequired: true,
 });
 const environments = ["development", "staging", "production"] as const;
@@ -212,6 +230,55 @@ function challenge(env: object): Readonly<BrokerChallenge> | null {
   }
 }
 
+// M5 PR-1 (ADR-0022 items 7 and 12): the restricted test key (rk_test_ only: a secret sk_
+// key or any live key is refused), the webhook signing secret, STRIPE_CONFIGURATION_JSON
+// (the saved portal configuration and the tax and address flags, a reviewed staging
+// identifier) and the workspace origin Checkout returns to. Development and staging only,
+// and only with the vault: the Stripe definers run on the broker's own login. Anything
+// missing or malformed holds Stripe only (its methods answer BROKER_HELD; billing 503).
+function stripe(
+  env: object,
+  environment: string,
+  vaultCapability: Readonly<BrokerVault> | null,
+): Readonly<BrokerStripe> | null {
+  if (environment === "production" || vaultCapability === null) return null;
+  try {
+    const restrictedKey = own(env, "STRIPE_RESTRICTED_KEY");
+    const webhookSecret = own(env, "STRIPE_WEBHOOK_SECRET");
+    if (
+      typeof restrictedKey !== "string" ||
+      stripeRestrictedKeyPattern.exec(restrictedKey)?.[0] !== restrictedKey ||
+      typeof webhookSecret !== "string" ||
+      stripeWebhookSecretPattern.exec(webhookSecret)?.[0] !== webhookSecret
+    )
+      return null;
+    const configuration = parseStripeConfiguration(own(env, "STRIPE_CONFIGURATION_JSON"));
+    const login = loginJson(own(env, "LOGIN_CONFIGURATION_JSON"), 32768, [
+      "schemaVersion",
+      "controllerProtocol",
+      "origin",
+      "retentionTier",
+      "authenticationBindingJson",
+      "verificationProfileJson",
+      "profileId",
+      "profileRecordRevision",
+    ]);
+    const origin = login.origin;
+    if (typeof origin !== "string" || login.retentionTier !== environment) return null;
+    const url = new URL(origin);
+    if (url.origin !== origin || url.protocol !== "https:") return null;
+    return Object.freeze({
+      environment: environment as "development" | "staging",
+      restrictedKey,
+      webhookSecret,
+      configuration,
+      returnOrigin: origin,
+    });
+  } catch {
+    return null;
+  }
+}
+
 async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
   let result = nothing;
   try {
@@ -219,16 +286,19 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
     if (
       typeof environment === "string" &&
       (environments as readonly string[]).includes(environment)
-    )
+    ) {
+      const vaultCapability = await vault(env, environment);
       result = Object.freeze({
         sessions: await sessions(env, environment),
         database: database(env, environment, "api"),
         connector: database(env, environment, "connector"),
         runtime: database(env, environment, "runtime"),
-        vault: await vault(env, environment),
+        vault: vaultCapability,
         challenge: challenge(env),
+        stripe: stripe(env, environment, vaultCapability),
         challengeRequired: environment !== "development",
       });
+    }
   } catch {
     result = nothing;
   }
@@ -241,6 +311,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
       runtime: result.runtime !== null,
       vault: result.vault !== null,
       challenge: result.challenge !== null,
+      stripe: result.stripe !== null,
     }),
   );
   return result;

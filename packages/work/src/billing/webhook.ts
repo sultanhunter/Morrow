@@ -1,4 +1,4 @@
-import { billingEnvironments, type BillingEnvironment } from "@morrow/policy/billing-state";
+import { billingEnvironments } from "@morrow/policy/billing-state";
 import {
   WorkOutcomeUnknown,
   WorkReject,
@@ -8,7 +8,7 @@ import {
   type WorkTx,
 } from "../connection.js";
 import { parseReceiptFacts, planReceiptApplication, receiptModeAccepted } from "./apply-plan.js";
-import type { BillingBrokerPort } from "./commands.js";
+import type { BillingBrokerPort, BillingEnvironmentName } from "./port.js";
 
 // The Stripe webhook (M5 PR-1; ADR-0022 items 9 and 12, the item 9 amendment of 2026-10-20).
 // POST /api/billing/stripe/webhook, public and sessionless. The api never parses the
@@ -21,7 +21,7 @@ import type { BillingBrokerPort } from "./commands.js";
 
 export interface StripeWebhookDependencies {
   readonly connector: WorkSqlConnector;
-  readonly environment: BillingEnvironment;
+  readonly environment: BillingEnvironmentName;
   readonly broker: BillingBrokerPort;
   readonly now: () => number;
 }
@@ -87,7 +87,7 @@ async function apply(
   tx: WorkTx,
   receiptId: string,
   objectDigest: string,
-  environment: BillingEnvironment,
+  environment: BillingEnvironmentName,
   now: string,
 ): Promise<Applied> {
   const begun = await tx.run("receiptBegin", [receiptId, objectDigest]);

@@ -25,38 +25,7 @@ import { subscriptionEntry, termsFromRow, type BillingTermsRevision } from "./te
 // that rechecks freshness and the route under the route row's lock. Only after the commit
 // does the api ask the broker to act, by operation id only (ADR-0022 item 7).
 
-/** The broker's Stripe methods as the api sees them (apps/api/src/broker-client.ts). */
-export interface BillingBrokerPort {
-  customerEnsure(
-    operationId: string,
-    signal: AbortSignal,
-  ): Promise<{ readonly outcome: "verified" | "failed" | "uncertain" }>;
-  checkoutCreate(
-    operationId: string,
-    signal: AbortSignal,
-  ): Promise<{
-    readonly outcome: "verified" | "failed" | "uncertain" | "closed" | "pending";
-    readonly checkoutUrl: string | null;
-    readonly expiresAtMs: number | null;
-  }>;
-  portalCreate(
-    operationId: string,
-    signal: AbortSignal,
-  ): Promise<{
-    readonly outcome: "verified" | "failed" | "uncertain";
-    readonly portalUrl: string | null;
-  }>;
-  webhookVerify(
-    rawBodyBase64: string,
-    signatureHeader: string,
-    signal: AbortSignal,
-  ): Promise<{
-    readonly verdict: "recorded" | "duplicate" | "rejected" | "ignored";
-    readonly receiptId: string | null;
-    readonly objectDigest: string | null;
-    readonly attributed: boolean | null;
-  }>;
-}
+export type { BillingBrokerPort } from "./port.js";
 
 /**
  * A decided purchase-guard denial, mapped by the HTTP layer to its BILLING_DENIAL_ENVELOPES

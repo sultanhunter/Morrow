@@ -94,8 +94,9 @@ export async function identityConstants() {
     // item 7). Each gets LOGIN, the limit, both timeouts and a generated password.
     roles: [...protocol.brokerNeonRoleNames, protocol.brokerVaultRole],
     passwordSecret: protocol.brokerPasswordSecret,
-    // The broker's fourteen names (D1, AC02): WORKOS_API_KEY, P05.T01ab's
-    // TURNSTILE_SECRET_KEY, the eleven role passwords and M2 PR-1's MORROW_VAULT_KEK_V1.
+    // The broker's sixteen names (D1, AC02): WORKOS_API_KEY, P05.T01ab's
+    // TURNSTILE_SECRET_KEY, the eleven role passwords, M2 PR-1's MORROW_VAULT_KEK_V1 and
+    // M5 PR-1's STRIPE_RESTRICTED_KEY and STRIPE_WEBHOOK_SECRET.
     // brokerRequiredSecrets is the one list: the wrangler `secrets.required` of development
     // and staging, verify-config, gate 6, secrets-status and the first-deploy file all use
     // it (production requires its vault-free subset, brokerRequiredSecretsFor).
@@ -103,6 +104,8 @@ export async function identityConstants() {
     // The vault KEKs (ADR-0022 item 7) are the owner's: each is read from its owner file
     // (`vault-kek-v<n>`, written by `npm run vault -- kek`) and never generated here.
     vaultKekSecrets: [...protocol.brokerVaultKekSecrets],
+    // M5 PR-1: the Stripe secrets, read from their owner files like the WorkOS key.
+    stripeSecrets: [...protocol.brokerStripeSecrets],
     parseBinding: protocol.parseBrokerDatabaseBinding,
   });
 }
@@ -137,6 +140,9 @@ export async function loadStagingConfiguration(root) {
       turnstileJson: text(brokerVars, "TURNSTILE_CONFIGURATION_JSON"),
       loginConfigurationJson: text(brokerVars, "LOGIN_CONFIGURATION_JSON"),
       bindingJson: text(brokerVars, "MORROW_DATABASE_BINDING_JSON"),
+      // M5 PR-1: the saved portal configuration and tax flags, a reviewed identifier that
+      // arrives on the PR-D path; absent, the broker holds Stripe and billing answers 503.
+      stripeJson: text(brokerVars, "STRIPE_CONFIGURATION_JSON"),
     }),
   });
 }
@@ -217,6 +223,25 @@ export async function checkChallengeConfiguration(loaded) {
     hostname: turnstile.hostname,
     actions: challenge.actions,
   });
+}
+
+// M5 PR-1: the broker's STRIPE_CONFIGURATION_JSON, if present, must be the closed shape
+// the broker itself parses (parseStripeConfiguration); a malformed one stops the deploy
+// before upload. Absent is allowed: the broker then holds Stripe and billing fails closed.
+export async function checkStripeConfiguration(loaded) {
+  const json = loaded?.broker?.stripeJson ?? null;
+  if (json === null) return Object.freeze({ present: false });
+  const { tsImport } = await import("tsx/esm/api");
+  const { parseStripeConfiguration } = await tsImport(
+    "../packages/identity/src/broker-protocol.ts",
+    import.meta.url,
+  );
+  try {
+    const parsed = parseStripeConfiguration(json);
+    return Object.freeze({ present: true, automaticTax: parsed.automaticTax });
+  } catch {
+    throw new StagingError("STAGING_STRIPE_CONFIGURATION_INVALID");
+  }
 }
 
 // The card is active only when the record says approved, 30 days have not passed, and no
@@ -434,6 +459,9 @@ command("provision-roles", {
         "TURNSTILE_SECRET_KEY",
         ...roles.map(constants.passwordSecret),
         ...kekNames,
+        // M5 PR-1: the two Stripe secrets, from their owner files.
+        "STRIPE_RESTRICTED_KEY",
+        "STRIPE_WEBHOOK_SECRET",
       ];
       if (
         new Set(planned).size !== planned.length ||
@@ -443,6 +471,8 @@ command("provision-roles", {
         throw new StagingError("STAGING_BROKER_FILE_NAMES_INVALID");
       const workos = readCredentialFile(ctx.directory, "workos-api-key", specs);
       const turnstile = readCredentialFile(ctx.directory, "turnstile-secret", specs);
+      const stripeKey = readCredentialFile(ctx.directory, "stripe-restricted-key", specs);
+      const stripeWebhook = readCredentialFile(ctx.directory, "stripe-webhook-secret", specs);
       // M2 PR-1: the owner's KEK files, read like the WorkOS key; the tool never makes one.
       const keks = Object.fromEntries(
         kekNames.map((name) => [
@@ -464,7 +494,13 @@ command("provision-roles", {
         handle.abandon();
         throw error;
       }
-      const secrets = { WORKOS_API_KEY: workos, TURNSTILE_SECRET_KEY: turnstile, ...keks };
+      const secrets = {
+        WORKOS_API_KEY: workos,
+        TURNSTILE_SECRET_KEY: turnstile,
+        STRIPE_RESTRICTED_KEY: stripeKey,
+        STRIPE_WEBHOOK_SECRET: stripeWebhook,
+        ...keks,
+      };
       for (const role of roles)
         secrets[constants.passwordSecret(role)] = provisioned.passwords.get(role);
       if (fileNames(Object.keys(secrets)) !== expected) {
@@ -511,16 +547,23 @@ command("provision-roles", {
   },
 });
 
+// M5 PR-1 adds the two Stripe secrets. This deliberately reverses the P04.T01i note that
+// put-secret only re-places names the running broker already holds: a broker deployed
+// before M5 lacks both Stripe names, and gate 6 holds every deploy until the owner places
+// them, so put-secret adds them (docs/packets/P04.T01i.md, the M5 PR-1 note).
 const putSecretFiles = Object.freeze({
   WORKOS_API_KEY: "workos-api-key",
   TURNSTILE_SECRET_KEY: "turnstile-secret",
+  STRIPE_RESTRICTED_KEY: "stripe-restricted-key",
+  STRIPE_WEBHOOK_SECRET: "stripe-webhook-secret",
 });
 // M2 PR-1: a vault KEK (MORROW_VAULT_KEK_V<n>) is re-placed from the owner's own file,
 // with the same value; a new KEK is a new version, never a new value under an old name.
 const putSecretFile = (name) =>
   Object.hasOwn(putSecretFiles, name) ? putSecretFiles[name] : vaultKekFile(name);
 command("put-secret", {
-  usage: "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY|MORROW_VAULT_KEK_V1",
+  usage:
+    "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY|STRIPE_RESTRICTED_KEY|STRIPE_WEBHOOK_SECRET|MORROW_VAULT_KEK_V1",
   parse(args) {
     if (args.length !== 1 || putSecretFile(args[0]) === null)
       throw new StagingError("STAGING_USAGE");
@@ -865,7 +908,12 @@ command("deploy", {
       checkpoint: writeReport,
       preconditions: () => mainPreconditions(ctx, github.repository),
       loginDigest: async () => (await ctx.loginConfiguration(config)).configurationDigest,
-      challenge: () => ctx.challengeConfiguration(config),
+      // Gate 4 also checks M5 PR-1's reviewed broker var: a present
+      // STRIPE_CONFIGURATION_JSON must parse (absent, billing fails closed with 503).
+      async challenge() {
+        await ctx.challengeConfiguration(config);
+        await checkStripeConfiguration(config);
+      },
       // The two owner files: exact key sets (their format checks), and the keyring bound
       // to the committed login configuration's digest.
       async firstFiles(digest) {

@@ -52,7 +52,6 @@ export {
   parsePortalBody,
   readBillingContext,
   requirePurchase,
-  type BillingBrokerPort,
   type BillingCommandRejection,
   type BillingContext,
   type CheckoutOpened,
@@ -71,7 +70,6 @@ export {
 } from "./apply-plan.js";
 export {
   billingBodyLimitBytes,
-  billingDenialResponse,
   billingRoutes,
   createBillingApiHandler,
   type BillingApiDependencies,
@@ -85,4 +83,5 @@ export {
   type StripeWebhookDependencies,
 } from "./webhook.js";
 export { billingStatements, type BillingStatementName } from "./sql.js";
+export type { BillingBrokerPort, BillingEnvironmentName } from "./port.js";
 export * from "./stripe-objects.js";

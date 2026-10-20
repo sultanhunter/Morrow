@@ -12,6 +12,8 @@
 // logs, and every failure is one fixed VaultError code with no value, key or byte in it.
 // Uses only WebCrypto, so the same code runs in workerd and in Node 24.
 
+import { billingVaultStatements } from "./vault-statements-billing.js";
+
 // Trust model v1 custody covers development and staging only (ADR-0022 item 7). Production
 // custody needs its own ADR (ADR-0007 item 9), so no keyring, envelope or additional data
 // exists for production until that ADR adds it here.
@@ -37,7 +39,13 @@ export type VaultErrorCode =
   | "VAULT_INPUT_INVALID"
   | "VAULT_KEK_UNAVAILABLE"
   | "VAULT_OPEN_FAILED"
-  | "VAULT_RECORD_INVALID";
+  | "VAULT_RECORD_INVALID"
+  // M2 PR-2, the vault transport (vault-database.ts): the database could not be used, a
+  // statement outside the registry was refused, or a COMMIT was sent and its
+  // acknowledgement lost (never retried; the caller reconciles by its own ids).
+  | "VAULT_DATABASE_UNAVAILABLE"
+  | "VAULT_STATEMENT_DENIED"
+  | "VAULT_OUTCOME_UNKNOWN";
 export class VaultError extends Error {
   constructor(readonly code: VaultErrorCode) {
     super(code);
@@ -383,9 +391,14 @@ export async function openVaultRecord(
 // The app-secret read path (M2 PR-2's launch and callback verification use it). The
 // broker's own login, morrow_vault_broker, runs this one fixed statement; the definer
 // returns the active envelope as hex and nothing else.
+//
+// vaultStatements is THE registry of statements the vault login may send: a frozen union
+// of per-PR maps, each in its own module (M2 PR-2: Shopify; M5 PR-1: billing). The vault
+// transport (vault-database.ts) refuses any other text.
 export const vaultStatements = Object.freeze({
   appSecretGet:
     "SELECT outcome,version,kek_version,wrapped_key,sealed_value FROM morrow_vault.app_secret_get($1)",
+  ...billingVaultStatements,
 } as const);
 /** One fixed statement on a connection logged in as morrow_vault_broker. */
 export type VaultQuery = (

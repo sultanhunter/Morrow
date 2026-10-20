@@ -8,6 +8,12 @@ import type {
 import { brokerCallerHealth, brokerHealth, brokerInputInvalid } from "./capabilities.js";
 import { brokerChallengeVerify } from "./challenge.js";
 import { brokerNeonLease } from "./neon-lease.js";
+import {
+  brokerStripeCheckoutCreate,
+  brokerStripeCustomerEnsure,
+  brokerStripePortalCreate,
+  brokerStripeWebhookVerify,
+} from "./stripe-broker.js";
 import { brokerWorkosSessionPage } from "./workos-session.js";
 
 // Reachable only through its service-binding entrypoints (ADR-0007; trust model v1,
@@ -15,8 +21,9 @@ import { brokerWorkosSessionPage } from "./workos-session.js";
 // Each method checks its arity and forwards to a module-scope handler. Results are
 // strings or booleans only.
 
-// The api Worker's entrypoint: exactly four prototype methods (v0; ADR-0019 item 6
-// added challengeVerify).
+// The api Worker's entrypoint: exactly eight prototype methods (v0's four, ADR-0019 item 6
+// added challengeVerify; M5 PR-1 adds the four Stripe methods, which take ids, strings and
+// budgets only, as v1 requires: the broker loads every Stripe parameter itself).
 export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0 ? brokerHealth(this.env) : brokerInputInvalid("health");
@@ -39,6 +46,30 @@ export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc
     return arguments.length === 3
       ? brokerChallengeVerify(this.env, action, token, budgetMs)
       : brokerInputInvalid("challengeVerify");
+  }
+  stripeCustomerEnsure(operationId: string, budgetMs: number): Promise<string> {
+    return arguments.length === 2
+      ? brokerStripeCustomerEnsure(this.env, operationId, budgetMs)
+      : brokerInputInvalid("stripeCustomerEnsure");
+  }
+  stripeCheckoutCreate(operationId: string, budgetMs: number): Promise<string> {
+    return arguments.length === 2
+      ? brokerStripeCheckoutCreate(this.env, operationId, budgetMs)
+      : brokerInputInvalid("stripeCheckoutCreate");
+  }
+  stripePortalCreate(operationId: string, budgetMs: number): Promise<string> {
+    return arguments.length === 2
+      ? brokerStripePortalCreate(this.env, operationId, budgetMs)
+      : brokerInputInvalid("stripePortalCreate");
+  }
+  stripeWebhookVerify(
+    rawBodyBase64: string,
+    signatureHeader: string,
+    budgetMs: number,
+  ): Promise<string> {
+    return arguments.length === 3
+      ? brokerStripeWebhookVerify(this.env, rawBodyBase64, signatureHeader, budgetMs)
+      : brokerInputInvalid("stripeWebhookVerify");
   }
 }
 

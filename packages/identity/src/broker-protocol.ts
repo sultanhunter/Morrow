@@ -52,19 +52,26 @@ export const brokerVaultRole = "morrow_vault_broker";
 export const brokerVaultKekSecrets: readonly string[] = Object.freeze(["MORROW_VAULT_KEK_V1"]);
 export const brokerPasswordSecret = (role: BrokerNeonRole | typeof brokerVaultRole) =>
   `MORROW_DB_PASSWORD_${role.toUpperCase()}`;
-// Development and staging: every secret, the vault's included. P05.T01ab (ADR-0019
-// item 6): the Turnstile secret is the one provider credential admitted beside WorkOS
-// under v0. It verifies tokens and cannot mint them.
+// M5 PR-1 (ADR-0022 items 7 and 12): the Stripe restricted key (rk_test_ only) and the
+// webhook signing secret, bound only to the broker, in development and staging only.
+export const brokerStripeSecrets: readonly string[] = Object.freeze([
+  "STRIPE_RESTRICTED_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+]);
+// Development and staging: every secret, the vault's and Stripe's included (16 names).
+// P05.T01ab (ADR-0019 item 6): the Turnstile secret is the one provider credential admitted
+// beside WorkOS under v0. It verifies tokens and cannot mint them.
 export const brokerRequiredSecrets: readonly string[] = Object.freeze([
   "WORKOS_API_KEY",
   "TURNSTILE_SECRET_KEY",
   ...brokerNeonRoleNames.map(brokerPasswordSecret),
   brokerPasswordSecret(brokerVaultRole),
   ...brokerVaultKekSecrets,
+  ...brokerStripeSecrets,
 ]);
-// Production holds the vault (trust model v1 custody is development and staging only,
-// ADR-0022 item 7, until the ADR-0007 item 9 production custody ADR), so a production
-// deploy requires neither a KEK nor the vault login's password.
+// Production holds the vault and Stripe (trust model v1 custody is development and staging
+// only, ADR-0022 item 7, until the ADR-0007 item 9 production custody ADR), so a production
+// deploy requires neither a KEK, the vault login's password nor a Stripe secret (12 names).
 export const brokerVaultSecrets: readonly string[] = Object.freeze([
   brokerPasswordSecret(brokerVaultRole),
   ...brokerVaultKekSecrets,
@@ -73,7 +80,11 @@ export function brokerRequiredSecretsFor(
   environment: "development" | "staging" | "production",
 ): readonly string[] {
   return environment === "production"
-    ? Object.freeze(brokerRequiredSecrets.filter((name) => !brokerVaultSecrets.includes(name)))
+    ? Object.freeze(
+        brokerRequiredSecrets.filter(
+          (name) => !brokerVaultSecrets.includes(name) && !brokerStripeSecrets.includes(name),
+        ),
+      )
     : brokerRequiredSecrets;
 }
 export const brokerLimits = Object.freeze({
@@ -98,6 +109,18 @@ export interface ApiBrokerRpc {
   workosSessionPage(namespaceJson: string, selectorJson: string, budgetMs: number): Promise<string>;
   // P05.T01ab (ADR-0019 item 6): one siteverify call; held is the error BROKER_HELD.
   challengeVerify(action: string, token: string, budgetMs: number): Promise<ChallengeVerdict>;
+  // M5 PR-1 (ADR-0022 items 7 and 12): Stripe on one pinned API version, ids only. Each
+  // write names an authorized stripe_write operation; the broker loads its customer, price,
+  // metadata and URLs from the database. Results are the closed JSON strings below.
+  stripeCustomerEnsure(operationId: string, budgetMs: number): Promise<string>;
+  stripeCheckoutCreate(operationId: string, budgetMs: number): Promise<string>;
+  stripePortalCreate(operationId: string, budgetMs: number): Promise<string>;
+  // The raw webhook body, base64 so the bytes stay exact, and the Stripe-Signature header.
+  stripeWebhookVerify(
+    rawBodyBase64: string,
+    signatureHeader: string,
+    budgetMs: number,
+  ): Promise<string>;
 }
 // M2 PR-1 (ADR-0022 item 7, spine §4): the connector's and the orchestrator's own
 // entrypoints. PR-1 gives each its health and its own role lease; the Shopify and model
@@ -327,3 +350,221 @@ export function decodeNeonLeaseGrant(text: unknown): string {
     throw invalid();
   }
 }
+
+// ---------------------------------------------------------------------------
+// M5 PR-1: the ApiBroker Stripe protocol. Closed result JSON with fixed codes; never
+// provider text. A hosted URL is returned to the caller and never stored (ADR-0022
+// item 13); it is accepted only on Stripe's own hosts.
+export const stripeLimits = Object.freeze({
+  budgetMinMs: 1,
+  budgetMaxMs: 10000,
+  webhookBodyMaxBytes: 262144,
+  // base64 of the largest body.
+  webhookBase64MaxBytes: 349528,
+  signatureMaxBytes: 4096,
+  resultMaxBytes: 4096,
+  urlMaxBytes: 2048,
+});
+export type StripeWriteOutcome = "verified" | "failed" | "uncertain";
+export interface StripeCustomerResult {
+  readonly outcome: StripeWriteOutcome;
+}
+export interface StripeCheckoutResult {
+  readonly outcome: StripeWriteOutcome | "closed" | "pending";
+  readonly checkoutUrl: string | null;
+  readonly expiresAtMs: number | null;
+}
+export interface StripePortalResult {
+  readonly outcome: StripeWriteOutcome;
+  readonly portalUrl: string | null;
+}
+export interface StripeWebhookResult {
+  readonly verdict: "recorded" | "duplicate" | "rejected" | "ignored";
+  readonly receiptId: string | null;
+  readonly objectDigest: string | null;
+  readonly attributed: boolean | null;
+}
+const operationIdPattern = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+export const stripeOperationIdValid = (value: unknown): value is string =>
+  exact(operationIdPattern, value);
+export const stripeBudgetValid = (value: unknown): value is number =>
+  Number.isSafeInteger(value) &&
+  (value as number) >= stripeLimits.budgetMinMs &&
+  (value as number) <= stripeLimits.budgetMaxMs;
+const stripeUrl = (value: unknown, host: "checkout.stripe.com" | "billing.stripe.com") => {
+  if (typeof value !== "string" || brokerUtf8Bytes(value) > stripeLimits.urlMaxBytes) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === host &&
+      url.port === "" &&
+      !url.username &&
+      !url.password &&
+      url.href === value
+    );
+  } catch {
+    return false;
+  }
+};
+const stripeTime = (value: unknown): value is number =>
+  Number.isSafeInteger(value) && (value as number) > 0 && (value as number) <= 8640000000000000;
+const writeOutcomes: readonly string[] = ["verified", "failed", "uncertain"];
+
+export function encodeStripeCustomerResult(r: StripeCustomerResult): string {
+  if (!writeOutcomes.includes(r.outcome)) throw invalid();
+  return JSON.stringify({ schemaVersion: 1, outcome: r.outcome });
+}
+export function decodeStripeCustomerResult(text: unknown): StripeCustomerResult {
+  try {
+    const r = loginJson(text, stripeLimits.resultMaxBytes, ["schemaVersion", "outcome"]);
+    if (r.schemaVersion !== 1 || !writeOutcomes.includes(r.outcome as string)) throw invalid();
+    return Object.freeze({ outcome: r.outcome as StripeWriteOutcome });
+  } catch {
+    throw invalid();
+  }
+}
+export function encodeStripeCheckoutResult(r: StripeCheckoutResult): string {
+  const value = {
+    schemaVersion: 1,
+    outcome: r.outcome,
+    checkoutUrl: r.checkoutUrl,
+    expiresAtMs: r.expiresAtMs,
+  };
+  decodeStripeCheckoutResult(JSON.stringify(value));
+  return JSON.stringify(value);
+}
+export function decodeStripeCheckoutResult(text: unknown): StripeCheckoutResult {
+  try {
+    const r = loginJson(text, stripeLimits.resultMaxBytes, [
+      "schemaVersion",
+      "outcome",
+      "checkoutUrl",
+      "expiresAtMs",
+    ]);
+    const verified = r.outcome === "verified";
+    if (
+      r.schemaVersion !== 1 ||
+      ![...writeOutcomes, "closed", "pending"].includes(r.outcome as string) ||
+      (verified
+        ? !stripeUrl(r.checkoutUrl, "checkout.stripe.com") || !stripeTime(r.expiresAtMs)
+        : r.checkoutUrl !== null || r.expiresAtMs !== null)
+    )
+      throw invalid();
+    return Object.freeze({
+      outcome: r.outcome as StripeCheckoutResult["outcome"],
+      checkoutUrl: r.checkoutUrl as string | null,
+      expiresAtMs: r.expiresAtMs as number | null,
+    });
+  } catch {
+    throw invalid();
+  }
+}
+export function encodeStripePortalResult(r: StripePortalResult): string {
+  const value = { schemaVersion: 1, outcome: r.outcome, portalUrl: r.portalUrl };
+  decodeStripePortalResult(JSON.stringify(value));
+  return JSON.stringify(value);
+}
+export function decodeStripePortalResult(text: unknown): StripePortalResult {
+  try {
+    const r = loginJson(text, stripeLimits.resultMaxBytes, [
+      "schemaVersion",
+      "outcome",
+      "portalUrl",
+    ]);
+    if (
+      r.schemaVersion !== 1 ||
+      !writeOutcomes.includes(r.outcome as string) ||
+      (r.outcome === "verified"
+        ? !stripeUrl(r.portalUrl, "billing.stripe.com")
+        : r.portalUrl !== null)
+    )
+      throw invalid();
+    return Object.freeze({
+      outcome: r.outcome as StripeWriteOutcome,
+      portalUrl: r.portalUrl as string | null,
+    });
+  } catch {
+    throw invalid();
+  }
+}
+export function encodeStripeWebhookResult(r: StripeWebhookResult): string {
+  const value = {
+    schemaVersion: 1,
+    verdict: r.verdict,
+    receiptId: r.receiptId,
+    objectDigest: r.objectDigest,
+    attributed: r.attributed,
+  };
+  decodeStripeWebhookResult(JSON.stringify(value));
+  return JSON.stringify(value);
+}
+export function decodeStripeWebhookResult(text: unknown): StripeWebhookResult {
+  try {
+    const r = loginJson(text, stripeLimits.resultMaxBytes, [
+      "schemaVersion",
+      "verdict",
+      "receiptId",
+      "objectDigest",
+      "attributed",
+    ]);
+    const stored = r.verdict === "recorded" || r.verdict === "duplicate";
+    if (
+      r.schemaVersion !== 1 ||
+      !["recorded", "duplicate", "rejected", "ignored"].includes(r.verdict as string) ||
+      (stored
+        ? !exact(operationIdPattern, r.receiptId) ||
+          !exact(/^[a-f0-9]{64}$/, r.objectDigest) ||
+          typeof r.attributed !== "boolean"
+        : r.receiptId !== null || r.objectDigest !== null || r.attributed !== null)
+    )
+      throw invalid();
+    return Object.freeze({
+      verdict: r.verdict as StripeWebhookResult["verdict"],
+      receiptId: r.receiptId as string | null,
+      objectDigest: r.objectDigest as string | null,
+      attributed: r.attributed as boolean | null,
+    });
+  } catch {
+    throw invalid();
+  }
+}
+
+// The broker's STRIPE_CONFIGURATION_JSON var (M5 PR-1): reviewed identifiers, not secrets.
+// The saved customer portal configuration (bpc_), whether Checkout computes tax, and the
+// billing-address rule; at most 1024 bytes, closed, no duplicate member. Shared by the
+// broker's Stripe capability and the edge and staging checks. Anything else is
+// BROKER_PROTOCOL_INVALID, and the broker's Stripe capability stays held (503).
+export interface StripeConfiguration {
+  readonly portalConfigurationId: string;
+  readonly automaticTax: boolean;
+  readonly billingAddressCollection: "auto" | "required";
+}
+export function parseStripeConfiguration(json: unknown): Readonly<StripeConfiguration> {
+  try {
+    const c = loginJson(json, 1024, [
+      "schemaVersion",
+      "portalConfigurationId",
+      "automaticTax",
+      "billingAddressCollection",
+    ]);
+    if (
+      c.schemaVersion !== 1 ||
+      !exact(/^bpc_[A-Za-z0-9]{8,64}$/, c.portalConfigurationId) ||
+      typeof c.automaticTax !== "boolean" ||
+      (c.billingAddressCollection !== "auto" && c.billingAddressCollection !== "required")
+    )
+      throw invalid();
+    return Object.freeze({
+      portalConfigurationId: c.portalConfigurationId,
+      automaticTax: c.automaticTax,
+      billingAddressCollection: c.billingAddressCollection,
+    });
+  } catch {
+    throw invalid();
+  }
+}
+// Only a restricted test key and a webhook signing secret are admitted (development and
+// staging); a secret sk_ key and any live key are refused.
+export const stripeRestrictedKeyPattern = /^rk_test_[A-Za-z0-9]{16,250}$/;
+export const stripeWebhookSecretPattern = /^whsec_[A-Za-z0-9+/=_-]{16,256}$/;
