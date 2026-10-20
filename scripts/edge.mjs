@@ -454,7 +454,7 @@ export async function verifyEdgeConfig({
     "../packages/infrastructure/src/selected-stack.ts",
     here,
   );
-  const { brokerRequiredSecrets } = await tsImport(
+  const { brokerRequiredSecretsFor } = await tsImport(
     "../packages/identity/src/broker-protocol.ts",
     here,
   );
@@ -530,7 +530,7 @@ export async function verifyEdgeConfig({
         if (
           !Array.isArray(required) ||
           new Set(required).size !== required.length ||
-          !same([...required].sort(), [...brokerRequiredSecrets].sort())
+          !same([...required].sort(), [...brokerRequiredSecretsFor(environment)].sort())
         )
           problem("EDGE_BROKER_SECRETS", where);
       } else if (!same(required, [])) problem("EDGE_SECRETS_REQUIRED_NOT_EMPTY", where);

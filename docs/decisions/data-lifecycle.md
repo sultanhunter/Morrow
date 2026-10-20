@@ -31,11 +31,12 @@ Browser session lifecycle records (P05.T01y, ADR-0004, migration 0016). No row h
 
 Growth: at most one rotation per 5 minutes of activity, so at most 144 generation rows and 144 audit rows per person per 12-hour day, about 105,000 rows per person-year at 365 days. This is a P09.T05 sizing input; no real data exists before P09.T05.
 
-Spine foundation records (M2 PR-1, ADR-0022 item 13, migrations 0019-0021). No row holds merchant content: identifiers, digests, instants, fixed codes and, in the vault, AES-256-GCM envelopes.
+Spine foundation records (M2 PR-1, ADR-0022 item 13, migrations 0019-0024). No row holds merchant content: identifiers, digests, instants, fixed codes and, in the vault, AES-256-GCM envelopes.
 
 | Table | Class and retention | Erasure hook |
 | --- | --- | --- |
-| `morrow_work.work_leases` | Content-free audit, 365 days. A lease confers nothing after it ends or expires | None until P09.T05 adds pruning; no delete path exists (`append_only()`) |
+| `morrow_work.work_leases` | Content-free audit, 365 days. A lease confers nothing after it ends or expires; a membership removal revokes its member's leases (0023-0024) | None until P09.T05 adds pruning; no delete path exists (`append_only()`) |
+| `morrow_work.lease_entries` | Content-free runtime state: one row per database backend (the last lease it entered, its transaction id and a random nonce), overwritten by that backend's next entry | None needed: bounded by the number of backend ids, no tenant keys |
 | `morrow_work.stop_controls`, `morrow_work.stop_records` | Content-free audit, 365 days; platform rows have null tenant keys. The reason is operator or member text about the stop, never merchant data | P09.T05 prunes after 365 days; no delete path exists |
 | `morrow_work.operations`, `morrow_work.operation_transitions` | Content-free audit, 365 days: ids, digests, statuses and the provider request id | P09.T05 prunes after 365 days; no delete path exists |
 | `morrow_billing.workspace_billing_routes` | Workspace lifetime; the route never changes once fixed | Deleted with the workspace by P09.T05 |

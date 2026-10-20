@@ -18,7 +18,7 @@ import {
   workRoles,
   workTables,
 } from "./registry.mjs";
-import { contentProblems, registeredTables } from "./content.mjs";
+import { contentProblems, contentSchemas, registeredTables } from "./content.mjs";
 import { conformanceReport, recordConformance } from "./report.mjs";
 import { morrowSetRowsSql } from "../../scripts/fixtures/createrole-administrator.mjs";
 
@@ -77,11 +77,27 @@ const extraPolicies = {
     "((SESSION_USER = 'morrow_runtime_executor'::name) AND (status = 'active'::text) AND (started_at IS NULL) AND (kind = ANY (ARRAY['run'::text, 'operation'::text])))",
     null,
   ],
+  // The entry proof of enter_lease (0020): the runtime login's own backend only.
+  lease_entry: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_runtime_executor'::name) AND (backend_pid = pg_backend_pid()))",
+    "((SESSION_USER = 'morrow_runtime_executor'::name) AND (backend_pid = pg_backend_pid()))",
+  ],
+  // The membership-removal revocation (0023): the named membership's leases, only while
+  // that member is not current, and only the change to revoked with reason membership.
+  lease_member_revoke: [
+    "ALL",
+    "{morrow_work_command}",
+    "((current_setting('morrow.work_member_revocation'::text, true) = (((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (initiator_membership_id)::text)) AND (NOT morrow_identity.work_lease_member_current((organization_id)::text, (workspace_id)::text, (initiator_principal_id)::text, (initiator_membership_id)::text)))",
+    "((status = 'revoked'::text) AND (revoked_reason = 'membership'::text) AND (current_setting('morrow.work_member_revocation'::text, true) = (((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (initiator_membership_id)::text)))",
+  ],
+  // The signup bridge's policy, bound to the website signup (0022-0023).
   route_signup: [
     "INSERT",
     "{morrow_work_command}",
     null,
-    "((origin = 'website'::text) AND (route IS NULL) AND (mode IS NULL) AND (route_fixed_at IS NULL) AND (fixing_payment_key IS NULL) AND ((revision)::bigint = 1))",
+    "((origin = 'website'::text) AND (route IS NULL) AND (mode IS NULL) AND (route_fixed_at IS NULL) AND (fixing_payment_key IS NULL) AND ((revision)::bigint = 1) AND morrow_identity.work_signup_workspace((organization_id)::text, (workspace_id)::text))",
   ],
   vault_broker: [
     "ALL",
@@ -222,6 +238,26 @@ test("S3: tenant keys, composite parents and the one tenant policy template", ()
     );
     assert.equal(platform[0].n, 0, table);
     assert.deepEqual(spec.parents, [], table);
+    // A platform table with registered policies (the M2 PR-1 entry proof) has exactly the
+    // owner's maintenance policy and those, each in its checked shape.
+    if (spec.policies) {
+      const policies = rows(
+        `SELECT policyname, cmd, roles::text AS roles, qual, with_check FROM pg_policies WHERE schemaname='morrow_work' AND tablename='${table}' ORDER BY policyname`,
+      );
+      assert.deepEqual(
+        names(policies.map((p) => p.policyname)),
+        names(["work_owner", ...spec.policies]),
+        table,
+      );
+      for (const policy of policies)
+        assert.deepEqual(
+          [policy.cmd, policy.roles, policy.qual, policy.with_check],
+          policy.policyname === "work_owner"
+            ? ["ALL", "{morrow_work_owner}", "true", "true"]
+            : extraPolicies[policy.policyname],
+          table + " " + policy.policyname,
+        );
+    }
   }
   recordConformance("S3", true);
 });
@@ -649,17 +685,18 @@ test("S7: the billing and vault schemas, and what each executor login may execut
   recordConformance("S7", true);
 });
 
-// M2 PR-1 (P09.T05a; mvp-architecture §11): every registered table, which S1 and S7 tie to
-// the live catalog, declares its content class, and every store-content table has exactly
-// one cleanup handler in packages/work/src/redaction.ts.
+// M2 PR-1 (P09.T05a; mvp-architecture §11): every table of the four schemas, morrow_identity
+// included, declares its content class (the registry equals the live catalog), and every
+// store-content table has exactly one cleanup handler in packages/work/src/redaction.ts.
 test("S8: content classes and the store-content cleanup handlers", () => {
   const live = new Set(
     db
       .rows(
-        "SELECT n.nspname||'.'||c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname IN ('morrow_work','morrow_billing','morrow_vault')",
+        `SELECT n.nspname||'.'||c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind IN ('r','p') AND n.nspname IN (${contentSchemas.map((schema) => `'${schema}'`).join(",")})`,
       )
       .map((r) => r.name),
   );
+  assert.ok([...live].some((name) => name === "morrow_identity.linking_candidates"));
   assert.deepEqual(
     registeredTables()
       .map(([name]) => name)

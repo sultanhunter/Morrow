@@ -540,12 +540,29 @@ test("P7: a lease selects one tenant; a forged, stale or foreign lease setting y
   assert.equal(view(enter(A)), `${P.A.org}|1|0`);
   assert.equal(view(enter(Y)), `${P.Y.org}|1|0`);
   // Forged settings without enter_lease, or naming another generation or an unknown
-  // lease: zero rows, and a refused enter_lease leaves no context behind.
-  const set = (id, generation, withMarker) =>
-    `SELECT set_config('morrow.work_lease_id',${literal(id)},true),set_config('morrow.work_lease_generation',${literal(generation)},true)${withMarker ? `,set_config('morrow.work_lease_entered',${marker},true)` : ""} IS NOT NULL;`;
-  assert.equal(view(set(A, "1", false)), "-|0|0");
-  assert.equal(view(set(A, "2", true)), "-|0|0");
-  assert.equal(view(set(randomUUID(), "1", true)), "-|0|0");
+  // lease: zero rows, and a refused enter_lease leaves no context behind. The runtime
+  // login itself can compute any value it likes for the entry setting (here the 0020
+  // part-1 marker, and a random nonce), but only enter_lease writes the entry proof, so
+  // even its own lease, at the right generation, resolves nothing (the review's case).
+  const set = (id, generation, entered) =>
+    `SELECT set_config('morrow.work_lease_id',${literal(id)},true),set_config('morrow.work_lease_generation',${literal(generation)},true)${entered ? `,set_config('morrow.work_lease_entered',${entered},true)` : ""} IS NOT NULL;`;
+  assert.equal(view(set(A, "1", null)), "-|0|0");
+  assert.equal(view(set(A, "1", marker)), "-|0|0");
+  assert.equal(view(set(A, "1", literal(randomUUID()))), "-|0|0");
+  assert.equal(view(set(A, "2", marker)), "-|0|0");
+  assert.equal(view(set(randomUUID(), "1", marker)), "-|0|0");
+  // Entered A, then the settings retargeted to Y's lease with A's own nonce: the proof
+  // names A, so nothing resolves; and clearing the settings does not allow a second entry.
+  assert.equal(
+    view(`${enter(A)} SELECT set_config('morrow.work_lease_id',${literal(Y)},true) IS NOT NULL;`),
+    "-|0|0",
+  );
+  assert.deepEqual(
+    runtime(
+      `BEGIN; ${enter(A)} SELECT concat(set_config('morrow.work_lease_id','',true),set_config('morrow.work_lease_generation','',true),set_config('morrow.work_lease_entered','',true)) IS NOT NULL; ${enter(Y)} SELECT concat_ws('|',COALESCE(organization_id,'-'),operations) FROM lab_probe.lease_view(); ROLLBACK;`,
+    ).split("\n"),
+    ["entered", "t", "denied", "-|0"],
+  );
   for (const [id, generation, outcome] of [
     [A, "2", "not_found"],
     [randomUUID(), "1", "not_found"],
@@ -568,14 +585,15 @@ BEGIN; SELECT concat_ws('|',COALESCE(organization_id,'-'),operations) FROM lab_p
   assert.equal(
     db
       .sql(
-        `BEGIN; ${set(A, "1", true)} SELECT concat_ws('|',COALESCE(organization_id,'-'),operations,stops) FROM lab_probe.lease_view(); ROLLBACK;`,
+        `BEGIN; ${set(A, "1", marker)} SELECT concat_ws('|',COALESCE(organization_id,'-'),operations,stops) FROM lab_probe.lease_view(); ROLLBACK;`,
         { user: "morrow_api_worker" },
       )
       .split("\n")
       .at(-1),
     "-|0|0",
   );
-  // A removed member's lease resolves nothing, and enters as member_inactive.
+  // A removed member's lease is revoked in the removing transaction (0024), so it resolves
+  // nothing, and stays ended when the membership returns.
   const R = openLease(P.R, "run", "p7_run_r");
   db.sql(revocationSql(P.R));
   try {
@@ -583,11 +601,23 @@ BEGIN; SELECT concat_ws('|',COALESCE(organization_id,'-'),operations) FROM lab_p
       runtime(`BEGIN; ${enter(R)} ROLLBACK;`)
         .split("\n")
         .at(-1),
-      "member_inactive",
+      "ended",
     );
   } finally {
     db.sql(restoreSql(P.R));
   }
+  assert.equal(
+    runtime(`BEGIN; ${enter(R)} ROLLBACK;`)
+      .split("\n")
+      .at(-1),
+    "ended",
+  );
+  assert.equal(
+    db.rows(
+      `SELECT status||'|'||revoked_reason AS s FROM morrow_work.work_leases WHERE id=${literal(R)}`,
+    )[0].s,
+    "revoked|membership",
+  );
   recordConformance("P7", true);
 });
 

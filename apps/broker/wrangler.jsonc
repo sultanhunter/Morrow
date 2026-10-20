@@ -3,7 +3,8 @@
 // trust model v1 ConnectorBroker and RuntimeBroker, ADR-0022 item 7). It is the only
 // Worker that binds provider credentials (`brokerRequiredSecrets`): the WorkOS API
 // key, the ten leased Neon role passwords, its own vault login's password and the
-// vault KEK (MORROW_VAULT_KEK_V1). No identifier is committed; the first hosted
+// vault KEK (MORROW_VAULT_KEK_V1); production omits the last two (the vault is held there
+// until the ADR-0007 item 9 production custody ADR). No identifier is committed; the first hosted
 // deploy fails closed until P04.T01i supplies `wrangler deploy --secrets-file`.
 // Merchant and model credentials come only under trust model v1, as vault rows or
 // the secrets ADR-0022 item 7 admits, each with the PR that uses it.
@@ -60,6 +61,8 @@
         ],
       },
     },
+    // Production holds the vault until the production custody ADR (ADR-0007 item 9), so
+    // it requires neither the vault login's password nor a KEK (brokerRequiredSecretsFor).
     "production": {
       "name": "morrow-production-broker",
       "vars": { "MORROW_ENVIRONMENT": "production" },
@@ -76,8 +79,6 @@
           "MORROW_DB_PASSWORD_MORROW_API_WORKER",
           "MORROW_DB_PASSWORD_MORROW_CONNECTOR_INGRESS",
           "MORROW_DB_PASSWORD_MORROW_RUNTIME_EXECUTOR",
-          "MORROW_DB_PASSWORD_MORROW_VAULT_BROKER",
-          "MORROW_VAULT_KEK_V1",
         ],
       },
     },

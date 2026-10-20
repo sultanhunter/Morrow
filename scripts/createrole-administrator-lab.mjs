@@ -43,7 +43,7 @@ const check = (name, passed) => {
   console.log(JSON.stringify({ check: name, passed: true }));
 };
 const chain = manifestChain();
-// The chain through its head, including the M2 PR-1 spine migrations (0019-0021), which
+// The chain through its head, including the M2 PR-1 spine migrations (0019-0024), which
 // add the three membership-free executor logins this lab also qualifies.
 if (
   chain.length < 21 ||

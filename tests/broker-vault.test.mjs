@@ -146,11 +146,15 @@ test("wrong additional data, KEK, KEK version or environment fails with one fixe
     assert.equal(await fails(keyring, token(change)), "VAULT_OPEN_FAILED");
   assert.equal(await fails(keyring, app("credential-1")), "VAULT_OPEN_FAILED");
   // The same KEK in another environment, and another KEK in this one.
-  for (const environment of ["development", "production"])
-    assert.equal(
-      await fails(await createVaultKeyring(environment, new Map([[1, secret]])), ref),
-      "VAULT_OPEN_FAILED",
-    );
+  assert.equal(
+    await fails(await createVaultKeyring("development", new Map([[1, secret]])), ref),
+    "VAULT_OPEN_FAILED",
+  );
+  // Production has no keyring until the production custody ADR (ADR-0007 item 9).
+  await assert.rejects(
+    createVaultKeyring("production", new Map([[1, secret]])),
+    /VAULT_KEK_UNAVAILABLE/,
+  );
   assert.equal(
     await fails(await createVaultKeyring("staging", new Map([[1, kek()]])), ref),
     "VAULT_OPEN_FAILED",

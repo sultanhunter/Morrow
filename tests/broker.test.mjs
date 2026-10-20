@@ -308,6 +308,15 @@ test("AC14: a key from the wrong tier disables sessions only", async () => {
   assert.equal(await brokerHealth(production), false);
   const capabilities = await brokerCapabilities(production);
   assert.deepEqual([capabilities.sessions, capabilities.database], [null, null]);
+  // Production holds the vault and both new callers' leases, whatever is bound: trust model
+  // v1 custody is development and staging only until the ADR-0007 item 9 production
+  // custody ADR (ADR-0022 item 7), and the KEK and the vault password are not required.
+  assert.deepEqual(
+    [capabilities.connector, capabilities.runtime, capabilities.vault],
+    [null, null, null],
+  );
+  for (const caller of ["connector", "runtime"])
+    assert.equal(await brokerCallerHealth(production, caller), false, caller);
   const ready = brokerEnv("staging").env;
   assert.equal(await brokerHealth(ready), true);
   assert.equal(

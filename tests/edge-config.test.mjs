@@ -66,8 +66,14 @@ test("AC01/AC04: the committed configuration resolves cleanly for 4 Workers x 3 
     assert.deepEqual(verdict.resolved["connector:" + environment].bindings, ["MORROW_ENVIRONMENT"]);
     // MORROW_ENVIRONMENT, WORKOS_API_KEY and the eight role passwords (P06.T01a adds
     // morrow_api_worker); M2 PR-1 adds the connector's and the orchestrator's role
-    // passwords, the vault login's password and the vault KEK (ADR-0022 items 7-8).
-    assert.equal(verdict.resolved["broker:" + environment].bindings.length, 14);
+    // passwords, the vault login's password and the vault KEK (ADR-0022 items 7-8). The
+    // vault is held in production until the ADR-0007 item 9 custody ADR, so production
+    // binds neither vault secret.
+    assert.equal(
+      verdict.resolved["broker:" + environment].bindings.length,
+      environment === "production" ? 12 : 14,
+      environment,
+    );
   }
   assert.deepEqual(verdict.reservedWorkerPaths, [...reservedWorkerPaths]);
   assert.deepEqual((await verify(tree())).problems, []);
@@ -137,6 +143,19 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
       {
         broker: (c) =>
           c.secrets.required.splice(c.secrets.required.indexOf("MORROW_VAULT_KEK_V1"), 1),
+      },
+      "EDGE_BROKER_SECRETS",
+    ],
+    // Production holds the vault until the production custody ADR: requiring a KEK or the
+    // vault login's password there fails the check.
+    [
+      { broker: (c) => c.env.production.secrets.required.push("MORROW_VAULT_KEK_V1") },
+      "EDGE_BROKER_SECRETS",
+    ],
+    [
+      {
+        broker: (c) =>
+          c.env.production.secrets.required.push("MORROW_DB_PASSWORD_MORROW_VAULT_BROKER"),
       },
       "EDGE_BROKER_SECRETS",
     ],

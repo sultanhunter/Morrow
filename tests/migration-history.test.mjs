@@ -104,12 +104,27 @@ const published = [
   [
     20,
     "0020.spine-foundation.sql",
-    "a2b1e01fa63fac0e35588bd4d0ebff06e1b781a509b93b224e8adb299ecc85c5",
+    "dad347120c5d1a1c8c329c66f079a6982cb50b326e66a75a65d8e893e2da6459",
   ],
   [
     21,
     "0021.signup-billing-route.sql",
     "5ea67667a852d03caecced11c73f6a6ad3caeef19d4c211c3f5609ab52ea7d7b",
+  ],
+  [
+    22,
+    "0022.signup-route-identity-check.sql",
+    "c4821e3980a67144f567f9c70d1560b55ca06c6cd3d86496615e21a14f450220",
+  ],
+  [
+    23,
+    "0023.member-lease-revocation.sql",
+    "0cacc1326ad0283c7fcc92de4e3a9c9cc01fab66bc06809cc4a05f8f08856686",
+  ],
+  [
+    24,
+    "0024.membership-lease-revocation.sql",
+    "00c64ae0bbb21fc245cf5e3521bdedbd7cbfeb33aec442b1b684426b06b6902b",
   ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each
@@ -179,10 +194,10 @@ const publishedPrerequisites = new Map([
   ],
 ]);
 // The role each published migration was applied under: the identity owner, except the
-// work-state tables (P06.T01a), the approval records (P06.T01b) and the spine foundation
-// (M2 PR-1), which the work owner creates.
+// work-state tables (P06.T01a), the approval records (P06.T01b), the spine foundation and
+// its member-lease revocation (M2 PR-1), which the work owner creates.
 const publishedExecuteAs = (sequence) =>
-  [15, 18, 20].includes(sequence) ? "morrow_work_owner" : "morrow_identity_owner";
+  [15, 18, 20, 23].includes(sequence) ? "morrow_work_owner" : "morrow_identity_owner";
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 

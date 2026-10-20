@@ -142,8 +142,11 @@ function database(
 
 // The vault needs every configured KEK version and the broker's own database login, in an
 // environment with a database binding. A missing or malformed secret disables the vault
-// only; no other capability depends on it.
+// only; no other capability depends on it. Production holds it: trust model v1 custody is
+// for development and staging (ADR-0022 item 7) until the production custody ADR
+// (ADR-0007 item 9), whatever secrets are bound.
 async function vault(env: object, environment: string): Promise<Readonly<BrokerVault> | null> {
+  if (environment === "production") return null;
   try {
     const binding = parseBrokerDatabaseBinding(own(env, "MORROW_DATABASE_BINDING_JSON"));
     if (binding.environment !== environment) return null;

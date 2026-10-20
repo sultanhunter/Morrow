@@ -120,6 +120,20 @@ CREATE UNIQUE INDEX work_leases_subject ON morrow_work.work_leases (organization
 CREATE INDEX work_leases_pending ON morrow_work.work_leases (created_at,id) WHERE status='active' AND started_at IS NULL AND kind IN ('run','operation');
 CREATE INDEX work_leases_active_connection ON morrow_work.work_leases (organization_id,workspace_id,connection_id) WHERE status='active';
 CREATE INDEX work_leases_active_installation ON morrow_work.work_leases (organization_id,workspace_id,installation_id) WHERE status='active';
+-- The entry proof (spine §5). enter_lease writes one row for its backend: the lease and
+-- generation it entered, the transaction it entered in, and a random nonce that it also
+-- places in the lease context. The runtime login can set every setting itself, but it can
+-- neither read nor write this table, so a context it forges matches no row: current_lease()
+-- resolves only what enter_lease entered, with its stop check, in this backend and
+-- transaction. One row per backend id, overwritten by that backend's next entry; a refused
+-- entry leaves its row naming no transaction ('0'). Content-free, no tenant keys.
+CREATE TABLE morrow_work.lease_entries (
+ backend_pid integer NOT NULL PRIMARY KEY CHECK (backend_pid>0),
+ xact_id text NOT NULL CHECK (xact_id ~ '^(0|[1-9][0-9]{0,19})$'),
+ lease_id text NOT NULL CHECK (lease_id ~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'),
+ generation text NOT NULL CHECK (generation ~ '^[1-9][0-9]{0,15}$'),
+ nonce text NOT NULL CHECK (nonce ~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$')
+);
 
 -- The stop state (P11.T05a; ADR-0022 item 15). One row per stop; a lift sets the lifted_*
 -- columns once and only a person lifts (a human member, or the operator by script).
@@ -360,7 +374,7 @@ CREATE UNIQUE INDEX credentials_one_active_subject ON morrow_vault.credentials (
 -- ---------------------------------------------------------------------------
 -- Row security. Every table: ENABLE + FORCE and the maintenance-only owner policy.
 DO $$ DECLARE t text; BEGIN
- FOREACH t IN ARRAY ARRAY['morrow_work.work_leases','morrow_work.stop_controls','morrow_work.stop_records','morrow_work.operations',
+ FOREACH t IN ARRAY ARRAY['morrow_work.work_leases','morrow_work.lease_entries','morrow_work.stop_controls','morrow_work.stop_records','morrow_work.operations',
   'morrow_work.operation_transitions','morrow_billing.workspace_billing_routes','morrow_vault.app_secrets','morrow_vault.credentials'] LOOP
   EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY',t);
   EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY',t);
@@ -369,11 +383,12 @@ DO $$ DECLARE t text; BEGIN
  END LOOP;
 END $$;
 
--- The lease context: a transaction-local setting that only enter_lease writes and only
--- this resolver reads. Every evaluation re-resolves it: the session user is exactly the
+-- The lease context: transaction-local settings that enter_lease writes and only this
+-- resolver reads. Every evaluation re-resolves it: the session user is exactly the
 -- runtime executor (and passes the ADR-0020 guard), no session context is set, the
--- setting was made in this transaction, and the lease is active, unexpired, of the
--- named generation, with its initiating member still current. A forged, stale,
+-- entry proof (lease_entries) of this backend names this transaction, lease, generation
+-- and nonce, and the lease is active, unexpired, of the named generation, with its
+-- initiating member still current. A forged (even by the runtime login itself), stale,
 -- foreign-session or cross-role setting therefore yields zero rows.
 CREATE FUNCTION morrow_work.current_lease()
 RETURNS TABLE(organization_id text,workspace_id text,lease_id text,generation bigint,kind text,subject_id text,store_id text,
@@ -385,13 +400,18 @@ DECLARE
  v_generation text:=pg_catalog.current_setting('morrow.work_lease_generation',true);
  v_entered text:=pg_catalog.current_setting('morrow.work_lease_entered',true);
 BEGIN
- IF COALESCE(v_id,'')='' OR COALESCE(v_generation,'')=''
-  OR v_entered IS DISTINCT FROM ((extract(epoch FROM pg_catalog.transaction_timestamp())*1000000)::bigint::text||':'||pg_catalog.pg_backend_pid()::text)
+ IF COALESCE(v_id,'')='' OR COALESCE(v_generation,'')='' OR COALESCE(v_entered,'')=''
   OR COALESCE(pg_catalog.current_setting('morrow.work_session_digest',true),'')<>''
   OR COALESCE(pg_catalog.current_setting('morrow.work_workspace',true),'')<>'' THEN
   RETURN;
  END IF;
  IF NOT morrow_identity.work_executor_safe('morrow_runtime_executor') THEN RETURN; END IF;
+ -- The entry proof: only enter_lease writes it, and only for an entry it admitted.
+ IF NOT EXISTS(SELECT 1 FROM morrow_work.lease_entries e WHERE e.backend_pid=pg_catalog.pg_backend_pid()
+   AND e.xact_id=pg_catalog.pg_current_xact_id_if_assigned()::text AND e.nonce=v_entered AND e.lease_id=v_id
+   AND e.generation=v_generation) THEN
+  RETURN;
+ END IF;
  RETURN QUERY SELECT l.organization_id::text,l.workspace_id::text,l.id::text,l.generation::bigint,l.kind,l.subject_id::text,
   l.store_id::text,l.connection_id::text,l.installation_id::text,l.initiator_principal_id::text,l.initiator_membership_id::text,l.expires_at
   FROM morrow_work.work_leases l
@@ -438,6 +458,10 @@ CREATE POLICY lease_self ON morrow_work.work_leases TO morrow_work_command
  WITH CHECK (session_user='morrow_runtime_executor' AND id::text=pg_catalog.current_setting('morrow.work_lease_id',true));
 CREATE POLICY lease_pending ON morrow_work.work_leases FOR SELECT TO morrow_work_command
  USING (session_user='morrow_runtime_executor' AND status='active' AND started_at IS NULL AND kind IN ('run','operation'));
+-- The entry proof is reached only by the runtime login's own definers, for its own backend.
+CREATE POLICY lease_entry ON morrow_work.lease_entries TO morrow_work_command
+ USING (session_user='morrow_runtime_executor' AND backend_pid=pg_catalog.pg_backend_pid())
+ WITH CHECK (session_user='morrow_runtime_executor' AND backend_pid=pg_catalog.pg_backend_pid());
 CREATE POLICY tenant_command ON morrow_billing.workspace_billing_routes TO morrow_work_command
  USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c))
  WITH CHECK ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_tenant() c));
@@ -452,6 +476,8 @@ CREATE POLICY route_signup ON morrow_billing.workspace_billing_routes FOR INSERT
 GRANT SELECT,INSERT ON morrow_work.work_leases,morrow_work.stop_controls,morrow_work.stop_records,morrow_work.operations,
  morrow_work.operation_transitions,morrow_billing.workspace_billing_routes TO morrow_work_command;
 GRANT UPDATE (status,ended_at,revoked_reason,started_at) ON morrow_work.work_leases TO morrow_work_command;
+GRANT SELECT,INSERT ON morrow_work.lease_entries TO morrow_work_command;
+GRANT UPDATE (xact_id,lease_id,generation,nonce) ON morrow_work.lease_entries TO morrow_work_command;
 GRANT UPDATE (lifted_at,lifted_by_kind,lifted_by_principal_id,lifted_by_membership_id,lifted_by_operator_id) ON morrow_work.stop_controls TO morrow_work_command;
 GRANT UPDATE (status,revision,updated_at,attempt,send_started_at,submitted_at,provider_request_id,uncertainty_reason) ON morrow_work.operations TO morrow_work_command;
 GRANT SELECT ON morrow_vault.app_secrets,morrow_vault.credentials TO morrow_work_command;
@@ -777,17 +803,18 @@ END $$;
 -- EXECUTE for morrow_runtime_executor only. Each takes ids only; the tenant comes only
 -- from the lease.
 -- Enters one lease for the rest of the transaction: refused for any other login, when a
--- session or lease context is already set, or when the lease does not resolve through
--- current_lease() or is stopped; a refusal leaves no context. Outcomes: entered,
--- denied, not_found (unknown id or another generation), ended (released or revoked),
--- expired, member_inactive, stopped.
+-- session or lease context is already set, when this transaction already entered a lease
+-- (even if its settings were cleared since), or when the lease does not resolve through
+-- current_lease() or is stopped; a refusal leaves no context and no usable entry proof.
+-- Outcomes: entered, denied, not_found (unknown id or another generation), ended
+-- (released or revoked), expired, member_inactive, stopped.
 CREATE FUNCTION morrow_work.enter_lease(p_lease_id text,p_generation text)
 RETURNS TABLE(outcome text,organization_id text,workspace_id text,kind text,subject_id text,store_id text,connection_id text,
  installation_id text,initiator_principal_id text,initiator_membership_id text,expires_at_ms text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE
- l record; r record; v_outcome text;
+ l record; r record; v_outcome text; v_xact text; v_nonce text; n integer;
 BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_runtime_executor')
   OR COALESCE(pg_catalog.current_setting('morrow.work_session_digest',true),'')<>''
@@ -800,10 +827,24 @@ BEGIN
   RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text;
   RETURN;
  END IF;
+ -- The entry proof for this backend and transaction (lease_entries): one entry per
+ -- transaction, and a fresh nonce that only this function knows until it is set below.
+ v_xact:=pg_catalog.pg_current_xact_id()::text;
+ IF EXISTS(SELECT 1 FROM morrow_work.lease_entries e WHERE e.backend_pid=pg_catalog.pg_backend_pid() AND e.xact_id=v_xact) THEN
+  RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text;
+  RETURN;
+ END IF;
+ v_nonce:=gen_random_uuid()::text;
+ UPDATE morrow_work.lease_entries e SET xact_id=v_xact,lease_id=p_lease_id,generation=p_generation,nonce=v_nonce
+  WHERE e.backend_pid=pg_catalog.pg_backend_pid();
+ GET DIAGNOSTICS n=ROW_COUNT;
+ IF n=0 THEN
+  INSERT INTO morrow_work.lease_entries(backend_pid,xact_id,lease_id,generation,nonce)
+  VALUES (pg_catalog.pg_backend_pid(),v_xact,p_lease_id,p_generation,v_nonce);
+ END IF;
  PERFORM pg_catalog.set_config('morrow.work_lease_id',p_lease_id,true),
   pg_catalog.set_config('morrow.work_lease_generation',p_generation,true),
-  pg_catalog.set_config('morrow.work_lease_entered',
-   (extract(epoch FROM pg_catalog.transaction_timestamp())*1000000)::bigint::text||':'||pg_catalog.pg_backend_pid()::text,true);
+  pg_catalog.set_config('morrow.work_lease_entered',v_nonce,true);
  SELECT * INTO l FROM morrow_work.current_lease();
  IF FOUND THEN
   IF NOT morrow_work.stop_active(l.organization_id,l.workspace_id,l.kind,l.connection_id,l.installation_id) THEN
@@ -820,6 +861,8 @@ BEGIN
  END IF;
  PERFORM pg_catalog.set_config('morrow.work_lease_id','',true),pg_catalog.set_config('morrow.work_lease_generation','',true),
   pg_catalog.set_config('morrow.work_lease_entered','',true);
+ -- The refused entry's proof names no transaction and a nonce nobody saw.
+ UPDATE morrow_work.lease_entries e SET xact_id='0',nonce=gen_random_uuid()::text WHERE e.backend_pid=pg_catalog.pg_backend_pid();
  RETURN QUERY SELECT v_outcome,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text;
 END $$;
 -- The one cross-tenant read (spine §5): the ids of committed, unexpired run and operation

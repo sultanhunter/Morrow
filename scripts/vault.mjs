@@ -6,11 +6,14 @@
 //       outside the repository and prints only its fingerprint. Keep that file as the
 //       offline copy and place its content as the broker secret MORROW_VAULT_KEK_V1
 //       (morrow_put, then staging:put-secret).
-//   npm run vault -- seal-app-secret --environment <development|staging|production>
+//   npm run vault -- seal-app-secret --environment <development|staging>
 //       --app-key <key> --version <n> --kek-file <file> [--kek-version <n>] --out <file>
 //       Reads one Shopify app client secret from stdin (not echoed on a terminal), seals it
 //       with the broker's own vault module under the KEK and writes the envelope to a new
-//       0600 file. The envelope holds only ciphertext and metadata.
+//       0600 file. The envelope holds only ciphertext and metadata. Production is refused
+//       until the production custody ADR (ADR-0007 item 9; ADR-0022 item 7) is accepted.
+//       A secret with any control character (a typed correction such as Backspace, which a
+//       terminal without line editing passes through) is refused, and Ctrl-C aborts.
 //   npm run vault -- check-envelope --kek-file <file> --envelope <file>
 //       Opens an envelope with the KEK and prints only "envelope opens".
 //
@@ -20,8 +23,8 @@
 // additional data binds that version. No secret, KEK or envelope byte is ever printed, and
 // no file is ever written inside the repository.
 import { createHash } from "node:crypto";
-import { closeSync, openSync, readFileSync, statSync, writeSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { closeSync, openSync, readFileSync, realpathSync, statSync, writeSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { repositoryRoot } from "./artifacts.mjs";
 import {
@@ -62,13 +65,34 @@ export function parseVaultArguments(argv) {
   return { command, options };
 }
 
-// A path outside the repository: a secret or envelope never lands in the checkout.
+// A path outside the repository: a secret or envelope never lands in the checkout. Both the
+// path as given and its real path (symbolic links resolved, through the parent directory
+// for a file not yet written) must lie outside the real repository root. "Outside" is a
+// parent step ("..", or ".." and a separator) or another root, so a name inside the
+// checkout that merely starts with ".." (such as "..kek") is inside.
+const outside = (base, candidate) => {
+  const inside = relative(base, candidate);
+  return inside === ".." || inside.startsWith(".." + sep) || isAbsolute(inside);
+};
+function realPath(absolute) {
+  try {
+    return realpathSync(absolute);
+  } catch {
+    return join(realpathSync(dirname(absolute)), basename(absolute));
+  }
+}
 export function outsideRepository(path, root = repositoryRoot) {
   const absolute = resolve(path);
-  const inside = relative(resolve(root), absolute);
-  if (inside === "" || (!inside.startsWith("..") && !inside.startsWith("/")))
+  let real, realRoot;
+  try {
+    real = realPath(absolute);
+    realRoot = realpathSync(resolve(root));
+  } catch {
+    throw fail("PATH_INVALID");
+  }
+  if (!outside(resolve(root), absolute) || !outside(realRoot, real))
     throw fail("PATH_INSIDE_REPOSITORY");
-  return absolute;
+  return real;
 }
 // A new file, created exclusively with mode 0600.
 function writeNew(path, text) {
@@ -106,14 +130,25 @@ const positive = (value, maximum) => {
   if (!/^[1-9][0-9]*$/.test(value ?? "") || Number(value) > maximum) throw fail("USAGE");
   return Number(value);
 };
+// C0 and C1 control characters and DEL: never part of a client secret.
+const controlCharacter = /[\u0000-\u001f\u007f-\u009f]/;
 export async function sealAppSecret(options, secret) {
+  // Production custody needs its own ADR (ADR-0007 item 9); until then no production
+  // envelope is made.
+  if (options.environment === "production") throw fail("PRODUCTION_HELD");
   if (!vaultEnvironments.includes(options.environment)) throw fail("USAGE");
   if (!appKeyPattern.test(options["app-key"] ?? "")) throw fail("USAGE");
   const version = positive(options.version, Number.MAX_SAFE_INTEGER);
   const kekVersion = positive(options["kek-version"] ?? "1", vaultLimits.kekVersionMax);
   const bytes = new TextEncoder().encode(secret);
-  if (bytes.length < 1 || bytes.length > vaultLimits.plaintextMaxBytes || /[\r\n]/.test(secret))
+  if (
+    bytes.length < 1 ||
+    bytes.length > vaultLimits.plaintextMaxBytes ||
+    controlCharacter.test(secret)
+  ) {
+    bytes.fill(0);
     throw fail("SECRET_INVALID");
+  }
   const keyring = await createVaultKeyring(
     options.environment,
     new Map([[kekVersion, readKekFile(options["kek-file"])]]),
@@ -188,8 +223,10 @@ export function appSecretPutStatement(envelope) {
   });
 }
 
-// One secret line from stdin: not echoed on a terminal, at most 4096 bytes.
-async function readSecret(stdin = process.stdin) {
+// One secret line from stdin: not echoed on a terminal, at most 4096 bytes. A terminal is
+// read in raw mode (no echo), so it has no line editing: Ctrl-C aborts, and any other
+// control byte (a Backspace) stays in the text, where sealAppSecret refuses it.
+export async function readSecret(stdin = process.stdin) {
   const chunks = [];
   let size = 0;
   if (stdin.isTTY) {
@@ -198,6 +235,11 @@ async function readSecret(stdin = process.stdin) {
   }
   try {
     for await (const chunk of stdin) {
+      if (stdin.isTTY && chunk.includes(3)) {
+        for (const held of chunks) held.fill(0);
+        chunk.fill(0);
+        throw fail("ABORTED");
+      }
       chunks.push(chunk);
       size += chunk.length;
       if (size > vaultLimits.plaintextMaxBytes + 2) throw fail("SECRET_INVALID");

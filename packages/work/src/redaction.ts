@@ -1,9 +1,9 @@
 // The store-content cleanup contract (P09.T05a; mvp-architecture §11; ADR-0022 items 13
-// and 14): ONE list, in code, of every table that holds a store's content or credential,
-// with the handler that empties it. The tenant-conformance registry classifies every
-// registered table (`content`: none, workspace or store), and the conformance suite fails
-// a store-content table without exactly one handler here (S8 and
-// tests/redaction-handlers.test.mjs).
+// and 14): ONE list, in code, of every table that holds a store's content, identity or
+// credential, with the handler that empties it. The tenant-conformance registry classifies
+// every table of morrow_work, morrow_billing, morrow_vault and morrow_identity (`content`:
+// none, workspace or store), and the conformance suite fails a store-content table without
+// exactly one handler here (S8 and tests/redaction-handlers.test.mjs).
 //
 // `shop/redact` (M2 PR-3) runs every `shop_redact` handler for the store; the uninstall
 // webhook and the human disconnect run every `uninstall_or_disconnect` handler. A handler
@@ -44,6 +44,15 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       trigger: "uninstall_or_disconnect",
       action: "destroy_credential",
       storeKey: "subject_id: the store installation the token belongs to",
+      executor: null,
+      executable: "M2 PR-3",
+    },
+    {
+      table: "morrow_identity.linking_candidates",
+      dataClass: "shop_identity",
+      trigger: "shop_redact",
+      action: "pseudonymise",
+      storeKey: "installation_id: the store installation the candidate proved (shop_id kept)",
       executor: null,
       executable: "M2 PR-3",
     },

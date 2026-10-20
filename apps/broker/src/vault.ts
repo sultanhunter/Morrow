@@ -12,11 +12,13 @@
 // logs, and every failure is one fixed VaultError code with no value, key or byte in it.
 // Uses only WebCrypto, so the same code runs in workerd and in Node 24.
 
-export type VaultEnvironment = "development" | "staging" | "production";
+// Trust model v1 custody covers development and staging only (ADR-0022 item 7). Production
+// custody needs its own ADR (ADR-0007 item 9), so no keyring, envelope or additional data
+// exists for production until that ADR adds it here.
+export type VaultEnvironment = "development" | "staging";
 export const vaultEnvironments: readonly VaultEnvironment[] = Object.freeze([
   "development",
   "staging",
-  "production",
 ]);
 // The byte limits of the 0020 CHECK constraints: wrapped_key is a 12-byte IV, the
 // 32-byte data key and a 16-byte tag (60); sealed_value is an IV, 1-4096 bytes of

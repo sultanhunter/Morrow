@@ -19,9 +19,11 @@ export const workRoles = Object.freeze({
 // `lease: true` adds the lease-context twin of the command policy (tenant_lease, through
 // current_lease()); `policies` names a table's extra, exactly-checked policies.
 // `content` classifies what a row may hold (P09.T05a, spine §11): "none" (ids, digests,
-// codes and times only), "workspace" (text people write in the workspace, deleted with
-// it) or "store" (a store's content or credential): every "store" table has exactly one
-// cleanup handler in packages/work/src/redaction.ts (S8).
+// codes and times only), "workspace" (text people write, members in their workspace or
+// the operator in platform audit rows; never a store's content) or "store" (a store's
+// content, identity or credential): every "store" table, in every schema the registry
+// covers (identityTables included), has exactly one cleanup handler in
+// packages/work/src/redaction.ts (S8).
 export const workTables = Object.freeze({
   goals: { class: "tenant_readable", parents: ["workspace_streams"], content: "workspace" },
   tasks: { class: "tenant_readable", parents: ["goals"], content: "workspace" },
@@ -58,13 +60,16 @@ export const workTables = Object.freeze({
   review_capabilities: { class: "platform", parents: [], content: "none" },
   review_risk_by_effect: { class: "platform", parents: [], content: "none" },
   review_policy_defaults: { class: "platform", parents: [], content: "none" },
-  // M2 PR-1 spine foundation (migration 0020).
+  // M2 PR-1 spine foundation (migration 0020; lease_member_revoke from 0023).
   work_leases: {
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
-    policies: ["lease_pending", "lease_self"],
+    policies: ["lease_member_revoke", "lease_pending", "lease_self"],
     content: "none",
   },
+  // The entry proof of enter_lease (0020): one row per backend, no tenant keys, reached
+  // only by the runtime login's own definers (lease_entry).
+  lease_entries: { class: "platform", parents: [], policies: ["lease_entry"], content: "none" },
   stop_controls: {
     class: "tenant_or_platform",
     parents: ["morrow_identity.workspaces"],
@@ -210,6 +215,13 @@ export const workFunctions = Object.freeze({
     columns: ["kind", "subject_id", "lease_id", "generation"],
   },
   "lease_mark_started()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
+  // 0023: the membership-removal revocation, called by 0024's identity triggers with the
+  // tenant of the membership row they handle.
+  "revoke_member_leases(text,text,text)": {
+    kind: "bridge_in",
+    grantees: ["morrow_identity_owner"],
+    tenantParameters: ["p_organization_id", "p_workspace_id", "p_membership_id"],
+  },
   "lease_release()": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
   "stop_active(text,text,text,text,text)": { kind: "helper", grantees: [] },
   "lease_open(text,text,text,text,text)": { kind: "helper", grantees: [] },
@@ -266,6 +278,8 @@ export const bridgeFunctions = Object.freeze([
   // M2 PR-1 (0019).
   "work_executor_safe(text)",
   "work_lease_member_current(text,text,text,text)",
+  // M2 PR-1 review (0022): the website-signup fact behind route_signup.
+  "work_signup_workspace(text,text)",
 ]);
 // M2 PR-1 (0020): the two schemas the work owner creates beside morrow_work. The billing
 // route is tenant-readable with one extra insert policy for the signup bridge; the vault
@@ -296,6 +310,58 @@ export const vaultFunctions = Object.freeze({
   "app_secret_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "app_secret_put(text,text,text,text)": { kind: "operator", grantees: [] },
   "vault_guard()": { kind: "trigger", grantees: [] },
+});
+// M2 PR-1 review (P09.T05a; spine §11): the content class of every morrow_identity table,
+// so the store-content cleanup contract (S8, tests/redaction-handlers.test.mjs) covers the
+// schema that holds the shop identity and, from M2 PR-2, the store tables of spine §6
+// (store_installations, shopify_webhook_inbox, install_continuations, privacy_requests),
+// each registered here as it lands. Identity tables keep their P05 RLS shape; only their
+// content is classified here. Account identifiers (principals, provider subjects, sessions)
+// are "none": they are ids, and the account deletion path (P09.T05, data-lifecycle.md)
+// covers them.
+export const identityTables = Object.freeze({
+  account_enrollments: { content: "none" },
+  account_session_commands: { content: "none" },
+  authentication_bindings: { content: "none" },
+  authentication_challenges: { content: "none" },
+  authentication_exchange_admissions: { content: "none" },
+  authentication_exchange_bindings: { content: "none" },
+  authentication_pkce_challenges: { content: "none" },
+  browser_session_audits: { content: "none" },
+  browser_session_commands: { content: "none" },
+  browser_session_families: { content: "none" },
+  browser_session_generations: { content: "none" },
+  grants: { content: "none" },
+  identity_verification_profiles: { content: "none" },
+  // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
+  linking_candidates: { content: "store" },
+  linking_handoffs: { content: "none" },
+  linking_reviews: { content: "none" },
+  login_command_guards: { content: "none" },
+  login_controller_configurations: { content: "none" },
+  login_flow_events: { content: "none" },
+  login_flow_quotas: { content: "none" },
+  login_flow_tombstones: { content: "none" },
+  login_flows: { content: "none" },
+  memberships: { content: "none" },
+  migration_administrator: { content: "none" },
+  organization_session_signouts: { content: "none" },
+  organization_signups: { content: "none" },
+  // display names people write
+  organizations: { content: "workspace" },
+  principals: { content: "none" },
+  provider_session_bindings: { content: "none" },
+  provider_subject_mappings: { content: "none" },
+  provider_subject_profile_bindings: { content: "none" },
+  // the operator's reason for an enrollment switch
+  self_service_revisions: { content: "workspace" },
+  sessions: { content: "none" },
+  workspace_link_results: { content: "none" },
+  workspace_memberships: { content: "none" },
+  workspace_revocation_receipts: { content: "none" },
+  workspace_revocation_results: { content: "none" },
+  workspace_store_links: { content: "none" },
+  workspaces: { content: "workspace" },
 });
 // The three membership-free executor logins (ADR-0022 item 8) and the functions each
 // may execute, across every schema.

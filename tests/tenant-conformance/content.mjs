@@ -3,22 +3,29 @@
 // handler in packages/work/src/redaction.ts. Used by S8 (lab:tenant-conformance) and by
 // tests/redaction-handlers.test.mjs (npm test).
 import { storeContentHandlers } from "../../packages/work/src/redaction.ts";
-import { billingTables, vaultTables, workTables } from "./registry.mjs";
+import { billingTables, identityTables, vaultTables, workTables } from "./registry.mjs";
 
 export const contentClasses = Object.freeze(["none", "workspace", "store"]);
-export const registeredTables = (tables = { workTables, billingTables, vaultTables }) => [
+// The schemas whose every table is classified: S8 compares this list with the live
+// catalog of each, so a new table in any of them fails until it is registered.
+export const contentSchemas = Object.freeze([
+  "morrow_billing",
+  "morrow_identity",
+  "morrow_vault",
+  "morrow_work",
+]);
+const defaultTables = { workTables, billingTables, vaultTables, identityTables };
+export const registeredTables = (tables = defaultTables) => [
   ...Object.entries(tables.workTables).map(([name, spec]) => ["morrow_work." + name, spec]),
   ...Object.entries(tables.billingTables).map(([name, spec]) => ["morrow_billing." + name, spec]),
   ...Object.entries(tables.vaultTables).map(([name, spec]) => ["morrow_vault." + name, spec]),
+  ...Object.entries(tables.identityTables).map(([name, spec]) => ["morrow_identity." + name, spec]),
 ];
 const triggers = ["shop_redact", "uninstall_or_disconnect"];
 const actions = ["destroy_credential", "empty_keep_digest", "delete_rows", "pseudonymise"];
 const keys = "action,dataClass,executable,executor,storeKey,table,trigger";
 
-export function contentProblems(
-  handlers = storeContentHandlers,
-  tables = { workTables, billingTables, vaultTables },
-) {
+export function contentProblems(handlers = storeContentHandlers, tables = defaultTables) {
   const problems = [];
   const registered = new Map(registeredTables(tables));
   for (const [name, spec] of registered)

@@ -1,7 +1,8 @@
-// M2 PR-1 PostgreSQL 17 laboratory: the spine foundation (migrations 0019-0021) on an
+// M2 PR-1 PostgreSQL 17 laboratory: the spine foundation (migrations 0019-0024) on an
 // isolated network-none engine with the full manifest applied by the Neon-shaped
 // non-superuser CREATEROLE administrator (ADR-0020 D4, the hosted shape). It proves the
-// lease context, that stops block admission (including both race orders), the operation
+// lease context (its entry proof, and revocation at membership removal), that stops block
+// admission (including both race orders), the operation
 // state machine and its send fence, that vault rows are unreadable to every role but the
 // broker's login (with the broker's own AES-256-GCM envelopes and the owner script's
 // apply statement), and the billing route's creation and immutability rules. Part 2's
@@ -66,6 +67,8 @@ const ms = "date_trunc('milliseconds',clock_timestamp())";
 // One instant per transaction, for inserts whose triggers require created_at=updated_at:
 // two clock_timestamp() calls can straddle a millisecond on a loaded host.
 const txMs = "date_trunc('milliseconds',transaction_timestamp())";
+// The part-1 entry marker, which the runtime login can compute for itself: the forged
+// entry checks (L3) prove it no longer resolves a lease.
 const marker =
   "(extract(epoch FROM transaction_timestamp())*1000000)::bigint::text||':'||pg_backend_pid()::text";
 const uuid = () => randomUUID();
@@ -305,6 +308,75 @@ export async function runSpineFoundationLab(db) {
         refused(enter(run.id), "permission denied", "morrow_vault_broker") &&
         refused(asApi(P.A, enter(run.id)), "permission denied", "morrow_api_worker"),
     );
+    // The entry proof (review finding 1): the runtime login can set every lease setting
+    // itself, including the computable part-1 marker or any nonce, but only enter_lease
+    // writes the proof row, so a forged context resolves nothing, even for an active lease
+    // at its own generation, and its definers refuse it.
+    const forge = (id, entered) =>
+      `SELECT concat(set_config('morrow.work_lease_id',${literal(id)},true),set_config('morrow.work_lease_generation','1',true),set_config('morrow.work_lease_entered',${entered},true)) IS NOT NULL;`;
+    const forged = (id, entered) =>
+      runtime(
+        `BEGIN; ${forge(id, entered)} SELECT concat_ws('|',COALESCE(organization_id,'-'),operations) FROM lab_probe.lease_view(); SELECT morrow_work.lease_mark_started(); SELECT morrow_work.lease_release(); ROLLBACK;`,
+      )
+        .split("\n")
+        .join(",");
+    const unstarted = openLease(P.A, "run", "l_run_forged");
+    const forgeries = [
+      forged(unstarted.id, marker),
+      forged(unstarted.id, literal(uuid())),
+      forged(run.id, marker),
+    ];
+    check(
+      "L3:forged_context_resolves_nothing",
+      forgeries.every((f) => f === "t,-|0,denied,denied") &&
+        lease(unstarted.id).status === "active" &&
+        !lease(unstarted.id).started,
+      forgeries,
+    );
+    // One entry per transaction, even after the caller clears its settings; a retargeted
+    // context (another lease with this entry's nonce) resolves nothing.
+    const once = [
+      runtime(
+        `BEGIN; ${enter(run.id)} SELECT concat(set_config('morrow.work_lease_id','',true),set_config('morrow.work_lease_generation','',true),set_config('morrow.work_lease_entered','',true)) IS NOT NULL; ${enter(operation.id)} ROLLBACK;`,
+      )
+        .split("\n")
+        .join(","),
+      runtime(
+        `BEGIN; ${enter(run.id)} SELECT set_config('morrow.work_lease_id',${literal(unstarted.id)},true) IS NOT NULL; SELECT concat_ws('|',COALESCE(organization_id,'-'),operations) FROM lab_probe.lease_view(); ROLLBACK;`,
+      )
+        .split("\n")
+        .join(","),
+    ];
+    check(
+      "L3:one_entry_per_transaction",
+      once[0] === "entered,t,denied" && once[1] === "entered,t,-|0",
+      once,
+    );
+    // A refused entry leaves no usable proof: the next entry in the same transaction works.
+    check(
+      "L3:refused_entry_then_entry",
+      runtime(`BEGIN; ${enter(uuid())} ${enter(unstarted.id)} ROLLBACK;`)
+        .split("\n")
+        .join(",") === "not_found,entered",
+    );
+    check(
+      "L3:entry_proof_unreachable_to_logins",
+      refused(
+        "SELECT count(*) FROM morrow_work.lease_entries;",
+        "permission denied",
+        "morrow_runtime_executor",
+      ) &&
+        refused(
+          "INSERT INTO morrow_work.lease_entries VALUES(pg_backend_pid(),'1','00000000-0000-4000-8000-000000000001','1','00000000-0000-4000-8000-000000000002');",
+          "permission denied",
+          "morrow_runtime_executor",
+        ) &&
+        refused(
+          asApi(P.A, "SELECT count(*) FROM morrow_work.lease_entries;"),
+          "permission denied",
+          "morrow_api_worker",
+        ),
+    );
     // An expired lease (owner-inserted with a past creation time; no sweep exists).
     const expired = uuid();
     db.workOwner(
@@ -320,18 +392,93 @@ export async function runSpineFoundationLab(db) {
       "L4:release_ends_the_context",
       released.join(",") === "entered,released,-|0,denied" && entered(release.id) === "ended",
     );
-    // A removed member: the lease stays active but resolves nothing.
-    const removed = openLease(P.R, "run", "l_run_r");
-    db.sql(revocationSql(P.R));
+    // An inactive member whose leases were not revoked (a principal deactivated by the
+    // owner; no identity path does that today): the live recheck still resolves nothing.
+    const paused = openLease(P.R, "run", "l_run_r_paused");
+    const principalActive = (active) =>
+      db.sql(
+        `BEGIN; SET LOCAL ROLE morrow_identity_owner; UPDATE morrow_identity.principals SET active=${active} WHERE id=${literal(P.R.principal)}; COMMIT;`,
+      );
+    principalActive(false);
     try {
       check(
         "L3:member_inactive",
-        entered(removed.id) === "member_inactive" && lease(removed.id).status === "active",
+        entered(paused.id) === "member_inactive" && lease(paused.id).status === "active",
       );
+    } finally {
+      principalActive(true);
+    }
+    check("L3:member_restored", entered(paused.id) === "entered");
+    // A removed member (review finding 2; spine §5): the removing transaction revokes the
+    // member's leases (0024's trigger and 0023's definer), pending_starts drops them, and
+    // they stay ended when the membership returns. Other members' leases are untouched.
+    const removed = openLease(P.R, "run", "l_run_r");
+    const removedRead = openLease(P.R, "read", "l_read_r", { installation: null });
+    const bystander = openLease(P.A, "run", "l_run_bystander");
+    check(
+      "L6:pending_before_removal",
+      pending().some((l) => l.includes(removed.id)),
+    );
+    db.sql(revocationSql(P.R));
+    try {
+      check(
+        "L6:membership_removal_revokes_its_leases",
+        [removed, removedRead, paused].every(
+          (l) => lease(l.id).status === "revoked" && lease(l.id).revoked_reason === "membership",
+        ) &&
+          lease(bystander.id).status === "active" &&
+          lease(run.id).status === "active",
+      );
+      check("L6:pending_starts_drops_them", !pending().some((l) => l.includes(removed.id)));
+      check("L6:removed_member_enters_nothing", entered(removed.id) === "ended");
     } finally {
       db.sql(restoreSql(P.R));
     }
-    check("L3:member_restored", entered(removed.id) === "entered");
+    check(
+      "L6:membership_return_does_not_resume",
+      entered(removed.id) === "ended" &&
+        lease(removed.id).status === "revoked" &&
+        !pending().some((l) => l.includes(removed.id)),
+    );
+    // The organization membership behind it: every workspace's leases of that member.
+    const orgRemoved = openLease(P.R, "operation", "l_claim_r");
+    const membershipActive = (active) =>
+      db.sql(
+        `BEGIN; SET LOCAL ROLE morrow_identity_owner; UPDATE morrow_identity.memberships SET active=${active} WHERE id=${literal(P.R.membership)}; COMMIT;`,
+      );
+    membershipActive(false);
+    membershipActive(true);
+    check(
+      "L6:organization_membership_removal_revokes",
+      lease(orgRemoved.id).status === "revoked" &&
+        lease(orgRemoved.id).revoked_reason === "membership" &&
+        entered(orgRemoved.id) === "ended" &&
+        lease(bystander.id).status === "active",
+    );
+    // The definer and its policy spare current members: the command role (its owner) and
+    // a context-free command role with the revocation setting revoke nothing of P.A's.
+    const spare = `SELECT outcome||'|'||revoked FROM morrow_work.revoke_member_leases(${literal(P.A.org)},${literal(P.A.workspace)},${literal(P.A.membership)});`;
+    const spared = [
+      last(db.sql(`BEGIN; SET LOCAL ROLE morrow_work_command; ${spare} COMMIT;`)),
+      last(
+        db.sql(
+          `BEGIN; SET LOCAL ROLE morrow_work_command; SELECT set_config('morrow.work_member_revocation',${literal(`${P.A.org}|${P.A.workspace}|${P.A.membership}`)},true) IS NOT NULL; WITH u AS (UPDATE morrow_work.work_leases SET status='revoked',revoked_reason='membership',ended_at=${ms} WHERE id=${literal(bystander.id)} RETURNING 1) SELECT count(*) FROM u; COMMIT;`,
+        ),
+      ),
+    ];
+    check(
+      "L6:revocation_spares_current_members",
+      spared[0] === "applied|0" && spared[1] === "0" && lease(bystander.id).status === "active",
+      spared,
+    );
+    check(
+      "L6:revocation_definer_identity_owner_only",
+      refused(spare, "permission denied", "morrow_runtime_executor") &&
+        refused(asApi(P.A, spare), "permission denied", "morrow_api_worker") &&
+        refused("SET ROLE morrow_work_owner; " + spare, "permission denied") &&
+        last(db.sql(`BEGIN; SET LOCAL ROLE morrow_identity_owner; ${spare} ROLLBACK;`)) ===
+          "applied|0",
+    );
     // Lease rows: no generation, term or tenant change, no update after the end, no delete.
     const own = (statement) =>
       refused(
@@ -1362,6 +1509,25 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
           ),
           "permission denied",
         ),
+    );
+    // The signup bridge's policy is bound to the website signup itself (review finding 7;
+    // 0022-0023): a session-context definer cannot record a website route for another
+    // tenant, nor can a context-free command-role definer for a workspace that no website
+    // signup created. R1 is the admitted case (the signup's own transaction).
+    const websiteRow = (p) =>
+      `INSERT INTO morrow_billing.workspace_billing_routes VALUES(${literal(p.org)},${literal(p.workspace)},'website',NULL,NULL,NULL,NULL,NULL,1,${txMs},${txMs});`;
+    check(
+      "R5:no_website_route_without_its_signup",
+      refused(asCommandRole(P.A, websiteRow(P.Y)), "row-level security") &&
+        refused(
+          `BEGIN; SET LOCAL ROLE morrow_work_command; ${websiteRow(P.Y)} ROLLBACK;`,
+          "row-level security",
+        ) &&
+        refused(
+          `BEGIN; SET LOCAL ROLE morrow_work_command; ${websiteRow({ org: "org_r3", workspace: "ws_r3" })} ROLLBACK;`,
+          "row-level security",
+        ) &&
+        routeOf(P.Y.workspace) === null,
     );
   }
   // ---------------------------------------------------------------------------

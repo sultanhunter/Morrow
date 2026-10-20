@@ -52,12 +52,27 @@ export const brokerVaultRole = "morrow_vault_broker";
 export const brokerVaultKekSecrets: readonly string[] = Object.freeze(["MORROW_VAULT_KEK_V1"]);
 export const brokerPasswordSecret = (role: BrokerNeonRole | typeof brokerVaultRole) =>
   `MORROW_DB_PASSWORD_${role.toUpperCase()}`;
+// Development and staging: every secret, the vault's included.
 export const brokerRequiredSecrets: readonly string[] = Object.freeze([
   "WORKOS_API_KEY",
   ...brokerNeonRoleNames.map(brokerPasswordSecret),
   brokerPasswordSecret(brokerVaultRole),
   ...brokerVaultKekSecrets,
 ]);
+// Production holds the vault (trust model v1 custody is development and staging only,
+// ADR-0022 item 7, until the ADR-0007 item 9 production custody ADR), so a production
+// deploy requires neither a KEK nor the vault login's password.
+export const brokerVaultSecrets: readonly string[] = Object.freeze([
+  brokerPasswordSecret(brokerVaultRole),
+  ...brokerVaultKekSecrets,
+]);
+export function brokerRequiredSecretsFor(
+  environment: "development" | "staging" | "production",
+): readonly string[] {
+  return environment === "production"
+    ? Object.freeze(brokerRequiredSecrets.filter((name) => !brokerVaultSecrets.includes(name)))
+    : brokerRequiredSecrets;
+}
 export const brokerLimits = Object.freeze({
   namespaceMaxBytes: 1024,
   selectorMaxBytes: 2048,
