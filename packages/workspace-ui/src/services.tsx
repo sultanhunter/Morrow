@@ -28,7 +28,9 @@ export type MarkerKind =
   | "assignment"
   | "question"
   | "answer"
-  | "cancel";
+  | "cancel"
+  | "agent"
+  | "model_default";
 export interface Marker {
   readonly workspaceId: Id;
   readonly kind: MarkerKind;

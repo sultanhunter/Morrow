@@ -528,8 +528,11 @@ export async function runSpineFoundationLab(db) {
   // S: stops block admission (spine §10; ADR-0022 item 15), and revoke leases.
   {
     phase("stops");
+    // System stops (an uninstall's shape): since M3 PR-1 a person's stop names the
+    // KillSwitchRecord it commits with (stop_controls_human_record), and
+    // lab:listings-authority proves that path; the stop mechanics here are the same.
     const stopSql = (p, scope, target, o = {}) =>
-      `INSERT INTO morrow_work.stop_controls(organization_id,workspace_id,id,scope,store_id,target_id,set_by_kind,set_by_principal_id,set_by_membership_id,reason_code,reason,created_at) VALUES(${literal(p.org)},${literal(p.workspace)},${literal(o.id ?? uuid())},${literal(scope)},${literal(o.store ?? "store_s")},${literal(target)},'human',${literal(p.principal)},${literal(p.membership)},'kill_switch','Stop AI work',${ms});`;
+      `INSERT INTO morrow_work.stop_controls(organization_id,workspace_id,id,scope,store_id,target_id,set_by_kind,set_by_principal_id,set_by_membership_id,reason_code,reason,created_at) VALUES(${literal(p.org)},${literal(p.workspace)},${literal(o.id ?? uuid())},${literal(scope)},${literal(o.store ?? "store_s")},${literal(target)},'system',NULL,NULL,'lab_stop','Laboratory stop',${ms});`;
     const s = { store: "store_s", connection: "connection_s", installation: "installation_s" };
     const runBefore = openLease(P.A, "run", "s_run_before", s);
     const operationBefore = openLease(P.A, "operation", "s_claim_before", s);
@@ -584,7 +587,7 @@ export async function runSpineFoundationLab(db) {
     });
     db.sql(
       `ALTER TABLE morrow_work.stop_controls DISABLE TRIGGER stop_guard;
-INSERT INTO morrow_work.stop_controls(organization_id,workspace_id,id,scope,store_id,target_id,set_by_kind,set_by_principal_id,set_by_membership_id,reason_code,reason,created_at) VALUES(${literal(P.A.org)},${literal(P.A.workspace)},'s_sim',${literal("installation")},'store_s','installation_k','human',${literal(P.A.principal)},${literal(P.A.membership)},'kill_switch','sim',${ms});
+INSERT INTO morrow_work.stop_controls(organization_id,workspace_id,id,scope,store_id,target_id,set_by_kind,set_by_principal_id,set_by_membership_id,reason_code,reason,created_at) VALUES(${literal(P.A.org)},${literal(P.A.workspace)},'s_sim',${literal("installation")},'store_s','installation_k','system',NULL,NULL,'lab_stop','sim',${ms});
 ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
     );
     check(

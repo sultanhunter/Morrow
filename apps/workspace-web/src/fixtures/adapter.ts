@@ -5,6 +5,9 @@
 import {
   portMethods,
   type AnswerView,
+  type ListingsAgentView,
+  type ListingsDocumentView,
+  type ModelCatalogueView,
   type Command,
   type Composed,
   type GoalView,
@@ -16,7 +19,14 @@ import {
   type WorkspacePort,
 } from "@morrow/workspace-ui";
 import { challengedIn } from "./challenge";
-import { createSeed, fixtureOrganizationName, fixtureWorkspace, people } from "./seed";
+import {
+  createSeed,
+  fixtureCatalogue,
+  fixtureOrganizationName,
+  fixtureStore,
+  fixtureWorkspace,
+  people,
+} from "./seed";
 import { scenarios, uncomposedIn, type ScenarioName } from "./scenarios";
 
 /** Present in every fixture bundle; `verify:workspace-web` fails a dist that holds it. */
@@ -99,6 +109,40 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
   const question = (id: string) => seed.questions.find((q) => q.id === id);
   const goal = (id: string) => seed.goals.find((g) => g.id === id);
   const at = () => new Date(Date.UTC(2026, 9, 16, 9, created)).toISOString();
+  // M3 PR-1 fixture state: the Listings agent of the fixture store, and the model default.
+  const listings = {
+    installationId: null as string | null,
+    status: "active" as "active" | "disabled",
+    stopped: false,
+    revision: 0,
+    document: null as ListingsDocumentView | null,
+  };
+  const listingsView = (): ListingsAgentView => ({
+    storeId: fixtureStore.id,
+    linked: true,
+    installation:
+      listings.installationId === null
+        ? null
+        : {
+            installationId: listings.installationId,
+            status: listings.status,
+            revision: listings.revision,
+            stopped: listings.stopped,
+            updatedAt: at(),
+          },
+    actions: {
+      enable: listings.installationId === null,
+      resume: listings.installationId !== null && listings.stopped,
+      stop: listings.installationId !== null,
+    },
+  });
+  const modelDefault = {
+    model: "claude_sonnet_5_5",
+    effort: "low",
+    ceiling: 1,
+    revision: null as number | null,
+    canRevise: true,
+  };
   return {
     session: {
       startSignIn: () => reply("session.startSignIn", () => ok({ navigateTo: "/" })),
@@ -300,5 +344,111 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         }),
     },
     people: { list: () => Promise.resolve({ kind: "not_in_build" }) },
+    // M3 PR-1: one fixture store with the Listings agent, and the catalogue version 1
+    // listing (no provider strings, prices or tokens). Scripted, not simulated: the
+    // server's kernel, document binding and stops are proved by lab:listings-authority.
+    agents: {
+      listingsStatus: (id, storeId) =>
+        reply<ListingsAgentView>("agents.listingsStatus", () =>
+          ws(id) && storeId === fixtureStore.id ? ok(listingsView()) : notFound,
+        ),
+      listingsDocument: (id, storeId, c) =>
+        command("agents.listingsDocument", c, () => {
+          if (!ws(id) || storeId !== fixtureStore.id) return notFound;
+          const view = listingsView();
+          const purpose = view.actions.enable ? "enable" : view.actions.resume ? "resume" : null;
+          if (purpose === null)
+            return { kind: "conflict", recheck: true, message: "The agent changed." };
+          created++;
+          listings.document = {
+            documentDigest: created.toString(16).padStart(64, "d"),
+            nonce: created.toString(16).padStart(64, "e"),
+            purpose,
+            installationId: listings.installationId ?? `inst-listings-${created}`,
+            expiresAt: new Date(Date.UTC(2026, 9, 16, 9, 5 + created)).toISOString(),
+            releaseRevision: 1,
+            grants: [
+              { capabilityId: "catalog.content.propose", verbs: ["execute"] },
+              { capabilityId: "catalog.content.publish", verbs: ["propose"] },
+              { capabilityId: "catalog.products.read", verbs: ["view"] },
+            ],
+            fields: ["descriptionHtml", "seo.description", "seo.title", "tags", "title"],
+          };
+          return ok(listings.document);
+        }),
+      listingsEnable: (id, storeId, c) =>
+        command("agents.listingsEnable", c, () => {
+          const doc = listings.document;
+          if (!ws(id) || storeId !== fixtureStore.id) return notFound;
+          if (!doc || doc.documentDigest !== c.body.documentDigest || doc.nonce !== c.body.nonce)
+            return {
+              kind: "conflict",
+              recheck: true,
+              message: "A precondition for this change is not met.",
+            };
+          listings.document = null;
+          listings.installationId = doc.installationId;
+          listings.status = "active";
+          listings.stopped = false;
+          listings.revision += 1;
+          return ok({
+            installationId: doc.installationId,
+            status: "active",
+            revision: listings.revision,
+          });
+        }),
+      listingsStop: (id, storeId, c) =>
+        command("agents.listingsStop", c, () => {
+          if (!ws(id) || storeId !== fixtureStore.id || listings.installationId === null)
+            return notFound;
+          if (listings.status === "active") listings.revision += 1;
+          listings.status = "disabled";
+          listings.stopped = true;
+          return ok({
+            installationId: listings.installationId,
+            status: "disabled",
+            revision: listings.revision,
+          });
+        }),
+    },
+    models: {
+      list: (id) =>
+        reply<ModelCatalogueView>("models.list", () =>
+          ws(id)
+            ? ok({
+                catalogueVersion: 1,
+                entries: fixtureCatalogue.map((e) => ({
+                  ...e,
+                  allowedForMember:
+                    modelDefault.canRevise || e.creditsPerProduct <= modelDefault.ceiling,
+                })),
+                workspaceDefault: { model: modelDefault.model, effort: modelDefault.effort },
+                ceiling: modelDefault.ceiling,
+                revision: modelDefault.revision,
+                canRevise: modelDefault.canRevise,
+              })
+            : notFound,
+        ),
+      reviseDefault: (id, c) =>
+        command("models.reviseDefault", c, () => {
+          if (!ws(id)) return notFound;
+          if (c.body.expectedRevision !== modelDefault.revision)
+            return {
+              kind: "conflict",
+              recheck: true,
+              message: "The record changed. Reread it before retrying.",
+            };
+          const entry = fixtureCatalogue.find(
+            (e) => e.model === c.body.model && e.effort === c.body.effort,
+          );
+          if (!entry || entry.creditsPerProduct > c.body.maxCreditsPerProduct)
+            return { kind: "invalid", field: null };
+          modelDefault.model = c.body.model;
+          modelDefault.effort = c.body.effort;
+          modelDefault.ceiling = c.body.maxCreditsPerProduct;
+          modelDefault.revision = (modelDefault.revision ?? 0) + 1;
+          return ok({ revision: modelDefault.revision });
+        }),
+    },
   };
 }

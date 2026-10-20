@@ -5,6 +5,10 @@ import type {
   AnswerView,
   GoalView,
   Id,
+  ListingsAgentView,
+  ListingsChangeView,
+  ListingsDocumentView,
+  ModelCatalogueView,
   Page,
   PersonRef,
   QuestionView,
@@ -114,6 +118,41 @@ export interface WorkspacePort {
     getAnswer(ws: Id, id: Id): Promise<Outcome<AnswerView>>;
   };
   readonly people: { list(ws: Id): Promise<Outcome<readonly PersonRef[]>> }; // not_in_build (§4.14)
+  /** M3 PR-1: the Listings agent of one connected store. */
+  readonly agents: {
+    listingsStatus(ws: Id, storeId: Id): Promise<Outcome<ListingsAgentView>>;
+    /** Step 1 of Enable (or resume): the server builds the document the owner confirms. */
+    listingsDocument(
+      ws: Id,
+      storeId: Id,
+      c: Command<Record<string, never>>,
+    ): Promise<Outcome<ListingsDocumentView>>;
+    /** Step 2: confirms exactly that document, by its digest and single-use nonce. */
+    listingsEnable(
+      ws: Id,
+      storeId: Id,
+      c: Command<{ documentDigest: string; nonce: string }>,
+    ): Promise<Outcome<ListingsChangeView>>;
+    /** "Stop AI work": a person's kill switch, with their reason. */
+    listingsStop(
+      ws: Id,
+      storeId: Id,
+      c: Command<{ reason: string }>,
+    ): Promise<Outcome<ListingsChangeView>>;
+  };
+  /** M3 PR-1: the model catalogue and the workspace's default and member ceiling. */
+  readonly models: {
+    list(ws: Id): Promise<Outcome<ModelCatalogueView>>;
+    reviseDefault(
+      ws: Id,
+      c: Command<{
+        model: string;
+        effort: string;
+        maxCreditsPerProduct: number;
+        expectedRevision: number | null;
+      }>,
+    ): Promise<Outcome<{ readonly revision: number }>>;
+  };
 }
 
 export const portMethods = [
@@ -139,6 +178,12 @@ export const portMethods = [
   "work.cancelQuestion",
   "work.getAnswer",
   "people.list",
+  "agents.listingsStatus",
+  "agents.listingsDocument",
+  "agents.listingsEnable",
+  "agents.listingsStop",
+  "models.list",
+  "models.reviseDefault",
 ] as const;
 export type PortMethod = (typeof portMethods)[number];
 /** Which port methods this build composes (§4.2). An uncomposed method sends nothing. */

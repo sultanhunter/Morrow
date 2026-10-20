@@ -7,10 +7,12 @@ import {
   AccountScreen,
   AppShell,
   Button,
+  ConnectionAgentsScreen,
   Dialog,
   EntryLayout,
   HomeScreen,
   InboxScreen,
+  ModelDefaultScreen,
   NotFoundScreen,
   QuestionScreen,
   ReentryNotice,
@@ -543,6 +545,16 @@ function WorkspaceFrame({
         return <InboxScreen workspace={workspace} />;
       case "question":
         return <QuestionScreen workspace={workspace} questionId={params.questionId!} />;
+      // M3 PR-1: the Listings agent card (M2 PR-2's connection screen hosts it at rebase)
+      // and the model default under Settings > Governance.
+      case "connection":
+        return <ConnectionAgentsScreen workspace={workspace} storeId={params.connectionId!} />;
+      case "settings_section":
+        return params.section === "governance" ? (
+          <ModelDefaultScreen workspace={workspace} />
+        ) : (
+          <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />
+        );
       default:
         return <UnavailableDestination title={routeTitle(workspaceRoutes, match.id) ?? match.id} />;
     }
@@ -598,5 +610,15 @@ export function guardPort(
     },
     work,
     people: { list: watch(port.people.list.bind(port.people), first) },
+    agents: {
+      listingsStatus: watch(port.agents.listingsStatus.bind(port.agents), first),
+      listingsDocument: watch(port.agents.listingsDocument.bind(port.agents), first),
+      listingsEnable: watch(port.agents.listingsEnable.bind(port.agents), first),
+      listingsStop: watch(port.agents.listingsStop.bind(port.agents), first),
+    },
+    models: {
+      list: watch(port.models.list.bind(port.models), first),
+      reviseDefault: watch(port.models.reviseDefault.bind(port.models), first),
+    },
   };
 }
