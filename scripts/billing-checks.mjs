@@ -768,7 +768,14 @@ export const capabilityEffects = [
   "billable_job",
 ];
 export const permissionVerbs = ["view", "propose", "approve", "execute", "delegate", "administer"];
-export const grantTemplateIds = ["owner-bootstrap-v1", "workspace-member-v1", "workspace-admin-v1"];
+// M5 PR-1: owner-bootstrap-v2 (ADR-0022 item 3) is the signup template from 0026 on; v1 stays
+// recorded for the signups made before it.
+export const grantTemplateIds = [
+  "owner-bootstrap-v1",
+  "owner-bootstrap-v2",
+  "workspace-member-v1",
+  "workspace-admin-v1",
+];
 export function paidWorkPredicate(table, catalogue) {
   const capabilities = new Map(catalogue.capabilities.map((c) => [c.id, c])),
     effects = new Set(table.paidEffects),
@@ -829,7 +836,7 @@ export function inspectPaidWork(table, catalogue, templates) {
     )
   )
     fail("PW4");
-  // PW5: no row of the three ADR grant templates is paid with its template verbs.
+  // PW5: no row of the ADR grant templates is paid with its template verbs.
   if (
     !templates ||
     typeof templates !== "object" ||
