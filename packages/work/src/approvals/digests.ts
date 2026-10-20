@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Core_ProposalRef, Core_Scope, Current_ApprovalStatus } from "@morrow/contracts";
+import type { Core_ProposalRef, Current_ApprovalStatus, Current_Proposal } from "@morrow/contracts";
 import { canonicalDigest } from "@morrow/policy/review";
 import { canonicalJson } from "../digest.js";
 
@@ -13,8 +13,8 @@ export const canonicalText = (value: unknown): string => canonicalJson(value);
 export const sha256Text = (text: string): string =>
   createHash("sha256").update(text, "utf8").digest("hex");
 
-/** Approval@2 scopeDigest: sha256(JCS(proposal.scope)). */
-export function scopeDigest(scope: Core_Scope): string {
+/** Approval@2 scopeDigest: sha256(JCS(proposal.scope)), over Proposal@2's own scope. */
+export function scopeDigest(scope: Current_Proposal["scope"]): string {
   return canonicalDigest(scope);
 }
 

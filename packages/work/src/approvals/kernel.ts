@@ -1,5 +1,5 @@
 import type {
-  Core_Grant,
+  Current_Grant,
   Current_HumanActorRef,
   Current_Proposal,
   Current_ProposalTarget,
@@ -57,7 +57,7 @@ export function memberAuthority(
   a: WorkAuthority,
   principalId: string,
   membershipId: string,
-  grants: readonly Core_Grant[],
+  grants: readonly Current_Grant[],
 ): WorkAuthority {
   return Object.freeze({
     actor: Object.freeze({
@@ -77,7 +77,10 @@ export function memberAuthority(
 }
 
 /** Decodes a bridge row's grants (at most 64 kept; 65 means overflow, judged ineligible). */
-export function snapshotGrants(text: unknown, count: unknown): readonly Core_Grant[] | "overflow" {
+export function snapshotGrants(
+  text: unknown,
+  count: unknown,
+): readonly Current_Grant[] | "overflow" {
   if (typeof count === "string" && /^[0-9]{1,3}$/.test(count) && Number(count) >= 65)
     return "overflow";
   const grants = decodeGrants(text, count);

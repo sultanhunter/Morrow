@@ -284,12 +284,45 @@ export const bridgeFunctions = Object.freeze([
 // M2 PR-1 (0020): the two schemas the work owner creates beside morrow_work. The billing
 // route is tenant-readable with one extra insert policy for the signup bridge; the vault
 // is readable only while the session user is the broker's login (vault_broker).
+//
+// S7 per-table spec (M2 PR-2a). Every billingTables and vaultTables entry carries exactly
+// {class, parents, policies, content, commandPrivileges, commandColumnUpdates, apiColumns}:
+// class, parents, policies and content as in workTables, and the table's whole ACL:
+//   commandPrivileges     the table privileges morrow_work_command holds (never DELETE,
+//                         TRUNCATE, REFERENCES or TRIGGER);
+//   commandColumnUpdates  the columns morrow_work_command may UPDATE (column grants);
+//   apiColumns            the columns morrow_work_api may SELECT (column grants).
+// Nobody else holds a table or column privilege; S7 compares each list with the catalog.
+// Later PRs only add entries, each in its own commented block (// M2 PR-2, // M5 PR-1,
+// // M3 PR-1), and widen schemaUsage below; shared lists stay sorted.
+const aclSpec = (commandPrivileges, commandColumnUpdates = [], apiColumns = []) => ({
+  commandPrivileges,
+  commandColumnUpdates,
+  apiColumns,
+});
 export const billingTables = Object.freeze({
   workspace_billing_routes: {
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
     policies: ["route_signup"],
     content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      [],
+      [
+        "created_at",
+        "fixing_payment_key",
+        "mode",
+        "organization_id",
+        "origin",
+        "revision",
+        "route",
+        "route_fixed_at",
+        "shopify_bound_at",
+        "updated_at",
+        "workspace_id",
+      ],
+    ),
   },
 });
 export const billingFunctions = Object.freeze({
@@ -303,8 +336,26 @@ export const billingFunctions = Object.freeze({
   "route_guard()": { kind: "trigger", grantees: [] },
 });
 export const vaultTables = Object.freeze({
-  app_secrets: { class: "vault_platform", parents: [], content: "none" },
-  credentials: { class: "vault_tenant", parents: ["morrow_identity.workspaces"], content: "store" },
+  app_secrets: {
+    class: "vault_platform",
+    parents: [],
+    policies: [],
+    content: "none",
+    ...aclSpec(["SELECT"]),
+  },
+  credentials: {
+    class: "vault_tenant",
+    parents: ["morrow_identity.workspaces"],
+    policies: [],
+    content: "store",
+    ...aclSpec(["SELECT"]),
+  },
+});
+// S7 (M2 PR-2a): the roles granted USAGE on each schema S7 covers, besides its owner.
+// An executor login's USAGE must also equal the schemas of the functions it executes.
+export const schemaUsage = Object.freeze({
+  morrow_billing: ["morrow_identity_owner", "morrow_work_api", "morrow_work_command"],
+  morrow_vault: ["morrow_vault_broker", "morrow_work_command"],
 });
 export const vaultFunctions = Object.freeze({
   "app_secret_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },

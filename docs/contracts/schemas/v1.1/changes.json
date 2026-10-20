@@ -1,6 +1,6 @@
 {
   "contract_version": "morrow.contracts.v1.1",
-  "policy": "Every v1.1 definition that reuses a v1 name (core or billing), and every v1.1 capability body that overrides a v1 body, is listed here. Each one is a replacement, and writers emit only the current shape. Each is incompatible with the v1 shape in both directions, except AllocationShare@2: it is a superset of v1 AllocationShare, never stored on its own, only inside CostAllocation@2, whose schemaVersion 2 keeps v1 and v1.1 allocations apart. Checked by inspectDeclaredReplacements in scripts/boundary-checks.mjs.",
+  "policy": "Every v1.1 definition that reuses a v1 name (core or billing), and every v1.1 capability body that overrides a v1 body, is listed here. Each one is a replacement, and writers emit only the current shape. Each is incompatible with the v1 shape in both directions, except the declared supersets, whose reasons say 'superset of v1': AllocationShare@2 is a superset of v1 AllocationShare, never stored on its own, only inside CostAllocation@2, whose schemaVersion 2 keeps v1 and v1.1 allocations apart; and core ResourceRef, Scope and Grant (ADR-0022 item 2) are supersets of v1, so every stored v1 grant, scope and resource stays valid, a v1 reader refuses the one addition (kind store) and so fails closed, and kernels match resources exactly, so the addition widens no existing authority. Checked by inspectDeclaredReplacements in scripts/boundary-checks.mjs; the supersets by tests/contract-versioning.test.mjs.",
   "changes": [
     {
       "kind": "capability_body",
@@ -99,6 +99,27 @@
       "replaces": "core:EventEnvelope",
       "reason": "EventEnvelope@2: schemaVersion 2; the v1 payloadRef is an ArtifactRef and event payloads are not artifacts. An additive event registry (docs/contracts/event-registry.json) replaces the closed aggregate enum; payloads carry IDs and statuses only; payload and payloadRef (an EventPayloadRef) are nulled together; streamPosition is sealed per viewer. A v1 envelope is not a valid EventEnvelope@2.",
       "adr": "ADR-0016"
+    },
+    {
+      "kind": "definition",
+      "name": "ResourceRef",
+      "replaces": "core:ResourceRef",
+      "reason": "ResourceRef v1.1: kind gains store, the connected store as a whole ({kind: store, id: storeId, storeId, connectionId}; storeId and connectionId non-null by schema, id = storeId checked in code by validateCurrentDefinition), the resource every catalogue permission is evaluated on. A superset of v1: every v1 ResourceRef is valid, and a v1 reader refuses kind store, so it fails closed.",
+      "adr": "ADR-0022"
+    },
+    {
+      "kind": "definition",
+      "name": "Scope",
+      "replaces": "core:Scope",
+      "reason": "Scope v1.1: resources are v1.1 ResourceRefs, so a scope can name the store resource; nothing else changes. A superset of v1: every v1 Scope is valid.",
+      "adr": "ADR-0022"
+    },
+    {
+      "kind": "definition",
+      "name": "Grant",
+      "replaces": "core:Grant",
+      "reason": "Grant v1.1: its scope is the v1.1 Scope, so the store-link template (ADR-0022 item 3) can be stored and re-read; nothing else changes. A superset of v1: every stored v1 grant is valid, and kernels read grants only through validateCurrentDefinition.",
+      "adr": "ADR-0022"
     }
   ]
 }

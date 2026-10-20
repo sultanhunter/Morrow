@@ -3,21 +3,29 @@ import type { IdentitySqlPool } from "@morrow/identity";
 import { randomUUID } from "node:crypto";
 import type {
   Core_ActorRef,
-  Core_Grant,
   Core_PolicyDecision,
-  Core_ResourceRef,
   CapabilityId,
+  CurrentDefinitionName,
+  Current_Grant,
+  Current_ResourceRef,
 } from "@morrow/contracts";
-import { validateDefinition } from "@morrow/contracts/validation";
+import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import catalogue from "../../../docs/contracts/capabilities.json";
 import { plainJson, closed, freezeJson } from "./json-boundary";
 import { isPaidWork } from "./paid-work";
 export { isPaidWork } from "./paid-work";
-export type PermissionVerb = Core_Grant["verbs"][number];
+export {
+  isStoreResource,
+  listingFieldPaths,
+  storeResource,
+  StoreResourceError,
+} from "./store-resource";
+export type { ListingFieldPath, StoreResource } from "./store-resource";
+export type PermissionVerb = Current_Grant["verbs"][number];
 export interface PermissionRequest {
   readonly capabilityId: CapabilityId;
   readonly verb: PermissionVerb;
-  readonly resource: Core_ResourceRef;
+  readonly resource: Current_ResourceRef;
   readonly accountId: string | null;
   readonly fields: readonly string[];
 }
@@ -32,7 +40,7 @@ export interface HumanAuthority {
   readonly workspaceActive: boolean;
   readonly membershipActive: boolean;
   readonly sessionCurrent: boolean;
-  readonly resource: Core_ResourceRef;
+  readonly resource: Current_ResourceRef;
   readonly accountId: string | null;
   readonly providerAllowed: boolean;
   /**
@@ -41,7 +49,7 @@ export interface HumanAuthority {
    * `inspectEntitlementWriters` enforces this (P01.T04a §2).
    */
   readonly entitlementAllowed: boolean;
-  readonly grants: readonly Core_Grant[];
+  readonly grants: readonly Current_Grant[];
 }
 export interface AuthorityReader {
   readCurrent(request: PermissionRequest): Promise<HumanAuthority>;
@@ -68,8 +76,11 @@ export class PolicyBoundaryError extends Error {
 }
 const verbs = ["view", "propose", "approve", "execute", "delegate", "administer"];
 const capabilities = new Map(catalogue.capabilities.map((c) => [c.id, c]));
-const valid = (type: string, value: unknown) => validateDefinition("core", type, value);
-const sameResource = (a: Core_ResourceRef, b: Core_ResourceRef) =>
+// Current definitions (ADR-0022 item 2): a grant, scope or resource may name the store
+// resource, and a store resource's id must be its storeId (validateCurrentDefinition).
+const valid = (type: CurrentDefinitionName, value: unknown) =>
+  validateCurrentDefinition(type, value);
+const sameResource = (a: Current_ResourceRef, b: Current_ResourceRef) =>
   a.organizationId === b.organizationId &&
   a.workspaceId === b.workspaceId &&
   a.storeId === b.storeId &&
@@ -162,7 +173,7 @@ const safeMessages: Record<Core_PolicyDecision["reason"], string> = {
  * separately.
  */
 export function isCurrentGrant(
-  grant: Core_Grant,
+  grant: Current_Grant,
   actor: Core_ActorRef,
   capabilityId: string,
   verb: string,

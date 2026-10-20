@@ -44,8 +44,8 @@ Roles propose defaults; server grants determine authority. Owner is not a provid
 | workspace.inbox.mark | human_or_bounded_installation_with_explicit_capability_grant | read state | Grant checks | human_only | No |
 | catalog.products.read | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO, variants, media, tags | Grant checks | agent_direct_read | No |
 | catalog.audit.create | human_or_bounded_installation_with_explicit_capability_grant | catalog facts, approved claims | Grant checks | agent_direct_write | No |
-| catalog.content.propose | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO title, SEO description | Grant checks | agent_direct_write | No |
-| catalog.content.publish | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO title, SEO description | Required | agent_after_approval | No |
+| catalog.content.propose | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO title, SEO description, tags | Grant checks | agent_direct_write | No |
+| catalog.content.publish | human_or_bounded_installation_with_explicit_capability_grant | title, description, SEO title, SEO description, tags | Required | agent_after_approval | No |
 | catalog.variants.propose | human_or_bounded_installation_with_explicit_capability_grant | price, compare-at price, option values | Grant checks | agent_direct_write | No |
 | catalog.variants.publish | human_or_bounded_installation_with_explicit_capability_grant | price, compare-at price, option values | Required | agent_after_approval | No |
 | catalog.collection.propose | human_or_bounded_installation_with_explicit_capability_grant | membership, sort order | Grant checks | agent_direct_write | No |

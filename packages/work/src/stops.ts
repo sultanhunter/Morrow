@@ -1,5 +1,4 @@
 import type {
-  Core_ResourceRef,
   Current_HumanActorRef,
   Current_KillSwitchRecord,
   Current_StopRecord,
@@ -66,13 +65,18 @@ const recordId = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const exact = (pattern: RegExp, value: unknown): value is string =>
   typeof value === "string" && pattern.exec(value)?.[0] === value;
 const inputInvalid = () => new StopBoundaryError("STOP_INPUT_INVALID");
+/** One KillSwitchRecord target, as the record's own schema types it. */
+type KillSwitchTarget = Current_KillSwitchRecord["targets"][number];
 
 export type StopAiWorkResult =
   | {
       readonly allowed: true;
       readonly plan: StopControlPlan;
-      /** The KillSwitchRecord targets: the installation as a v1 ResourceRef. */
-      readonly targets: readonly Core_ResourceRef[];
+      /**
+       * The KillSwitchRecord targets: the installation as a v1 ResourceRef (KillSwitchRecord
+       * keeps v1 ResourceRef targets; the v1.1 ResourceRef only adds kind store).
+       */
+      readonly targets: readonly KillSwitchTarget[];
     }
   | Extract<KillSwitchTargetResult, { allowed: false }>;
 
@@ -126,7 +130,7 @@ export function planStopAiWork(
     reasonCode: stopReasonCodes.stopAiWork,
     reason: request.input.control.reason,
   });
-  const target: Core_ResourceRef = Object.freeze({
+  const target: KillSwitchTarget = Object.freeze({
     organizationId: facts.organizationId,
     workspaceId: facts.workspaceId,
     storeId: record.storeId,
