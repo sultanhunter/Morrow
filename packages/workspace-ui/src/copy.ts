@@ -192,7 +192,7 @@ export const copy = {
     installLinkNote: "Opens Shopify in a new tab.",
     installReason: {
       linked: "This workspace already has a connected store.",
-      not_permitted: "Only people who can connect stores to this workspace see the install link.",
+      not_permitted: "Only the workspace owner sees the install link.",
       not_registered:
         "Your store's install link isn't ready yet. Morrow sets it up for each beta store.",
       route_not_ready: "Subscribe before connecting a store.",
@@ -204,7 +204,10 @@ export const copy = {
     } as Readonly<Record<string, string>>,
     updated: "Updated",
     viewConnection: (shop: string) => `View ${shop}`,
-    finishFromShopify: "Sign in, then reopen Morrow from your Shopify admin to finish connecting.",
+    // Shown on signed-in screens: the reader is already signed in (M2 PR-2 review).
+    finishFromShopify: "Reopen Morrow from your Shopify admin to finish connecting.",
+    // For a reader who cannot finish the link (only the owner links a store).
+    finishByOwner: "The workspace owner needs to finish connecting this store.",
     linkTitle: "Finish connecting your store",
     checking: "Checking this connection…",
     confirm: (shop: string) => `Link ${shop} to this workspace?`,
@@ -215,7 +218,8 @@ export const copy = {
     linking: "Linking…",
     notNow: "Not now",
     linked: "Store linked.",
-    linkDenied: "Morrow couldn't link this store. Nothing was changed.",
+    linkDenied:
+      "Morrow couldn't link this store. Nothing was changed. Reopen Morrow from your Shopify admin to try again.",
     linkExpired:
       "This connection link expired or was already used. Reopen Morrow from your Shopify admin to get a new one.",
     routeRequired: "Subscribe before connecting a store.",

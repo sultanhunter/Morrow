@@ -285,6 +285,14 @@ function LinkStore({
   );
 }
 
+// An unlinked store's next step: reopen from Shopify, or, for a reader who cannot link
+// (the install link is not_permitted), the owner's.
+function finishCopy(offer: InstallLinkView): string {
+  return offer.reason === "not_permitted"
+    ? copy.connections.finishByOwner
+    : copy.connections.finishFromShopify;
+}
+
 function InstallOffer({ offer }: { readonly offer: InstallLinkView }) {
   const titleId = useId();
   if (offer.reason === "linked") return null;
@@ -377,7 +385,7 @@ export function ConnectionsScreen({
               ))}
             </ul>
             {unlinked && (!linkOpen || linkSettled) ? (
-              <p className="muted">{copy.connections.finishFromShopify}</p>
+              <p className="muted">{finishCopy(list.value.installLink)}</p>
             ) : null}
           </>
         ) : (
@@ -448,7 +456,7 @@ export function ConnectionScreen({
             <p>{copy.connections.statusHelp[installation.status]}</p>
           ) : null}
           {installation.status === "unlinked" ? (
-            <p className="muted">{copy.connections.finishFromShopify}</p>
+            <p className="muted">{finishCopy(list.value.installLink)}</p>
           ) : null}
           <StateView kind="not_in_build" compact message={copy.connections.disconnectLater} />
         </article>

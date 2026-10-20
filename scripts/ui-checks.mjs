@@ -500,7 +500,10 @@ fixtureCases.push(
     widths: [1440, 390],
     scenario: "connections_unlinked",
     setup: (page) =>
-      page.getByText("Sign in, then reopen Morrow from your Shopify admin").first().waitFor(),
+      page
+        .getByText("Reopen Morrow from your Shopify admin to finish connecting")
+        .first()
+        .waitFor(),
   }),
   fixtureCase("connections", "detail", `/w/${ws}/connections/conn-sample-1`, {
     widths: [1440, 390],
