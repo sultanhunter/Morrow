@@ -6,13 +6,8 @@ import {
   type WorkSqlConnection,
 } from "../connection.js";
 import { workErrorResponse, type WorkApiDependencies } from "../http.js";
-import {
-  prepareAgentCommand,
-  runAgentCommand,
-  runAgentRead,
-  type AgentCommandType,
-  type AgentRead,
-} from "./commands.js";
+import { prepareAgentCommand, runAgentCommand, runAgentRead } from "./commands.js";
+import type { AgentCommandType, AgentRead } from "./types.js";
 import {
   guardWorkspaceRequest,
   type GuardedWorkspaceRequest,

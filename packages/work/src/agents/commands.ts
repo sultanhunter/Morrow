@@ -63,12 +63,8 @@ import type { GuardedWorkspaceRequest } from "./workspace-guard-stub.js";
 //     the stop. It never reads entitlement or credits.
 //   * The model default is governance.model_default.revise; GET /models lists the active
 //     catalogue entries with what the member may pick (the member ceiling).
-export type AgentCommandType =
-  | "installation.document"
-  | "installation.enable"
-  | "installation.stop"
-  | "model_default.revise";
-export type AgentRead = "listings.status" | "models.list";
+import type { AgentCommandType, AgentRead } from "./types.js";
+export type { AgentCommandType, AgentRead } from "./types.js";
 export interface AgentResult {
   readonly status: 200 | 201;
   readonly body: Readonly<Record<string, unknown>>;
