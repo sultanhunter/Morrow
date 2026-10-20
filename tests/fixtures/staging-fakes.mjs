@@ -610,6 +610,8 @@ export async function fakeContext({
     ),
     loginConfigurationJson: pick("brokerLogin", loginConfiguration),
     bindingJson: pick("brokerBinding", bindingJson),
+    // M5 PR-1: absent by default (billing then fails closed with 503).
+    stripeJson: pick("brokerStripe", null),
   });
   const out = [];
   const err = [];

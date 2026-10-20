@@ -68,14 +68,19 @@ test("AC01/AC04: the committed configuration resolves cleanly for 4 Workers x 3 
     // MORROW_ENVIRONMENT, WORKOS_API_KEY, TURNSTILE_SECRET_KEY (P05.T01ab) and the eight
     // role passwords (P06.T01a adds morrow_api_worker); M2 PR-1 adds the connector's and
     // the orchestrator's role passwords, the vault login's password and the vault KEK
-    // (ADR-0022 items 7-8). The vault is held in production until the ADR-0007 item 9
-    // custody ADR, so production binds neither vault secret.
+    // (ADR-0022 items 7-8); M5 PR-1 adds the Stripe restricted key and webhook secret. The
+    // vault and Stripe are held in production until the ADR-0007 item 9 custody ADR, so
+    // production binds none of those four.
     assert.equal(
       verdict.resolved["broker:" + environment].bindings.length,
-      environment === "production" ? 13 : 15,
+      environment === "production" ? 13 : 17,
       environment,
     );
     assert.ok(verdict.resolved["broker:" + environment].bindings.includes("TURNSTILE_SECRET_KEY"));
+    assert.equal(
+      verdict.resolved["broker:" + environment].bindings.includes("STRIPE_RESTRICTED_KEY"),
+      environment !== "production",
+    );
   }
   assert.deepEqual(verdict.reservedWorkerPaths, [...reservedWorkerPaths]);
   assert.deepEqual((await verify(tree())).problems, []);
@@ -132,6 +137,31 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
       "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
     ],
     [{ api: (c) => (c.vars.ANTHROPIC_BASE_URL = "x") }, "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER"],
+    // M5 PR-1: every STRIPE_ name is broker-only, the configuration included.
+    [
+      { api: (c) => c.env.staging.secrets.required.push("STRIPE_RESTRICTED_KEY") },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    [
+      { connector: (c) => (c.vars.STRIPE_CONFIGURATION_JSON = "{}") },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    [
+      { orchestrator: (c) => (c.secrets.required = ["STRIPE_WEBHOOK_SECRET"]) },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    // Production holds Stripe until the production custody ADR.
+    [
+      { broker: (c) => c.env.production.secrets.required.push("STRIPE_RESTRICTED_KEY") },
+      "EDGE_BROKER_SECRETS",
+    ],
+    [
+      {
+        broker: (c) =>
+          c.secrets.required.splice(c.secrets.required.indexOf("STRIPE_WEBHOOK_SECRET"), 1),
+      },
+      "EDGE_BROKER_SECRETS",
+    ],
     // M2 PR-1: the vault KEK is broker-only (ADR-0022 item 7).
     [
       { connector: (c) => c.env.staging.secrets.required.push("MORROW_VAULT_KEK_V1") },
@@ -186,6 +216,19 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
     [
       { broker: (c) => (c.vars.LOGIN_CLIENT = "client_" + "A".repeat(26)) },
       "EDGE_COMMITTED_IDENTIFIER_WORKOS_CLIENT",
+    ],
+    // M5 PR-1: Stripe markers are never committed, even on the broker.
+    [
+      { broker: (c) => (c.vars.NOTE = "rk_" + "test_" + "A".repeat(24)) },
+      "EDGE_COMMITTED_IDENTIFIER_STRIPE_RESTRICTED_KEY",
+    ],
+    [
+      { broker: (c) => (c.vars.NOTE = "whsec_" + "A".repeat(24)) },
+      "EDGE_COMMITTED_IDENTIFIER_STRIPE_WEBHOOK_SECRET",
+    ],
+    [
+      { broker: (c) => (c.env.staging.vars.NOTE = "bpc_" + "A".repeat(24)) },
+      "EDGE_COMMITTED_IDENTIFIER_STRIPE_PORTAL_CONFIGURATION",
     ],
     [
       { api: (c) => (c.routes = [{ pattern: "example.test/*", zone_name: "example.test" }]) },

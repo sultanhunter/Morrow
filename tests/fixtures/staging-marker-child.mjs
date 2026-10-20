@@ -151,6 +151,20 @@ const scenarios = {
     argv: ["put-secret", "MORROW_VAULT_KEK_V1"],
     tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
   }),
+  // M5 PR-1: the Stripe owner files, placed on a broker that does not hold them yet.
+  "put-secret-stripe-key": (constants) => ({
+    argv: ["put-secret", "STRIPE_RESTRICTED_KEY"],
+    tools: {
+      emit,
+      wrangler: {
+        secrets: { broker: constants.brokerSecrets.filter((n) => !n.startsWith("STRIPE_")) },
+      },
+    },
+  }),
+  "put-secret-stripe-webhook": (constants) => ({
+    argv: ["put-secret", "STRIPE_WEBHOOK_SECRET"],
+    tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
+  }),
   "put-secret-fails": (constants) => ({
     argv: ["put-secret", "TURNSTILE_SECRET_KEY"],
     tools: {

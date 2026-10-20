@@ -423,9 +423,10 @@ const allowedBindings = Object.freeze({
   orchestrator: ["workflows", "queues", "secrets"],
   connector: ["vars", "secrets"],
 });
-// MORROW_VAULT_ (the vault KEKs, ADR-0022 item 7) binds only to the broker as well.
+// MORROW_VAULT_ (the vault KEKs, ADR-0022 item 7) binds only to the broker as well, and so
+// does STRIPE_ (M5 PR-1: the restricted key, the webhook secret and the configuration).
 const providerCredentialName =
-  /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG)/i;
+  /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG|STRIPE_)/i;
 const credentialWord = /KEY|SECRET|PASSWORD|TOKEN/i;
 // Hosted identifiers that P04.T02a must not commit (P04.T01i later allows only the
 // reviewed staging identifiers in env.staging.vars).
@@ -438,6 +439,11 @@ export const committedIdentifierPatterns = Object.freeze([
   ["neon_branch", /\bbr-[a-z0-9-]+/],
   ["neon_password", /\bnpg_[A-Za-z0-9]/],
   ["workos_key", /\bsk_(?:test|live)_/],
+  // M5 PR-1: a Stripe restricted key, a webhook signing secret or a portal configuration
+  // is never committed (the last arrives on the reviewed staging-identifier path).
+  ["stripe_restricted_key", /\brk_(?:test|live)_/],
+  ["stripe_webhook_secret", /\bwhsec_/],
+  ["stripe_portal_configuration", /\bbpc_[A-Za-z0-9]/],
   ["cloudflare_account", /"account_id"|\b[0-9a-f]{32}\b/],
   ["route", /"routes?"\s*:/],
 ]);

@@ -9,6 +9,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
   checkChallengeConfiguration,
+  checkStripeConfiguration,
   committedCsp,
   commands,
   identityConstants,
@@ -489,6 +490,70 @@ test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and
   await assert.rejects(checkChallengeConfiguration(committed), {
     code: "STAGING_CHALLENGE_CONFIGURATION_MISSING",
   });
+});
+
+// M5 PR-1: the broker's STRIPE_CONFIGURATION_JSON is a reviewed identifier on the PR-D path.
+// Gate 4 parses a present one with the broker's own parser; an absent one is allowed (the
+// broker then holds Stripe and billing answers 503); a malformed one deploys nothing.
+test("AC04: gate 4 refuses a malformed STRIPE_CONFIGURATION_JSON and deploys nothing", async () => {
+  const valid = {
+    schemaVersion: 1,
+    portalConfigurationId: "bpc_" + "A".repeat(24),
+    automaticTax: false,
+    billingAddressCollection: "auto",
+  };
+  const committed = await import("../scripts/staging.mjs").then((m) =>
+    m.loadStagingConfiguration(process.cwd()),
+  );
+  assert.equal(committed.broker.stripeJson, null);
+  assert.deepEqual(await checkStripeConfiguration(committed), { present: false });
+  assert.deepEqual(
+    await checkStripeConfiguration({ broker: { stripeJson: JSON.stringify(valid) } }),
+    { present: true, automaticTax: false },
+  );
+  for (const bad of [
+    { ...valid, extra: 1 },
+    { ...valid, portalConfigurationId: "bpc_short" },
+    { ...valid, portalConfigurationId: "pc_" + "A".repeat(24) },
+    { ...valid, automaticTax: "false" },
+    { ...valid, billingAddressCollection: "never" },
+    { ...valid, schemaVersion: 2 },
+  ])
+    await assert.rejects(
+      checkStripeConfiguration({ broker: { stripeJson: JSON.stringify(bad) } }),
+      { code: "STAGING_STRIPE_CONFIGURATION_INVALID" },
+      JSON.stringify(bad),
+    );
+  await assert.rejects(checkStripeConfiguration({ broker: { stripeJson: "{" } }), {
+    code: "STAGING_STRIPE_CONFIGURATION_INVALID",
+  });
+  for (const ci of [false, true]) {
+    const bad = await world({
+      challengeVars: { brokerStripe: JSON.stringify({ ...valid, x: 1 }) },
+      ...(ci ? { environment: ciEnvironment() } : {}),
+    });
+    try {
+      const { code, result } = await bad.run(ci ? ["deploy", "--ci"] : ["deploy"]);
+      assert.equal(code, 1);
+      assert.equal(result.outcome, "failed");
+      assert.equal(result.code, "STAGING_STRIPE_CONFIGURATION_INVALID");
+      assert.equal(result.gates.challenge, "invalid");
+      assert.deepEqual(wranglerCalls(bad), []);
+    } finally {
+      bad.planted.cleanup();
+    }
+  }
+  const ok = await world({
+    challengeVars: { brokerStripe: JSON.stringify(valid) },
+    environment: ciEnvironment(),
+  });
+  try {
+    const { result } = await ok.run(["deploy", "--ci"]);
+    assert.equal(result.gates.challenge, "ok");
+    assert.equal(result.outcome, "deployed");
+  } finally {
+    ok.planted.cleanup();
+  }
 });
 
 test("AC04: a local deploy refuses a HEAD that is not origin/main, a missing or failed foundation, a dirty tree", async () => {
@@ -1433,6 +1498,9 @@ const files = () => ({
   "cloudflare-operator-token": "R".repeat(40),
   // M2 PR-1: the owner's vault KEK (`npm run vault -- kek`).
   "vault-kek-v1": "5eed".repeat(16),
+  // M5 PR-1: the owner's Stripe restricted test key and webhook signing secret.
+  "stripe-restricted-key": "rk_test_" + "K".repeat(32),
+  "stripe-webhook-secret": "whsec_" + "H".repeat(32),
 });
 test("preflight: reports pending owner steps without values and blocks on the card or a tool pin", async () => {
   const w = await world({ files: files() });

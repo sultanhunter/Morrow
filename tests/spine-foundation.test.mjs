@@ -62,9 +62,10 @@ test("manifest: rows 19-24, their executeAs roles, digests and the one prerequis
     entry.prerequisites.map((p) => [p.file, p.sha256, [...p.roles]]),
     [["infra/spine-executor-role-prerequisites.sql", sha(prerequisites), logins]],
   );
+  // Rows 19-24 of the chain (later migrations follow them).
   assert.deepEqual(
     loadMigrationChain()
-      .filter((e) => e.sequence >= 19)
+      .filter((e) => e.sequence >= 19 && e.sequence <= 24)
       .map((e) => e.executeAs),
     rows.map((m) => m.executeAs),
   );

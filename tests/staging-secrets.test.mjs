@@ -48,6 +48,9 @@ const markers = {
   malformed: "badfile" + alnum(10),
   // M2 PR-1: the owner's vault KEK, 64 lowercase hex characters.
   kek: alnum(32),
+  // M5 PR-1: the owner's Stripe restricted test key and webhook signing secret.
+  stripeKey: "stripekey" + alnum(12),
+  stripeWebhook: "stripehook" + alnum(12),
 };
 const files = () => ({
   "workos-api-key": "sk_test_" + markers.workos,
@@ -56,6 +59,8 @@ const files = () => ({
   "neon-project-api-key": "napi_" + markers.neonKey,
   "cloudflare-operator-token": markers.operator,
   "vault-kek-v1": markers.kek,
+  "stripe-restricted-key": "rk_test_" + markers.stripeKey,
+  "stripe-webhook-secret": "whsec_" + markers.stripeWebhook,
 });
 const everyMarker = () => Object.values(markers);
 const contains = (text, values) => values.filter((value) => value && String(text).includes(value));
@@ -124,34 +129,45 @@ async function status({
   }
 }
 
-// AC02 after P05.T01ab (D1, ADR-0019 items 6 and 8) and M2 PR-1 (ADR-0022 items 7-8): the
-// broker's exact secret set is `brokerRequiredSecrets`, fourteen names: WORKOS_API_KEY,
-// TURNSTILE_SECRET_KEY, the eleven role passwords (the ten leased roles and the broker's
-// own `morrow_vault_broker`) and MORROW_VAULT_KEK_V1. secrets-status, gate 6 and the
+// AC02 after P05.T01ab (D1, ADR-0019 items 6 and 8), M2 PR-1 (ADR-0022 items 7-8) and M5
+// PR-1 (ADR-0022 items 7 and 12): the broker's exact secret set is `brokerRequiredSecrets`,
+// sixteen names: WORKOS_API_KEY, TURNSTILE_SECRET_KEY, the eleven role passwords (the ten
+// leased roles and the broker's own `morrow_vault_broker`), MORROW_VAULT_KEK_V1,
+// STRIPE_RESTRICTED_KEY and STRIPE_WEBHOOK_SECRET. secrets-status, gate 6 and the
 // first-deploy file all use that set, and it is the broker's wrangler `secrets.required`
-// in development and staging; production requires its vault-free subset (twelve names,
-// `brokerRequiredSecretsFor("production")`) until the ADR-0007 item 9 custody ADR.
-// ADR-0022's Anthropic, Shopify and Stripe credentials join only with their milestones.
-// The staging api keeps P05.T01ab's three limiters and no required secret.
-test("AC02: the broker's fourteen secret names are brokerRequiredSecrets and wrangler's secrets.required", async () => {
+// in development and staging; production requires its vault-free and Stripe-free subset
+// (twelve names, `brokerRequiredSecretsFor("production")`) until the ADR-0007 item 9
+// custody ADR. ADR-0022's Anthropic and Shopify credentials join only with their
+// milestones. The staging api keeps P05.T01ab's three limiters and no required secret.
+test("AC02: the broker's sixteen secret names are brokerRequiredSecrets and wrangler's secrets.required", async () => {
   const constants = await identityConstants();
   assert.equal(constants.roles.length, 11);
   assert.equal(constants.roles.at(-1), "morrow_vault_broker");
   assert.deepEqual(constants.vaultKekSecrets, ["MORROW_VAULT_KEK_V1"]);
+  assert.deepEqual(constants.stripeSecrets, ["STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"]);
   const expected = [
     "WORKOS_API_KEY",
     "TURNSTILE_SECRET_KEY",
     ...constants.roles.map((role) => constants.passwordSecret(role)),
     "MORROW_VAULT_KEK_V1",
+    "STRIPE_RESTRICTED_KEY",
+    "STRIPE_WEBHOOK_SECRET",
   ].sort();
-  assert.equal(constants.brokerSecrets.length, 14);
+  assert.equal(constants.brokerSecrets.length, 16);
   assert.deepEqual(constants.brokerSecrets, expected);
   const { brokerRequiredSecretsFor } = await import("../packages/identity/src/broker-protocol.ts");
   const production = [...brokerRequiredSecretsFor("production")].sort();
+  assert.equal(production.length, 12);
   assert.deepEqual(
     production,
     constants.brokerSecrets.filter(
-      (name) => !["MORROW_DB_PASSWORD_MORROW_VAULT_BROKER", "MORROW_VAULT_KEK_V1"].includes(name),
+      (name) =>
+        ![
+          "MORROW_DB_PASSWORD_MORROW_VAULT_BROKER",
+          "MORROW_VAULT_KEK_V1",
+          "STRIPE_RESTRICTED_KEY",
+          "STRIPE_WEBHOOK_SECRET",
+        ].includes(name),
     ),
   );
   const { unstable_readConfig } = await loadWranglerApi();
@@ -175,9 +191,12 @@ test("AC08: a healthy staging reports presence, mode, format and age, and exits 
   assert.equal(report.directory.ok, true);
   assert.equal(report.directory.mode, "0700");
   const required = report.files.filter((f) => f.required);
-  // Five operator files and M2 PR-1's vault KEK (`vault-kek-v1`, the owner's own).
-  assert.equal(required.length, 6);
+  // Five operator files, M2 PR-1's vault KEK (`vault-kek-v1`, the owner's own) and M5
+  // PR-1's two Stripe files.
+  assert.equal(required.length, 8);
   assert.ok(required.some((f) => f.file === "vault-kek-v1"));
+  assert.ok(required.some((f) => f.file === "stripe-restricted-key"));
+  assert.ok(required.some((f) => f.file === "stripe-webhook-secret"));
   for (const f of required)
     assert.deepEqual(
       [f.exists, f.mode, f.owner, f.nonEmpty, f.format, f.ok],
@@ -202,6 +221,24 @@ test("AC08: a missing, extra or malformed secret, a wrong mode or a symlink exit
     [{ plant: (({ "vault-kek-v1": _, ...rest }) => rest)(files()) }, "file:vault-kek-v1"],
     [{ plant: { ...files(), "vault-kek-v1": markers.malformed } }, "file:vault-kek-v1"],
     [{ modes: { "vault-kek-v1": 0o640 } }, "file:vault-kek-v1"],
+    // M5 PR-1: only a restricted test key and a webhook signing secret are admitted.
+    [
+      { plant: (({ "stripe-restricted-key": _, ...rest }) => rest)(files()) },
+      "file:stripe-restricted-key",
+    ],
+    [
+      { plant: { ...files(), "stripe-restricted-key": "sk_test_" + markers.malformed } },
+      "file:stripe-restricted-key",
+    ],
+    [
+      { plant: { ...files(), "stripe-restricted-key": "rk_live_" + markers.malformed } },
+      "file:stripe-restricted-key",
+    ],
+    [
+      { plant: { ...files(), "stripe-webhook-secret": "wh_" + markers.malformed } },
+      "file:stripe-webhook-secret",
+    ],
+    [{ modes: { "stripe-webhook-secret": 0o644 } }, "file:stripe-webhook-secret"],
     [
       { plant: { ...files(), "workos-api-key": "pk_live_" + markers.malformed } },
       "file:workos-api-key",
@@ -426,6 +463,10 @@ test("AC07: role passwords reach only the 0600 first-deploy file or `secret bulk
   assert.equal(secrets.WORKOS_API_KEY, "sk_test_" + markers.workos);
   // The owner's KEK file, byte for byte: the tool reads it and generates none.
   assert.equal(secrets.MORROW_VAULT_KEK_V1, markers.kek);
+  // M5 PR-1: the owner's two Stripe files, byte for byte.
+  assert.equal(secrets.STRIPE_RESTRICTED_KEY, "rk_test_" + markers.stripeKey);
+  assert.equal(secrets.STRIPE_WEBHOOK_SECRET, "whsec_" + markers.stripeWebhook);
+  assert.equal(Object.keys(secrets).length, 16);
   noMarkers(first, passwords);
   assert.equal(
     first.dump.statements.filter((s) => /PASSWORD 'SCRAM-SHA-256\$4096:/.test(s.text)).length,
@@ -479,6 +520,19 @@ test("AC07: role passwords reach only the 0600 first-deploy file or `secret bulk
   assert.equal(oneLine(kek, "stdout").secret, "MORROW_VAULT_KEK_V1");
   assert.deepEqual(JSON.parse(kek.dump.bulkInputs[0].input), { MORROW_VAULT_KEK_V1: markers.kek });
   noMarkers(kek);
+
+  // M5 PR-1: each Stripe owner file reaches the broker only through `secret bulk` stdin,
+  // also when the running broker does not hold the name yet (placed before the merge).
+  for (const [scenario, name, value] of [
+    ["put-secret-stripe-key", "STRIPE_RESTRICTED_KEY", "rk_test_" + markers.stripeKey],
+    ["put-secret-stripe-webhook", "STRIPE_WEBHOOK_SECRET", "whsec_" + markers.stripeWebhook],
+  ]) {
+    const stripe = runChild(scenario);
+    assert.equal(stripe.status, 0, stripe.stderr);
+    assert.equal(oneLine(stripe, "stdout").secret, name);
+    assert.deepEqual(JSON.parse(stripe.dump.bulkInputs[0].input), { [name]: value });
+    noMarkers(stripe);
+  }
 });
 
 test("AC07: connections count unknown names without printing them; keyring prints metadata only", () => {

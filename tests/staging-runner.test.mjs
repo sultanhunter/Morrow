@@ -1328,6 +1328,11 @@ test("staging.json: the D1 shape with every identifier still null", () => {
 
 // M2 PR-1: the owner's vault KEK file (`npm run vault -- kek`), 64 lowercase hex characters.
 const plantedKek = "c0ffee".repeat(10) + "abcd";
+// M5 PR-1: the owner's Stripe restricted test key and webhook signing secret files.
+const plantedStripe = Object.freeze({
+  "stripe-restricted-key": "rk_test_" + "K".repeat(32),
+  "stripe-webhook-secret": "whsec_" + "H".repeat(32),
+});
 
 test("fake database: provisioning through the CLI sends only verifiers", async () => {
   const planted = plantedHome({
@@ -1335,6 +1340,7 @@ test("fake database: provisioning through the CLI sends only verifiers", async (
     "workos-api-key": "sk_test_" + "W".repeat(24),
     "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
     "vault-kek-v1": plantedKek,
+    ...plantedStripe,
   });
   try {
     const { ctx, out, constants } = await fakeContext({
@@ -1349,7 +1355,10 @@ test("fake database: provisioning through the CLI sends only verifiers", async (
     );
     assert.equal(statSync(join(planted.directory, "tmp/broker-secrets.json")).mode & 0o777, 0o600);
     assert.deepEqual(Object.keys(secrets).sort(), constants.brokerSecrets);
-    assert.equal(constants.brokerSecrets.length, 14);
+    assert.equal(constants.brokerSecrets.length, 16);
+    // M5 PR-1: the owner's Stripe files, unchanged; never sent to the database.
+    assert.equal(secrets.STRIPE_RESTRICTED_KEY, plantedStripe["stripe-restricted-key"]);
+    assert.equal(secrets.STRIPE_WEBHOOK_SECRET, plantedStripe["stripe-webhook-secret"]);
     // Eleven logins: the ten leased roles and the broker's own vault login (M2 PR-1).
     assert.equal(constants.roles.length, 11);
     assert.ok(constants.roles.includes("morrow_vault_broker"));
@@ -1360,6 +1369,7 @@ test("fake database: provisioning through the CLI sends only verifiers", async (
     const sent = JSON.stringify(db.statements);
     assert.ok(passwords.every((p) => !sent.includes(p)));
     assert.ok(!sent.includes(plantedKek));
+    assert.ok(Object.values(plantedStripe).every((v) => !sent.includes(v)));
     assert.equal((sent.match(/SCRAM-SHA-256\$4096:/g) ?? []).length, 11);
     assert.ok([...passwords, plantedKek].every((p) => !out.join().includes(p)));
     // A second --first refuses: the file exists, and nothing was sent.
@@ -1380,6 +1390,7 @@ test("provision-roles --first: broker file names other than brokerRequiredSecret
     "workos-api-key": "sk_test_" + "W".repeat(24),
     "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
     "vault-kek-v1": plantedKek,
+    ...plantedStripe,
   });
   try {
     const base = await fakeContext({ home: planted.home, tools: fakeTools().tools });
@@ -1395,6 +1406,8 @@ test("provision-roles --first: broker file names other than brokerRequiredSecret
       constants.brokerSecrets.filter(
         (name) => name !== constants.passwordSecret("morrow_vault_broker"),
       ),
+      // M5 PR-1: the Stripe names are part of the one list.
+      constants.brokerSecrets.filter((name) => name !== "STRIPE_WEBHOOK_SECRET"),
     ]) {
       ctx.constants = async () => Object.freeze({ ...constants, brokerSecrets });
       assert.equal(await main(["provision-roles", "--first"], ctx), 1);
@@ -1422,6 +1435,7 @@ test("provision-roles --first: the vault KEK is read from the owner's file, neve
         "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
         "workos-api-key": "sk_test_" + "W".repeat(24),
         "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
+        ...plantedStripe,
         ...plant,
       },
       { modes },
@@ -1438,6 +1452,56 @@ test("provision-roles --first: the vault KEK is read from the owner's file, neve
       assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false, label);
       assert.deepEqual(db.statements, [], label);
       assert.ok(!err.join().includes(plantedKek.slice(4, 40)), label);
+    } finally {
+      planted.cleanup();
+    }
+  }
+});
+
+// M5 PR-1 (ADR-0022 items 7 and 12): both Stripe secrets come only from the owner's files.
+// A missing file, a secret sk_ key, a live key, a malformed webhook secret or a loose mode
+// stops --first before the broker file is created or any role is touched.
+test("provision-roles --first: the Stripe secrets are read from the owner's files", async () => {
+  for (const [label, plant, modes, code] of [
+    ["missing key", { "stripe-restricted-key": null }, {}, "STAGING_FILE_MISSING"],
+    ["missing webhook", { "stripe-webhook-secret": null }, {}, "STAGING_FILE_MISSING"],
+    [
+      "secret key",
+      { "stripe-restricted-key": "sk_test_" + "K".repeat(32) },
+      {},
+      "STAGING_FILE_FORMAT",
+    ],
+    [
+      "live key",
+      { "stripe-restricted-key": "rk_live_" + "K".repeat(32) },
+      {},
+      "STAGING_FILE_FORMAT",
+    ],
+    ["webhook", { "stripe-webhook-secret": "H".repeat(32) }, {}, "STAGING_FILE_FORMAT"],
+    ["mode", {}, { "stripe-restricted-key": 0o644 }, "STAGING_FILE_MODE"],
+  ]) {
+    const files = {
+      "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
+      "workos-api-key": "sk_test_" + "W".repeat(24),
+      "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
+      "vault-kek-v1": plantedKek,
+      ...plantedStripe,
+      ...plant,
+    };
+    for (const [name, value] of Object.entries(files)) if (value === null) delete files[name];
+    const planted = plantedHome(files, { modes });
+    try {
+      const { ctx, err, constants } = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+      });
+      const db = fakeDatabase({ roles: constants.roles });
+      ctx.database = db.connector;
+      assert.equal(await main(["provision-roles", "--first"], ctx), 1, label);
+      assert.equal(JSON.parse(err.at(-1)).code, code, label);
+      assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false, label);
+      assert.deepEqual(db.statements, [], label);
+      assert.ok(!err.join().includes("K".repeat(32)), label);
     } finally {
       planted.cleanup();
     }

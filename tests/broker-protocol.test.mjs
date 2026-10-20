@@ -9,6 +9,7 @@ import {
   brokerPasswordValid,
   brokerRequiredSecrets,
   brokerRequiredSecretsFor,
+  brokerStripeSecrets,
   decodeNeonLeaseGrant,
   encodeNeonLeaseGrant,
   neonLeaseNamespace,
@@ -82,16 +83,21 @@ test("one role table drives the ten role secrets and the broker's required secre
     ...brokerNeonRoleNames.map((role) => "MORROW_DB_PASSWORD_" + role.toUpperCase()),
     "MORROW_DB_PASSWORD_MORROW_VAULT_BROKER",
     "MORROW_VAULT_KEK_V1",
+    // M5 PR-1 (ADR-0022 items 7 and 12): Stripe, development and staging only.
+    "STRIPE_RESTRICTED_KEY",
+    "STRIPE_WEBHOOK_SECRET",
   ]);
-  // Production holds the vault (ADR-0022 item 7; ADR-0007 item 9): a production deploy
-  // requires neither the vault login's password nor a KEK.
+  assert.equal(brokerRequiredSecrets.length, 16);
+  assert.deepEqual(brokerStripeSecrets, ["STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"]);
+  // Production holds the vault and Stripe (ADR-0022 item 7; ADR-0007 item 9): a production
+  // deploy requires neither the vault login's password, a KEK nor a Stripe secret (12).
   assert.equal(brokerRequiredSecretsFor("development"), brokerRequiredSecrets);
   assert.equal(brokerRequiredSecretsFor("staging"), brokerRequiredSecrets);
   assert.deepEqual(
     brokerRequiredSecretsFor("production"),
-    brokerRequiredSecrets.filter((name) => !/VAULT/.test(name)),
+    brokerRequiredSecrets.filter((name) => !/VAULT|STRIPE/.test(name)),
   );
-  assert.equal(brokerRequiredSecretsFor("production").length, brokerRequiredSecrets.length - 2);
+  assert.equal(brokerRequiredSecretsFor("production").length, 12);
   assert.deepEqual(brokerLimits, {
     namespaceMaxBytes: 1024,
     selectorMaxBytes: 2048,

@@ -134,6 +134,11 @@ test("AC07: any provider or credential-like binding keeps the api unbound", () =
     "ANTHROPIC_BASE_URL",
     // M2 PR-1: the vault KEK binds only to the broker (ADR-0022 item 7).
     "MORROW_VAULT_KEK_V1",
+    // M5 PR-1: every STRIPE_ name binds only to the broker, the configuration included.
+    "STRIPE_RESTRICTED_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_CONFIGURATION_JSON",
+    "stripe_publishable",
     "E2B_API_KEY",
     "workos_client",
     "DEPLOY_SECRET",
