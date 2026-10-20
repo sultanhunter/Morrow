@@ -34,6 +34,60 @@ test("selected environment inventories are distinct and remain non-activating", 
     assert.equal(config.runtime.dispatch, "disabled");
   }
 });
+// P04.T01i PR-D part 1: staging carries exactly the reviewed public identifiers, and
+// development and production still bind none. Any other value is an unreviewed delta.
+test("staging carries only the reviewed identifiers; development and production none", () => {
+  const staging = read("infra/environments/staging.json");
+  assert.deepEqual(
+    {
+      account: staging.cloudflare.account_id,
+      subdomain: staging.cloudflare.workers_dev_subdomain,
+      origin: staging.cloudflare.origin,
+      project: staging.neon.project_id,
+      root: staging.neon.root_branch_id,
+      branch: staging.neon.branch_id,
+      region: staging.neon.region_id,
+      endpoint: staging.neon.endpoint_host,
+      turnstile: staging.cloudflare.turnstile,
+    },
+    {
+      account: "79ff672d013b8f0956437af6eea3c213",
+      subdomain: "sultanibneusman0",
+      origin: "https://morrow-staging-api.sultanibneusman0.workers.dev",
+      project: "sweet-sound-23947873",
+      root: "br-noisy-wind-b7cxr2a1",
+      branch: "br-dark-recipe-b78ytwj9",
+      region: "aws-us-east-1",
+      endpoint: "ep-hidden-mouse-b7e6ff6l.c-13.us-east-1.aws.neon.tech",
+      turnstile: {
+        widget: "morrow-staging",
+        mode: "invisible",
+        site_key: "0x4AAAAAAFdwF1eDox4vfBd2",
+      },
+    },
+  );
+  assert.deepEqual(inspectSelectedConfiguration(staging), []);
+  for (const environment of ["development", "production"]) {
+    const config = read(`infra/environments/${environment}.json`);
+    assert.equal(config.cloudflare.account_id, null);
+    assert.equal(config.neon.project_id, null);
+    assert.equal(config.neon.branch_id, null);
+    assert.equal("endpoint_host" in config.neon, false);
+    assert.equal("turnstile" in config.cloudflare, false);
+  }
+  for (const change of [
+    (c) => (c.neon.branch_id = c.neon.root_branch_id),
+    (c) => (c.cloudflare.origin = "https://morrow-staging-api.other.workers.dev"),
+    (c) => (c.cloudflare.workers_dev_subdomain = null),
+    (c) => (c.neon.endpoint_host = "ep-falling-math-b78o6uzn.c-13.us-east-1.aws.neon.tech"),
+    (c) => (c.cloudflare.turnstile.site_key = "0x4AAAAAAFdwF1eDox4vfBd3"),
+    (c) => delete c.cloudflare.turnstile,
+  ]) {
+    const config = structuredClone(staging);
+    change(config);
+    assert.deepEqual(inspectSelectedConfiguration(config), ["UNREVIEWED_CONFIGURATION_DELTA"]);
+  }
+});
 test("configuration digest is independent of JSON key ordering", () => {
   const config = selectedConfiguration("staging");
   const reordered = Object.fromEntries(Object.entries(config).reverse());

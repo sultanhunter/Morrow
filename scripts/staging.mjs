@@ -10,6 +10,7 @@
 // PostgreSQL lab pass fakes for tools, the Cloudflare API and the database.
 import "./staging-token.mjs"; // FIRST: removes CLOUDFLARE_API_TOKEN and GH_TOKEN from process.env.
 import { appendFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
+import { setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -40,6 +41,7 @@ import {
   seedPlatform,
   sessionIdentity,
   checkIdentity,
+  statementStatsScratchDatabase,
 } from "./staging-runner.mjs";
 import { cloudflareCredential, githubCredential } from "./staging-token.mjs";
 import {
@@ -76,7 +78,8 @@ export { githubVariables };
 
 // ---------------------------------------------------------------------------
 // Configuration: staging.json, the card record, and the resolved staging vars of the api
-// (the database binding and the login configuration; identifiers arrive in PR-D).
+// and the broker (the database binding, the login configuration and the two challenge
+// vars: the reviewed identifiers of P04.T01i PR-D part 1, held by verify-config).
 export const workerConfigs = Object.freeze({
   api: "apps/api/wrangler.jsonc",
   broker: "apps/broker/wrangler.jsonc",
@@ -130,8 +133,8 @@ export async function loadStagingConfiguration(root) {
     bindingJson: text(vars, "MORROW_DATABASE_BINDING_JSON"),
     loginConfigurationJson: text(vars, "LOGIN_CONFIGURATION_JSON"),
     // P05.T01ab (D1, D5): the api's challenge configuration and the broker's own vars.
-    // Both JSON vars name reviewed identifiers (the site key, the workers.dev host), so
-    // they arrive with PR-D; until then they are null and a deploy stops before upload.
+    // Both JSON vars name reviewed identifiers (the site key, the workers.dev host),
+    // committed by PR-D part 1; a missing one is null and a deploy stops before upload.
     challengeJson: text(vars, "LOGIN_CHALLENGE_JSON"),
     broker: Object.freeze({
       turnstileJson: text(brokerVars, "TURNSTILE_CONFIGURATION_JSON"),
@@ -152,7 +155,8 @@ export const stagingChallengeActions = Object.freeze({
 // false, so a deploy would only fail later, at the health gate. The checks are the
 // runtimes' own parsers (parseLoginChallengeConfiguration; parseTurnstileConfiguration,
 // which the broker itself uses, so a duplicate member or more than 1024 bytes stops here)
-// plus D1's cross-Worker rules: the same actions (D1's values, in the same order), the
+// plus D1's cross-Worker rules: the site key equal to staging.json's widget's
+// (`cloudflare.turnstile.site_key`), the same actions (D1's values, in the same order), the
 // Turnstile hostname equal to the origin's, and the broker's login configuration and
 // database binding present and byte-equal to the api's. The broker compares the hostname
 // with its own login configuration's origin; that text is byte-equal to the api's, whose
@@ -191,6 +195,8 @@ export async function checkChallengeConfiguration(loaded) {
   } catch {
     throw invalid("api");
   }
+  const siteKey = loaded.staging?.cloudflare?.turnstile?.site_key;
+  if (typeof siteKey !== "string" || challenge.siteKey !== siteKey) throw invalid("site_key");
   const origin = loaded.staging?.cloudflare?.origin;
   let turnstile;
   try {
@@ -258,6 +264,10 @@ const githubTarget = (staging) => ({
   repository: repositoryOf(staging),
   environment: githubScope(staging).length ? "staging" : null,
 });
+// The committed binding, held to staging.json: the `staging` branch of the project, through
+// that branch's direct endpoint (`neon.endpoint_host`). The parser already refuses a
+// `-pooler` host; any other well-formed `ep-` host (the root branch's, say) fails here, so
+// the owner URL check below cannot follow a binding to another endpoint.
 async function stagingBinding(ctx, config) {
   if (config.bindingJson === null) throw new StagingError("STAGING_IDENTIFIERS_UNSET");
   const constants = await ctx.constants();
@@ -272,8 +282,11 @@ async function stagingBinding(ctx, config) {
     binding.environment !== "staging" ||
     neon.project_id === null ||
     neon.branch_id === null ||
+    typeof neon.endpoint_host !== "string" ||
     binding.projectId !== neon.project_id ||
-    binding.branchId !== neon.branch_id
+    binding.branchId !== neon.branch_id ||
+    binding.hostname !== neon.endpoint_host ||
+    binding.hostname.split(".")[0].includes("-pooler")
   )
     throw new StagingError("STAGING_BINDING_INVALID");
   return binding;
@@ -422,6 +435,15 @@ command("provision-roles", {
     const ownerUrl = ownerUrlFor(ctx, binding, specs);
     const roles = constants.roles;
     const connect = ctx.database({ ownerUrl, binding }).connect;
+    // The scratch database the statement-statistics wipe runs from (M-N3 as amended
+    // 2026-10-20): the same endpoint and administrator, never the binding database.
+    const scratch = {
+      database: statementStatsScratchDatabase,
+      connect: ctx.database({
+        ownerUrl,
+        binding: { ...binding, database: statementStatsScratchDatabase },
+      }).connect,
+    };
     if (options.mode === "first") {
       // One source of names: the file holds brokerRequiredSecrets exactly (the list gate 6
       // and the first deploy's file check use). The names are checked before any file is
@@ -459,6 +481,7 @@ command("provision-roles", {
           administrator: ctx.administrator,
           roles,
           passwordRoles: roles,
+          scratch,
         });
       } catch (error) {
         handle.abandon();
@@ -477,7 +500,14 @@ command("provision-roles", {
         versionId: null,
         now: ctx.now(),
       });
-      return { mode: "first", roles, file: "tmp/broker-secrets.json", controls: "verified" };
+      return {
+        mode: "first",
+        roles,
+        file: "tmp/broker-secrets.json",
+        controls: "verified",
+        passwordStorage: provisioned.passwordStorage,
+        statementStats: provisioned.statementStats,
+      };
     }
     const selected =
       options.target === "all" ? roles : roles.filter((role) => role === options.target);
@@ -493,6 +523,7 @@ command("provision-roles", {
       administrator: ctx.administrator,
       roles,
       passwordRoles: selected,
+      scratch,
     });
     const status = await brokerBulk(
       ctx,
@@ -507,7 +538,14 @@ command("provision-roles", {
     } finally {
       recordRotation(ctx.directory, names, { worker: "broker", versionId, now: ctx.now() });
     }
-    return { mode: "rotate", roles: selected, versionId, controls: "verified" };
+    return {
+      mode: "rotate",
+      roles: selected,
+      versionId,
+      controls: "verified",
+      passwordStorage: provisioned.passwordStorage,
+      statementStats: provisioned.statementStats,
+    };
   },
 });
 
@@ -1010,9 +1048,19 @@ command("neon-probe", {
   async run(ctx) {
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
+    // M-N3: the probe sends its plaintext in the binding's database (on the probe branch)
+    // and wipes the statistics from the scratch database, as provision-roles does.
+    let database = null;
+    if (config.bindingJson !== null)
+      try {
+        database = (await ctx.constants()).parseBinding(config.bindingJson).database;
+      } catch {
+        throw new StagingError("STAGING_BINDING_INVALID");
+      }
     return neonProbe(ctx, {
       staging: config.staging,
       administrator: ctx.administrator,
+      database,
       connectProbe: (url) => ctx.probeDatabase(url),
     });
   },
@@ -1234,7 +1282,19 @@ export function defaultContext() {
   return ctx;
 }
 
+// Node's happy-eyeballs connect (autoSelectFamily): each address attempt gets this long
+// before the next address is tried. Node's default (250 ms) is shorter than a connect
+// from the operator's network to Neon's us-east-1 endpoints, so every connection there
+// (TLS, the Neon driver's WebSocket, HTTPS) failed with ETIMEDOUT and the tools reported
+// STAGING_DATABASE_UNAVAILABLE; 3000 ms connected in about 575 ms (2026-10-20,
+// docs/evidence/live/2026-10-20-neon-probe-rerun.md). The connector's own deadlines
+// (25 s connect, 2 s end) still bound every attempt.
+export const connectAttemptTimeoutMs = 3000;
+
+// The CLI entry: the connect timeout is set before the context exists and before any
+// network call, so every connection this process opens uses it.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  setDefaultAutoSelectFamilyAttemptTimeout(connectAttemptTimeoutMs);
   const code = await main(process.argv.slice(2), defaultContext()).catch(() => {
     process.stderr.write(JSON.stringify({ code: "STAGING_INTERNAL_ERROR" }) + "\n");
     return 1;

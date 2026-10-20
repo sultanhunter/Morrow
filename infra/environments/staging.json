@@ -5,9 +5,14 @@
   "status": "design_candidate",
   "global_processing": "permitted_under_approved_data_policy",
   "cloudflare": {
-    "account_id": null,
-    "workers_dev_subdomain": null,
-    "origin": null,
+    "account_id": "79ff672d013b8f0956437af6eea3c213",
+    "workers_dev_subdomain": "sultanibneusman0",
+    "origin": "https://morrow-staging-api.sultanibneusman0.workers.dev",
+    "turnstile": {
+      "widget": "morrow-staging",
+      "mode": "invisible",
+      "site_key": "0x4AAAAAAFdwF1eDox4vfBd2"
+    },
     "workers": {
       "api": "morrow-staging-api",
       "connector": "morrow-staging-connector",
@@ -27,11 +32,12 @@
     "artifact_revisions": "unique_keys_checksums_conditional_create"
   },
   "neon": {
-    "project_id": null,
-    "root_branch_id": null,
-    "branch_id": null,
+    "project_id": "sweet-sound-23947873",
+    "root_branch_id": "br-noisy-wind-b7cxr2a1",
+    "branch_id": "br-dark-recipe-b78ytwj9",
     "branch_name": "staging",
-    "region_id": null,
+    "region_id": "aws-us-east-1",
+    "endpoint_host": "ep-hidden-mouse-b7e6ff6l.c-13.us-east-1.aws.neon.tech",
     "primary_storage_country": "US",
     "major_version": 17,
     "minor_version": null,
