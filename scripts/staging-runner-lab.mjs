@@ -14,11 +14,15 @@
 // The chain runs through its head (M2 PR-1: 0019-0024), so provisioning covers the eleven
 // broker logins, the vault login included, and the first-deploy file the fourteen broker
 // names, with the owner's vault KEK read from its planted file (`vault-kek-v1`).
+// Provisioning sends each generated plaintext once, in its own ALTER ROLE (P04.T01i M-N3
+// as amended 2026-10-20: Neon takes only plaintexts), after refusing a database where
+// pg_stat_statements could keep the statement or the server would not store SCRAM.
 // No provider, credential, host port or merchant data; every secret is a synthetic marker.
 import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -75,6 +79,17 @@ const home = (files) => {
   return planted;
 };
 const parse = (lines) => lines.map((line) => JSON.parse(line));
+// The one statement a role password reaches (M-N3 as amended 2026-10-20), as the psql
+// connector sends it; `passwords` maps role -> plaintext.
+const passwordStatement = (role, password) =>
+  `ALTER ROLE ${role} WITH LOGIN CONNECTION LIMIT 10 PASSWORD '${password}';`;
+const sentOnceInOwnStatement = (statements, passwords) =>
+  Object.entries(passwords).every(([role, password]) => {
+    const carrying = statements.filter((text) => text.includes(password));
+    return carrying.length === 1 && carrying[0] === passwordStatement(role, password);
+  });
+const rolePasswords = (constants, secrets) =>
+  Object.fromEntries(constants.roles.map((r) => [r, secrets[constants.passwordSecret(r)]]));
 
 // A copy of the reviewed chain with one byte changed in `path` (a wrong sha256).
 function tamperedRoot(path) {
@@ -403,16 +418,57 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
     ) === "0",
   );
 
+  // --- Refusals before any password statement (M-N3 as amended 2026-10-20): the
+  // pg_stat_statements extension in the target database, then a server that would hash
+  // with md5. Each refusal opens a fresh session, sends no BEGIN, ALTER ROLE or password,
+  // and leaves no first-deploy file.
+  const secretsFile = join(planted.directory, "tmp/broker-secrets.json");
+  const refusedBefore = async (name, setup, teardown, expected) => {
+    db(setup);
+    const sent = connector.statements.length;
+    const refused = await run(["provision-roles", "--first"]);
+    db(teardown);
+    check(
+      name,
+      refused.code === 1 &&
+        JSON.stringify(refused.err[0]) === JSON.stringify(expected) &&
+        connector.statements
+          .slice(sent)
+          .every((text) => !/^(BEGIN|ALTER ROLE)|PASSWORD/.test(text)) &&
+        !existsSync(secretsFile),
+    );
+  };
+  await refusedBefore(
+    "statement_stats_extension_refuses_before_any_password_statement",
+    "CREATE EXTENSION pg_stat_statements;",
+    "DROP EXTENSION pg_stat_statements;",
+    {
+      command: "provision-roles",
+      code: "STAGING_STATEMENT_STATS_PRESENT",
+      reason: "extension",
+      extension: true,
+      module: false,
+    },
+  );
+  await refusedBefore(
+    "md5_password_encryption_refuses_before_any_password_statement",
+    "ALTER DATABASE morrow SET password_encryption = 'md5';",
+    "ALTER DATABASE morrow RESET password_encryption;",
+    { command: "provision-roles", code: "STAGING_PASSWORD_ENCRYPTION" },
+  );
+
   // --- Hosted-shape provisioning (D3, AC07 SQL half). Every statement is logged by the
-  // server from here on, so the log can show that only verifiers reached SQL.
+  // server from here on, so the log can show where each plaintext reached the server:
+  // once, in its own role's ALTER ROLE statement, and nowhere else.
   db("ALTER DATABASE morrow SET log_statement = 'all';", "morrow_lab");
   const provision = await run(["provision-roles", "--first"]);
   check(
     "provision_first_succeeds",
-    provision.code === 0 && provision.out[0]?.controls === "verified",
+    provision.code === 0 &&
+      provision.out[0]?.controls === "verified" &&
+      provision.out[0]?.passwordStorage === "SCRAM-SHA-256",
   );
   const constants = base.constants;
-  const secretsFile = join(planted.directory, "tmp/broker-secrets.json");
   const mode = statSync(secretsFile).mode & 0o777;
   const secrets = JSON.parse(readFileSync(secretsFile, "utf8"));
   check("first_deploy_file_is_owner_only", mode === 0o600);
@@ -448,8 +504,10 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
           f.s === "idle_in_transaction_session_timeout=10s,statement_timeout=5s",
       ),
   );
+  // The server hashed exactly the generated plaintext: each stored SCRAM-SHA-256 verifier
+  // recomputes from it with the stored salt.
   check(
-    "stored_verifiers_match_the_generated_passwords",
+    "stored_scram_verifiers_match_the_generated_plaintexts",
     facts.every((f) => {
       const password = secrets[constants.passwordSecret(f.r)];
       const salt = Buffer.from(/^SCRAM-SHA-256\$4096:([^$]+)\$/.exec(f.v)?.[1] ?? "", "base64");
@@ -732,31 +790,38 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
       setRows() === "0",
   );
 
-  // --- AC07: no marker in the tool's output, the statements it sent, or the server log.
+  // --- AC07: no marker in the tool's output or argv; each plaintext only in its own
+  // ALTER ROLE, in the statements sent and in the server log; no other marker in either.
   const logs = spawnSync("docker", ["logs", id], {
     encoding: "utf8",
     timeout: 30000,
     maxBuffer: 64 << 20,
   });
   const serverLog = (logs.stdout ?? "") + (logs.stderr ?? "");
-  const secretsSeen = [
-    markers.ownerPassword,
-    markers.workos,
-    markers.turnstile,
-    markers.kek,
-    ...passwords,
-  ];
+  const others = [markers.ownerPassword, markers.workos, markers.turnstile, markers.kek];
+  const secretsSeen = [...others, ...passwords];
+  const sentPasswords = rolePasswords(constants, secrets);
   check(
-    "server_log_recorded_the_provisioning_verifiers",
-    serverLog.includes("SCRAM-SHA-256$4096:"),
+    "server_log_holds_each_plaintext_only_in_its_alter_role_statement",
+    Object.entries(sentPasswords).every(([role, password]) => {
+      const lines = serverLog.split("\n").filter((line) => line.includes(password));
+      return (
+        lines.length === 1 &&
+        lines[0].includes("statement: " + passwordStatement(role, password).slice(0, -1))
+      );
+    }),
   );
   check(
-    "no_plaintext_or_marker_in_server_log",
-    secretsSeen.every((m) => !serverLog.includes(m)),
+    "no_other_marker_in_server_log",
+    others.every((m) => !serverLog.includes(m)),
   );
   check(
-    "no_plaintext_or_marker_in_statements_sent",
-    secretsSeen.every((m) => connector.statements.every((s) => !s.includes(m))),
+    "each_plaintext_sent_once_in_its_own_alter_role",
+    sentOnceInOwnStatement(connector.statements, sentPasswords),
+  );
+  check(
+    "no_other_marker_in_statements_sent",
+    others.every((m) => connector.statements.every((s) => !s.includes(m))),
   );
   check(
     "no_plaintext_or_marker_in_tool_output",
@@ -873,6 +938,21 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
       ) === String(base.constants.roles.length),
   );
   check("createrole_provisioning_keeps_memberships_closed", closed() && morrowSetRows(id) === 0);
+  // The Neon-shaped administrator reads pg_authid through neon_superuser's
+  // pg_read_all_data, so the stored form is checked: SCRAM-SHA-256 for every role. Each
+  // plaintext was sent once, in its own ALTER ROLE, and is in no output.
+  const createroleSecrets = JSON.parse(
+    readFileSync(join(planted.directory, "tmp/broker-secrets.json"), "utf8"),
+  );
+  const createrolePasswords = rolePasswords(base.constants, createroleSecrets);
+  check(
+    "createrole_passwords_stored_as_scram_and_sent_once",
+    provision.out[0]?.passwordStorage === "SCRAM-SHA-256" &&
+      sentOnceInOwnStatement(connector.statements, createrolePasswords) &&
+      Object.values(createrolePasswords).every(
+        (p) => ![...base.out, ...base.err].some((line) => line.includes(p)),
+      ),
+  );
 
   // AC14: the last entry through a kill before COMMIT, then a lost acknowledgement.
   base.ctx.chain = () => chain;
@@ -971,7 +1051,7 @@ const reportText =
       task: "P04.T01i",
       observed_at: new Date().toISOString(),
       scope:
-        "Two isolated PostgreSQL 17.11 containers (network none): the staging migration runner in superuser mode over the real chain with the hosted-shape replay, hosted-shape role provisioning with SCRAM verifiers, and the P04.T01j D4 SET-row protocol on synthetic chains; then the real chain applied by a Neon-shaped non-superuser CREATEROLE administrator with D4, hosted-shape provisioning, a kill before COMMIT, a lost acknowledgement, a superseded digest and a planted SET row (P04.T01j-AC14). Fake git and gh; no provider, credential or network.",
+        "Two isolated PostgreSQL 17.11 containers (network none): the staging migration runner in superuser mode over the real chain with the hosted-shape replay, hosted-shape role provisioning (generated plaintexts, each sent once in its own ALTER ROLE and stored by the server as SCRAM-SHA-256; refusals for the pg_stat_statements extension and md5 storage before any password statement), and the P04.T01j D4 SET-row protocol on synthetic chains; then the real chain applied by a Neon-shaped non-superuser CREATEROLE administrator with D4, hosted-shape provisioning, a kill before COMMIT, a lost acknowledgement, a superseded digest and a planted SET row (P04.T01j-AC14). Fake git and gh; no provider, credential or network.",
       ...report,
       createrole: createroleReport,
       checks,

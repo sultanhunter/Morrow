@@ -131,7 +131,7 @@ Each of these needs a per-action approval:
 - **Valid until:** 2026-11-18 (30 days after approval), or the creation of the first production resource, whichever comes first.
 - **OQ-2 answer (GitHub plan and Actions budget):** "GitHub Pro (Recommended)": GitHub Pro (about $4 a month) as a per-action purchase, a capped Actions spending limit (about $10), and branch protection on `main` (requires `foundation`, no approving review) as soon as Pro is active. **Done 2026-10-19, outside this card:** the owner bought Pro; Claude set the $10 Actions budget at the owner's instruction ("pro is active you set the action budget"); and Claude enabled branch protection after the owner answered "Turn it on (Recommended)". See `docs/evidence/live/2026-10-19-github-*`.
 - **Effects used under this card** (bookkeeping; each live record holds the details):
-  - E3, 2026-10-20: one expiring probe branch, reconciled and expired (`docs/evidence/live/2026-10-20-neon-probe-branch.md`).
+  - E3, 2026-10-20: one expiring probe branch, reconciled and expired (`docs/evidence/live/2026-10-20-neon-probe-branch.md`); then, at 16:53Z, a second expiring probe branch that measured M-N1, M-N3 and M-N4, with a diagnostic throwaway role at 16:54Z (`docs/evidence/live/2026-10-20-neon-probe-rerun.md`, which also records the owner's own 16:45Z probe run).
   - E4, 2026-10-20: the queues `morrow-staging-dispatch` and `morrow-staging-dispatch-dlq` (`docs/evidence/live/2026-10-20-cloudflare-census-and-queues.md`).
   - E5, 2026-10-20: the Turnstile widget `morrow-staging` (`docs/evidence/live/2026-10-20-cloudflare-turnstile-widget.md`).
   - E6, 2026-10-20: the WorkOS redirect, saved by the owner (`docs/evidence/live/2026-10-20-workos-staging-redirect.md`).

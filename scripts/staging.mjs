@@ -10,6 +10,7 @@
 // PostgreSQL lab pass fakes for tools, the Cloudflare API and the database.
 import "./staging-token.mjs"; // FIRST: removes CLOUDFLARE_API_TOKEN and GH_TOKEN from process.env.
 import { appendFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
+import { setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -488,7 +489,13 @@ command("provision-roles", {
         versionId: null,
         now: ctx.now(),
       });
-      return { mode: "first", roles, file: "tmp/broker-secrets.json", controls: "verified" };
+      return {
+        mode: "first",
+        roles,
+        file: "tmp/broker-secrets.json",
+        controls: "verified",
+        passwordStorage: provisioned.passwordStorage,
+      };
     }
     const selected =
       options.target === "all" ? roles : roles.filter((role) => role === options.target);
@@ -518,7 +525,13 @@ command("provision-roles", {
     } finally {
       recordRotation(ctx.directory, names, { worker: "broker", versionId, now: ctx.now() });
     }
-    return { mode: "rotate", roles: selected, versionId, controls: "verified" };
+    return {
+      mode: "rotate",
+      roles: selected,
+      versionId,
+      controls: "verified",
+      passwordStorage: provisioned.passwordStorage,
+    };
   },
 });
 
@@ -1245,7 +1258,19 @@ export function defaultContext() {
   return ctx;
 }
 
+// Node's happy-eyeballs connect (autoSelectFamily): each address attempt gets this long
+// before the next address is tried. Node's default (250 ms) is shorter than a connect
+// from the operator's network to Neon's us-east-1 endpoints, so every connection there
+// (TLS, the Neon driver's WebSocket, HTTPS) failed with ETIMEDOUT and the tools reported
+// STAGING_DATABASE_UNAVAILABLE; 3000 ms connected in about 575 ms (2026-10-20,
+// docs/evidence/live/2026-10-20-neon-probe-rerun.md). The connector's own deadlines
+// (25 s connect, 2 s end) still bound every attempt.
+export const connectAttemptTimeoutMs = 3000;
+
+// The CLI entry: the connect timeout is set before the context exists and before any
+// network call, so every connection this process opens uses it.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  setDefaultAutoSelectFamilyAttemptTimeout(connectAttemptTimeoutMs);
   const code = await main(process.argv.slice(2), defaultContext()).catch(() => {
     process.stderr.write(JSON.stringify({ code: "STAGING_INTERNAL_ERROR" }) + "\n");
     return 1;

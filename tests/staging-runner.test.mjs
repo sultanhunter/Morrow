@@ -31,10 +31,12 @@ import {
   ledgerDrift,
   morrowSetRowsQuery,
   neonConnector,
+  passwordLiteral,
   platformSeedRows,
   provisioningSql,
   runMigrations,
   scramVerifier,
+  statementStatsFacts,
 } from "../scripts/staging-runner.mjs";
 import {
   d4Transaction,
@@ -46,6 +48,7 @@ import {
   censusFindings,
   closedReport,
   commands,
+  connectAttemptTimeoutMs,
   main,
   mainPreconditions,
 } from "../scripts/staging.mjs";
@@ -489,7 +492,9 @@ test("identity: database, server major, session role, no SET ROLE, administrator
 });
 
 // ---------------------------------------------------------------------------
-// Role controls (D3, AC07): only verifiers reach SQL.
+// Role controls (D3, AC07; M-N3 as amended 2026-10-20): each generated plaintext reaches
+// SQL once, in its own ALTER ROLE statement, after the statement-statistics check.
+// The verifier form stays for neon-probe (it records Neon's refusal) and the lab.
 test("scram verifier: PostgreSQL's SCRAM-SHA-256 stored form, independent of the plaintext", async () => {
   const salt = Buffer.alloc(16, 7);
   const password = "A".repeat(43);
@@ -525,17 +530,16 @@ test("scram verifier: PostgreSQL's SCRAM-SHA-256 stored form, independent of the
     );
 });
 
-test("provisioning SQL: LOGIN, the limit, both timeouts, REVOKE TEMP, verifiers only", () => {
-  const password = "p".repeat(43);
-  const verifier = scramVerifier(password);
+test("provisioning SQL: LOGIN with the plaintext, the limit, both timeouts, REVOKE TEMP", () => {
+  const password = "p".repeat(21) + "_-" + "Q9".repeat(10);
   const statements = provisioningSql({
     roles: ["morrow_api", "morrow_api_worker"],
-    verifiers: new Map([["morrow_api", verifier]]),
+    passwords: new Map([["morrow_api", password]]),
     database: "morrow",
   });
   assert.deepEqual(statements, [
     "BEGIN",
-    `ALTER ROLE morrow_api WITH LOGIN CONNECTION LIMIT 10 PASSWORD '${verifier}'`,
+    `ALTER ROLE morrow_api WITH LOGIN CONNECTION LIMIT 10 PASSWORD '${password}'`,
     "ALTER ROLE morrow_api SET statement_timeout = '5s'",
     "ALTER ROLE morrow_api SET idle_in_transaction_session_timeout = '10s'",
     "ALTER ROLE morrow_api_worker WITH LOGIN CONNECTION LIMIT 10",
@@ -544,29 +548,113 @@ test("provisioning SQL: LOGIN, the limit, both timeouts, REVOKE TEMP, verifiers 
     "REVOKE TEMP ON DATABASE morrow FROM PUBLIC",
     "COMMIT",
   ]);
-  assert.ok(statements.every((s) => !s.includes(password)));
+  // The plaintext appears once, in its own role's statement.
+  assert.equal(statements.filter((s) => s.includes(password)).length, 1);
+  // Only the generated shape reaches the literal: 43 base64url characters, nothing that
+  // could close or escape the string (no bind parameters exist for ALTER ROLE).
+  for (const bad of [
+    "p".repeat(42),
+    "p".repeat(44),
+    "p".repeat(42) + "'",
+    "p".repeat(42) + "\\",
+    "p".repeat(42) + " ",
+    "p".repeat(42) + "=",
+    "p".repeat(42) + "é",
+    "SCRAM-SHA-256$4096:" + "A".repeat(24),
+    42,
+    null,
+  ]) {
+    assert.equal(
+      codeOf(() =>
+        provisioningSql({
+          roles: ["morrow_api"],
+          passwords: new Map([["morrow_api", bad]]),
+          database: "morrow",
+        }),
+      ),
+      "STAGING_PASSWORD_INVALID",
+      String(bad),
+    );
+    assert.equal(
+      codeOf(() => passwordLiteral(bad)),
+      "STAGING_PASSWORD_INVALID",
+    );
+  }
+  assert.equal(passwordLiteral(password), `'${password}'`);
   assert.equal(
     codeOf(() =>
-      provisioningSql({
-        roles: ["morrow_api"],
-        verifiers: new Map([["morrow_api", password]]),
-        database: "morrow",
-      }),
-    ),
-    "STAGING_PASSWORD_INVALID",
-  );
-  assert.equal(
-    codeOf(() =>
-      provisioningSql({ roles: ["morrow_api; DROP"], verifiers: new Map(), database: "morrow" }),
+      provisioningSql({ roles: ["morrow_api; DROP"], passwords: new Map(), database: "morrow" }),
     ),
     "STAGING_ROLE_INVALID",
   );
   assert.equal(
     codeOf(() =>
-      provisioningSql({ roles: ["morrow_api"], verifiers: new Map(), database: "morrow; x" }),
+      provisioningSql({ roles: ["morrow_api"], passwords: new Map(), database: "morrow; x" }),
     ),
     "STAGING_DATABASE_MISMATCH",
   );
+});
+
+// pg_stat_statements keeps a utility statement's text with its literals, in every
+// database once the module is loaded. Provisioning refuses unless the row shows that
+// nothing can keep it; anything unreadable or unexpected counts as recording.
+test("statement statistics: the facts that let a password statement through, and nothing else", () => {
+  const row = (change = {}) => ({
+    extension: false,
+    track: null,
+    track_utility: null,
+    password_encryption: "scram-sha-256",
+    log_statement: "none",
+    ...change,
+  });
+  assert.deepEqual(statementStatsFacts(row()), {
+    checked: true,
+    extension: false,
+    module: false,
+    track: null,
+    trackUtility: null,
+    recording: false,
+    passwordEncryption: "scram-sha-256",
+    logStatement: "none",
+  });
+  for (const [label, change, recording, module] of [
+    ["extension in the target database", { extension: true }, true, false],
+    ["module loaded, default tracking", { track: "top", track_utility: "on" }, true, true],
+    ["module loaded, all statements", { track: "all", track_utility: "on" }, true, true],
+    ["module loaded, tracking off", { track: "none", track_utility: "on" }, false, true],
+    ["module loaded, utility off", { track: "top", track_utility: "off" }, false, true],
+    ["module half-read", { track: "top", track_utility: null }, true, true],
+    [
+      "extension with tracking off",
+      { extension: true, track: "none", track_utility: "off" },
+      true,
+      true,
+    ],
+  ]) {
+    const facts = statementStatsFacts(row(change));
+    assert.equal(facts.checked, true, label);
+    assert.equal(facts.recording, recording, label);
+    assert.equal(facts.module, module, label);
+  }
+  for (const unreadable of [
+    null,
+    undefined,
+    {},
+    row({ extension: "f" }),
+    row({ extension: null }),
+    row({ track: "some" }),
+    row({ track_utility: "true" }),
+    row({ track: undefined }),
+  ]) {
+    const facts = statementStatsFacts(unreadable);
+    assert.equal(facts.checked, false, JSON.stringify(unreadable));
+    assert.equal(facts.recording, true, JSON.stringify(unreadable));
+    assert.equal(facts.module, null);
+  }
+  assert.equal(statementStatsFacts(row({ password_encryption: "md5" })).passwordEncryption, "md5");
+  assert.equal(statementStatsFacts(row({ password_encryption: "x" })).passwordEncryption, null);
+  assert.equal(statementStatsFacts(row({ log_statement: "ddl" })).logStatement, "ddl");
+  assert.equal(statementStatsFacts(row({ log_statement: "x" })).logStatement, null);
 });
 
 // ---------------------------------------------------------------------------
@@ -1396,15 +1484,21 @@ test("staging.json: the D1 shape; every identifier is set and well-formed (PR-D 
 // M2 PR-1: the owner's vault KEK file (`npm run vault -- kek`), 64 lowercase hex characters.
 const plantedKek = "c0ffee".repeat(10) + "abcd";
 
-test("fake database: provisioning through the CLI sends only verifiers", async () => {
-  const planted = plantedHome({
-    "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
-    "workos-api-key": "sk_test_" + "W".repeat(24),
-    "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
-    "vault-kek-v1": plantedKek,
-  });
+const provisionPlant = () => ({
+  "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
+  "workos-api-key": "sk_test_" + "W".repeat(24),
+  "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
+  "vault-kek-v1": plantedKek,
+});
+// The one place a role password appears outside the broker's file or stdin: its own
+// role's ALTER ROLE statement, sent once (M-N3 as amended 2026-10-20).
+const passwordStatement =
+  /^ALTER ROLE (morrow_[a-z0-9_]+) WITH LOGIN CONNECTION LIMIT 10 PASSWORD '([A-Za-z0-9_-]{43})'$/;
+
+test("fake database: provisioning sends each plaintext once, in its own role's ALTER ROLE", async () => {
+  const planted = plantedHome(provisionPlant());
   try {
-    const { ctx, out, constants } = await fakeContext({
+    const { ctx, out, err, constants } = await fakeContext({
       home: planted.home,
       tools: fakeTools().tools,
     });
@@ -1422,19 +1516,196 @@ test("fake database: provisioning through the CLI sends only verifiers", async (
     assert.ok(constants.roles.includes("morrow_vault_broker"));
     const passwords = constants.roles.map((r) => secrets[constants.passwordSecret(r)]);
     assert.ok(passwords.every((p) => /^[A-Za-z0-9_-]{43}$/.test(p)));
+    assert.equal(new Set(passwords).size, passwords.length);
     // The KEK is the owner's file, unchanged; the tool generates no KEK.
     assert.equal(secrets.MORROW_VAULT_KEK_V1, plantedKek);
-    const sent = JSON.stringify(db.statements);
-    assert.ok(passwords.every((p) => !sent.includes(p)));
-    assert.ok(!sent.includes(plantedKek));
-    assert.equal((sent.match(/SCRAM-SHA-256\$4096:/g) ?? []).length, 11);
+    const texts = db.statements.map((s) => s.text + JSON.stringify(s.params));
+    for (const role of constants.roles) {
+      const password = secrets[constants.passwordSecret(role)];
+      const carrying = db.statements.filter((s) => (s.text + s.params.join()).includes(password));
+      assert.equal(carrying.length, 1, role);
+      const [, named, sent] = passwordStatement.exec(carrying[0].text) ?? [];
+      assert.deepEqual([named, sent, carrying[0].params], [role, password, []], role);
+    }
+    assert.equal(db.statements.filter((s) => / PASSWORD /.test(s.text)).length, 11);
+    assert.ok(!texts.join().includes(plantedKek));
+    assert.ok(!texts.join().includes("SCRAM-SHA-256$"));
+    // The statement-statistics check runs before the first password statement.
+    const check = db.statements.findIndex((s) => /extname = 'pg_stat_statements'/.test(s.text));
+    const first = db.statements.findIndex((s) => / PASSWORD /.test(s.text));
+    assert.ok(check >= 0 && check < first);
+    // No plaintext or KEK in the output; this fake's pg_authid is unreadable.
     assert.ok([...passwords, plantedKek].every((p) => !out.join().includes(p)));
+    assert.equal(JSON.parse(out.at(-1)).passwordStorage, "unreadable");
+    assert.equal(err.length, 0);
     // A second --first refuses: the file exists, and nothing was sent.
     const before = db.statements.length;
     assert.equal(await main(["provision-roles", "--first"], ctx), 1);
     assert.equal(db.statements.length, before);
   } finally {
     planted.cleanup();
+  }
+});
+
+// The owner's condition (2026-10-20): the tool refuses if statement statistics could
+// record the plaintext, or if that cannot be checked, before any password statement,
+// any broker file or any secret placement. So does a server that would not store SCRAM.
+test("provision-roles: statement statistics or non-SCRAM storage refuse before any password statement", async () => {
+  const bulkCalls = (f) => f.calls.filter((c) => c.tool === "wrangler" && c.args[1] === "bulk");
+  for (const [label, database, details] of [
+    [
+      "extension",
+      { statementStats: { extension: true } },
+      { reason: "extension", extension: true, module: false },
+    ],
+    [
+      "module",
+      { statementStats: { track: "top", track_utility: "on" } },
+      { reason: "module", extension: false, module: true },
+    ],
+    [
+      "unchecked (error)",
+      { rules: [[/extname = 'pg_stat_statements'/, Error("permission denied")]] },
+      { reason: "unchecked", extension: null, module: null },
+    ],
+    [
+      "unchecked (no row)",
+      { rules: [[/extname = 'pg_stat_statements'/, []]] },
+      { reason: "unchecked", extension: null, module: null },
+    ],
+    ["md5", { statementStats: { password_encryption: "md5" } }, null],
+  ]) {
+    for (const argv of [
+      ["provision-roles", "--first"],
+      ["provision-roles", "--rotate", "all"],
+    ]) {
+      const planted = plantedHome(provisionPlant());
+      try {
+        const constants = (await fakeContext({ home: planted.home, tools: fakeTools().tools }))
+          .constants;
+        const fake = fakeTools({ wrangler: { secrets: { broker: constants.brokerSecrets } } });
+        const { ctx, out, err } = await fakeContext({ home: planted.home, tools: fake.tools });
+        const db = fakeDatabase({ roles: constants.roles, ...database });
+        ctx.database = db.connector;
+        const name = label + " " + argv.join(" ");
+        assert.equal(await main(argv, ctx), 1, name);
+        const failure = JSON.parse(err.at(-1));
+        if (details)
+          assert.deepEqual(
+            failure,
+            { command: "provision-roles", code: "STAGING_STATEMENT_STATS_PRESENT", ...details },
+            name,
+          );
+        else
+          assert.deepEqual(
+            failure,
+            { command: "provision-roles", code: "STAGING_PASSWORD_ENCRYPTION" },
+            name,
+          );
+        assert.deepEqual(
+          db.statements.filter((s) => /PASSWORD|^BEGIN|^ALTER ROLE/.test(s.text)),
+          [],
+          name,
+        );
+        assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false, name);
+        assert.deepEqual(bulkCalls(fake), [], name);
+        assert.equal(out.length, 0, name);
+      } finally {
+        planted.cleanup();
+      }
+    }
+  }
+  // Tracking switched off, or a module that keeps no utility text, lets provisioning run.
+  for (const statementStats of [
+    { track: "none", track_utility: "on" },
+    { track: "top", track_utility: "off" },
+  ]) {
+    const planted = plantedHome(provisionPlant());
+    try {
+      const { ctx, constants } = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+      });
+      ctx.database = fakeDatabase({ roles: constants.roles, statementStats }).connector;
+      assert.equal(
+        await main(["provision-roles", "--first"], ctx),
+        0,
+        JSON.stringify(statementStats),
+      );
+    } finally {
+      planted.cleanup();
+    }
+  }
+});
+
+test("provision-roles: the stored form is checked where pg_authid is readable", async () => {
+  const superuser = { name: "postgres", mode: "superuser" };
+  for (const [storedForm, code] of [
+    ["all", 0],
+    [3, 1],
+  ]) {
+    const planted = plantedHome({
+      ...provisionPlant(),
+      "neon-owner-url": `postgresql://postgres:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
+    });
+    try {
+      const { ctx, out, err, constants } = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+        administrator: superuser,
+      });
+      const db = fakeDatabase({
+        roles: constants.roles,
+        storedForm,
+        identity: { session_role: "postgres", current_role: "postgres", superuser: true },
+      });
+      ctx.database = db.connector;
+      assert.equal(await main(["provision-roles", "--first"], ctx), code, err.join());
+      if (code === 0) assert.equal(JSON.parse(out.at(-1)).passwordStorage, "SCRAM-SHA-256");
+      else {
+        assert.deepEqual(JSON.parse(err.at(-1)), {
+          command: "provision-roles",
+          code: "STAGING_PASSWORD_STORAGE_MISMATCH",
+        });
+        // No secrets file: the roles hold passwords nobody keeps, and a rerun replaces them.
+        assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false);
+      }
+      // Only a count leaves the server, never a stored verifier.
+      const reads = db.statements.filter((s) => /pg_catalog\.pg_authid/.test(s.text));
+      assert.equal(reads.length, 2);
+      assert.match(reads[1].text, /^SELECT count\(\*\)::int AS n FROM pg_catalog\.pg_authid /);
+    } finally {
+      planted.cleanup();
+    }
+  }
+});
+
+// Node's happy-eyeballs default (250 ms per address attempt) failed every connection to
+// Neon's us-east-1 endpoints from the operator's network (2026-10-20). The CLI entry sets
+// 3000 ms before any network call; importing the module changes nothing global.
+test("cli entry: the connect attempt timeout is set before the command runs", () => {
+  assert.equal(connectAttemptTimeoutMs, 3000);
+  const home = mkdtempSync(join(tmpdir(), "morrow-staging-entry-"));
+  try {
+    const probe =
+      "data:text/javascript," +
+      encodeURIComponent(
+        'import net from "node:net";\n' +
+          "const at = net.getDefaultAutoSelectFamilyAttemptTimeout();\n" +
+          'process.on("exit", () => process.stdout.write(JSON.stringify({ at, exit: net.getDefaultAutoSelectFamilyAttemptTimeout() }) + "\\n"));\n',
+      );
+    const result = spawnSync(process.execPath, ["--import", probe, "scripts/staging.mjs"], {
+      encoding: "utf8",
+      timeout: 60000,
+      env: { PATH: process.env.PATH, HOME: home, TMPDIR: process.env.TMPDIR ?? tmpdir() },
+    });
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(JSON.parse(result.stderr.trim()).code, "STAGING_USAGE");
+    const seen = JSON.parse(result.stdout.trim().split("\n").at(-1));
+    assert.notEqual(seen.at, connectAttemptTimeoutMs);
+    assert.equal(seen.exit, connectAttemptTimeoutMs);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
   }
 });
 

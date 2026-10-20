@@ -7,8 +7,8 @@
 // The staging CLI passes the Neon serverless connector below; the PostgreSQL 17 lab
 // passes a psql connector (scripts/fixtures/staging-psql-connection.mjs) with fault
 // hooks. Identifiers that reach SQL text are closed role and database names; every value
-// is a parameter, except a SCRAM verifier, which PostgreSQL accepts only as a literal and
-// which is checked against its exact grammar first.
+// is a parameter, except a role password, which ALTER ROLE accepts only as a literal (it
+// takes no bind parameters) and which is checked against its exact grammar first.
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
 import { StagingError, fixedServerMessage, sqlState } from "./staging-common.mjs";
 import { ledgerRecord } from "./migration-chain.mjs";
@@ -534,8 +534,20 @@ export const roleControls = Object.freeze({
   connectionLimit: 10,
   settings: Object.freeze(["idle_in_transaction_session_timeout=10s", "statement_timeout=5s"]),
 });
-// 32 random bytes, base64url: 43 printable ASCII characters (SASLprep is the identity).
+// 32 random bytes, base64url: 43 characters of [A-Za-z0-9_-]. A SQL string literal holds
+// them as they are (no quote, backslash or non-ASCII byte), and SASLprep is the identity.
 export const generatePassword = () => randomBytes(32).toString("base64url");
+export const passwordGrammar = /^[A-Za-z0-9_-]{43}$/;
+// The literal that reaches ALTER ROLE: only a password of the generated shape, checked
+// immediately before interpolation (ALTER ROLE has no bind parameters).
+export function passwordLiteral(password) {
+  if (typeof password !== "string" || !passwordGrammar.test(password))
+    throw new StagingError("STAGING_PASSWORD_INVALID");
+  return `'${password}'`;
+}
+// PostgreSQL's SCRAM-SHA-256 stored form of a password. Provisioning no longer sends it
+// (Neon refuses a pre-hashed verifier, M-N3 as amended 2026-10-20); neon-probe sends one
+// to record that refusal, and the lab recomputes stored verifiers with it.
 export function scramVerifier(password, { salt = randomBytes(16), iterations = 4096 } = {}) {
   if (typeof password !== "string" || !/^[\x21-\x7e]{16,1024}$/.test(password))
     throw new StagingError("STAGING_PASSWORD_INVALID");
@@ -546,23 +558,23 @@ export function scramVerifier(password, { salt = randomBytes(16), iterations = 4
   salted.fill(0);
   return `SCRAM-SHA-256$${iterations}:${salt.toString("base64")}$${storedKey.toString("base64")}:${serverKey.toString("base64")}`;
 }
-const verifierGrammar =
-  /^SCRAM-SHA-256\$4096:[A-Za-z0-9+/]{22}==\$[A-Za-z0-9+/]{43}=:[A-Za-z0-9+/]{43}=$/;
 
-// The provisioning statements: LOGIN with a verifier (never a plaintext), the connection
-// limit, both timeouts, and REVOKE TEMP from PUBLIC. `verifiers` maps role -> verifier
-// for the roles whose password changes; every listed role gets the controls.
-export function provisioningSql({ roles, verifiers, database }) {
+// The provisioning statements: LOGIN with the role's new password, the connection limit,
+// both timeouts, and REVOKE TEMP from PUBLIC. `passwords` maps role -> plaintext for the
+// roles whose password changes; every listed role gets the controls. Neon takes only a
+// plaintext and stores its SCRAM-SHA-256 hash itself (M-N3 as amended 2026-10-20, owner
+// decision "Plaintext over TLS"), so each plaintext is sent once, in its own statement,
+// over the TLS connection. The returned text is for `connection.exec` only: never logged,
+// printed, put in an error or written anywhere.
+export function provisioningSql({ roles, passwords, database }) {
   if (!identifier.test(database)) throw new StagingError("STAGING_DATABASE_MISMATCH");
   const statements = ["BEGIN"];
   for (const role of roles) {
     if (!morrowRole.test(role)) throw new StagingError("STAGING_ROLE_INVALID");
-    const verifier = verifiers.get(role);
-    if (verifier !== undefined && !verifierGrammar.test(verifier))
-      throw new StagingError("STAGING_PASSWORD_INVALID");
+    const password = passwords.get(role);
     statements.push(
       `ALTER ROLE ${role} WITH LOGIN CONNECTION LIMIT ${roleControls.connectionLimit}` +
-        (verifier === undefined ? "" : ` PASSWORD '${verifier}'`),
+        (password === undefined ? "" : ` PASSWORD ${passwordLiteral(password)}`),
       `ALTER ROLE ${role} SET statement_timeout = '5s'`,
       `ALTER ROLE ${role} SET idle_in_transaction_session_timeout = '10s'`,
     );
@@ -603,8 +615,83 @@ export async function roleControlFacts(connection, roles) {
   };
 }
 
+// Statement statistics (M-N3 as amended 2026-10-20). The plaintext is a literal in the
+// ALTER ROLE text, and pg_stat_statements keeps a utility statement's text with its
+// literals. Once the module is loaded (shared_preload_libraries) it records statements
+// in every database, whether or not the extension exists there (measured on PostgreSQL
+// 17.11), so both are read: the extension in the target database, and the module's own
+// settings, which exist only while it is loaded. Every value here is readable without
+// privileges. log_statement is read for neon-probe's record only.
+export const statementStatsQuery =
+  "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'pg_stat_statements') AS extension, current_setting('pg_stat_statements.track', true) AS track, current_setting('pg_stat_statements.track_utility', true) AS track_utility, current_setting('password_encryption') AS password_encryption, current_setting('log_statement') AS log_statement";
+const oneOf = (value, values) => (values.includes(value) ? value : undefined);
+// Pure: the closed facts of one row of statementStatsQuery. `recording` is true unless the
+// row shows that no statement text can be kept: no extension in the target database, and
+// the module either not loaded or tracking no utility statement. Anything unreadable or
+// unexpected counts as recording (`checked` false).
+export function statementStatsFacts(row) {
+  const extension = typeof row?.extension === "boolean" ? row.extension : undefined;
+  const track = row?.track === null ? null : oneOf(row?.track, ["none", "top", "all"]);
+  const trackUtility =
+    row?.track_utility === null ? null : oneOf(row?.track_utility, ["on", "off"]);
+  const checked = extension !== undefined && track !== undefined && trackUtility !== undefined;
+  const loaded = checked ? track !== null || trackUtility !== null : null;
+  const recording =
+    !checked || extension || (loaded && !(track === "none" || trackUtility === "off"));
+  return Object.freeze({
+    checked,
+    extension: extension ?? null,
+    module: loaded,
+    track: track ?? null,
+    trackUtility: trackUtility ?? null,
+    recording,
+    passwordEncryption: oneOf(row?.password_encryption, ["scram-sha-256", "md5"]) ?? null,
+    logStatement: oneOf(row?.log_statement, ["none", "ddl", "mod", "all"]) ?? null,
+  });
+}
+export async function readStatementStats(connection) {
+  try {
+    const [row] = await connection.query(statementStatsQuery);
+    return statementStatsFacts(row);
+  } catch {
+    return statementStatsFacts(null);
+  }
+}
+// Refuses before any password statement: statistics could keep the text, or the server
+// would not store a SCRAM-SHA-256 hash. Details are closed values only.
+export function assertPasswordStatementSafe(stats) {
+  if (stats.recording)
+    throw new StagingError("STAGING_STATEMENT_STATS_PRESENT", {
+      reason: !stats.checked ? "unchecked" : stats.extension ? "extension" : "module",
+      extension: stats.extension,
+      module: stats.module,
+    });
+  if (stats.passwordEncryption !== "scram-sha-256")
+    throw new StagingError("STAGING_PASSWORD_ENCRYPTION");
+}
+
+// The stored form of the roles' passwords, where the session may read pg_authid (a
+// superuser can, and so can a pg_read_all_data member such as Neon's neondb_owner through
+// neon_superuser; a plain CREATEROLE role cannot): "SCRAM-SHA-256" when every
+// role's stored password is a SCRAM-SHA-256 verifier, "other" when any is not,
+// "unreadable" otherwise. Only a count leaves the server, never a stored verifier.
+// Readability is asked first, so a refused read never fails the session.
+export async function storedPasswordForm(connection, roles) {
+  const [access] = await connection.query(
+    "SELECT pg_catalog.has_table_privilege('pg_catalog.pg_authid', 'SELECT') AS readable",
+  );
+  if (access?.readable !== true) return "unreadable";
+  const [row] = await connection.query(
+    `SELECT count(*)::int AS n FROM pg_catalog.pg_authid WHERE rolname IN (${roleList(roles)}) AND rolpassword LIKE 'SCRAM-SHA-256$%'`,
+  );
+  return row?.n === roles.length ? "SCRAM-SHA-256" : "other";
+}
+
 // Provisions the controls and, for `passwordRoles`, new passwords. Plaintexts are
-// generated here and returned only to the in-process caller; only verifiers reach SQL.
+// generated here, sent once each in their ALTER ROLE statement over the TLS connection,
+// and returned only to the in-process caller, which delivers them to the broker (the
+// 0600 first-deploy file or `secret bulk` stdin). Before any password statement the
+// session must show no statement statistics that could keep it and SCRAM-SHA-256 storage.
 export async function provisionRoles({ connect, binding, administrator, roles, passwordRoles }) {
   checkAdministrator(administrator);
   if (!passwordRoles.every((role) => roles.includes(role)))
@@ -613,21 +700,23 @@ export async function provisionRoles({ connect, binding, administrator, roles, p
   try {
     if ((await presentRoles(connection, roles)) !== roles.length)
       throw new StagingError("STAGING_ROLES_MISSING");
+    if (passwordRoles.length) assertPasswordStatementSafe(await readStatementStats(connection));
     const passwords = new Map(passwordRoles.map((role) => [role, generatePassword()]));
-    const verifiers = new Map(
-      [...passwords].map(([role, password]) => [role, scramVerifier(password)]),
-    );
-    const statements = provisioningSql({ roles, verifiers, database: binding.database });
     let committed = false;
     try {
-      for (const statement of statements) await connection.exec(statement);
+      for (const statement of provisioningSql({ roles, passwords, database: binding.database }))
+        await connection.exec(statement);
       committed = true;
     } catch (error) {
       throw sqlFailure("STAGING_PROVISION_FAILED", error);
     }
     const facts = await roleControlFacts(connection, roles);
     if (!committed || !facts.ok) throw new StagingError("STAGING_ROLE_CONTROLS_MISMATCH");
-    return { passwords, facts };
+    const passwordStorage = passwordRoles.length
+      ? await storedPasswordForm(connection, passwordRoles)
+      : "unchanged";
+    if (passwordStorage === "other") throw new StagingError("STAGING_PASSWORD_STORAGE_MISMATCH");
+    return { passwords, facts, passwordStorage };
   } finally {
     await connection.close();
   }

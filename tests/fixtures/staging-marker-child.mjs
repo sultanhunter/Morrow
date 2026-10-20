@@ -73,15 +73,40 @@ const probeNeonctl = (args) => {
     };
   return null;
 };
-// A probe connection whose every failure carries markers in its message.
+// A probe connection whose every failure carries markers in its message. The verifier is
+// refused with Neon's control-plane text around the markers (M-N3, 2026-10-20) and the
+// generated plaintext is accepted; every statement goes to the dump, so the parent can
+// check that the plaintext never reaches the output.
+const probeStatements = [];
 const probeConnection = async () => ({
-  async query(text) {
+  async query(text, params = []) {
+    probeStatements.push({ text, params: [...params] });
     if (/session_role/.test(text))
       return [{ session_role: "neondb_owner", current_role: "neondb_owner", superuser: false }];
+    if (/extname = 'pg_stat_statements'/.test(text))
+      return [
+        {
+          extension: false,
+          track: null,
+          track_utility: null,
+          password_encryption: "scram-sha-256",
+          log_statement: "none",
+        },
+      ];
     return [];
   },
   async exec(text) {
-    if (/PASSWORD 'SCRAM|^REVOKE/.test(text)) throw markerError();
+    probeStatements.push({ text, params: [] });
+    if (/PASSWORD 'SCRAM/.test(text)) {
+      const error = markerError();
+      error.server =
+        "Received HTTP code 400 from control plane: " +
+        JSON.stringify({
+          error: "Neon only supports being given plaintext passwords " + markers.url,
+        });
+      throw error;
+    }
+    if (/^REVOKE/.test(text)) throw markerError();
   },
   async close() {},
 });
@@ -292,6 +317,7 @@ writeFileSync(
     code,
     calls: fake.calls,
     statements: db.statements,
+    probeStatements,
     bulkInputs: fake.state.bulkInputs,
     cloudflareCalls: cloud.calls,
     reports,

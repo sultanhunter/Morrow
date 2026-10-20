@@ -428,7 +428,10 @@ export function fakeSite({ cloud, ready = true, guard = true, limit = 10, csp, o
 
 // A scriptable database for the commands' SQL paths without PostgreSQL. `rules` map a
 // statement pattern to rows (or a function returning rows, or an Error to throw). Every
-// statement and parameter list is recorded.
+// statement and parameter list is recorded; the role passwords provisioning sends are
+// in the ALTER ROLE statements here, so tests check where they appear.
+// `statementStats` overrides the statement-statistics row; `storedForm` makes pg_authid
+// readable.
 export function fakeDatabase(options = {}) {
   const statements = [];
   const roles = options.roles ?? [];
@@ -464,6 +467,38 @@ export function fakeDatabase(options = {}) {
     [/privilege_type = 'TEMPORARY'/, () => [{ revoked: provisioned.size > 0 }]],
     [/pg_stat_activity WHERE datname/, () => options.activity ?? []],
     [/pg_auth_members/, () => [{ n: 0 }]],
+    // M-N3 as amended: no pg_stat_statements and SCRAM storage, unless a test says so.
+    [
+      /extname = 'pg_stat_statements'/,
+      () => [
+        {
+          extension: false,
+          track: null,
+          track_utility: null,
+          password_encryption: "scram-sha-256",
+          log_statement: "none",
+          ...(options.statementStats ?? {}),
+        },
+      ],
+    ],
+    // pg_authid is unreadable here (a plain CREATEROLE role); `storedForm` makes it
+    // readable, as for a superuser or Neon's neondb_owner (pg_read_all_data), with the
+    // given count of SCRAM-SHA-256 rows ("all" or a number).
+    [
+      /has_table_privilege\('pg_catalog\.pg_authid'/,
+      () => [{ readable: options.storedForm !== undefined }],
+    ],
+    [
+      /FROM pg_catalog\.pg_authid WHERE rolname IN/,
+      (text) => [
+        {
+          n:
+            options.storedForm === "all"
+              ? (text.match(/'morrow_[a-z0-9_]+'/g) ?? []).length
+              : options.storedForm,
+        },
+      ],
+    ],
   ];
   const answer = (text) => {
     for (const [pattern, result] of [...(options.rules ?? []), ...rules]) {
@@ -486,7 +521,7 @@ export function fakeDatabase(options = {}) {
           },
           async exec(text) {
             statements.push({ text, params: [] });
-            const role = /^ALTER ROLE (morrow_[a-z_]+) WITH LOGIN/.exec(text)?.[1];
+            const role = /^ALTER ROLE (morrow_[a-z0-9_]+) WITH LOGIN/.exec(text)?.[1];
             if (role) provisioned.add(role);
             if (options.execError && options.execError.pattern.test(text))
               throw options.execError.error;

@@ -15,7 +15,15 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { StagingError, failureRecord } from "./staging-common.mjs";
 import { createOwnerFile, parseOwnerUrl, recordRotation } from "./staging-files.mjs";
-import { generatePassword, scramVerifier, sessionIdentity, sqlFailure } from "./staging-runner.mjs";
+import {
+  generatePassword,
+  passwordLiteral,
+  readStatementStats,
+  scramVerifier,
+  sessionIdentity,
+  sqlFailure,
+  storedPasswordForm,
+} from "./staging-runner.mjs";
 import { toolJson, toolOk } from "./staging-tools.mjs";
 import {
   deployWorkflow,
@@ -183,6 +191,71 @@ export async function status(ctx, p) {
 }
 
 // ---------------------------------------------------------------------------
+// M-N3 as amended 2026-10-20 (owner decision "Plaintext over TLS"): Neon refuses a
+// pre-hashed SCRAM verifier and takes only a plaintext, which it hashes and stores as
+// SCRAM-SHA-256 itself. On the probe's own throwaway role this records (1) whether a
+// verifier is accepted, the refusal reduced to a fixed reason, never the server's text;
+// (2) the statement-statistics facts provisioning refuses on, with password_encryption
+// and log_statement; (3) only when provisioning's own check would pass, whether a
+// generated plaintext (sent once, never kept) is accepted, and its stored form where
+// pg_authid is readable.
+const neonPlaintextOnly = /Neon only supports being given plaintext passwords/;
+export function verifierRefusal(error) {
+  const text = [error?.server, error?.message].filter((v) => typeof v === "string").join(" ");
+  return neonPlaintextOnly.test(text) ? "neon_plaintext_only" : "other";
+}
+const probeSqlstate = (error) =>
+  failureRecord(sqlFailure("STAGING_PROBE_PASSWORD", error)).sqlstate ?? null;
+async function probePasswords(connection, role) {
+  const record = {
+    verifierAccepted: null,
+    verifierSqlstate: null,
+    verifierRefusal: null,
+    statementStats: null,
+    passwordEncryption: null,
+    logStatement: null,
+    plaintextSent: false,
+    plaintextAccepted: null,
+    plaintextSqlstate: null,
+    storedForm: null,
+  };
+  const verifier = scramVerifier(generatePassword());
+  try {
+    await connection.exec(`ALTER ROLE ${role} WITH LOGIN PASSWORD '${verifier}'`);
+    record.verifierAccepted = true;
+  } catch (error) {
+    record.verifierAccepted = false;
+    record.verifierSqlstate = probeSqlstate(error);
+    record.verifierRefusal = verifierRefusal(error);
+  }
+  const stats = await readStatementStats(connection);
+  record.statementStats = {
+    checked: stats.checked,
+    extension: stats.extension,
+    module: stats.module,
+    track: stats.track,
+    trackUtility: stats.trackUtility,
+    recording: stats.recording,
+  };
+  record.passwordEncryption = stats.passwordEncryption;
+  record.logStatement = stats.logStatement;
+  if (stats.recording || stats.passwordEncryption !== "scram-sha-256") return record;
+  record.plaintextSent = true;
+  try {
+    await connection.exec(
+      `ALTER ROLE ${role} WITH LOGIN PASSWORD ${passwordLiteral(generatePassword())}`,
+    );
+    record.plaintextAccepted = true;
+  } catch (error) {
+    record.plaintextAccepted = false;
+    record.plaintextSqlstate = probeSqlstate(error);
+    return record;
+  }
+  record.storedForm = await storedPasswordForm(connection, [role]);
+  return record;
+}
+
+// ---------------------------------------------------------------------------
 // neon-probe (M-N1, M-N3, M-N4). `p`: {staging, administrator, connectProbe(url)}. Only
 // a branch it creates is touched: a fresh `morrow-probe-<hex>` child of the root branch
 // with an expiry, never the root or the bound `staging` branch. The probe's connection
@@ -288,17 +361,7 @@ export async function neonProbe(ctx, p) {
       revokeRefused: after !== null,
       revokeSqlstate,
     };
-    // M-N3: a SCRAM verifier, so no plaintext reaches the server.
-    const verifier = scramVerifier(generatePassword());
-    try {
-      await connection.exec(`ALTER ROLE ${role} WITH LOGIN PASSWORD '${verifier}'`);
-      report.mN3 = { verifierAccepted: true, sqlstate: null };
-    } catch (error) {
-      report.mN3 = {
-        verifierAccepted: false,
-        sqlstate: failureRecord(sqlFailure("STAGING_PROBE_VERIFIER", error)).sqlstate ?? null,
-      };
-    }
+    report.mN3 = await probePasswords(connection, role);
     await connection.exec(`ALTER ROLE ${role} WITH NOLOGIN PASSWORD NULL`);
   } catch (error) {
     throw sqlFailure("STAGING_NEON_PROBE_SQL", error);

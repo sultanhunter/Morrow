@@ -13,3 +13,4 @@
 - **Cap and observed cost.** Neon Free, no card: $0.
 - **Cleanup.** The branch expired automatically at 04:22:17Z. Verified at 2026-10-20T11:21:41Z with a read-only branch list (Neon API, HTTP 200): only the root `br-noisy-wind-b7cxr2a1` remains.
 - **Open unknown outcomes.** None (reconciled above).
+- **Correction (2026-10-20, later).** The sandbox was not the cause. Node's happy-eyeballs default (250 ms per address attempt) made every connection from the operator's network to Neon's us-east-1 endpoints time out; with 3000 ms the probe connected and measured M-N1, M-N3 and M-N4 at 16:53Z (`docs/evidence/live/2026-10-20-neon-probe-rerun.md`). The staging CLI now sets 3000 ms at startup.

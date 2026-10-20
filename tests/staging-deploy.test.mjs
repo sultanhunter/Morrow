@@ -1753,7 +1753,17 @@ const probeStaging = () => {
     },
   };
 };
-function probeWorld({ revoke = "warning", verifier = "accepted", createFails = false } = {}) {
+// `verifier`: "accepted", "refused" (another refusal) or "neon" (Neon's control-plane
+// refusal, as measured 2026-10-20); `stats` overrides the statement-statistics row;
+// `plaintext`: "accepted" or "refused"; `readable`: pg_authid readable, with SCRAM rows.
+function probeWorld({
+  revoke = "warning",
+  verifier = "accepted",
+  createFails = false,
+  stats = {},
+  plaintext = "accepted",
+  readable = false,
+} = {}) {
   const password = "probepw" + "x".repeat(20);
   const statements = [];
   const neonctl = (args) => {
@@ -1814,6 +1824,19 @@ function probeWorld({ revoke = "warning", verifier = "accepted", createFails = f
               grantor_superuser: true,
             },
           ];
+        if (/extname = 'pg_stat_statements'/.test(text))
+          return [
+            {
+              extension: false,
+              track: null,
+              track_utility: null,
+              password_encryption: "scram-sha-256",
+              log_statement: "none",
+              ...stats,
+            },
+          ];
+        if (/has_table_privilege/.test(text)) return [{ readable }];
+        if (/FROM pg_catalog\.pg_authid/.test(text)) return [{ n: 1 }];
         if (/count\(\*\)::int AS n/.test(text)) return [{ n: 0 }];
         return [];
       },
@@ -1827,6 +1850,21 @@ function probeWorld({ revoke = "warning", verifier = "accepted", createFails = f
         if (/PASSWORD 'SCRAM/.test(text) && verifier === "refused") {
           const error = Error("password is too weak " + password);
           error.code = "22023";
+          throw error;
+        }
+        if (/PASSWORD 'SCRAM/.test(text) && verifier === "neon") {
+          // Neon's reply text, which carries a request body: reduced to a fixed reason.
+          const error = Error(
+            'Received HTTP code 400 from control plane: {"request_id":"' +
+              password +
+              '","error":"Neon only supports being given plaintext passwords"}',
+          );
+          error.code = "XX000";
+          throw error;
+        }
+        if (/PASSWORD '[A-Za-z0-9_-]{43}'$/.test(text) && plaintext === "refused") {
+          const error = Error("control plane said no " + password);
+          error.code = "XX000";
           throw error;
         }
       },
@@ -1866,7 +1904,25 @@ test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, nev
       revokeRefused: true,
       revokeSqlstate: null,
     });
-    assert.deepEqual(result.mN3, { verifierAccepted: true, sqlstate: null });
+    assert.deepEqual(result.mN3, {
+      verifierAccepted: true,
+      verifierSqlstate: null,
+      verifierRefusal: null,
+      statementStats: {
+        checked: true,
+        extension: false,
+        module: false,
+        track: null,
+        trackUtility: null,
+        recording: false,
+      },
+      passwordEncryption: "scram-sha-256",
+      logStatement: "none",
+      plaintextSent: true,
+      plaintextAccepted: true,
+      plaintextSqlstate: null,
+      storedForm: "unreadable",
+    });
     assert.deepEqual(result.mN4, {
       branchIdKept: true,
       hostKept: true,
@@ -1876,10 +1932,78 @@ test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, nev
     assert.equal(result.cleanup, "branch_expires_at");
     const sent = JSON.stringify(probe.statements);
     assert.ok(!sent.includes(probe.password));
-    assert.match(sent, /PASSWORD 'SCRAM-SHA-256\$4096:/);
+    // The verifier, then (after the statistics check) one generated plaintext, then none.
+    const texts = probe.statements.map((s) => s.text ?? "");
+    const verifierAt = texts.findIndex((t) => /PASSWORD 'SCRAM-SHA-256\$4096:/.test(t));
+    const statsAt = texts.findIndex((t) => /extname = 'pg_stat_statements'/.test(t));
+    const plain = texts.filter((t) =>
+      /^ALTER ROLE morrow_probe_[0-9a-f]{8} WITH LOGIN PASSWORD '[A-Za-z0-9_-]{43}'$/.test(t),
+    );
+    assert.equal(plain.length, 1);
+    assert.ok(verifierAt >= 0 && verifierAt < statsAt && statsAt < texts.indexOf(plain[0]));
+    assert.match(texts.filter((t) => /^ALTER ROLE/.test(t)).at(-1), /WITH NOLOGIN PASSWORD NULL$/);
+    const generated = /'([A-Za-z0-9_-]{43})'$/.exec(plain[0])[1];
     assert.ok(!w.out.join("\n").includes(probe.password));
+    assert.ok(!w.out.join("\n").includes(generated));
   } finally {
     w.planted.cleanup();
+  }
+  // The 2026-10-20 measurement: Neon refuses the verifier through its control plane and
+  // takes the plaintext; the reply's text never reaches the report.
+  const neon = probeWorld({ verifier: "neon", readable: true });
+  const n = await world({
+    staging: probeStaging(),
+    tools: { neonctl: neon.neonctl },
+    overrides: { probeDatabase: neon.connectProbe },
+  });
+  try {
+    const { code, result } = await n.run(["neon-probe"]);
+    assert.equal(code, 0);
+    assert.equal(result.mN3.verifierAccepted, false);
+    assert.equal(result.mN3.verifierSqlstate, "XX000");
+    assert.equal(result.mN3.verifierRefusal, "neon_plaintext_only");
+    assert.equal(result.mN3.plaintextAccepted, true);
+    assert.equal(result.mN3.storedForm, "SCRAM-SHA-256");
+    const text = n.out.join("\n");
+    for (const value of [neon.password, "control plane", "request_id", "plaintext passwords"])
+      assert.ok(!text.includes(value), value);
+  } finally {
+    n.planted.cleanup();
+  }
+  // Statistics that could keep the text: the plaintext is never sent, and the facts say why.
+  for (const [stats, facts] of [
+    [{ extension: true }, { extension: true, module: false, recording: true }],
+    [
+      { track: "top", track_utility: "on" },
+      { extension: false, module: true, recording: true },
+    ],
+  ]) {
+    const kept = probeWorld({ verifier: "neon", stats });
+    const k = await world({
+      staging: probeStaging(),
+      tools: { neonctl: kept.neonctl },
+      overrides: { probeDatabase: kept.connectProbe },
+    });
+    try {
+      const { code, result } = await k.run(["neon-probe"]);
+      assert.equal(code, 0);
+      assert.deepEqual(
+        {
+          extension: result.mN3.statementStats.extension,
+          module: result.mN3.statementStats.module,
+          recording: result.mN3.statementStats.recording,
+        },
+        facts,
+      );
+      assert.equal(result.mN3.plaintextSent, false);
+      assert.equal(result.mN3.plaintextAccepted, null);
+      assert.ok(
+        !kept.statements.some((s) => /PASSWORD '[A-Za-z0-9_-]{43}'$/.test(s.text ?? "")),
+        JSON.stringify(stats),
+      );
+    } finally {
+      k.planted.cleanup();
+    }
   }
   const refused = probeWorld({ revoke: "error", verifier: "refused" });
   const r = await world({
@@ -1891,10 +2015,29 @@ test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, nev
     const { code, result } = await r.run(["neon-probe"]);
     assert.equal(code, 0);
     assert.equal(result.mN1.revokeSqlstate, "42501");
-    assert.deepEqual(result.mN3, { verifierAccepted: false, sqlstate: "22023" });
+    assert.equal(result.mN3.verifierAccepted, false);
+    assert.equal(result.mN3.verifierSqlstate, "22023");
+    assert.equal(result.mN3.verifierRefusal, "other");
     assert.ok(!r.out.join("\n").includes(refused.password));
   } finally {
     r.planted.cleanup();
+  }
+  const plaintextRefused = probeWorld({ verifier: "neon", plaintext: "refused" });
+  const pr = await world({
+    staging: probeStaging(),
+    tools: { neonctl: plaintextRefused.neonctl },
+    overrides: { probeDatabase: plaintextRefused.connectProbe },
+  });
+  try {
+    const { code, result } = await pr.run(["neon-probe"]);
+    assert.equal(code, 0);
+    assert.equal(result.mN3.plaintextSent, true);
+    assert.equal(result.mN3.plaintextAccepted, false);
+    assert.equal(result.mN3.plaintextSqlstate, "XX000");
+    assert.equal(result.mN3.storedForm, null);
+    assert.ok(!pr.out.join("\n").includes(plaintextRefused.password));
+  } finally {
+    pr.planted.cleanup();
   }
   const failed = probeWorld({ createFails: true });
   const f = await world({
