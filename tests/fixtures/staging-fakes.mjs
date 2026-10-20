@@ -329,6 +329,14 @@ export function fakeCloudflare(options = {}) {
           sitekey: "0x4AAAAAAA" + "S".repeat(14),
           secret: "0x4AAAAAAA" + "s".repeat(24),
         };
+        // `refuse`: Cloudflare's answer to a token without Turnstile Edit (403, code 10000),
+        // as staging-tools.mjs reports it, plus a detail the tool must not relay.
+        if (options.widgetCreate === "refuse")
+          throw new StagingError("STAGING_CLOUDFLARE_REQUEST_FAILED", {
+            status: 403,
+            codes: [10000],
+            reason: "relayed_detail",
+          });
         if (options.widgetCreate !== "fail")
           widgets.push({ name: body.name, sitekey: reply.sitekey, domains: body.domains });
         if (options.widgetCreate === "lost" || options.widgetCreate === "fail")

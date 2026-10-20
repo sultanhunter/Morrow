@@ -1610,6 +1610,45 @@ test("turnstile-create: the secret goes only to a new 0600 file; the site key is
   }
 });
 
+// 2026-10-20 (docs/evidence/live/2026-10-20-cloudflare-turnstile-widget.md): a refused
+// create names Cloudflare's HTTP status and numeric codes only, after the widget list shows
+// no widget; any other detail of the refusal, and Cloudflare's messages, stay out.
+test("turnstile-create: a refused create reports Cloudflare's status and numeric codes only", async () => {
+  const refused = await world({ cloudflare: { widgetCreate: "refuse" } });
+  try {
+    const { code, result } = await refused.run(["turnstile-create"]);
+    assert.equal(code, 1);
+    assert.deepEqual(result, {
+      command: "turnstile-create",
+      code: "STAGING_TURNSTILE_CREATE_FAILED",
+      status: 403,
+      codes: [10000],
+    });
+    assert.ok(!refused.err.join("\n").includes("relayed_detail"));
+    // The create, then the reconciling list that found no widget.
+    assert.deepEqual(refused.cloud.calls.slice(-2), [
+      "POST challenges/widgets",
+      "challenges/widgets",
+    ]);
+    assert.equal(existsSync(join(refused.planted.directory, "turnstile-secret")), false);
+  } finally {
+    refused.planted.cleanup();
+  }
+  // A failure that is not a Cloudflare refusal has neither a status nor codes.
+  const unavailable = await world({ cloudflare: { widgetCreate: "fail" } });
+  try {
+    const { result } = await unavailable.run(["turnstile-create"]);
+    assert.deepEqual(result, {
+      command: "turnstile-create",
+      code: "STAGING_TURNSTILE_CREATE_FAILED",
+      status: null,
+      codes: [],
+    });
+  } finally {
+    unavailable.planted.cleanup();
+  }
+});
+
 // neon-probe: a fake neonctl and a scripted probe connection.
 const probeStaging = () => {
   const base = JSON.parse(readFileSync("infra/environments/staging.json", "utf8"));
