@@ -5358,6 +5358,243 @@
           "additionalProperties": false
         }
       ]
+    },
+    "ResourceRef": {
+      "description": "ResourceRef v1.1 (ADR-0022 items 2 and 3). Replaces core v1 ResourceRef (changes.json) as a declared superset: every v1 ResourceRef is valid here. The one addition is kind store, the connected store as a whole: {kind: store, id: storeId, storeId, connectionId}, with storeId and connectionId both non-null. id equals storeId, which validateCurrentDefinition checks in code. Kernels match resources exactly, so a store resource covers only a request on that store resource.",
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "connectionId": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "product",
+            "variant",
+            "collection",
+            "publication",
+            "inventory_item",
+            "location",
+            "order",
+            "fulfillment",
+            "return",
+            "refund",
+            "ad_account",
+            "campaign",
+            "audience",
+            "segment",
+            "case",
+            "theme",
+            "extension",
+            "artifact",
+            "task",
+            "goal",
+            "installation",
+            "member",
+            "knowledge",
+            "budget",
+            "subject",
+            "workspace",
+            "release",
+            "store"
+          ]
+        },
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId",
+        "storeId",
+        "connectionId",
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "store"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "storeId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              },
+              "connectionId": {
+                "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Scope": {
+      "description": "Scope v1.1 (ADR-0022 item 2). Replaces core v1 Scope (changes.json) only so that resources are v1.1 ResourceRefs; a declared superset: every v1 Scope is valid here.",
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeIds": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+          },
+          "minItems": 0,
+          "maxItems": 1000,
+          "uniqueItems": true
+        },
+        "accountIds": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+          },
+          "minItems": 0,
+          "maxItems": 1000,
+          "uniqueItems": true
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResourceRef"
+          },
+          "minItems": 0,
+          "maxItems": 1000,
+          "uniqueItems": true
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/FieldPath"
+          },
+          "minItems": 0,
+          "maxItems": 1000,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "organizationId",
+        "workspaceId",
+        "storeIds",
+        "accountIds",
+        "resources",
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "Grant": {
+      "description": "Grant v1.1 (ADR-0022 items 2 and 3). Replaces core v1 Grant (changes.json) only so that its scope is the v1.1 Scope, which can name the store resource of the store-link template; a declared superset: every v1 Grant is valid here.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "principal": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ActorRef"
+        },
+        "capabilityId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/CapabilityId"
+        },
+        "verbs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "view",
+              "propose",
+              "approve",
+              "execute",
+              "delegate",
+              "administer"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "issuedBy": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/ActorRef"
+        },
+        "validFrom": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revokedAt": {
+          "anyOf": [
+            {
+              "$ref": "urn:morrow:contracts:core:v1#/$defs/UtcTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policyRevision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "id",
+        "principal",
+        "capabilityId",
+        "verbs",
+        "scope",
+        "issuedBy",
+        "validFrom",
+        "expiresAt",
+        "revokedAt",
+        "policyRevision"
+      ],
+      "additionalProperties": false
     }
   }
 }

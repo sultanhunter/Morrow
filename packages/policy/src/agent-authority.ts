@@ -1,13 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
-import { validateDefinition } from "@morrow/contracts/validation";
+import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import type {
   Core_ActorRef,
-  Core_Grant,
-  Core_Scope,
-  Core_ResourceRef,
   Core_PolicyDecision,
   Core_GrantRef,
   Core_MandateRef,
+  CurrentDefinitionName,
+  Current_Grant,
+  Current_ResourceRef,
+  Current_Scope,
 } from "@morrow/contracts";
 import type { PermissionRequest, PermissionVerb } from "./index";
 import type {
@@ -37,7 +38,10 @@ export class AgentAuthorityError extends Error {
     this.name = "AgentAuthorityError";
   }
 }
-const valid = (name: string, value: unknown) => validateDefinition("core", name, value);
+// Current definitions (ADR-0022 item 2): grants, scopes and resources may name the store
+// resource. AgentInstallation and AutomationMandate are unchanged v1 definitions.
+const valid = (name: CurrentDefinitionName, value: unknown) =>
+  validateCurrentDefinition(name, value);
 const verbs = ["view", "propose", "approve", "execute", "delegate", "administer"];
 const capabilities = new Map(catalogue.capabilities.map((c) => [c.id, c]));
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -194,7 +198,8 @@ function parseCurrent(v: unknown): CurrentActorAuthority {
   )
     throw Error();
   boundedArray(v.grants, 1000, (g) => valid("Grant", g));
-  if (new Set((v.grants as Core_Grant[]).map((g) => g.id)).size !== v.grants.length) throw Error();
+  if (new Set((v.grants as Current_Grant[]).map((g) => g.id)).size !== v.grants.length)
+    throw Error();
   return v as unknown as CurrentActorAuthority;
 }
 function parseRecord(
@@ -346,10 +351,10 @@ function parseAutomation(v: unknown): AutomationAuthorityFacts {
 }
 const sameActor = (a: Core_ActorRef, b: Core_ActorRef) =>
   canonical(a as unknown as Json) === canonical(b as unknown as Json);
-const sameResource = (a: Core_ResourceRef, b: Core_ResourceRef) =>
+const sameResource = (a: Current_ResourceRef, b: Current_ResourceRef) =>
   canonical(a as unknown as Json) === canonical(b as unknown as Json);
 const samePayload = (a: unknown, b: unknown) => canonical(a as Json) === canonical(b as Json);
-const context = (a: Core_ActorRef, r: Core_ResourceRef) =>
+const context = (a: Core_ActorRef, r: Current_ResourceRef) =>
   a.organizationId === r.organizationId && a.workspaceId === r.workspaceId;
 const human = (a: Core_ActorRef) =>
   a.kind === "human" &&
@@ -371,7 +376,7 @@ const live = (a: CurrentActorAuthority, revision: number) =>
   a.grantsRevision === revision;
 const liveHuman = (a: CurrentActorAuthority, revision: number) =>
   human(a.actor) && a.membershipActive && live(a, revision);
-function scopeBound(scope: Core_Scope, r: Core_ResourceRef) {
+function scopeBound(scope: Current_Scope, r: Current_ResourceRef) {
   return (
     scope.organizationId === r.organizationId &&
     scope.workspaceId === r.workspaceId &&
@@ -383,7 +388,7 @@ function scopeBound(scope: Core_Scope, r: Core_ResourceRef) {
     )
   );
 }
-function scopeCovers(scope: Core_Scope, op: PermissionRequest) {
+function scopeCovers(scope: Current_Scope, op: PermissionRequest) {
   return (
     scopeBound(scope, op.resource) &&
     (op.resource.storeId === null
@@ -396,7 +401,7 @@ function scopeCovers(scope: Core_Scope, op: PermissionRequest) {
     op.fields.every((f) => scope.fields.includes(f))
   );
 }
-function subset(child: Core_Scope, parent: Core_Scope) {
+function subset(child: Current_Scope, parent: Current_Scope) {
   return (
     child.organizationId === parent.organizationId &&
     child.workspaceId === parent.workspaceId &&

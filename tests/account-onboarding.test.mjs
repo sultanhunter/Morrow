@@ -469,6 +469,9 @@ test("every template payload passes Grant and the 0002 CHECK", () => {
       policyRevision: 1,
     };
     assert.ok(validateDefinition("core", "Grant", payload), row.capabilityId);
+    // ADR-0022 item 2: the v1.1 Grant is a superset, so every v1 template row still
+    // parses where the kernels read grants (validateCurrentDefinition).
+    assert.ok(validateCurrentDefinition("Grant", payload), row.capabilityId);
     // The 0002 CHECK, field by field.
     assert.equal(payload.id, id);
     assert.equal(payload.principal.organizationId, O);
