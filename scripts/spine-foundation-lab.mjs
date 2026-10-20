@@ -51,6 +51,25 @@ import { appSecretPutStatement, sealAppSecret } from "./vault.mjs";
 const transitionsJson = JSON.parse(readFileSync("docs/contracts/state-transitions.json", "utf8"));
 const checks = [];
 const failures = [];
+// One log-safe line per stage (a fixed name and the elapsed seconds), so a stalled run
+// names the stage it stalled in. Every wait of this lab has a deadline: each psql call is
+// bounded by the harness (60 s), and every asynchronous wait by `within`, which fails with
+// SPINE_LAB_STALLED:<stage>:<wait> instead of hanging.
+const labStarted = Date.now();
+let stage = "start";
+const phase = (value) => {
+  stage = value;
+  console.error(
+    "SPINE_LAB_PHASE:" + value + " t=" + Math.round((Date.now() - labStarted) / 1000) + "s",
+  );
+};
+function within(promise, timeoutMs, wait) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(Error("SPINE_LAB_STALLED:" + stage + ":" + wait)), timeoutMs);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
 function check(name, passed, detail) {
   if (!/^[A-Z][0-9]+:[a-z0-9_]+$/.test(name) || checks.some((c) => c.name === name))
     throw Error("SPINE_LAB_CHECK_NAME:" + name);
@@ -140,6 +159,7 @@ GRANT USAGE ON SCHEMA lab_probe TO morrow_runtime_executor,morrow_api_worker,mor
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA lab_probe TO morrow_runtime_executor,morrow_api_worker,morrow_vault_broker,morrow_connector_ingress;`;
 
 export async function runSpineFoundationLab(db) {
+  phase("fixtures");
   const P = seedWorkFixtures(db);
   db.sql(probes);
   const as = (user) => (text) => db.sql(text, { user });
@@ -182,6 +202,7 @@ export async function runSpineFoundationLab(db) {
   // ---------------------------------------------------------------------------
   // L: the lease context (spine §5; ADR-0022 item 9).
   {
+    phase("lease_context");
     const read = openLease(P.A, "read", "l_read_1", { installation: null });
     const run = openLease(P.A, "run", "l_run_1");
     const operation = openLease(P.A, "operation", "l_claim_1");
@@ -506,6 +527,7 @@ export async function runSpineFoundationLab(db) {
   // ---------------------------------------------------------------------------
   // S: stops block admission (spine §10; ADR-0022 item 15), and revoke leases.
   {
+    phase("stops");
     const stopSql = (p, scope, target, o = {}) =>
       `INSERT INTO morrow_work.stop_controls(organization_id,workspace_id,id,scope,store_id,target_id,set_by_kind,set_by_principal_id,set_by_membership_id,reason_code,reason,created_at) VALUES(${literal(p.org)},${literal(p.workspace)},${literal(o.id ?? uuid())},${literal(scope)},${literal(o.store ?? "store_s")},${literal(target)},'human',${literal(p.principal)},${literal(p.membership)},'kill_switch','Stop AI work',${ms});`;
     const s = { store: "store_s", connection: "connection_s", installation: "installation_s" };
@@ -703,14 +725,21 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
     // Races, forced with a gate session that the lab terminates: (a) a stop waits for an
     // in-flight lease_open and then revokes the committed lease; (b) a lease_open waits for
     // an in-flight stop and then refuses.
+    // The gate resolves to a handle that holds the session's promise, never to the promise
+    // itself: an async function that returns a promise adopts it, so awaiting the gate
+    // would wait for the gate session to end. That session sleeps 600 s until the lab
+    // terminates it, so each race used to stall for background's whole 300 s kill timer
+    // (twice per run, about ten minutes; enough to exceed the pg-work leg's cap in CI).
+    // Each gate is awaited under a deadline, so that mistake would now fail by name.
     const gateKey = 7240191;
     const gate = async (name) => {
-      const held = background(
+      const session = background(
         db.id,
         `BEGIN; SELECT pg_advisory_xact_lock(${gateKey}); SELECT pg_sleep(600); COMMIT;`,
         name,
       );
-      for (let i = 0; i < 2400; i++) {
+      const deadline = Date.now() + 60000;
+      while (Date.now() < deadline) {
         if (
           last(
             db.sql(
@@ -718,20 +747,21 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
             ),
           ) === "1"
         )
-          return held;
+          return { session };
         await sleep(25);
       }
-      throw Error("SPINE_LAB_GATE");
+      throw Error("SPINE_LAB_STALLED:" + stage + ":gate");
     };
     const release = async (name, held) => {
       db.sql(
         `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name=${literal(name)};`,
       );
-      await held;
+      await within(held.session, 60000, "gate_release");
     };
     const race = { store: "store_r", connection: "connection_r", installation: "installation_r" };
     {
-      const held = await gate("spine_gate_a");
+      phase("stop_race_inflight_lease");
+      const held = await within(gate("spine_gate_a"), 90000, "gate");
       const opener = background(
         db.id,
         asCommandRole(
@@ -751,7 +781,11 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
       );
       const waitingStop = await db.waitForLockWait("application_name='spine_race_stop_a'", 120000);
       await release("spine_gate_a", held);
-      const [opened, stopped] = await Promise.all([opener, stopper]);
+      const [opened, stopped] = await within(
+        Promise.all([opener, stopper]),
+        120000,
+        "race_sessions",
+      );
       const id = opened.stdout.split("\n")[1]?.split("|")[1];
       check(
         "S6:stop_waits_for_inflight_lease_then_revokes_it",
@@ -765,7 +799,8 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
       );
     }
     {
-      const held = await gate("spine_gate_b");
+      phase("stop_race_inflight_stop");
+      const held = await within(gate("spine_gate_b"), 90000, "gate");
       const stopper = background(
         db.id,
         asCommandRole(
@@ -788,7 +823,11 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
       );
       const waitingOpen = await db.waitForLockWait("application_name='spine_race_open_b'", 120000);
       await release("spine_gate_b", held);
-      const [stopped, opened] = await Promise.all([stopper, opener]);
+      const [stopped, opened] = await within(
+        Promise.all([stopper, opener]),
+        120000,
+        "race_sessions",
+      );
       check(
         "S6:lease_waits_for_inflight_stop_then_refuses",
         waitingStop && waitingOpen && stopped.ok && opened.ok && last(opened.stdout) === "stopped",
@@ -800,6 +839,7 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
   // ---------------------------------------------------------------------------
   // O: the OperationLedger machine (spine §8) on state-transitions.json, unchanged.
   {
+    phase("operation_ledger");
     const rules = db
       .rows(
         "SELECT from_status,to_status,actor,guard FROM morrow_work.transition_rules WHERE machine='operation'",
@@ -1056,6 +1096,7 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
   // V: the vault (ADR-0022 item 7). Every role but the broker's login is denied, and the
   // envelope the broker reads decrypts only with its KEK and the exact AAD.
   {
+    phase("vault");
     // Every envelope is sealed and opened by the broker's own vault module
     // (apps/broker/src/vault.ts), with its additional data.
     const kek = randomBytes(32).toString("hex");
@@ -1102,17 +1143,22 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
     const brokerConnector = createLocalWorkConnector(db.id, { user: "morrow_vault_broker" });
     const brokerQuery = async (text, values) => {
       const connection = await brokerConnector.open({
-        signal: new AbortController().signal,
+        signal: AbortSignal.timeout(60000),
         deadlineMs: Date.now() + 60000,
         waitUntil() {},
       });
       try {
-        return (await connection.query(text, values, new AbortController().signal)).rows;
+        return (await connection.query(text, values, AbortSignal.timeout(60000))).rows;
       } finally {
         await connection.close();
       }
     };
-    const readSecret = (app) => readAppSecret(keyring, brokerQuery, app).catch(() => null);
+    const readSecret = (app) =>
+      within(
+        readAppSecret(keyring, brokerQuery, app).catch(() => null),
+        120000,
+        "broker_read",
+      );
     const got = await readSecret("lab-app");
     const otherGot = await readSecret("other-app");
     check(
@@ -1287,6 +1333,7 @@ ALTER TABLE morrow_work.stop_controls ENABLE TRIGGER stop_guard;`,
   // ---------------------------------------------------------------------------
   // R: the billing route (P01.T04a §3 R1-R4, §8.1; ADR-0015 item 2).
   {
+    phase("billing_route");
     const routeOf = (ws) =>
       db.rows(
         `SELECT origin,shopify_bound_at IS NOT NULL AS bound,route,mode,revision::int FROM morrow_billing.workspace_billing_routes WHERE workspace_id=${literal(ws)}`,
@@ -1537,6 +1584,7 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
   // ADR-0020 D5 preflight; stop rows and the stop_active twin use the api's fixed
   // statements.
   {
+    phase("typescript_helpers");
     const fixedPool = (user) => {
       const connector = createLocalWorkConnector(db.id, { user });
       return {
@@ -1554,15 +1602,28 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
       };
     };
     const runtimePool = fixedPool("morrow_runtime_executor");
-    const attempt = () => createRuntimeAttempt(30000, new AbortController().signal);
+    // One runtime attempt per step, always ended: an attempt left open keeps its 30 s
+    // timer, which held the process open for up to 30 s after the report.
+    const attempted = async (run) => {
+      const a = createRuntimeAttempt(30000, new AbortController().signal);
+      try {
+        return await run(a);
+      } finally {
+        a.end();
+      }
+    };
     const where = { store: "store_t", connection: "connection_t", installation: "installation_t" };
     const run = openLease(P.A, "run", "t_run_1", where);
     const operation = openLease(P.A, "operation", "t_claim_1", where);
     const read = openLease(P.A, "read", "t_read_1", { ...where, installation: null });
     const step = (l, body = async (s) => s.lease, pool = runtimePool) =>
-      runLeaseStep(pool, attempt(), { leaseId: l.id, generation: 1 }, body).catch(() => ({
-        ok: false,
-      }));
+      within(
+        attempted((a) => runLeaseStep(pool, a, { leaseId: l.id, generation: 1 }, body)).catch(
+          () => ({ ok: false }),
+        ),
+        120000,
+        "lease_step",
+      );
     const first = await step(run, async (s) => ({
       lease: s.lease,
       started: await s.markStarted(),
@@ -1598,9 +1659,13 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
     );
     const refusal = async (ref) =>
       (
-        await runLeaseStep(runtimePool, attempt(), ref, async () => "ran").catch(() => ({
-          ok: false,
-        }))
+        await within(
+          attempted((a) => runLeaseStep(runtimePool, a, ref, async () => "ran")).catch(() => ({
+            ok: false,
+          })),
+          120000,
+          "lease_step",
+        )
       ).value?.refusal ?? null;
     check(
       "T1:forged_or_stale_references_are_refused_without_a_body",
@@ -1617,7 +1682,11 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
       wrongLogins.every((ok) => ok === false),
     );
     // Pending starts: exactly what the definer's own query selects, ids only.
-    const pending = await listPendingStarts(runtimePool, attempt()).catch(() => ({ ok: false }));
+    const pending = await within(
+      attempted((a) => listPendingStarts(runtimePool, a)).catch(() => ({ ok: false })),
+      120000,
+      "pending_starts",
+    );
     const expected = db
       .rows(
         "SELECT l.id::text AS id FROM morrow_work.work_leases l WHERE l.status='active' AND l.started_at IS NULL AND l.kind IN ('run','operation') AND l.expires_at>clock_timestamp() ORDER BY l.created_at,l.id LIMIT 100",
@@ -1767,13 +1836,21 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
 async function main() {
   const started = Date.now();
   let result;
-  await withWorkDatabase(
-    "M2.PR1.spine-foundation",
-    async (db) => {
-      result = await runSpineFoundationLab(db);
-    },
-    { administrator: "createrole" },
-  );
+  phase("engine_and_migrations");
+  try {
+    await withWorkDatabase(
+      "M2.PR1.spine-foundation",
+      async (db) => {
+        result = await runSpineFoundationLab(db);
+      },
+      { administrator: "createrole" },
+    );
+  } catch (error) {
+    // The stage name is fixed text; the error itself is reported as thrown.
+    console.error("SPINE_LAB_FAILED_IN:" + stage);
+    throw error;
+  }
+  phase("report");
   writeArtifact("labs/spine-foundation.json", {
     task: "M2 PR-1",
     qualification: "local_postgresql17_network_none_spine_foundation",
