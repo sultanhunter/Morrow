@@ -22,6 +22,7 @@ import {
 } from "../apps/broker/src/capabilities.ts";
 import { brokerNeonLease } from "../apps/broker/src/neon-lease.ts";
 import { brokerWorkosSessionPage } from "../apps/broker/src/workos-session.ts";
+import { resolvedEdgeConfig } from "../scripts/edge.mjs";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
 import { appliedLegacyLoginControllerProtocol } from "../scripts/fixtures/standalone-login-fixture.mjs";
 
@@ -190,6 +191,35 @@ test("trust model v1: connector and runtime health need their own lease and the 
     "MORROW_VAULT_KEK_V1",
   ])
     assert.ok(brokerRequiredSecrets.includes(name), name);
+});
+
+// P04.T01i PR-D part 1: the committed staging broker vars, as wrangler resolves them, with
+// synthetic secrets in place of the ones the first deploy brings, give every capability, so
+// the staging broker is healthy for the api, the connector and the orchestrator.
+test("P04.T01i PR-D: the committed staging vars give the broker every capability", async () => {
+  const { vars } = await resolvedEdgeConfig("broker", "staging");
+  assert.deepEqual(Object.keys(vars).sort(), [
+    "LOGIN_CONFIGURATION_JSON",
+    "MORROW_DATABASE_BINDING_JSON",
+    "MORROW_ENVIRONMENT",
+    "TURNSTILE_CONFIGURATION_JSON",
+  ]);
+  const env = { ...brokerEnv("staging").env, ...vars };
+  const capabilities = await brokerCapabilities(env);
+  for (const name of ["sessions", "database", "connector", "runtime", "vault", "challenge"])
+    assert.notEqual(capabilities[name], null, name);
+  assert.equal(capabilities.challenge.hostname, "morrow-staging-api.sultanibneusman0.workers.dev");
+  assert.deepEqual(capabilities.challenge.actions, ["account_login", "organization_signup"]);
+  assert.equal(await brokerHealth(env), true);
+  assert.equal(await brokerCallerHealth(env, "connector"), true);
+  assert.equal(await brokerCallerHealth(env, "runtime"), true);
+  // The leases are keyed by the committed binding: the staging branch's direct endpoint.
+  const binding = parseBrokerDatabaseBinding(vars.MORROW_DATABASE_BINDING_JSON);
+  assert.equal(binding.branchId, "br-dark-recipe-b78ytwj9");
+  assert.ok(capabilities.database.leases.has(neonLeaseNamespace(binding, "morrow_api")));
+  // Without its Turnstile configuration a staging broker is unhealthy (ADR-0019 item 6).
+  const { TURNSTILE_CONFIGURATION_JSON: _turnstile, ...unchallenged } = env;
+  assert.equal(await brokerHealth(unchallenged), false);
 });
 
 test("AC11: neonLease denies other roles, purposes, bindings and encodings", async () => {

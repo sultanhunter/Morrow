@@ -894,16 +894,30 @@ test("cli: schema-head prints the head; effects refuse without the card or ident
     assert.equal(await main(["migrate"], unset.ctx), 1);
     assert.equal(JSON.parse(unset.err.at(-1)).code, "STAGING_IDENTIFIERS_UNSET");
     const committed = JSON.parse(read("infra/environments/staging.json"));
-    const mismatched = await fakeContext({
-      home: planted.home,
-      tools: fakeTools().tools,
-      staging: {
-        ...committed,
-        neon: { ...committed.neon, project_id: "another-project", branch_id: labBinding.branchId },
-      },
-    });
-    assert.equal(await main(["migrate"], mismatched.ctx), 1);
-    assert.equal(JSON.parse(mismatched.err.at(-1)).code, "STAGING_BINDING_INVALID");
+    const bound = {
+      project_id: labBinding.projectId,
+      branch_id: labBinding.branchId,
+      endpoint_host: labBinding.hostname,
+    };
+    // The binding resolves only to staging.json's project, branch and direct endpoint:
+    // another project, another well-formed `ep-` host (the root branch's, as the PR-D review
+    // names it, or a one-character change), or no endpoint recorded, fails before any read.
+    for (const neon of [
+      { ...bound, project_id: "another-project" },
+      { ...bound, endpoint_host: "ep-falling-math-b78o6uzn.c-13.us-east-1.aws.neon.tech" },
+      { ...bound, endpoint_host: labBinding.hostname.replace("000001", "000002") },
+      { ...bound, endpoint_host: null },
+    ]) {
+      const mismatched = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+        staging: { ...committed, neon: { ...committed.neon, ...neon } },
+      });
+      for (const argv of [["migrate"], ["connections"]]) {
+        assert.equal(await main(argv, mismatched.ctx), 1);
+        assert.equal(JSON.parse(mismatched.err.at(-1)).code, "STAGING_BINDING_INVALID");
+      }
+    }
     assert.equal(err.length, 0);
   } finally {
     planted.cleanup();
@@ -1099,6 +1113,53 @@ test("census: findings for anything that is not exactly Morrow's staging", async
       JSON.parse(second.out.at(-1)).findings.map((f) => f.code),
       ["PAGES_PROJECT", "BROKER_BOUND_ELSEWHERE"],
     );
+    // An account without Workers for Platforms: 403 with Cloudflare error 10121 alone is
+    // reported as `unavailable_10121`, no namespace (2026-10-20, the staging account; the
+    // packet's PR-B notes, deviation 17). Any other status or code, or 10121 beside
+    // another code, fails the census.
+    const noWfp = await fakeContext({
+      home: planted.home,
+      tools: fakeTools().tools,
+      cloudflare: fakeCloudflare({ namespacesError: { status: 403, codes: [10121] } }).api,
+    });
+    assert.equal(await main(["census"], noWfp.ctx), 0);
+    assert.deepEqual(JSON.parse(noWfp.out.at(-1)).findings, []);
+    assert.equal(JSON.parse(noWfp.out.at(-1)).dispatchNamespaces, "unavailable_10121");
+    assert.equal(JSON.parse(out.at(-1)).dispatchNamespaces, 0);
+    for (const namespacesError of [
+      { status: 403, codes: [10000] },
+      { status: 403, codes: [10000, 10121] },
+      { status: 403, codes: [10121, 10121] },
+      { status: 403, codes: [] },
+      { status: 403 },
+      { status: 401, codes: [10121] },
+      { status: 500, codes: [10121] },
+    ]) {
+      const refused = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+        cloudflare: fakeCloudflare({ namespacesError }).api,
+      });
+      assert.notEqual(await main(["census"], refused.ctx), 0, JSON.stringify(namespacesError));
+      assert.equal(
+        JSON.parse(refused.err.at(-1)).code,
+        "STAGING_CLOUDFLARE_REQUEST_FAILED",
+        JSON.stringify(namespacesError),
+      );
+    }
+    // Any other count is a finding; so is a reply that is not a list.
+    for (const namespaces of [[{ id: "ns" }], { result: [] }]) {
+      const listed = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+        cloudflare: fakeCloudflare({ namespaces }).api,
+      });
+      assert.equal(await main(["census"], listed.ctx), 1);
+      assert.deepEqual(
+        JSON.parse(listed.out.at(-1)).findings.map((f) => f.code),
+        ["DISPATCH_NAMESPACES"],
+      );
+    }
   } finally {
     planted.cleanup();
   }
@@ -1301,18 +1362,24 @@ test("token: staging-token.mjs is the first import and removes the token before 
 
 // ---------------------------------------------------------------------------
 // Shapes the rest of PR-B and PR-D build on.
-test("staging.json: the D1 shape with every identifier still null", () => {
+test("staging.json: the D1 shape; every identifier is set and well-formed (PR-D part 1)", () => {
   const staging = JSON.parse(read("infra/environments/staging.json"));
-  for (const value of [
-    staging.cloudflare.account_id,
-    staging.cloudflare.workers_dev_subdomain,
-    staging.cloudflare.origin,
-    staging.neon.project_id,
-    staging.neon.root_branch_id,
-    staging.neon.branch_id,
-    staging.neon.region_id,
+  const { cloudflare, neon } = staging;
+  for (const [value, shape] of [
+    [cloudflare.account_id, /^[0-9a-f]{32}$/],
+    [cloudflare.workers_dev_subdomain, /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/],
+    [neon.project_id, /^[a-z]+-[a-z]+-[0-9]{8}$/],
+    [neon.root_branch_id, /^br-[a-z]+-[a-z]+-[a-z0-9]{8}$/],
+    [neon.branch_id, /^br-[a-z]+-[a-z]+-[a-z0-9]{8}$/],
+    [neon.region_id, /^aws-[a-z]+-[a-z]+-[0-9]$/],
   ])
-    assert.equal(value, null);
+    assert.match(value, shape);
+  // The origin is derived from the subdomain, and the bound branch is never the root.
+  assert.equal(
+    cloudflare.origin,
+    `https://${cloudflare.workers.api}.${cloudflare.workers_dev_subdomain}.workers.dev`,
+  );
+  assert.notEqual(neon.branch_id, neon.root_branch_id);
   assert.equal(staging.neon.plan, "Free");
   assert.equal(staging.neon.branch_name, "staging");
   assert.equal(staging.neon.history_window_hours, 6);

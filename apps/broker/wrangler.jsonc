@@ -6,8 +6,9 @@
 // passwords, its own vault login's password, the vault KEK (MORROW_VAULT_KEK_V1) and M5
 // PR-1's Stripe restricted test key and webhook signing secret (ADR-0022 items 7 and 12);
 // production omits the last four (12 names; the vault and Stripe are held there until the
-// ADR-0007 item 9 production custody ADR). No identifier is committed; the first hosted deploy
-// fails closed until P04.T01i supplies `wrangler deploy --secrets-file`. Merchant and
+// ADR-0007 item 9 production custody ADR). Only env.staging.vars hold identifiers (P04.T01i
+// PR-D part 1); the first hosted deploy fails closed until P04.T01i supplies
+// `wrangler deploy --secrets-file`. Merchant and
 // model credentials come only under trust model v1, as vault rows or the secrets
 // ADR-0022 item 7 admits, each with the PR that uses it.
 {
@@ -45,9 +46,30 @@
     ],
   },
   "env": {
+    // P04.T01i D1 (PR-D part 1): no workers.dev or preview URL; Workers Logs as the api's.
+    // LOGIN_CONFIGURATION_JSON and MORROW_DATABASE_BINDING_JSON are byte-equal to the api's;
+    // TURNSTILE_CONFIGURATION_JSON names the origin's hostname and the api's actions.
     "staging": {
       "name": "morrow-staging-broker",
-      "vars": { "MORROW_ENVIRONMENT": "staging" },
+      "workers_dev": false,
+      "preview_urls": false,
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "traces": { "enabled": false },
+        "logs": {
+          "enabled": true,
+          "invocation_logs": false,
+          "head_sampling_rate": 1,
+          "persist": true,
+        },
+      },
+      "vars": {
+        "MORROW_ENVIRONMENT": "staging",
+        "LOGIN_CONFIGURATION_JSON": "{\"schemaVersion\":1,\"controllerProtocol\":\"morrow-login-v1\",\"origin\":\"https://morrow-staging-api.sultanibneusman0.workers.dev\",\"retentionTier\":\"staging\",\"authenticationBindingJson\":\"{\\\"bindingId\\\":\\\"workos_staging_login\\\",\\\"bindingRevision\\\":1,\\\"environmentId\\\":\\\"environment_01M4HG7FV7X8EFXE1J9S6GG00R\\\",\\\"applicationId\\\":\\\"app_01M4HG7GEJJWTKG4W16RB98VZE\\\",\\\"clientId\\\":\\\"client_01M4HG7GA0DX8C3PFSQHBP4BN3\\\",\\\"redirectUri\\\":\\\"https://morrow-staging-api.sultanibneusman0.workers.dev/auth/workos/callback\\\",\\\"returnPath\\\":\\\"/\\\"}\",\"verificationProfileJson\":\"{\\\"schemaVersion\\\":1,\\\"providerId\\\":\\\"workos\\\",\\\"environmentId\\\":\\\"environment_01M4HG7FV7X8EFXE1J9S6GG00R\\\",\\\"applicationId\\\":\\\"app_01M4HG7GEJJWTKG4W16RB98VZE\\\",\\\"clientId\\\":\\\"client_01M4HG7GA0DX8C3PFSQHBP4BN3\\\",\\\"issuer\\\":\\\"https://api.workos.com/user_management/client_01M4HG7GA0DX8C3PFSQHBP4BN3\\\",\\\"revision\\\":1,\\\"audiencePolicy\\\":\\\"absent\\\"}\",\"profileId\":\"workos_staging_profile\",\"profileRecordRevision\":1}",
+        "MORROW_DATABASE_BINDING_JSON": "{\"schemaVersion\":1,\"environment\":\"staging\",\"projectId\":\"sweet-sound-23947873\",\"branchId\":\"br-dark-recipe-b78ytwj9\",\"hostname\":\"ep-hidden-mouse-b7e6ff6l.c-13.us-east-1.aws.neon.tech\",\"database\":\"morrow\"}",
+        "TURNSTILE_CONFIGURATION_JSON": "{\"schemaVersion\":1,\"hostname\":\"morrow-staging-api.sultanibneusman0.workers.dev\",\"actions\":{\"login\":\"account_login\",\"signup\":\"organization_signup\"}}",
+      },
       "secrets": {
         "required": [
           "WORKOS_API_KEY",

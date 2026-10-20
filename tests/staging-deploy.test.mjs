@@ -36,6 +36,7 @@ import {
   labSiteKey,
   plantedHome,
   scriptOf,
+  unsetStaging,
 } from "./fixtures/staging-fakes.mjs";
 
 const head = schemaHead(loadMigrationChain());
@@ -310,7 +311,7 @@ test("AC04: a mismatched schema head, digest or broker secret name, or a failed 
 // P05.T01ab reconciliation (D1, D5; ADR-0019 items 6-8): gate 4 also requires the api's
 // LOGIN_CHALLENGE_JSON and the broker's TURNSTILE_CONFIGURATION_JSON, in agreement, so no
 // api is uploaded that would map to API_ENV_ABUSE_GUARD_MISSING and no broker whose health
-// is false. Both carry PR-D identifiers, so today's committed staging config stops here.
+// is false. Both carry PR-D part 1 identifiers; the committed staging config passes.
 test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and deploys nothing", async () => {
   const host = new URL(origin).hostname;
   const apiVar = (patch = {}) =>
@@ -382,6 +383,13 @@ test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and
       { api: apiVar({ siteKey: "1x00000000000000000000AA" }) },
       "STAGING_CHALLENGE_CONFIGURATION_INVALID",
       "api",
+    ],
+    // Another well-formed key than staging.json's widget's (`cloudflare.turnstile.site_key`).
+    [
+      "swapped well-formed site key",
+      { api: apiVar({ siteKey: labSiteKey.slice(0, -1) + "z" }) },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "site_key",
     ],
     [
       "api provider none",
@@ -481,15 +489,62 @@ test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and
   } finally {
     ok.planted.cleanup();
   }
-  // The committed staging configuration has no challenge vars until PR-D.
+  // P04.T01i PR-D part 1: the committed staging configuration passes gate 4's challenge
+  // check (D1's actions, the origin's hostname, the broker's shared vars byte-equal).
   const committed = await import("../scripts/staging.mjs").then((m) =>
     m.loadStagingConfiguration(process.cwd()),
   );
-  assert.equal(committed.challengeJson, null);
-  assert.equal(committed.broker.turnstileJson, null);
-  await assert.rejects(checkChallengeConfiguration(committed), {
-    code: "STAGING_CHALLENGE_CONFIGURATION_MISSING",
+  assert.deepEqual(await checkChallengeConfiguration(committed), {
+    provider: "turnstile",
+    hostname: "morrow-staging-api.sultanibneusman0.workers.dev",
+    actions: stagingChallengeActions,
   });
+  assert.equal(
+    JSON.parse(committed.challengeJson).siteKey,
+    committed.staging.cloudflare.turnstile.site_key,
+  );
+  // staging.json records another well-formed key, or none: the committed vars fail gate 4.
+  for (const turnstile of [
+    { ...committed.staging.cloudflare.turnstile, site_key: "0x4AAAAAAFdwF1eDox4vfBd3" },
+    null,
+  ])
+    await assert.rejects(
+      checkChallengeConfiguration({
+        ...committed,
+        staging: {
+          ...committed.staging,
+          cloudflare: { ...committed.staging.cloudflare, turnstile },
+        },
+      }),
+      (error) =>
+        error.code === "STAGING_CHALLENGE_CONFIGURATION_INVALID" &&
+        error.details.reason === "site_key",
+    );
+});
+
+// P04.T01i PR-D part 1: gate 4's digest step reads the committed login configuration with
+// the runtime's parser (the real context, no fake): a staging tier and the staging origin.
+// Its configurationDigest is what `staging:keyring` binds and the deploy compares with
+// STAGING_LOGIN_CONFIGURATION_DIGEST.
+test("AC04: the committed login configuration passes gate 4's digest step", async () => {
+  const { defaultContext, loadStagingConfiguration } = await import("../scripts/staging.mjs");
+  const committed = await loadStagingConfiguration(process.cwd());
+  const parsed = await defaultContext().loginConfiguration(committed);
+  assert.equal(parsed.retentionTier, "staging");
+  assert.equal(parsed.origin, committed.staging.cloudflare.origin);
+  assert.equal(parsed.binding.redirectUri, parsed.origin + "/auth/workos/callback");
+  assert.match(parsed.configurationDigest, /^[0-9a-f]{64}$/);
+  // Another origin in staging.json than the committed configuration's fails closed.
+  await assert.rejects(
+    defaultContext().loginConfiguration({
+      ...committed,
+      staging: {
+        ...committed.staging,
+        cloudflare: { ...committed.staging.cloudflare, origin: "https://other.example" },
+      },
+    }),
+    { code: "STAGING_LOGIN_CONFIGURATION_INVALID" },
+  );
 });
 
 // M5 PR-1: the broker's STRIPE_CONFIGURATION_JSON is a reviewed identifier on the PR-D path.
@@ -1328,11 +1383,7 @@ test("smoke: no guard means no login start; failures name the check; --acceptanc
   } finally {
     unlimited.planted.cleanup();
   }
-  const unset = await world({
-    staging: {
-      ...JSON.parse(readFileSync("infra/environments/staging.json", "utf8")),
-    },
-  });
+  const unset = await world({ staging: unsetStaging() });
   try {
     assert.equal((await unset.run(["smoke"])).result.code, "STAGING_IDENTIFIERS_UNSET");
   } finally {
@@ -1530,6 +1581,37 @@ test("preflight: reports pending owner steps without values and blocks on the ca
   } finally {
     unset.planted.cleanup();
   }
+  // P04.T01i PR-D part 1: with the committed configuration every identifier is set,
+  // the binding and the challenge included, so none is pending.
+  const committed = await world({
+    files: files(),
+    overrides: {
+      config: async () =>
+        (await import("../scripts/staging.mjs")).loadStagingConfiguration(process.cwd()),
+    },
+  });
+  try {
+    const { code, result } = await committed.run(["preflight"]);
+    assert.equal(code, 0, JSON.stringify(result));
+    assert.ok(
+      Object.values(result.identifiers).every((set) => set === true),
+      result.identifiers,
+    );
+    assert.deepEqual(Object.keys(result.identifiers).sort(), [
+      "accountId",
+      "binding",
+      "branchId",
+      "challenge",
+      "origin",
+      "projectId",
+      "regionId",
+      "rootBranchId",
+      "workersDevSubdomain",
+    ]);
+    assert.ok(!result.pending.some((p) => p.startsWith("identifier:")));
+  } finally {
+    committed.planted.cleanup();
+  }
   // M2 PR-1: until the owner writes the vault KEK file, it is a pending owner step.
   const { "vault-kek-v1": _kek, ...withoutKek } = files();
   const noKek = await world({ files: withoutKek });
@@ -1678,6 +1760,45 @@ test("turnstile-create: the secret goes only to a new 0600 file; the site key is
     } finally {
       v.planted.cleanup();
     }
+  }
+});
+
+// 2026-10-20 (docs/evidence/live/2026-10-20-cloudflare-turnstile-widget.md): a refused
+// create names Cloudflare's HTTP status and numeric codes only, after the widget list shows
+// no widget; any other detail of the refusal, and Cloudflare's messages, stay out.
+test("turnstile-create: a refused create reports Cloudflare's status and numeric codes only", async () => {
+  const refused = await world({ cloudflare: { widgetCreate: "refuse" } });
+  try {
+    const { code, result } = await refused.run(["turnstile-create"]);
+    assert.equal(code, 1);
+    assert.deepEqual(result, {
+      command: "turnstile-create",
+      code: "STAGING_TURNSTILE_CREATE_FAILED",
+      status: 403,
+      codes: [10000],
+    });
+    assert.ok(!refused.err.join("\n").includes("relayed_detail"));
+    // The create, then the reconciling list that found no widget.
+    assert.deepEqual(refused.cloud.calls.slice(-2), [
+      "POST challenges/widgets",
+      "challenges/widgets",
+    ]);
+    assert.equal(existsSync(join(refused.planted.directory, "turnstile-secret")), false);
+  } finally {
+    refused.planted.cleanup();
+  }
+  // A failure that is not a Cloudflare refusal has neither a status nor codes.
+  const unavailable = await world({ cloudflare: { widgetCreate: "fail" } });
+  try {
+    const { result } = await unavailable.run(["turnstile-create"]);
+    assert.deepEqual(result, {
+      command: "turnstile-create",
+      code: "STAGING_TURNSTILE_CREATE_FAILED",
+      status: null,
+      codes: [],
+    });
+  } finally {
+    unavailable.planted.cleanup();
   }
 });
 
@@ -1856,7 +1977,7 @@ test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, nev
   } finally {
     f.planted.cleanup();
   }
-  const unset = await world();
+  const unset = await world({ staging: unsetStaging() });
   try {
     assert.equal((await unset.run(["neon-probe"])).result.code, "STAGING_IDENTIFIERS_UNSET");
   } finally {
