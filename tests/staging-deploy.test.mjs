@@ -5,6 +5,7 @@
 // Cloudflare API, database and HTTP; nothing reaches a provider.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -1767,6 +1768,9 @@ const quietLogging = {
   log_statement_sample_rate: "1",
   log_min_error_statement: "panic",
   log_duration: "off",
+  debug_print_parse: "off",
+  debug_print_rewritten: "off",
+  debug_print_plan: "off",
 };
 const neonModule = { track: "top", track_utility: "on" };
 function probeWorld({
@@ -1861,7 +1865,9 @@ function probeWorld({
           return scratch.extension ? [{ schema: "public" }] : [];
         if (/clock_timestamp/.test(text)) return [{ before: "2026-10-20 19:00:00.000001+00" }];
         if (/pg_stat_statements_reset/.test(text)) return [{ reset: "x" }];
-        if (/pg_stat_statements_info/.test(text)) return [{ full_reset: true, remaining: residue }];
+        if (/pg_stat_statements_info/.test(text))
+          return [{ full_reset: true, same_instance: true, remaining: residue }];
+        if (/ AS instance$/.test(text)) return [{ instance: "1792526146.012127/10.0.0.1/5432" }];
         if (/^SELECT EXISTS \(SELECT 1 FROM pg_catalog\.pg_extension/.test(text))
           return [
             { extension: database === "morrow" ? stats.extension === true : scratch.extension },
@@ -1981,6 +1987,9 @@ test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, nev
       logStatementSampleRate: "1",
       logMinErrorStatement: "panic",
       logDuration: "off",
+      debugPrintParse: "off",
+      debugPrintRewritten: "off",
+      debugPrintPlan: "off",
     },
     refusal: null,
     plaintextSent: true,
@@ -2052,16 +2061,27 @@ test("neon-probe: on Neon's shape, the plaintext, the wipe from neondb and the v
       .filter((s) => /EXTENSION|pg_stat_statements_/.test(s.text ?? ""))
       .every((s) => s.database === "neondb"),
   );
-  // The plaintext: once in its ALTER ROLE (morrow), once as the verification's parameter.
+  // The plaintext: once, in its ALTER ROLE (morrow). The verification in neondb carries
+  // only its SHA-256 digest and the instance read before the plaintext was sent.
   const plain = probe.statements.find((s) => plaintextStatement.test(s.text ?? ""));
   const generated = /'([A-Za-z0-9_-]{43})'$/.exec(plain.text)[1];
   const carrying = probe.statements.filter((s) =>
     ((s.text ?? "") + JSON.stringify(s.params ?? [])).includes(generated),
   );
-  assert.equal(carrying.length, 2);
-  assert.match(carrying[1].text, /pg_stat_statements_info/);
-  assert.deepEqual(JSON.parse(carrying[1].params[1]), [generated]);
-  assert.ok(probe.statements.indexOf(carrying[0]) < probe.statements.indexOf(carrying[1]));
+  assert.deepEqual(carrying, [plain]);
+  const verify = probe.statements.find((s) => /pg_stat_statements_info/.test(s.text ?? ""));
+  assert.equal(verify.database, "neondb");
+  assert.deepEqual(JSON.parse(verify.params[1]), [
+    createHash("sha256").update(generated).digest("hex"),
+  ]);
+  assert.equal(verify.params[2], "1792526146.012127/10.0.0.1/5432");
+  assert.ok(probe.statements.indexOf(plain) < probe.statements.indexOf(verify));
+  const instanceReads = probe.statements.filter((s) => / AS instance$/.test(s.text ?? ""));
+  assert.deepEqual(
+    instanceReads.map((s) => s.database),
+    ["morrow", "neondb"],
+  );
+  assert.ok(probe.statements.indexOf(instanceReads[1]) < probe.statements.indexOf(plain));
   for (const value of [
     probe.password,
     generated,
@@ -2091,6 +2111,10 @@ test("neon-probe: refusals send no plaintext, and failures after it keep what wa
     [
       { stats: neonModule, scratchStats: { log_min_error_statement: "error" } },
       { code: "STAGING_STATEMENT_LOGGING", reason: "log_min_error_statement", database: "scratch" },
+    ],
+    [
+      { stats: { debug_print_parse: "on" } },
+      { code: "STAGING_STATEMENT_LOGGING", reason: "debug_print_parse", database: "binding" },
     ],
     [{ stats: { password_encryption: "md5" } }, { code: "STAGING_PASSWORD_ENCRYPTION" }],
   ]) {
@@ -2127,6 +2151,8 @@ test("neon-probe: refusals send no plaintext, and failures after it keep what wa
     code: "STAGING_STATEMENT_STATS_RESIDUE",
     stage: "verify",
     entriesRemaining: 1,
+    fullReset: true,
+    sameInstance: true,
   });
   assert.equal(kept.result.mN3.storedForm, "error");
   assert.deepEqual(kept.result.mN3.roleCleanup, { done: false, sqlstate: "XX000" });

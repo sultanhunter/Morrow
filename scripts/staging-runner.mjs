@@ -623,12 +623,14 @@ export async function roleControlFacts(connection, roles) {
 // statements in every database, whether or not the extension exists there (measured on a
 // Neon probe branch, docs/evidence/live/2026-10-20-neon-password-path-experiments.md, and
 // checked by lab:staging-runner on PostgreSQL 17.11). The server log would keep the text
-// under log_statement, a duration threshold, or a log_min_error_statement level that a
-// failing statement reaches. So one row reads the extension in the session's database, the
-// module's settings (which exist only while it is loaded), password_encryption and the
-// logging settings.
+// under log_statement, a duration threshold, a log_min_error_statement level that a
+// failing statement reaches, or debug_print_parse or debug_print_rewritten, which print
+// the statement's tree with the PASSWORD string (USERSET: a database or role owner can
+// turn them on with ALTER DATABASE/ROLE ... SET; checked on PostgreSQL 17.11). So one row
+// reads the extension in the session's database, the module's settings (which exist only
+// while it is loaded), password_encryption and the logging settings.
 export const statementStatsQuery =
-  "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'pg_stat_statements') AS extension, current_setting('pg_stat_statements.track', true) AS track, current_setting('pg_stat_statements.track_utility', true) AS track_utility, current_setting('password_encryption') AS password_encryption, current_setting('log_statement') AS log_statement, current_setting('log_min_duration_statement') AS log_min_duration_statement, current_setting('log_min_duration_sample') AS log_min_duration_sample, current_setting('log_statement_sample_rate') AS log_statement_sample_rate, current_setting('log_min_error_statement') AS log_min_error_statement, current_setting('log_duration') AS log_duration";
+  "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'pg_stat_statements') AS extension, current_setting('pg_stat_statements.track', true) AS track, current_setting('pg_stat_statements.track_utility', true) AS track_utility, current_setting('password_encryption') AS password_encryption, current_setting('log_statement') AS log_statement, current_setting('log_min_duration_statement') AS log_min_duration_statement, current_setting('log_min_duration_sample') AS log_min_duration_sample, current_setting('log_statement_sample_rate') AS log_statement_sample_rate, current_setting('log_min_error_statement') AS log_min_error_statement, current_setting('log_duration') AS log_duration, current_setting('debug_print_parse') AS debug_print_parse, current_setting('debug_print_rewritten') AS debug_print_rewritten, current_setting('debug_print_plan') AS debug_print_plan";
 const oneOf = (value, values) => (values.includes(value) ? value : undefined);
 const messageLevels = Object.freeze([
   "debug5",
@@ -682,6 +684,9 @@ export function statementStatsFacts(row) {
         : null,
     logMinErrorStatement: oneOf(row?.log_min_error_statement, messageLevels) ?? null,
     logDuration: oneOf(row?.log_duration, ["on", "off"]) ?? null,
+    debugPrintParse: oneOf(row?.debug_print_parse, ["on", "off"]) ?? null,
+    debugPrintRewritten: oneOf(row?.debug_print_rewritten, ["on", "off"]) ?? null,
+    debugPrintPlan: oneOf(row?.debug_print_plan, ["on", "off"]) ?? null,
   });
 }
 export async function readStatementStats(connection) {
@@ -694,8 +699,16 @@ export async function readStatementStats(connection) {
 }
 // Pure: the first logging setting under which the server could write a statement's text
 // to its log, or null. log_min_error_statement must be panic: at fatal, a statement cut
-// short by a terminating connection is logged with its text. log_duration alone never
-// logs the text, so it is only recorded. An unreadable value refuses.
+// short by a terminating connection is logged with its text. The three debug_print
+// settings must be off: parse and rewritten print an ALTER ROLE's PASSWORD string (both
+// checked on PostgreSQL 17.11); plan printed nothing for it there, and is refused too
+// because it prints statement trees. log_duration alone never logs the text, so it is
+// only recorded. An unreadable value refuses.
+const debugPrintSettings = Object.freeze([
+  ["debug_print_parse", "debugPrintParse"],
+  ["debug_print_rewritten", "debugPrintRewritten"],
+  ["debug_print_plan", "debugPrintPlan"],
+]);
 export function statementLoggingRefusal(facts) {
   if (facts.logStatement !== "none") return "log_statement";
   if (facts.logMinDurationStatement !== "disabled") return "log_min_duration_statement";
@@ -708,6 +721,7 @@ export function statementLoggingRefusal(facts) {
     );
   if (sampled) return "log_min_duration_sample";
   if (facts.logMinErrorStatement !== "panic") return "log_min_error_statement";
+  for (const [setting, fact] of debugPrintSettings) if (facts[fact] !== "off") return setting;
   return null;
 }
 // Refuses before any password statement, with closed details only: statistics that
@@ -730,11 +744,34 @@ export function assertPasswordStatementSafe(stats) {
   return stats.recording;
 }
 
+// The PostgreSQL instance a session runs on: the postmaster's start time (a restart
+// changes it) and, over TCP, the server's address and port ("-" over a socket). Read in
+// both sessions before any password statement and again inside the verification, so the
+// wipe is shown to have run on the instance that recorded the statements and that it did
+// not restart in between (pg_stat_statements saves its entries across a clean restart).
+// Only compared in SQL; never printed, logged or put in an error.
+export const instanceIdentityExpression =
+  "pg_catalog.concat_ws('/', EXTRACT(epoch FROM pg_catalog.pg_postmaster_start_time())::text, coalesce(pg_catalog.host(pg_catalog.inet_server_addr()), '-'), coalesce(pg_catalog.inet_server_port()::text, '-'))";
+export const instanceIdentityQuery = `SELECT ${instanceIdentityExpression} AS instance`;
+export async function readInstanceIdentity(connection) {
+  try {
+    const [row] = await connection.query(instanceIdentityQuery);
+    return typeof row?.instance === "string" && /^[0-9.]{1,40}\/[^\s]{1,80}$/.test(row.instance)
+      ? row.instance
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 // The scratch database the wipe runs from: Neon's default `neondb`, never the binding
 // database, so `morrow` never gains the extension. Opened, identity-checked and held to
-// the same logging rule before any password statement, because the verification query
-// carries the passwords as a bind parameter. A scratch database that is unnamed, the
-// binding database itself, absent or unreachable keeps the refusal (`reason` `module`).
+// the same logging rule before any password statement. It never receives a password (the
+// verification sends only SHA-256 digests), but every session of a password run meets one
+// rule, and a scratch database that logs stops the run before any password exists. Its
+// instance must be the binding session's (instanceIdentityQuery). A scratch database that
+// is unnamed, the binding database itself, absent, unreachable, or not shown to run on the
+// binding's instance keeps the refusal (`reason` `module`). Returns {session, instance}.
 export const statementStatsScratchDatabase = "neondb";
 const scratchRefusal = (scratch) =>
   new StagingError("STAGING_STATEMENT_STATS_PRESENT", {
@@ -775,7 +812,10 @@ export async function openStatementStatsScratch(connection, { binding, administr
     const logging = statementLoggingRefusal(await readStatementStats(session));
     if (logging)
       throw new StagingError("STAGING_STATEMENT_LOGGING", { reason: logging, database: "scratch" });
-    return session;
+    const instance = await readInstanceIdentity(connection);
+    if (instance === null || (await readInstanceIdentity(session)) !== instance)
+      throw scratchRefusal("other_instance");
+    return Object.freeze({ session, instance });
   } catch (error) {
     await session.close();
     throw error;
@@ -784,24 +824,37 @@ export async function openStatementStatsScratch(connection, { binding, administr
 
 // The wipe (owner decision 2026-10-20, "Plaintext, then wipe stats"), from the scratch
 // session only: create the extension there if it is absent, run the full reset (all
-// users, all databases; it also truncates the stored query texts), verify that the reset
-// was full (pg_stat_statements_info.stats_reset moved past the time read just before it)
-// and that no entry contains any of `passwords` (sent as one bind parameter; only counts
-// come back), then drop the extension if this call created it. Any failure, including a
-// residue or a drop that fails, is STAGING_STATEMENT_STATS_RESIDUE with the stage reached
-// and the count when one was read.
+// users, all databases; it also truncates the stored query texts), then verify, in one
+// query: the reset was full (pg_stat_statements_info.stats_reset moved past the time read
+// just before it, so entries the session cannot see are gone too), the session still
+// runs on `instance` (read in both sessions before the password statements), and no
+// entry's text contains any of `passwords`. The passwords never leave memory here: the
+// query receives their SHA-256 digests as one bind parameter, and the server hashes every
+// 43-character window of each run of password characters in each entry's text and
+// compares (each password is 32 random bytes, so its digest reveals nothing). Only
+// booleans and a count come back. Then the extension is dropped if this call created it.
+// Any failure, including a residue or a drop that fails, is
+// STAGING_STATEMENT_STATS_RESIDUE with the stage reached and what the verification read.
 const extensionSchemaQuery =
   "SELECT n.nspname::text AS schema FROM pg_catalog.pg_extension e JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'pg_stat_statements'";
-export async function wipeStatementStats(session, passwords) {
+// The verification query for the extension in `schema`: $1 the time read just before the
+// reset, $2 the JSON array of password digests (lowercase hex), $3 the expected instance.
+export function statementStatsVerificationQuery(schema) {
+  if (typeof schema !== "string" || !identifier.test(schema)) throw Error("schema");
+  return `SELECT coalesce((SELECT i.stats_reset >= $1::timestamptz FROM ${schema}.pg_stat_statements_info i), false) AS full_reset, coalesce(${instanceIdentityExpression} = $3::text, false) AS same_instance, (SELECT count(*)::int FROM ${schema}.pg_stat_statements s WHERE EXISTS (SELECT 1 FROM pg_catalog.regexp_matches(s.query, '[A-Za-z0-9_-]{43,}', 'g') m(run), pg_catalog.generate_series(1, pg_catalog.length(m.run[1]) - 42) w(i) WHERE pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(pg_catalog.substr(m.run[1], w.i, 43), 'UTF8')), 'hex') IN (SELECT pg_catalog.jsonb_array_elements_text($2::jsonb)))) AS remaining`;
+}
+export const passwordDigest = (password) => createHash("sha256").update(password).digest("hex");
+export async function wipeStatementStats(session, passwords, instance) {
   if (
     !Array.isArray(passwords) ||
     !passwords.length ||
     !passwords.every((p) => passwordGrammar.test(p))
   )
     throw new StagingError("STAGING_PASSWORD_INVALID");
+  const digests = JSON.stringify(passwords.map(passwordDigest));
   let stage = "extension";
   let created = false;
-  let remaining = null;
+  let check = null;
   try {
     let [row] = await session.query(extensionSchemaQuery);
     if (!row) {
@@ -809,18 +862,23 @@ export async function wipeStatementStats(session, passwords) {
       created = true;
       [row] = await session.query(extensionSchemaQuery);
     }
-    const schema = row?.schema;
-    if (typeof schema !== "string" || !identifier.test(schema)) throw Error("schema");
+    const query = statementStatsVerificationQuery(row?.schema);
     stage = "reset";
     const [clock] = await session.query("SELECT pg_catalog.clock_timestamp()::text AS before");
-    await session.query(`SELECT ${schema}.pg_stat_statements_reset()::text AS reset`);
+    await session.query(`SELECT ${row.schema}.pg_stat_statements_reset()::text AS reset`);
     stage = "verify";
-    const [check] = await session.query(
-      `SELECT coalesce((SELECT i.stats_reset >= $1::timestamptz FROM ${schema}.pg_stat_statements_info i), false) AS full_reset, (SELECT count(*)::int FROM ${schema}.pg_stat_statements s WHERE EXISTS (SELECT 1 FROM pg_catalog.jsonb_array_elements_text($2::jsonb) p(v) WHERE pg_catalog.strpos(s.query, p.v) > 0)) AS remaining`,
-      [clock?.before, JSON.stringify(passwords)],
-    );
-    remaining = Number.isSafeInteger(check?.remaining) ? check.remaining : null;
-    if (check?.full_reset !== true || remaining !== 0) throw Error("residue");
+    [check] = await session.query(query, [
+      clock?.before,
+      digests,
+      typeof instance === "string" ? instance : "",
+    ]);
+    if (
+      check?.full_reset !== true ||
+      check?.same_instance !== true ||
+      check?.remaining !== 0 ||
+      typeof instance !== "string"
+    )
+      throw Error("residue");
     if (created) {
       stage = "drop";
       await session.exec("DROP EXTENSION pg_stat_statements");
@@ -834,15 +892,19 @@ export async function wipeStatementStats(session, passwords) {
       } catch {
         // The residue below already stops the run.
       }
+    const read = (value) => (typeof value === "boolean" ? value : null);
     throw new StagingError("STAGING_STATEMENT_STATS_RESIDUE", {
       stage,
-      entriesRemaining: remaining,
+      entriesRemaining: Number.isSafeInteger(check?.remaining) ? check.remaining : null,
+      fullReset: read(check?.full_reset),
+      sameInstance: read(check?.same_instance),
     });
   }
 }
 
 // The stored form of the roles' passwords, where the session may read pg_authid (a
-// superuser can, and so can a pg_read_all_data member such as Neon's neondb_owner through
+// superuser can, and so can a pg_read_all_data member; under ADR-0020's model of Neon's
+// roles, not yet confirmed on Neon (M-N1+, P04.T01j-AC15), neondb_owner is one through
 // neon_superuser; a plain CREATEROLE role cannot): "SCRAM-SHA-256" when every
 // role's stored password is a SCRAM-SHA-256 verifier, "other" when any is not,
 // "unreadable" otherwise. Only a count leaves the server, never a stored verifier.
@@ -863,8 +925,10 @@ export async function storedPasswordForm(connection, roles) {
 // and returned only to the in-process caller, which delivers them to the broker (the
 // 0600 first-deploy file or `secret bulk` stdin). Before any password statement the
 // session must pass assertPasswordStatementSafe; when the loaded module records the
-// statements, the scratch session is opened first and the statistics are wiped and
-// verified after the statements, whether they committed or failed. A wipe that cannot be
+// statements, the scratch session is opened and shown to share the binding's instance
+// first, and the statistics are wiped and verified after the statements, whether they
+// committed or failed. Each plaintext leaves memory only in its ALTER ROLE and the
+// broker delivery; the wipe sends digests. A wipe that cannot be
 // verified stops the run before any password is returned (STAGING_STATEMENT_STATS_RESIDUE).
 // `scratch` is {database, connect} for the scratch database (statementStatsScratchDatabase).
 export async function provisionRoles({
@@ -879,12 +943,12 @@ export async function provisionRoles({
   if (!passwordRoles.every((role) => roles.includes(role)))
     throw new StagingError("STAGING_ROLE_INVALID");
   const connection = await connectChecked(connect, binding, administrator);
-  let scratchSession = null;
+  let wipeFrom = null;
   try {
     if ((await presentRoles(connection, roles)) !== roles.length)
       throw new StagingError("STAGING_ROLES_MISSING");
     if (passwordRoles.length && assertPasswordStatementSafe(await readStatementStats(connection)))
-      scratchSession = await openStatementStatsScratch(connection, {
+      wipeFrom = await openStatementStatsScratch(connection, {
         binding,
         administrator,
         scratch,
@@ -897,8 +961,15 @@ export async function provisionRoles({
     } catch (error) {
       failure = sqlFailure("STAGING_PROVISION_FAILED", error);
     }
-    const statementStats = scratchSession
-      ? { recording: true, ...(await wipeStatementStats(scratchSession, [...passwords.values()])) }
+    const statementStats = wipeFrom
+      ? {
+          recording: true,
+          ...(await wipeStatementStats(
+            wipeFrom.session,
+            [...passwords.values()],
+            wipeFrom.instance,
+          )),
+        }
       : { recording: false };
     if (failure) throw failure;
     const facts = await roleControlFacts(connection, roles);
@@ -909,7 +980,7 @@ export async function provisionRoles({
     if (passwordStorage === "other") throw new StagingError("STAGING_PASSWORD_STORAGE_MISMATCH");
     return { passwords, facts, passwordStorage, statementStats };
   } finally {
-    if (scratchSession) await scratchSession.close();
+    if (wipeFrom) await wipeFrom.session.close();
     await connection.close();
   }
 }

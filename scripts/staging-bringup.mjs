@@ -205,7 +205,8 @@ export async function status(ctx, p) {
 // statistics module, password_encryption and the logging settings; (3) only when
 // provisioning's own gate would pass, whether a generated plaintext (sent once, never
 // kept) is accepted, its stored form where pg_authid is readable, the same wipe and
-// verification from the scratch database, and whether the binding's database gained the
+// verification from the scratch database (digests only, on the same instance, checked
+// as provisioning checks it), and whether the binding's database gained the
 // extension. Each step after the plaintext records its own failure, so a failing step
 // never discards what was already measured.
 const neonPlaintextOnly = /Neon only supports being given plaintext passwords/;
@@ -268,6 +269,9 @@ async function probePasswords(connection, role, p) {
       logStatementSampleRate: stats.logStatementSampleRate,
       logMinErrorStatement: stats.logMinErrorStatement,
       logDuration: stats.logDuration,
+      debugPrintParse: stats.debugPrintParse,
+      debugPrintRewritten: stats.debugPrintRewritten,
+      debugPrintPlan: stats.debugPrintPlan,
     };
     try {
       if (assertPasswordStatementSafe(stats))
@@ -297,7 +301,7 @@ async function probePasswords(connection, role, p) {
       }
     if (scratch)
       try {
-        record.wipe = await wipeStatementStats(scratch, [password]);
+        record.wipe = await wipeStatementStats(scratch.session, [password], scratch.instance);
       } catch (error) {
         record.wipe = { wiped: false, ...failureRecord(error) };
       }
@@ -311,7 +315,7 @@ async function probePasswords(connection, role, p) {
     }
     return record;
   } finally {
-    if (scratch) await scratch.close();
+    if (scratch) await scratch.session.close();
     await target.close();
   }
 }

@@ -31,6 +31,7 @@ import {
   ledgerDrift,
   morrowSetRowsQuery,
   neonConnector,
+  passwordDigest,
   passwordLiteral,
   platformSeedRows,
   provisioningSql,
@@ -39,6 +40,7 @@ import {
   scramVerifier,
   statementLoggingRefusal,
   statementStatsFacts,
+  statementStatsVerificationQuery,
   wipeStatementStats,
 } from "../scripts/staging-runner.mjs";
 import {
@@ -613,6 +615,9 @@ const statsRow = (change = {}) => ({
   log_statement_sample_rate: "1",
   log_min_error_statement: "panic",
   log_duration: "off",
+  debug_print_parse: "off",
+  debug_print_rewritten: "off",
+  debug_print_plan: "off",
   ...change,
 });
 test("statement statistics: the facts that let a password statement through, and nothing else", () => {
@@ -630,6 +635,9 @@ test("statement statistics: the facts that let a password statement through, and
     logStatementSampleRate: "1",
     logMinErrorStatement: "panic",
     logDuration: "off",
+    debugPrintParse: "off",
+    debugPrintRewritten: "off",
+    debugPrintPlan: "off",
   });
   for (const [label, change, recording, module] of [
     ["extension in the target database", { extension: true }, true, false],
@@ -694,12 +702,22 @@ test("statement statistics: the facts that let a password statement through, and
   assert.equal(fact({ log_min_error_statement: "error" }, "logMinErrorStatement"), "error");
   assert.equal(fact({ log_min_error_statement: "PANIC" }, "logMinErrorStatement"), null);
   assert.equal(fact({ log_duration: "on" }, "logDuration"), "on");
+  for (const [setting, key] of [
+    ["debug_print_parse", "debugPrintParse"],
+    ["debug_print_rewritten", "debugPrintRewritten"],
+    ["debug_print_plan", "debugPrintPlan"],
+  ]) {
+    assert.equal(fact({ [setting]: "on" }, key), "on");
+    assert.equal(fact({ [setting]: "true" }, key), null);
+    assert.equal(fact({ [setting]: null }, key), null);
+  }
 });
 
 // The server log must never be able to write a password statement's text: no statement
-// logging, no duration threshold (or a sample rate of 0), and log_min_error_statement at
-// panic. log_duration alone logs no text. Neon's staging values (measured 2026-10-20)
-// pass.
+// logging, no duration threshold (or a sample rate of 0), log_min_error_statement at
+// panic, and no debug_print output (parse and rewritten print the PASSWORD string). The
+// debug_print settings are USERSET, so a database or role owner can turn them on.
+// log_duration alone logs no text. Neon's staging values (measured 2026-10-20) pass.
 test("statement logging: only settings that never write a statement's text pass", () => {
   const refusal = (change) => statementLoggingRefusal(statementStatsFacts(statsRow(change)));
   assert.equal(refusal({}), null);
@@ -724,6 +742,12 @@ test("statement logging: only settings that never write a statement's text pass"
     [{ log_min_error_statement: "log" }, "log_min_error_statement"],
     [{ log_min_error_statement: "fatal" }, "log_min_error_statement"],
     [{ log_min_error_statement: null }, "log_min_error_statement"],
+    [{ debug_print_parse: "on" }, "debug_print_parse"],
+    [{ debug_print_parse: null }, "debug_print_parse"],
+    [{ debug_print_rewritten: "on" }, "debug_print_rewritten"],
+    [{ debug_print_rewritten: "yes" }, "debug_print_rewritten"],
+    [{ debug_print_plan: "on" }, "debug_print_plan"],
+    [{ debug_print_plan: undefined }, "debug_print_plan"],
   ])
     assert.equal(refusal(change), reason, JSON.stringify(change));
   assert.equal(statementLoggingRefusal(statementStatsFacts(null)), "log_statement");
@@ -1696,6 +1720,11 @@ test("provision-roles: unreadable statistics, the extension, non-SCRAM storage, 
       { statementStats: { log_min_error_statement: "error" } },
       logging("log_min_error_statement", "binding"),
     ],
+    ...["debug_print_parse", "debug_print_rewritten", "debug_print_plan"].map((setting) => [
+      setting,
+      { statementStats: { ...recordingModule, [setting]: "on" } },
+      logging(setting, "binding"),
+    ]),
     [
       "scratch database absent",
       { statementStats: recordingModule, scratchPresent: false },
@@ -1715,6 +1744,34 @@ test("provision-roles: unreadable statistics, the extension, non-SCRAM storage, 
       "scratch session logs errors",
       { statementStats: recordingModule, scratchStats: { log_min_error_statement: "error" } },
       logging("log_min_error_statement", "scratch"),
+    ],
+    [
+      "scratch session prints parse trees",
+      { statementStats: recordingModule, scratchStats: { debug_print_parse: "on" } },
+      logging("debug_print_parse", "scratch"),
+    ],
+    [
+      "scratch session on another instance",
+      { statementStats: recordingModule, instance: { neondb: "1792526999.5/10.0.0.2/5432" } },
+      moduleRefusal("other_instance"),
+    ],
+    [
+      "the binding's instance unreadable",
+      { statementStats: recordingModule, instance: { morrow: null } },
+      moduleRefusal("other_instance"),
+    ],
+    [
+      "the scratch session's instance unreadable",
+      {
+        statementStats: recordingModule,
+        rules: [
+          [
+            / AS instance$/,
+            (text, params, db) => (db === "neondb" ? Error("x") : [{ instance: "1/-/-" }]),
+          ],
+        ],
+      },
+      moduleRefusal("other_instance"),
     ],
   ]) {
     for (const argv of provisionModes) {
@@ -1751,7 +1808,8 @@ test("provision-roles: unreadable statistics, the extension, non-SCRAM storage, 
 // checked first; after the password statements the statistics are fully reset from it,
 // verified to hold no password, and the extension it created is dropped. The binding's
 // database never gains the extension; each plaintext reaches SQL text once, in its own
-// ALTER ROLE, and otherwise only the verification query's bind parameter.
+// ALTER ROLE, and nowhere else: the verification receives only SHA-256 digests and the
+// instance identity both sessions read before the password statements.
 test("provision-roles: a recording module is wiped and verified from the scratch database", async () => {
   for (const [argv, scratchExtension] of [
     [["provision-roles", "--first"], false],
@@ -1787,6 +1845,8 @@ test("provision-roles: a recording module is wiped and verified from the scratch
       at(/FROM pg_catalog\.pg_database WHERE datname/, "morrow"),
       at(/session_user::text AS session_role/, "neondb"),
       at(/AS extension, current_setting/, "neondb"),
+      at(/ AS instance$/, "morrow"),
+      at(/ AS instance$/, "neondb"),
       at(/^BEGIN$/, "morrow"),
       at(/^COMMIT$/, "morrow"),
       at(/pg_catalog\.pg_extension e JOIN/, "neondb"),
@@ -1809,20 +1869,26 @@ test("provision-roles: a recording module is wiped and verified from the scratch
       scratchExtension ? [0, 0] : [1, 1],
       name,
     );
-    // The verification query: the reset time read before it, then every password as one
-    // JSON bind parameter; the statement text itself carries none.
+    // The verification query: the reset time read before it, every password's SHA-256
+    // digest as one JSON bind parameter, and the instance read in both sessions before the
+    // password statements. Each plaintext is in exactly one statement, its own ALTER ROLE.
     const verify = db.statements[at(/pg_stat_statements_info/)];
+    assert.equal(verify.text, statementStatsVerificationQuery("public"), name);
+    assert.equal(verify.params.length, 3, name);
     assert.equal(verify.params[0], "2026-10-20 12:00:00.000001+00", name);
-    assert.deepEqual(JSON.parse(verify.params[1]).sort(), [...passwords].sort(), name);
+    assert.deepEqual(
+      JSON.parse(verify.params[1]).sort(),
+      passwords.map((p) => createHash("sha256").update(p).digest("hex")).sort(),
+      name,
+    );
+    assert.equal(verify.params[2], "1792526146.012127/10.0.0.1/5432", name);
     for (const password of passwords) {
       const carrying = db.statements.filter((s) =>
         (s.text + JSON.stringify(s.params)).includes(password),
       );
-      assert.equal(carrying.length, 2, name);
+      assert.equal(carrying.length, 1, name);
       assert.match(carrying[0].text, passwordStatement, name);
       assert.equal(carrying[0].database, "morrow", name);
-      assert.equal(carrying[1], verify, name);
-      assert.ok(!verify.text.includes(password), name);
     }
     assert.ok(
       passwords.every((p) => !out.join().includes(p) && !err.join().includes(p)),
@@ -1836,18 +1902,32 @@ test("provision-roles: a recording module is wiped and verified from the scratch
 // run created is dropped on the way out where possible. A failure of the password
 // statements still runs the wipe; a residue then wins over the statement's own failure.
 test("provision-roles: a wipe that cannot be verified refuses with the stage reached, and delivers nothing", async () => {
-  const residue = (stage, entriesRemaining) => ({
+  const residue = (stage, entriesRemaining, fullReset = null, sameInstance = null) => ({
     code: "STAGING_STATEMENT_STATS_RESIDUE",
     stage,
     entriesRemaining,
+    fullReset,
+    sameInstance,
   });
   for (const [label, database, expected, dropped] of [
-    ["an entry remains", { residue: 1 }, residue("verify", 1), 1],
-    ["a partial reset", { partialReset: true }, residue("verify", 0), 1],
+    ["an entry remains", { residue: 1 }, residue("verify", 1, true, true), 1],
+    ["a partial reset", { partialReset: true }, residue("verify", 0, false, true), 1],
+    [
+      "the instance changed (a restart or another server)",
+      { instanceChanged: true },
+      residue("verify", 0, true, false),
+      1,
+    ],
     [
       "the reset fails",
       { rules: [[/pg_stat_statements_reset\(\)/, Error("permission denied")]] },
       residue("reset", null),
+      1,
+    ],
+    [
+      "the verification fails",
+      { rules: [[/pg_stat_statements_info/, Error("permission denied")]] },
+      residue("verify", null),
       1,
     ],
     [
@@ -1859,7 +1939,7 @@ test("provision-roles: a wipe that cannot be verified refuses with the stage rea
     [
       "the drop fails",
       { execError: { pattern: /^DROP EXTENSION/, error: Error("dependent objects") } },
-      residue("drop", 0),
+      residue("drop", 0, true, true),
       0,
     ],
     [
@@ -1868,7 +1948,7 @@ test("provision-roles: a wipe that cannot be verified refuses with the stage rea
         residue: 2,
         execError: { pattern: /^ALTER ROLE morrow_api /, error: Error("refused") },
       },
-      residue("verify", 2),
+      residue("verify", 2, true, true),
       1,
     ],
     [
@@ -1940,15 +2020,31 @@ test("provisionRoles: an unnamed scratch database or the binding's own refuses b
   }
 });
 
-test("wipeStatementStats: only generated passwords reach the verification query", async () => {
+test("wipeStatementStats: only generated passwords are digested, and a missing instance never verifies", async () => {
   for (const passwords of [[], ["short"], ["x".repeat(43) + "'"], "x".repeat(43), null]) {
     const db = fakeDatabase({ scratchExtension: true });
     const session = await db.connector({ binding: { database: "neondb" } }).connect();
-    await assert.rejects(wipeStatementStats(session, passwords), {
+    await assert.rejects(wipeStatementStats(session, passwords, "1/-/-"), {
       code: "STAGING_PASSWORD_INVALID",
     });
     assert.deepEqual(db.statements, []);
   }
+  // Without the instance read before the password statements, the wipe still runs (the
+  // reset is the point), and the verification cannot pass.
+  const db = fakeDatabase({ scratchExtension: true });
+  const session = await db.connector({ binding: { database: "neondb" } }).connect();
+  await assert.rejects(wipeStatementStats(session, ["x".repeat(43)], undefined), {
+    code: "STAGING_STATEMENT_STATS_RESIDUE",
+    details: { stage: "verify", entriesRemaining: 0, fullReset: true, sameInstance: true },
+  });
+  assert.ok(db.statements.some((s) => /pg_stat_statements_reset\(\)/.test(s.text)));
+  // The digest is SHA-256 over the password's bytes, lowercase hex.
+  assert.equal(
+    passwordDigest("a".repeat(43)),
+    createHash("sha256").update("a".repeat(43)).digest("hex"),
+  );
+  assert.match(passwordDigest("a".repeat(43)), /^[0-9a-f]{64}$/);
+  assert.throws(() => statementStatsVerificationQuery("public; x"));
 });
 
 test("provision-roles: the stored form is checked where pg_authid is readable", async () => {

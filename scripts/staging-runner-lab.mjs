@@ -18,10 +18,13 @@
 // Provisioning sends each generated plaintext once, in its own ALTER ROLE (P04.T01i M-N3
 // as amended 2026-10-20: Neon takes only plaintexts), after refusing a database whose
 // statistics cannot be read or hold the extension, non-SCRAM storage, statement logging
-// in either session, and a recording module with no usable scratch database. With the
-// module recording, the statistics are wiped and verified from the scratch database
-// `neondb` (owner decision "Plaintext, then wipe stats"): zero entries hold a password,
-// `morrow` never gains the extension, and the server log holds no plaintext.
+// in either session (debug_print_parse and debug_print_rewritten included), and a
+// recording module with no usable scratch database. With the module recording, the
+// statistics are wiped and verified from the scratch database `neondb` (owner decision
+// "Plaintext, then wipe stats"): the run's passwords were recorded before the wipe, zero
+// entries hold one after it, the scratch session never receives a plaintext (the
+// verification takes digests), `morrow` never gains the extension, and the server log
+// holds no plaintext. The verification query itself runs on real statistics first.
 // No provider, credential, host port or merchant data; every secret is a synthetic marker.
 import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -41,7 +44,15 @@ import { repositoryRoot, writeArtifact } from "./artifacts.mjs";
 import { localPostgresLab } from "./local-postgres-lab.mjs";
 import { loadMigrationChain, schemaHead } from "./migration-chain.mjs";
 import { identityConstants, main } from "./staging.mjs";
-import { runMigrations, runnerSetRows, scramVerifier } from "./staging-runner.mjs";
+import {
+  generatePassword,
+  instanceIdentityQuery,
+  passwordDigest,
+  runMigrations,
+  runnerSetRows,
+  scramVerifier,
+  statementStatsVerificationQuery,
+} from "./staging-runner.mjs";
 import { psqlConnector } from "./fixtures/staging-psql-connection.mjs";
 import {
   createAdministrator,
@@ -187,7 +198,11 @@ const superuserLab = async ({ id, sql, image, version }) => {
   // The measured premise of M-N3 as amended: the preloaded module records a password
   // statement, literal included, in a database without the extension, and a full reset
   // clears it. Read from morrow_lab, the only database that holds the extension here.
-  const premise = "labpremise" + hex(16);
+  // Then the wipe's own verification query (statementStatsVerificationQuery, with the
+  // password's digest, never the password) on these real statistics: before the reset it
+  // finds the entry and sees no full reset; after it, a full reset and no entry; and it
+  // refuses an instance other than its own.
+  const premise = generatePassword();
   sql("CREATE ROLE lab_stats_probe NOLOGIN;");
   db(`ALTER ROLE lab_stats_probe PASSWORD '${premise}';`);
   sql("CREATE EXTENSION pg_stat_statements;");
@@ -198,8 +213,37 @@ const superuserLab = async ({ id, sql, image, version }) => {
     holding() >= 1 &&
       db("SELECT count(*) FROM pg_extension WHERE extname='pg_stat_statements';") === "0",
   );
-  sql("SELECT pg_stat_statements_reset();");
-  check("full_reset_clears_the_recorded_password", holding() === 0);
+  const verifier = await psqlConnector(id, { user: "postgres", database: "morrow_lab" }).connect();
+  try {
+    const [{ instance }] = await verifier.query(instanceIdentityQuery);
+    const [{ before }] = await verifier.query(
+      "SELECT pg_catalog.clock_timestamp()::text AS before",
+    );
+    const verify = async (expected = instance) =>
+      (
+        await verifier.query(statementStatsVerificationQuery("public"), [
+          before,
+          JSON.stringify([passwordDigest(generatePassword()), passwordDigest(premise)]),
+          expected,
+        ])
+      )[0];
+    const recorded = await verify();
+    check(
+      "verification_query_finds_a_recorded_password_before_the_reset",
+      recorded?.full_reset === false && recorded.same_instance === true && recorded.remaining >= 1,
+    );
+    await verifier.query("SELECT public.pg_stat_statements_reset()::text AS reset");
+    const wiped = await verify();
+    check(
+      "verification_query_sees_the_full_reset_and_no_entry",
+      wiped?.full_reset === true && wiped.same_instance === true && wiped.remaining === 0,
+    );
+    check("full_reset_clears_the_recorded_password", holding() === 0);
+    const elsewhere = await verify("1/-/-");
+    check("verification_query_refuses_another_instance", elsewhere?.same_instance === false);
+  } finally {
+    await verifier.close();
+  }
   sql("DROP EXTENSION pg_stat_statements;");
   sql("DROP ROLE lab_stats_probe;");
   const chain = loadMigrationChain();
@@ -245,7 +289,35 @@ const superuserLab = async ({ id, sql, image, version }) => {
     "vault-kek-v1": markers.kek,
   });
   const connector = psqlConnector(id, { user: "postgres", database: "morrow" });
-  const scratchConnector = psqlConnector(id, { user: "postgres", database: "neondb" });
+  // Just before the wipe's reset, from a separate neondb session (the run has just
+  // created the extension there), the exact verification query counts the entries that
+  // hold this run's passwords (read back from their ALTER ROLE statements), so the wipe is
+  // shown to clear real entries rather than an empty view.
+  const recordedBeforeWipe = [];
+  const scratchConnector = psqlConnector(id, {
+    user: "postgres",
+    database: "neondb",
+    hooks: {
+      async before(text) {
+        if (!/\.pg_stat_statements_reset\(\)/.test(text)) return;
+        const sent = connector.statements.flatMap((statement) =>
+          [...statement.matchAll(/ PASSWORD '([A-Za-z0-9_-]{43})'/g)].map((m) => m[1]),
+        );
+        const side = await psqlConnector(id, { user: "postgres", database: "neondb" }).connect();
+        try {
+          const [{ instance }] = await side.query(instanceIdentityQuery);
+          const [row] = await side.query(statementStatsVerificationQuery("public"), [
+            "-infinity",
+            JSON.stringify(sent.map(passwordDigest)),
+            instance,
+          ]);
+          recordedBeforeWipe.push({ sent: sent.length, row });
+        } finally {
+          await side.close();
+        }
+      },
+    },
+  });
   const fakes = fakeTools();
   const base = await fakeContext({
     home: planted.home,
@@ -495,6 +567,9 @@ const superuserLab = async ({ id, sql, image, version }) => {
       ["log_min_duration_statement", "0"],
       ["log_min_duration_sample", "0"],
       ["log_min_error_statement", "'error'"],
+      // USERSET: a database or role owner can set it without being a superuser; it would
+      // print the ALTER ROLE's PASSWORD string to the server log.
+      ["debug_print_parse", "on"],
     ].map(([setting, value]) => [
       setting + "_in_the_binding_session",
       `ALTER DATABASE morrow SET ${setting} = ${value};`,
@@ -506,6 +581,12 @@ const superuserLab = async ({ id, sql, image, version }) => {
       "ALTER DATABASE neondb SET log_statement = 'all';",
       "ALTER DATABASE neondb RESET log_statement;",
       { code: "STAGING_STATEMENT_LOGGING", reason: "log_statement", database: "scratch" },
+    ],
+    [
+      "debug_print_rewritten_in_the_scratch_session",
+      "ALTER DATABASE neondb SET debug_print_rewritten = on;",
+      "ALTER DATABASE neondb RESET debug_print_rewritten;",
+      { code: "STAGING_STATEMENT_LOGGING", reason: "debug_print_rewritten", database: "scratch" },
     ],
     [
       "absent_scratch_database",
@@ -591,11 +672,19 @@ const superuserLab = async ({ id, sql, image, version }) => {
       return salt.length === 16 && scramVerifier(password, { salt }) === f.v;
     }),
   );
-  // The wipe (owner decision 2026-10-20, "Plaintext, then wipe stats"). Read independently
-  // from morrow_lab: no entry holds any generated password. morrow never gained the
-  // extension, and neondb's, created by the run, is gone. The extension statements and
-  // the reset ran only in the scratch session, and each plaintext reached that session
-  // only as the verification query's parameter, never in a statement's text.
+  // The wipe (owner decision 2026-10-20, "Plaintext, then wipe stats"). Just before the
+  // reset, the run's eleven passwords were recorded (the hook above). Read independently
+  // from morrow_lab after it: no entry holds any generated password. morrow never gained
+  // the extension, and neondb's, created by the run, is gone. The extension statements
+  // and the reset ran only in the scratch session, which never received a plaintext: the
+  // verification query took each password's SHA-256 digest as its parameter.
+  check(
+    "the_run_s_passwords_were_recorded_just_before_the_wipe",
+    recordedBeforeWipe.length === 1 &&
+      recordedBeforeWipe[0].sent === constants.roles.length &&
+      recordedBeforeWipe[0].row?.same_instance === true &&
+      recordedBeforeWipe[0].row.remaining >= constants.roles.length,
+  );
   sql("CREATE EXTENSION pg_stat_statements;");
   const holdingAny = Number(
     sql(
@@ -621,14 +710,18 @@ const superuserLab = async ({ id, sql, image, version }) => {
         1,
   );
   check(
-    "each_plaintext_reaches_the_scratch_session_only_as_the_verification_parameter",
+    "no_plaintext_reaches_the_scratch_session",
+    passwords.every((p) => scratchConnector.statements.every((s) => !s.includes(p))),
+  );
+  check(
+    "the_verification_takes_each_digest_once_as_its_parameter",
     passwords.every((p) => {
-      const carrying = scratchConnector.statements.filter((s) => s.includes(p));
+      const carrying = scratchConnector.statements.filter((s) => s.includes(passwordDigest(p)));
       return (
         carrying.length === 1 &&
         /pg_stat_statements_info/.test(carrying[0]) &&
         carrying[0].startsWith("PREPARE staging_lab_q AS ") &&
-        !carrying[0].split("\nEXECUTE ")[0].includes(p)
+        !carrying[0].split("\nEXECUTE ")[0].includes(passwordDigest(p))
       );
     }),
   );

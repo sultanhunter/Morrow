@@ -109,13 +109,18 @@ const probeConnection = async (url) => ({
           log_statement_sample_rate: "1",
           log_min_error_statement: "panic",
           log_duration: "off",
+          debug_print_parse: "off",
+          debug_print_rewritten: "off",
+          debug_print_plan: "off",
         },
       ];
+    if (/ AS instance$/.test(text)) return [{ instance: "1792526146.012127/10.0.0.1/5432" }];
     if (/FROM pg_catalog\.pg_database WHERE datname/.test(text)) return [{ present: true }];
     if (/pg_catalog\.pg_extension e JOIN/.test(text))
       return probeScratch.extension ? [{ schema: "public" }] : [];
     if (/clock_timestamp/.test(text)) return [{ before: "2026-10-20 19:00:00.000001+00" }];
-    if (/pg_stat_statements_info/.test(text)) return [{ full_reset: true, remaining: 0 }];
+    if (/pg_stat_statements_info/.test(text))
+      return [{ full_reset: true, same_instance: true, remaining: 0 }];
     if (/^SELECT EXISTS \(SELECT 1 FROM pg_catalog\.pg_extension WHERE/.test(text))
       return [{ extension: url.database === "neondb" && probeScratch.extension }];
     if (/has_table_privilege/.test(text)) throw markerError();

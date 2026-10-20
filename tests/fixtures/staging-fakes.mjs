@@ -435,7 +435,9 @@ export function fakeSite({ cloud, ready = true, guard = true, limit = 10, csp, o
 // binding's database and `scratchStats` that of any other database; `storedForm` makes
 // pg_authid readable. The scratch database (M-N3 wipe): `scratchPresent` (default true),
 // `scratchExtension` (an extension already there), `residue` (entries left after the
-// reset) and `partialReset` (stats_reset not moved).
+// reset), `partialReset` (stats_reset not moved), `instance` (a map database -> the
+// instance identity it reads, default one shared value; null makes it unreadable) and
+// `instanceChanged` (the verification reads another instance).
 export function fakeDatabase(options = {}) {
   const statements = [];
   const roles = options.roles ?? [];
@@ -458,7 +460,14 @@ export function fakeDatabase(options = {}) {
     log_statement_sample_rate: "1",
     log_min_error_statement: "panic",
     log_duration: "off",
+    debug_print_parse: "off",
+    debug_print_rewritten: "off",
+    debug_print_plan: "off",
   };
+  const instanceOf = (database) =>
+    options.instance && database in options.instance
+      ? options.instance[database]
+      : "1792526146.012127/10.0.0.1/5432";
   const provisioned = new Set(options.provisioned ? roles : []);
   const rules = [
     [/^SELECT session_user::text AS session_role/, (text, params, db) => [identityFor(db)]],
@@ -515,7 +524,17 @@ export function fakeDatabase(options = {}) {
     [/pg_stat_statements_reset\(\)/, () => [{ reset: "2026-10-20 12:00:00.000002+00" }]],
     [
       /pg_stat_statements_info/,
-      () => [{ full_reset: options.partialReset !== true, remaining: options.residue ?? 0 }],
+      () => [
+        {
+          full_reset: options.partialReset !== true,
+          same_instance: options.instanceChanged !== true,
+          remaining: options.residue ?? 0,
+        },
+      ],
+    ],
+    [
+      /^SELECT pg_catalog\.concat_ws\('\/'.* AS instance$/,
+      (text, params, db) => [{ instance: instanceOf(db) }],
     ],
     // pg_authid is unreadable here (a plain CREATEROLE role); `storedForm` makes it
     // readable, as for a superuser or Neon's neondb_owner (pg_read_all_data), with the
