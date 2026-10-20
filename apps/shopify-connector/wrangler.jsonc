@@ -17,8 +17,22 @@
   "vars": { "MORROW_ENVIRONMENT": "development" },
   "secrets": { "required": [] },
   "env": {
+    // P04.T01i D1 and D6: no workers.dev, preview URL or route; Workers Logs as the api's.
     "staging": {
       "name": "morrow-staging-connector",
+      "workers_dev": false,
+      "preview_urls": false,
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "traces": { "enabled": false },
+        "logs": {
+          "enabled": true,
+          "invocation_logs": false,
+          "head_sampling_rate": 1,
+          "persist": true,
+        },
+      },
       "vars": { "MORROW_ENVIRONMENT": "staging" },
       "secrets": { "required": [] },
     },

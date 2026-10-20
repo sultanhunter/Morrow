@@ -2,7 +2,8 @@
 // no Cloudflare account, credential or network:
 //   types [--check]   Env typings, generated in a clean temporary copy of each Worker
 //   typecheck         Worker sources against the pinned 2026-07-30 runtime types
-//   verify-config     resolved wrangler configuration of all 4 Workers x 3 environments
+//   verify-config     resolved wrangler configuration of all 4 Workers x 3 environments,
+//                     and the reviewed staging values (P04.T01i D1)
 //   dry-run           `wrangler deploy --dry-run` bundles, metafiles and sizes.json
 //   dev               unbound local api + broker on https://127.0.0.1:8787
 //   smoke-dev         dev over http, then https: /healthz, /, SIGTERM, port closed
@@ -458,10 +459,243 @@ export function edgeRateLimits(environment) {
   }));
 }
 
-// Resolved-configuration checks for AC01, AC04, AC22 (static) and AC24.
+// P04.T01i D1 and D6 (AC01, AC02): only the staging api is on workers.dev; every staging
+// Worker keeps Workers Logs (invocation logs and traces off); development and production
+// keep observability off. Compared exactly, per Worker and environment.
+export const edgeStagingObservability = Object.freeze({
+  enabled: true,
+  head_sampling_rate: 1,
+  traces: Object.freeze({ enabled: false }),
+  logs: Object.freeze({
+    enabled: true,
+    invocation_logs: false,
+    head_sampling_rate: 1,
+    persist: true,
+  }),
+});
+export const edgeObservability = (environment) =>
+  environment === "staging" ? edgeStagingObservability : Object.freeze({ enabled: false });
+export const edgeWorkersDev = (worker, environment) =>
+  worker === "api" && environment === "staging";
+// P04.T01i D1 (AC01): each Worker's var names, exactly, per environment. Only the staging
+// api and broker carry configuration; the orchestrator has no vars at all.
+export function edgeVarNames(worker, environment) {
+  if (worker === "orchestrator") return [];
+  if (environment !== "staging" || worker === "connector") return ["MORROW_ENVIRONMENT"];
+  return worker === "api"
+    ? [
+        "MORROW_ENVIRONMENT",
+        "LOGIN_CONFIGURATION_JSON",
+        "WORKSPACE_CONFIGURATION_JSON",
+        "LOGOUT_CONFIGURATION_JSON",
+        "MORROW_DATABASE_BINDING_JSON",
+        "LOGIN_CHALLENGE_JSON",
+      ]
+    : [
+        "MORROW_ENVIRONMENT",
+        "LOGIN_CONFIGURATION_JSON",
+        "MORROW_DATABASE_BINDING_JSON",
+        "TURNSTILE_CONFIGURATION_JSON",
+      ];
+}
+// Key-order-free comparison for the observability blocks.
+const canonicalJson = (value) =>
+  JSON.stringify(value, (_key, child) =>
+    child && typeof child === "object" && !Array.isArray(child)
+      ? Object.fromEntries(
+          Object.keys(child)
+            .sort()
+            .map((key) => [key, child[key]]),
+        )
+      : child,
+  );
+const globalPattern = (pattern) =>
+  new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g");
+const matchesOf = (pattern, text) => [...text.matchAll(globalPattern(pattern))].map((m) => m[0]);
+const readJson = (path) => {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+};
+
+// P04.T01i D1 "Rules" (AC01) on the staging vars, with the runtimes' own parsers, and the
+// narrowed P04.T02a AC24: a staging var may name only the reviewed WorkOS environment,
+// application and client (docs/decisions/workos-staging.json), the bound `br-…` branch of
+// staging.json, a direct `ep-….aws.neon.tech` endpoint, the `0x…` Turnstile site key (in
+// LOGIN_CHALLENGE_JSON only) and the origin. Every origin use is D1's
+// `https://${env.staging.name}.${workers_dev_subdomain}.workers.dev`, with the subdomain read
+// from staging.json; the only other URL is the WorkOS issuer the login parser fixes to the
+// client. Returns the problems and the identifiers a committed file may name.
+// The runtimes' own parsers, loaded once per process.
+let stagingParsers;
+const loadStagingParsers = () =>
+  (stagingParsers ??= (async () => {
+    const { tsImport } = await import("tsx/esm/api");
+    const here = import.meta.url;
+    const [binding, login, protocol, guard] = await Promise.all([
+      tsImport("../packages/identity/src/managed-workspace-binding.ts", here),
+      tsImport("../packages/identity/src/standalone-login-protocol.ts", here),
+      tsImport("../packages/identity/src/broker-protocol.ts", here),
+      tsImport("../apps/api/src/abuse-guard.ts", here),
+    ]);
+    return Object.freeze({
+      captureManagedWorkspaceBinding: binding.captureManagedWorkspaceBinding,
+      parseLoginConfiguration: login.parseLoginConfiguration,
+      parseBrokerDatabaseBinding: protocol.parseBrokerDatabaseBinding,
+      parseTurnstileConfiguration: protocol.parseTurnstileConfiguration,
+      turnstileHostnameMismatch: protocol.turnstileHostnameMismatch,
+      parseLoginChallengeConfiguration: guard.parseLoginChallengeConfiguration,
+    });
+  })());
+async function stagingValueChecks({ vars, apiName, staging, workos }) {
+  const {
+    captureManagedWorkspaceBinding,
+    parseLoginConfiguration,
+    parseBrokerDatabaseBinding,
+    parseTurnstileConfiguration,
+    turnstileHostnameMismatch,
+    parseLoginChallengeConfiguration,
+  } = await loadStagingParsers();
+  const problems = [];
+  const problem = (code, where) => problems.push(code + ":" + where);
+  const text = (worker, name) =>
+    typeof vars[worker]?.[name] === "string" ? vars[worker][name] : null;
+  const subdomain = staging?.cloudflare?.workers_dev_subdomain;
+  const origin =
+    typeof subdomain === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)
+      ? `https://${apiName}.${subdomain}.workers.dev`
+      : null;
+  if (origin === null || staging?.cloudflare?.origin !== origin)
+    problem("EDGE_STAGING_ORIGIN", "staging.json");
+  const neon = staging?.neon ?? {};
+  const allowed = new Set(
+    [workos?.environment_id, workos?.application_id, workos?.client_id, neon.branch_id].filter(
+      (value) => typeof value === "string",
+    ),
+  );
+  // The api's four configuration values together, as mapper step 7 reads them, then the
+  // full login parser the broker and gate 4 use.
+  const login = text("api", "LOGIN_CONFIGURATION_JSON");
+  try {
+    const captured = captureManagedWorkspaceBinding({
+      loginConfigurationJson: login,
+      workspaceConfigurationJson: text("api", "WORKSPACE_CONFIGURATION_JSON"),
+      logoutConfigurationJson: text("api", "LOGOUT_CONFIGURATION_JSON"),
+      bindingJson: text("api", "MORROW_DATABASE_BINDING_JSON"),
+    });
+    const parsed = await parseLoginConfiguration(login);
+    if (parsed.retentionTier !== "staging" || parsed.origin !== captured.origin)
+      problem("EDGE_STAGING_LOGIN_CONFIGURATION", "api:staging");
+    // The login, workspace and logout origins and the redirect base are one value here.
+    if (origin === null || captured.origin !== origin)
+      problem("EDGE_STAGING_ORIGIN", "api:staging");
+  } catch {
+    problem("EDGE_STAGING_LOGIN_CONFIGURATION", "api:staging");
+  }
+  // The binding: the committed `staging` branch of the committed project, never a pooler.
+  try {
+    const binding = parseBrokerDatabaseBinding(text("api", "MORROW_DATABASE_BINDING_JSON"));
+    const label = binding.hostname.split(".")[0];
+    if (
+      binding.environment !== "staging" ||
+      binding.projectId !== neon.project_id ||
+      binding.branchId !== neon.branch_id ||
+      binding.branchId === neon.root_branch_id ||
+      binding.database !== "morrow" ||
+      label.includes("-pooler") ||
+      !binding.hostname.endsWith(".aws.neon.tech")
+    )
+      throw Error("EDGE_STAGING_BINDING");
+    allowed.add(binding.hostname);
+  } catch {
+    problem("EDGE_STAGING_BINDING", "api:staging");
+  }
+  for (const name of ["LOGIN_CONFIGURATION_JSON", "MORROW_DATABASE_BINDING_JSON"])
+    if (text("broker", name) === null || text("broker", name) !== text("api", name))
+      problem("EDGE_STAGING_SHARED_VARS", "broker:staging:" + name);
+  // The two challenge vars: each runtime's parser, the Turnstile hostname the origin's, and
+  // the actions byte-equal (both parsers refuse a duplicate member, so JSON.parse agrees).
+  let siteKey = null;
+  let apiActions = null;
+  let brokerActions = null;
+  try {
+    siteKey = parseLoginChallengeConfiguration(text("api", "LOGIN_CHALLENGE_JSON")).siteKey;
+    apiActions = JSON.stringify(JSON.parse(text("api", "LOGIN_CHALLENGE_JSON")).actions);
+  } catch {
+    problem("EDGE_STAGING_CHALLENGE", "api:staging");
+  }
+  try {
+    parseTurnstileConfiguration(text("broker", "TURNSTILE_CONFIGURATION_JSON"), origin);
+    brokerActions = JSON.stringify(
+      JSON.parse(text("broker", "TURNSTILE_CONFIGURATION_JSON")).actions,
+    );
+  } catch (error) {
+    problem(
+      error?.message === turnstileHostnameMismatch
+        ? "EDGE_STAGING_ORIGIN"
+        : "EDGE_STAGING_CHALLENGE",
+      "broker:staging",
+    );
+  }
+  if (apiActions !== null && brokerActions !== null && apiActions !== brokerActions)
+    problem("EDGE_STAGING_CHALLENGE_ACTIONS", "staging");
+  // Every value of every staging Worker: identifiers, URLs, workers.dev hosts and keys.
+  const urls = new Set(
+    origin === null
+      ? []
+      : [
+          origin,
+          origin + "/auth/workos/callback",
+          "https://api.workos.com/user_management/" + workos?.client_id,
+        ],
+  );
+  const host = origin === null ? null : new URL(origin).hostname;
+  for (const [worker, record] of Object.entries(vars))
+    for (const [name, value] of Object.entries(record ?? {})) {
+      if (typeof value !== "string") continue;
+      const where = worker + ":staging:" + name;
+      for (const [kind, pattern] of committedIdentifierPatterns)
+        if (matchesOf(pattern, value).some((match) => !allowed.has(match)))
+          problem("EDGE_STAGING_VALUE_" + kind.toUpperCase(), where);
+      if (matchesOf(/https?:\/\/[^\s"\\]*/i, value).some((url) => !urls.has(url)))
+        problem("EDGE_STAGING_VALUE_URL", where);
+      if (matchesOf(/[A-Za-z0-9.-]*\.workers\.dev\b/i, value).some((match) => match !== host))
+        problem("EDGE_STAGING_VALUE_HOSTNAME", where);
+      const keys = matchesOf(/\b0x[0-9A-Za-z_-]*/, value);
+      if (
+        keys.length &&
+        (worker !== "api" || name !== "LOGIN_CHALLENGE_JSON" || keys.some((key) => key !== siteKey))
+      )
+        problem("EDGE_STAGING_VALUE_SITE_KEY", where);
+    }
+  return { problems, allowed };
+}
+
+// One Worker's resolved wrangler configuration (no account, credential or network).
+export async function resolvedEdgeConfig(workerKey, environment, root = repositoryRoot) {
+  const worker = edgeWorkers.find((candidate) => candidate.key === workerKey);
+  if (!worker || !edgeEnvironments.includes(environment)) throw Error("EDGE_USAGE");
+  const { unstable_readConfig } = await loadWranglerApi();
+  return captureConsole(() =>
+    unstable_readConfig(
+      {
+        config: workerConfigPath(worker, root),
+        env: environment === "development" ? undefined : environment,
+      },
+      {},
+    ),
+  ).value;
+}
+
+// Resolved-configuration checks for AC01, AC04, AC22 (static) and AC24, and P04.T01i AC01
+// and AC02.
 export async function verifyEdgeConfig({
   root = repositoryRoot,
   routesPath = join(repositoryRoot, "docs/contracts/workspace-routes.json"),
+  stagingPath = join(repositoryRoot, "infra/environments/staging.json"),
+  workosPath = join(repositoryRoot, "docs/decisions/workos-staging.json"),
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
@@ -477,13 +711,13 @@ export async function verifyEdgeConfig({
   const { unstable_readConfig } = await loadWranglerApi();
   const problems = [];
   const resolved = {};
+  const texts = {};
+  const stagingVars = {};
+  let apiStagingName = null;
   const problem = (code, where) => problems.push(code + ":" + where);
   for (const worker of edgeWorkers) {
     const path = workerConfigPath(worker, root);
-    const text = readFileSync(path, "utf8");
-    for (const [kind, pattern] of committedIdentifierPatterns)
-      if (pattern.test(text))
-        problem("EDGE_COMMITTED_IDENTIFIER_" + kind.toUpperCase(), worker.key);
+    texts[worker.key] = readFileSync(path, "utf8");
     for (const environment of edgeEnvironments) {
       const where = worker.key + ":" + environment;
       let config;
@@ -508,8 +742,9 @@ export async function verifyEdgeConfig({
         !same(config.compatibility_flags, edgeCompatibility.flags)
       )
         problem("EDGE_COMPATIBILITY", where);
+      if (config.workers_dev !== edgeWorkersDev(worker.key, environment))
+        problem("EDGE_FLAG_WORKERS_DEV", where);
       for (const key of [
-        "workers_dev",
         "preview_urls",
         "logpush",
         "upload_source_maps",
@@ -517,10 +752,7 @@ export async function verifyEdgeConfig({
         "send_metrics",
       ])
         if (config[key] !== false) problem("EDGE_FLAG_" + key.toUpperCase(), where);
-      if (
-        config.observability?.enabled !== false ||
-        !same(Object.keys(config.observability), ["enabled"])
-      )
+      if (canonicalJson(config.observability) !== canonicalJson(edgeObservability(environment)))
         problem("EDGE_FLAG_OBSERVABILITY", where);
       if (!emptyValue(config.routes) || !emptyValue(config.route)) problem("EDGE_ROUTES", where);
       const allowed = allowedBindings[worker.key];
@@ -537,10 +769,21 @@ export async function verifyEdgeConfig({
         names.some((name) => providerCredentialName.test(name) || credentialWord.test(name))
       )
         problem("EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER", where);
-      const environmentVars = { MORROW_ENVIRONMENT: environment };
-      if (worker.key === "orchestrator") {
-        if (!emptyValue(vars)) problem("EDGE_VARS", where);
-      } else if (!same(vars, environmentVars)) problem("EDGE_VARS", where);
+      // The var allowlist (P04.T01i AC01): exactly these names, string values, and the
+      // Worker's own environment.
+      const varNames = edgeVarNames(worker.key, environment);
+      if (
+        vars === null ||
+        typeof vars !== "object" ||
+        !same(Object.keys(vars).sort(), [...varNames].sort()) ||
+        Object.values(vars).some((value) => typeof value !== "string") ||
+        (varNames.includes("MORROW_ENVIRONMENT") && vars.MORROW_ENVIRONMENT !== environment)
+      )
+        problem("EDGE_VARS", where);
+      if (environment === "staging") {
+        stagingVars[worker.key] = vars;
+        if (worker.key === "api") apiStagingName = config.name;
+      }
       if (worker.key === "broker") {
         if (
           !Array.isArray(required) ||
@@ -597,6 +840,27 @@ export async function verifyEdgeConfig({
       resolved[where] = { name: config.name, bindings: names, services: config.services ?? [] };
     }
   }
+  // P04.T01i D1: the staging values, then the committed text. A file may name an identifier
+  // only if it is the api's or the broker's and the identifier is a reviewed staging one.
+  const staging = readJson(stagingPath);
+  const workos = readJson(workosPath);
+  if (staging === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "staging.json");
+  if (workos === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "workos-staging.json");
+  const checked = await stagingValueChecks({
+    vars: stagingVars,
+    apiName: apiStagingName ?? selectedConfiguration("staging").cloudflare.workers.api,
+    staging,
+    workos,
+  });
+  problems.push(...checked.problems);
+  for (const worker of edgeWorkers)
+    for (const [kind, pattern] of committedIdentifierPatterns)
+      if (
+        matchesOf(pattern, texts[worker.key]).some(
+          (match) => !["api", "broker"].includes(worker.key) || !checked.allowed.has(match),
+        )
+      )
+        problem("EDGE_COMMITTED_IDENTIFIER_" + kind.toUpperCase(), worker.key);
   // No SPA route may fall under a Worker-reserved prefix (AC22).
   const routes = JSON.parse(readFileSync(routesPath, "utf8")).routes;
   const bases = [...new Set(reservedWorkerPaths.map((path) => path.replace(/\/\*$/, "")))];
