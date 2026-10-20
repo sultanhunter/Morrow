@@ -37,6 +37,9 @@ export const capabilitiesAfter0018 = Object.freeze([
   "workspace.inbox.read",
   "workspace.inbox.mark",
   "governance.access.request",
+  // M3 PR-1 branch-local stub of M5 PR-1's catalogue row (integration interface
+  // "Capabilities and owner template v2"); dropped at rebase in favour of M5's row.
+  "governance.model_default.revise",
 ]);
 /** The catalogue as 0018 copies it, in catalogue order. */
 export const catalogueAt0018 = (catalogue) =>

@@ -185,6 +185,14 @@
       "schema": "urn:morrow:contracts:core:v1.1#/$defs/MessagePartInputs",
       "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
     },
+    "ModelCreditCeiling": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/ModelCreditCeiling",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "ModelSelectionKey": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/ModelSelectionKey",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
     "MoneyList": {
       "schema": "urn:morrow:contracts:core:v1#/$defs/MoneyList",
       "sourceFile": "docs/contracts/schemas/v1/core.schema.json"
@@ -199,6 +207,10 @@
     },
     "NullablePageCursor": {
       "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullablePageCursor",
+      "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
+    },
+    "NullableRevision": {
+      "schema": "urn:morrow:contracts:core:v1.1#/$defs/NullableRevision",
       "sourceFile": "docs/contracts/schemas/v1.1/core.schema.json"
     },
     "OptionList": {

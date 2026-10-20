@@ -1248,6 +1248,18 @@ Retention: R02. Verification: A request never grants; only a linked reviewed gra
 
 Trace: J13; P05.T02, P14.T03; P01.A01, P05.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
 
+### governance.model_default.revise
+
+Change the workspace's default model and member ceiling. Owner: Morrow platform owner. Effect: control. Provider: morrow (D01, Design recorded).
+
+Input: model: ModelSelectionKey; effort: ModelSelectionKey; maxCreditsPerProduct: ModelCreditCeiling; expectedRevision: NullableRevision. Output: revision: Revision.
+
+Authority: human_or_bounded_installation_with_explicit_capability_grant; explicit grant governance.model_default.revise. Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable. Fields: default model, default effort, member credit ceiling. Executor: human_only. Review gate: no action approval by default; grants and other policy gates still apply.
+
+Retention: R02. Verification: Only catalogue keys of the active version; a member without this capability is held to the ceiling. Failure: Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.
+
+Trace: J13; P13.T01; P01.A01, P13.A01. Complete domain workflow in standalone Morrow; connector context cannot dispatch it; Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.
+
 ## Custom agents
 
 ### agents.listing.read

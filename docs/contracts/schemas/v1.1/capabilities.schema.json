@@ -431,6 +431,44 @@
         "status"
       ],
       "additionalProperties": false
+    },
+    "governance.model_default.revise.input": {
+      "description": "M3 PR-1 branch-local stub of M5 PR-1's body (integration interface 'Capabilities and owner template v2'), dropped at rebase for M5's: the workspace's default model selection and member ceiling.",
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelSelectionKey"
+        },
+        "effort": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelSelectionKey"
+        },
+        "maxCreditsPerProduct": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelCreditCeiling"
+        },
+        "expectedRevision": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableRevision"
+        }
+      },
+      "required": [
+        "model",
+        "effort",
+        "maxCreditsPerProduct",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "governance.model_default.revise.output": {
+      "description": "M3 PR-1 branch-local stub of M5 PR-1's body, dropped at rebase for M5's.",
+      "type": "object",
+      "properties": {
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "additionalProperties": false
     }
   }
 }

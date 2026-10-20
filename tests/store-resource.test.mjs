@@ -451,7 +451,7 @@ test("billing spendingScope reads store grants: paid store work names its store"
   );
 });
 
-test("agent kernel: store-scoped grants parse; an agent cannot act on the store resource yet", async () => {
+test("agent kernel: store-scoped grants and installations parse; a misnamed store fails closed", async () => {
   const run = (f) =>
     createAgentAuthorityService(
       {
@@ -493,9 +493,10 @@ test("agent kernel: store-scoped grants parse; an agent cannot act on the store 
     run(broken),
     (e) => e instanceof AgentAuthorityError && e.code === "AGENT_POLICY_AUTHORITY_UNAVAILABLE",
   );
-  // An agent request on the store resource itself parses (current ResourceRef), but the
-  // installation record is still AgentInstallation@1, whose v1 scope cannot name the
-  // store, so the delegation fails closed until M3 PR-1 replaces the installation scope.
+  // An agent request on the store resource itself parses (current ResourceRef), and since
+  // M3 PR-1 so does a store-scoped installation (AgentInstallation v1.1, a declared
+  // superset). With an envelope, hop and grants that do not name the store, the kernel
+  // denies it; tests/agent-delegation-reader.test.mjs covers the admitted store run.
   const onStore = delegationFixture();
   onStore.input.operation.resource = store();
   onStore.input.operation.accountId = null;
@@ -503,8 +504,14 @@ test("agent kernel: store-scoped grants parse; an agent cannot act on the store 
   onStore.facts.constraints.resource = store();
   onStore.facts.constraints.accountId = null;
   onStore.facts.executor.installation.scope = storeScope;
+  const denied = await run(onStore);
+  assert.equal(denied.decision.allowed, false);
+  assert.equal(denied.lineage, null);
+  // A misnamed store in the installation's scope still fails closed (the store rule).
+  const misnamedScope = clone(onStore);
+  misnamedScope.facts.executor.installation.scope.resources[0].id = "store_b";
   await assert.rejects(
-    run(onStore),
+    run(misnamedScope),
     (e) => e instanceof AgentAuthorityError && e.code === "AGENT_POLICY_AUTHORITY_UNAVAILABLE",
   );
   // A malformed store resource in the request is refused as input.

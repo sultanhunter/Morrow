@@ -141,6 +141,7 @@ test("AC03: replacements are declared, and undeclared ones are reported", () => 
       ["definition", "ResourceRef", "ADR-0022"],
       ["definition", "Scope", "ADR-0022"],
       ["definition", "Grant", "ADR-0022"],
+      ["definition", "AgentInstallation", "ADR-0022"],
     ],
   );
   const prefixes = {
@@ -348,6 +349,7 @@ test("AC11: product code cannot validate or type a replaced v1 definition", () =
     "ResourceRef",
     "Scope",
     "Grant",
+    "AgentInstallation",
   ]);
   const check = (path, code) => inspectSupersededUse(path, code, replaced);
   assert.deepEqual(
@@ -450,13 +452,13 @@ test("ADR-0022 item 2: core ResourceRef, Scope and Grant are declared supersets 
   assert.deepEqual(grant.properties.scope, { $ref: "#/$defs/Scope" });
   grant.properties.scope = { $ref: "urn:morrow:contracts:core:v1#/$defs/Scope" };
   assert.deepEqual(grant, absolute(v1Defs.Grant));
-  // The declared core supersets are exactly these three; every other core replacement
-  // stays incompatible in both directions.
+  // The declared core supersets are exactly these three and M3 PR-1's AgentInstallation
+  // (below); every other core replacement stays incompatible in both directions.
   assert.deepEqual(
     changes.changes
       .filter((c) => c.kind === "definition" && /superset of v1/i.test(c.reason))
       .map((c) => c.name),
-    ["ResourceRef", "Scope", "Grant"],
+    ["ResourceRef", "Scope", "Grant", "AgentInstallation"],
   );
   assert.match(changes.policy, /ResourceRef, Scope and Grant \(ADR-0022 item 2\) are supersets/);
   // Every P01.A02 case for them keeps its verdict under the current definition.
@@ -514,6 +516,117 @@ test("ADR-0022 item 2: core ResourceRef, Scope and Grant are declared supersets 
       validateDefinition("core", "ResourceRef", { ...store, kind, id: kind + "_a" }),
       kind,
     );
+});
+
+// --- M3 PR-1: the store-scoped installation and the model selection (ADR-0022) -----
+test("ADR-0022 items 2-3: core AgentInstallation is a declared superset of v1 (M3 PR-1)", () => {
+  const v1Defs = layered.core.$defs,
+    v11Defs = layered["core-v1.1"].$defs;
+  const absolute = (value) =>
+    JSON.parse(
+      JSON.stringify(value).replaceAll('"#/$defs/', '"urn:morrow:contracts:core:v1#/$defs/'),
+    );
+  // Structurally: the v1 definition with absolute refs, except its scope is the v1.1 Scope.
+  const { description, ...installation } = structuredClone(v11Defs.AgentInstallation);
+  assert.match(description, /superset of v1/);
+  assert.deepEqual(installation.properties.scope, { $ref: "#/$defs/Scope" });
+  installation.properties.scope = { $ref: "urn:morrow:contracts:core:v1#/$defs/Scope" };
+  assert.deepEqual(installation, absolute(v1Defs.AgentInstallation));
+  assert.match(
+    changes.policy,
+    /core AgentInstallation \(ADR-0022 items 2 and 3, M3 PR-1\) is a superset of v1/,
+  );
+  const store = {
+    organizationId: "org_a",
+    workspaceId: "workspace_a",
+    storeId: "store_a",
+    connectionId: "connection_a",
+    kind: "store",
+    id: "store_a",
+  };
+  const digest = "a".repeat(64);
+  const ref = (kind, id) => ({
+    organizationId: "org_a",
+    workspaceId: "workspace_a",
+    storeId: "store_a",
+    kind,
+    id,
+    revision: 1,
+    digest,
+  });
+  const base = {
+    schemaVersion: 1,
+    id: "installation_a",
+    organizationId: "org_a",
+    workspaceId: "workspace_a",
+    storeId: "store_a",
+    revision: 1,
+    createdAt: "2026-10-20T00:00:00.000Z",
+    updatedAt: "2026-10-20T00:00:00.000Z",
+    releaseRef: { ...ref("release", "morrow.listings"), storeId: null },
+    owner: {
+      kind: "human",
+      principalId: "person_a",
+      organizationId: "org_a",
+      workspaceId: "workspace_a",
+      membershipId: "membership_a",
+      installationId: null,
+      mandateId: null,
+    },
+    status: "active",
+    configurationRef: ref("config", "config_a"),
+    scope: {
+      organizationId: "org_a",
+      workspaceId: "workspace_a",
+      storeIds: [],
+      accountIds: [],
+      resources: [],
+      fields: [],
+    },
+    grantRefs: [ref("grant", "grant_a")],
+    mandateRefs: [],
+    dependencies: [],
+    evaluationRef: null,
+    provisionalExpiresAt: null,
+  };
+  // A v1 installation is valid under both definitions.
+  assert.equal(validateDefinition("core", "AgentInstallation", base), true);
+  assert.equal(validateCurrentDefinition("AgentInstallation", base), true);
+  // The store-scoped one is valid only under the current definition (v1 fails closed).
+  const scoped = {
+    ...base,
+    scope: { ...base.scope, storeIds: ["store_a"], resources: [store], fields: ["title"] },
+  };
+  assert.equal(validateDefinition("core", "AgentInstallation", scoped), false);
+  assert.equal(validateCurrentDefinition("AgentInstallation", scoped), true);
+  // The store rule reaches the installation's scope.
+  const misnamed = {
+    ...scoped,
+    scope: { ...scoped.scope, resources: [{ ...store, id: "store_b" }] },
+  };
+  assert.equal(validateDefinition("core-v1.1", "AgentInstallation", misnamed), true);
+  assert.equal(validateCurrentDefinition("AgentInstallation", misnamed), false);
+});
+
+test("ADR-0022 items 2 and 16: ModelSelection keys are opaque pattern-checked strings", () => {
+  const ok = (value) => validateCurrentDefinition("ModelSelection", value);
+  assert.equal(ok({ model: "claude_sonnet_5_5", effort: "low" }), true);
+  assert.equal(ok({ model: "anything_new", effort: "xhigh" }), true, "keys are not enums");
+  for (const bad of [
+    { model: "claude-opus-5-5", effort: "low" },
+    { model: "Claude", effort: "low" },
+    { model: "a".repeat(41), effort: "low" },
+    { model: "claude_sonnet_5_5" },
+    { model: "claude_sonnet_5_5", effort: "low", catalogueVersion: 1 },
+    { model: "claude_sonnet_5_5", effort: null },
+  ])
+    assert.equal(ok(bad), false, JSON.stringify(bad));
+  // The ceiling is an integer 1..99; an expected revision may be null.
+  assert.equal(validateCurrentDefinition("ModelCreditCeiling", 6), true);
+  for (const bad of [0, 100, 1.5, "1"])
+    assert.equal(validateCurrentDefinition("ModelCreditCeiling", bad), false, String(bad));
+  assert.equal(validateCurrentDefinition("NullableRevision", null), true);
+  assert.equal(validateCurrentDefinition("NullableRevision", 0), false);
 });
 
 // --- P01.T04a PR-A: billing routes by origin (ADR-0015) --------------------------
