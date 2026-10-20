@@ -4,7 +4,7 @@ Updated 2026-10-20. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active packets
 
-`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#29. The latest:
+`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#30. The latest:
 - PR #10 P05.T01x Part B (`e51e5b7`); PR #12 P06.T01a (`06e4dfe`; Verified waits for the P05 exit gate); PR #13 the ADR-0018 Proposal@2 edit (`08e5ebf`); PR #14 P01.T04a PR-A (`bba3cec`); PR #15 P14.T01a PR-1 (`5ad6cc7`, provisional under ADR-0003); PR #11 P03.T04e PR-A (`f8314e8`). Still open for #11: its AC22 `workflow_dispatch` run of `heavy-faults.yml` (about 18 billed minutes), and the AC04 hosted totals and hosted part of AC05, which P03.T04f moves to its first hosted `checks` job.
 - PR #16 P03.T04f CI cost reduction (`5806049`): light runs for Markdown-only PRs and for pushes whose tree equals the merged PR head; 9 jobs instead of 12; the pgwire hold now records its stage and frames (run 39260319338 held once at `actual_84_callback_delivery_3`, then passed on rerun).
 - PR #17 docs, merged as `8b451e8`: ADR-0019, ADR-0020 and ADR-0021 Accepted; `staging-card-1`; P04.T01i and P04.T01j PR-A packets; the ADR-0014 item 4 and 5 amendments; `docs/plan/mvp.md`; the 2026-10-19 live evidence; the Mobbin design references.
@@ -17,9 +17,9 @@ Updated 2026-10-20. Rewrite this file in place (at most 80 lines). The pre-overh
 - PR #25 MVP design (`e8db88f`): ADR-0022 Accepted; Claude behind a provider-neutral model gateway; model catalogue v1 active; briefs M2–M5.
 - PR #27 P05.T01ab = P04.T01i PR-C (`7585782`): the sign-in abuse guard (limits 10/20/5 per 60 s, Turnstile through broker `challengeVerify`, `GET /auth/challenge`, mapper step 10), the broker's ten secret names, the widgets. PR #26 (`38b4347`): the postgres legs are now `[core, http, linking, work]`.
 - PR #28 P04.T01i PR-B, trimmed (`bb882ad`): staging tooling, config and `lab:staging-runner`, no provider effect; deploy after green CI, gates 1–6, census, `kill`/`unkill`, no rollback (E11 suspended). PR #29 (`1a2e189`): the Neon connect and its cleanup are bounded, so an unreachable endpoint fails closed (`STAGING_DATABASE_UNAVAILABLE`).
+- PR #30 M2 PR-1 (`6d744ae`; PR run on head `39542d8` green): migrations 0019–0024 (three spine executor logins, leases, stops, operations, the vault, the billing route, member-lease revocation); `ConnectorBroker`/`RuntimeBroker` (trust model v1) with vault envelopes; 14 broker secret names with `MORROW_VAULT_KEK_V1` (production 12). Two AI reviews (security lens) passed; four advisories are follow-ups below.
 
 In progress:
-- **PR #30, M2 PR-1** (`claude/m2-foundation`, head `39542d8`): leases, stops, the operations ledger, the billing route row, the broker vault (trust model v1, 14 broker secret names with `MORROW_VAULT_KEK_V1`), executor logins. Hosted CI green on the head; the build-time AI review (security lens) passed; a review of the merge reconciliation and the `lab:spine-foundation` fix (gates no longer wait out a 300 s kill timer) is running. It merges before the first staging deploy, since a deployed broker can't gain secret names.
 - **PR-D part 1** (`claude/p04-t01i-d1-identifiers`, local): the Cloudflare and Neon identifiers known so far; the census treats Cloudflare code 10121 (no Workers for Platforms) as zero dispatch namespaces; tests no longer assume null identifiers; AC03 records `actions: read` (owner, 2026-10-20). Still to add: `neon.branch_id`, the database binding, the two challenge vars (Turnstile site key), the api's `workers_dev` and the observability blocks.
 
 ## Decisions recorded 2026-10-18 to 2026-10-20 (owner, in chat)
@@ -45,25 +45,24 @@ In progress:
 ## Next actions
 
 MVP fast track (ADR-0021; `docs/plan/mvp.md`). M1, staging live:
-1. Merge PR #30 once its reconciliation review passes.
-2. Bring-up under `staging-card-1`, as the owner steps land: census (needs Pages Read), `staging:queues` (E4), `staging:turnstile-create` (E5), the WorkOS redirect (E6), the Neon probe rerun (E3), then PR-D part 1 with every identifier; `migrate`, `provision-roles --first`, `seed-platform`; the owner's `staging:keyring`; `deploy --first` and the smoke; the owner's assisted sign-in.
-3. Then M2 PR-2/PR-3, M5 (Stripe test mode), M3 (the listings agent), M4 (approve and apply), M6 (the deletion path before the real-store smoke).
-4. Follow-ups: a KEK fingerprint check in `staging:put-secret` (#30 review advisory); a `ci` PR disabling the weekly `heavy-faults.yml` schedule.
+1. Bring-up under `staging-card-1`, as the owner steps land: census (needs Pages Read), `staging:queues` (E4), `staging:turnstile-create` (E5), the WorkOS redirect (E6), the Neon probe rerun (E3), then PR-D part 1 with every identifier; `migrate`, `provision-roles --first`, `seed-platform`; the owner's `staging:keyring`; `deploy --first` and the smoke; the owner's assisted sign-in.
+2. Then M2 PR-2/PR-3, M5 (Stripe test mode), M3 (the listings agent), M4 (approve and apply), M6 (the deletion path before the real-store smoke).
+3. Follow-ups: a KEK fingerprint check in `staging:put-secret`; the #30 advisories (a production broker must hold non-api callers; re-add the 18 → 0019 replay case once staging exists; `identityConstants` via `brokerRequiredSecretsFor("staging")`; the spine T1 preflight asserts its refusal); a `ci` PR disabling the weekly `heavy-faults.yml` schedule.
 
 Open plan follow-ups: work routes in production must be gated on P09.T05 when production mapping is enabled (ADR-0007 item 9; packet hard ordering b); superseded banners on `docs/references/*`; check against the WorkOS docs whether a user's session list can hold expired or ended sessions (`packages/identity/src/workos-session-status.ts` refuses the whole page on such a row; found in the P14.T01a AC30 hold); a forward migration routing the 0006, 0007, 0009 and 0011 definer guards through `executor_role_safe` (informational; 0017–0018 are P06.T01b); a forward migration adding P01.T02c's eight v1.1 capabilities to `morrow_work.review_capabilities` once a consumer needs them (0018 predates them; none is reviewable); P05.T01y: rebind linking handoffs, reviews and status to the family (P09.T01a/T02a) and the revocation receipt (P05.T01z), and the production custody decision (ADR-0007 item 9) revisits the two R1 widenings accepted for staging; timing fixes if hosted `unit-stress` confirms them (`tests/broker-client.test.mjs` AC30, the 5,000 ms entry-timeout case in `tests/standalone-login-http.test.mjs`).
 
 ## Blockers
 
-None for local work. Staging bring-up waits on the owner steps below and on PR #30. This session's sandbox still blocks Neon endpoint hosts (`*.aws.neon.tech`) until it reloads its settings; the fallback is per-command approval to run outside the sandbox. Production custody still needs its own ADR before M6.
+None for local work. Staging bring-up waits on the owner steps below. This session's sandbox still blocks Neon endpoint hosts (`*.aws.neon.tech`) until it reloads its settings; the fallback is per-command approval to run outside the sandbox. Production custody still needs its own ADR before M6.
 
 ## Pending owner actions
 
-- **Bring-up now:** add Account · Cloudflare Pages · Read to `morrow-staging-operator` (the census gets a 403, code 10000); run the Neon steps (create database `morrow`, branch `staging`, save the owner URL to `~/.config/morrow/staging/neon-owner-url`); after #30 merges, `npm run vault -- kek --out ~/.config/morrow/staging/vault-kek-v1`; delete the local `cloudflare-ci-token` and `cloudflare-operator-token.old-*` files.
+- **Bring-up now:** add Account · Cloudflare Pages · Read to `morrow-staging-operator` (the census gets a 403, code 10000); run the Neon steps (create database `morrow`, branch `staging`, save the owner URL to `~/.config/morrow/staging/neon-owner-url`); the vault KEK (below; #30 is merged); delete the local `cloudflare-ci-token` and `cloudflare-operator-token.old-*` files.
 - **Before the first staging deploy (`staging-card-1`, "Preconditions for the first deploy"):**
   - GitHub: suspend the ChatGPT Codex Connector app (GitHub's sudo re-authentication stopped Claude's attempt) and delete the classic token "AppForge Github Actions". The platform apps AWS Connector, Codemagic, DigitalOcean, Expo, Netlify, Render and Vercel stay (ADR-0019 item 5 exception).
   - Cloudflare usage alerts at about 10% of each allowance (D9 5(c)), or confirm the D6 fallback: the $5 billable-usage alert (exists) plus your weekly check of Billing → Usage.
   - D9: delete Neon `cool-butterfly-64820147` and create the project key; change the Cloudflare Global API Key and create the two tokens (TTL 2026-11-18); a new WorkOS key, revoking old ones; `gh secret set CLOUDFLARE_API_TOKEN --env staging`; `tmutil addexclusion ~/.config/morrow`.
-- **For M3:** an Anthropic Console workspace for staging with a monthly spend limit; its workspace-scoped API key placed with `morrow_put`.
+- **For M2 and M3:** the vault KEK, before the first deploy that carries M2 PR-1: `npm run vault -- kek --out ~/.config/morrow/staging/vault-kek-v1` (a new 0600 file; it prints only a fingerprint; keep an offline copy), or `morrow_put … vault-kek-v1` for a KEK made elsewhere; then an Anthropic Console workspace for staging with a monthly spend limit, its workspace-scoped API key placed with `morrow_put`.
 - **Sign-off:** Plan R1 (Tier 3), which also freezes the P01 contract v1.1 billing layer (Shopify-route money is USD-only; `AllocationShare@2` is a declared superset of v1).
 - **Credential rotation:** the E2B key "Morrow-qualification-2026-10-14" and the Neon and WorkOS credentials the previous agent held. Agents never read the old Codex working directory.
 - **Billing (ADR-0015):** a Stripe test-mode account for M5; later, per action, the hosted staging test entitlement seed (OQ-2) and the production App Review allowance (OQ-3); before live billing, the business entity, bank, tax advisor and registrations, then Stripe live activation; before launch, Shopify's written answer on charging custom-distribution installs and on its revenue share.

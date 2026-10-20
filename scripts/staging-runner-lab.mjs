@@ -11,6 +11,9 @@
 //   createrole-administrator.mjs), the hosted-shape provisioning, then the last entry
 //   through a kill before COMMIT and a lost acknowledgement, a superseded digest, and a
 //   planted SET row; zero Morrow SET rows and closed memberships at rest.
+// The chain runs through its head (M2 PR-1: 0019-0024), so provisioning covers the eleven
+// broker logins, the vault login included, and the first-deploy file the fourteen broker
+// names, with the owner's vault KEK read from its planted file (`vault-kek-v1`).
 // No provider, credential, host port or merchant data; every secret is a synthetic marker.
 import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -28,7 +31,7 @@ import { join } from "node:path";
 import { repositoryRoot, writeArtifact } from "./artifacts.mjs";
 import { localPostgresLab } from "./local-postgres-lab.mjs";
 import { loadMigrationChain, schemaHead } from "./migration-chain.mjs";
-import { main } from "./staging.mjs";
+import { identityConstants, main } from "./staging.mjs";
 import { runMigrations, runnerSetRows, scramVerifier } from "./staging-runner.mjs";
 import { psqlConnector } from "./fixtures/staging-psql-connection.mjs";
 import {
@@ -58,6 +61,8 @@ const markers = {
   ownerPassword: "labowner" + hex(12),
   workos: "sk_test_" + hex(12).toUpperCase() + "LAB",
   turnstile: "0x4AAAAAAA" + hex(14),
+  // M2 PR-1: the owner's vault KEK file holds 64 lowercase hex characters.
+  kek: hex(32),
 };
 const ownerUrl = (user, { host = labBinding.hostname, database = "morrow" } = {}) =>
   `postgresql://${user}:${markers.ownerPassword}@${host}/${database}?sslmode=require`;
@@ -159,6 +164,19 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
   const chain = loadMigrationChain();
   // Hosted-shape replay (D3): apply up to the last sequence on origin/main, provision the
   // roles in hosted shape, then apply the rest. A PR that adds no migration replays N.
+  // Provisioning needs every broker login, so the baseline also reaches the entry whose
+  // pinned prerequisite creates the last of them (M2 PR-1: 0019, the spine logins).
+  const brokerLogins = (await identityConstants()).roles;
+  const created = new Set();
+  let loginsReady = chain.length;
+  for (const [index, entry] of chain.entries()) {
+    for (const prerequisite of entry.prerequisites)
+      for (const role of prerequisite.roles) created.add(role);
+    if (brokerLogins.every((role) => created.has(role))) {
+      loginsReady = index + 1;
+      break;
+    }
+  }
   const mainManifest = spawnSync("git", ["show", "origin/main:migrations/manifest.json"], {
     cwd: repositoryRoot,
     encoding: "utf8",
@@ -170,12 +188,20 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
   } catch {
     mainLength = null;
   }
-  const baseline = mainLength !== null && mainLength < chain.length ? mainLength : chain.length - 1;
+  const baseline = Math.min(
+    Math.max(
+      mainLength !== null && mainLength < chain.length ? mainLength : chain.length - 1,
+      loginsReady,
+    ),
+    chain.length - 1,
+  );
+  check("baseline_creates_every_broker_login", loginsReady <= baseline);
 
   const planted = home({
     "neon-owner-url": ownerUrl("postgres"),
     "workos-api-key": markers.workos,
     "turnstile-secret": markers.turnstile,
+    "vault-kek-v1": markers.kek,
   });
   const connector = psqlConnector(id, { user: "postgres", database: "morrow" });
   const fakes = fakeTools();
@@ -393,9 +419,12 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
   check(
     "first_deploy_file_holds_exactly_the_broker_secrets",
     Object.keys(secrets).sort().join() === constants.brokerSecrets.join() &&
+      constants.brokerSecrets.length === 14 &&
       secrets.WORKOS_API_KEY === markers.workos &&
       secrets.TURNSTILE_SECRET_KEY === markers.turnstile,
   );
+  // M2 PR-1: the KEK is the owner's file, byte for byte; the tool never generates one.
+  check("first_deploy_file_carries_the_owner_kek", secrets.MORROW_VAULT_KEK_V1 === markers.kek);
   const passwords = constants.roles.map((role) => secrets[constants.passwordSecret(role)]);
   check(
     "passwords_are_32_random_bytes",
@@ -409,7 +438,9 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
   );
   check(
     "all_roles_have_login_limit_and_timeouts",
-    facts.length === 8 &&
+    facts.length === constants.roles.length &&
+      constants.roles.length === 11 &&
+      constants.roles.includes("morrow_vault_broker") &&
       facts.every(
         (f) =>
           f.l === true &&
@@ -708,7 +739,13 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
     maxBuffer: 64 << 20,
   });
   const serverLog = (logs.stdout ?? "") + (logs.stderr ?? "");
-  const secretsSeen = [markers.ownerPassword, markers.workos, markers.turnstile, ...passwords];
+  const secretsSeen = [
+    markers.ownerPassword,
+    markers.workos,
+    markers.turnstile,
+    markers.kek,
+    ...passwords,
+  ];
   check(
     "server_log_recorded_the_provisioning_verifiers",
     serverLog.includes("SCRAM-SHA-256$4096:"),
@@ -733,6 +770,7 @@ const report = await localPostgresLab("P04.T01i", async ({ id, sql, image, versi
     image,
     version,
     baseline,
+    loginsReady,
     mainManifest: mainLength === null ? "unavailable" : "origin/main",
     sentinels: secretsSeen.length,
   };
@@ -750,6 +788,7 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
     "neon-owner-url": ownerUrl("neondb_owner"),
     "workos-api-key": markers.workos,
     "turnstile-secret": markers.turnstile,
+    "vault-kek-v1": markers.kek,
   });
   const connector = psqlConnector(id, { user: "neondb_owner", database: "morrow" });
   const fakes = fakeTools();
@@ -831,7 +870,7 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
       provision.out[0]?.controls === "verified" &&
       db(
         `SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname IN (${base.constants.roles.map((r) => `'${r}'`).join(",")}) AND rolcanlogin AND rolconnlimit = 10;`,
-      ) === "8",
+      ) === String(base.constants.roles.length),
   );
   check("createrole_provisioning_keeps_memberships_closed", closed() && morrowSetRows(id) === 0);
 
@@ -912,7 +951,7 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
     "createrole_at_rest_census_is_creation_rows_and_reviewed_rows",
     morrowSetRows(id) === 0 && closed() && census().length === morrowRoles.length + 2,
   );
-  const secretsSeen = [markers.ownerPassword, markers.workos, markers.turnstile];
+  const secretsSeen = [markers.ownerPassword, markers.workos, markers.turnstile, markers.kek];
   check(
     "createrole_no_marker_in_statements_or_output",
     secretsSeen.every(

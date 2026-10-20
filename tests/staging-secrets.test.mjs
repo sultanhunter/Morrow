@@ -46,6 +46,8 @@ const markers = {
   tool: "toolout" + alnum(10),
   database: "dberr" + alnum(10),
   malformed: "badfile" + alnum(10),
+  // M2 PR-1: the owner's vault KEK, 64 lowercase hex characters.
+  kek: alnum(32),
 };
 const files = () => ({
   "workos-api-key": "sk_test_" + markers.workos,
@@ -53,6 +55,7 @@ const files = () => ({
   "neon-owner-url": `postgresql://neondb_owner:${markers.url}@${labBinding.hostname}/morrow?sslmode=require`,
   "neon-project-api-key": "napi_" + markers.neonKey,
   "cloudflare-operator-token": markers.operator,
+  "vault-kek-v1": markers.kek,
 });
 const everyMarker = () => Object.values(markers);
 const contains = (text, values) => values.filter((value) => value && String(text).includes(value));
@@ -121,29 +124,43 @@ async function status({
   }
 }
 
-// AC02 after P05.T01ab (D1, ADR-0019 items 6 and 8): the broker's exact secret set is
-// `brokerRequiredSecrets`, ten names: WORKOS_API_KEY, TURNSTILE_SECRET_KEY and the eight
-// role passwords. secrets-status, gate 6 and the first-deploy file all use that set, and
-// it is the broker's wrangler `secrets.required` in every environment. ADR-0022's
-// Anthropic, Shopify and Stripe credentials join only with their milestones. The staging
-// api keeps P05.T01ab's three limiters and no required secret.
-test("AC02: the broker's ten secret names are brokerRequiredSecrets and wrangler's secrets.required", async () => {
+// AC02 after P05.T01ab (D1, ADR-0019 items 6 and 8) and M2 PR-1 (ADR-0022 items 7-8): the
+// broker's exact secret set is `brokerRequiredSecrets`, fourteen names: WORKOS_API_KEY,
+// TURNSTILE_SECRET_KEY, the eleven role passwords (the ten leased roles and the broker's
+// own `morrow_vault_broker`) and MORROW_VAULT_KEK_V1. secrets-status, gate 6 and the
+// first-deploy file all use that set, and it is the broker's wrangler `secrets.required`
+// in development and staging; production requires its vault-free subset (twelve names,
+// `brokerRequiredSecretsFor("production")`) until the ADR-0007 item 9 custody ADR.
+// ADR-0022's Anthropic, Shopify and Stripe credentials join only with their milestones.
+// The staging api keeps P05.T01ab's three limiters and no required secret.
+test("AC02: the broker's fourteen secret names are brokerRequiredSecrets and wrangler's secrets.required", async () => {
   const constants = await identityConstants();
-  assert.equal(constants.roles.length, 8);
+  assert.equal(constants.roles.length, 11);
+  assert.equal(constants.roles.at(-1), "morrow_vault_broker");
+  assert.deepEqual(constants.vaultKekSecrets, ["MORROW_VAULT_KEK_V1"]);
   const expected = [
     "WORKOS_API_KEY",
     "TURNSTILE_SECRET_KEY",
     ...constants.roles.map((role) => constants.passwordSecret(role)),
+    "MORROW_VAULT_KEK_V1",
   ].sort();
-  assert.equal(constants.brokerSecrets.length, 10);
+  assert.equal(constants.brokerSecrets.length, 14);
   assert.deepEqual(constants.brokerSecrets, expected);
+  const { brokerRequiredSecretsFor } = await import("../packages/identity/src/broker-protocol.ts");
+  const production = [...brokerRequiredSecretsFor("production")].sort();
+  assert.deepEqual(
+    production,
+    constants.brokerSecrets.filter(
+      (name) => !["MORROW_DB_PASSWORD_MORROW_VAULT_BROKER", "MORROW_VAULT_KEK_V1"].includes(name),
+    ),
+  );
   const { unstable_readConfig } = await loadWranglerApi();
   const resolved = (worker, env) =>
     captureConsole(() => unstable_readConfig({ config: workerConfigs[worker], env }, {})).value;
   for (const env of [undefined, "staging", "production"])
     assert.deepEqual(
       [...resolved("broker", env).secrets.required].sort(),
-      constants.brokerSecrets,
+      env === "production" ? production : constants.brokerSecrets,
       String(env),
     );
   const api = resolved("api", "staging");
@@ -158,7 +175,9 @@ test("AC08: a healthy staging reports presence, mode, format and age, and exits 
   assert.equal(report.directory.ok, true);
   assert.equal(report.directory.mode, "0700");
   const required = report.files.filter((f) => f.required);
-  assert.equal(required.length, 5);
+  // Five operator files and M2 PR-1's vault KEK (`vault-kek-v1`, the owner's own).
+  assert.equal(required.length, 6);
+  assert.ok(required.some((f) => f.file === "vault-kek-v1"));
   for (const f of required)
     assert.deepEqual(
       [f.exists, f.mode, f.owner, f.nonEmpty, f.format, f.ok],
@@ -180,6 +199,9 @@ test("AC08: a missing, extra or malformed secret, a wrong mode or a symlink exit
   const cases = [
     [{ plant: (({ "workos-api-key": _, ...rest }) => rest)(files()) }, "file:workos-api-key"],
     [{ modes: { "turnstile-secret": 0o644 } }, "file:turnstile-secret"],
+    [{ plant: (({ "vault-kek-v1": _, ...rest }) => rest)(files()) }, "file:vault-kek-v1"],
+    [{ plant: { ...files(), "vault-kek-v1": markers.malformed } }, "file:vault-kek-v1"],
+    [{ modes: { "vault-kek-v1": 0o640 } }, "file:vault-kek-v1"],
     [
       { plant: { ...files(), "workos-api-key": "pk_live_" + markers.malformed } },
       "file:workos-api-key",
@@ -255,6 +277,12 @@ test("AC08: ages warn at 80 days (50 for the keyring); transient files are repor
   assert.ok(aging.report.warnings.includes("age:WORKOS_API_KEY"));
   assert.ok(aging.report.warnings.includes("age:LOGIN_CAPSULE_KEYRING"));
   assert.ok(aging.report.warnings.includes("age_unknown:TURNSTILE_SECRET_KEY"));
+  // A vault KEK is replaced by a new version, never rotated in place: its age is reported
+  // and never warned about or failed (M2 PR-1, ADR-0022 item 7).
+  const kek = await status({ ages: { MORROW_VAULT_KEK_V1: 400 } });
+  assert.equal(kek.code, 0, JSON.stringify(kek.report.mismatches));
+  assert.equal(kek.report.ages.find((a) => a.name === "MORROW_VAULT_KEK_V1").days, 400);
+  assert.ok(!kek.report.warnings.some((w) => w.startsWith("age:MORROW_VAULT_KEK")));
   const transient = await status({ plant: { ...files(), "cloudflare-ci-token": "c".repeat(40) } });
   assert.equal(transient.code, 0);
   assert.ok(transient.report.warnings.includes("transient_present:cloudflare-ci-token"));
@@ -393,12 +421,15 @@ test("AC07: role passwords reach only the 0600 first-deploy file or `secret bulk
   const passwords = Object.entries(secrets)
     .filter(([name]) => name.startsWith("MORROW_DB_PASSWORD_"))
     .map(([, value]) => value);
-  assert.equal(passwords.length, 8);
+  // The ten leased roles and the broker's own vault login (M2 PR-1).
+  assert.equal(passwords.length, 11);
   assert.equal(secrets.WORKOS_API_KEY, "sk_test_" + markers.workos);
+  // The owner's KEK file, byte for byte: the tool reads it and generates none.
+  assert.equal(secrets.MORROW_VAULT_KEK_V1, markers.kek);
   noMarkers(first, passwords);
   assert.equal(
     first.dump.statements.filter((s) => /PASSWORD 'SCRAM-SHA-256\$4096:/.test(s.text)).length,
-    8,
+    11,
   );
 
   const failed = runChild("provision-first-sql-error");
@@ -409,11 +440,11 @@ test("AC07: role passwords reach only the 0600 first-deploy file or `secret bulk
   const rotate = runChild("provision-rotate");
   assert.equal(rotate.status, 0, rotate.stderr);
   const result = oneLine(rotate, "stdout");
-  assert.equal(result.roles.length, 8);
+  assert.equal(result.roles.length, 11);
   assert.match(result.versionId, /^[0-9a-f-]{36}$/);
   assert.equal(rotate.dump.bulkInputs.length, 1);
   const delivered = Object.values(JSON.parse(rotate.dump.bulkInputs[0].input));
-  assert.equal(delivered.length, 8);
+  assert.equal(delivered.length, 11);
   noMarkers(rotate, delivered);
   const bulk = rotate.dump.calls.find((c) => c.tool === "wrangler" && c.args[1] === "bulk");
   assert.deepEqual(bulk.args, [
@@ -441,6 +472,13 @@ test("AC07: role passwords reach only the 0600 first-deploy file or `secret bulk
     WORKOS_API_KEY: "sk_test_" + markers.workos,
   });
   noMarkers(put);
+
+  // M2 PR-1: the owner's KEK reaches the broker only through `secret bulk` stdin.
+  const kek = runChild("put-secret-kek");
+  assert.equal(kek.status, 0, kek.stderr);
+  assert.equal(oneLine(kek, "stdout").secret, "MORROW_VAULT_KEK_V1");
+  assert.deepEqual(JSON.parse(kek.dump.bulkInputs[0].input), { MORROW_VAULT_KEK_V1: markers.kek });
+  noMarkers(kek);
 });
 
 test("AC07: connections count unknown names without printing them; keyring prints metadata only", () => {

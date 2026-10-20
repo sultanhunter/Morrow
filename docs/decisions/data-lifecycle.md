@@ -31,6 +31,18 @@ Browser session lifecycle records (P05.T01y, ADR-0004, migration 0016). No row h
 
 Growth: at most one rotation per 5 minutes of activity, so at most 144 generation rows and 144 audit rows per person per 12-hour day, about 105,000 rows per person-year at 365 days. This is a P09.T05 sizing input; no real data exists before P09.T05.
 
+Spine foundation records (M2 PR-1, ADR-0022 item 13, migrations 0019-0024). No row holds merchant content: identifiers, digests, instants, fixed codes and, in the vault, AES-256-GCM envelopes.
+
+| Table | Class and retention | Erasure hook |
+| --- | --- | --- |
+| `morrow_work.work_leases` | Content-free audit, 365 days. A lease confers nothing after it ends or expires; a membership removal revokes its member's leases (0023-0024) | None until P09.T05 adds pruning; no delete path exists (`append_only()`) |
+| `morrow_work.lease_entries` | Content-free runtime state: one row per database backend (the last lease it entered, its transaction id and a random nonce), overwritten by that backend's next entry | None needed: bounded by the number of backend ids, no tenant keys |
+| `morrow_work.stop_controls`, `morrow_work.stop_records` | Content-free audit, 365 days; platform rows have null tenant keys. The reason is operator or member text about the stop, never merchant data | P09.T05 prunes after 365 days; no delete path exists |
+| `morrow_work.operations`, `morrow_work.operation_transitions` | Content-free audit, 365 days: ids, digests, statuses and the provider request id | P09.T05 prunes after 365 days; no delete path exists |
+| `morrow_billing.workspace_billing_routes` | Workspace lifetime; the route never changes once fixed | Deleted with the workspace by P09.T05 |
+| `morrow_vault.app_secrets` | Until rotated: a retired row keeps only metadata (its key material is erased in the rotating statement) | Rotation (`app_secret_put`) |
+| `morrow_vault.credentials` | Until uninstall, disconnect or re-authorisation, which erase the key material at once and keep metadata (M2 PR-2/PR-3 writers) | The destroy path of M2 PR-2/PR-3 |
+
 No real user may enroll until the P09.T05 deletion path covers principal, mapping and enrollment (ADR-0003 hard ordering (b)); self-service stays disabled except on development and staging profiles with an allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Daily recovery snapshots/exports are separately retained thirty-five days in production/seven in staging; they do not provide thirty-five-day point-in-time recovery. Qualify changed storage, matching artifact revision manifests and erasure/revocation replay.

@@ -1428,6 +1428,8 @@ const files = () => ({
   "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@ep-lab-runner-000001.us-east-1.aws.neon.tech/morrow?sslmode=require`,
   "neon-project-api-key": "napi_" + "n".repeat(48),
   "cloudflare-operator-token": "R".repeat(40),
+  // M2 PR-1: the owner's vault KEK (`npm run vault -- kek`).
+  "vault-kek-v1": "5eed".repeat(16),
 });
 test("preflight: reports pending owner steps without values and blocks on the card or a tool pin", async () => {
   const w = await world({ files: files() });
@@ -1456,6 +1458,19 @@ test("preflight: reports pending owner steps without values and blocks on the ca
     assert.ok(result.pending.includes("identifier:challenge"));
   } finally {
     unset.planted.cleanup();
+  }
+  // M2 PR-1: until the owner writes the vault KEK file, it is a pending owner step.
+  const { "vault-kek-v1": _kek, ...withoutKek } = files();
+  const noKek = await world({ files: withoutKek });
+  try {
+    const { code, result } = await noKek.run(["preflight"]);
+    assert.equal(code, 0);
+    assert.deepEqual(
+      result.pending.filter((p) => p.startsWith("file:")),
+      ["file:vault-kek-v1"],
+    );
+  } finally {
+    noKek.planted.cleanup();
   }
   const blocked = await world({
     card: { ...approvedCard(), status: "proposed", approvedOn: null, expiresOn: null },

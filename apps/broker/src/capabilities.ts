@@ -1,26 +1,33 @@
 import { createWorkersFixedWorkosLoginPort } from "../../../packages/identity/src/fixed-workos-login-port.js";
 import type { FixedWorkosLoginPort } from "../../../packages/identity/src/standalone-login.js";
 import {
+  loginJson,
   parseLoginConfiguration,
   type LoginControl,
 } from "../../../packages/identity/src/standalone-login-protocol.js";
 import {
-  brokerNeonRoleNames,
+  brokerCallerRoles,
   brokerPasswordSecret,
   brokerPasswordValid,
+  brokerVaultKekSecrets,
+  brokerVaultRole,
   neonLeaseNamespace,
   parseBrokerDatabaseBinding,
   parseTurnstileConfiguration,
   turnstileKeyPattern,
   workosSessionNamespace,
+  type BrokerCaller,
 } from "../../../packages/identity/src/broker-protocol.js";
-import { loginJson } from "../../../packages/identity/src/standalone-login-protocol.js";
+import { createVaultKeyring, type VaultKeyring } from "./vault.js";
 
 // Broker v0 trust model (ADR-0007 item 3): every holder of the ApiBroker binding
 // is trusted for these pre-authentication identity calls and role leases only.
 // No merchant, model or other provider credential may be added under it; the
 // Turnstile secret is the one admitted beside WorkOS (ADR-0019 item 6).
+// Trust model v1 (ADR-0022 item 7) adds one entrypoint per caller, each serving only
+// its own role lease; the vault keys stay inside the broker and never cross RPC.
 
+export type BrokerEntrypoint = "ApiBroker" | "ConnectorBroker" | "RuntimeBroker";
 export type BrokerMethod = "health" | "neonLease" | "workosSessionPage" | "challengeVerify";
 export type BrokerFailureCode =
   | "INPUT_INVALID"
@@ -41,6 +48,12 @@ export interface BrokerDatabase {
   // Exact namespace JSON -> that role's static password. Lookup is byte equality.
   readonly leases: ReadonlyMap<string, string>;
 }
+// The vault (ADR-0022 item 7): the KEK keyring and the broker's own database login.
+// Neither is ever returned by a method.
+export interface BrokerVault {
+  readonly keyring: VaultKeyring;
+  readonly databasePassword: string;
+}
 // P05.T01ab: siteverify for the configured hostname and the two configured actions.
 export interface BrokerChallenge {
   readonly secret: string;
@@ -49,7 +62,13 @@ export interface BrokerChallenge {
 }
 export interface BrokerCapabilities {
   readonly sessions: Readonly<BrokerSessions> | null;
+  /** The api caller's eight role leases (ApiBroker). */
   readonly database: Readonly<BrokerDatabase> | null;
+  /** The connector's own role lease (ConnectorBroker). */
+  readonly connector: Readonly<BrokerDatabase> | null;
+  /** The orchestrator's own role lease (RuntimeBroker). */
+  readonly runtime: Readonly<BrokerDatabase> | null;
+  readonly vault: Readonly<BrokerVault> | null;
   readonly challenge: Readonly<BrokerChallenge> | null;
   // Hosted environments sign in only behind the guard (ADR-0019 item 6), so their
   // health also needs the challenge capability; development may run without it.
@@ -59,6 +78,9 @@ export interface BrokerCapabilities {
 const nothing: Readonly<BrokerCapabilities> = Object.freeze({
   sessions: null,
   database: null,
+  connector: null,
+  runtime: null,
+  vault: null,
   challenge: null,
   challengeRequired: true,
 });
@@ -113,17 +135,47 @@ async function sessions(
   }
 }
 
-function database(env: object, environment: string): Readonly<BrokerDatabase> | null {
+// One caller's leases: every role of that caller must hold a valid password, else none.
+function database(
+  env: object,
+  environment: string,
+  caller: BrokerCaller,
+): Readonly<BrokerDatabase> | null {
   try {
     const binding = parseBrokerDatabaseBinding(own(env, "MORROW_DATABASE_BINDING_JSON"));
     if (binding.environment !== environment) return null;
     const leases = new Map<string, string>();
-    for (const role of brokerNeonRoleNames) {
+    for (const role of brokerCallerRoles[caller]) {
       const password = own(env, brokerPasswordSecret(role));
       if (!brokerPasswordValid(password)) return null;
       leases.set(neonLeaseNamespace(binding, role), password);
     }
     return Object.freeze({ leases });
+  } catch {
+    return null;
+  }
+}
+
+// The vault needs every configured KEK version and the broker's own database login, in an
+// environment with a database binding. A missing or malformed secret disables the vault
+// only; no other capability depends on it. Production holds it: trust model v1 custody is
+// for development and staging (ADR-0022 item 7) until the production custody ADR
+// (ADR-0007 item 9), whatever secrets are bound.
+async function vault(env: object, environment: string): Promise<Readonly<BrokerVault> | null> {
+  if (environment === "production") return null;
+  try {
+    const binding = parseBrokerDatabaseBinding(own(env, "MORROW_DATABASE_BINDING_JSON"));
+    if (binding.environment !== environment) return null;
+    const databasePassword = own(env, brokerPasswordSecret(brokerVaultRole));
+    if (!brokerPasswordValid(databasePassword)) return null;
+    const keks = new Map<number, unknown>();
+    for (const name of brokerVaultKekSecrets) {
+      const match = /^MORROW_VAULT_KEK_V([1-9][0-9]{0,2})$/.exec(name);
+      if (!match) return null;
+      keks.set(Number(match[1]), own(env, name));
+    }
+    const keyring = await createVaultKeyring(environment, keks);
+    return Object.freeze({ keyring, databasePassword });
   } catch {
     return null;
   }
@@ -170,7 +222,10 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
     )
       result = Object.freeze({
         sessions: await sessions(env, environment),
-        database: database(env, environment),
+        database: database(env, environment, "api"),
+        connector: database(env, environment, "connector"),
+        runtime: database(env, environment, "runtime"),
+        vault: await vault(env, environment),
         challenge: challenge(env),
         challengeRequired: environment !== "development",
       });
@@ -182,6 +237,9 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
       event: "morrow_broker_init",
       sessions: result.sessions !== null,
       database: result.database !== null,
+      connector: result.connector !== null,
+      runtime: result.runtime !== null,
+      vault: result.vault !== null,
       challenge: result.challenge !== null,
     }),
   );
@@ -200,21 +258,28 @@ export function brokerCapabilities(env: unknown): Promise<Readonly<BrokerCapabil
   return pending;
 }
 
-// Every failure becomes the single error BROKER_HELD plus one fixed log line.
-// No value, URL, namespace field or secret is logged or returned.
+// Every failure becomes the single error BROKER_HELD plus one fixed log line naming the
+// entrypoint and method. No value, URL, namespace field or secret is logged or returned.
 export async function invokeBrokerMethod<T>(
   method: BrokerMethod,
   run: () => Promise<T>,
+  entrypoint: BrokerEntrypoint = "ApiBroker",
 ): Promise<T> {
   try {
     return await run();
   } catch (error) {
     const code: BrokerFailureCode =
       error instanceof BrokerHold ? error.code : "CAPABILITY_UNAVAILABLE";
-    console.log(JSON.stringify({ event: "morrow_broker", method, code }));
+    console.log(JSON.stringify({ event: "morrow_broker", entrypoint, method, code }));
     throw Error("BROKER_HELD");
   }
 }
+
+export const brokerEntrypoints: Readonly<Record<BrokerCaller, BrokerEntrypoint>> = Object.freeze({
+  api: "ApiBroker",
+  connector: "ConnectorBroker",
+  runtime: "RuntimeBroker",
+});
 
 export function brokerHealth(env: unknown): Promise<boolean> {
   return invokeBrokerMethod("health", async () => {
@@ -227,6 +292,28 @@ export function brokerHealth(env: unknown): Promise<boolean> {
   });
 }
 
-export function brokerInputInvalid(method: BrokerMethod): Promise<never> {
-  return invokeBrokerMethod(method, () => Promise.reject(new BrokerHold("INPUT_INVALID")));
+// The connector and the orchestrator are ready when their own lease and the vault are.
+export function brokerCallerHealth(
+  env: unknown,
+  caller: "connector" | "runtime",
+): Promise<boolean> {
+  return invokeBrokerMethod(
+    "health",
+    async () => {
+      const capabilities = await brokerCapabilities(env);
+      return capabilities[caller] !== null && capabilities.vault !== null;
+    },
+    brokerEntrypoints[caller],
+  );
+}
+
+export function brokerInputInvalid(
+  method: BrokerMethod,
+  entrypoint: BrokerEntrypoint = "ApiBroker",
+): Promise<never> {
+  return invokeBrokerMethod(
+    method,
+    () => Promise.reject(new BrokerHold("INPUT_INVALID")),
+    entrypoint,
+  );
 }

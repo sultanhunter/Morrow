@@ -132,6 +132,8 @@ test("AC07: any provider or credential-like binding keeps the api unbound", () =
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_BASE_URL",
+    // M2 PR-1: the vault KEK binds only to the broker (ADR-0022 item 7).
+    "MORROW_VAULT_KEK_V1",
     "E2B_API_KEY",
     "workos_client",
     "DEPLOY_SECRET",

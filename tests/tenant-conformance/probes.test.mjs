@@ -486,3 +486,171 @@ test("P6: one connection reused across tenants keeps no context and no role", as
   }
   recordConformance("P6", true);
 });
+
+// M2 PR-1 (spine §5): the lease context. A lab-only definer owned by the command role
+// reports what the tenant_lease policies show; it is created by the local superuser as
+// scaffolding and is not a migration object.
+const leaseView = `CREATE SCHEMA lab_probe;
+CREATE FUNCTION lab_probe.lease_view() RETURNS TABLE(organization_id text,workspace_id text,operations bigint,stops bigint)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+ SELECT (SELECT c.organization_id FROM morrow_work.current_lease() c),(SELECT c.workspace_id FROM morrow_work.current_lease() c),
+  (SELECT count(*) FROM morrow_work.operations),(SELECT count(*) FROM morrow_work.stop_controls WHERE organization_id IS NOT NULL) $$;
+ALTER FUNCTION lab_probe.lease_view() OWNER TO morrow_work_command;
+REVOKE ALL ON FUNCTION lab_probe.lease_view() FROM PUBLIC;
+GRANT USAGE ON SCHEMA lab_probe TO morrow_runtime_executor,morrow_api_worker;
+GRANT EXECUTE ON FUNCTION lab_probe.lease_view() TO morrow_runtime_executor,morrow_api_worker;`;
+const marker =
+  "(extract(epoch FROM transaction_timestamp())*1000000)::bigint::text||':'||pg_backend_pid()::text";
+function openLease(p, kind, subject) {
+  const out = db.sql(
+    asCommandRole(
+      p,
+      `SELECT outcome||'|'||COALESCE(lease_id,'') FROM morrow_work.lease_open(${literal(kind)},${literal(subject)},'store_p7','connection_p7',${kind === "read" ? "NULL" : "'installation_p7'"});`,
+      { end: "COMMIT" },
+    ),
+  );
+  const [outcome, id] = out.split("\n").at(-1).split("|");
+  assert.equal(outcome, "opened");
+  return id;
+}
+const runtime = (text) => db.sql(text, { user: "morrow_runtime_executor" });
+const view = (prefix) =>
+  runtime(
+    `BEGIN; ${prefix} SELECT concat_ws('|',COALESCE(organization_id,'-'),operations,stops) FROM lab_probe.lease_view(); ROLLBACK;`,
+  )
+    .split("\n")
+    .at(-1);
+
+test("P7: a lease selects one tenant; a forged, stale or foreign lease setting yields zero rows", () => {
+  db.sql(leaseView);
+  const A = openLease(P.A, "run", "p7_run_a");
+  const Y = openLease(P.Y, "run", "p7_run_y");
+  // One taskless billing operation per tenant, written in each tenant's session context.
+  for (const p of [P.A, P.Y])
+    db.sql(
+      asCommandRole(
+        p,
+        `INSERT INTO morrow_work.operations(organization_id,workspace_id,id,revision,kind,capability_id,status,request_digest,attempt,created_at,updated_at) VALUES(${literal(p.org)},${literal(p.workspace)},'p7_operation',1,'stripe_write','governance.billing.manage','planned',${literal("f".repeat(64))},0,date_trunc('milliseconds',clock_timestamp()),date_trunc('milliseconds',clock_timestamp()));`,
+        { end: "COMMIT" },
+      ),
+    );
+  const enter = (id, generation = "1") =>
+    `SELECT outcome FROM morrow_work.enter_lease(${literal(id)},${literal(generation)});`;
+  // Entered: exactly the lease's tenant.
+  assert.equal(view(enter(A)), `${P.A.org}|1|0`);
+  assert.equal(view(enter(Y)), `${P.Y.org}|1|0`);
+  // Forged settings without enter_lease, or naming another generation or an unknown
+  // lease: zero rows, and a refused enter_lease leaves no context behind. The runtime
+  // login itself can compute any value it likes for the entry setting (here the 0020
+  // part-1 marker, and a random nonce), but only enter_lease writes the entry proof, so
+  // even its own lease, at the right generation, resolves nothing (the review's case).
+  const set = (id, generation, entered) =>
+    `SELECT set_config('morrow.work_lease_id',${literal(id)},true),set_config('morrow.work_lease_generation',${literal(generation)},true)${entered ? `,set_config('morrow.work_lease_entered',${entered},true)` : ""} IS NOT NULL;`;
+  assert.equal(view(set(A, "1", null)), "-|0|0");
+  assert.equal(view(set(A, "1", marker)), "-|0|0");
+  assert.equal(view(set(A, "1", literal(randomUUID()))), "-|0|0");
+  assert.equal(view(set(A, "2", marker)), "-|0|0");
+  assert.equal(view(set(randomUUID(), "1", marker)), "-|0|0");
+  // Entered A, then the settings retargeted to Y's lease with A's own nonce: the proof
+  // names A, so nothing resolves; and clearing the settings does not allow a second entry.
+  assert.equal(
+    view(`${enter(A)} SELECT set_config('morrow.work_lease_id',${literal(Y)},true) IS NOT NULL;`),
+    "-|0|0",
+  );
+  assert.deepEqual(
+    runtime(
+      `BEGIN; ${enter(A)} SELECT concat(set_config('morrow.work_lease_id','',true),set_config('morrow.work_lease_generation','',true),set_config('morrow.work_lease_entered','',true)) IS NOT NULL; ${enter(Y)} SELECT concat_ws('|',COALESCE(organization_id,'-'),operations) FROM lab_probe.lease_view(); ROLLBACK;`,
+    ).split("\n"),
+    ["entered", "t", "denied", "-|0"],
+  );
+  for (const [id, generation, outcome] of [
+    [A, "2", "not_found"],
+    [randomUUID(), "1", "not_found"],
+    ["not-a-lease", "1", "denied"],
+  ]) {
+    const out = runtime(
+      `BEGIN; ${enter(id, generation)} SELECT concat_ws('|',COALESCE(organization_id,'-'),operations) FROM lab_probe.lease_view(); SELECT '['||COALESCE(current_setting('morrow.work_lease_id',true),'')||']'; ROLLBACK;`,
+    ).split("\n");
+    assert.deepEqual(out, [outcome, "-|0", "[]"], id);
+  }
+  // A session-level setting made in an earlier transaction is stale in the next one, and
+  // blocks enter_lease on that connection.
+  const stale = runtime(
+    `SELECT set_config('morrow.work_lease_id',${literal(A)},false),set_config('morrow.work_lease_generation','1',false),set_config('morrow.work_lease_entered',${marker},false) IS NOT NULL;
+BEGIN; SELECT concat_ws('|',COALESCE(organization_id,'-'),operations) FROM lab_probe.lease_view(); ${enter(A)} ROLLBACK;`,
+  ).split("\n");
+  assert.deepEqual(stale.slice(-2), ["-|0", "denied"]);
+  // The same setting from any other login resolves nothing: the api Worker's login with a
+  // well-formed lease context (and its role's session definers never see a lease).
+  assert.equal(
+    db
+      .sql(
+        `BEGIN; ${set(A, "1", marker)} SELECT concat_ws('|',COALESCE(organization_id,'-'),operations,stops) FROM lab_probe.lease_view(); ROLLBACK;`,
+        { user: "morrow_api_worker" },
+      )
+      .split("\n")
+      .at(-1),
+    "-|0|0",
+  );
+  // A removed member's lease is revoked in the removing transaction (0024), so it resolves
+  // nothing, and stays ended when the membership returns.
+  const R = openLease(P.R, "run", "p7_run_r");
+  db.sql(revocationSql(P.R));
+  try {
+    assert.equal(
+      runtime(`BEGIN; ${enter(R)} ROLLBACK;`)
+        .split("\n")
+        .at(-1),
+      "ended",
+    );
+  } finally {
+    db.sql(restoreSql(P.R));
+  }
+  assert.equal(
+    runtime(`BEGIN; ${enter(R)} ROLLBACK;`)
+      .split("\n")
+      .at(-1),
+    "ended",
+  );
+  assert.equal(
+    db.rows(
+      `SELECT status||'|'||revoked_reason AS s FROM morrow_work.work_leases WHERE id=${literal(R)}`,
+    )[0].s,
+    "revoked|membership",
+  );
+  recordConformance("P7", true);
+});
+
+test("P8: a lease context calling a session definer is refused, and a session never reaches a lease definer", () => {
+  const A = openLease(P.A, "run", "p8_run_a");
+  const enter = `SELECT outcome FROM morrow_work.enter_lease(${literal(A)},'1');`;
+  const sessionCalls = [
+    `SELECT count(*) FROM morrow_work.enter_context(${literal(P.A.digest)},${literal(P.A.workspace)})`,
+    `SELECT count(*) FROM morrow_work.current_tenant()`,
+    `SELECT outcome FROM morrow_work.cmd_goal_create('${randomUUID()}','${"a".repeat(64)}','corr','x','[]')`,
+    `SELECT count(*) FROM morrow_work.review_context('governance.grants.revise',NULL)`,
+    `SELECT count(*) FROM morrow_work.goals`,
+    `SELECT count(*) FROM morrow_work.operations`,
+  ];
+  for (const call of sessionCalls) {
+    const r = db.tryRun(`BEGIN; ${enter} ${call}; ROLLBACK;`, { user: "morrow_runtime_executor" });
+    assert.equal(r.ok, false, call);
+    assert.match(r.stderr, /permission denied/, call);
+  }
+  // The api login, in a valid session context, cannot call any lease definer.
+  for (const call of [
+    enter,
+    "SELECT count(*) FROM morrow_work.pending_starts();",
+    "SELECT morrow_work.lease_mark_started();",
+    "SELECT morrow_work.lease_release();",
+    "SELECT count(*) FROM morrow_work.current_lease();",
+  ]) {
+    const r = db.tryRun(asApi(P.A, call), { user: "morrow_api_worker" });
+    assert.equal(r.ok, false, call);
+    assert.match(r.stderr, /permission denied/, call);
+  }
+  // A session context cannot enter a lease: enter_lease refuses any login but the runtime
+  // executor, even the command role with a valid session context.
+  assert.equal(db.sql(asCommandRole(P.A, enter)).split("\n").at(-1), "denied");
+  recordConformance("P8", true);
+});

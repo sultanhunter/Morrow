@@ -346,7 +346,13 @@ test("P05.T01ab-AC10 (broker): no log line holds the secret, the token or the re
     assert.ok(!text.includes(value));
   assert.deepEqual(events(), [
     { event: "morrow_challenge", code: "failed" },
-    { event: "morrow_broker", method: "challengeVerify", code: "PROVIDER_HELD" },
+    // M2 PR-1 (trust model v1): the fixed line also names the entrypoint.
+    {
+      event: "morrow_broker",
+      entrypoint: "ApiBroker",
+      method: "challengeVerify",
+      code: "PROVIDER_HELD",
+    },
   ]);
   reply = () => Response.json(verdict());
 });
@@ -362,7 +368,17 @@ test("P05.T01ab: hosted health needs the challenge capability; development does 
   assert.equal(await brokerHealth(hosted), false);
   reset();
   await brokerCapabilities(brokerEnv("staging"));
+  // M2 PR-1: the init line also reports the connector's and the orchestrator's leases and
+  // the vault (held here: this environment binds no KEK or vault login).
   assert.deepEqual(events(), [
-    { event: "morrow_broker_init", sessions: true, database: true, challenge: true },
+    {
+      event: "morrow_broker_init",
+      sessions: true,
+      database: true,
+      connector: true,
+      runtime: true,
+      vault: false,
+      challenge: true,
+    },
   ]);
 });

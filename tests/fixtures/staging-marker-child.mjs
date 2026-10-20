@@ -146,6 +146,11 @@ const scenarios = {
     argv: ["put-secret", "WORKOS_API_KEY"],
     tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
   }),
+  // M2 PR-1: the owner's vault KEK file re-placed as the broker secret, by stdin only.
+  "put-secret-kek": (constants) => ({
+    argv: ["put-secret", "MORROW_VAULT_KEK_V1"],
+    tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
+  }),
   "put-secret-fails": (constants) => ({
     argv: ["put-secret", "TURNSTILE_SECRET_KEY"],
     tools: {

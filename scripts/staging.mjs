@@ -28,6 +28,7 @@ import {
   readRotationRecord,
   recordRotation,
   stagingFileSpecs,
+  vaultKekFile,
 } from "./staging-files.mjs";
 import {
   connectionCensus,
@@ -88,12 +89,20 @@ export async function identityConstants() {
   const { tsImport } = await import("tsx/esm/api");
   const protocol = await tsImport("../packages/identity/src/broker-protocol.ts", import.meta.url);
   return Object.freeze({
-    roles: [...protocol.brokerNeonRoleNames],
+    // The broker's database logins that provisioning controls: the ten leased roles
+    // (brokerNeonRoles) and M2 PR-1's own vault login, which is never leased (ADR-0022
+    // item 7). Each gets LOGIN, the limit, both timeouts and a generated password.
+    roles: [...protocol.brokerNeonRoleNames, protocol.brokerVaultRole],
     passwordSecret: protocol.brokerPasswordSecret,
-    // The broker's ten names (D1, AC02): WORKOS_API_KEY, P05.T01ab's TURNSTILE_SECRET_KEY
-    // and the eight role passwords. brokerRequiredSecrets is the one list: the wrangler
-    // `secrets.required` of every environment, verify-config and gate 6 all use it.
+    // The broker's fourteen names (D1, AC02): WORKOS_API_KEY, P05.T01ab's
+    // TURNSTILE_SECRET_KEY, the eleven role passwords and M2 PR-1's MORROW_VAULT_KEK_V1.
+    // brokerRequiredSecrets is the one list: the wrangler `secrets.required` of development
+    // and staging, verify-config, gate 6, secrets-status and the first-deploy file all use
+    // it (production requires its vault-free subset, brokerRequiredSecretsFor).
     brokerSecrets: [...protocol.brokerRequiredSecrets].sort(),
+    // The vault KEKs (ADR-0022 item 7) are the owner's: each is read from its owner file
+    // (`vault-kek-v<n>`, written by `npm run vault -- kek`) and never generated here.
+    vaultKekSecrets: [...protocol.brokerVaultKekSecrets],
     parseBinding: protocol.parseBrokerDatabaseBinding,
   });
 }
@@ -419,15 +428,28 @@ command("provision-roles", {
       // read or created and before any role is touched, and the written keys again.
       const fileNames = (names) => [...names].sort().join("\n");
       const expected = fileNames(constants.brokerSecrets);
+      const kekNames = constants.vaultKekSecrets;
       const planned = [
         "WORKOS_API_KEY",
         "TURNSTILE_SECRET_KEY",
         ...roles.map(constants.passwordSecret),
+        ...kekNames,
       ];
-      if (new Set(planned).size !== planned.length || fileNames(planned) !== expected)
+      if (
+        new Set(planned).size !== planned.length ||
+        fileNames(planned) !== expected ||
+        !kekNames.every((name) => vaultKekFile(name) !== null)
+      )
         throw new StagingError("STAGING_BROKER_FILE_NAMES_INVALID");
       const workos = readCredentialFile(ctx.directory, "workos-api-key", specs);
       const turnstile = readCredentialFile(ctx.directory, "turnstile-secret", specs);
+      // M2 PR-1: the owner's KEK files, read like the WorkOS key; the tool never makes one.
+      const keks = Object.fromEntries(
+        kekNames.map((name) => [
+          name,
+          readCredentialFile(ctx.directory, vaultKekFile(name), specs),
+        ]),
+      );
       const handle = createOwnerFile(ctx.directory, "tmp/broker-secrets.json");
       let provisioned;
       try {
@@ -442,7 +464,7 @@ command("provision-roles", {
         handle.abandon();
         throw error;
       }
-      const secrets = { WORKOS_API_KEY: workos, TURNSTILE_SECRET_KEY: turnstile };
+      const secrets = { WORKOS_API_KEY: workos, TURNSTILE_SECRET_KEY: turnstile, ...keks };
       for (const role of roles)
         secrets[constants.passwordSecret(role)] = provisioned.passwords.get(role);
       if (fileNames(Object.keys(secrets)) !== expected) {
@@ -493,18 +515,27 @@ const putSecretFiles = Object.freeze({
   WORKOS_API_KEY: "workos-api-key",
   TURNSTILE_SECRET_KEY: "turnstile-secret",
 });
+// M2 PR-1: a vault KEK (MORROW_VAULT_KEK_V<n>) is re-placed from the owner's own file,
+// with the same value; a new KEK is a new version, never a new value under an old name.
+const putSecretFile = (name) =>
+  Object.hasOwn(putSecretFiles, name) ? putSecretFiles[name] : vaultKekFile(name);
 command("put-secret", {
-  usage: "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY",
+  usage: "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY|MORROW_VAULT_KEK_V1",
   parse(args) {
-    if (args.length !== 1 || !Object.hasOwn(putSecretFiles, args[0]))
+    if (args.length !== 1 || putSecretFile(args[0]) === null)
       throw new StagingError("STAGING_USAGE");
     return { name: args[0] };
   },
   async run(ctx, { name }) {
+    if (
+      !Object.hasOwn(putSecretFiles, name) &&
+      !(await ctx.constants()).vaultKekSecrets.includes(name)
+    )
+      throw new StagingError("STAGING_USAGE");
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
     await mainPreconditions(ctx, repositoryOf(config.staging));
-    const value = readCredentialFile(ctx.directory, putSecretFiles[name], await ctx.specs());
+    const value = readCredentialFile(ctx.directory, putSecretFile(name), await ctx.specs());
     await brokerList(ctx);
     const status = await brokerBulk(ctx, { [name]: value });
     if (status !== null) throw new StagingError("STAGING_PUT_SECRET_FAILED", { status });
@@ -611,8 +642,14 @@ command("census", {
 // D4 `secrets status`: presence, mode, owner, format and age of every file; the
 // deployed secret names of each Worker against exact sets; the GitHub secret and variable
 // names and dates; the role controls. No value is shown. Non-zero on any mismatch.
+// A vault KEK has no age limit: it is replaced by a new KEK version, not rotated in place
+// (ADR-0022 item 7), so its age is reported and never warned about.
 const ageLimits = (name) =>
-  name === "LOGIN_CAPSULE_KEYRING" ? { warn: 50, due: 60 } : { warn: 80, due: 90 };
+  name === "LOGIN_CAPSULE_KEYRING"
+    ? { warn: 50, due: 60 }
+    : vaultKekFile(name) !== null
+      ? null
+      : { warn: 80, due: 90 };
 command("secrets-status", {
   usage: "secrets-status",
   parse: noArguments,
@@ -729,8 +766,8 @@ command("secrets-status", {
       }
       const days = Math.floor((ctx.now() - Date.parse(entry.rotatedAt)) / 86400000);
       const limits = ageLimits(name);
-      if (days > limits.due) mismatches.push("age:" + name);
-      else if (days >= limits.warn) warnings.push("age:" + name);
+      if (limits !== null && days > limits.due) mismatches.push("age:" + name);
+      else if (limits !== null && days >= limits.warn) warnings.push("age:" + name);
       return { name, days, versionId: entry.versionId };
     });
     return {

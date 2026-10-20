@@ -868,6 +868,7 @@ test("cli: schema-head prints the head; effects refuse without the card or ident
       ["migrate"],
       ["provision-roles", "--first"],
       ["put-secret", "WORKOS_API_KEY"],
+      ["put-secret", "MORROW_VAULT_KEK_V1"],
       ["seed-platform"],
     ]) {
       const proposed = await fakeContext({
@@ -918,6 +919,7 @@ test("cli: every database or broker-secret effect refuses an unmerged HEAD befor
       ["provision-roles", "--first"],
       ["provision-roles", "--rotate", "all"],
       ["put-secret", "WORKOS_API_KEY"],
+      ["put-secret", "MORROW_VAULT_KEK_V1"],
       ["seed-platform"],
     ]) {
       for (const [label, options, code] of [
@@ -1347,11 +1349,15 @@ test("staging.json: the D1 shape; each identifier is null or well-formed (PR-D p
   assert.ok(statSync("node_modules/neonctl/bin/cli.js").isFile());
 });
 
+// M2 PR-1: the owner's vault KEK file (`npm run vault -- kek`), 64 lowercase hex characters.
+const plantedKek = "c0ffee".repeat(10) + "abcd";
+
 test("fake database: provisioning through the CLI sends only verifiers", async () => {
   const planted = plantedHome({
     "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
     "workos-api-key": "sk_test_" + "W".repeat(24),
     "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
+    "vault-kek-v1": plantedKek,
   });
   try {
     const { ctx, out, constants } = await fakeContext({
@@ -1366,12 +1372,19 @@ test("fake database: provisioning through the CLI sends only verifiers", async (
     );
     assert.equal(statSync(join(planted.directory, "tmp/broker-secrets.json")).mode & 0o777, 0o600);
     assert.deepEqual(Object.keys(secrets).sort(), constants.brokerSecrets);
+    assert.equal(constants.brokerSecrets.length, 14);
+    // Eleven logins: the ten leased roles and the broker's own vault login (M2 PR-1).
+    assert.equal(constants.roles.length, 11);
+    assert.ok(constants.roles.includes("morrow_vault_broker"));
     const passwords = constants.roles.map((r) => secrets[constants.passwordSecret(r)]);
     assert.ok(passwords.every((p) => /^[A-Za-z0-9_-]{43}$/.test(p)));
+    // The KEK is the owner's file, unchanged; the tool generates no KEK.
+    assert.equal(secrets.MORROW_VAULT_KEK_V1, plantedKek);
     const sent = JSON.stringify(db.statements);
     assert.ok(passwords.every((p) => !sent.includes(p)));
-    assert.equal((sent.match(/SCRAM-SHA-256\$4096:/g) ?? []).length, 8);
-    assert.ok(passwords.every((p) => !out.join().includes(p)));
+    assert.ok(!sent.includes(plantedKek));
+    assert.equal((sent.match(/SCRAM-SHA-256\$4096:/g) ?? []).length, 11);
+    assert.ok([...passwords, plantedKek].every((p) => !out.join().includes(p)));
     // A second --first refuses: the file exists, and nothing was sent.
     const before = db.statements.length;
     assert.equal(await main(["provision-roles", "--first"], ctx), 1);
@@ -1389,6 +1402,7 @@ test("provision-roles --first: broker file names other than brokerRequiredSecret
     "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
     "workos-api-key": "sk_test_" + "W".repeat(24),
     "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
+    "vault-kek-v1": plantedKek,
   });
   try {
     const base = await fakeContext({ home: planted.home, tools: fakeTools().tools });
@@ -1400,6 +1414,10 @@ test("provision-roles --first: broker file names other than brokerRequiredSecret
       constants.brokerSecrets.filter((name) => name !== "TURNSTILE_SECRET_KEY"),
       constants.brokerSecrets.filter((name) => name !== constants.passwordSecret("morrow_api")),
       [...constants.brokerSecrets.slice(1), constants.brokerSecrets[1]],
+      constants.brokerSecrets.filter((name) => name !== "MORROW_VAULT_KEK_V1"),
+      constants.brokerSecrets.filter(
+        (name) => name !== constants.passwordSecret("morrow_vault_broker"),
+      ),
     ]) {
       ctx.constants = async () => Object.freeze({ ...constants, brokerSecrets });
       assert.equal(await main(["provision-roles", "--first"], ctx), 1);
@@ -1409,5 +1427,42 @@ test("provision-roles --first: broker file names other than brokerRequiredSecret
     }
   } finally {
     planted.cleanup();
+  }
+});
+
+// M2 PR-1 (ADR-0022 item 7): the KEK comes only from the owner's `vault-kek-v1` file. A
+// missing, malformed or loosely permitted file stops --first before the broker file is
+// created or any role is touched, and the tool never generates a KEK in its place.
+test("provision-roles --first: the vault KEK is read from the owner's file, never generated", async () => {
+  for (const [label, plant, modes, code] of [
+    ["missing", {}, {}, "STAGING_FILE_MISSING"],
+    ["uppercase", { "vault-kek-v1": plantedKek.toUpperCase() }, {}, "STAGING_FILE_FORMAT"],
+    ["short", { "vault-kek-v1": plantedKek.slice(2) }, {}, "STAGING_FILE_FORMAT"],
+    ["mode", { "vault-kek-v1": plantedKek }, { "vault-kek-v1": 0o644 }, "STAGING_FILE_MODE"],
+  ]) {
+    const planted = plantedHome(
+      {
+        "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
+        "workos-api-key": "sk_test_" + "W".repeat(24),
+        "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
+        ...plant,
+      },
+      { modes },
+    );
+    try {
+      const { ctx, err, constants } = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+      });
+      const db = fakeDatabase({ roles: constants.roles });
+      ctx.database = db.connector;
+      assert.equal(await main(["provision-roles", "--first"], ctx), 1, label);
+      assert.equal(JSON.parse(err.at(-1)).code, code, label);
+      assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false, label);
+      assert.deepEqual(db.statements, [], label);
+      assert.ok(!err.join().includes(plantedKek.slice(4, 40)), label);
+    } finally {
+      planted.cleanup();
+    }
   }
 });
