@@ -260,8 +260,10 @@ INSERT INTO morrow_identity.self_service_revisions(profile_id,revision,enrollmen
         "\n" +
         grantInsert(P.V, fixtureGrant(P.V, "governance.usage.read", ["view"], ["period", "scope"])),
     );
+    // Born with updated_at equal to created_at (0020's route_guard): one transaction time for
+    // both, so the two never straddle a millisecond on a loaded machine.
     const routeRow = (p) =>
-      `INSERT INTO morrow_billing.workspace_billing_routes VALUES(${lit(p.org)},${lit(p.workspace)},'website',NULL,NULL,NULL,NULL,NULL,1,date_trunc('milliseconds',clock_timestamp()),date_trunc('milliseconds',clock_timestamp()));`;
+      `INSERT INTO morrow_billing.workspace_billing_routes VALUES(${lit(p.org)},${lit(p.workspace)},'website',NULL,NULL,NULL,NULL,NULL,1,date_trunc('milliseconds',transaction_timestamp()),date_trunc('milliseconds',transaction_timestamp()));`;
     // Fresh single-owner tenants for the receipt cases (the work fixtures share ws_w).
     const tenant = (key) => {
       const secret = createHash("sha256").update(randomUUID()).digest().toString("base64url");
