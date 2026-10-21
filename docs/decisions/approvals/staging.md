@@ -33,6 +33,7 @@
 - The ChatGPT Codex Connector GitHub App is suspended, and the classic token "AppForge Github Actions" is deleted (owner-run; ADR-0019 item 5 exception, 2026-10-19). The remaining platform GitHub Apps (AWS Connector, Codemagic, DigitalOcean, Expo, Netlify, Render and Vercel) are an accepted exception for staging.
 - The Cloudflare usage alerts exist, or the D6 fallback is recorded: the $5 billable-usage alert plus the owner's weekly check of Billing → Usage.
 - The trimmed P04.T01i PR-B has merged with `staging:kill`/`unkill`, the flag re-reads, deploy gates 1–6 and the census (ADR-0021).
+- **Met 2026-10-20:** the owner suspended the app, deleted the token and chose the D6 fallback ("app suspended,token deleted and use the fallback"; `docs/evidence/live/2026-10-20-owner-preconditions.md`); PR-B merged as #28.
 
 ## Owner-run under this card
 
@@ -131,9 +132,23 @@ Each of these needs a per-action approval:
 - **Valid until:** 2026-11-18 (30 days after approval), or the creation of the first production resource, whichever comes first.
 - **OQ-2 answer (GitHub plan and Actions budget):** "GitHub Pro (Recommended)": GitHub Pro (about $4 a month) as a per-action purchase, a capped Actions spending limit (about $10), and branch protection on `main` (requires `foundation`, no approving review) as soon as Pro is active. **Done 2026-10-19, outside this card:** the owner bought Pro; Claude set the $10 Actions budget at the owner's instruction ("pro is active you set the action budget"); and Claude enabled branch protection after the owner answered "Turn it on (Recommended)". See `docs/evidence/live/2026-10-19-github-*`.
 - **Effects used under this card** (bookkeeping; each live record holds the details):
+  - E1, 2026-10-20: the first deploy, `npm run staging:deploy -- --first` from `main` `3a48d11`, 21:58:21Z to 22:00:51Z. All four Workers deployed; the smoke failed on the database path (`SMOKE_DATABASE_PATH`, 503) (`docs/evidence/live/2026-10-20-cloudflare-first-deploy.md`).
+  - E2, 2026-10-20: with that deploy, the broker's fourteen secrets and the api's keyring, from the owner's first-deploy files (same record).
+  - E3, 2026-10-20: `staging:migrate` on the `staging` branch, 16:56:15Z to 16:59:30Z, migrations 1–24 (`docs/evidence/live/2026-10-20-neon-staging-migrate.md`); `provision-roles --first` (eleven logins, statistics wiped) and `seed-platform` (platform configuration rows only), 21:27:56Z to 21:28:45Z (`docs/evidence/live/2026-10-20-neon-provision-roles-and-seed.md`).
+  - E10, 2026-10-20: `STAGING_SCHEMA_HEAD`, withdrawn and published again by `migrate`; `STAGING_LOGIN_CONFIGURATION_DIGEST`, published by the first deploy before its first upload (the two records above).
+  - E9, 2026-10-21: read-only script settings reads with the operator token, for the database-path diagnosis (`docs/evidence/live/2026-10-20-cloudflare-first-deploy.md`).
+  - E9, 2026-10-21: read-only M-N1+ catalog reads on the staging `morrow` database (`docs/evidence/live/2026-10-21-neon-mn1plus-catalog.md`), and the M-O1 Workers Logs query (`docs/evidence/live/2026-10-21-cloudflare-m-o1-log-probe.md`).
   - E3, 2026-10-20: one expiring probe branch, reconciled and expired (`docs/evidence/live/2026-10-20-neon-probe-branch.md`); then, at 16:53Z, a second expiring probe branch that measured M-N1, M-N3 and M-N4, with a diagnostic throwaway role at 16:54Z (`docs/evidence/live/2026-10-20-neon-probe-rerun.md`, which also records the owner's own 16:45Z probe run); then the probe branch `morrow-probe-1689b575` (`br-frosty-wave-b7g7o2cm`, expiring 20:10:17Z) that measured the role-password path, the statistics wipe and Neon's `reset_password` refusal (`docs/evidence/live/2026-10-20-neon-password-path-experiments.md`).
   - E4, 2026-10-20: the queues `morrow-staging-dispatch` and `morrow-staging-dispatch-dlq` (`docs/evidence/live/2026-10-20-cloudflare-census-and-queues.md`).
   - E5, 2026-10-20: the Turnstile widget `morrow-staging` (`docs/evidence/live/2026-10-20-cloudflare-turnstile-widget.md`).
   - E6, 2026-10-20: the WorkOS redirect, saved by the owner (`docs/evidence/live/2026-10-20-workos-staging-redirect.md`).
   - E9, 2026-10-20: the census and the operator token's permission reads (`docs/evidence/live/2026-10-20-cloudflare-census-and-queues.md`); read-only settings reads of the staging `morrow` database (`docs/evidence/live/2026-10-20-neon-password-path-experiments.md`).
-  - The owner's D9 steps that Claude performed on per-action approval (2026-10-19) are recorded in `docs/evidence/live/2026-10-19-*`, and the owner's own Neon `morrow` database and `staging` branch in `docs/evidence/live/2026-10-20-neon-staging-branch.md`.
+  - The owner's D9 steps that Claude performed on per-action approval (2026-10-19) are recorded in `docs/evidence/live/2026-10-19-*`, and the owner's own Neon `morrow` database and `staging` branch in `docs/evidence/live/2026-10-20-neon-staging-branch.md`. The owner's preconditions for the first deploy, and the vault KEK file, are in `docs/evidence/live/2026-10-20-owner-preconditions.md`; the owner ran `staging:keyring` (D9 step 9) before the first deploy.
+
+## Amendments
+
+### 2026-10-21: E1, the connector's workers.dev hostname
+
+E1's sentence "Only the api is on workers.dev." now reads: "Only the api is on workers.dev; after M2 PR-2 has merged, `morrow-staging-connector` may be on workers.dev too, with the census admitting it only through M2's entrypoint allow table (`connector → ConnectorBroker`) and its rate-limit bindings pinned by verify-config." The broker and the orchestrator stay off workers.dev. Before the connector's hostname is enabled, `staging:kill` and its dashboard fallback must also turn off the connector's workers.dev hostname (today they cover the api only). The amendment creates no Shopify app, store or install: each app deploy, vault secret, registration and the development-store install still needs its own owner step or per-action approval (M2 brief, owner actions).
+
+Owner decision, 2026-10-21, in chat. The question was: "To test a Shopify install on staging, the connector Worker needs its own public workers.dev address. The staging approval card currently allows only the api to be public. Change the card?" The owner answered: "Approve card change (Recommended)". The option read: "Amend staging-card-1 E1 so `morrow-staging-connector` may also be on workers.dev, after M2 merges and only with M2's census rules. Nothing is installed until you create the Shopify app and development store."
