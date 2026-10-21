@@ -176,6 +176,28 @@ export function workErrorResponse(kind: ErrorKind, correlationId: string, allow?
   if (!validateDefinition("core", "ErrorEnvelope", envelope)) throw Error("WORK_ERROR_INVALID");
   return json(status, envelope, allow ? { Allow: allow } : {});
 }
+// The api Worker's per-address session limit (apps/api/src/session-limit.ts) answers a work
+// path over its limit before this handler runs, in this API's own error shape: code
+// rate_limited, the read class on GET (as the handler classifies a request before its
+// guard runs), and the same seconds in retryAfterSeconds and Retry-After.
+export function workRateLimitedResponse(
+  read: boolean,
+  correlationId: string,
+  retryAfterSeconds: number,
+) {
+  const envelope: Core_ErrorEnvelope = {
+    schemaVersion: 1,
+    code: "rate_limited",
+    retryClass: read ? "safe_read_retry" : "recheck_before_retry",
+    safeMessage: "Too many requests. Try again shortly.",
+    correlationId,
+    operationId: null,
+    retryAfterSeconds,
+    inputRequestIds: [],
+  };
+  if (!validateDefinition("core", "ErrorEnvelope", envelope)) throw Error("WORK_ERROR_INVALID");
+  return json(429, envelope, { "Retry-After": String(retryAfterSeconds) });
+}
 function guardKind(error: WorkGuardError): ErrorKind {
   if (error.status === 401) return "unauthenticated";
   if (error.status === 400) return "invalid";

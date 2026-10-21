@@ -1,0 +1,91 @@
+import {
+  managedApiRoute,
+  type ManagedApiRoute,
+} from "../../../packages/identity/src/managed-workspace-api.js";
+import { limitAddress, type RateLimiter } from "../../../packages/identity/src/edge-limiter.js";
+import { sessionCookieSecret } from "../../../packages/identity/src/request-primitives.js";
+import { workErrorResponse, workRateLimitedResponse } from "../../../packages/work/src/http.js";
+import { edgeLimitFailure, edgeRateLimited, edgeReply, logEdgeGuard } from "./abuse-guard.js";
+import { workPath } from "./worker.js";
+
+// The per-address limit of the session routes (ADR-0019 item 8 applied to them; the
+// pre-publication sweep, 2026-10-22). Every route the router hands a session cookie to, and
+// that can reach SQL, is limited per address: signup by the abuse guard's SIGNUP_LIMITER
+// (abuse-guard.ts), and the rest here, by SESSION_LIMITER, 120 per 60 s: the workspace
+// handler's paths (/workspaces and /workspace/*, which include the work API) and logout
+// and rotate. It runs in the api Worker before the router, so before any broker lease or
+// SQL, and selects requests with the router's own matcher (`managedApiRoute`).
+//
+// Step 0 counts only a request carrying exactly one canonical `__Host-morrow_session`
+// cookie (`sessionCookieSecret`, the function every session handler uses): each handler
+// refuses every other request with its own 401 or 403 before any lease or SQL (logout's
+// cookie rule is stricter still), so an uncounted request never reaches the database. A
+// third-party page cannot make a visitor's browser attach the SameSite=Lax cookie to a
+// subresource, fetch or cross-site POST, so it cannot spend the visitor's (or their NAT's)
+// budget. Step 1 is one count per address: over the limit is 429 rate_limited with
+// Retry-After: 60, in the route family's own shape (the sign-in routes' SignInGuardOutcome,
+// or the work API's ErrorEnvelope on a work path); a missing or invalid address or a failed
+// limiter is the route's existing 503 and one fixed-code `morrow_edge_guard` line. A 429
+// logs nothing. A passed request is forwarded unchanged, its body unread. The address is
+// hashed for the key and never stored, logged or used for authority.
+
+export const sessionLimitedRoutes: readonly ManagedApiRoute[] = Object.freeze([
+  "workspace",
+  "logout",
+  "rotate",
+]);
+
+const retryAfterSeconds = 60;
+// Over the limit: the work API's own ErrorEnvelope on a work path (the read class on GET),
+// and elsewhere the sign-in routes' 429, which the SPA's identity decoders already read.
+function limited(pathname: string, method: string): Response {
+  if (workPath.test(pathname))
+    return workRateLimitedResponse(method === "GET", crypto.randomUUID(), retryAfterSeconds);
+  return edgeRateLimited();
+}
+// The route's existing 503: logout's and rotate's own outcome bodies, the work API's
+// ErrorEnvelope (its read class, safe_read_retry, on GET and recheck_before_retry otherwise,
+// as the work handler classifies a request before its guard runs), and the workspace
+// handler's {"code":"unavailable"}. None sets a cookie.
+function unavailable(route: ManagedApiRoute, pathname: string, method: string): Response {
+  if (route === "logout")
+    return edgeReply(503, '{"schemaVersion":1,"outcome":"logout_unavailable"}');
+  if (route === "rotate")
+    return edgeReply(503, '{"schemaVersion":1,"outcome":"rotation_unavailable"}');
+  if (workPath.test(pathname))
+    return workErrorResponse(
+      method === "GET" ? "unavailable_read" : "unavailable",
+      crypto.randomUUID(),
+    );
+  return edgeReply(503, '{"code":"unavailable"}');
+}
+
+/** `limiter` null (development without limiters) forwards every request untouched. */
+export function createSessionLimit(limiter: RateLimiter | null) {
+  const handle = async (
+    request: Request,
+    next: (request: Request) => Promise<Response>,
+  ): Promise<Response> => {
+    if (!limiter) return next(request);
+    let pathname: string;
+    try {
+      pathname = new URL(request.url).pathname;
+    } catch {
+      return next(request);
+    }
+    const route = managedApiRoute(pathname);
+    if (!sessionLimitedRoutes.includes(route)) return next(request);
+    // Step 0: no canonical session cookie, no count; the handler's own refusal follows.
+    if (sessionCookieSecret(request.headers.get("cookie")) === null) return next(request);
+    // Step 1: the per-address limit.
+    const limit = await limitAddress(limiter, "session", request.headers.get("cf-connecting-ip"));
+    if (limit === "limited") return limited(pathname, request.method);
+    if (limit !== "allowed") {
+      logEdgeGuard(edgeLimitFailure(limit));
+      return unavailable(route, pathname, request.method);
+    }
+    return next(request);
+  };
+  return Object.freeze({ handle });
+}
+export type SessionLimit = ReturnType<typeof createSessionLimit>;

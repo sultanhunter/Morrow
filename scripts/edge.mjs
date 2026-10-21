@@ -481,16 +481,20 @@ export const committedIdentifierPatterns = Object.freeze([
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // P05.T01ab (ADR-0019 item 8): the api's per-address sign-in limits, exact per
 // environment: login start 10, the callback 20 and signup 5 per 60 s, in namespaces
-// 7001-7003 (development), 7101-7103 (staging) and 7201-7203 (production).
+// 7001-7003 (development), 7101-7103 (staging) and 7201-7203 (production). The session
+// routes' limit (ADR-0019 item 8 applied to them; apps/api/src/session-limit.ts) is 120 per
+// 60 s in 7006, 7106 and 7206, the api's next ids after the connector's 7004-7005 block.
+// Each environment keeps its own hundred (70xx, 71xx, 72xx); no namespace is shared.
 export function edgeRateLimits(environment) {
-  const base = { development: 7001, staging: 7101, production: 7201 }[environment];
+  const base = { development: 7000, staging: 7100, production: 7200 }[environment];
   return [
-    ["LOGIN_START_LIMITER", 10],
-    ["LOGIN_CALLBACK_LIMITER", 20],
-    ["SIGNUP_LIMITER", 5],
-  ].map(([name, limit], i) => ({
+    ["LOGIN_START_LIMITER", 1, 10],
+    ["LOGIN_CALLBACK_LIMITER", 2, 20],
+    ["SIGNUP_LIMITER", 3, 5],
+    ["SESSION_LIMITER", 6, 120],
+  ].map(([name, offset, limit]) => ({
     name,
-    namespace_id: String(base + i),
+    namespace_id: String(base + offset),
     simple: { limit, period: 60 },
   }));
 }
@@ -1271,7 +1275,8 @@ async function smokeDevPhase(protocol, markers, check) {
       label("broker_binds_only_morrow_environment"),
       JSON.stringify(tables["morrow-development-broker"]) === '["MORROW_ENVIRONMENT"]',
     );
-    // P05.T01ab adds the three per-address limiters; still no text or secret binding.
+    // P05.T01ab adds the three per-address sign-in limiters and the session routes their
+    // own fourth; still no text or secret binding.
     check(
       label("api_binds_only_broker_environment_and_limiters"),
       JSON.stringify([...(tables["morrow-development-api"] ?? [])].sort()) ===
@@ -1281,6 +1286,7 @@ async function smokeDevPhase(protocol, markers, check) {
             "LOGIN_CALLBACK_LIMITER",
             "LOGIN_START_LIMITER",
             "MORROW_ENVIRONMENT",
+            "SESSION_LIMITER",
             "SIGNUP_LIMITER",
           ].sort(),
         ),

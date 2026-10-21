@@ -78,6 +78,7 @@ const guard = () => ({
   LOGIN_START_LIMITER: limiter(),
   LOGIN_CALLBACK_LIMITER: limiter(),
   SIGNUP_LIMITER: limiter(),
+  SESSION_LIMITER: limiter(),
 });
 const env = (environment = "development", change = {}) => ({
   MORROW_ENVIRONMENT: environment,
@@ -311,7 +312,13 @@ const without = (record, ...names) => {
   for (const name of names) delete copy[name];
   return copy;
 };
-const limiterNames = ["LOGIN_START_LIMITER", "LOGIN_CALLBACK_LIMITER", "SIGNUP_LIMITER"];
+const limiterNames = [
+  "LOGIN_START_LIMITER",
+  "LOGIN_CALLBACK_LIMITER",
+  "SIGNUP_LIMITER",
+  "SESSION_LIMITER",
+];
+const limiterKeys = ["loginStart", "loginCallback", "signup", "session"];
 
 test("P05.T01ab-AC07: staging without the guard is API_ENV_ABUSE_GUARD_MISSING", () => {
   const record = env("staging");
@@ -331,8 +338,9 @@ test("P05.T01ab-AC07: staging without the guard is API_ENV_ABUSE_GUARD_MISSING",
     siteKey,
     actions: { login: "account_login", signup: "organization_signup" },
   });
-  assert.deepEqual(Object.keys(mapped.guard.limiters), ["loginStart", "loginCallback", "signup"]);
+  assert.deepEqual(Object.keys(mapped.guard.limiters), limiterKeys);
   assert.equal(mapped.guard.limiters.signup, record.SIGNUP_LIMITER);
+  assert.equal(mapped.guard.limiters.session, record.SESSION_LIMITER);
 });
 
 test("P05.T01ab-AC07: invalid challenge configuration or limiter bindings fail closed", () => {
@@ -358,7 +366,8 @@ test("P05.T01ab-AC07: invalid challenge configuration or limiter bindings fail c
       String(value).slice(0, 60),
     );
   for (const value of [null, "LIMITER", {}, { limit: "x" }, 1])
-    assert.equal(code({ ...record, SIGNUP_LIMITER: value }), "API_ENV_ABUSE_GUARD_MISSING");
+    for (const name of ["SIGNUP_LIMITER", "SESSION_LIMITER"])
+      assert.equal(code({ ...record, [name]: value }), "API_ENV_ABUSE_GUARD_MISSING", name);
   const getter = env("staging");
   Object.defineProperty(getter, "LOGIN_START_LIMITER", { get: limiter, enumerable: true });
   assert.equal(code(getter), "API_ENV_ABUSE_GUARD_MISSING");
@@ -383,7 +392,7 @@ test("P05.T01ab-AC07: step 10 itself needs the whole guard in staging and produc
     const full = mapAbuseGuard(guard(), environment);
     assert.ok(full && Object.isFrozen(full), environment);
     assert.equal(full.challenge.siteKey, siteKey);
-    assert.deepEqual(Object.keys(full.limiters), ["loginStart", "loginCallback", "signup"]);
+    assert.deepEqual(Object.keys(full.limiters), limiterKeys);
     for (const missing of [
       ["LOGIN_CHALLENGE_JSON"],
       limiterNames,
@@ -399,6 +408,11 @@ test("P05.T01ab-AC07: step 10 itself needs the whole guard in staging and produc
   }
   assert.deepEqual(mapAbuseGuard({}, "development"), { challenge: null, limiters: null });
   assert.equal(mapAbuseGuard(without(guard(), "SIGNUP_LIMITER"), "development"), null);
+  // The session routes' limiter is no optional extra: without it development's limiters
+  // are partial, and staging's and production's guard is missing.
+  assert.equal(mapAbuseGuard(without(guard(), "SESSION_LIMITER"), "development"), null);
+  for (const environment of ["staging", "production"])
+    assert.equal(mapAbuseGuard(without(guard(), "SESSION_LIMITER"), environment), null);
 });
 
 test("P05.T01ab-AC07: development maps with no guard, limiters only, or the full guard", () => {
@@ -415,7 +429,7 @@ test("P05.T01ab-AC07: development maps with no guard, limiters only, or the full
   assert.equal(
     code({ ...env(), LOGIN_START_LIMITER: limiter() }),
     "API_ENV_ABUSE_GUARD_MISSING",
-    "the limiters come all three or none",
+    "the limiters come all four or none",
   );
   assert.equal(
     code({ ...env(), LOGIN_CHALLENGE_JSON: challengeJson({ siteKey: "2x" + "0".repeat(22) }) }),
@@ -442,6 +456,7 @@ test("P04.T01i PR-D: the committed staging vars map once the keyring is bound", 
     LOGIN_START_LIMITER: limiter(),
     LOGIN_CALLBACK_LIMITER: limiter(),
     SIGNUP_LIMITER: limiter(),
+    SESSION_LIMITER: limiter(),
   };
   assert.equal(code(bound), "API_ENV_PARTIAL");
   const mapped = map({ ...bound, LOGIN_CAPSULE_KEYRING: values("staging").LOGIN_CAPSULE_KEYRING });
@@ -458,6 +473,11 @@ test("P04.T01i PR-D: the committed staging vars map once the keyring is bound", 
   const { LOGIN_START_LIMITER: _start, ...unguarded } = bound;
   assert.equal(
     code({ ...unguarded, LOGIN_CAPSULE_KEYRING: values("staging").LOGIN_CAPSULE_KEYRING }),
+    "API_ENV_ABUSE_GUARD_MISSING",
+  );
+  const { SESSION_LIMITER: _session, ...unlimited } = bound;
+  assert.equal(
+    code({ ...unlimited, LOGIN_CAPSULE_KEYRING: values("staging").LOGIN_CAPSULE_KEYRING }),
     "API_ENV_ABUSE_GUARD_MISSING",
   );
 });

@@ -8,7 +8,9 @@ type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
 // P06.T01a: /workspace/<Id>/work(/|$) goes to the work API; every other path is
 // the unchanged P05 handler. Both share the /workspace/* namespace that the api
 // Worker serves ahead of Static Assets (run_worker_first).
-const workPath = /^\/workspace\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\/work(?:\/|$)/;
+// Exported so the session limiter (session-limit.ts) answers a work path in the work
+// API's own error shape; there is one matcher.
+export const workPath = /^\/workspace\/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\/work(?:\/|$)/;
 
 // The configured local fixture imports this exact entry constructor. The
 // ordinary artifact intentionally has no account/secret/environment binding:

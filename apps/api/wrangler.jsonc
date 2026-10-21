@@ -7,6 +7,9 @@
 // P05.T01ab (ADR-0019 item 8): the per-address sign-in limits, one namespace per
 // route and environment (development 7001-7003, staging 7101-7103, production
 // 7201-7203). `ratelimits` is not inherited, so every environment names its own.
+// SESSION_LIMITER (ADR-0019 item 8 applied to the session routes, src/session-limit.ts):
+// 120 per 60 s per address on /workspaces, /workspace/* and logout and rotate, in 7006,
+// 7106 and 7206 (the connector holds 7004-7005, 7104-7105 and 7204-7205).
 // P04.T01i PR-D part 1 commits the reviewed staging identifiers in env.staging.vars
 // only: the login, workspace and logout configurations, the database binding and
 // LOGIN_CHALLENGE_JSON (the Turnstile site key). Development and production bind none.
@@ -54,6 +57,11 @@
       "simple": { "limit": 20, "period": 60 },
     },
     { "name": "SIGNUP_LIMITER", "namespace_id": "7003", "simple": { "limit": 5, "period": 60 } },
+    {
+      "name": "SESSION_LIMITER",
+      "namespace_id": "7006",
+      "simple": { "limit": 120, "period": 60 },
+    },
   ],
   "secrets": { "required": [] },
   "dev": { "ip": "127.0.0.1", "port": 8787, "local_protocol": "https" },
@@ -113,6 +121,11 @@
           "namespace_id": "7103",
           "simple": { "limit": 5, "period": 60 },
         },
+        {
+          "name": "SESSION_LIMITER",
+          "namespace_id": "7106",
+          "simple": { "limit": 120, "period": 60 },
+        },
       ],
       "secrets": { "required": [] },
     },
@@ -139,6 +152,11 @@
           "name": "SIGNUP_LIMITER",
           "namespace_id": "7203",
           "simple": { "limit": 5, "period": 60 },
+        },
+        {
+          "name": "SESSION_LIMITER",
+          "namespace_id": "7206",
+          "simple": { "limit": 120, "period": 60 },
         },
       ],
       "secrets": { "required": [] },
