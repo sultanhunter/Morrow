@@ -22,7 +22,10 @@
 //   C11 a lease context cannot create a wallet (0033 adds no INSERT policy), and its UPDATE
 //      that raises available without a credit grant or lowers consumed is refused by M5's
 //      wallet_guard; a sum-preserving move of its own wallet passes, another tenant's
-//      wallet is invisible.
+//      wallet is invisible; with no lease, the UPDATE itself matches no row. Relaxing 0033's
+//      tenant_lease_read alone (sim) shows the wallet and still moves nothing; relaxing
+//      tenant_lease_update with it lets the move through (PostgreSQL applies a table's
+//      SELECT policies to the rows an UPDATE reads, so both must admit the row); restored.
 // The wallets are M5 PR-1's (0029): one Morrow-direct billing account and wallet per
 // workspace, so each scenario reserves from its own synthetic workspace's wallet. Each wallet
 // is born empty through wallet_guard; its funding (M5's grant-funded increase from a verified
@@ -120,11 +123,32 @@ BEGIN
  GET DIAGNOSTICS n=ROW_COUNT;
  RETURN 'moved|'||n;
 END $$;
+-- C11: the same UPDATE, and a read of the wallet, with no lease check of their own, so
+-- that without a lease nothing but the wallet's row policies (0033's tenant_lease_read and
+-- tenant_lease_update) stands between them and the row.
+CREATE FUNCTION lab_credits.wallet_seen(p_org text,p_ws text,p_account text) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+BEGIN
+ RETURN 'seen|'||(SELECT count(*) FROM morrow_billing.credit_wallets x WHERE x.organization_id=p_org AND x.workspace_id=p_ws
+  AND x.billing_account_id=p_account);
+END $$;
+CREATE FUNCTION lab_credits.wallet_move_unchecked(p_org text,p_ws text,p_account text,p_available bigint,p_reserved bigint,
+ p_consumed bigint) RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE n integer;
+BEGIN
+ UPDATE morrow_billing.credit_wallets x SET available=x.available+p_available,reserved=x.reserved+p_reserved,consumed=x.consumed+p_consumed,
+  revision=x.revision+1,updated_at=greatest(date_trunc('milliseconds',clock_timestamp()),x.updated_at)
+  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.billing_account_id=p_account;
+ GET DIAGNOSTICS n=ROW_COUNT;
+ RETURN 'moved|'||n;
+END $$;
 ALTER FUNCTION lab_credits.book(text,text,numeric,text) OWNER TO morrow_work_command;
 ALTER FUNCTION lab_credits.settle(text,integer) OWNER TO morrow_work_command;
 ALTER FUNCTION lab_credits.foreign_settle(text,text,text) OWNER TO morrow_work_command;
 ALTER FUNCTION lab_credits.wallet_insert(text) OWNER TO morrow_work_command;
 ALTER FUNCTION lab_credits.wallet_move(text,text,text,bigint,bigint,bigint) OWNER TO morrow_work_command;
+ALTER FUNCTION lab_credits.wallet_move_unchecked(text,text,text,bigint,bigint,bigint) OWNER TO morrow_work_command;
+ALTER FUNCTION lab_credits.wallet_seen(text,text,text) OWNER TO morrow_work_command;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA lab_credits FROM PUBLIC;
 GRANT USAGE ON SCHEMA lab_credits TO morrow_runtime_executor;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA lab_credits TO morrow_runtime_executor;`;
@@ -133,6 +157,13 @@ export async function runCreditsLab(db) {
   phase("fixtures");
   const P = seedWorkFixtures(db);
   db.sql(probes);
+  // 0033's two lease policies on the wallet as migrated: C10 and C11 relax them (sim) and
+  // C11 proves they are restored exactly.
+  const leasePolicies = () =>
+    db.rows(
+      "SELECT policyname,cmd,roles::text AS roles,qual,with_check FROM pg_policies WHERE schemaname='morrow_billing' AND tablename='credit_wallets' AND policyname IN ('tenant_lease_read','tenant_lease_update') ORDER BY policyname",
+    );
+  const migrated = leasePolicies();
   const O = P.A.org,
     W = P.A.workspace;
   const attempt = (text, user = "postgres") => db.tryRun(text, { user });
@@ -829,8 +860,17 @@ COMMIT;`);
     // and no wallet (owner-seeded) cannot get one from its run lease. Under the funded
     // workspace's run lease, after a settlement (consumed 1): raising available without a
     // credit grant, or a sum-preserving move that lowers consumed, is BILLING_WALLET_INVALID;
-    // a sum-preserving reserve passes (rolled back); another tenant's wallet matches no row;
-    // no lease, nothing. The wallet ends as the settlement left it.
+    // a sum-preserving reserve passes (rolled back); another tenant's wallet matches no row.
+    // No lease: definers with no lease check of their own read the wallet and update it
+    // directly, and neither sees the row (the same update under the lease moves it, rolled
+    // back). Negative control (sim: 0033's two lease policies relaxed to the wallet's tenant
+    // with no lease, then restored to their migrated text): with tenant_lease_read relaxed
+    // alone the wallet is visible and still not updated, and with tenant_lease_update
+    // relaxed too it moves (rolled back), so the refusal is tenant_lease_update's. The two
+    // are relaxed together for the move because PostgreSQL also applies the SELECT policies
+    // to the rows an UPDATE reads (its WHERE and SET name the wallet's columns): relaxing
+    // tenant_lease_update alone would still match no row. The wallet ends as the settlement
+    // left it.
     fund("account_wallet", 100);
     const a = accountOf("account_wallet");
     reserve("account_wallet", "run_wallet", "claude_sonnet_5_5", "low", 2, { period: laterPeriod });
@@ -872,13 +912,39 @@ INSERT INTO morrow_identity.workspace_memberships VALUES(${literal(bare.org)},${
     const control = move(own, -1, 1, 0, "ROLLBACK");
     const y = accountOf("account_lease_y");
     const foreign = move({ org: y.org, ws: y.ws, account: "account_lease_y" }, -1, 1, 0);
-    const noLease = attempt(
-      `BEGIN; SELECT lab_credits.wallet_move(${literal(a.org)},${literal(a.ws)},'account_wallet',-1,1,0); ROLLBACK;`,
-      "morrow_runtime_executor",
-    );
+    const uncheckedMove = `SELECT lab_credits.wallet_move_unchecked(${literal(a.org)},${literal(a.ws)},'account_wallet',-1,1,0);`;
+    // With no lease: whether the wallet is visible, then the UPDATE (rolled back).
+    const noLeaseMove = () =>
+      attempt(
+        `BEGIN; SELECT lab_credits.wallet_seen(${literal(a.org)},${literal(a.ws)},'account_wallet'); ${uncheckedMove} ROLLBACK;`,
+        "morrow_runtime_executor",
+      );
+    const leaseMove = underLease(leaseId, uncheckedMove, "ROLLBACK");
+    const noLease = noLeaseMove();
+    const leasePolicy =
+      "(organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_lease() c)";
+    const tenantOnly = `(organization_id::text,workspace_id::text)=(${literal(a.org)},${literal(a.ws)})`;
+    let readRelaxed, bothRelaxed;
+    try {
+      db.sql(
+        `ALTER POLICY tenant_lease_read ON morrow_billing.credit_wallets USING (${tenantOnly});`,
+      );
+      readRelaxed = noLeaseMove();
+      db.sql(
+        `ALTER POLICY tenant_lease_update ON morrow_billing.credit_wallets USING (${tenantOnly}) WITH CHECK (${tenantOnly});`,
+      );
+      bothRelaxed = noLeaseMove();
+    } finally {
+      db.sql(
+        `ALTER POLICY tenant_lease_read ON morrow_billing.credit_wallets USING (${leasePolicy}); ALTER POLICY tenant_lease_update ON morrow_billing.credit_wallets USING (${leasePolicy}) WITH CHECK (${leasePolicy});`,
+      );
+    }
+    const restored = JSON.stringify(leasePolicies()) === JSON.stringify(migrated);
+    const noLeaseAgain = noLeaseMove();
     const after = wallet("account_wallet");
     const out = (r) =>
       r.ok ? last(r.stdout) : "error:" + (r.stderr.match(/ERROR:\s*([^\n]*)/)?.[1] ?? "");
+    const both = (r) => (r.ok ? r.stdout.split("\n").join("|") : out(r));
     check(
       "C11:lease_context_cannot_create_or_inflate_a_wallet",
       opened === "opened" &&
@@ -894,7 +960,13 @@ INSERT INTO morrow_identity.workspace_memberships VALUES(${literal(bare.org)},${
         /BILLING_WALLET_INVALID/.test(lower.stderr) &&
         out(control) === "moved|1" &&
         out(foreign) === "moved|0" &&
-        out(noLease) === "denied" &&
+        out(leaseMove) === "moved|1" &&
+        both(noLease) === "seen|0|moved|0" &&
+        both(readRelaxed) === "seen|1|moved|0" &&
+        both(bothRelaxed) === "seen|1|moved|1" &&
+        migrated.length === 2 &&
+        restored &&
+        both(noLeaseAgain) === "seen|0|moved|0" &&
         JSON.stringify(after) === JSON.stringify(settledWallet),
       {
         opened,
@@ -906,7 +978,12 @@ INSERT INTO morrow_identity.workspace_memberships VALUES(${literal(bare.org)},${
         lower: out(lower),
         control: out(control),
         foreign: out(foreign),
-        noLease: out(noLease),
+        leaseMove: out(leaseMove),
+        noLease: both(noLease),
+        readRelaxed: both(readRelaxed),
+        bothRelaxed: both(bothRelaxed),
+        restored,
+        noLeaseAgain: both(noLeaseAgain),
         after,
       },
     );

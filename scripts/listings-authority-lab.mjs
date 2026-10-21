@@ -5,9 +5,10 @@
 // handler (Node, the psql work connector logged in as morrow_api_worker) and direct SQL
 // as each login, it proves:
 //   G  agent grants: membership null exactly for agents; the identity bridges' refusals;
-//      the installation's grant set and the enable request inside M2's store-link template
-//      (store_link_grants_v1()); agents.installation.activate held only by the
-//      organization's founding principal (the ADR-0022 item 3 amendment of 2026-10-21);
+//      every grant of the installation's grant set and the enable request inside M2's
+//      store-link template (store_link_grants_v1()); agents.installation.activate held
+//      only by the organization's founding principal (the ADR-0022 item 3 amendment of
+//      2026-10-21);
 //   E  "Enable Listings agent" (the ADR-0022 item 3 amendment): the server-built document,
 //      bound to actor, session, five minutes and a single-use nonce; the confirmation
 //      creates the installation, its principals and grants; replay, reuse, expiry,
@@ -15,8 +16,9 @@
 //   S  "Stop AI work": the KillSwitchRecord commits with the stop and its event, revokes
 //      the installation's run leases, and a later lease_open is stopped; a stale prior
 //      state is a conflict; resume only after the owner's own stop, with a fresh document
-//      that is exactly the installation (release, connection, grants) and lifts only the
-//      stop it named; a confirmation under a connection stop changes nothing;
+//      that is exactly the installation (release, connection, grants; a SQL refusal read
+//      inside its own transaction, and committed) and lifts only the stop it named; a
+//      confirmation under a connection stop changes nothing;
 //   R  morrow_vault.resolve_call as the broker's login: every refusal, and nothing for
 //      any other login;
 //   D  delegation_facts as morrow_runtime_executor feeding the real agent kernel through
@@ -29,8 +31,9 @@
 //   T  the owner-run platform stop through the staging runner's admin transaction, and a
 //      resume confirmed under it changes nothing;
 //   L  M2's store installation unlinked, suspended or uninstalled: enable and resume are
-//      refused at both steps, in TypeScript and in SQL, and change nothing; linked again,
-//      the same documents apply; "Stop AI work" needs no link.
+//      refused at both steps, in TypeScript and in SQL, and change nothing (a SQL refusal
+//      read inside its own transaction, and committed); linked again, the same documents
+//      apply; "Stop AI work" needs no link.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Runs in
 // the CI pg-work group. The local superuser is used only for fixtures and the shapes
 // marked "sim".
@@ -266,6 +269,29 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(P.A.principal)
     return r.stdout.split("\n").slice(1);
   };
   const count = (query) => Number(last(db.sql(`SELECT (${query})::bigint;`)));
+  // What an enable or resume definer could change, as the api's role reads it (S8, L): the
+  // Listings installations matching `where` (id, status, revision), their open stops set by
+  // a person, and whether the enable document with this digest is recorded and unconsumed.
+  const agentState = (where, digestSql) =>
+    `SELECT concat_ws('|',(SELECT coalesce(string_agg(i.id::text||':'||i.status||':'||i.revision,',' ORDER BY i.id),'none') FROM morrow_work.agent_installations i WHERE ${where}),(SELECT coalesce(string_agg(s.id::text,',' ORDER BY s.id),'none') FROM morrow_work.stop_controls s JOIN morrow_work.agent_installations i ON s.target_id=i.id::text WHERE ${where} AND s.scope='installation' AND s.lifted_at IS NULL AND s.set_by_kind='human'),(SELECT count(*) FROM morrow_work.agent_enable_document(${digestSql}) d WHERE NOT d.consumed));`;
+  // One SQL definer call (TypeScript bypassed), as the api's login in one transaction that
+  // ends in ROLLBACK, as the Worker ends every outcome but applied. The state the call
+  // leaves is read in that same transaction, after the call and before its ROLLBACK, where
+  // anything it wrote is still visible, and compared with the committed state just before
+  // the call: a refusal cannot pass because its writes were rolled back (the applied
+  // controls show the same read sees an applied call's writes).
+  const definerRun = (p, definer, state) => {
+    const before = last(db.sql(asApi(p, state), { user: "morrow_api_worker" }));
+    const out = db.sql(asApi(p, definer + "\n" + state), { user: "morrow_api_worker" }).split("\n");
+    return { outcome: out.at(-2), before, after: out.at(-1), unchanged: out.at(-1) === before };
+  };
+  const refusedInPlace = (run, outcome) => run.outcome === outcome && run.unchanged;
+  // An applied document call: the same read, in the same transaction, sees the document it
+  // recorded (and nothing else changed).
+  const recordedInPlace = (run) =>
+    run.outcome === "applied" &&
+    run.before.endsWith("|0") &&
+    run.after === run.before.slice(0, -1) + "1";
   // The state of one M2 store installation as M2 PR-3's uninstall, suspension and disconnect
   // paths will write it (sim: 0026's shopify_record_guard admits only unlinked -> linked, so
   // the edit runs with that trigger disabled). `unlinked` clears the link reference; `linked`
@@ -601,13 +627,31 @@ INSERT INTO morrow_identity.agent_principals VALUES(${literal(agent2)},'agent',$
     const template = db.rows(
       "SELECT capability_id,verbs,fields FROM morrow_identity.store_link_grants_v1()",
     );
-    const inside = Number(
+    // A grant set's elements inside the template (the inner JOIN) and all of its elements:
+    // they are equal only when no element falls outside, so a grant the template does not
+    // hold cannot hide behind the JOIN.
+    const listingsSet = `morrow_work.listings_grant_set(${literal(O)},${literal(W)},${literal(S)},${literal(C)})`;
+    const insideOf = (set) =>
       last(
         db.sql(
-          `SELECT count(*) FROM jsonb_array_elements(morrow_work.listings_grant_set(${literal(O)},${literal(W)},${literal(S)},${literal(C)})) g JOIN morrow_identity.store_link_grants_v1() t ON t.capability_id=g->>'capabilityId' WHERE (g->'verbs')<@t.verbs AND t.verbs ? 'delegate' AND (g#>'{scope,fields}')<@t.fields;`,
+          `SELECT (SELECT count(*) FROM jsonb_array_elements(${set}) g JOIN morrow_identity.store_link_grants_v1() t ON t.capability_id=g->>'capabilityId' WHERE (g->'verbs')<@t.verbs AND t.verbs ? 'delegate' AND (g#>'{scope,fields}')<@t.fields)||'|'||jsonb_array_length(${set});`,
         ),
-      ),
-    );
+      )
+        .split("|")
+        .map(Number);
+    const [inside, total] = insideOf(listingsSet);
+    // Negative controls: the same set with one more grant outside the template (a
+    // capability it has no row for; a template capability with a verb its row lacks, or a
+    // field its row lacks; the activate row, which carries no delegate) counts that grant in
+    // the total only.
+    const extra = (capabilityId, verbs, fields) =>
+      `${listingsSet}||jsonb_build_array(jsonb_build_object('capabilityId',${literal(capabilityId)},'verbs',${literal(JSON.stringify(verbs))}::jsonb,'scope',jsonb_build_object('fields',${literal(JSON.stringify(fields))}::jsonb)))`;
+    const outside = [
+      insideOf(extra("governance.model_default.revise", ["execute"], ["model"])),
+      insideOf(extra("catalog.content.propose", ["approve"], [...listingFieldPaths])),
+      insideOf(extra("catalog.products.read", ["view"], ["vendor"])),
+      insideOf(extra("agents.installation.activate", ["execute"], activateFields)),
+    ];
     const seeded = db.rows(
       `SELECT payload->>'capabilityId' AS capability_id,payload->'verbs' AS verbs,payload#>'{scope,fields}' AS fields FROM morrow_identity.grants WHERE membership_id=${literal(P.A.membership)} AND payload#>>'{scope,resources,0,kind}'='store' AND payload#>>'{scope,resources,0,id}'=${literal(S)}`,
     );
@@ -616,6 +660,8 @@ INSERT INTO morrow_identity.agent_principals VALUES(${literal(agent2)},'agent',$
       "G3:installation_and_enable_inside_the_store_link_template",
       template.length === 4 &&
         inside === 3 &&
+        total === inside &&
+        outside.every(([n, all]) => n === inside && all === inside + 1) &&
         template.some(
           (t) =>
             t.capability_id === "agents.installation.activate" &&
@@ -623,7 +669,7 @@ INSERT INTO morrow_identity.agent_principals VALUES(${literal(agent2)},'agent',$
             enableRequestFields.every((f) => t.fields.includes(f)),
         ) &&
         seeded.map(key).sort().join() === template.map(key).sort().join(),
-      { template, inside, seeded },
+      { template, inside, total, outside, seeded },
     );
     // Neither agents bridge issues agents.installation.activate: not in an installation's
     // grant set, and not as the owner's grant (whose control, the disable grant, issues).
@@ -1843,7 +1889,10 @@ INSERT INTO morrow_work.proposals(organization_id,workspace_id,id,revision,famil
     const unchanged = (stopId, reply) =>
       disabled() && ownerStop(stopId) && unconsumed(reply.body.documentDigest);
     // SQL alone (TypeScript bypassed): the document definer with a resume document of the
-    // store's current resource, dated inside its own transaction.
+    // store's current resource, dated inside its own transaction, and the confirmation
+    // definer; each runs in its own transaction ending in ROLLBACK (definerRun), where the
+    // installation's state (agentState: its status and revision, its open human stops, and
+    // the named document unconsumed) is read after the call and before the rollback.
     const template = (
       await buildInstallationDocument({
         id: randomUUID(),
@@ -1857,33 +1906,33 @@ INSERT INTO morrow_work.proposals(organization_id,workspace_id,id,revision,famil
     const placeholders = template
       .replace('"createdAt":"2026-01-01T00:00:00.000Z"', '"createdAt":"__CREATED__"')
       .replace('"expiresAt":"2026-01-01T00:05:00.000Z"', '"expiresAt":"__EXPIRES__"');
+    const installationState = (digestSql) =>
+      agentState(`i.id=${literal(installationId)}`, digestSql);
     const documentDefiner = () => {
       const command = randomUUID();
       const at = "date_trunc('milliseconds',transaction_timestamp())";
-      return last(
-        db.sql(
-          asApi(
-            P.A,
-            `WITH t AS (SELECT replace(replace(${literal(placeholders)},'__CREATED__',${utc(at)}),'__EXPIRES__',${utc(at + "+interval '5 minutes'")}) AS c) SELECT x.outcome FROM t,morrow_work.cmd_listings_enable_document(${literal(command)},${literal(sha(command))},'corr',${literal(S)},'resume',${literal(installationId)},${literal(JSON.parse(template).id)},t.c,encode(sha256(convert_to(t.c,'UTF8')),'hex'),${literal(sha(randomUUID()))}) x;`,
-          ),
-          { user: "morrow_api_worker" },
-        ),
+      const canonical = `replace(replace(${literal(placeholders)},'__CREATED__',${utc(at)}),'__EXPIRES__',${utc(at + "+interval '5 minutes'")})`;
+      return definerRun(
+        P.A,
+        `WITH t AS (SELECT ${canonical} AS c) SELECT x.outcome FROM t,morrow_work.cmd_listings_enable_document(${literal(command)},${literal(sha(command))},'corr',${literal(S)},'resume',${literal(installationId)},${literal(JSON.parse(template).id)},t.c,encode(sha256(convert_to(t.c,'UTF8')),'hex'),${literal(sha(randomUUID()))}) x;`,
+        installationState(`encode(sha256(convert_to(${canonical},'UTF8')),'hex')`),
       );
     };
     const confirmDefiner = (reply) =>
-      last(
-        db.sql(
-          asApi(
-            P.A,
-            `SELECT outcome FROM morrow_work.cmd_listings_enable(${literal(randomUUID())},${literal("a".repeat(64))},'corr',${literal(S)},${literal(reply.body.documentDigest)},${literal(reply.body.nonce)},NULL,NULL,NULL,NULL);`,
-          ),
-          { user: "morrow_api_worker" },
-        ),
+      definerRun(
+        P.A,
+        `SELECT outcome FROM morrow_work.cmd_listings_enable(${literal(randomUUID())},${literal("a".repeat(64))},'corr',${literal(S)},${literal(reply.body.documentDigest)},${literal(reply.body.nonce)},NULL,NULL,NULL,NULL);`,
+        installationState(literal(reply.body.documentDigest ?? "")),
       );
     const h1 = openHumanStop();
     const sqlControl = documentDefiner();
     // (a) The installation pinned to another connection of the store (sim: the guard that
-    // keeps an installation's connection fixed is disabled for the edit, and restored).
+    // keeps an installation's connection fixed is disabled for the edit, and restored). The
+    // SQL refusals are read in place: the confirmation's state before the call is the one a
+    // resume would change (disabled, the owner's stop open, the document unused) and the
+    // same read after the call, before its rollback, is unchanged. Repinned, the same
+    // confirmation (rolled back) applies, and the same read sees the installation active,
+    // the stop lifted and the document consumed; nothing persists.
     const pin = (connection) =>
       db.sql(`BEGIN; ALTER TABLE morrow_work.agent_installations DISABLE TRIGGER agent_installation_guard;
 UPDATE morrow_work.agent_installations SET connection_id=${literal(connection)},scope=morrow_work.listings_scope(${literal(O)},${literal(W)},${literal(S)},${literal(connection)}) WHERE id=${literal(installationId)};
@@ -1895,18 +1944,28 @@ ALTER TABLE morrow_work.agent_installations ENABLE TRIGGER agent_installation_gu
     const movedDefiner = documentDefiner();
     const movedConfirm = await send(P.A, "POST", listings, confirmOf(pending));
     const movedConfirmDefiner = confirmDefiner(pending);
+    // And committed: nothing the TypeScript refusals or the definers did persists.
     const movedUnchanged = unchanged(h1, pending);
     pin(C);
+    const repinnedConfirm = confirmDefiner(pending);
+    const repinnedUnchanged = unchanged(h1, pending);
+    const awaiting = new RegExp(`^${installationId}:disabled:([0-9]+)\\|${h1}\\|1$`);
+    const revision = movedConfirmDefiner.before.match(awaiting)?.[1];
     check(
       "S8:resume_refused_on_another_connection",
       pending.status === 201 &&
-        sqlControl === "applied" &&
+        recordedInPlace(sqlControl) &&
         movedStatus.body.actions?.resume === false &&
         is(movedDocument, "state_conflict") &&
-        movedDefiner === "state_conflict" &&
+        refusedInPlace(movedDefiner, "state_conflict") &&
         is(movedConfirm, "state_conflict") &&
-        movedConfirmDefiner === "state_conflict" &&
-        movedUnchanged,
+        refusedInPlace(movedConfirmDefiner, "state_conflict") &&
+        revision !== undefined &&
+        movedUnchanged &&
+        repinnedConfirm.outcome === "applied" &&
+        repinnedConfirm.before === movedConfirmDefiner.before &&
+        repinnedConfirm.after === `${installationId}:active:${Number(revision) + 1}|none|0` &&
+        repinnedUnchanged,
       {
         sqlControl,
         movedStatus: movedStatus.body,
@@ -1914,6 +1973,7 @@ ALTER TABLE morrow_work.agent_installations ENABLE TRIGGER agent_installation_gu
         movedDefiner,
         movedConfirm: movedConfirm.body,
         movedConfirmDefiner,
+        repinnedConfirm,
       },
     );
     // (b) A newer release published (sim: the shape of a future release migration; removed
@@ -1957,7 +2017,7 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
         is(grantsDocument, "state_conflict") &&
         is(grantsConfirm, "state_conflict") &&
         grantsUnchanged &&
-        documentDefiner() === "applied",
+        recordedInPlace(documentDefiner()),
       { grantsDocument: grantsDocument.body, grantsConfirm: grantsConfirm.body },
     );
 
@@ -2178,8 +2238,11 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
     // linked through M2's tables with the founder's store-link grants. For each state, a
     // document built while Z was linked is refused at both steps, in TypeScript (404: the
     // store has no current association) and in SQL with TypeScript bypassed (the document
-    // definer not_found, the confirmation state_conflict), and nothing changes. Linked again,
-    // the SQL controls (rolled back) get past the store check, and the last document applies.
+    // definer not_found, the confirmation state_conflict), and nothing changes: each SQL
+    // refusal's state is read inside its own transaction before the ROLLBACK and equals the
+    // committed state before the call, and nothing persists after. Linked again, the SQL
+    // controls (rolled back) get past the store check, and the same in-transaction read sees
+    // what they wrote (the document recorded; the resume applied); the last document applies.
     // Store N was born unlinked (M2's own unlinked state) and was never linked.
     const Z = "store_lz",
       ZC = "connection_lz",
@@ -2204,7 +2267,13 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
       documentDigest: reply.body.documentDigest,
       nonce: reply.body.nonce,
     });
-    // The document definer with a document of this store, dated inside its own transaction.
+    // The state an enable definer could change on a store (agentState): its Listings
+    // installations, their open human stops, and the named enable document.
+    const storeAgents = (storeId, digestSql) =>
+      agentState(`i.store_id=${literal(storeId)}`, digestSql);
+    // The document definer with a document of this store, dated inside its own transaction;
+    // the state, of that store, names that document by its digest, recomputed in the same
+    // transaction.
     const documentSql = async (storeId, connectionId, purpose, installation) => {
       const built = await buildInstallationDocument({
         id: randomUUID(),
@@ -2219,28 +2288,22 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
         .replace('"expiresAt":"2026-01-01T00:05:00.000Z"', '"expiresAt":"__EXPIRES__"');
       const command = randomUUID();
       const at = "date_trunc('milliseconds',transaction_timestamp())";
-      return last(
-        db.sql(
-          asApi(
-            P.A,
-            `WITH t AS (SELECT replace(replace(${literal(text)},'__CREATED__',${utc(at)}),'__EXPIRES__',${utc(at + "+interval '5 minutes'")}) AS c) SELECT x.outcome FROM t,morrow_work.cmd_listings_enable_document(${literal(command)},${literal(sha(command))},'corr',${literal(storeId)},${literal(purpose)},${literal(installation)},${literal(built.document.id)},t.c,encode(sha256(convert_to(t.c,'UTF8')),'hex'),${literal(sha(randomUUID()))}) x;`,
-          ),
-          { user: "morrow_api_worker" },
-        ),
+      const canonical = `replace(replace(${literal(text)},'__CREATED__',${utc(at)}),'__EXPIRES__',${utc(at + "+interval '5 minutes'")})`;
+      const digest = `encode(sha256(convert_to(${canonical},'UTF8')),'hex')`;
+      return definerRun(
+        P.A,
+        `WITH t AS (SELECT ${canonical} AS c) SELECT x.outcome FROM t,morrow_work.cmd_listings_enable_document(${literal(command)},${literal(sha(command))},'corr',${literal(storeId)},${literal(purpose)},${literal(installation)},${literal(built.document.id)},t.c,encode(sha256(convert_to(t.c,'UTF8')),'hex'),${literal(sha(randomUUID()))}) x;`,
+        storeAgents(storeId, digest),
       );
     };
     // The confirmation definer. An enable confirmation carries principal ids and an empty
     // grant list, so on a linked store it passes the store check and stops at the grants
     // (invalid); a resume carries none.
     const confirmSql = (reply, purpose) =>
-      last(
-        db.sql(
-          asApi(
-            P.A,
-            `SELECT outcome FROM morrow_work.cmd_listings_enable(${literal(randomUUID())},${literal("a".repeat(64))},'corr',${literal(Z)},${literal(reply.body.documentDigest)},${literal(reply.body.nonce)},${purpose === "enable" ? `${literal("agent_" + randomUUID())},${literal("agent_" + randomUUID())},'[]','{}'` : "NULL,NULL,NULL,NULL"});`,
-          ),
-          { user: "morrow_api_worker" },
-        ),
+      definerRun(
+        P.A,
+        `SELECT outcome FROM morrow_work.cmd_listings_enable(${literal(randomUUID())},${literal("a".repeat(64))},'corr',${literal(Z)},${literal(reply.body.documentDigest)},${literal(reply.body.nonce)},${purpose === "enable" ? `${literal("agent_" + randomUUID())},${literal("agent_" + randomUUID())},'[]','{}'` : "NULL,NULL,NULL,NULL"});`,
+        storeAgents(Z, literal(reply.body.documentDigest ?? "")),
       );
     const unconsumed = (reply) =>
       count(
@@ -2261,7 +2324,8 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
       neverReported === "unlinked" &&
         is(neverStatus, "not_found") &&
         is(neverDocument, "not_found") &&
-        neverDefiner === "not_found" &&
+        refusedInPlace(neverDefiner, "not_found") &&
+        neverDefiner.before === "none|none|0" &&
         count(
           `SELECT count(*) FROM morrow_work.agent_enable_documents WHERE store_id=${literal(N)}`,
         ) === 0,
@@ -2286,7 +2350,8 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
       const documentDefiner = await documentSql(Z, ZC, "enable", randomUUID());
       const confirm = await send(P.A, "POST", zPath, confirmOf(pending));
       const confirmDefiner = confirmSql(pending, "enable");
-      const unchanged = zInstallations() === 0 && unconsumed(pending);
+      // And committed: nothing the TypeScript refusals or the definers did persists.
+      const committed = zInstallations() === 0 && unconsumed(pending);
       storeState(ZI, "linked");
       enableRuns[state] = {
         pending: pending.status === 201 && pending.body.purpose === "enable",
@@ -2296,12 +2361,19 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
         documentDefiner,
         confirm: is(confirm, "not_found"),
         confirmDefiner,
-        unchanged,
+        committed,
         controlDocument: await documentSql(Z, ZC, "enable", randomUUID()),
         controlConfirm: confirmSql(pending, "enable"),
       };
     }
     const enabled = await send(P.A, "POST", zPath, confirmOf(pending));
+    // The negative control of the confirmation's state read: committed, the applied enable
+    // shows there as the new installation with the document consumed.
+    const enabledState = last(
+      db.sql(asApi(P.A, storeAgents(Z, literal(pending.body.documentDigest ?? ""))), {
+        user: "morrow_api_worker",
+      }),
+    );
     check(
       "L1:enable_refused_unless_linked",
       linkStates.every((state) => {
@@ -2311,18 +2383,20 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
           r.reported === state &&
           r.status &&
           r.document &&
-          r.documentDefiner === "not_found" &&
+          refusedInPlace(r.documentDefiner, "not_found") &&
           r.confirm &&
-          r.confirmDefiner === "state_conflict" &&
-          r.unchanged &&
-          r.controlDocument === "applied" &&
-          r.controlConfirm === "invalid"
+          refusedInPlace(r.confirmDefiner, "state_conflict") &&
+          r.confirmDefiner.before === "none|none|1" &&
+          r.committed &&
+          recordedInPlace(r.controlDocument) &&
+          refusedInPlace(r.controlConfirm, "invalid")
         );
       }) &&
         enabled.status === 200 &&
         enabled.body.status === "active" &&
-        enabled.body.purpose === "enable",
-      { enableRuns, enabled: enabled.body },
+        enabled.body.purpose === "enable" &&
+        enabledState === enabled.body.installationId + ":active:1|none|0",
+      { enableRuns, enabled: enabled.body, enabledState },
     );
 
     // L2: resume after the owner's own "Stop AI work".
@@ -2339,6 +2413,10 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
       count(
         `SELECT count(*) FROM morrow_work.agent_installations WHERE id=${literal(zInstallation ?? "")} AND status='disabled'`,
       ) === 1;
+    // The negative control of the resume's state read: an applied resume, in its own
+    // transaction, shows the installation active, the owner's stop lifted and the document
+    // consumed.
+    const resumedInPlace = new RegExp("^" + zInstallation + ":active:[0-9]+\\|none\\|0$");
     const resumeRuns = {};
     for (const state of linkStates) {
       pending = await send(P.A, "POST", zPath + "/document", {});
@@ -2348,7 +2426,8 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
       const documentDefiner = await documentSql(Z, ZC, "resume", zInstallation);
       const confirm = await send(P.A, "POST", zPath, confirmOf(pending));
       const confirmDefiner = confirmSql(pending, "resume");
-      const unchanged = disabled() && humanStop() === ownerStopId && unconsumed(pending);
+      // And committed: nothing the TypeScript refusals or the definers did persists.
+      const committed = disabled() && humanStop() === ownerStopId && unconsumed(pending);
       storeState(ZI, "linked");
       resumeRuns[state] = {
         pending: pending.status === 201 && pending.body.purpose === "resume",
@@ -2364,7 +2443,7 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
         documentDefiner,
         confirm: is(confirm, "not_found"),
         confirmDefiner,
-        unchanged,
+        committed,
         controlDocument: await documentSql(Z, ZC, "resume", zInstallation),
         controlConfirm: confirmSql(pending, "resume"),
       };
@@ -2381,12 +2460,16 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
             r.reported === state &&
             r.status &&
             r.document &&
-            r.documentDefiner === "not_found" &&
+            refusedInPlace(r.documentDefiner, "not_found") &&
             r.confirm &&
-            r.confirmDefiner === "state_conflict" &&
-            r.unchanged &&
-            r.controlDocument === "applied" &&
-            r.controlConfirm === "applied"
+            refusedInPlace(r.confirmDefiner, "state_conflict") &&
+            r.confirmDefiner.before.startsWith(zInstallation + ":disabled:") &&
+            r.confirmDefiner.before.endsWith("|" + ownerStopId + "|1") &&
+            r.committed &&
+            recordedInPlace(r.controlDocument) &&
+            r.controlConfirm.outcome === "applied" &&
+            r.controlConfirm.before === r.confirmDefiner.before &&
+            resumedInPlace.test(r.controlConfirm.after)
           );
         }) &&
         resumed.status === 200 &&

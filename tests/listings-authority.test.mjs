@@ -433,9 +433,111 @@ function sqlStoreLinkTemplate() {
   }));
 }
 
+// The grants of listings_grant_set's body, in order (capability, verbs; each one's scope is
+// listings_scope, whose fields are listingFieldPaths).
+function sqlListingsGrantSet(sql = authoritySql) {
+  const body =
+    /CREATE FUNCTION morrow_work\.listings_grant_set\([^)]*\)[\s\S]*?\$\$([\s\S]*?)\$\$/.exec(
+      sql,
+    )?.[1];
+  assert.ok(body, "listings_grant_set body");
+  const row =
+    /jsonb_build_object\('capabilityId','([a-z._]+)','verbs','(\[[^\]]*\])'::jsonb,'scope',morrow_work\.listings_scope\(p_org,p_ws,p_store,p_connection\)\)/g;
+  const rows = [...body.matchAll(row)].map((m) => ({
+    capabilityId: m[1],
+    verbs: JSON.parse(m[2]),
+    fields: [...listingFieldPaths],
+  }));
+  // None is missed, however it is spelled: with each row read above replaced by one token
+  // and whitespace removed, the body is exactly one jsonb_build_array of those rows, so any
+  // other element or text in it fails here.
+  assert.equal(
+    body.replace(row, "ROW").replace(/\s+/g, ""),
+    `SELECTjsonb_build_array(${rows.map(() => "ROW").join(",")})`,
+    "listings_grant_set is one jsonb_build_array of readable grants",
+  );
+  return rows;
+}
+// The lab's G3 count over a grant set: the grants inside the template (a row of the same
+// capability whose verbs and fields contain the grant's, carrying delegate) and all of
+// them. Equal only when no grant falls outside the template.
+const insideTemplate = (set, rows) => ({
+  inside: set.filter((g) => {
+    const r = rows.find((t) => t.capabilityId === g.capabilityId);
+    return (
+      r !== undefined &&
+      g.verbs.every((v) => r.verbs.includes(v)) &&
+      r.verbs.includes("delegate") &&
+      g.fields.every((f) => r.fields.includes(f))
+    );
+  }).length,
+  total: set.length,
+});
+
 test("the installation and the enable request stay inside M2's store-link template", () => {
   const sqlRows = sqlStoreLinkTemplate();
   assert.equal(sqlRows.length, 4);
+  // Every grant of the grant set, counted: the SQL set is the TypeScript one, and the
+  // template-matched count equals its length against both templates.
+  const sqlSet = sqlListingsGrantSet();
+  const tsSet = listingsGrantSet.map((g) => ({
+    capabilityId: g.capabilityId,
+    verbs: [...g.verbs],
+    fields: [...listingsScope(store()).fields],
+  }));
+  assert.deepEqual(sqlSet, tsSet);
+  for (const rows of [storeLinkGrantTemplate, sqlRows])
+    for (const set of [tsSet, sqlSet])
+      assert.deepEqual(insideTemplate(set, rows), { inside: 3, total: 3 });
+  // Negative controls: one more grant outside the template (a capability with no row; a
+  // verb or a field its row lacks; the activate row, which carries no delegate) is counted
+  // in the total only.
+  for (const extra of [
+    { capabilityId: "governance.model_default.revise", verbs: ["execute"], fields: ["model"] },
+    { capabilityId: "catalog.content.propose", verbs: ["approve"], fields: [...listingFieldPaths] },
+    { capabilityId: "catalog.products.read", verbs: ["view"], fields: ["vendor"] },
+    {
+      capabilityId: "agents.installation.activate",
+      verbs: ["execute"],
+      fields: ["evaluation", "grant", "installationId", "revision"],
+    },
+  ])
+    for (const rows of [storeLinkGrantTemplate, sqlRows])
+      assert.deepEqual(
+        insideTemplate([...sqlSet, extra], rows),
+        { inside: 3, total: 4 },
+        extra.capabilityId,
+      );
+  // And at the source: a body with one more grant outside the template parses to four
+  // grants, three inside, so the equality above would fail; one the parser cannot read
+  // fails the parser.
+  const widened = authoritySql.replace(
+    "jsonb_build_object('capabilityId','catalog.products.read'",
+    "jsonb_build_object('capabilityId','governance.model_default.revise','verbs','[\"execute\"]'::jsonb,'scope',morrow_work.listings_scope(p_org,p_ws,p_store,p_connection)),\n  jsonb_build_object('capabilityId','catalog.products.read'",
+  );
+  assert.notEqual(widened, authoritySql);
+  assert.deepEqual(insideTemplate(sqlListingsGrantSet(widened), sqlRows), { inside: 3, total: 4 });
+  const unreadable = authoritySql.replace(
+    "jsonb_build_object('capabilityId','catalog.products.read'",
+    "jsonb_build_object('capabilityId','governance.model_default.revise','verbs','[\"execute\"]'::jsonb,'scope','{}'::jsonb),\n  jsonb_build_object('capabilityId','catalog.products.read'",
+  );
+  assert.throws(() => sqlListingsGrantSet(unreadable), assert.AssertionError);
+  // Nor one spelled without the 'capabilityId' token: a jsonb literal element, or a grant
+  // appended to the array.
+  for (const [from, to] of [
+    [
+      "jsonb_build_object('capabilityId','catalog.products.read'",
+      `'{"capabilityId":"governance.model_default.revise","verbs":["execute"]}'::jsonb,\n  jsonb_build_object('capabilityId','catalog.products.read'`,
+    ],
+    [
+      "listings_scope(p_org,p_ws,p_store,p_connection)))\n$$",
+      `listings_scope(p_org,p_ws,p_store,p_connection)))||jsonb_build_array(morrow_work.listings_scope(p_org,p_ws,p_store,p_connection))\n$$`,
+    ],
+  ]) {
+    const planted = authoritySql.replace(from, to);
+    assert.notEqual(planted, authoritySql, from);
+    assert.throws(() => sqlListingsGrantSet(planted), assert.AssertionError);
+  }
   const scope = listingsScope(store());
   for (const rows of [storeLinkGrantTemplate, sqlRows]) {
     const row = (id) => rows.find((r) => r.capabilityId === id);
