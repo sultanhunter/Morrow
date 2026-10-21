@@ -3,7 +3,7 @@
 - Status: Accepted 2026-10-19 (owner decisions in chat; see Approval), including the model catalogue values, which the owner confirmed the same day ("Owner confirmation of the catalogue values (2026-10-19)")
 - Date: 2026-10-19 (revised after two AI critiques, same day; model provider, model choice and credit weighting revised on acceptance; gateway, outcome, catalogue and failed-product rules revised after a third AI critique, same day; catalogue values confirmed by the owner, same day)
 - Amends: ADR-0007 items 1 and 4 (connector hostname; Shopify, Anthropic and Stripe credentials in the broker under trust model v1, development and staging only); ADR-0019 item 2 (a second public Worker); ADR-0010 item 2 (a lease context for background work, beside the unchanged session context); contract v1.1 (`ResourceRef` gains kind `store`; `Operation@2` allows a taskless billing operation); the Shopify row of `docs/decisions/providers.json` (custom distribution for the beta); the model provider of the 2026-10-14 stack selection (the plan's "Hosting decision" and "Merchant model gateway", `docs/decisions/model-selection.md`, `model-policy.json`, `providers.json` and `provider-bindings.json`): Anthropic Claude replaces OpenAI for text models (item 10), and OpenAI keeps only the post-launch image capabilities.
-- Amended: items 3, 9 and 11, 2026-10-20 (enabling the Listings agent; Stripe webhook ingress; credit rollover in the beta). See Amendments.
+- Amended: items 3, 9 and 11, 2026-10-20 (enabling the Listings agent; Stripe webhook ingress; credit rollover in the beta); items 3 and 12, 2026-10-21 (the linking owner is the founding principal; closing an unknown Stripe customer-create outcome by operator attestation). See Amendments.
 - Does not change: ADR-0007 item 9 (production custody needs its own ADR before M6); ADR-0020 (no new membership pair or owner role); ADR-0015 (both routes stay; the MVP uses only Morrow-direct); ADR-0005 (kill switches stay human-only).
 - Affects: `docs/briefs/mvp-architecture.md` (the spine) and the M2–M5 briefs; `docs/plan/mvp.md` and `docs/plan/build-plan.md`; `docs/contracts/capabilities.json`; contract v1.1 (or v1.2 if frozen first); `migrations/`; `apps/broker`, `apps/shopify-connector`, `apps/workers`, `apps/api`; `docs/decisions/{providers.json, provider-bindings.json, model-policy.json, model-selection.md, data-lifecycle.md}`; `docs/research/sources.json`.
 
@@ -268,3 +268,20 @@ Owner decision, 2026-10-20, in chat. The question was: "How should a verified St
 Unused monthly credits roll over. Each paid period grants 300 credits with no expiry (`CreditGrant.expiresAt` null), and credits are spendable only while the subscription is active. This is revisited before live money (M6).
 
 Owner decision, 2026-10-20, in chat. The question was: "During the beta, do unused monthly credits roll over?" The owner answered: "Roll over in beta (Recommended)". The option read: "Unused credits stay available while the subscription is active (300 are added each month). We revisit this before taking real money (M6). The billing rules library already works this way."
+
+### 2026-10-21: item 3, the linking owner (M2 PR-2)
+
+"The linking owner" in item 3's store-link template means the organization's founding principal (`organization_signups.principal_id`). Only that principal can be issued a Shopify (`shopify_oauth`) link handoff, apply the link, and receive the store-link grants on the store resource. A member who holds `governance.connection.connect` or `administer` but is not the founding principal is refused with `actor_ineligible`.
+
+Owner decision, 2026-10-21, in chat. The question was: "ADR-0022 says the store permissions go to the 'linking owner'. M2 implements that as: only the person who created the organization can link a Shopify store and receive its permissions. Admins can't. Is that right?" The owner answered: "Founder only (Recommended)". The option read: "Only the organization's founder can link a store and gets the store permissions (read products, propose and publish listings, enable the agent). This matches a solo-owner beta and keeps authority simple. Recorded as an ADR-0022 item 3 clarification." The other option, not chosen, read: "Anyone holding the connect permission can link a store and receives the store permissions. More flexible for teams, but it widens who can publish."
+
+### 2026-10-21: item 12, closing an unknown Stripe customer-create outcome (M5 PR-1)
+
+A customer-create operation whose outcome stays unknown, where Stripe's records prove neither outcome, blocks that workspace's checkout. It may be closed only this way:
+- an operator inspects the Stripe test account, under a per-action approval and with a live evidence record;
+- the operator attests that no customer was created;
+- the operation is then settled as failed (`verified_no_effect`, reason `operator_verified_no_effect`).
+
+It is never settled as succeeded. This keeps the invariant: an unknown outcome is reconciled before any retry and is never promoted to success.
+
+Owner decision, 2026-10-21, in chat. The question was: "Sometimes Stripe's 'create customer' call has an unknown outcome, and Stripe's records can't prove it either way. That workspace's checkout then stays blocked. M5 adds an operator path: after an inspection of the Stripe test account (approved per action), an operator attests 'no customer was created' and the operation is closed as failed. It's never treated as success. Allow it?" The owner answered: "Allow operator abandon (Recommended)". The option read: "Unblocks checkout after a recorded, approved inspection. The unknown is closed as 'failed', never 'succeeded', with a live evidence record each time." The other option, not chosen, read: "The workspace stays blocked until Stripe itself proves the outcome. Safer in theory, but a workspace could be stuck indefinitely."

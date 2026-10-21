@@ -67,8 +67,8 @@
         "P11",
         "P17"
       ],
-      "test_account_plan": "Create a separate Morrow development store and public app; do not mutate the observed live or unrelated development stores.",
-      "restrictions": "Public app review, protected data, historical orders, theme exemption and field/staff eligibility. Standalone workspace with thin connector controls only; connector classification/UI review and specific billing eligibility remain unqualified.",
+      "test_account_plan": "ADR-0022 item 4: one custom-distribution app per beta store, each on a fresh Morrow development store in a Shopify Partner organization; never the owner's live shop or an unrelated store. The owner deploys each app's TOML (npm run shopify-app -- toml), stores its client secret in the broker vault and registers it (npm run shopify-app -- register) under per-action approval; the first install is recorded in docs/evidence/live/. CI uses only the synthetic Shopify oracle.",
+      "restrictions": "MVP (ADR-0022 items 4-6; ADR-0008 as amended 2026-10-20): custom distribution only, read_products and write_products only, non-expiring offline tokens held as broker-vault envelopes, development stores only until M6, and no public app, App Store review or Shopify App Pricing. The broker hand-writes the query and webhook HMAC, the code exchange and one fixed Admin GraphQL document; the connector binds no secret and uses no Shopify library. Standalone workspace with thin connector controls only; protected data, historical orders, theme exemption, connector classification/UI review and specific billing eligibility remain unqualified.",
       "qualification_evidence": []
     },
     {
@@ -375,7 +375,7 @@
     {
       "id": "stripe",
       "name": "Stripe Billing and Stripe Tax",
-      "version": "api:pinned-by-payments-packet;stripe-node:pinned-by-payments-packet",
+      "version": "api:2025-03-31.basil;sdk:none",
       "decision_ids": [
         "D21"
       ],
@@ -400,8 +400,8 @@
         "P14",
         "P18"
       ],
-      "test_account_plan": "No Stripe account exists. The owner creates one in test mode when the payments packet starts; test-mode objects only, no live keys. Live activation needs a legal business entity, a bank account, a tax advisor and tax registrations where required, plus an approved packet and per-action owner approvals.",
-      "restrictions": "Morrow-direct billing route only (ADR-0015): website-created workspaces that pay before linking a store. Never reachable for a Shopify-route workspace or a workspace with no route that has ever had a store linked (shopifyBoundAt set, never cleared); the API refuses those sessions. API keys and webhook signing secrets are broker-only (Security invariant 11) and wait for the P08.T02 trust model (ADR-0007 item 4). Morrow is the seller of record and files and remits sales tax and VAT. Stripe billing credits are not the Morrow work-credit ledger. Revenue-share treatment under the Shopify Partner Program Agreement is unresolved.",
+      "test_account_plan": "No Stripe account exists yet (owner actions 1-3 of docs/briefs/M5-billing.md). M5 PR-1 code runs only against the fake Stripe origin of scripts/fixtures/stripe-fake.mjs; the owner creates the test-mode account, restricted key, webhook endpoint (six events, the pinned version), Product, Price and portal configuration under per-action approval, and the first test-mode smoke is recorded in docs/evidence/live/. Live activation needs a legal business entity, a bank account, a tax advisor and tax registrations where required, plus an approved packet and per-action owner approvals.",
+      "restrictions": "Morrow-direct billing route only (ADR-0015): website-created workspaces that pay before linking a store. Never reachable for a Shopify-route workspace or a workspace with no route that has ever had a store linked (shopifyBoundAt set, never cleared); the API refuses those sessions. No SDK: fixed fetch calls in the broker on the one pinned API version (M5 PR-1), WebCrypto HMAC for webhook signatures. The restricted test key (rk_test_ only) and the webhook signing secret bind only to the broker in development and staging (Security invariant 11; ADR-0022 item 7); production holds them until the ADR-0007 item 9 custody ADR. Morrow is the seller of record and files and remits sales tax and VAT. Stripe billing credits are not the Morrow work-credit ledger. Revenue-share treatment under the Shopify Partner Program Agreement is unresolved.",
       "qualification_evidence": []
     }
   ]

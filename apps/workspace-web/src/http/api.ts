@@ -4,7 +4,20 @@
 // documented ones, bodies are closed literals with no organization, workspace or
 // principal key, and byte limits are checked before anything is sent.
 import type { Command, Composed, Outcome, PortMethod, WorkspacePort } from "@morrow/workspace-ui";
-import { byteLength, isChallengeToken, isCommandKey, isId, type Client } from "./client";
+import {
+  byteLength,
+  isChallengeToken,
+  isCommandKey,
+  isCsrfValue,
+  isId,
+  type Client,
+} from "./client";
+import {
+  decodeConnections,
+  decodeStoreLinkPreview,
+  decodeStoreLinkResult,
+} from "./connection-decoders";
+import { handoffTokenPattern } from "../handoff";
 import {
   decodeAccountOverview,
   decodeBootstrap,
@@ -45,9 +58,11 @@ export type HttpRequest =
       readonly key: string | null;
       /** P05.T01ab: the X-Morrow-Challenge token, on login start and signup only. */
       readonly challenge?: string;
+      /** M2 PR-2: the X-Morrow-CSRF value, on the store-link apply only. */
+      readonly csrf?: string;
     }
   | { readonly method: "PUT"; readonly path: string; readonly body: string; readonly key: string };
-export const byteLimits = Object.freeze({ login: 512, signup: 2048, work: 65536 });
+export const byteLimits = Object.freeze({ login: 512, signup: 2048, work: 65536, link: 256 });
 
 const workPath = (ws: string, ...parts: string[]) => `/workspace/${ws}/work/${parts.join("/")}`;
 const query = (pairs: readonly (readonly [string, string | null])[]) => {
@@ -237,6 +252,25 @@ export const requests = {
   },
   getAnswer: (ws: string, id: string) =>
     ids(ws, id) ? get(workPath(ws, "questions", id, "answer")) : null,
+  // M2 PR-2: the connections read and the store-link routes. The body is exactly
+  // {handoffToken} (the guard's closed shape); the key is the handoff's one command key.
+  connections: (ws: string) => (ids(ws) ? get(`/workspace/${ws}/connections`) : null),
+  storeLink(
+    route: "preview" | "apply" | "status",
+    ws: string,
+    c: Command<{ handoffToken: string }>,
+    csrf: string | null = null,
+  ): HttpRequest | null {
+    const token = c.body.handoffToken;
+    if (!ids(ws) || typeof token !== "string" || !handoffTokenPattern.test(token)) return null;
+    if ((route === "apply") !== (csrf !== null) || (csrf !== null && !isCsrfValue(csrf)))
+      return null;
+    const path =
+      route === "apply" ? `/workspace/${ws}/store-links` : `/workspace/${ws}/store-links/${route}`;
+    const request = post(path, { handoffToken: token }, c.key, byteLimits.link);
+    if (!request || request.key === null) return null;
+    return csrf !== null ? { ...request, csrf } : request;
+  },
   listingsStatus: (ws: string, storeId: string) =>
     ids(ws, storeId) ? get(agentsPath(ws, storeId)) : null,
   listingsDocument: (ws: string, storeId: string, c: Command<Record<string, never>>) =>
@@ -307,7 +341,13 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
       ? client.get(request.path, navigationSignal())
       : request.method === "PUT"
         ? client.put(request.path, request.body, request.key)
-        : client.post(request.path, request.body, request.key, request.challenge ?? null);
+        : client.post(
+            request.path,
+            request.body,
+            request.key,
+            request.challenge ?? null,
+            request.csrf ?? null,
+          );
   // people.list and session.keepAlive stay uncomposed in this build (§4.14): they
   // answer not_in_build and send nothing.
   const unbuilt = async (..._args: unknown[]) => notInBuild;
@@ -451,6 +491,35 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
     },
     work,
     people: { list: unbuilt },
+    connections: {
+      list: gated("connections.list", async (ws: string) => {
+        const request = requests.connections(ws);
+        return request ? decodeConnections(await send(request), ws) : unknownRecord;
+      }),
+    },
+    storeLinks: {
+      preview: gated(
+        "storeLinks.preview",
+        async (ws: string, c: Command<{ handoffToken: string }>) => {
+          const request = requests.storeLink("preview", ws, c);
+          return request ? decodeStoreLinkPreview(await send(request)) : refused;
+        },
+      ),
+      apply: gated(
+        "storeLinks.apply",
+        async (ws: string, c: Command<{ handoffToken: string }>, csrf: string) => {
+          const request = requests.storeLink("apply", ws, c, csrf);
+          return request ? decodeStoreLinkResult(await send(request)) : refused;
+        },
+      ),
+      status: gated(
+        "storeLinks.status",
+        async (ws: string, c: Command<{ handoffToken: string }>) => {
+          const request = requests.storeLink("status", ws, c);
+          return request ? decodeStoreLinkResult(await send(request)) : refused;
+        },
+      ),
+    },
     agents: {
       listingsStatus: gated("agents.listingsStatus", (ws: string, storeId: string) =>
         read(requests.listingsStatus(ws, storeId), (b) => decodeListingsStatus(b, storeId)),

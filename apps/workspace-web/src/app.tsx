@@ -7,7 +7,8 @@ import {
   AccountScreen,
   AppShell,
   Button,
-  ConnectionAgentsScreen,
+  ConnectionScreen,
+  ConnectionsScreen,
   Dialog,
   EntryLayout,
   HomeScreen,
@@ -34,10 +35,12 @@ import {
   type Composed,
   type Id,
   type Outcome,
+  type StoreLinkHandoff,
   type UiServices,
   type WorkspacePort,
   type WorkspaceView,
 } from "@morrow/workspace-ui";
+import { captureHandoff, type Handoff } from "./handoff";
 import { newCommandKey } from "./http/client";
 import { clearIntended, storeIntended, takeIntended } from "./intended-route";
 import { createLeaveGuard, type LeaveGuard } from "./leave-guard";
@@ -97,6 +100,11 @@ export interface AppRuntime {
   readonly pending: Pending;
   /** Set once when `/` restored the intended route on this load (§4.6). */
   restored: { path: string; consumed: boolean } | null;
+  /**
+   * M2 PR-2: the install continuation this load was opened with (memory only), until its
+   * link step settles or the session view ends.
+   */
+  handoff: Handoff | null;
   requestLeave: (request: LeaveRequest) => void;
 }
 
@@ -111,6 +119,9 @@ export function createAppRuntime(): AppRuntime {
       restored = { path: intended, consumed: false };
     }
   }
+  // M2 PR-2: `/w/:ws/connections#handoff=<token>` is read and replaced before the router
+  // reads the address (anything else with a fragment stays NotFound).
+  const handoff = captureHandoff(window, newCommandKey);
   const pending = createPending();
   const guard = createLeaveGuard(window, () => pending.blocking());
   pending.subscribe(() => guard.sync());
@@ -119,6 +130,7 @@ export function createAppRuntime(): AppRuntime {
     guard,
     pending,
     restored,
+    handoff,
     requestLeave: () => {},
   };
   const router = createRouter(window, guard, (request) => runtime.requestLeave(request));
@@ -202,6 +214,8 @@ export function App({
   // A 401 or a sign-out ends the private view and bypasses the leave guard, including a
   // "Leave this page?" dialog that was already open.
   const ended = () => {
+    // An ended session view never keeps a continuation (it was bound to that session).
+    runtime.handoff = null;
     reads.current = new Map();
     setEntry(null);
     setLeave(null);
@@ -485,6 +499,14 @@ export function App({
         fixture={fixture}
         signOutState={signOutState}
         onSignOut={() => void signOutRef.current()}
+        handoff={
+          runtime.handoff && runtime.handoff.workspaceId === entry.view.id
+            ? { token: runtime.handoff.token, key: runtime.handoff.key }
+            : null
+        }
+        onHandoffSettled={() => {
+          runtime.handoff = null;
+        }}
       />
     );
   return (
@@ -501,12 +523,16 @@ function WorkspaceFrame({
   fixture,
   signOutState,
   onSignOut,
+  handoff,
+  onHandoffSettled,
 }: {
   readonly workspace: WorkspaceView;
   readonly match: RouteMatch;
   readonly fixture: ReactNode;
   readonly signOutState: "idle" | "busy" | "incomplete";
   readonly onSignOut: () => void;
+  readonly handoff: StoreLinkHandoff | null;
+  readonly onHandoffSettled: () => void;
 }) {
   const services = useServices();
   useServicesVersion();
@@ -545,10 +571,19 @@ function WorkspaceFrame({
         return <InboxScreen workspace={workspace} />;
       case "question":
         return <QuestionScreen workspace={workspace} questionId={params.questionId!} />;
-      // M3 PR-1: the Listings agent card (M2 PR-2's connection screen hosts it at rebase)
-      // and the model default under Settings > Governance.
+      // M2 PR-2: the store connections screens.
+      case "connections":
+        return (
+          <ConnectionsScreen
+            workspace={workspace}
+            handoff={handoff}
+            onHandoffSettled={onHandoffSettled}
+          />
+        );
       case "connection":
-        return <ConnectionAgentsScreen workspace={workspace} storeId={params.connectionId!} />;
+        return <ConnectionScreen workspace={workspace} connectionId={params.connectionId!} />;
+      // M3 PR-1: the model default under Settings > Governance (the Listings agent card is
+      // on the connection screen above).
       case "settings_section":
         return params.section === "governance" ? (
           <ModelDefaultScreen workspace={workspace} />
@@ -610,6 +645,12 @@ export function guardPort(
     },
     work,
     people: { list: watch(port.people.list.bind(port.people), first) },
+    connections: { list: watch(port.connections.list.bind(port.connections), first) },
+    storeLinks: {
+      preview: watch(port.storeLinks.preview.bind(port.storeLinks), first),
+      apply: watch(port.storeLinks.apply.bind(port.storeLinks), first),
+      status: watch(port.storeLinks.status.bind(port.storeLinks), first),
+    },
     agents: {
       listingsStatus: watch(port.agents.listingsStatus.bind(port.agents), first),
       listingsDocument: watch(port.agents.listingsDocument.bind(port.agents), first),

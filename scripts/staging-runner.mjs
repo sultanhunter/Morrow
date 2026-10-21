@@ -6,9 +6,10 @@
 //   close()
 // The staging CLI passes the Neon serverless connector below; the PostgreSQL 17 lab
 // passes a psql connector (scripts/fixtures/staging-psql-connection.mjs) with fault
-// hooks. Identifiers that reach SQL text are closed role and database names; every value
-// is a parameter, except a SCRAM verifier, which PostgreSQL accepts only as a literal and
-// which is checked against its exact grammar first.
+// hooks. Identifiers that reach SQL text are closed role, database and schema names;
+// every value is a parameter, except a role password, which ALTER ROLE accepts only as a
+// literal (it takes no bind parameters) and which is checked against its exact grammar
+// first.
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
 import { StagingError, fixedServerMessage, sqlState } from "./staging-common.mjs";
 import { ledgerRecord } from "./migration-chain.mjs";
@@ -177,7 +178,7 @@ export function checkAdministrator(administrator) {
     throw new StagingError("STAGING_ADMINISTRATOR_INVALID");
 }
 
-async function connectChecked(connect, binding, administrator) {
+export async function connectChecked(connect, binding, administrator) {
   let connection;
   try {
     connection = await connect();
@@ -534,8 +535,20 @@ export const roleControls = Object.freeze({
   connectionLimit: 10,
   settings: Object.freeze(["idle_in_transaction_session_timeout=10s", "statement_timeout=5s"]),
 });
-// 32 random bytes, base64url: 43 printable ASCII characters (SASLprep is the identity).
+// 32 random bytes, base64url: 43 characters of [A-Za-z0-9_-]. A SQL string literal holds
+// them as they are (no quote, backslash or non-ASCII byte), and SASLprep is the identity.
 export const generatePassword = () => randomBytes(32).toString("base64url");
+export const passwordGrammar = /^[A-Za-z0-9_-]{43}$/;
+// The literal that reaches ALTER ROLE: only a password of the generated shape, checked
+// immediately before interpolation (ALTER ROLE has no bind parameters).
+export function passwordLiteral(password) {
+  if (typeof password !== "string" || !passwordGrammar.test(password))
+    throw new StagingError("STAGING_PASSWORD_INVALID");
+  return `'${password}'`;
+}
+// PostgreSQL's SCRAM-SHA-256 stored form of a password. Provisioning no longer sends it
+// (Neon refuses a pre-hashed verifier, M-N3 as amended 2026-10-20); neon-probe sends one
+// to record that refusal, and the lab recomputes stored verifiers with it.
 export function scramVerifier(password, { salt = randomBytes(16), iterations = 4096 } = {}) {
   if (typeof password !== "string" || !/^[\x21-\x7e]{16,1024}$/.test(password))
     throw new StagingError("STAGING_PASSWORD_INVALID");
@@ -546,23 +559,24 @@ export function scramVerifier(password, { salt = randomBytes(16), iterations = 4
   salted.fill(0);
   return `SCRAM-SHA-256$${iterations}:${salt.toString("base64")}$${storedKey.toString("base64")}:${serverKey.toString("base64")}`;
 }
-const verifierGrammar =
-  /^SCRAM-SHA-256\$4096:[A-Za-z0-9+/]{22}==\$[A-Za-z0-9+/]{43}=:[A-Za-z0-9+/]{43}=$/;
 
-// The provisioning statements: LOGIN with a verifier (never a plaintext), the connection
-// limit, both timeouts, and REVOKE TEMP from PUBLIC. `verifiers` maps role -> verifier
-// for the roles whose password changes; every listed role gets the controls.
-export function provisioningSql({ roles, verifiers, database }) {
+// The provisioning statements: LOGIN with the role's new password, the connection limit,
+// both timeouts, and REVOKE TEMP from PUBLIC. `passwords` maps role -> plaintext for the
+// roles whose password changes; every listed role gets the controls. Neon takes only a
+// plaintext (its control plane refuses a verifier), and pg_authid then holds the
+// plaintext's SCRAM-SHA-256 verifier; what the control plane keeps is not measured (M-N3
+// as amended 2026-10-20). So each plaintext is sent once, in its own statement, over the
+// TLS connection. The returned text is for `connection.exec` only: never logged, printed,
+// put in an error or written anywhere.
+export function provisioningSql({ roles, passwords, database }) {
   if (!identifier.test(database)) throw new StagingError("STAGING_DATABASE_MISMATCH");
   const statements = ["BEGIN"];
   for (const role of roles) {
     if (!morrowRole.test(role)) throw new StagingError("STAGING_ROLE_INVALID");
-    const verifier = verifiers.get(role);
-    if (verifier !== undefined && !verifierGrammar.test(verifier))
-      throw new StagingError("STAGING_PASSWORD_INVALID");
+    const password = passwords.get(role);
     statements.push(
       `ALTER ROLE ${role} WITH LOGIN CONNECTION LIMIT ${roleControls.connectionLimit}` +
-        (verifier === undefined ? "" : ` PASSWORD '${verifier}'`),
+        (password === undefined ? "" : ` PASSWORD ${passwordLiteral(password)}`),
       `ALTER ROLE ${role} SET statement_timeout = '5s'`,
       `ALTER ROLE ${role} SET idle_in_transaction_session_timeout = '10s'`,
     );
@@ -603,32 +617,373 @@ export async function roleControlFacts(connection, roles) {
   };
 }
 
+// Statement statistics and statement logging (M-N3 as amended 2026-10-20). The plaintext
+// is a literal in the ALTER ROLE text. pg_stat_statements keeps a utility statement's text
+// with its literals, and once its module is loaded (shared_preload_libraries) it records
+// statements in every database, whether or not the extension exists there (measured on a
+// Neon probe branch, docs/evidence/live/2026-10-20-neon-password-path-experiments.md, and
+// checked by lab:staging-runner on PostgreSQL 17.11). The server log would keep the text
+// under log_statement, a duration threshold, a log_min_error_statement level that a
+// failing statement reaches, or debug_print_parse or debug_print_rewritten, which print
+// the statement's tree with the PASSWORD string (USERSET: a database or role owner can
+// turn them on with ALTER DATABASE/ROLE ... SET; checked on PostgreSQL 17.11). So one row
+// reads the extension in the session's database, the module's settings (which exist only
+// while it is loaded), password_encryption and the logging settings.
+export const statementStatsQuery =
+  "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'pg_stat_statements') AS extension, current_setting('pg_stat_statements.track', true) AS track, current_setting('pg_stat_statements.track_utility', true) AS track_utility, current_setting('password_encryption') AS password_encryption, current_setting('log_statement') AS log_statement, current_setting('log_min_duration_statement') AS log_min_duration_statement, current_setting('log_min_duration_sample') AS log_min_duration_sample, current_setting('log_statement_sample_rate') AS log_statement_sample_rate, current_setting('log_min_error_statement') AS log_min_error_statement, current_setting('log_duration') AS log_duration, current_setting('debug_print_parse') AS debug_print_parse, current_setting('debug_print_rewritten') AS debug_print_rewritten, current_setting('debug_print_plan') AS debug_print_plan";
+const oneOf = (value, values) => (values.includes(value) ? value : undefined);
+const messageLevels = Object.freeze([
+  "debug5",
+  "debug4",
+  "debug3",
+  "debug2",
+  "debug1",
+  "info",
+  "notice",
+  "warning",
+  "error",
+  "log",
+  "fatal",
+  "panic",
+]);
+// A duration threshold: -1 is "disabled"; any other well-formed value is "enabled".
+const threshold = (value) =>
+  value === "-1"
+    ? "disabled"
+    : typeof value === "string" && /^[0-9]{1,10}(us|ms|s|min|h|d)?$/.test(value)
+      ? "enabled"
+      : null;
+// Pure: the closed facts of one row of statementStatsQuery. `recording` is true unless the
+// row shows that no statement text can be kept: no extension in the session's database,
+// and the module either not loaded or tracking no utility statement. Anything unreadable
+// or unexpected counts as recording (`checked` false), or as a logging value of null.
+export function statementStatsFacts(row) {
+  const extension = typeof row?.extension === "boolean" ? row.extension : undefined;
+  const track = row?.track === null ? null : oneOf(row?.track, ["none", "top", "all"]);
+  const trackUtility =
+    row?.track_utility === null ? null : oneOf(row?.track_utility, ["on", "off"]);
+  const checked = extension !== undefined && track !== undefined && trackUtility !== undefined;
+  const loaded = checked ? track !== null || trackUtility !== null : null;
+  const recording =
+    !checked || extension || (loaded && !(track === "none" || trackUtility === "off"));
+  const rate = row?.log_statement_sample_rate;
+  return Object.freeze({
+    checked,
+    extension: extension ?? null,
+    module: loaded,
+    track: track ?? null,
+    trackUtility: trackUtility ?? null,
+    recording,
+    passwordEncryption: oneOf(row?.password_encryption, ["scram-sha-256", "md5"]) ?? null,
+    logStatement: oneOf(row?.log_statement, ["none", "ddl", "mod", "all"]) ?? null,
+    logMinDurationStatement: threshold(row?.log_min_duration_statement),
+    logMinDurationSample: threshold(row?.log_min_duration_sample),
+    logStatementSampleRate:
+      typeof rate === "string" && /^[01](\.[0-9]{1,6})?$/.test(rate) && Number(rate) <= 1
+        ? rate
+        : null,
+    logMinErrorStatement: oneOf(row?.log_min_error_statement, messageLevels) ?? null,
+    logDuration: oneOf(row?.log_duration, ["on", "off"]) ?? null,
+    debugPrintParse: oneOf(row?.debug_print_parse, ["on", "off"]) ?? null,
+    debugPrintRewritten: oneOf(row?.debug_print_rewritten, ["on", "off"]) ?? null,
+    debugPrintPlan: oneOf(row?.debug_print_plan, ["on", "off"]) ?? null,
+  });
+}
+export async function readStatementStats(connection) {
+  try {
+    const [row] = await connection.query(statementStatsQuery);
+    return statementStatsFacts(row);
+  } catch {
+    return statementStatsFacts(null);
+  }
+}
+// Pure: the first logging setting under which the server could write a statement's text
+// to its log, or null. log_min_error_statement must be panic: at fatal, a statement cut
+// short by a terminating connection is logged with its text. The three debug_print
+// settings must be off: parse and rewritten print an ALTER ROLE's PASSWORD string (both
+// checked on PostgreSQL 17.11); plan printed nothing for it there, and is refused too
+// because it prints statement trees. log_duration alone never logs the text, so it is
+// only recorded. An unreadable value refuses.
+const debugPrintSettings = Object.freeze([
+  ["debug_print_parse", "debugPrintParse"],
+  ["debug_print_rewritten", "debugPrintRewritten"],
+  ["debug_print_plan", "debugPrintPlan"],
+]);
+export function statementLoggingRefusal(facts) {
+  if (facts.logStatement !== "none") return "log_statement";
+  if (facts.logMinDurationStatement !== "disabled") return "log_min_duration_statement";
+  const sampled =
+    facts.logMinDurationSample !== "disabled" &&
+    !(
+      facts.logMinDurationSample === "enabled" &&
+      facts.logStatementSampleRate !== null &&
+      Number(facts.logStatementSampleRate) === 0
+    );
+  if (sampled) return "log_min_duration_sample";
+  if (facts.logMinErrorStatement !== "panic") return "log_min_error_statement";
+  for (const [setting, fact] of debugPrintSettings) if (facts[fact] !== "off") return setting;
+  return null;
+}
+// Refuses before any password statement, with closed details only: statistics that
+// cannot be read, the extension in the session's own database, storage other than
+// SCRAM-SHA-256, or a logging setting that could write the text. Returns true when the
+// loaded module records the statement, so the caller must wipe the statistics from a
+// scratch database afterwards (owner decision "Plaintext, then wipe stats").
+export function assertPasswordStatementSafe(stats) {
+  if (!stats.checked || stats.extension)
+    throw new StagingError("STAGING_STATEMENT_STATS_PRESENT", {
+      reason: !stats.checked ? "unchecked" : "extension",
+      extension: stats.extension,
+      module: stats.module,
+    });
+  if (stats.passwordEncryption !== "scram-sha-256")
+    throw new StagingError("STAGING_PASSWORD_ENCRYPTION");
+  const logging = statementLoggingRefusal(stats);
+  if (logging)
+    throw new StagingError("STAGING_STATEMENT_LOGGING", { reason: logging, database: "binding" });
+  return stats.recording;
+}
+
+// The PostgreSQL instance a session runs on: the postmaster's start time (a restart
+// changes it) and, over TCP, the server's address and port ("-" over a socket). Read in
+// both sessions before any password statement and again inside the verification, so the
+// wipe is shown to have run on the instance that recorded the statements and that it did
+// not restart in between (pg_stat_statements saves its entries across a clean restart).
+// Only compared in SQL; never printed, logged or put in an error.
+export const instanceIdentityExpression =
+  "pg_catalog.concat_ws('/', EXTRACT(epoch FROM pg_catalog.pg_postmaster_start_time())::text, coalesce(pg_catalog.host(pg_catalog.inet_server_addr()), '-'), coalesce(pg_catalog.inet_server_port()::text, '-'))";
+export const instanceIdentityQuery = `SELECT ${instanceIdentityExpression} AS instance`;
+export async function readInstanceIdentity(connection) {
+  try {
+    const [row] = await connection.query(instanceIdentityQuery);
+    return typeof row?.instance === "string" && /^[0-9.]{1,40}\/[^\s]{1,80}$/.test(row.instance)
+      ? row.instance
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+// The scratch database the wipe runs from: Neon's default `neondb`, never the binding
+// database, so `morrow` never gains the extension. Opened, identity-checked and held to
+// the same logging rule before any password statement. It never receives a password (the
+// verification sends only SHA-256 digests), but every session of a password run meets one
+// rule, and a scratch database that logs stops the run before any password exists. Its
+// instance must be the binding session's (instanceIdentityQuery). A scratch database that
+// is unnamed, the binding database itself, absent, unreachable, or not shown to run on the
+// binding's instance keeps the refusal (`reason` `module`). Returns {session, instance}.
+export const statementStatsScratchDatabase = "neondb";
+const scratchRefusal = (scratch) =>
+  new StagingError("STAGING_STATEMENT_STATS_PRESENT", {
+    reason: "module",
+    extension: false,
+    module: true,
+    scratch,
+  });
+export async function openStatementStatsScratch(connection, { binding, administrator, scratch }) {
+  if (
+    typeof scratch?.connect !== "function" ||
+    typeof scratch.database !== "string" ||
+    !identifier.test(scratch.database)
+  )
+    throw scratchRefusal("unnamed");
+  if (scratch.database === binding.database) throw scratchRefusal("same_database");
+  let present = null;
+  try {
+    [present] = await connection.query(
+      "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_database WHERE datname = $1::text AND datallowconn AND NOT datistemplate) AS present",
+      [scratch.database],
+    );
+  } catch {
+    present = null;
+  }
+  if (present?.present !== true) throw scratchRefusal("absent");
+  let session;
+  try {
+    session = await connectChecked(
+      scratch.connect,
+      { ...binding, database: scratch.database },
+      administrator,
+    );
+  } catch {
+    throw scratchRefusal("unavailable");
+  }
+  try {
+    // A bound on every scratch statement: a stalled verification fails closed as a residue
+    // (stage "verify") instead of hanging the run.
+    await session.exec("SET statement_timeout = '60s'");
+    const logging = statementLoggingRefusal(await readStatementStats(session));
+    if (logging)
+      throw new StagingError("STAGING_STATEMENT_LOGGING", { reason: logging, database: "scratch" });
+    const instance = await readInstanceIdentity(connection);
+    if (instance === null || (await readInstanceIdentity(session)) !== instance)
+      throw scratchRefusal("other_instance");
+    return Object.freeze({ session, instance });
+  } catch (error) {
+    await session.close();
+    throw error;
+  }
+}
+
+// The wipe (owner decision 2026-10-20, "Plaintext, then wipe stats"), from the scratch
+// session only: create the extension there if it is absent, run the full reset (all
+// users, all databases; it also truncates the stored query texts), then verify, in one
+// query: the reset was full (pg_stat_statements_info.stats_reset moved past the time read
+// just before it, so entries the session cannot see are gone too), the session still
+// runs on `instance` (read in both sessions before the password statements), and no
+// entry's text contains any of `passwords`. The passwords never leave memory here: the
+// query receives their SHA-256 digests as one bind parameter, and the server hashes every
+// 43-character window of each run of password characters in each entry's text and
+// compares (each password is 32 random bytes, so its digest reveals nothing). Only
+// booleans and a count come back. Then the extension is dropped if this call created it.
+// Any failure, including a residue or a drop that fails, is
+// STAGING_STATEMENT_STATS_RESIDUE with the stage reached and what the verification read.
+const extensionSchemaQuery =
+  "SELECT n.nspname::text AS schema FROM pg_catalog.pg_extension e JOIN pg_catalog.pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'pg_stat_statements'";
+// The verification query for the extension in `schema`: $1 the time read just before the
+// reset, $2 the JSON array of password digests (lowercase hex), $3 the expected instance.
+export function statementStatsVerificationQuery(schema) {
+  if (typeof schema !== "string" || !identifier.test(schema)) throw Error("schema");
+  return `SELECT coalesce((SELECT i.stats_reset >= $1::timestamptz FROM ${schema}.pg_stat_statements_info i), false) AS full_reset, coalesce(${instanceIdentityExpression} = $3::text, false) AS same_instance, (SELECT count(*)::int FROM ${schema}.pg_stat_statements s WHERE EXISTS (SELECT 1 FROM pg_catalog.regexp_matches(s.query, '[A-Za-z0-9_-]{43,}', 'g') m(run), pg_catalog.generate_series(1, pg_catalog.length(m.run[1]) - 42) w(i) WHERE pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(pg_catalog.substr(m.run[1], w.i, 43), 'UTF8')), 'hex') IN (SELECT pg_catalog.jsonb_array_elements_text($2::jsonb)))) AS remaining`;
+}
+export const passwordDigest = (password) => createHash("sha256").update(password).digest("hex");
+export async function wipeStatementStats(session, passwords, instance) {
+  if (
+    !Array.isArray(passwords) ||
+    !passwords.length ||
+    !passwords.every((p) => passwordGrammar.test(p))
+  )
+    throw new StagingError("STAGING_PASSWORD_INVALID");
+  const digests = JSON.stringify(passwords.map(passwordDigest));
+  let stage = "extension";
+  let created = false;
+  let check = null;
+  try {
+    let [row] = await session.query(extensionSchemaQuery);
+    if (!row) {
+      await session.exec("CREATE EXTENSION pg_stat_statements");
+      created = true;
+      [row] = await session.query(extensionSchemaQuery);
+    }
+    const query = statementStatsVerificationQuery(row?.schema);
+    stage = "reset";
+    const [clock] = await session.query("SELECT pg_catalog.clock_timestamp()::text AS before");
+    await session.query(`SELECT ${row.schema}.pg_stat_statements_reset()::text AS reset`);
+    stage = "verify";
+    [check] = await session.query(query, [
+      clock?.before,
+      digests,
+      typeof instance === "string" ? instance : "",
+    ]);
+    if (
+      check?.full_reset !== true ||
+      check?.same_instance !== true ||
+      check?.remaining !== 0 ||
+      typeof instance !== "string"
+    )
+      throw Error("residue");
+    if (created) {
+      stage = "drop";
+      await session.exec("DROP EXTENSION pg_stat_statements");
+      created = false;
+    }
+    return Object.freeze({ wiped: true, entriesRemaining: 0 });
+  } catch {
+    if (created && stage !== "drop")
+      try {
+        await session.exec("DROP EXTENSION pg_stat_statements");
+      } catch {
+        // The residue below already stops the run.
+      }
+    const read = (value) => (typeof value === "boolean" ? value : null);
+    throw new StagingError("STAGING_STATEMENT_STATS_RESIDUE", {
+      stage,
+      entriesRemaining: Number.isSafeInteger(check?.remaining) ? check.remaining : null,
+      fullReset: read(check?.full_reset),
+      sameInstance: read(check?.same_instance),
+    });
+  }
+}
+
+// The stored form of the roles' passwords, where the session may read pg_authid (a
+// superuser can, and so can a pg_read_all_data member; under ADR-0020's model of Neon's
+// roles, not yet confirmed on Neon (M-N1+, P04.T01j-AC15), neondb_owner is one through
+// neon_superuser; a plain CREATEROLE role cannot): "SCRAM-SHA-256" when every
+// role's stored password is a SCRAM-SHA-256 verifier, "other" when any is not,
+// "unreadable" otherwise. Only a count leaves the server, never a stored verifier.
+// Readability is asked first, so a refused read never fails the session.
+export async function storedPasswordForm(connection, roles) {
+  const [access] = await connection.query(
+    "SELECT pg_catalog.has_table_privilege('pg_catalog.pg_authid', 'SELECT') AS readable",
+  );
+  if (access?.readable !== true) return "unreadable";
+  const [row] = await connection.query(
+    `SELECT count(*)::int AS n FROM pg_catalog.pg_authid WHERE rolname IN (${roleList(roles)}) AND rolpassword LIKE 'SCRAM-SHA-256$%'`,
+  );
+  return row?.n === roles.length ? "SCRAM-SHA-256" : "other";
+}
+
 // Provisions the controls and, for `passwordRoles`, new passwords. Plaintexts are
-// generated here and returned only to the in-process caller; only verifiers reach SQL.
-export async function provisionRoles({ connect, binding, administrator, roles, passwordRoles }) {
+// generated here, sent once each in their ALTER ROLE statement over the TLS connection,
+// and returned only to the in-process caller, which delivers them to the broker (the
+// 0600 first-deploy file or `secret bulk` stdin). Before any password statement the
+// session must pass assertPasswordStatementSafe; when the loaded module records the
+// statements, the scratch session is opened and shown to share the binding's instance
+// first, and the statistics are wiped and verified after the statements, whether they
+// committed or failed. Each plaintext leaves memory only in its ALTER ROLE and the
+// broker delivery; the wipe sends digests. A wipe that cannot be
+// verified stops the run before any password is returned (STAGING_STATEMENT_STATS_RESIDUE).
+// `scratch` is {database, connect} for the scratch database (statementStatsScratchDatabase).
+export async function provisionRoles({
+  connect,
+  binding,
+  administrator,
+  roles,
+  passwordRoles,
+  scratch = null,
+}) {
   checkAdministrator(administrator);
   if (!passwordRoles.every((role) => roles.includes(role)))
     throw new StagingError("STAGING_ROLE_INVALID");
   const connection = await connectChecked(connect, binding, administrator);
+  let wipeFrom = null;
   try {
     if ((await presentRoles(connection, roles)) !== roles.length)
       throw new StagingError("STAGING_ROLES_MISSING");
+    if (passwordRoles.length && assertPasswordStatementSafe(await readStatementStats(connection)))
+      wipeFrom = await openStatementStatsScratch(connection, {
+        binding,
+        administrator,
+        scratch,
+      });
     const passwords = new Map(passwordRoles.map((role) => [role, generatePassword()]));
-    const verifiers = new Map(
-      [...passwords].map(([role, password]) => [role, scramVerifier(password)]),
-    );
-    const statements = provisioningSql({ roles, verifiers, database: binding.database });
-    let committed = false;
+    let failure = null;
     try {
-      for (const statement of statements) await connection.exec(statement);
-      committed = true;
+      for (const statement of provisioningSql({ roles, passwords, database: binding.database }))
+        await connection.exec(statement);
     } catch (error) {
-      throw sqlFailure("STAGING_PROVISION_FAILED", error);
+      failure = sqlFailure("STAGING_PROVISION_FAILED", error);
     }
+    const statementStats = wipeFrom
+      ? {
+          recording: true,
+          ...(await wipeStatementStats(
+            wipeFrom.session,
+            [...passwords.values()],
+            wipeFrom.instance,
+          )),
+        }
+      : { recording: false };
+    if (failure) throw failure;
     const facts = await roleControlFacts(connection, roles);
-    if (!committed || !facts.ok) throw new StagingError("STAGING_ROLE_CONTROLS_MISMATCH");
-    return { passwords, facts };
+    if (!facts.ok) throw new StagingError("STAGING_ROLE_CONTROLS_MISMATCH");
+    const passwordStorage = passwordRoles.length
+      ? await storedPasswordForm(connection, passwordRoles)
+      : "unchanged";
+    if (passwordStorage === "other") throw new StagingError("STAGING_PASSWORD_STORAGE_MISMATCH");
+    return { passwords, facts, passwordStorage, statementStats };
   } finally {
+    if (wipeFrom) await wipeFrom.session.close();
     await connection.close();
   }
 }
@@ -775,6 +1130,168 @@ export async function seedPlatform({ connect, binding, administrator, rows, self
     }
     await assertNoSetRows(connection);
     return written;
+  } finally {
+    await connection.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// M5 PR-1: the billing terms seed (`seed-platform`). docs/decisions/billing-terms.json
+// publishes each environment's BillingTerms@1 revisions with their display offers and
+// digests (npm run verify:billing checks the file; staging.mjs parses it again with the
+// billing module before calling this). Written as morrow_work_owner, in revision order, in
+// one transaction under the D4 SET-row protocol, idempotent, and refused on drift: a
+// stored revision that differs from the file, or one the file does not have. The table's
+// own guard (0029 terms_guard) also refuses a gap or any change.
+const termsStatements = Object.freeze({
+  lock: "LOCK TABLE morrow_billing.billing_terms IN SHARE ROW EXCLUSIVE MODE",
+  count: "SELECT count(*)::int AS n FROM morrow_billing.billing_terms",
+  same: "SELECT (terms = $2::jsonb AND offers = $3::jsonb AND digest = $4::text)::text AS same FROM morrow_billing.billing_terms WHERE terms_revision = $1::bigint",
+  insert:
+    "INSERT INTO morrow_billing.billing_terms(terms_revision, terms, offers, digest, recorded_at) VALUES ($1::bigint, $2::jsonb, $3::jsonb, $4::text, date_trunc('milliseconds', clock_timestamp()))",
+});
+/** One row per revision, in order: [revision, terms JSON, offers JSON, digest], all text. */
+export function billingTermsSeedRows(revisions) {
+  if (!Array.isArray(revisions) || revisions.length > 1000)
+    throw new StagingError("STAGING_TERMS_INVALID");
+  return Object.freeze(
+    revisions.map((r, index) => {
+      if (
+        !r ||
+        typeof r !== "object" ||
+        Object.keys(r).sort().join() !== "digest,offers,terms" ||
+        !/^[a-f0-9]{64}$/.test(r.digest ?? "") ||
+        r.terms?.termsRevision !== index + 1
+      )
+        throw new StagingError("STAGING_TERMS_INVALID");
+      return Object.freeze([
+        String(index + 1),
+        JSON.stringify(r.terms),
+        JSON.stringify(r.offers),
+        r.digest,
+      ]);
+    }),
+  );
+}
+export async function seedBillingTerms({ connect, binding, administrator, rows }) {
+  checkAdministrator(administrator);
+  if (
+    !Array.isArray(rows) ||
+    !rows.every(
+      (row, index) =>
+        Array.isArray(row) &&
+        row.length === 4 &&
+        row.every((v) => typeof v === "string") &&
+        row[0] === String(index + 1),
+    )
+  )
+    throw new StagingError("STAGING_TERMS_INVALID");
+  const connection = await connectChecked(connect, binding, administrator);
+  const admin = administrator.name;
+  const written = { termsRevisions: rows.length, termsInserted: 0 };
+  try {
+    try {
+      await connection.exec("BEGIN");
+      if (administrator.mode === "createrole")
+        await connection.exec(
+          `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+        );
+      await connection.exec("SET LOCAL ROLE morrow_work_owner");
+      await connection.exec(termsStatements.lock);
+      const [{ n } = {}] = await connection.query(termsStatements.count);
+      const stored = Number.isSafeInteger(n) ? n : 0;
+      if (stored > rows.length)
+        throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
+      for (const row of rows.slice(0, stored)) {
+        const [same] = await connection.query(termsStatements.same, row);
+        if (same?.same !== "true")
+          throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
+      }
+      for (const row of rows.slice(stored)) {
+        await connection.query(termsStatements.insert, row);
+        written.termsInserted++;
+      }
+      await connection.exec("RESET ROLE");
+      if (administrator.mode === "createrole")
+        await connection.exec(`REVOKE morrow_work_owner FROM ${admin} GRANTED BY ${admin}`);
+      await connection.exec("COMMIT");
+    } catch (error) {
+      throw sqlFailure("STAGING_SEED_FAILED", error);
+    }
+    await assertNoSetRows(connection);
+    return written;
+  } finally {
+    await connection.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// M5 PR-1 (review): the operator path for a held customer operation
+// (`billing-customer-resolve`). The broker holds a customer operation when, once no replay
+// or send can run, Stripe proves neither outcome (several customers of the operation, or
+// more than its bounded list); the workspace's checkout then answers customer_held. After
+// correcting or inspecting Stripe (a per-action approval and a docs/evidence/live record,
+// whose path is recorded), the operator runs morrow_billing.operator_customer_operation_resolve
+// as morrow_work_owner under the D4 SET-row protocol: retry (stripe_corrected) clears the
+// hold so the broker's proof runs again; abandon (customers_deleted or none_found) fails the
+// operation and the intents it serves. Anything but released or abandoned commits nothing.
+export const customerResolutionEvidence = Object.freeze({
+  retry: Object.freeze(["stripe_corrected"]),
+  abandon: Object.freeze(["customers_deleted", "none_found"]),
+});
+const resolveOutcomes = ["released", "abandoned", "not_held", "not_found", "invalid", "denied"];
+const resolveStatement =
+  "SELECT outcome, operation_status FROM morrow_billing.operator_customer_operation_resolve($1, $2, $3, $4, $5)";
+export function customerResolutionInput({
+  operatorId,
+  operationId,
+  resolution,
+  evidenceCode,
+  evidenceRef,
+}) {
+  if (
+    typeof operatorId !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(operatorId) ||
+    typeof operationId !== "string" ||
+    !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(operationId) ||
+    !Object.hasOwn(customerResolutionEvidence, resolution ?? "") ||
+    !customerResolutionEvidence[resolution].includes(evidenceCode) ||
+    typeof evidenceRef !== "string" ||
+    !/^docs\/evidence\/live\/\d{4}-\d{2}-\d{2}-[a-z0-9-]{1,80}\.md$/.test(evidenceRef)
+  )
+    throw new StagingError("STAGING_USAGE");
+  return Object.freeze([operatorId, operationId, resolution, evidenceCode, evidenceRef]);
+}
+export async function resolveHeldCustomerOperation({ connect, binding, administrator, input }) {
+  checkAdministrator(administrator);
+  const values = customerResolutionInput(input ?? {});
+  const connection = await connectChecked(connect, binding, administrator);
+  const admin = administrator.name;
+  try {
+    let row;
+    try {
+      await connection.exec("BEGIN");
+      if (administrator.mode === "createrole")
+        await connection.exec(
+          `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+        );
+      await connection.exec("SET LOCAL ROLE morrow_work_owner");
+      [row] = await connection.query(resolveStatement, [...values]);
+      const outcome = resolveOutcomes.includes(row?.outcome) ? row.outcome : "unknown";
+      if (outcome !== "released" && outcome !== "abandoned")
+        throw new StagingError("STAGING_RESOLVE_REFUSED", { outcome });
+      await connection.exec("RESET ROLE");
+      if (administrator.mode === "createrole")
+        await connection.exec(`REVOKE morrow_work_owner FROM ${admin} GRANTED BY ${admin}`);
+      await connection.exec("COMMIT");
+    } catch (error) {
+      throw sqlFailure("STAGING_RESOLVE_FAILED", error);
+    }
+    await assertNoSetRows(connection);
+    return Object.freeze({
+      outcome: row.outcome,
+      operationStatus: typeof row.operation_status === "string" ? row.operation_status : null,
+    });
   } finally {
     await connection.close();
   }

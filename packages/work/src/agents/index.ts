@@ -35,13 +35,7 @@ export {
 export {
   createLeaseDelegationReader,
   DelegationFactsUnavailable,
+  type LeaseBillingFactsReader,
   type LeaseDelegationReaderPorts,
 } from "./delegation-reader.js";
-export {
-  BillingFactsUnavailable,
-  createBillingFactsReader,
-  type BillingFactsRead,
-  type BillingFactsReaderPort,
-  type BillingPeriod,
-} from "./billing-facts-stub.js";
 export { agentStatements } from "./sql.js";

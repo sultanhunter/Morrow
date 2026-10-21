@@ -36,8 +36,10 @@ const logins = ["morrow_connector_ingress", "morrow_runtime_executor", "morrow_v
 
 test("manifest: rows 19-24, their executeAs roles, digests and the one prerequisite", () => {
   const manifest = JSON.parse(read("migrations/manifest.json"));
+  // The spine's six rows (M2 PR-2's later rows share the brief as their reviewRef).
   const rows = manifest.migrations.filter(
-    (m) => m.reviewRef === "docs/briefs/M2-shopify-connect.md",
+    (m) =>
+      m.reviewRef === "docs/briefs/M2-shopify-connect.md" && m.sequence >= 19 && m.sequence <= 24,
   );
   assert.deepEqual(
     rows.map((m) => [m.sequence, m.file, m.executeAs]),
@@ -62,10 +64,10 @@ test("manifest: rows 19-24, their executeAs roles, digests and the one prerequis
     entry.prerequisites.map((p) => [p.file, p.sha256, [...p.roles]]),
     [["infra/spine-executor-role-prerequisites.sql", sha(prerequisites), logins]],
   );
-  // Later PRs append their own rows after 0024 (each under its own reviewRef).
+  // Rows 19-24 of the chain (later migrations follow them).
   assert.deepEqual(
     loadMigrationChain()
-      .filter((e) => rows.some((m) => m.sequence === e.sequence))
+      .filter((e) => e.sequence >= 19 && e.sequence <= 24)
       .map((e) => e.executeAs),
     rows.map((m) => m.executeAs),
   );

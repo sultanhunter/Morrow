@@ -71,12 +71,17 @@ const tones: Readonly<Record<string, TagTone>> = {
   achieved: "success",
   succeeded: "success",
   failed: "danger",
+  // M2 PR-2: store installations.
+  linked: "success",
+  unlinked: "warning",
+  suspended: "warning",
+  uninstalled: "danger",
 };
 export function StatusTag({
   family,
   status,
 }: {
-  readonly family: "task" | "goal" | "question";
+  readonly family: "task" | "goal" | "question" | "installation";
   readonly status: string;
 }) {
   return (

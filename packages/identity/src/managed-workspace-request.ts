@@ -2,12 +2,17 @@ import {
   createManagedStandaloneRequestGuard,
   standaloneJson,
   StandaloneRequestError,
+  type GuardedStandaloneRequest,
   type StandaloneAccountRoute,
   type StandaloneRequestRoute,
 } from "./standalone-request-guard.js";
-import { executeStandaloneWorkspaceBootstrap } from "./standalone-workspace-bootstrap.js";
+import {
+  executeStandaloneWorkspaceBootstrap,
+  type StandaloneWorkspaceSqlPool,
+} from "./standalone-workspace-bootstrap.js";
 import { executeAccountOverview, executeFirstOrganization } from "./account-onboarding.js";
 import { createStandaloneStoreLinkingExecution } from "./standalone-store-linking.js";
+import { executeWorkspaceConnections, type ConnectionKernel } from "./shopify-link-issuer.js";
 import { dispatchStandaloneLogoutWithAttempt } from "./standalone-logout.js";
 import { dispatchStandaloneRotationWithAttempt } from "./standalone-session-rotation.js";
 import { SESSION_COOKIE_CLEAR } from "./request-primitives.js";
@@ -114,13 +119,47 @@ const exactRoutes: Readonly<Record<string, Route>> = Object.freeze({
 });
 const workspaceSuffixes: readonly (readonly [string, StandaloneRequestRoute])[] = Object.freeze([
   ["/bootstrap", "bootstrap"],
+  // M2 PR-2: GET /workspace/:ws/connections (the guard checks the exact path).
+  ["/connections", "connections"],
   ["/preview", "preview"],
   ["/status", "status"],
 ]);
-function selectRoute(path: string): Route {
+// Exported for the composition test (M2 PR-2 review): the deployed route table.
+export function managedWorkspaceRoute(path: string): Route {
   if (Object.hasOwn(exactRoutes, path)) return exactRoutes[path]!;
   for (const [suffix, route] of workspaceSuffixes) if (path.endsWith(suffix)) return route;
   return "apply";
+}
+
+// The workspace routes' executors over one request's pools, as the deployed handler runs
+// them (exported for the composition test, M2 PR-2 review): bootstrap on the identity
+// pool; GET /connections and the store-link routes on the linking pool, with the api's
+// connection kernel (so a preview runs the Shopify issuer first) when one is composed.
+export function createManagedWorkspaceExecution(
+  dependencies: Readonly<{
+    configurationJson: string;
+    identityPool: StandaloneWorkspaceSqlPool;
+    linkingPool: StandaloneWorkspaceSqlPool;
+    now: () => number;
+    connections?: ConnectionKernel;
+  }>,
+) {
+  const { configurationJson, identityPool, linkingPool, now, connections } = dependencies;
+  const linking = createStandaloneStoreLinkingExecution({
+    configurationJson,
+    pool: linkingPool,
+    now,
+    ...(connections ? { connections } : {}),
+  });
+  return (
+    selected: StandaloneRequestRoute,
+    context: Readonly<GuardedStandaloneRequest>,
+  ): Promise<Response> =>
+    selected === "bootstrap"
+      ? executeStandaloneWorkspaceBootstrap(identityPool, context)
+      : selected === "connections"
+        ? executeWorkspaceConnections(linkingPool, now, connections, context)
+        : linking.execute(selected, context);
 }
 
 export function createWorkersManagedWorkspaceHandler(
@@ -128,9 +167,11 @@ export function createWorkersManagedWorkspaceHandler(
     binding: Readonly<CapturedManagedWorkspaceBinding>;
     credentialBroker: unknown;
     now: () => number;
+    // M2 PR-2: the api's connection kernel (governance.connection.connect administer).
+    connections?: ConnectionKernel;
   }>,
 ) {
-  const { binding, credentialBroker, now } = dependencies;
+  const { binding, credentialBroker, now, connections } = dependencies;
   const guard = createManagedStandaloneRequestGuard(binding.workspaceConfigurationJson, now);
   const fetch = async (request: Request, _env: unknown, actualCtx: Context): Promise<Response> => {
     let attempt: LoginAttempt | undefined, owner: Owner | undefined;
@@ -149,7 +190,7 @@ export function createWorkersManagedWorkspaceHandler(
       initialDeadlineMs = attempt.control().deadlineMs;
       enteredAtMs = initialDeadlineMs - 5000;
       owner = createManagedLoginRequestOwner(actualCtx, attempt);
-      route = selectRoute(new URL(request.url).pathname);
+      route = managedWorkspaceRoute(new URL(request.url).pathname);
       submitted = entry.accountSubmitted;
       attempt.check();
       const resolved = await resolveManagedWorkspaceBinding(binding, attempt);
@@ -198,17 +239,16 @@ export function createWorkersManagedWorkspaceHandler(
         });
       } else {
         const selected = route;
-        const linking = createStandaloneStoreLinkingExecution({
+        const execute = createManagedWorkspaceExecution({
           configurationJson: binding.workspaceConfigurationJson,
-          pool: pools.linkingPool,
+          identityPool: pools.identityPool,
+          linkingPool: pools.linkingPool,
           now: attempt.check,
+          ...(connections ? { connections } : {}),
         });
-        const identityPool = pools.identityPool;
         response = await entry.handle(selected, (context) => {
           invoked = true;
-          return selected === "bootstrap"
-            ? executeStandaloneWorkspaceBootstrap(identityPool, context)
-            : linking.execute(selected, context);
+          return execute(selected, context);
         });
       }
       if (!response) throw held();

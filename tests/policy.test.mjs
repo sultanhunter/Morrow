@@ -740,8 +740,9 @@ test("P01.T04a AC05: every ADR grant template row works without entitlement; pai
         rows++;
       }
   assert.ok(rows >= 40, String(rows));
-  // owner-bootstrap-v1 and workspace-admin-v1 each hold connect `approve`.
-  assert.equal(connectApprove, 2);
+  // owner-bootstrap-v1, owner-bootstrap-v2 (M5 PR-1, a superset of v1) and
+  // workspace-admin-v1 each hold connect `approve`.
+  assert.equal(connectApprove, 3);
   for (const capabilityId of [
     "creative.image.generate",
     "catalog.content.publish",

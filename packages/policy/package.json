@@ -7,13 +7,15 @@
     ".": "./src/index.ts",
     "./agent-authority": "./src/agent-authority.ts",
     "./billing-state": "./src/billing-state.ts",
+    "./connection-authority": "./src/connection-authority.ts",
     "./kill-switch": "./src/kill-switch.ts",
     "./model-catalogue": "./src/model-catalogue.ts",
     "./paid-work": "./src/paid-work.ts",
     "./review-facts": "./src/review-facts.ts",
     "./review": "./src/review.ts",
     "./run-credits": "./src/run-credits.ts",
-    "./store-resource": "./src/store-resource.ts"
+    "./store-resource": "./src/store-resource.ts",
+    "./store-link-template": "./src/store-link-template.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

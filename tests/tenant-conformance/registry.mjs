@@ -83,15 +83,18 @@ export const workTables = Object.freeze({
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
     lease: true,
+    // M5 PR-1 (0029): the broker's own login settles its stripe_write operations.
+    policies: ["broker_stripe"],
     content: "none",
   },
   operation_transitions: {
     class: "tenant_readable",
     parents: ["operations"],
     lease: true,
+    policies: ["broker_stripe_transition"],
     content: "none",
   },
-  // M3 PR-1 listings authority (migration 0028 in this branch).
+  // M3 PR-1 listings authority (migration 0031).
   agent_releases: { class: "platform", parents: [], content: "none" },
   model_catalogue_versions: { class: "platform", parents: [], content: "none" },
   model_catalogue_entries: { class: "platform", parents: [], content: "none" },
@@ -304,7 +307,7 @@ export const workFunctions = Object.freeze({
   },
   "proposal_document_matches(text,text,text,text,text,bigint,text,text,integer[],text,text,text,boolean,text,integer,numeric,text,text,text,text,text[],text,bigint,text,text,text,timestamp with time zone,timestamp with time zone)":
     { kind: "check", grantees: ["morrow_work_command"] },
-  // M3 PR-1 (migrations 0028 and 0029 in this branch). Pure functions of the CHECKs.
+  // M3 PR-1 (migrations 0031 and 0032). Pure functions of the CHECKs.
   "listing_fields()": { kind: "check", grantees: ["morrow_work_command"] },
   "store_resource(text,text,text,text)": { kind: "check", grantees: ["morrow_work_command"] },
   "listings_scope(text,text,text,text)": { kind: "check", grantees: ["morrow_work_command"] },
@@ -382,10 +385,15 @@ export const bridgeFunctions = Object.freeze([
   "work_lease_member_current(text,text,text,text)",
   // M2 PR-1 review (0022): the website-signup fact behind route_signup.
   "work_signup_workspace(text,text)",
-  // M2 PR-2's store installation read bridge (in this branch, a branch-local stub; M2's
-  // own function, with the same signature, replaces it at rebase).
+  // M2 PR-2 (0026): the vault login's identity bridges, called only by 0027's vault
+  // definers, and the shared store-installation read for the work and billing definers
+  // (M5 PR-1's workspace_associations and checkout precondition call it).
+  "work_shopify_install_prepare(text,text,text,text)",
+  "work_shopify_install_record(text,text,text,text,text,text,text,text,text,text,text,text)",
+  "work_shopify_launch(text,text)",
+  "work_shopify_state_claim(text,text)",
   "work_store_installations(text,text)",
-  // M3 PR-1 (0027 in this branch): agent principals, agent grants and the kernel's facts.
+  // M3 PR-1 (0030): agent principals, agent grants and the kernel's facts.
   "work_agent_principal_ensure(text,text,text,text,text)",
   "work_agent_grants_issue(text,text,jsonb)",
   "work_owner_disable_grant_issue(text,text,jsonb)",
@@ -398,9 +406,10 @@ export const bridgeFunctions = Object.freeze([
 //
 // S7 per-table spec (M2 PR-2a). Every billingTables and vaultTables entry carries exactly
 // {class, parents, policies, content, commandPrivileges, commandColumnUpdates, apiColumns},
-// plus an optional `lease: true`: class, parents, policies, content and lease as in
-// workTables (`lease: true` expects tenant_lease, the lease-context command policy), and
-// the table's whole ACL:
+// plus an optional `lease: true` and (M5 PR-1) an optional `commandRead: true`: class,
+// parents, policies, content and lease as in workTables (`lease: true` expects tenant_lease,
+// the lease-context command policy; `commandRead: true` expects tenant_command FOR SELECT
+// instead of FOR ALL, so no session definer writes the table), and the table's whole ACL:
 //   commandPrivileges     the table privileges morrow_work_command holds (never DELETE,
 //                         TRUNCATE, REFERENCES or TRIGGER);
 //   commandColumnUpdates  the columns morrow_work_command may UPDATE (column grants);
@@ -413,15 +422,23 @@ const aclSpec = (commandPrivileges, commandColumnUpdates = [], apiColumns = []) 
   commandColumnUpdates,
   apiColumns,
 });
+// Billing classes beside the shared ones: platform_readable (no tenant columns, read by both
+// runtime roles, written only by the owner), ingress (the broker-recorded receipts and
+// their applications: nullable tenant keys, reached only through the broker's and the
+// receipt ingress's own policies, never the session template) and operator_record (tenant
+// keys and composite parents, written only by the owner's operator functions; no runtime
+// role holds anything).
 export const billingTables = Object.freeze({
   workspace_billing_routes: {
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
-    policies: ["route_signup"],
+    // M2 PR-2 (0025): route_link_read, the linking rule's one-row read. M5 PR-1 (0029):
+    // receipt_apply fixes the route from a verified receipt.
+    policies: ["receipt_apply", "route_link_read", "route_signup"],
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
-      [],
+      ["fixing_payment_key", "mode", "revision", "route", "route_fixed_at", "updated_at"],
       [
         "created_at",
         "fixing_payment_key",
@@ -437,12 +454,230 @@ export const billingTables = Object.freeze({
       ],
     ),
   },
-  // M5 PR-1 (branch-local stub of its credit_wallets; M5's entry replaces this at rebase).
-  // tenant_lease is M3 PR-1's (0030): run steps settle under a run lease.
-  credit_wallets: {
+  // M5 PR-1 (0029): the M5 billing records.
+  billing_terms: {
+    class: "platform_readable",
+    parents: [],
+    policies: ["platform_api_read", "platform_command_read"],
+    content: "none",
+    ...aclSpec(["SELECT"], [], ["digest", "offers", "recorded_at", "terms", "terms_revision"]),
+  },
+  // The mapping and the ledger: tenant_command FOR SELECT (commandRead), so no session
+  // definer inserts a mapping, an account, a snapshot, a payment, a grant or a wallet; they
+  // are written by the broker's definers and in the receipt context only.
+  stripe_customers: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces", "morrow_work.operations"],
+    policies: ["broker_billing"],
+    commandRead: true,
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"]),
+  },
+  checkout_intents: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces", "morrow_work.operations"],
+    policies: ["broker_billing", "receipt_apply"],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["revision", "status", "stripe_session_id", "updated_at"],
+      [
+        "actor_membership_id",
+        "actor_principal_id",
+        "checkout_operation_id",
+        "created_at",
+        "customer_operation_id",
+        "expires_at",
+        "id",
+        "mode",
+        "organization_id",
+        "price_key",
+        "revision",
+        "route_revision",
+        "status",
+        "terms_revision",
+        "updated_at",
+        "workspace_id",
+      ],
+    ),
+  },
+  // The api reads a Stripe operation's purpose and hold (the billing view's setup hold).
+  stripe_operations: {
+    class: "tenant_readable",
+    parents: ["morrow_billing.checkout_intents", "morrow_work.operations"],
+    policies: ["broker_billing", "receipt_apply"],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["held_at", "provider_object_id"],
+      [
+        "checkout_intent_id",
+        "created_at",
+        "held_at",
+        "operation_id",
+        "organization_id",
+        "purpose",
+        "workspace_id",
+      ],
+    ),
+  },
+  // The operator's resolutions of held customer operations (fixed codes, the evidence
+  // record's path).
+  stripe_operation_resolutions: {
+    class: "operator_record",
+    parents: ["morrow_billing.stripe_operations"],
+    policies: [],
+    content: "none",
+    ...aclSpec([]),
+  },
+  stripe_event_receipts: {
+    class: "ingress",
+    parents: ["morrow_identity.workspaces"],
+    policies: ["broker_billing", "receipt_ingress_read"],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"]),
+  },
+  receipt_applications: {
+    class: "ingress",
+    parents: ["morrow_billing.stripe_event_receipts"],
+    policies: ["receipt_ingress_apply", "receipt_ingress_read"],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"]),
+  },
+  // The entry proof of receipt_begin: one row per backend, the api login's own only.
+  receipt_entries: {
+    class: "platform",
+    parents: [],
+    policies: ["receipt_entry"],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["nonce", "receipt_id", "receipt_organization_id", "receipt_workspace_id", "xact_id"],
+    ),
+  },
+  billing_accounts: {
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
-    policies: ["tenant_lease"],
+    policies: ["receipt_apply"],
+    commandRead: true,
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["revision", "status", "updated_at"],
+      [
+        "created_at",
+        "currency",
+        "id",
+        "mode",
+        "organization_id",
+        "revision",
+        "route",
+        "status",
+        "updated_at",
+        "workspace_id",
+      ],
+    ),
+  },
+  entitlement_snapshots: {
+    class: "tenant_readable",
+    parents: ["morrow_billing.billing_accounts", "morrow_billing.stripe_event_receipts"],
+    policies: ["receipt_apply"],
+    commandRead: true,
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      [],
+      [
+        "billing_account_id",
+        "mode",
+        "organization_id",
+        "provider_evidence_ref",
+        "recorded_at",
+        "revision",
+        "route",
+        "status",
+        "subscription_key",
+        "valid_until",
+        "verified_at",
+        "workspace_id",
+      ],
+    ),
+  },
+  verified_payment_events: {
+    class: "tenant_readable",
+    parents: ["morrow_billing.stripe_event_receipts", "morrow_identity.workspaces"],
+    policies: ["receipt_apply"],
+    commandRead: true,
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      [],
+      [
+        "amount",
+        "currency",
+        "id",
+        "kind",
+        "mode",
+        "operation_id",
+        "organization_id",
+        "outcome",
+        "outcome_code",
+        "payment_key",
+        "period_end",
+        "period_start",
+        "price_key",
+        "provider_evidence_ref",
+        "recorded_at",
+        "route",
+        "subscription_key",
+        "verified_at",
+        "workspace_id",
+      ],
+    ),
+  },
+  credit_grants: {
+    class: "tenant_readable",
+    parents: ["morrow_billing.billing_accounts"],
+    policies: ["receipt_apply"],
+    commandRead: true,
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      [],
+      [
+        "billing_account_id",
+        "credit_units",
+        "effective_at",
+        "expires_at",
+        "funded_wallet_revision",
+        "id",
+        "kind",
+        "mode",
+        "organization_id",
+        "payment_key",
+        "purchase_evidence_ref",
+        "recorded_at",
+        "route",
+        "terms_revision",
+        "workspace_id",
+      ],
+    ),
+  },
+  // The wallet's session UPDATE (tenant_command_update) is for M3 PR-1's moves, which
+  // wallet_guard keeps sum-preserving; there is no session INSERT. M3 PR-1 (0033) adds the
+  // lease twins of the same two policies, tenant_lease_read (FOR SELECT) and
+  // tenant_lease_update (FOR UPDATE): run steps settle under a run lease, and no lease
+  // context inserts a wallet either.
+  credit_wallets: {
+    class: "tenant_readable",
+    parents: ["morrow_billing.billing_accounts"],
+    policies: [
+      "receipt_apply",
+      "tenant_command_update",
+      "tenant_lease_read",
+      "tenant_lease_update",
+    ],
+    commandRead: true,
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -451,6 +686,7 @@ export const billingTables = Object.freeze({
         "available",
         "billing_account_id",
         "consumed",
+        "created_at",
         "organization_id",
         "rate_revision",
         "reserved",
@@ -461,11 +697,12 @@ export const billingTables = Object.freeze({
       ],
     ),
   },
-  // M3 PR-1 run credits (0030 in this branch).
+  // M3 PR-1 run credits (0033): tenant_command, and tenant_lease for M3 PR-2's run steps.
   credit_reservations: {
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces", "morrow_billing.credit_wallets"],
-    policies: ["tenant_lease"],
+    lease: true,
+    policies: [],
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -495,7 +732,8 @@ export const billingTables = Object.freeze({
   vendor_cost_reservations: {
     class: "tenant_readable",
     parents: ["morrow_billing.credit_reservations"],
-    policies: ["tenant_lease"],
+    lease: true,
+    policies: [],
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -527,14 +765,16 @@ export const billingTables = Object.freeze({
   run_cost_bookings: {
     class: "tenant_internal",
     parents: ["morrow_billing.vendor_cost_reservations"],
-    policies: ["tenant_lease"],
+    lease: true,
+    policies: [],
     content: "none",
     ...aclSpec(["INSERT", "SELECT"]),
   },
   unrecovered_costs: {
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
-    policies: ["tenant_lease"],
+    lease: true,
+    policies: [],
     content: "none",
     ...aclSpec(["INSERT", "SELECT"], ["amount_usd", "revision", "updated_at"]),
   },
@@ -545,7 +785,8 @@ export const billingTables = Object.freeze({
       "morrow_billing.vendor_cost_reservations",
       "morrow_billing.run_cost_bookings",
     ],
-    policies: ["tenant_lease"],
+    lease: true,
+    policies: [],
     content: "none",
     ...aclSpec(["INSERT", "SELECT"]),
   },
@@ -559,9 +800,53 @@ export const billingFunctions = Object.freeze({
     tenantParameters: ["p_organization_id", "p_workspace_id"],
   },
   "route_guard()": { kind: "trigger", grantees: [] },
-  // M5 PR-1's wallet guard (branch-local stub; M5's replaces it at rebase).
+  // M2 PR-2 (0025): the linking rule's route read (ADR-0022 item 5), called by the
+  // identity-owned linking definers with the tenant of the handoff, continuation or
+  // session they hold.
+  "link_route_current(text,text)": {
+    kind: "bridge_in",
+    grantees: ["morrow_identity_owner"],
+    tenantParameters: ["p_org", "p_ws"],
+  },
+  // M5 PR-1 (0029). Session definers for the api role (tenant from current_tenant()).
+  "workspace_associations()": { kind: "api", grantees: ["morrow_work_api"] },
+  "cmd_checkout_open(text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+  },
+  "cmd_portal_open(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
+  // The receipt-only ingress (ADR-0022 item 9 amendment): the api login with no session
+  // context; the tenant only from the broker-recorded receipt.
+  "receipt_begin(text,text)": { kind: "ingress", grantees: ["morrow_work_api"] },
+  "receipt_apply(text,text,text)": { kind: "ingress", grantees: ["morrow_work_api"] },
+  "receipt_status(text)": { kind: "ingress", grantees: ["morrow_work_api"] },
+  // The broker's own login (work_executor_safe): ids only.
+  "stripe_op_begin(text)": { kind: "broker", grantees: ["morrow_vault_broker"] },
+  "stripe_op_settle(text,text,text,text)": { kind: "broker", grantees: ["morrow_vault_broker"] },
+  "stripe_receipt_record(text,text,text,text,text,text,text,text,text)": {
+    kind: "broker",
+    grantees: ["morrow_vault_broker"],
+  },
+  // The operator path: INVOKER, owned by the owner, granted to nobody.
+  "operator_customer_operation_resolve(text,text,text,text,text)": {
+    kind: "operator",
+    grantees: [],
+  },
+  // INVOKER helpers the policies and definers evaluate as the command role.
+  "receipt_ingress()": { kind: "check", grantees: ["morrow_work_command"] },
+  "receipt_entered(text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "receipt_tenant(text,text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "receipt_object_valid(text,jsonb)": { kind: "check", grantees: ["morrow_work_command"] },
+  "terms_guard()": { kind: "trigger", grantees: [] },
+  "intent_guard()": { kind: "trigger", grantees: [] },
+  "stripe_operation_guard()": { kind: "trigger", grantees: [] },
+  "account_guard()": { kind: "trigger", grantees: [] },
+  "snapshot_guard()": { kind: "trigger", grantees: [] },
   "wallet_guard()": { kind: "trigger", grantees: [] },
-  // M3 PR-1 run credits (0030 in this branch): triggers, and the revisable owner helpers
+  "grant_guard()": { kind: "trigger", grantees: [] },
+  "application_guard()": { kind: "trigger", grantees: [] },
+  "route_fix_guard()": { kind: "trigger", grantees: [] },
+  // M3 PR-1 run credits (0033): triggers, and the revisable owner helpers
   // that M3 PR-2's admission and run definers call.
   "credit_reservation_guard()": { kind: "trigger", grantees: [] },
   "vendor_reservation_guard()": { kind: "trigger", grantees: [] },
@@ -588,30 +873,50 @@ export const vaultTables = Object.freeze({
     content: "none",
     ...aclSpec(["SELECT"]),
   },
+  // M2 PR-2 (0027): the first writer. The broker's install definer inserts a version and
+  // destroys the active one (the only update vault_guard admits erases the key material).
   credentials: {
     class: "vault_tenant",
     parents: ["morrow_identity.workspaces"],
     policies: [],
     content: "store",
-    ...aclSpec(["SELECT"]),
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["destroy_reason", "destroyed_at", "sealed_value", "status", "wrapped_key"],
+    ),
   },
 });
 // S7 (M2 PR-2a): the roles granted USAGE on each schema S7 covers, besides its owner.
 // An executor login's USAGE must also equal the schemas of the functions it executes.
 export const schemaUsage = Object.freeze({
-  morrow_billing: ["morrow_identity_owner", "morrow_work_api", "morrow_work_command"],
+  // M5 PR-1: the broker's own login runs its three billing definers.
+  morrow_billing: [
+    "morrow_identity_owner",
+    "morrow_vault_broker",
+    "morrow_work_api",
+    "morrow_work_command",
+  ],
   morrow_vault: ["morrow_vault_broker", "morrow_work_command"],
 });
 export const vaultFunctions = Object.freeze({
   "app_secret_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "app_secret_put(text,text,text,text)": { kind: "operator", grantees: [] },
   "vault_guard()": { kind: "trigger", grantees: [] },
-  // M3 PR-1 (0028 in this branch): the broker's resolver and its revisable credential helper.
+  // M3 PR-1 (0031): the broker's resolver and its revisable credential helper.
   "resolve_call(text,text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "credential_for_connection(text,text,text)": {
     kind: "owner_helper",
     grantees: ["morrow_work_command"],
   },
+  // M2 PR-2 (0027): the Shopify launch and callback definers of the broker's own login.
+  "shopify_callback_claim(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_install_prepare(text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "shopify_install_store(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)":
+    { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_launch_context(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
 });
 // M2 PR-1 review (P09.T05a; spine §11): the content class of every morrow_identity table,
 // so the store-content cleanup contract (S8, tests/redaction-handlers.test.mjs) covers the
@@ -624,7 +929,7 @@ export const vaultFunctions = Object.freeze({
 export const identityTables = Object.freeze({
   account_enrollments: { content: "none" },
   account_session_commands: { content: "none" },
-  // M3 PR-1 (0027 in this branch): the Coordinator and installation agent principals.
+  // M3 PR-1 (0030): the Coordinator and installation agent principals.
   agent_principals: { content: "none" },
   authentication_bindings: { content: "none" },
   authentication_challenges: { content: "none" },
@@ -637,6 +942,10 @@ export const identityTables = Object.freeze({
   browser_session_generations: { content: "none" },
   grants: { content: "none" },
   identity_verification_profiles: { content: "none" },
+  // M2 PR-2 (0026): continuation and state digests, the app registry (the intended shop as
+  // a digest; its install link names the shop) and the installations, whose shop domain
+  // and id are shop identity.
+  install_continuations: { content: "none" },
   // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
   linking_candidates: { content: "store" },
   linking_handoffs: { content: "none" },
@@ -660,6 +969,11 @@ export const identityTables = Object.freeze({
   // the operator's reason for an enrollment switch
   self_service_revisions: { content: "workspace" },
   sessions: { content: "none" },
+  // the install link names the shop (M2 PR-2 review; retirement and shop/redact clear it)
+  shopify_apps: { content: "store" },
+  shopify_oauth_states: { content: "none" },
+  // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
+  store_installations: { content: "store" },
   workspace_link_results: { content: "none" },
   workspace_memberships: { content: "none" },
   workspace_revocation_receipts: { content: "none" },
@@ -670,7 +984,8 @@ export const identityTables = Object.freeze({
 // The three membership-free executor logins (ADR-0022 item 8) and the functions each
 // may execute, across every schema.
 export const executorLogins = Object.freeze({
-  morrow_connector_ingress: [],
+  // M2 PR-2 (0026): the connector's one definer, in the identity schema.
+  morrow_connector_ingress: ["morrow_identity.connector_oauth_state_open(text,text,text)"],
   morrow_runtime_executor: [
     "morrow_work.delegation_facts(text,text,text)",
     "morrow_work.enter_lease(text,text)",
@@ -679,8 +994,18 @@ export const executorLogins = Object.freeze({
     "morrow_work.pending_starts()",
   ],
   morrow_vault_broker: [
+    // M5 PR-1 (0029).
+    "morrow_billing.stripe_op_begin(text)",
+    "morrow_billing.stripe_op_settle(text,text,text,text)",
+    "morrow_billing.stripe_receipt_record(text,text,text,text,text,text,text,text,text)",
     "morrow_vault.app_secret_get(text)",
+    // M3 PR-1 (0031).
     "morrow_vault.resolve_call(text,text,text,text)",
+    // M2 PR-2 (0027).
+    "morrow_vault.shopify_callback_claim(text,text)",
+    "morrow_vault.shopify_install_prepare(text,text,text,text)",
+    "morrow_vault.shopify_install_store(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)",
+    "morrow_vault.shopify_launch_context(text,text)",
   ],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);

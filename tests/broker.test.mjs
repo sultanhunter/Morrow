@@ -22,6 +22,7 @@ import {
 } from "../apps/broker/src/capabilities.ts";
 import { brokerNeonLease } from "../apps/broker/src/neon-lease.ts";
 import { brokerWorkosSessionPage } from "../apps/broker/src/workos-session.ts";
+import { resolvedEdgeConfig } from "../scripts/edge.mjs";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
 import { appliedLegacyLoginControllerProtocol } from "../scripts/fixtures/standalone-login-fixture.mjs";
 
@@ -190,6 +191,35 @@ test("trust model v1: connector and runtime health need their own lease and the 
     "MORROW_VAULT_KEK_V1",
   ])
     assert.ok(brokerRequiredSecrets.includes(name), name);
+});
+
+// P04.T01i PR-D part 1: the committed staging broker vars, as wrangler resolves them, with
+// synthetic secrets in place of the ones the first deploy brings, give every capability, so
+// the staging broker is healthy for the api, the connector and the orchestrator.
+test("P04.T01i PR-D: the committed staging vars give the broker every capability", async () => {
+  const { vars } = await resolvedEdgeConfig("broker", "staging");
+  assert.deepEqual(Object.keys(vars).sort(), [
+    "LOGIN_CONFIGURATION_JSON",
+    "MORROW_DATABASE_BINDING_JSON",
+    "MORROW_ENVIRONMENT",
+    "TURNSTILE_CONFIGURATION_JSON",
+  ]);
+  const env = { ...brokerEnv("staging").env, ...vars };
+  const capabilities = await brokerCapabilities(env);
+  for (const name of ["sessions", "database", "connector", "runtime", "vault", "challenge"])
+    assert.notEqual(capabilities[name], null, name);
+  assert.equal(capabilities.challenge.hostname, "morrow-staging-api.sultanibneusman0.workers.dev");
+  assert.deepEqual(capabilities.challenge.actions, ["account_login", "organization_signup"]);
+  assert.equal(await brokerHealth(env), true);
+  assert.equal(await brokerCallerHealth(env, "connector"), true);
+  assert.equal(await brokerCallerHealth(env, "runtime"), true);
+  // The leases are keyed by the committed binding: the staging branch's direct endpoint.
+  const binding = parseBrokerDatabaseBinding(vars.MORROW_DATABASE_BINDING_JSON);
+  assert.equal(binding.branchId, "br-dark-recipe-b78ytwj9");
+  assert.ok(capabilities.database.leases.has(neonLeaseNamespace(binding, "morrow_api")));
+  // Without its Turnstile configuration a staging broker is unhealthy (ADR-0019 item 6).
+  const { TURNSTILE_CONFIGURATION_JSON: _turnstile, ...unchallenged } = env;
+  assert.equal(await brokerHealth(unchallenged), false);
 });
 
 test("AC11: neonLease denies other roles, purposes, bindings and encodings", async () => {
@@ -393,7 +423,7 @@ test("AC29: 20 concurrent first calls share one initialisation; a failure stays 
   for (const value of [undefined, null, "env"]) assert.equal(await brokerHealth(value), false);
 });
 
-test("AC10: ApiBroker has exactly four prototype methods, arity checks and a 404 default", async (t) => {
+test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 404 default", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "morrow-broker-entry-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const bundled = await build({
@@ -421,21 +451,33 @@ test("AC10: ApiBroker has exactly four prototype methods, arity checks and a 404
   const file = join(directory, "broker.mjs");
   writeFileSync(file, bundled.outputFiles[0].text);
   const module = await import(pathToFileURL(file).href);
-  // P05.T01ab (ADR-0019 item 6) added challengeVerify.
+  // P05.T01ab (ADR-0019 item 6) added challengeVerify; M5 PR-1 the four Stripe methods.
   assert.deepEqual(Object.getOwnPropertyNames(module.ApiBroker.prototype).sort(), [
     "challengeVerify",
     "constructor",
     "health",
     "neonLease",
+    "stripeCheckoutCreate",
+    "stripeCustomerEnsure",
+    "stripePortalCreate",
+    "stripeWebhookVerify",
     "workosSessionPage",
   ]);
-  // Trust model v1: one class per caller, exactly its own methods.
-  for (const name of ["ConnectorBroker", "RuntimeBroker"])
-    assert.deepEqual(Object.getOwnPropertyNames(module[name].prototype).sort(), [
-      "constructor",
-      "health",
-      "neonLease",
-    ]);
+  // Trust model v1: one class per caller, exactly its own methods. M2 PR-2 gives the
+  // connector its three Shopify methods; the orchestrator's are unchanged.
+  assert.deepEqual(Object.getOwnPropertyNames(module.ConnectorBroker.prototype).sort(), [
+    "constructor",
+    "health",
+    "neonLease",
+    "shopifyInstallComplete",
+    "shopifyLaunchVerify",
+    "shopifyWebhookVerify",
+  ]);
+  assert.deepEqual(Object.getOwnPropertyNames(module.RuntimeBroker.prototype).sort(), [
+    "constructor",
+    "health",
+    "neonLease",
+  ]);
   assert.deepEqual(Object.keys(module).sort(), [
     "ApiBroker",
     "ConnectorBroker",
@@ -457,9 +499,15 @@ test("AC10: ApiBroker has exactly four prototype methods, arity checks and a 404
   await failure(entry.workosSessionPage("a", "b"));
   await failure(entry.challengeVerify("account_login", "token"));
   await failure(entry.challengeVerify("account_login", "token", 1000, 1));
+  // M5 PR-1: each Stripe method takes exactly its ids, strings and budget.
+  const operation = "00000000-0000-4000-8000-000000000001";
+  await failure(entry.stripeCustomerEnsure(operation));
+  await failure(entry.stripeCheckoutCreate(operation, 1000, 1));
+  await failure(entry.stripePortalCreate());
+  await failure(entry.stripeWebhookVerify("e30=", "t=1"));
   assert.deepEqual(
     logs.map((line) => JSON.parse(line).code),
-    Array(6).fill("INPUT_INVALID"),
+    Array(10).fill("INPUT_INVALID"),
   );
   assert.equal(await entry.health(), true);
   const parsed = parseBrokerDatabaseBinding(env.MORROW_DATABASE_BINDING_JSON);
@@ -487,6 +535,23 @@ test("AC10: ApiBroker has exactly four prototype methods, arity checks and a 404
     assert.equal(await caller.health(), true);
     assert.ok(JSON.parse(await caller.neonLease(neonLeaseNamespace(parsed, role))).password);
     assert.equal(typeof caller.workosSessionPage, "undefined");
+  }
+  // M2 PR-2: the Shopify methods check their exact arity; the api and the orchestrator
+  // have none of them.
+  const connector = new module.ConnectorBroker({}, env);
+  logs.length = 0;
+  await failure(connector.shopifyLaunchVerify("app-1"));
+  await failure(connector.shopifyLaunchVerify("app-1", "q", "x"));
+  await failure(connector.shopifyInstallComplete("app-1", "q", "d"));
+  await failure(connector.shopifyInstallComplete("app-1", "q", "d", 1000, 1));
+  await failure(connector.shopifyWebhookVerify("app-1", "{}"));
+  assert.deepEqual(
+    logs.map((line) => [JSON.parse(line).entrypoint, JSON.parse(line).code]),
+    Array(5).fill(["ConnectorBroker", "INPUT_INVALID"]),
+  );
+  for (const name of ["shopifyLaunchVerify", "shopifyInstallComplete", "shopifyWebhookVerify"]) {
+    assert.equal(typeof new module.ApiBroker({}, env)[name], "undefined");
+    assert.equal(typeof new module.RuntimeBroker({}, env)[name], "undefined");
   }
   await failure(entry.neonLease(neonLeaseNamespace(parsed, "morrow_runtime_executor")));
 });

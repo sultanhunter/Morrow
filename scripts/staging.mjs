@@ -10,6 +10,7 @@
 // PostgreSQL lab pass fakes for tools, the Cloudflare API and the database.
 import "./staging-token.mjs"; // FIRST: removes CLOUDFLARE_API_TOKEN and GH_TOKEN from process.env.
 import { appendFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
+import { setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -31,17 +32,22 @@ import {
   vaultKekFile,
 } from "./staging-files.mjs";
 import {
+  billingTermsSeedRows,
   connectionCensus,
+  customerResolutionInput,
   neonConnector,
   platformSeedRows,
   platformStop,
   checkPlatformStopInput,
   provisionRoles,
+  resolveHeldCustomerOperation,
   roleControlFacts,
   runMigrations,
+  seedBillingTerms,
   seedPlatform,
   sessionIdentity,
   checkIdentity,
+  statementStatsScratchDatabase,
 } from "./staging-runner.mjs";
 import { cloudflareCredential, githubCredential } from "./staging-token.mjs";
 import {
@@ -78,7 +84,8 @@ export { githubVariables };
 
 // ---------------------------------------------------------------------------
 // Configuration: staging.json, the card record, and the resolved staging vars of the api
-// (the database binding and the login configuration; identifiers arrive in PR-D).
+// and the broker (the database binding, the login configuration and the two challenge
+// vars: the reviewed identifiers of P04.T01i PR-D part 1, held by verify-config).
 export const workerConfigs = Object.freeze({
   api: "apps/api/wrangler.jsonc",
   broker: "apps/broker/wrangler.jsonc",
@@ -96,8 +103,9 @@ export async function identityConstants() {
     // item 7). Each gets LOGIN, the limit, both timeouts and a generated password.
     roles: [...protocol.brokerNeonRoleNames, protocol.brokerVaultRole],
     passwordSecret: protocol.brokerPasswordSecret,
-    // The broker's fourteen names (D1, AC02): WORKOS_API_KEY, P05.T01ab's
-    // TURNSTILE_SECRET_KEY, the eleven role passwords and M2 PR-1's MORROW_VAULT_KEK_V1.
+    // The broker's sixteen names (D1, AC02): WORKOS_API_KEY, P05.T01ab's
+    // TURNSTILE_SECRET_KEY, the eleven role passwords, M2 PR-1's MORROW_VAULT_KEK_V1 and
+    // M5 PR-1's STRIPE_RESTRICTED_KEY and STRIPE_WEBHOOK_SECRET.
     // brokerRequiredSecrets is the one list: the wrangler `secrets.required` of development
     // and staging, verify-config, gate 6, secrets-status and the first-deploy file all use
     // it (production requires its vault-free subset, brokerRequiredSecretsFor).
@@ -105,6 +113,8 @@ export async function identityConstants() {
     // The vault KEKs (ADR-0022 item 7) are the owner's: each is read from its owner file
     // (`vault-kek-v<n>`, written by `npm run vault -- kek`) and never generated here.
     vaultKekSecrets: [...protocol.brokerVaultKekSecrets],
+    // M5 PR-1: the Stripe secrets, read from their owner files like the WorkOS key.
+    stripeSecrets: [...protocol.brokerStripeSecrets],
     parseBinding: protocol.parseBrokerDatabaseBinding,
   });
 }
@@ -132,13 +142,16 @@ export async function loadStagingConfiguration(root) {
     bindingJson: text(vars, "MORROW_DATABASE_BINDING_JSON"),
     loginConfigurationJson: text(vars, "LOGIN_CONFIGURATION_JSON"),
     // P05.T01ab (D1, D5): the api's challenge configuration and the broker's own vars.
-    // Both JSON vars name reviewed identifiers (the site key, the workers.dev host), so
-    // they arrive with PR-D; until then they are null and a deploy stops before upload.
+    // Both JSON vars name reviewed identifiers (the site key, the workers.dev host),
+    // committed by PR-D part 1; a missing one is null and a deploy stops before upload.
     challengeJson: text(vars, "LOGIN_CHALLENGE_JSON"),
     broker: Object.freeze({
       turnstileJson: text(brokerVars, "TURNSTILE_CONFIGURATION_JSON"),
       loginConfigurationJson: text(brokerVars, "LOGIN_CONFIGURATION_JSON"),
       bindingJson: text(brokerVars, "MORROW_DATABASE_BINDING_JSON"),
+      // M5 PR-1: the saved portal configuration and tax flags, a reviewed identifier that
+      // arrives on the PR-D path; absent, the broker holds Stripe and billing answers 503.
+      stripeJson: text(brokerVars, "STRIPE_CONFIGURATION_JSON"),
     }),
   });
 }
@@ -154,7 +167,8 @@ export const stagingChallengeActions = Object.freeze({
 // false, so a deploy would only fail later, at the health gate. The checks are the
 // runtimes' own parsers (parseLoginChallengeConfiguration; parseTurnstileConfiguration,
 // which the broker itself uses, so a duplicate member or more than 1024 bytes stops here)
-// plus D1's cross-Worker rules: the same actions (D1's values, in the same order), the
+// plus D1's cross-Worker rules: the site key equal to staging.json's widget's
+// (`cloudflare.turnstile.site_key`), the same actions (D1's values, in the same order), the
 // Turnstile hostname equal to the origin's, and the broker's login configuration and
 // database binding present and byte-equal to the api's. The broker compares the hostname
 // with its own login configuration's origin; that text is byte-equal to the api's, whose
@@ -193,6 +207,8 @@ export async function checkChallengeConfiguration(loaded) {
   } catch {
     throw invalid("api");
   }
+  const siteKey = loaded.staging?.cloudflare?.turnstile?.site_key;
+  if (typeof siteKey !== "string" || challenge.siteKey !== siteKey) throw invalid("site_key");
   const origin = loaded.staging?.cloudflare?.origin;
   let turnstile;
   try {
@@ -219,6 +235,54 @@ export async function checkChallengeConfiguration(loaded) {
     hostname: turnstile.hostname,
     actions: challenge.actions,
   });
+}
+
+// M5 PR-1: the broker's STRIPE_CONFIGURATION_JSON, if present, must be the closed shape
+// the broker itself parses (parseStripeConfiguration); a malformed one stops the deploy
+// before upload. Absent is allowed: the broker then holds Stripe and billing fails closed.
+export async function checkStripeConfiguration(loaded) {
+  const json = loaded?.broker?.stripeJson ?? null;
+  if (json === null) return Object.freeze({ present: false });
+  const { tsImport } = await import("tsx/esm/api");
+  const { parseStripeConfiguration } = await tsImport(
+    "../packages/identity/src/broker-protocol.ts",
+    import.meta.url,
+  );
+  try {
+    const parsed = parseStripeConfiguration(json);
+    return Object.freeze({ present: true, automaticTax: parsed.automaticTax });
+  } catch {
+    throw new StagingError("STAGING_STRIPE_CONFIGURATION_INVALID");
+  }
+}
+
+// M5 PR-1: one environment's published billing terms (docs/decisions/billing-terms.json),
+// parsed again with the billing module (parseTermsDocument, the published digest) before
+// any database effect. staging has no revision until the owner's test-mode Price exists.
+export async function stagingBillingTermsRows(root, environment = "staging") {
+  let revisions;
+  try {
+    revisions = JSON.parse(readFileSync(join(root, "docs/decisions/billing-terms.json"), "utf8"))
+      .environments[environment];
+  } catch {
+    throw new StagingError("STAGING_TERMS_INVALID");
+  }
+  const { tsImport } = await import("tsx/esm/api");
+  const { parseTermsDocument, termsDocumentDigest } = await tsImport(
+    "../packages/work/src/billing/terms.ts",
+    import.meta.url,
+  );
+  if (!Array.isArray(revisions)) throw new StagingError("STAGING_TERMS_INVALID");
+  for (const revision of revisions) {
+    try {
+      parseTermsDocument(revision?.terms, revision?.offers);
+    } catch {
+      throw new StagingError("STAGING_TERMS_INVALID");
+    }
+    if ((await termsDocumentDigest(revision.terms, revision.offers)) !== revision.digest)
+      throw new StagingError("STAGING_TERMS_INVALID");
+  }
+  return billingTermsSeedRows(revisions);
 }
 
 // The card is active only when the record says approved, 30 days have not passed, and no
@@ -260,6 +324,10 @@ const githubTarget = (staging) => ({
   repository: repositoryOf(staging),
   environment: githubScope(staging).length ? "staging" : null,
 });
+// The committed binding, held to staging.json: the `staging` branch of the project, through
+// that branch's direct endpoint (`neon.endpoint_host`). The parser already refuses a
+// `-pooler` host; any other well-formed `ep-` host (the root branch's, say) fails here, so
+// the owner URL check below cannot follow a binding to another endpoint.
 async function stagingBinding(ctx, config) {
   if (config.bindingJson === null) throw new StagingError("STAGING_IDENTIFIERS_UNSET");
   const constants = await ctx.constants();
@@ -274,8 +342,11 @@ async function stagingBinding(ctx, config) {
     binding.environment !== "staging" ||
     neon.project_id === null ||
     neon.branch_id === null ||
+    typeof neon.endpoint_host !== "string" ||
     binding.projectId !== neon.project_id ||
-    binding.branchId !== neon.branch_id
+    binding.branchId !== neon.branch_id ||
+    binding.hostname !== neon.endpoint_host ||
+    binding.hostname.split(".")[0].includes("-pooler")
   )
     throw new StagingError("STAGING_BINDING_INVALID");
   return binding;
@@ -424,6 +495,15 @@ command("provision-roles", {
     const ownerUrl = ownerUrlFor(ctx, binding, specs);
     const roles = constants.roles;
     const connect = ctx.database({ ownerUrl, binding }).connect;
+    // The scratch database the statement-statistics wipe runs from (M-N3 as amended
+    // 2026-10-20): the same endpoint and administrator, never the binding database.
+    const scratch = {
+      database: statementStatsScratchDatabase,
+      connect: ctx.database({
+        ownerUrl,
+        binding: { ...binding, database: statementStatsScratchDatabase },
+      }).connect,
+    };
     if (options.mode === "first") {
       // One source of names: the file holds brokerRequiredSecrets exactly (the list gate 6
       // and the first deploy's file check use). The names are checked before any file is
@@ -436,6 +516,9 @@ command("provision-roles", {
         "TURNSTILE_SECRET_KEY",
         ...roles.map(constants.passwordSecret),
         ...kekNames,
+        // M5 PR-1: the two Stripe secrets, from their owner files.
+        "STRIPE_RESTRICTED_KEY",
+        "STRIPE_WEBHOOK_SECRET",
       ];
       if (
         new Set(planned).size !== planned.length ||
@@ -445,6 +528,8 @@ command("provision-roles", {
         throw new StagingError("STAGING_BROKER_FILE_NAMES_INVALID");
       const workos = readCredentialFile(ctx.directory, "workos-api-key", specs);
       const turnstile = readCredentialFile(ctx.directory, "turnstile-secret", specs);
+      const stripeKey = readCredentialFile(ctx.directory, "stripe-restricted-key", specs);
+      const stripeWebhook = readCredentialFile(ctx.directory, "stripe-webhook-secret", specs);
       // M2 PR-1: the owner's KEK files, read like the WorkOS key; the tool never makes one.
       const keks = Object.fromEntries(
         kekNames.map((name) => [
@@ -461,12 +546,19 @@ command("provision-roles", {
           administrator: ctx.administrator,
           roles,
           passwordRoles: roles,
+          scratch,
         });
       } catch (error) {
         handle.abandon();
         throw error;
       }
-      const secrets = { WORKOS_API_KEY: workos, TURNSTILE_SECRET_KEY: turnstile, ...keks };
+      const secrets = {
+        WORKOS_API_KEY: workos,
+        TURNSTILE_SECRET_KEY: turnstile,
+        STRIPE_RESTRICTED_KEY: stripeKey,
+        STRIPE_WEBHOOK_SECRET: stripeWebhook,
+        ...keks,
+      };
       for (const role of roles)
         secrets[constants.passwordSecret(role)] = provisioned.passwords.get(role);
       if (fileNames(Object.keys(secrets)) !== expected) {
@@ -479,7 +571,14 @@ command("provision-roles", {
         versionId: null,
         now: ctx.now(),
       });
-      return { mode: "first", roles, file: "tmp/broker-secrets.json", controls: "verified" };
+      return {
+        mode: "first",
+        roles,
+        file: "tmp/broker-secrets.json",
+        controls: "verified",
+        passwordStorage: provisioned.passwordStorage,
+        statementStats: provisioned.statementStats,
+      };
     }
     const selected =
       options.target === "all" ? roles : roles.filter((role) => role === options.target);
@@ -495,6 +594,7 @@ command("provision-roles", {
       administrator: ctx.administrator,
       roles,
       passwordRoles: selected,
+      scratch,
     });
     const status = await brokerBulk(
       ctx,
@@ -509,20 +609,34 @@ command("provision-roles", {
     } finally {
       recordRotation(ctx.directory, names, { worker: "broker", versionId, now: ctx.now() });
     }
-    return { mode: "rotate", roles: selected, versionId, controls: "verified" };
+    return {
+      mode: "rotate",
+      roles: selected,
+      versionId,
+      controls: "verified",
+      passwordStorage: provisioned.passwordStorage,
+      statementStats: provisioned.statementStats,
+    };
   },
 });
 
+// M5 PR-1 adds the two Stripe secrets. This deliberately reverses the P04.T01i note that
+// put-secret only re-places names the running broker already holds: a broker deployed
+// before M5 lacks both Stripe names, and gate 6 holds every deploy until the owner places
+// them, so put-secret adds them (docs/packets/P04.T01i.md, the M5 PR-1 note).
 const putSecretFiles = Object.freeze({
   WORKOS_API_KEY: "workos-api-key",
   TURNSTILE_SECRET_KEY: "turnstile-secret",
+  STRIPE_RESTRICTED_KEY: "stripe-restricted-key",
+  STRIPE_WEBHOOK_SECRET: "stripe-webhook-secret",
 });
 // M2 PR-1: a vault KEK (MORROW_VAULT_KEK_V<n>) is re-placed from the owner's own file,
 // with the same value; a new KEK is a new version, never a new value under an old name.
 const putSecretFile = (name) =>
   Object.hasOwn(putSecretFiles, name) ? putSecretFiles[name] : vaultKekFile(name);
 command("put-secret", {
-  usage: "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY|MORROW_VAULT_KEK_V1",
+  usage:
+    "put-secret WORKOS_API_KEY|TURNSTILE_SECRET_KEY|STRIPE_RESTRICTED_KEY|STRIPE_WEBHOOK_SECRET|MORROW_VAULT_KEK_V1",
   parse(args) {
     if (args.length !== 1 || putSecretFile(args[0]) === null)
       throw new StagingError("STAGING_USAGE");
@@ -579,6 +693,8 @@ command("seed-platform", {
     await mainPreconditions(ctx, repositoryOf(config.staging));
     const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
     const rows = platformSeedRows(configuration, JSON.parse(configuration.verificationProfileJson));
+    // M5 PR-1: the billing terms, checked before any effect.
+    const terms = await ctx.billingTerms();
     const written = await seedPlatform({
       connect: ctx.database({ ownerUrl, binding }).connect,
       binding,
@@ -586,7 +702,61 @@ command("seed-platform", {
       rows,
       selfService,
     });
-    return { ...written, origin: configuration.origin };
+    const billing = await seedBillingTerms({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      rows: terms,
+    });
+    return { ...written, ...billing, origin: configuration.origin };
+  },
+});
+
+// M5 PR-1 (review): the operator path for a customer operation the broker held (Stripe
+// proved neither outcome). Under the active staging card, only with the live-evidence
+// record of the operator's Stripe inspection or correction committed at --evidence; the
+// definer re-checks the hold and the window. Prints the outcome only.
+command("billing-customer-resolve", {
+  usage:
+    "billing-customer-resolve --operation <uuid> --resolution retry|abandon --evidence-code <code> --evidence <docs/evidence/live/....md> --operator <id>",
+  parse(args) {
+    const flags = {};
+    for (let i = 0; i < args.length; i += 2) {
+      const [flag, value] = [args[i], args[i + 1]];
+      if (
+        !["--operation", "--resolution", "--evidence-code", "--evidence", "--operator"].includes(
+          flag,
+        ) ||
+        typeof value !== "string" ||
+        Object.hasOwn(flags, flag)
+      )
+        throw new StagingError("STAGING_USAGE");
+      flags[flag] = value;
+    }
+    const input = {
+      operatorId: flags["--operator"],
+      operationId: flags["--operation"],
+      resolution: flags["--resolution"],
+      evidenceCode: flags["--evidence-code"],
+      evidenceRef: flags["--evidence"],
+    };
+    customerResolutionInput(input);
+    return { input };
+  },
+  async run(ctx, { input }) {
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    if (!existsSync(join(ctx.root, input.evidenceRef)))
+      throw new StagingError("STAGING_EVIDENCE_MISSING");
+    const binding = await stagingBinding(ctx, config);
+    await mainPreconditions(ctx, repositoryOf(config.staging));
+    const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
+    return resolveHeldCustomerOperation({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      input,
+    });
   },
 });
 
@@ -867,7 +1037,12 @@ command("deploy", {
       checkpoint: writeReport,
       preconditions: () => mainPreconditions(ctx, github.repository),
       loginDigest: async () => (await ctx.loginConfiguration(config)).configurationDigest,
-      challenge: () => ctx.challengeConfiguration(config),
+      // Gate 4 also checks M5 PR-1's reviewed broker var: a present
+      // STRIPE_CONFIGURATION_JSON must parse (absent, billing fails closed with 503).
+      async challenge() {
+        await ctx.challengeConfiguration(config);
+        await checkStripeConfiguration(config);
+      },
       // The two owner files: exact key sets (their format checks), and the keyring bound
       // to the committed login configuration's digest.
       async firstFiles(digest) {
@@ -1044,9 +1219,19 @@ command("neon-probe", {
   async run(ctx) {
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
+    // M-N3: the probe sends its plaintext in the binding's database (on the probe branch)
+    // and wipes the statistics from the scratch database, as provision-roles does.
+    let database = null;
+    if (config.bindingJson !== null)
+      try {
+        database = (await ctx.constants()).parseBinding(config.bindingJson).database;
+      } catch {
+        throw new StagingError("STAGING_BINDING_INVALID");
+      }
     return neonProbe(ctx, {
       staging: config.staging,
       administrator: ctx.administrator,
+      database,
       connectProbe: (url) => ctx.probeDatabase(url),
     });
   },
@@ -1209,6 +1394,7 @@ export function defaultContext() {
       return cloudflareApi({ credential: await ctx.credential(), accountId });
     },
     database: ({ ownerUrl, binding }) => neonConnector({ ownerUrl, binding }),
+    billingTerms: () => stagingBillingTermsRows(root, "staging"),
     async loginConfiguration(loaded) {
       if (loaded.loginConfigurationJson === null)
         throw new StagingError("STAGING_LOGIN_CONFIGURATION_MISSING");
@@ -1268,7 +1454,19 @@ export function defaultContext() {
   return ctx;
 }
 
+// Node's happy-eyeballs connect (autoSelectFamily): each address attempt gets this long
+// before the next address is tried. Node's default (250 ms) is shorter than a connect
+// from the operator's network to Neon's us-east-1 endpoints, so every connection there
+// (TLS, the Neon driver's WebSocket, HTTPS) failed with ETIMEDOUT and the tools reported
+// STAGING_DATABASE_UNAVAILABLE; 3000 ms connected in about 575 ms (2026-10-20,
+// docs/evidence/live/2026-10-20-neon-probe-rerun.md). The connector's own deadlines
+// (25 s connect, 2 s end) still bound every attempt.
+export const connectAttemptTimeoutMs = 3000;
+
+// The CLI entry: the connect timeout is set before the context exists and before any
+// network call, so every connection this process opens uses it.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  setDefaultAutoSelectFamilyAttemptTimeout(connectAttemptTimeoutMs);
   const code = await main(process.argv.slice(2), defaultContext()).catch(() => {
     process.stderr.write(JSON.stringify({ code: "STAGING_INTERNAL_ERROR" }) + "\n");
     return 1;

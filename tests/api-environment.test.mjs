@@ -6,6 +6,7 @@ import {
   mapAbuseGuard,
   mapApiEnvironment,
 } from "../apps/api/src/environment.ts";
+import { resolvedEdgeConfig } from "../scripts/edge.mjs";
 import { createPlatformWorkosProviderOracle } from "../scripts/fixtures/fixed-workos-platform-provider.mjs";
 import { appliedLegacyLoginControllerProtocol } from "../scripts/fixtures/standalone-login-fixture.mjs";
 
@@ -134,6 +135,11 @@ test("AC07: any provider or credential-like binding keeps the api unbound", () =
     "ANTHROPIC_BASE_URL",
     // M2 PR-1: the vault KEK binds only to the broker (ADR-0022 item 7).
     "MORROW_VAULT_KEK_V1",
+    // M5 PR-1: every STRIPE_ name binds only to the broker, the configuration included.
+    "STRIPE_RESTRICTED_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_CONFIGURATION_JSON",
+    "stripe_publishable",
     "E2B_API_KEY",
     "workos_client",
     "DEPLOY_SECRET",
@@ -428,4 +434,35 @@ test("P05.T01ab: the Turnstile secret is a credential the api mapper refuses", (
       code({ ...env(environment), TURNSTILE_SECRET_KEY: "0x" + "A".repeat(30) }),
       "API_ENV_FORBIDDEN_CREDENTIAL_BINDING",
     );
+});
+
+// P04.T01i PR-D part 1: the committed staging vars, as wrangler resolves them, are what the
+// mapper accepts. Until the owner's keyring is placed the api has four of the five values
+// and stays on its deny-all instance.
+test("P04.T01i PR-D: the committed staging vars map once the keyring is bound", async () => {
+  const { vars } = await resolvedEdgeConfig("api", "staging");
+  const bound = {
+    ...vars,
+    BROKER: broker(),
+    LOGIN_START_LIMITER: limiter(),
+    LOGIN_CALLBACK_LIMITER: limiter(),
+    SIGNUP_LIMITER: limiter(),
+  };
+  assert.equal(code(bound), "API_ENV_PARTIAL");
+  const mapped = map({ ...bound, LOGIN_CAPSULE_KEYRING: values("staging").LOGIN_CAPSULE_KEYRING });
+  assert.equal(mapped.ok, true, mapped.code);
+  assert.equal(mapped.environment, "staging");
+  assert.equal(mapped.values.login, vars.LOGIN_CONFIGURATION_JSON);
+  assert.equal(mapped.values.binding, vars.MORROW_DATABASE_BINDING_JSON);
+  assert.equal(mapped.guard.challenge.siteKey, "0x4AAAAAAFdwF1eDox4vfBd2");
+  assert.deepEqual(mapped.guard.challenge.actions, {
+    login: "account_login",
+    signup: "organization_signup",
+  });
+  // Without the limiters the staging guard is missing: fail closed.
+  const { LOGIN_START_LIMITER: _start, ...unguarded } = bound;
+  assert.equal(
+    code({ ...unguarded, LOGIN_CAPSULE_KEYRING: values("staging").LOGIN_CAPSULE_KEYRING }),
+    "API_ENV_ABUSE_GUARD_MISSING",
+  );
 });

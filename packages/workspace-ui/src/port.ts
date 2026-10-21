@@ -3,6 +3,7 @@
 import type {
   AccountOverviewView,
   AnswerView,
+  ConnectionsView,
   GoalView,
   Id,
   ListingsAgentView,
@@ -12,6 +13,8 @@ import type {
   Page,
   PersonRef,
   QuestionView,
+  StoreLinkPreviewView,
+  StoreLinkResultView,
   TaskView,
   WorkspaceView,
 } from "./model";
@@ -118,6 +121,21 @@ export interface WorkspacePort {
     getAnswer(ws: Id, id: Id): Promise<Outcome<AnswerView>>;
   };
   readonly people: { list(ws: Id): Promise<Outcome<readonly PersonRef[]>> }; // not_in_build (§4.14)
+  // M2 PR-2: the workspace's store connections and the install-link offer.
+  readonly connections: { list(ws: Id): Promise<Outcome<ConnectionsView>> };
+  // M2 PR-2 (P05.T03b routes, the P09.T02a issuer behind preview): link the store an install
+  // continuation names. The handoff token is the fragment the connector redirect carried;
+  // it lives in memory only. All three reuse the handoff's one command key; apply also
+  // sends the CSRF value preview returned.
+  readonly storeLinks: {
+    preview(ws: Id, c: Command<{ handoffToken: string }>): Promise<Outcome<StoreLinkPreviewView>>;
+    apply(
+      ws: Id,
+      c: Command<{ handoffToken: string }>,
+      csrfToken: string,
+    ): Promise<Outcome<StoreLinkResultView>>;
+    status(ws: Id, c: Command<{ handoffToken: string }>): Promise<Outcome<StoreLinkResultView>>;
+  };
   /** M3 PR-1: the Listings agent of one connected store. */
   readonly agents: {
     listingsStatus(ws: Id, storeId: Id): Promise<Outcome<ListingsAgentView>>;
@@ -178,6 +196,10 @@ export const portMethods = [
   "work.cancelQuestion",
   "work.getAnswer",
   "people.list",
+  "connections.list",
+  "storeLinks.preview",
+  "storeLinks.apply",
+  "storeLinks.status",
   "agents.listingsStatus",
   "agents.listingsDocument",
   "agents.listingsEnable",
@@ -188,6 +210,15 @@ export const portMethods = [
 export type PortMethod = (typeof portMethods)[number];
 /** Which port methods this build composes (§4.2). An uncomposed method sends nothing. */
 export type Composed = Readonly<Record<PortMethod, boolean>>;
+
+/**
+ * M2 PR-2: an install continuation captured from `/w/:ws/connections#handoff=` (memory
+ * only) and the one command key its preview, apply and status share.
+ */
+export interface StoreLinkHandoff {
+  readonly token: string;
+  readonly key: string;
+}
 
 /** A decoded reply that ends an unknown outcome (§4.9). */
 export function isTerminal(outcome: Outcome<unknown>): boolean {

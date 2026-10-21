@@ -295,16 +295,41 @@ test("a request that passes the guard and its body reaches the connector exactly
   }
 });
 
-test("the route table: six routes, relative to /workspace/:ws, and one dispatch pattern", () => {
+test("the route table: six routes in three guard families, and one dispatch pattern", () => {
+  // M5 PR-1's guard takes one fixed prefix per family; each pattern is relative to it.
   assert.deepEqual(
-    agentRoutes.map((r) => [r.method, r.pattern, r.op]),
+    agentRoutes.map((r) => [r.method, r.prefix, r.pattern, r.path, r.op]),
     [
-      ["GET", "/stores/:storeId/agents/listings", "listings.status"],
-      ["POST", "/stores/:storeId/agents/listings/document", "installation.document"],
-      ["POST", "/stores/:storeId/agents/listings", "installation.enable"],
-      ["POST", "/stores/:storeId/agents/listings/stop", "installation.stop"],
-      ["GET", "/models", "models.list"],
-      ["PUT", "/settings/model-default", "model_default.revise"],
+      [
+        "GET",
+        "stores",
+        "/:storeId/agents/listings",
+        "/stores/:storeId/agents/listings",
+        "listings.status",
+      ],
+      [
+        "POST",
+        "stores",
+        "/:storeId/agents/listings/document",
+        "/stores/:storeId/agents/listings/document",
+        "installation.document",
+      ],
+      [
+        "POST",
+        "stores",
+        "/:storeId/agents/listings",
+        "/stores/:storeId/agents/listings",
+        "installation.enable",
+      ],
+      [
+        "POST",
+        "stores",
+        "/:storeId/agents/listings/stop",
+        "/stores/:storeId/agents/listings/stop",
+        "installation.stop",
+      ],
+      ["GET", "models", "", "/models", "models.list"],
+      ["PUT", "settings/model-default", "", "/settings/model-default", "model_default.revise"],
     ],
   );
   for (const path of [enable, stop, document_, models, revise, "/workspace/ws_w/stores/x/agents"])

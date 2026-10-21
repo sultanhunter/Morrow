@@ -19,9 +19,10 @@ import {
   parseWorkspaceBillingFacts,
   workspaceBillingState,
   type BillingEnvironment,
+  type BillingScope,
 } from "@morrow/policy/billing-state";
+import type { BillingFactsRead } from "../billing/facts.js";
 import type { DelegationFactsRow } from "../runtime/leases.js";
-import type { BillingFactsReaderPort } from "./billing-facts-stub.js";
 
 // The agent kernel's SQL fact reader (P05.T04b minimum; mvp-architecture §5 and §9). Inside
 // one lease step, morrow_work.delegation_facts returns the envelope, its hops, the
@@ -30,8 +31,8 @@ import type { BillingFactsReaderPort } from "./billing-facts-stub.js";
 // createAgentAuthorityService().decideDelegation; it decides nothing itself. Providers are
 // allowed while the lease's store association is current and no stop blocks the run.
 // `entitlementAllowed` comes only from entitlementFor over the workspace's billing facts
-// (M5 PR-1's reader; in this branch its fail-closed stub), which is why this function is on
-// the inspectEntitlementWriters allowlist. Any missing or malformed fact throws, which the
+// (M5 PR-1's createBillingFactsReader from @morrow/work/billing, or its `read` alone), which
+// is why this function is on the inspectEntitlementWriters allowlist. Any missing or malformed fact throws, which the
 // kernel reports as AGENT_POLICY_AUTHORITY_UNAVAILABLE: a denial.
 export class DelegationFactsUnavailable extends Error {
   constructor() {
@@ -80,6 +81,14 @@ interface LeaseFacts {
   readonly installationId: string | null;
 }
 
+/**
+ * M5 PR-1's billing facts reader (createBillingFactsReader(query) of @morrow/work/billing):
+ * the parseWorkspaceBillingFacts input and the billing period of one workspace. Any error
+ * it throws denies the step.
+ */
+export interface LeaseBillingFactsReader {
+  read(scope: BillingScope): Promise<Pick<BillingFactsRead, "facts" | "billingPeriod">>;
+}
 export interface LeaseDelegationReaderPorts {
   /** The step's delegation_facts (LeaseStep.delegationFacts of runLeaseStep). */
   readonly facts: (
@@ -88,7 +97,7 @@ export interface LeaseDelegationReaderPorts {
     capabilityId: string,
   ) => Promise<DelegationFactsRow | null>;
   /** M5 PR-1's billing facts reader for the lease's workspace. */
-  readonly billing: BillingFactsReaderPort;
+  readonly billing: LeaseBillingFactsReader;
   readonly environment: BillingEnvironment;
   readonly clock: () => Date;
 }

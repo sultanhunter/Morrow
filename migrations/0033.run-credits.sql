@@ -20,16 +20,30 @@ BEGIN;
 --     workspace's daily interlock: refuses insufficient_credits, daily_cap,
 --     unrecovered_cost_cap, run_product_limit, catalogue_inactive, no_billing_period or a
 --     duplicate run), run_book_cost, run_settle, run_release and unrecovered_allows. Every
---     wallet move keeps available+reserved+consumed constant (M5's wallet_guard).
--- Wallet-dependent SQL (the foreign key and the wallet's lease policy) is isolated at the
--- end of this file so it can be reconciled with M5 PR-1's credit_wallets at rebase.
+--     wallet move keeps available+reserved+consumed constant and never lowers consumed, the
+--     moves M5 PR-1's wallet_guard (0029) admits.
+--   * On M5 PR-1's credit_wallets (0029; no wallet is created here): every reservation names
+--     its wallet (foreign key), and the lease twins of the wallet's session policies,
+--     tenant_lease_read (FOR SELECT) and tenant_lease_update (FOR UPDATE), so M3 PR-2's run
+--     steps settle under a run lease. Like 0029's tenant_command (FOR SELECT) and
+--     tenant_command_update, there is no INSERT: no lease context creates a wallet.
 DO $$ BEGIN
  IF current_user<>'morrow_work_owner'
  OR to_regclass('morrow_billing.credit_wallets') IS NULL
+ OR to_regclass('morrow_billing.billing_accounts') IS NULL
+ OR to_regprocedure('morrow_billing.wallet_guard()') IS NULL
  OR to_regclass('morrow_work.model_catalogue_entries') IS NULL
  OR to_regclass('morrow_billing.credit_reservations') IS NOT NULL
  OR to_regprocedure('morrow_work.current_lease()') IS NULL OR to_regprocedure('morrow_work.current_tenant()') IS NULL
- OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_attribute a WHERE a.attrelid='morrow_billing.credit_wallets'::regclass AND a.attname='billing_account_id')
+ -- M5 PR-1's wallet: keyed by its billing account, with the command role's column UPDATE.
+ OR (SELECT pg_catalog.pg_get_constraintdef(c.oid) FROM pg_catalog.pg_constraint c
+   WHERE c.conrelid='morrow_billing.credit_wallets'::regclass AND c.contype='p')
+  IS DISTINCT FROM 'PRIMARY KEY (organization_id, workspace_id, billing_account_id)'
+ OR NOT pg_catalog.has_column_privilege('morrow_work_command','morrow_billing.credit_wallets','reserved','UPDATE')
+ OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_policies p WHERE p.schemaname='morrow_billing' AND p.tablename='credit_wallets'
+   AND p.policyname='tenant_command_update' AND p.cmd='UPDATE')
+ OR EXISTS(SELECT 1 FROM pg_catalog.pg_policies p WHERE p.schemaname='morrow_billing' AND p.tablename='credit_wallets'
+   AND p.policyname LIKE 'tenant\_lease%')
  OR NOT morrow_identity.morrow_memberships_closed()
  THEN RAISE EXCEPTION 'RUN_CREDITS_PREREQUISITES_INVALID'; END IF;
 END $$;
@@ -444,11 +458,14 @@ GRANT EXECUTE ON FUNCTION morrow_billing.unrecovered_allows(text,text,timestampt
  morrow_billing.run_release(text,text,text) TO morrow_work_command;
 
 -- ---------------------------------------------------------------------------
--- Wallet-dependent SQL, isolated for the rebase onto M5 PR-1's credit_wallets: every
--- reservation names its wallet, and run steps (M3 PR-2) settle under a run lease.
+-- On M5 PR-1's credit_wallets: every reservation names its wallet, and run steps (M3 PR-2)
+-- read and move the wallet under a run lease, never insert one (0029's session policies,
+-- in the lease context).
 ALTER TABLE morrow_billing.credit_reservations ADD CONSTRAINT credit_reservations_wallet FOREIGN KEY (organization_id,workspace_id,billing_account_id)
  REFERENCES morrow_billing.credit_wallets(organization_id,workspace_id,billing_account_id);
-CREATE POLICY tenant_lease ON morrow_billing.credit_wallets TO morrow_work_command
+CREATE POLICY tenant_lease_read ON morrow_billing.credit_wallets FOR SELECT TO morrow_work_command
+ USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_lease() c));
+CREATE POLICY tenant_lease_update ON morrow_billing.credit_wallets FOR UPDATE TO morrow_work_command
  USING ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_lease() c))
  WITH CHECK ((organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_lease() c));
 COMMIT;

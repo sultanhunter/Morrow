@@ -151,6 +151,10 @@ export function inspectImports(file, code) {
       errors.push("TRUST_BOUNDARY_IMPORT");
     if (productionSource && !broker && /^@morrow\/broker(?:\/|$)/.test(specifier))
       errors.push("BROKER_SOURCE_IMPORT");
+    // M5 PR-1 (ADR-0022 items 7 and 12): Stripe is called only from the broker, with fixed
+    // fetch and no SDK (providers.json), so no product source imports a Stripe package.
+    if (productionSource && /^(?:stripe|@stripe\/[^/]+)(?:\/|$)/.test(installedPackage))
+      errors.push(broker ? "STRIPE_SDK_DENIED" : "STRIPE_OUTSIDE_BROKER");
     if (localTarget !== null) {
       const target = localTarget;
       if (productionSource && !broker && /^apps\/broker\//.test(target))
@@ -221,6 +225,16 @@ export function inspectImports(file, code) {
     }
     if (ui && ts.isIdentifier(node) && node.text === "process")
       errors.push("UI_SERVER_ENVIRONMENT");
+    // M5 PR-1: the Stripe API origin appears only in broker source.
+    if (
+      productionSource &&
+      !broker &&
+      (ts.isStringLiteralLike(node) ||
+        ts.isTemplateHead(node) ||
+        ts.isTemplateMiddleOrTemplateTail(node)) &&
+      /api\.stripe\.com/i.test(node.text)
+    )
+      errors.push("STRIPE_OUTSIDE_BROKER");
     if (ui) inspectUiSinks(node, path, errors);
     ts.forEachChild(node, visit);
   };

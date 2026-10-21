@@ -1,10 +1,20 @@
-// morrow-<env>-connector: a fail-closed 503 placeholder until P09.T01 builds
-// the ADR-0008 runtime. It binds only MORROW_ENVIRONMENT; no Shopify secret,
-// route or provider call exists.
+// morrow-<env>-connector (M2 PR-2; ADR-0022 item 6; ADR-0008 as amended 2026-10-20): the
+// Shopify launch, callback, status and webhook routes on the connector's own hostname, so
+// the api's __Host- session cookie never reaches it. It binds MORROW_ENVIRONMENT and the
+// broker's ConnectorBroker entrypoint only; no secret, no Shopify library and no provider
+// credential (every secret-dependent Shopify call is in the broker). The reviewed staging
+// identifiers (CONNECTOR_CONFIGURATION_JSON, MORROW_DATABASE_BINDING_JSON) arrive through
+// the P04.T01i PR-D path; without them the connector is deny-all (503). workers.dev stays
+// off here: enabling the staging hostname needs the staging card change (ADR-0022 item 6).
+// M2 PR-2 review (ADR-0019 items 6 and 8 applied to the second public Worker): the
+// per-address ingress limits, launch, status and callback 20 and webhooks 300 per 60 s
+// (Shopify's delivery addresses are shared by every store's app), one namespace per limit
+// and environment (development 7004-7005, staging 7104-7105, production 7204-7205).
+// `ratelimits` is not inherited, so every environment names its own.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "morrow-development-connector",
-  "main": "worker/placeholder.ts",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-07-30",
   "compatibility_flags": ["nodejs_compat", "nodejs_compat_do_not_populate_process_env"],
   "workers_dev": false,
@@ -15,16 +25,79 @@
   "send_metrics": false,
   "observability": { "enabled": false },
   "vars": { "MORROW_ENVIRONMENT": "development" },
+  "services": [
+    {
+      "binding": "BROKER",
+      "service": "morrow-development-broker",
+      "entrypoint": "ConnectorBroker",
+    },
+  ],
+  "ratelimits": [
+    { "name": "INSTALL_LIMITER", "namespace_id": "7004", "simple": { "limit": 20, "period": 60 } },
+    { "name": "WEBHOOK_LIMITER", "namespace_id": "7005", "simple": { "limit": 300, "period": 60 } },
+  ],
   "secrets": { "required": [] },
   "env": {
+    // P04.T01i D1 and D6: no workers.dev, preview URL or route; Workers Logs as the api's.
     "staging": {
       "name": "morrow-staging-connector",
+      "workers_dev": false,
+      "preview_urls": false,
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "traces": { "enabled": false },
+        "logs": {
+          "enabled": true,
+          "invocation_logs": false,
+          "head_sampling_rate": 1,
+          "persist": true,
+        },
+      },
       "vars": { "MORROW_ENVIRONMENT": "staging" },
+      "services": [
+        {
+          "binding": "BROKER",
+          "service": "morrow-staging-broker",
+          "entrypoint": "ConnectorBroker",
+        },
+      ],
+      "ratelimits": [
+        {
+          "name": "INSTALL_LIMITER",
+          "namespace_id": "7104",
+          "simple": { "limit": 20, "period": 60 },
+        },
+        {
+          "name": "WEBHOOK_LIMITER",
+          "namespace_id": "7105",
+          "simple": { "limit": 300, "period": 60 },
+        },
+      ],
       "secrets": { "required": [] },
     },
     "production": {
       "name": "morrow-production-connector",
       "vars": { "MORROW_ENVIRONMENT": "production" },
+      "services": [
+        {
+          "binding": "BROKER",
+          "service": "morrow-production-broker",
+          "entrypoint": "ConnectorBroker",
+        },
+      ],
+      "ratelimits": [
+        {
+          "name": "INSTALL_LIMITER",
+          "namespace_id": "7204",
+          "simple": { "limit": 20, "period": 60 },
+        },
+        {
+          "name": "WEBHOOK_LIMITER",
+          "namespace_id": "7205",
+          "simple": { "limit": 300, "period": 60 },
+        },
+      ],
       "secrets": { "required": [] },
     },
   },

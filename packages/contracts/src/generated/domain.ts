@@ -462,11 +462,15 @@ export type CoreV1_1_StopRecord = ({ "schemaVersion": 1; "id": Core_Id; "stopCon
 export type CoreV1_1_ResourceRef = (unknown & { "organizationId": Core_Id; "workspaceId": Core_Id; "storeId": (Core_Id | null); "connectionId": (Core_Id | null); "kind": "product" | "variant" | "collection" | "publication" | "inventory_item" | "location" | "order" | "fulfillment" | "return" | "refund" | "ad_account" | "campaign" | "audience" | "segment" | "case" | "theme" | "extension" | "artifact" | "task" | "goal" | "installation" | "member" | "knowledge" | "budget" | "subject" | "workspace" | "release" | "store"; "id": Core_Id; });
 export type CoreV1_1_Scope = { "organizationId": Core_Id; "workspaceId": Core_Id; "storeIds": Array<Core_Id>; "accountIds": Array<Core_Id>; "resources": Array<CoreV1_1_ResourceRef>; "fields": Array<Core_FieldPath>; };
 export type CoreV1_1_Grant = { "id": Core_Id; "principal": Core_ActorRef; "capabilityId": Core_CapabilityId; "verbs": Array<"view" | "propose" | "approve" | "execute" | "delegate" | "administer">; "scope": CoreV1_1_Scope; "issuedBy": Core_ActorRef; "validFrom": Core_UtcTime; "expiresAt": (Core_UtcTime | null); "revokedAt": (Core_UtcTime | null); "policyRevision": Core_Revision; };
-export type CoreV1_1_AgentInstallation = { "schemaVersion": 1; "id": Core_Id; "organizationId": Core_Id; "workspaceId": Core_Id; "storeId": (Core_Id | null); "revision": Core_Revision; "createdAt": Core_UtcTime; "updatedAt": Core_UtcTime; "releaseRef": Core_ReleaseRef; "owner": Core_ActorRef; "status": Core_InstallationStatus; "configurationRef": Core_ConfigRef; "scope": CoreV1_1_Scope; "grantRefs": Array<Core_GrantRef>; "mandateRefs": Array<Core_MandateRef>; "dependencies": Array<Core_PinnedDependency>; "evaluationRef": (Core_EvaluationRef | null); "provisionalExpiresAt": (Core_UtcTime | null); };
+export type CoreV1_1_InstallLinkOffer = ({ "offered": true; "url": string; "reason": "offered"; } | { "offered": false; "url": null; "reason": "linked" | "not_permitted" | "not_registered" | "route_not_ready"; });
+export type CoreV1_1_WorkspaceConnections = { "schemaVersion": 1; "installations": Array<Core_StoreInstallation>; "installLink": CoreV1_1_InstallLinkOffer; };
+export type CoreV1_1_BillingManageAction = "subscribe" | "billing_portal";
+export type CoreV1_1_NullableStripePriceKey = (string | null);
 export type CoreV1_1_ModelOptionKey = string;
-export type CoreV1_1_ModelSelection = { "model": CoreV1_1_ModelOptionKey; "effort": CoreV1_1_ModelOptionKey; };
 export type CoreV1_1_CreditsPerProductCeiling = number;
 export type CoreV1_1_NullableRevision = (Core_Revision | null);
+export type CoreV1_1_AgentInstallation = { "schemaVersion": 1; "id": Core_Id; "organizationId": Core_Id; "workspaceId": Core_Id; "storeId": (Core_Id | null); "revision": Core_Revision; "createdAt": Core_UtcTime; "updatedAt": Core_UtcTime; "releaseRef": Core_ReleaseRef; "owner": Core_ActorRef; "status": Core_InstallationStatus; "configurationRef": Core_ConfigRef; "scope": CoreV1_1_Scope; "grantRefs": Array<Core_GrantRef>; "mandateRefs": Array<Core_MandateRef>; "dependencies": Array<Core_PinnedDependency>; "evaluationRef": (Core_EvaluationRef | null); "provisionalExpiresAt": (Core_UtcTime | null); };
+export type CoreV1_1_ModelSelection = { "model": CoreV1_1_ModelOptionKey; "effort": CoreV1_1_ModelOptionKey; };
 export type CapabilityV1_1_ads_campaign_pause_input = { "campaigns": CoreV1_1_CampaignRefs; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_agents_installation_disable_input = { "installationId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
 export type CapabilityV1_1_governance_membership_revoke_input = { "membershipId": Core_Id; "control": CoreV1_1_KillSwitchControl; };
@@ -493,6 +497,8 @@ export type CapabilityV1_1_workspace_inbox_mark_input = { "itemIds": CoreV1_1_In
 export type CapabilityV1_1_workspace_inbox_mark_output = { "updated": Core_Count; };
 export type CapabilityV1_1_governance_access_request_input = { "scope": CoreV1_1_AccessRequestScope; "reason": CoreV1_1_RequestReason; "context": CoreV1_1_AccessRequestContext; };
 export type CapabilityV1_1_governance_access_request_output = { "accessRequestId": Core_Id; "status": CoreV1_1_AccessRequestStatus; };
+export type CapabilityV1_1_governance_billing_manage_input = (unknown & { "action": CoreV1_1_BillingManageAction; "priceKey": CoreV1_1_NullableStripePriceKey; });
+export type CapabilityV1_1_governance_billing_manage_output = { "operationId": Core_Id; };
 export type CapabilityV1_1_governance_model_default_revise_input = { "model": CoreV1_1_ModelOptionKey; "effort": CoreV1_1_ModelOptionKey; "maxCreditsPerProduct": CoreV1_1_CreditsPerProductCeiling; "expectedRevision": CoreV1_1_NullableRevision; };
 export type CapabilityV1_1_governance_model_default_revise_output = { "revision": Core_Revision; };
 export type BillingV1_1_BillingRoute = "morrow_direct" | "shopify_app_pricing";
@@ -553,6 +559,7 @@ export interface CurrentDefinitions {
   "AudienceList": Core_AudienceList;
   "AudienceRef": Core_AudienceRef;
   "AutomationMandate": Core_AutomationMandate;
+  "BillingManageAction": CoreV1_1_BillingManageAction;
   "Boolean": CoreV1_1_Boolean;
   "BoundedFieldList": CoreV1_1_BoundedFieldList;
   "Budget": Core_Budget;
@@ -621,6 +628,7 @@ export interface CurrentDefinitions {
   "InboxMarkInput": CoreV1_1_InboxMarkInput;
   "InboxPage": CoreV1_1_InboxPage;
   "InboxSubject": CoreV1_1_InboxSubject;
+  "InstallLinkOffer": CoreV1_1_InstallLinkOffer;
   "InstallationStatus": Core_InstallationStatus;
   "InventoryList": Core_InventoryList;
   "KillSwitchControl": CoreV1_1_KillSwitchControl;
@@ -660,6 +668,7 @@ export interface CurrentDefinitions {
   "NullableId": CoreV1_1_NullableId;
   "NullablePageCursor": CoreV1_1_NullablePageCursor;
   "NullableRevision": CoreV1_1_NullableRevision;
+  "NullableStripePriceKey": CoreV1_1_NullableStripePriceKey;
   "Operation": Core_Operation;
   "OperationRef": CoreV1_1_OperationRef;
   "OperationStatus": Core_OperationStatus;
@@ -760,6 +769,7 @@ export interface CurrentDefinitions {
   "UsageList": Core_UsageList;
   "UtcTime": Core_UtcTime;
   "ViewportList": Core_ViewportList;
+  "WorkspaceConnections": CoreV1_1_WorkspaceConnections;
   "integer": Core_integer;
   "string": Core_string;
 }
@@ -797,6 +807,7 @@ export type Current_AttributionRef = Core_AttributionRef;
 export type Current_AudienceList = Core_AudienceList;
 export type Current_AudienceRef = Core_AudienceRef;
 export type Current_AutomationMandate = Core_AutomationMandate;
+export type Current_BillingManageAction = CoreV1_1_BillingManageAction;
 export type Current_Boolean = CoreV1_1_Boolean;
 export type Current_BoundedFieldList = CoreV1_1_BoundedFieldList;
 export type Current_Budget = Core_Budget;
@@ -865,6 +876,7 @@ export type Current_InboxKind = CoreV1_1_InboxKind;
 export type Current_InboxMarkInput = CoreV1_1_InboxMarkInput;
 export type Current_InboxPage = CoreV1_1_InboxPage;
 export type Current_InboxSubject = CoreV1_1_InboxSubject;
+export type Current_InstallLinkOffer = CoreV1_1_InstallLinkOffer;
 export type Current_InstallationStatus = Core_InstallationStatus;
 export type Current_InventoryList = Core_InventoryList;
 export type Current_KillSwitchControl = CoreV1_1_KillSwitchControl;
@@ -904,6 +916,7 @@ export type Current_NotifyMentionRequest = CoreV1_1_NotifyMentionRequest;
 export type Current_NullableId = CoreV1_1_NullableId;
 export type Current_NullablePageCursor = CoreV1_1_NullablePageCursor;
 export type Current_NullableRevision = CoreV1_1_NullableRevision;
+export type Current_NullableStripePriceKey = CoreV1_1_NullableStripePriceKey;
 export type Current_Operation = Core_Operation;
 export type Current_OperationRef = CoreV1_1_OperationRef;
 export type Current_OperationStatus = Core_OperationStatus;
@@ -1004,6 +1017,7 @@ export type Current_UrlList = Core_UrlList;
 export type Current_UsageList = Core_UsageList;
 export type Current_UtcTime = Core_UtcTime;
 export type Current_ViewportList = Core_ViewportList;
+export type Current_WorkspaceConnections = CoreV1_1_WorkspaceConnections;
 export type Current_integer = Core_integer;
 export type Current_string = Core_string;
 export interface CurrentBillingDefinitions {
@@ -1173,6 +1187,7 @@ export interface CapabilityBodies {
   "governance.privacy.export": { input: Capability_governance_privacy_export_input; output: Capability_governance_privacy_export_output; };
   "governance.privacy.erase": { input: Capability_governance_privacy_erase_input; output: Capability_governance_privacy_erase_output; };
   "governance.access.request": { input: CapabilityV1_1_governance_access_request_input; output: CapabilityV1_1_governance_access_request_output; };
+  "governance.billing.manage": { input: CapabilityV1_1_governance_billing_manage_input; output: CapabilityV1_1_governance_billing_manage_output; };
   "governance.model_default.revise": { input: CapabilityV1_1_governance_model_default_revise_input; output: CapabilityV1_1_governance_model_default_revise_output; };
   "agents.listing.read": { input: Capability_agents_listing_read_input; output: Capability_agents_listing_read_output; };
   "agents.builder.describe": { input: Capability_agents_builder_describe_input; output: Capability_agents_builder_describe_output; };

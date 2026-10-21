@@ -93,6 +93,13 @@ const extraPolicies = {
     "((current_setting('morrow.work_member_revocation'::text, true) = (((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (initiator_membership_id)::text)) AND (NOT morrow_identity.work_lease_member_current((organization_id)::text, (workspace_id)::text, (initiator_principal_id)::text, (initiator_membership_id)::text)))",
     "((status = 'revoked'::text) AND (revoked_reason = 'membership'::text) AND (current_setting('morrow.work_member_revocation'::text, true) = (((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (initiator_membership_id)::text)))",
   ],
+  // M2 PR-2 (0025): the linking rule's route read, one named row, SELECT only.
+  route_link_read: [
+    "SELECT",
+    "{morrow_work_command}",
+    "(current_setting('morrow.billing_route_read'::text, true) = (((organization_id)::text || '|'::text) || (workspace_id)::text))",
+    null,
+  ],
   // The signup bridge's policy, bound to the website signup (0022-0023).
   route_signup: [
     "INSERT",
@@ -106,6 +113,54 @@ const extraPolicies = {
     "(SESSION_USER = 'morrow_vault_broker'::name)",
     "(SESSION_USER = 'morrow_vault_broker'::name)",
   ],
+  // M5 PR-1 (0029): the broker's own login, through its own definers only.
+  broker_billing: [
+    "ALL",
+    "{morrow_work_command}",
+    "(SESSION_USER = 'morrow_vault_broker'::name)",
+    "(SESSION_USER = 'morrow_vault_broker'::name)",
+  ],
+  broker_stripe: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND (kind = 'stripe_write'::text))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND (kind = 'stripe_write'::text))",
+  ],
+  broker_stripe_transition: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND (EXISTS ( SELECT 1\n   FROM morrow_work.operations o\n  WHERE (((o.organization_id)::text = (operation_transitions.organization_id)::text) AND ((o.workspace_id)::text = (operation_transitions.workspace_id)::text) AND ((o.id)::text = (operation_transitions.operation_id)::text) AND (o.kind = 'stripe_write'::text)))))",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND (EXISTS ( SELECT 1\n   FROM morrow_work.operations o\n  WHERE (((o.organization_id)::text = (operation_transitions.organization_id)::text) AND ((o.workspace_id)::text = (operation_transitions.workspace_id)::text) AND ((o.id)::text = (operation_transitions.operation_id)::text) AND (o.kind = 'stripe_write'::text)))))",
+  ],
+  // The receipt-only ingress: the receipt's own tenant, through the entry proof.
+  receipt_apply: [
+    "ALL",
+    "{morrow_work_command}",
+    "morrow_billing.receipt_tenant((organization_id)::text, (workspace_id)::text)",
+    "morrow_billing.receipt_tenant((organization_id)::text, (workspace_id)::text)",
+  ],
+  receipt_ingress_read: [
+    "SELECT",
+    "{morrow_work_command}",
+    "morrow_billing.receipt_ingress()",
+    null,
+  ],
+  receipt_ingress_apply: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "morrow_billing.receipt_entered((receipt_id)::text)",
+  ],
+  receipt_entry: [
+    "ALL",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_api_worker'::name) AND (backend_pid = pg_backend_pid()))",
+    "((SESSION_USER = 'morrow_api_worker'::name) AND (backend_pid = pg_backend_pid()))",
+  ],
+  platform_command_read: ["SELECT", "{morrow_work_command}", "true", null],
+  platform_api_read: ["SELECT", "{morrow_work_api}", "true", null],
+  // M5 PR-1: the wallet's session UPDATE for M3 PR-1's sum-preserving moves (no INSERT).
+  tenant_command_update: ["UPDATE", "{morrow_work_command}", tenantPredicate, tenantPredicate],
   // M3 PR-1: morrow_vault.resolve_call reads, as the broker's login only, the one lease it
   // names, that lease's tenant's stops and the platform's, and that lease's installation,
   // through transaction-local settings it writes itself.
@@ -135,8 +190,14 @@ function checkPolicies(schema, table, spec) {
   );
   const mixed = spec.class === "tenant_or_platform";
   const vault = spec.class === "vault_platform" || spec.class === "vault_tenant";
+  // M5 PR-1: platform tables of morrow_billing, the ingress receipts and the operator's
+  // records carry only the owner's maintenance policy and their registered extras (no
+  // session template).
+  const ownOnly = ["platform", "platform_readable", "ingress", "operator_record"].includes(
+    spec.class,
+  );
   const expected = ["work_owner"]
-    .concat(vault ? ["vault_broker"] : ["tenant_command"])
+    .concat(vault ? ["vault_broker"] : ownOnly ? [] : ["tenant_command"])
     .concat(spec.class === "tenant_readable" || mixed ? ["tenant_read"] : [])
     .concat(spec.lease || mixed ? ["tenant_lease"] : [])
     .concat(spec.policies ?? []);
@@ -148,12 +209,14 @@ function checkPolicies(schema, table, spec) {
     else if (policy.policyname === "tenant_command")
       assert.deepEqual(
         shape,
-        [
-          "ALL",
-          "{morrow_work_command}",
-          mixed ? orPlatform(tenantPredicate) : tenantPredicate,
-          tenantPredicate,
-        ],
+        spec.commandRead
+          ? ["SELECT", "{morrow_work_command}", tenantPredicate, null]
+          : [
+              "ALL",
+              "{morrow_work_command}",
+              mixed ? orPlatform(tenantPredicate) : tenantPredicate,
+              tenantPredicate,
+            ],
         table,
       );
     else if (policy.policyname === "tenant_lease")
@@ -328,7 +391,9 @@ test("S4: the api role reads readable tables column by column; no runtime DELETE
 // Definer kinds: the api functions, the resolvers, and (M2 PR-1) the runtime, vault and
 // signup-bridge definers. Every definer is owned by the command role; operator functions
 // are INVOKER and owned by the owner, like triggers and checks.
-const definerKinds = ["api", "resolver", "runtime", "vault", "bridge_in"];
+// M5 PR-1 adds the broker's own billing definers ("broker") and the receipt-only ingress
+// ("ingress").
+const definerKinds = ["api", "resolver", "runtime", "vault", "bridge_in", "broker", "ingress"];
 
 test("S5: definers, owners, search paths, grants, parameters, roles and memberships", () => {
   const functions = rows(
@@ -442,7 +507,8 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
   const identityFunctions = rows(
     "SELECT p.oid::regprocedure::text AS signature, has_function_privilege('morrow_work_command',p.oid,'EXECUTE') AS c, has_function_privilege('morrow_work_api',p.oid,'EXECUTE') AS a, has_function_privilege('morrow_work_owner',p.oid,'EXECUTE') AS o, has_function_privilege('morrow_api_worker',p.oid,'EXECUTE') AS l FROM pg_proc p WHERE p.pronamespace='morrow_identity'::regnamespace",
   );
-  // No executor login executes any identity function (ADR-0022 item 8).
+  // No executor login executes an identity function beyond its registered ones (ADR-0022
+  // item 8): M2 PR-2's connector OAuth-state definer is the only one.
   const loginIdentity = rows(
     `SELECT r.rolname, p.oid::regprocedure::text AS signature FROM pg_roles r, pg_proc p WHERE r.rolname IN (${Object.keys(
       executorLogins,
@@ -452,7 +518,14 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
         ",",
       )}) AND p.pronamespace='morrow_identity'::regnamespace AND has_function_privilege(r.oid,p.oid,'EXECUTE')`,
   );
-  assert.deepEqual(loginIdentity, []);
+  assert.deepEqual(
+    loginIdentity.map((r) => r.rolname + " " + r.signature).sort(),
+    Object.entries(executorLogins)
+      .flatMap(([login, allowed]) =>
+        allowed.filter((f) => f.startsWith("morrow_identity.")).map((f) => login + " " + f),
+      )
+      .sort(),
+  );
   for (const f of identityFunctions) {
     const bridge = bridgeFunctions.includes(f.signature.replace("morrow_identity.", ""));
     assert.equal(f.c, bridge, f.signature);
@@ -623,7 +696,7 @@ test("S7: the billing and vault schemas, and what each executor login may execut
       );
       assert.ok(t.relrowsecurity && t.relforcerowsecurity && t.owner === workRoles.owner, table);
       checkPolicies(schema, table, spec);
-      if (spec.class !== "vault_platform") {
+      if (!["vault_platform", "platform", "platform_readable"].includes(spec.class)) {
         const fks = rows(
           `SELECT c.confrelid::regclass::text AS parent,(SELECT array_agg(a.attname ORDER BY k.ord) FROM unnest(c.conkey) WITH ORDINALITY k(attnum,ord) JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum) AS columns FROM pg_constraint c WHERE c.conrelid='${schema}.${table}'::regclass AND c.contype='f'`,
         );
@@ -698,14 +771,15 @@ test("S7: the billing and vault schemas, and what each executor login may execut
     }
   }
   // Every function an executor login may execute, in any schema, is exactly its list; it
-  // holds no table, column, sequence or schema privilege beyond USAGE on those schemas.
+  // holds no table, column, sequence or schema privilege beyond USAGE on those schemas
+  // (listed by name: morrow_vault_broker holds two since M5 PR-1).
   for (const [login, allowed] of Object.entries(executorLogins)) {
     const executable = rows(
       `SELECT p.oid::regprocedure::text AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname LIKE 'morrow\\_%' AND has_function_privilege('${login}',p.oid,'EXECUTE')`,
     );
     assert.deepEqual(names(executable.map((f) => f.signature)), names(allowed), login);
     const [privileges] = rows(
-      `SELECT (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname LIKE 'morrow\\_%' AND (has_table_privilege('${login}',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('${login}',c.oid,'SELECT,INSERT,UPDATE,REFERENCES')))::int AS tables, (SELECT COALESCE(array_agg(n.nspname ORDER BY 1),'{}') FROM pg_namespace n WHERE n.nspname LIKE 'morrow\\_%' AND has_schema_privilege('${login}',n.oid,'USAGE')) AS schemas, (SELECT count(*) FROM pg_namespace n WHERE n.nspname LIKE 'morrow\\_%' AND has_schema_privilege('${login}',n.oid,'CREATE'))::int AS creates`,
+      `SELECT (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname LIKE 'morrow\\_%' AND (has_table_privilege('${login}',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR has_any_column_privilege('${login}',c.oid,'SELECT,INSERT,UPDATE,REFERENCES')))::int AS tables, (SELECT COALESCE(array_agg(n.nspname::text ORDER BY n.nspname::text COLLATE "C"),'{}') FROM pg_namespace n WHERE n.nspname LIKE 'morrow\\_%' AND has_schema_privilege('${login}',n.oid,'USAGE')) AS schemas, (SELECT count(*) FROM pg_namespace n WHERE n.nspname LIKE 'morrow\\_%' AND has_schema_privilege('${login}',n.oid,'CREATE'))::int AS creates`,
     );
     assert.equal(privileges.tables, 0, login);
     assert.equal(privileges.creates, 0, login);

@@ -48,7 +48,12 @@ import {
   resumeDocumentMatches,
   type PinnedInstallation,
 } from "./listings.js";
-import type { GuardedWorkspaceRequest } from "./workspace-guard-stub.js";
+import type {
+  GuardedWorkspaceRequest as GuardedRequest,
+  WorkspaceRouteSpec,
+} from "../http-guard.js";
+// Any guarded agents request (the route family does not matter to the commands).
+type GuardedWorkspaceRequest = GuardedRequest<WorkspaceRouteSpec>;
 
 // The agents commands and reads (M3 PR-1; ADR-0022 items 3, 15 and 16 with the item 3
 // amendment of 2026-10-20). Each runs the human kernel (packages/policy) on the exact

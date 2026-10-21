@@ -57,7 +57,7 @@ const paths = [
     "agents/listings",
     "agents/bodies",
     "agents/sql",
-    "agents/workspace-guard-stub",
+    "agents/types",
   ].map((name) => "packages/work/src/" + name + ".ts"),
 ];
 const sourceDigests = Object.fromEntries(paths.map((p) => [p, hash(readFileSync(p))]));

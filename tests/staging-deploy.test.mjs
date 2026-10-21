@@ -5,10 +5,12 @@
 // Cloudflare API, database and HTTP; nothing reaches a provider.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
   checkChallengeConfiguration,
+  checkStripeConfiguration,
   committedCsp,
   commands,
   identityConstants,
@@ -35,6 +37,7 @@ import {
   labSiteKey,
   plantedHome,
   scriptOf,
+  unsetStaging,
 } from "./fixtures/staging-fakes.mjs";
 
 const head = schemaHead(loadMigrationChain());
@@ -181,6 +184,18 @@ test("AC04: a green CI deploy runs the gates, then broker, orchestrator, connect
     assert.deepEqual(result.smoke.failures, []);
     assert.deepEqual(result.censusBefore.findings, []);
     assert.deepEqual(result.census.findings, []);
+    // M2 PR-2: the deployed connector binds the broker's ConnectorBroker entrypoint, which
+    // the census allow table admits, so continuous deploy keeps running after the merge.
+    assert.deepEqual(
+      result.census.scripts
+        .filter((s) => s.bindsBroker)
+        .map((s) => [s.name, s.brokerEntrypoints])
+        .sort(),
+      [
+        ["morrow-staging-api", ["ApiBroker"]],
+        ["morrow-staging-connector", ["ConnectorBroker"]],
+      ],
+    );
     // CI never reads a variable through the API (its token cannot); it re-reads the
     // workflow's state at gate 2, before every upload and after the api deploy.
     const ghApi = w.fake.calls.filter((c) => c.tool === "gh").map((c) => c.args.join(" "));
@@ -309,7 +324,7 @@ test("AC04: a mismatched schema head, digest or broker secret name, or a failed 
 // P05.T01ab reconciliation (D1, D5; ADR-0019 items 6-8): gate 4 also requires the api's
 // LOGIN_CHALLENGE_JSON and the broker's TURNSTILE_CONFIGURATION_JSON, in agreement, so no
 // api is uploaded that would map to API_ENV_ABUSE_GUARD_MISSING and no broker whose health
-// is false. Both carry PR-D identifiers, so today's committed staging config stops here.
+// is false. Both carry PR-D part 1 identifiers; the committed staging config passes.
 test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and deploys nothing", async () => {
   const host = new URL(origin).hostname;
   const apiVar = (patch = {}) =>
@@ -381,6 +396,13 @@ test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and
       { api: apiVar({ siteKey: "1x00000000000000000000AA" }) },
       "STAGING_CHALLENGE_CONFIGURATION_INVALID",
       "api",
+    ],
+    // Another well-formed key than staging.json's widget's (`cloudflare.turnstile.site_key`).
+    [
+      "swapped well-formed site key",
+      { api: apiVar({ siteKey: labSiteKey.slice(0, -1) + "z" }) },
+      "STAGING_CHALLENGE_CONFIGURATION_INVALID",
+      "site_key",
     ],
     [
       "api provider none",
@@ -480,15 +502,126 @@ test("AC04: gate 4 refuses a missing or inconsistent challenge configuration and
   } finally {
     ok.planted.cleanup();
   }
-  // The committed staging configuration has no challenge vars until PR-D.
+  // P04.T01i PR-D part 1: the committed staging configuration passes gate 4's challenge
+  // check (D1's actions, the origin's hostname, the broker's shared vars byte-equal).
   const committed = await import("../scripts/staging.mjs").then((m) =>
     m.loadStagingConfiguration(process.cwd()),
   );
-  assert.equal(committed.challengeJson, null);
-  assert.equal(committed.broker.turnstileJson, null);
-  await assert.rejects(checkChallengeConfiguration(committed), {
-    code: "STAGING_CHALLENGE_CONFIGURATION_MISSING",
+  assert.deepEqual(await checkChallengeConfiguration(committed), {
+    provider: "turnstile",
+    hostname: "morrow-staging-api.sultanibneusman0.workers.dev",
+    actions: stagingChallengeActions,
   });
+  assert.equal(
+    JSON.parse(committed.challengeJson).siteKey,
+    committed.staging.cloudflare.turnstile.site_key,
+  );
+  // staging.json records another well-formed key, or none: the committed vars fail gate 4.
+  for (const turnstile of [
+    { ...committed.staging.cloudflare.turnstile, site_key: "0x4AAAAAAFdwF1eDox4vfBd3" },
+    null,
+  ])
+    await assert.rejects(
+      checkChallengeConfiguration({
+        ...committed,
+        staging: {
+          ...committed.staging,
+          cloudflare: { ...committed.staging.cloudflare, turnstile },
+        },
+      }),
+      (error) =>
+        error.code === "STAGING_CHALLENGE_CONFIGURATION_INVALID" &&
+        error.details.reason === "site_key",
+    );
+});
+
+// P04.T01i PR-D part 1: gate 4's digest step reads the committed login configuration with
+// the runtime's parser (the real context, no fake): a staging tier and the staging origin.
+// Its configurationDigest is what `staging:keyring` binds and the deploy compares with
+// STAGING_LOGIN_CONFIGURATION_DIGEST.
+test("AC04: the committed login configuration passes gate 4's digest step", async () => {
+  const { defaultContext, loadStagingConfiguration } = await import("../scripts/staging.mjs");
+  const committed = await loadStagingConfiguration(process.cwd());
+  const parsed = await defaultContext().loginConfiguration(committed);
+  assert.equal(parsed.retentionTier, "staging");
+  assert.equal(parsed.origin, committed.staging.cloudflare.origin);
+  assert.equal(parsed.binding.redirectUri, parsed.origin + "/auth/workos/callback");
+  assert.match(parsed.configurationDigest, /^[0-9a-f]{64}$/);
+  // Another origin in staging.json than the committed configuration's fails closed.
+  await assert.rejects(
+    defaultContext().loginConfiguration({
+      ...committed,
+      staging: {
+        ...committed.staging,
+        cloudflare: { ...committed.staging.cloudflare, origin: "https://other.example" },
+      },
+    }),
+    { code: "STAGING_LOGIN_CONFIGURATION_INVALID" },
+  );
+});
+
+// M5 PR-1: the broker's STRIPE_CONFIGURATION_JSON is a reviewed identifier on the PR-D path.
+// Gate 4 parses a present one with the broker's own parser; an absent one is allowed (the
+// broker then holds Stripe and billing answers 503); a malformed one deploys nothing.
+test("AC04: gate 4 refuses a malformed STRIPE_CONFIGURATION_JSON and deploys nothing", async () => {
+  const valid = {
+    schemaVersion: 1,
+    portalConfigurationId: "bpc_" + "A".repeat(24),
+    automaticTax: false,
+    billingAddressCollection: "auto",
+  };
+  const committed = await import("../scripts/staging.mjs").then((m) =>
+    m.loadStagingConfiguration(process.cwd()),
+  );
+  assert.equal(committed.broker.stripeJson, null);
+  assert.deepEqual(await checkStripeConfiguration(committed), { present: false });
+  assert.deepEqual(
+    await checkStripeConfiguration({ broker: { stripeJson: JSON.stringify(valid) } }),
+    { present: true, automaticTax: false },
+  );
+  for (const bad of [
+    { ...valid, extra: 1 },
+    { ...valid, portalConfigurationId: "bpc_short" },
+    { ...valid, portalConfigurationId: "pc_" + "A".repeat(24) },
+    { ...valid, automaticTax: "false" },
+    { ...valid, billingAddressCollection: "never" },
+    { ...valid, schemaVersion: 2 },
+  ])
+    await assert.rejects(
+      checkStripeConfiguration({ broker: { stripeJson: JSON.stringify(bad) } }),
+      { code: "STAGING_STRIPE_CONFIGURATION_INVALID" },
+      JSON.stringify(bad),
+    );
+  await assert.rejects(checkStripeConfiguration({ broker: { stripeJson: "{" } }), {
+    code: "STAGING_STRIPE_CONFIGURATION_INVALID",
+  });
+  for (const ci of [false, true]) {
+    const bad = await world({
+      challengeVars: { brokerStripe: JSON.stringify({ ...valid, x: 1 }) },
+      ...(ci ? { environment: ciEnvironment() } : {}),
+    });
+    try {
+      const { code, result } = await bad.run(ci ? ["deploy", "--ci"] : ["deploy"]);
+      assert.equal(code, 1);
+      assert.equal(result.outcome, "failed");
+      assert.equal(result.code, "STAGING_STRIPE_CONFIGURATION_INVALID");
+      assert.equal(result.gates.challenge, "invalid");
+      assert.deepEqual(wranglerCalls(bad), []);
+    } finally {
+      bad.planted.cleanup();
+    }
+  }
+  const ok = await world({
+    challengeVars: { brokerStripe: JSON.stringify(valid) },
+    environment: ciEnvironment(),
+  });
+  try {
+    const { result } = await ok.run(["deploy", "--ci"]);
+    assert.equal(result.gates.challenge, "ok");
+    assert.equal(result.outcome, "deployed");
+  } finally {
+    ok.planted.cleanup();
+  }
 });
 
 test("AC04: a local deploy refuses a HEAD that is not origin/main, a missing or failed foundation, a dirty tree", async () => {
@@ -603,7 +736,8 @@ test("AC04: a census finding before any upload deploys nothing; every path with 
         name,
         enabled: name === scriptOf.api,
         previews: false,
-        bindings: name === scriptOf.api ? [scriptOf.broker] : [],
+        bindings:
+          name === scriptOf.api ? [{ service: scriptOf.broker, entrypoint: "ApiBroker" }] : [],
       })),
       { name: "other-product", enabled: false, previews: false, bindings: [scriptOf.broker] },
     ],
@@ -1263,11 +1397,7 @@ test("smoke: no guard means no login start; failures name the check; --acceptanc
   } finally {
     unlimited.planted.cleanup();
   }
-  const unset = await world({
-    staging: {
-      ...JSON.parse(readFileSync("infra/environments/staging.json", "utf8")),
-    },
-  });
+  const unset = await world({ staging: unsetStaging() });
   try {
     assert.equal((await unset.run(["smoke"])).result.code, "STAGING_IDENTIFIERS_UNSET");
   } finally {
@@ -1433,6 +1563,9 @@ const files = () => ({
   "cloudflare-operator-token": "R".repeat(40),
   // M2 PR-1: the owner's vault KEK (`npm run vault -- kek`).
   "vault-kek-v1": "5eed".repeat(16),
+  // M5 PR-1: the owner's Stripe restricted test key and webhook signing secret.
+  "stripe-restricted-key": "rk_test_" + "K".repeat(32),
+  "stripe-webhook-secret": "whsec_" + "H".repeat(32),
 });
 test("preflight: reports pending owner steps without values and blocks on the card or a tool pin", async () => {
   const w = await world({ files: files() });
@@ -1461,6 +1594,37 @@ test("preflight: reports pending owner steps without values and blocks on the ca
     assert.ok(result.pending.includes("identifier:challenge"));
   } finally {
     unset.planted.cleanup();
+  }
+  // P04.T01i PR-D part 1: with the committed configuration every identifier is set,
+  // the binding and the challenge included, so none is pending.
+  const committed = await world({
+    files: files(),
+    overrides: {
+      config: async () =>
+        (await import("../scripts/staging.mjs")).loadStagingConfiguration(process.cwd()),
+    },
+  });
+  try {
+    const { code, result } = await committed.run(["preflight"]);
+    assert.equal(code, 0, JSON.stringify(result));
+    assert.ok(
+      Object.values(result.identifiers).every((set) => set === true),
+      result.identifiers,
+    );
+    assert.deepEqual(Object.keys(result.identifiers).sort(), [
+      "accountId",
+      "binding",
+      "branchId",
+      "challenge",
+      "origin",
+      "projectId",
+      "regionId",
+      "rootBranchId",
+      "workersDevSubdomain",
+    ]);
+    assert.ok(!result.pending.some((p) => p.startsWith("identifier:")));
+  } finally {
+    committed.planted.cleanup();
   }
   // M2 PR-1: until the owner writes the vault KEK file, it is a pending owner step.
   const { "vault-kek-v1": _kek, ...withoutKek } = files();
@@ -1613,6 +1777,45 @@ test("turnstile-create: the secret goes only to a new 0600 file; the site key is
   }
 });
 
+// 2026-10-20 (docs/evidence/live/2026-10-20-cloudflare-turnstile-widget.md): a refused
+// create names Cloudflare's HTTP status and numeric codes only, after the widget list shows
+// no widget; any other detail of the refusal, and Cloudflare's messages, stay out.
+test("turnstile-create: a refused create reports Cloudflare's status and numeric codes only", async () => {
+  const refused = await world({ cloudflare: { widgetCreate: "refuse" } });
+  try {
+    const { code, result } = await refused.run(["turnstile-create"]);
+    assert.equal(code, 1);
+    assert.deepEqual(result, {
+      command: "turnstile-create",
+      code: "STAGING_TURNSTILE_CREATE_FAILED",
+      status: 403,
+      codes: [10000],
+    });
+    assert.ok(!refused.err.join("\n").includes("relayed_detail"));
+    // The create, then the reconciling list that found no widget.
+    assert.deepEqual(refused.cloud.calls.slice(-2), [
+      "POST challenges/widgets",
+      "challenges/widgets",
+    ]);
+    assert.equal(existsSync(join(refused.planted.directory, "turnstile-secret")), false);
+  } finally {
+    refused.planted.cleanup();
+  }
+  // A failure that is not a Cloudflare refusal has neither a status nor codes.
+  const unavailable = await world({ cloudflare: { widgetCreate: "fail" } });
+  try {
+    const { result } = await unavailable.run(["turnstile-create"]);
+    assert.deepEqual(result, {
+      command: "turnstile-create",
+      code: "STAGING_TURNSTILE_CREATE_FAILED",
+      status: null,
+      codes: [],
+    });
+  } finally {
+    unavailable.planted.cleanup();
+  }
+});
+
 // neon-probe: a fake neonctl and a scripted probe connection.
 const probeStaging = () => {
   const base = JSON.parse(readFileSync("infra/environments/staging.json", "utf8"));
@@ -1632,9 +1835,40 @@ const probeStaging = () => {
     },
   };
 };
-function probeWorld({ revoke = "warning", verifier = "accepted", createFails = false } = {}) {
+// `verifier`: "accepted", "refused" (another refusal) or "neon" (Neon's control-plane
+// refusal, as measured 2026-10-20); `stats` overrides the statement-statistics row of the
+// binding's database (`morrow` on the probe branch) and `scratchStats` that of `neondb`;
+// `plaintext`: "accepted" or "refused"; `readable`: pg_authid readable, with SCRAM rows,
+// or "error"; `target`: "unavailable" fails the connection to `morrow`; `residue`: entries
+// left after the reset; `cleanup`: "error" fails the role's NOLOGIN cleanup.
+const quietLogging = {
+  password_encryption: "scram-sha-256",
+  log_statement: "none",
+  log_min_duration_statement: "-1",
+  log_min_duration_sample: "-1",
+  log_statement_sample_rate: "1",
+  log_min_error_statement: "panic",
+  log_duration: "off",
+  debug_print_parse: "off",
+  debug_print_rewritten: "off",
+  debug_print_plan: "off",
+};
+const neonModule = { track: "top", track_utility: "on" };
+function probeWorld({
+  revoke = "warning",
+  verifier = "accepted",
+  createFails = false,
+  stats = {},
+  scratchStats = {},
+  plaintext = "accepted",
+  readable = false,
+  target = "connected",
+  residue = 0,
+  cleanup = "done",
+} = {}) {
   const password = "probepw" + "x".repeat(20);
   const statements = [];
+  const scratch = { extension: false, created: 0, dropped: 0 };
   const neonctl = (args) => {
     if (args[0] === "branches" && args[1] === "create") {
       if (createFails) return null;
@@ -1667,16 +1901,18 @@ function probeWorld({ revoke = "warning", verifier = "accepted", createFails = f
     return null;
   };
   const connectProbe = async (url) => {
-    statements.push({ connect: url.host });
+    const database = url.database;
+    statements.push({ connect: url.host, database });
+    if (database === "morrow" && target === "unavailable") throw Error("no such database");
     return {
       async query(text, params = []) {
-        statements.push({ text, params });
+        statements.push({ text, params, database });
         if (/session_user::text AS session_role/.test(text))
           return [
             {
               session_role: "neondb_owner",
               current_role: "neondb_owner",
-              database: "neondb",
+              database,
               version: 170011,
               superuser: false,
               createrole: true,
@@ -1693,11 +1929,40 @@ function probeWorld({ revoke = "warning", verifier = "accepted", createFails = f
               grantor_superuser: true,
             },
           ];
+        if (/AS extension, current_setting/.test(text))
+          return [
+            database === "morrow"
+              ? { extension: false, track: null, track_utility: null, ...quietLogging, ...stats }
+              : {
+                  extension: scratch.extension,
+                  track: stats.track ?? null,
+                  track_utility: stats.track_utility ?? null,
+                  ...quietLogging,
+                  ...scratchStats,
+                },
+          ];
+        if (/FROM pg_catalog\.pg_database WHERE datname/.test(text)) return [{ present: true }];
+        if (/pg_catalog\.pg_extension e JOIN/.test(text))
+          return scratch.extension ? [{ schema: "public" }] : [];
+        if (/clock_timestamp/.test(text)) return [{ before: "2026-10-20 19:00:00.000001+00" }];
+        if (/pg_stat_statements_reset/.test(text)) return [{ reset: "x" }];
+        if (/pg_stat_statements_info/.test(text))
+          return [{ full_reset: true, same_instance: true, remaining: residue }];
+        if (/ AS instance$/.test(text)) return [{ instance: "1792526146.012127/10.0.0.1/5432" }];
+        if (/^SELECT EXISTS \(SELECT 1 FROM pg_catalog\.pg_extension/.test(text))
+          return [
+            { extension: database === "morrow" ? stats.extension === true : scratch.extension },
+          ];
+        if (/has_table_privilege/.test(text)) {
+          if (readable === "error") throw Error("permission denied " + password);
+          return [{ readable }];
+        }
+        if (/FROM pg_catalog\.pg_authid/.test(text)) return [{ n: 1 }];
         if (/count\(\*\)::int AS n/.test(text)) return [{ n: 0 }];
         return [];
       },
       async exec(text) {
-        statements.push({ text });
+        statements.push({ text, database });
         if (/^REVOKE/.test(text) && revoke === "error") {
           const error = Error("must have admin option");
           error.code = "42501";
@@ -1708,14 +1973,42 @@ function probeWorld({ revoke = "warning", verifier = "accepted", createFails = f
           error.code = "22023";
           throw error;
         }
+        if (/PASSWORD 'SCRAM/.test(text) && verifier === "neon") {
+          // Neon's reply text, which carries a request body: reduced to a fixed reason.
+          const error = Error(
+            'Received HTTP code 400 from control plane: {"request_id":"' +
+              password +
+              '","error":"Neon only supports being given plaintext passwords"}',
+          );
+          error.code = "XX000";
+          throw error;
+        }
+        if (/PASSWORD '[A-Za-z0-9_-]{43}'$/.test(text) && plaintext === "refused") {
+          const error = Error("control plane said no " + password);
+          error.code = "XX000";
+          throw error;
+        }
+        if (/NOLOGIN PASSWORD NULL$/.test(text) && cleanup === "error") {
+          const error = Error("cleanup refused " + password);
+          error.code = "XX000";
+          throw error;
+        }
+        if (text === "CREATE EXTENSION pg_stat_statements") {
+          scratch.extension = true;
+          scratch.created++;
+        }
+        if (text === "DROP EXTENSION pg_stat_statements") {
+          scratch.extension = false;
+          scratch.dropped++;
+        }
       },
       async close() {},
     };
   };
-  return { password, statements, neonctl, connectProbe };
+  return { password, statements, scratch, neonctl, connectProbe };
 }
-test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, never another branch", async () => {
-  const probe = probeWorld();
+const probeRun = async (options) => {
+  const probe = probeWorld(options);
   const w = await world({
     staging: probeStaging(),
     tools: { neonctl: probe.neonctl },
@@ -1723,58 +2016,249 @@ test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, nev
   });
   try {
     const { code, result } = await w.run(["neon-probe"]);
-    assert.equal(code, 0, JSON.stringify(result));
-    const create = w.fake.calls.find((c) => c.tool === "neonctl" && c.args[1] === "create").args;
-    assert.equal(create[create.indexOf("--parent") + 1], "br-root-000001");
-    assert.equal(create[create.indexOf("--project-id") + 1], "lab-project-runner");
-    assert.ok(create.includes("--no-secrets"));
-    assert.match(create[create.indexOf("--name") + 1], /^morrow-probe-[0-9a-f]{8}$/);
-    assert.equal(Date.parse(create[create.indexOf("--expires-at") + 1]) - w.ctx.now(), 2 * 3600000);
-    // Only the created branch is reset; the root and the bound branch are never named.
-    const reset = w.fake.calls.find((c) => c.tool === "neonctl" && c.args[1] === "reset").args;
-    assert.equal(reset[2], "br-probe-000001");
-    for (const call of w.fake.calls.filter((c) => c.tool === "neonctl")) {
-      assert.ok(!call.args.includes("br-lab-runner-000001"), call.args.join(" "));
-      if (call.args.includes("br-root-000001"))
-        assert.equal(call.args[call.args.indexOf("br-root-000001") - 1], "--parent");
-    }
-    assert.deepEqual(result.mN1, {
-      selfGrantRow: { admin: true, inherit: false, set: false },
-      grantor: "cloud_admin",
-      grantorSuperuser: true,
-      revokeRefused: true,
-      revokeSqlstate: null,
-    });
-    assert.deepEqual(result.mN3, { verifierAccepted: true, sqlstate: null });
-    assert.deepEqual(result.mN4, {
-      branchIdKept: true,
-      hostKept: true,
-      rolesDropped: true,
-      expirySupported: true,
-    });
-    assert.equal(result.cleanup, "branch_expires_at");
-    const sent = JSON.stringify(probe.statements);
-    assert.ok(!sent.includes(probe.password));
-    assert.match(sent, /PASSWORD 'SCRAM-SHA-256\$4096:/);
-    assert.ok(!w.out.join("\n").includes(probe.password));
+    return { probe, w, code, result, out: w.out.join("\n") };
   } finally {
     w.planted.cleanup();
   }
-  const refused = probeWorld({ revoke: "error", verifier: "refused" });
-  const r = await world({
-    staging: probeStaging(),
-    tools: { neonctl: refused.neonctl },
-    overrides: { probeDatabase: refused.connectProbe },
-  });
-  try {
-    const { code, result } = await r.run(["neon-probe"]);
-    assert.equal(code, 0);
-    assert.equal(result.mN1.revokeSqlstate, "42501");
-    assert.deepEqual(result.mN3, { verifierAccepted: false, sqlstate: "22023" });
-    assert.ok(!r.out.join("\n").includes(refused.password));
-  } finally {
-    r.planted.cleanup();
+};
+const plaintextStatement =
+  /^ALTER ROLE morrow_probe_[0-9a-f]{8} WITH LOGIN PASSWORD '[A-Za-z0-9_-]{43}'$/;
+test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, never another branch", async () => {
+  const { probe, w, code, result, out } = await probeRun();
+  assert.equal(code, 0, JSON.stringify(result));
+  const create = w.fake.calls.find((c) => c.tool === "neonctl" && c.args[1] === "create").args;
+  assert.equal(create[create.indexOf("--parent") + 1], "br-root-000001");
+  assert.equal(create[create.indexOf("--project-id") + 1], "lab-project-runner");
+  assert.ok(create.includes("--no-secrets"));
+  assert.match(create[create.indexOf("--name") + 1], /^morrow-probe-[0-9a-f]{8}$/);
+  assert.equal(Date.parse(create[create.indexOf("--expires-at") + 1]) - w.ctx.now(), 2 * 3600000);
+  // Only the created branch is reset; the root and the bound branch are never named.
+  const reset = w.fake.calls.find((c) => c.tool === "neonctl" && c.args[1] === "reset").args;
+  assert.equal(reset[2], "br-probe-000001");
+  for (const call of w.fake.calls.filter((c) => c.tool === "neonctl")) {
+    assert.ok(!call.args.includes("br-lab-runner-000001"), call.args.join(" "));
+    if (call.args.includes("br-root-000001"))
+      assert.equal(call.args[call.args.indexOf("br-root-000001") - 1], "--parent");
   }
+  assert.deepEqual(result.mN1, {
+    selfGrantRow: { admin: true, inherit: false, set: false },
+    grantor: "cloud_admin",
+    grantorSuperuser: true,
+    revokeRefused: true,
+    revokeSqlstate: null,
+  });
+  assert.deepEqual(result.mN3, {
+    verifierAccepted: true,
+    verifierSqlstate: null,
+    verifierRefusal: null,
+    target: "connected",
+    statementStats: {
+      checked: true,
+      extension: false,
+      module: false,
+      track: null,
+      trackUtility: null,
+      recording: false,
+    },
+    passwordEncryption: "scram-sha-256",
+    logging: {
+      logStatement: "none",
+      logMinDurationStatement: "disabled",
+      logMinDurationSample: "disabled",
+      logStatementSampleRate: "1",
+      logMinErrorStatement: "panic",
+      logDuration: "off",
+      debugPrintParse: "off",
+      debugPrintRewritten: "off",
+      debugPrintPlan: "off",
+    },
+    refusal: null,
+    plaintextSent: true,
+    plaintextAccepted: true,
+    plaintextSqlstate: null,
+    storedForm: "unreadable",
+    wipe: null,
+    targetExtension: false,
+    roleCleanup: { done: true, sqlstate: null },
+  });
+  assert.deepEqual(result.mN4, {
+    branchIdKept: true,
+    hostKept: true,
+    rolesDropped: true,
+    expirySupported: true,
+  });
+  assert.equal(result.cleanup, "branch_expires_at");
+  const sent = JSON.stringify(probe.statements);
+  assert.ok(!sent.includes(probe.password));
+  // The verifier in neondb; then, in the binding's database, the facts and one generated
+  // plaintext; then none.
+  const texts = probe.statements.map((s) => s.text ?? "");
+  const verifierAt = texts.findIndex((t) => /PASSWORD 'SCRAM-SHA-256\$4096:/.test(t));
+  const statsAt = texts.findIndex((t) => /AS extension, current_setting/.test(t));
+  const plain = probe.statements.filter((s) => plaintextStatement.test(s.text ?? ""));
+  assert.equal(plain.length, 1);
+  assert.equal(probe.statements[verifierAt].database, "neondb");
+  assert.equal(probe.statements[statsAt].database, "morrow");
+  assert.equal(plain[0].database, "morrow");
+  assert.ok(verifierAt >= 0 && verifierAt < statsAt && statsAt < texts.indexOf(plain[0].text));
+  assert.match(texts.filter((t) => /^ALTER ROLE/.test(t)).at(-1), /WITH NOLOGIN PASSWORD NULL$/);
+  // No module loaded: no scratch session, no extension statement.
+  assert.ok(!texts.some((t) => /EXTENSION|pg_stat_statements_reset/.test(t)));
+  const generated = /'([A-Za-z0-9_-]{43})'$/.exec(plain[0].text)[1];
+  assert.ok(!out.includes(probe.password));
+  assert.ok(!out.includes(generated));
+});
+
+// Neon's staging shape, measured 2026-10-20: the verifier refused through the control
+// plane, the plaintext accepted, and pg_stat_statements preloaded with utility tracking.
+// The probe wipes from neondb exactly as provision-roles does; the binding's database
+// never gains the extension; the reply's text and the plaintext never reach the report.
+test("neon-probe: on Neon's shape, the plaintext, the wipe from neondb and the verification", async () => {
+  const { probe, code, result, out } = await probeRun({
+    verifier: "neon",
+    readable: true,
+    stats: neonModule,
+  });
+  assert.equal(code, 0);
+  assert.equal(result.mN3.verifierAccepted, false);
+  assert.equal(result.mN3.verifierSqlstate, "XX000");
+  assert.equal(result.mN3.verifierRefusal, "neon_plaintext_only");
+  assert.deepEqual(result.mN3.statementStats, {
+    checked: true,
+    extension: false,
+    module: true,
+    track: "top",
+    trackUtility: "on",
+    recording: true,
+  });
+  assert.equal(result.mN3.refusal, null);
+  assert.equal(result.mN3.plaintextAccepted, true);
+  assert.equal(result.mN3.storedForm, "SCRAM-SHA-256");
+  assert.deepEqual(result.mN3.wipe, { wiped: true, entriesRemaining: 0 });
+  assert.equal(result.mN3.targetExtension, false);
+  assert.deepEqual([probe.scratch.created, probe.scratch.dropped], [1, 1]);
+  assert.ok(
+    probe.statements
+      .filter((s) => /EXTENSION|pg_stat_statements_/.test(s.text ?? ""))
+      .every((s) => s.database === "neondb"),
+  );
+  // The plaintext: once, in its ALTER ROLE (morrow). The verification in neondb carries
+  // only its SHA-256 digest and the instance read before the plaintext was sent.
+  const plain = probe.statements.find((s) => plaintextStatement.test(s.text ?? ""));
+  const generated = /'([A-Za-z0-9_-]{43})'$/.exec(plain.text)[1];
+  const carrying = probe.statements.filter((s) =>
+    ((s.text ?? "") + JSON.stringify(s.params ?? [])).includes(generated),
+  );
+  assert.deepEqual(carrying, [plain]);
+  const verify = probe.statements.find((s) => /pg_stat_statements_info/.test(s.text ?? ""));
+  assert.equal(verify.database, "neondb");
+  assert.deepEqual(JSON.parse(verify.params[1]), [
+    createHash("sha256").update(generated).digest("hex"),
+  ]);
+  assert.equal(verify.params[2], "1792526146.012127/10.0.0.1/5432");
+  assert.ok(probe.statements.indexOf(plain) < probe.statements.indexOf(verify));
+  const instanceReads = probe.statements.filter((s) => / AS instance$/.test(s.text ?? ""));
+  assert.deepEqual(
+    instanceReads.map((s) => s.database),
+    ["morrow", "neondb"],
+  );
+  assert.ok(probe.statements.indexOf(instanceReads[1]) < probe.statements.indexOf(plain));
+  for (const value of [
+    probe.password,
+    generated,
+    "control plane",
+    "request_id",
+    "plaintext passwords",
+  ])
+    assert.ok(!out.includes(value), value);
+});
+
+test("neon-probe: refusals send no plaintext, and failures after it keep what was measured", async () => {
+  // The provisioning gate refuses: the plaintext is never sent, and the record says why.
+  for (const [options, refusal] of [
+    [
+      { stats: { extension: true } },
+      {
+        code: "STAGING_STATEMENT_STATS_PRESENT",
+        reason: "extension",
+        extension: true,
+        module: false,
+      },
+    ],
+    [
+      { stats: { log_statement: "ddl" } },
+      { code: "STAGING_STATEMENT_LOGGING", reason: "log_statement", database: "binding" },
+    ],
+    [
+      { stats: neonModule, scratchStats: { log_min_error_statement: "error" } },
+      { code: "STAGING_STATEMENT_LOGGING", reason: "log_min_error_statement", database: "scratch" },
+    ],
+    [
+      { stats: { debug_print_parse: "on" } },
+      { code: "STAGING_STATEMENT_LOGGING", reason: "debug_print_parse", database: "binding" },
+    ],
+    [{ stats: { password_encryption: "md5" } }, { code: "STAGING_PASSWORD_ENCRYPTION" }],
+  ]) {
+    const { probe, code, result } = await probeRun({ verifier: "neon", ...options });
+    const name = JSON.stringify(options);
+    assert.equal(code, 0, name);
+    assert.deepEqual(result.mN3.refusal, refusal, name);
+    assert.equal(result.mN3.plaintextSent, false, name);
+    assert.equal(result.mN3.plaintextAccepted, null, name);
+    assert.ok(
+      !probe.statements.some((s) => /PASSWORD '[A-Za-z0-9_-]{43}'$/.test(s.text ?? "")),
+      name,
+    );
+    assert.deepEqual(result.mN3.roleCleanup, { done: true, sqlstate: null }, name);
+  }
+  // The binding's database is not on the probe branch: nothing is sent, M-N1 is kept.
+  const absent = await probeRun({ target: "unavailable" });
+  assert.equal(absent.code, 0);
+  assert.equal(absent.result.mN3.target, "unavailable");
+  assert.equal(absent.result.mN3.plaintextSent, false);
+  assert.equal(absent.result.mN1.grantor, "cloud_admin");
+  // A residue after the wipe, a failing stored-form read and a failing role cleanup are
+  // recorded; M-N1, M-N3 and M-N4 survive, and the exit is 0.
+  const kept = await probeRun({
+    verifier: "neon",
+    stats: neonModule,
+    residue: 1,
+    readable: "error",
+    cleanup: "error",
+  });
+  assert.equal(kept.code, 0, JSON.stringify(kept.result));
+  assert.deepEqual(kept.result.mN3.wipe, {
+    wiped: false,
+    code: "STAGING_STATEMENT_STATS_RESIDUE",
+    stage: "verify",
+    entriesRemaining: 1,
+    fullReset: true,
+    sameInstance: true,
+  });
+  assert.equal(kept.result.mN3.storedForm, "error");
+  assert.deepEqual(kept.result.mN3.roleCleanup, { done: false, sqlstate: "XX000" });
+  assert.equal(kept.result.mN3.plaintextAccepted, true);
+  assert.equal(kept.result.mN1.grantor, "cloud_admin");
+  assert.equal(kept.result.mN4.rolesDropped, true);
+  assert.deepEqual([kept.probe.scratch.created, kept.probe.scratch.dropped], [1, 1]);
+  assert.ok(!kept.out.includes(kept.probe.password));
+
+  const refused = await probeRun({ revoke: "error", verifier: "refused" });
+  assert.equal(refused.code, 0);
+  assert.equal(refused.result.mN1.revokeSqlstate, "42501");
+  assert.equal(refused.result.mN3.verifierAccepted, false);
+  assert.equal(refused.result.mN3.verifierSqlstate, "22023");
+  assert.equal(refused.result.mN3.verifierRefusal, "other");
+  assert.ok(!refused.out.includes(refused.probe.password));
+
+  const plaintextRefused = await probeRun({ verifier: "neon", plaintext: "refused" });
+  assert.equal(plaintextRefused.code, 0);
+  assert.equal(plaintextRefused.result.mN3.plaintextSent, true);
+  assert.equal(plaintextRefused.result.mN3.plaintextAccepted, false);
+  assert.equal(plaintextRefused.result.mN3.plaintextSqlstate, "XX000");
+  assert.equal(plaintextRefused.result.mN3.storedForm, null);
+  assert.ok(!plaintextRefused.out.includes(plaintextRefused.probe.password));
+
   const failed = probeWorld({ createFails: true });
   const f = await world({
     staging: probeStaging(),
@@ -1788,7 +2272,7 @@ test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, nev
   } finally {
     f.planted.cleanup();
   }
-  const unset = await world();
+  const unset = await world({ staging: unsetStaging() });
   try {
     assert.equal((await unset.run(["neon-probe"])).result.code, "STAGING_IDENTIFIERS_UNSET");
   } finally {
@@ -1798,6 +2282,8 @@ test("neon-probe: M-N1, M-N3 and M-N4 on a fresh expiring child of the root, nev
 
 test("cli: the trimmed PR-B's subcommands, and nothing for rollback, rotation drills or the keyring deploy", () => {
   assert.deepEqual([...commands.keys()].sort(), [
+    // M5 PR-1 (review): the operator path for a held customer operation.
+    "billing-customer-resolve",
     "census",
     "ci-gates",
     "connections",

@@ -35,6 +35,10 @@ export const byteLength = (text: string) => new TextEncoder().encode(text).lengt
 export const challengeTokenPattern = /^[A-Za-z0-9._-]{1,2048}$/;
 export const isChallengeToken = (value: unknown): value is string =>
   typeof value === "string" && challengeTokenPattern.test(value);
+/** M2 PR-2: the X-Morrow-CSRF value of a store-link apply (the preview's 43-char secret). */
+export const csrfValuePattern = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
+export const isCsrfValue = (value: unknown): value is string =>
+  typeof value === "string" && csrfValuePattern.test(value);
 
 export interface ClientOptions {
   readonly transport?: Transport;
@@ -44,12 +48,16 @@ export interface ClientOptions {
 }
 export interface Client {
   get(path: string, signal?: AbortSignal): Promise<Reply>;
-  /** `challenge` adds X-Morrow-Challenge (login start and signup only). */
+  /**
+   * `challenge` adds X-Morrow-Challenge (login start and signup only); `csrf` adds
+   * X-Morrow-CSRF (the store-link apply only).
+   */
   post(
     path: string,
     body: string,
     idempotencyKey: string | null,
     challenge?: string | null,
+    csrf?: string | null,
   ): Promise<Reply>;
   /** M3 PR-1: PUT under the POST rules (the model default); always keyed. */
   put(path: string, body: string, idempotencyKey: string): Promise<Reply>;
@@ -117,7 +125,7 @@ export function createClient(options: ClientOptions = {}): Client {
       );
     },
     // Commands are never aborted by navigation; after 15 s they are uncertain.
-    post(path, body, idempotencyKey, challenge = null) {
+    post(path, body, idempotencyKey, challenge = null, csrf = null) {
       const headers: Record<string, string> = {
         "X-Morrow-Request": "1",
         "Content-Type": "application/json",
@@ -131,6 +139,10 @@ export function createClient(options: ClientOptions = {}): Client {
         if (!isChallengeToken(challenge))
           return Promise.resolve({ kind: "not_sent", offline: false });
         headers["X-Morrow-Challenge"] = challenge;
+      }
+      if (csrf !== null) {
+        if (!isCsrfValue(csrf)) return Promise.resolve({ kind: "not_sent", offline: false });
+        headers["X-Morrow-CSRF"] = csrf;
       }
       return exchange(
         path,

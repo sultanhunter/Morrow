@@ -1,13 +1,20 @@
 // The Linen & Form sample (P14.T01a §4.11): synthetic data only (invariant 16).
 // One workspace, three goals, six tasks and four questions. Creates append here, in
 // memory, for the life of the page.
-import type { GoalView, PersonRef, QuestionView, TaskView } from "@morrow/workspace-ui";
+import type {
+  ConnectionsView,
+  GoalView,
+  PersonRef,
+  QuestionView,
+  StoreConnectionView,
+  TaskView,
+} from "@morrow/workspace-ui";
 
 export const fixtureWorkspace = { id: "ws-linen", displayName: "Linen & Form", policyRevision: 7 };
 export const fixtureOrganizationName = "Linen & Form (sample)";
-// M3 PR-1: one connected sample store, and catalogue version 1 as GET /models lists it
-// (docs/decisions/model-policy.json; credits per product and the run product limit).
-export const fixtureStore = { id: "store-linen", displayName: "linen-and-form" };
+// M3 PR-1: catalogue version 1 as GET /models lists it (docs/decisions/model-policy.json;
+// credits per product and the run product limit). The Listings agent's store is M2 PR-2's
+// sample store (fixtureStore below).
 export const fixtureCatalogue = [
   { model: "claude_haiku_5_5", effort: "low", creditsPerProduct: 1, runProductLimit: 25 },
   { model: "claude_haiku_5_5", effort: "medium", creditsPerProduct: 1, runProductLimit: 25 },
@@ -38,6 +45,28 @@ export interface FixtureSeed {
   tasks: TaskView[];
   questions: QuestionView[];
   answers: Record<string, { text: string; by: PersonRef; at: string }>;
+  /** M2 PR-2: the workspace's one sample development store and the install-link offer. */
+  connections: ConnectionsView;
+}
+// M2 PR-2: a synthetic development store (never a real shop) and the fixture continuation's
+// fixed values. The token and the CSRF value only have the api guard's shape.
+export const fixtureStore = {
+  installationId: "inst-sample-1",
+  connectionId: "conn-sample-1",
+  storeId: "store-sample-1",
+  shopDomain: "linen-and-form-dev.myshopify.com",
+};
+export const fixtureHandoffToken = "Hx" + "1".repeat(40) + "A";
+export const fixtureCsrfToken = "Cx" + "2".repeat(40) + "A";
+export const fixtureInstallUrl =
+  "https://admin.shopify.com/oauth/install_custom_app?client_id=sample&signature=sample";
+export function fixtureConnection(status: string): StoreConnectionView {
+  return {
+    ...fixtureStore,
+    status,
+    grantedScopes: ["read_products", "write_products"],
+    updatedAt: at(16, 9),
+  };
 }
 export function createSeed(): FixtureSeed {
   return {
@@ -174,6 +203,10 @@ export function createSeed(): FixtureSeed {
         by: people.owner,
         at: at(14, 11),
       },
+    },
+    connections: {
+      installations: [fixtureConnection("linked")],
+      installLink: { offered: false, url: null, reason: "linked" },
     },
   };
 }

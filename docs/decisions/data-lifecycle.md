@@ -41,7 +41,30 @@ Spine foundation records (M2 PR-1, ADR-0022 item 13, migrations 0019-0024). No r
 | `morrow_work.operations`, `morrow_work.operation_transitions` | Content-free audit, 365 days: ids, digests, statuses and the provider request id | P09.T05 prunes after 365 days; no delete path exists |
 | `morrow_billing.workspace_billing_routes` | Workspace lifetime; the route never changes once fixed | Deleted with the workspace by P09.T05 |
 | `morrow_vault.app_secrets` | Until rotated: a retired row keeps only metadata (its key material is erased in the rotating statement) | Rotation (`app_secret_put`) |
-| `morrow_vault.credentials` | Until uninstall, disconnect or re-authorisation, which erase the key material at once and keep metadata (M2 PR-2/PR-3 writers) | The destroy path of M2 PR-2/PR-3 |
+| `morrow_vault.credentials` | Until uninstall, disconnect or re-authorisation, which erase the key material at once and keep metadata. First writer: M2 PR-2's `shopify_install_store` (0027), which stores each offline-token envelope and, on re-authorisation, destroys the previous version (reason `reauthorised`) in the same transaction; uninstall and disconnect are M2 PR-3 | Re-authorisation (M2 PR-2); the uninstall and disconnect destroy paths (M2 PR-3) |
+
+Shopify install and link records (M2 PR-2, ADR-0022 items 4-6, migrations 0025-0027). Only development stores of beta workspaces; no product, customer or order data. The shop domain is held on the installation row and the linking candidate, as a digest in the registry and OAuth states, and inside the registry's install link (a `*.myshopify.com` host, or the shop in a custom-distribution link's signed parameter).
+
+| Table | Class and retention | Erasure hook |
+| --- | --- | --- |
+| `morrow_identity.shopify_apps` | Platform registry: one row per beta store's custom-distribution app, kept until retired (`shopify_app_retire`). The intended shop is a SHA-256 digest; the install link names the shop, so the row is store content | Retirement clears the install link; `shop/redact` clears it for the store's apps (redaction handler `shopify_apps`, `clear_install_link`, executable in M2 PR-3); retired rows keep only metadata |
+| `morrow_identity.shopify_oauth_states` | Content-free, 7 days: the app key, digests of the shop and the state, instants; single use, 10-minute window | P09.T05 prunes after 7 days; no delete path exists |
+| `morrow_identity.store_installations` | Installation lifetime: ids, the shop id and domain (shop identity), granted scopes, the credential version, status and instants | `shop/redact` pseudonymises the shop identity (redaction handler `store_installations`, executable in M2 PR-3); deleted with the workspace by P09.T05 |
+| `morrow_identity.install_continuations` | Content-free, 365 days after expiry: a token digest, its installation and consumption ids; 5-minute window, single use | P09.T05 prunes after 365 days; no delete path exists |
+
+Billing records (M5 PR-1, ADR-0022 item 13, migration `billing-records`). Financial records are kept for a proposed seven years until the tax advisor confirms the period (the open question of `docs/briefs/M5-billing.md`); every row holds ids, amounts, statuses, times and digests only. No email, name, address, card data, Checkout URL or portal URL is stored. Test-mode rows carry `mode = test`.
+
+| Table | Class and retention | Erasure hook |
+| --- | --- | --- |
+| `morrow_billing.billing_terms` | Platform configuration; kept for the life of any grant or payment that names a revision | None: no personal data |
+| `morrow_billing.stripe_customers` | Financial record, seven years after the workspace's last payment (proposed); the Stripe customer id and its creating operation | Pseudonymize the workspace association by P09.T05 after the period; the customer itself is erased at Stripe by the owner's request |
+| `morrow_billing.stripe_operations`, `morrow_billing.checkout_intents` | Content-free audit, 365 days (an intent that funded a payment follows the payment's period): ids, digests, statuses, the price key, the session id and a customer operation's hold time | P09.T05 prunes; no delete path exists |
+| `morrow_billing.stripe_operation_resolutions` | Content-free operator audit, 365 days: the operator id, the resolution and evidence codes (fixed sets) and the path of the docs/evidence/live record; no free text | P09.T05 prunes with its operation; no delete path exists |
+| `morrow_billing.stripe_event_receipts`, `morrow_billing.receipt_applications` | Financial evidence, seven years (proposed): the normalised object (ids, amounts, statuses, times) and its digest; unattributed receipts have null tenant keys | P09.T05 prunes after the period; an unattributed receipt names no workspace |
+| `morrow_billing.receipt_entries` | Content-free runtime state: one row per database backend (the receipt it entered, its transaction id and a nonce), overwritten by that backend's next entry | None needed: bounded by the number of backend ids |
+| `morrow_billing.billing_accounts`, `morrow_billing.entitlement_snapshots` | Financial record, seven years after the account's last payment (proposed) | Deleted with the workspace after the period by P09.T05 |
+| `morrow_billing.verified_payment_events`, `morrow_billing.credit_grants` | Financial record, seven years (proposed); append-only | P09.T05 prunes after the period |
+| `morrow_billing.credit_wallets` | Workspace lifetime; balances only | Deleted with the workspace by P09.T05 |
 
 Listings authority, stops and credits (M3 PR-1; ADR-0022 items 3, 11, 13, 15 and 16; migrations listings-identity-bridge, listings-authority, agent-proposals and run-credits). Apart from a person's stop reason and the parameters of a proposal, no row holds merchant or user content.
 

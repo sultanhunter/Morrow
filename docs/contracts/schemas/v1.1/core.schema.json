@@ -5596,6 +5596,127 @@
       ],
       "additionalProperties": false
     },
+    "InstallLinkOffer": {
+      "description": "InstallLinkOffer (M2 PR-2; ADR-0022 items 4-5; P09.T02a): whether a workspace's connections screen offers the beta store's custom-distribution install link. offered is true exactly when url is the registered https link and reason is offered: the reader may connect (the human kernel allows governance.connection.connect administer on the workspace resource), an active app invites this workspace, its billing route is fixed to morrow_direct, and no store is linked yet. Otherwise url is null and reason names the first unmet condition, in that order of checks: linked, not_permitted, not_registered, route_not_ready.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "offered": {
+              "const": true
+            },
+            "url": {
+              "type": "string",
+              "minLength": 12,
+              "maxLength": 2048,
+              "pattern": "^https://(admin\\.shopify\\.com|[a-z0-9][a-z0-9-]{0,62}\\.myshopify\\.com)/[!-~]+$"
+            },
+            "reason": {
+              "const": "offered"
+            }
+          },
+          "required": [
+            "offered",
+            "url",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "offered": {
+              "const": false
+            },
+            "url": {
+              "type": "null"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "linked",
+                "not_permitted",
+                "not_registered",
+                "route_not_ready"
+              ]
+            }
+          },
+          "required": [
+            "offered",
+            "url",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "WorkspaceConnections": {
+      "description": "WorkspaceConnections@1 (M2 PR-2; GET /workspace/:ws/connections): the store installations of the reader's workspace, oldest first (at most 50; StoreInstallation@1, never a credential or token), and the install-link offer. Readable by any session-eligible member of the workspace; the tenant comes only from the session.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "installations": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:morrow:contracts:core:v1#/$defs/StoreInstallation"
+          },
+          "maxItems": 50
+        },
+        "installLink": {
+          "$ref": "#/$defs/InstallLinkOffer"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "installations",
+        "installLink"
+      ],
+      "additionalProperties": false
+    },
+    "BillingManageAction": {
+      "description": "The Morrow-direct purchase action of governance.billing.manage (M5 PR-1; ADR-0022 items 2 and 12): subscribe opens a Stripe Checkout session for one priced plan, billing_portal a customer portal session. The server derives it from the purchase route; it is never a request field.",
+      "type": "string",
+      "enum": [
+        "subscribe",
+        "billing_portal"
+      ]
+    },
+    "NullableStripePriceKey": {
+      "description": "A Stripe price key (stripe:price:price_<id>, the billing v1.1 StripePriceKey pattern) or null (a capability body field type; R11 needs a named type).",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^stripe:price:price_[A-Za-z0-9]{8,100}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ModelOptionKey": {
+      "description": "An opaque model-catalogue key, a model or an effort (ADR-0022 items 2 and 16): the server checks it against the active catalogue version, so adding a model, an effort or a version changes no contract.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+    },
+    "CreditsPerProductCeiling": {
+      "description": "The workspace member ceiling of credits per product (ADR-0022 item 16): 1 to 99.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 99
+    },
+    "NullableRevision": {
+      "description": "A Revision or null (a capability body field type; R11 needs a named type).",
+      "anyOf": [
+        {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "AgentInstallation": {
       "description": "AgentInstallation v1.1 (ADR-0022 items 2 and 3; M3 PR-1). Replaces core v1 AgentInstallation (changes.json) only so that its scope is the v1.1 Scope, which can name the store resource of a store-bound installation (the Listings installation's scope is exactly its store resource); nothing else changes. A declared superset of v1: every v1 AgentInstallation is valid here, and a v1 reader refuses a store-scoped installation and so fails closed.",
       "type": "object",
@@ -5713,11 +5834,6 @@
       ],
       "additionalProperties": false
     },
-    "ModelOptionKey": {
-      "description": "An opaque model-catalogue key, a model or an effort (ADR-0022 items 2 and 16): the server checks it against the active catalogue version, so adding a model, an effort or a version changes no contract.",
-      "type": "string",
-      "pattern": "^[a-z][a-z0-9_]{0,39}$"
-    },
     "ModelSelection": {
       "description": "ModelSelection@1 (ADR-0022 items 2 and 16; M3 PR-1): the model and thinking effort of one run, or of the workspace default, as opaque catalogue keys. Closed; it never names a provider, a provider model ID, a catalogue version, a token limit or a price.",
       "type": "object",
@@ -5734,23 +5850,6 @@
         "effort"
       ],
       "additionalProperties": false
-    },
-    "CreditsPerProductCeiling": {
-      "description": "The workspace member ceiling of credits per product (ADR-0022 item 16): 1 to 99.",
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 99
-    },
-    "NullableRevision": {
-      "description": "A Revision or null (a capability body field type; R11 needs a named type).",
-      "anyOf": [
-        {
-          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
-        },
-        {
-          "type": "null"
-        }
-      ]
     }
   }
 }

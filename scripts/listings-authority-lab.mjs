@@ -1133,14 +1133,15 @@ INSERT INTO morrow_work.delegation_hops VALUES(${literal(O)},${literal(W)},${lit
         billingPeriod: null,
       }),
     };
-    const { createBillingFactsReader } = await import(
-      "../packages/work/src/agents/billing-facts-stub.ts"
-    );
+    // M5 PR-1's reader (@morrow/work/billing): a failed billing read denies the step.
+    const { createBillingFactsReader } = await import("../packages/work/src/billing/facts.ts");
     check(
       "D8:entitlement_only_via_entitlement_for",
       (await decide("envelope_ok", operation(), { billing: open })) === "entitlement_denied" &&
         (await decide("envelope_ok", operation(), {
-          billing: createBillingFactsReader(async () => []),
+          billing: createBillingFactsReader(async () => {
+            throw Error("BILLING_READ_FAILED");
+          }),
         })) === "AGENT_POLICY_AUTHORITY_UNAVAILABLE",
     );
     // The facts definer: nothing for another installation, a read lease or no lease.

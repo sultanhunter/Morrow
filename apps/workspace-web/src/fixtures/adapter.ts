@@ -22,12 +22,16 @@ import { challengedIn } from "./challenge";
 import {
   createSeed,
   fixtureCatalogue,
+  fixtureConnection,
+  fixtureCsrfToken,
+  fixtureHandoffToken,
+  fixtureInstallUrl,
   fixtureOrganizationName,
   fixtureStore,
   fixtureWorkspace,
   people,
 } from "./seed";
-import { scenarios, uncomposedIn, type ScenarioName } from "./scenarios";
+import { scenarios, uncomposedIn, unlinkedStoreIn, type ScenarioName } from "./scenarios";
 
 /** Present in every fixture bundle; `verify:workspace-web` fails a dist that holds it. */
 export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
@@ -104,6 +108,14 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
       return outcome;
     });
   }
+  // M2 PR-2: an unlinked sample store, with the install link offered; a link applies once
+  // per key (preview, apply and status share the handoff's key, so results are per route).
+  if (unlinkedStoreIn.includes(scenario))
+    seed.connections = {
+      installations: [fixtureConnection("unlinked")],
+      installLink: { offered: true, url: fixtureInstallUrl, reason: "offered" },
+    };
+  const linkResults = new Map<string, "applied">();
   const ws = (id: string) => id === fixtureWorkspace.id;
   const task = (id: string) => seed.tasks.find((t) => t.id === id);
   const question = (id: string) => seed.questions.find((q) => q.id === id);
@@ -117,9 +129,14 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
     revision: 0,
     document: null as ListingsDocumentView | null,
   };
+  // The store's association is current while M2 PR-2's sample connection is linked.
+  const storeLinked = () =>
+    seed.connections.installations.some(
+      (i) => i.storeId === fixtureStore.storeId && i.status === "linked",
+    );
   const listingsView = (): ListingsAgentView => ({
-    storeId: fixtureStore.id,
-    linked: true,
+    storeId: fixtureStore.storeId,
+    linked: storeLinked(),
     blocked: false,
     installation:
       listings.installationId === null
@@ -132,8 +149,8 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
             updatedAt: at(),
           },
     actions: {
-      enable: listings.installationId === null,
-      resume: listings.installationId !== null && listings.stopped,
+      enable: listings.installationId === null && storeLinked(),
+      resume: listings.installationId !== null && listings.stopped && storeLinked(),
       stop: listings.installationId !== null,
     },
   });
@@ -345,17 +362,56 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         }),
     },
     people: { list: () => Promise.resolve({ kind: "not_in_build" }) },
+    connections: {
+      list: (id) =>
+        reply("connections.list", () =>
+          ws(id)
+            ? ok({
+                installations: [...seed.connections.installations],
+                installLink: seed.connections.installLink,
+              })
+            : { kind: "unauthenticated" },
+        ),
+    },
+    storeLinks: {
+      preview: (id, c) =>
+        reply("storeLinks.preview", () => {
+          const unlinked = seed.connections.installations.find((i) => i.status === "unlinked");
+          if (!ws(id) || c.body.handoffToken !== fixtureHandoffToken || !unlinked)
+            return linkResults.has(c.key)
+              ? ok({ installationId: fixtureStore.installationId, csrfToken: fixtureCsrfToken })
+              : notFound;
+          return ok({ installationId: unlinked.installationId, csrfToken: fixtureCsrfToken });
+        }),
+      apply: (id, c, csrf) =>
+        reply("storeLinks.apply", () => {
+          if (!ws(id) || csrf !== fixtureCsrfToken)
+            return { kind: "denied", message: "", reference: null };
+          if (linkResults.has(c.key)) return ok({ outcome: "applied" as const }, true);
+          if (c.body.handoffToken !== fixtureHandoffToken) return notFound;
+          linkResults.set(c.key, "applied");
+          seed.connections = {
+            installations: [fixtureConnection("linked")],
+            installLink: { offered: false, url: null, reason: "linked" },
+          };
+          return ok({ outcome: "applied" as const });
+        }),
+      status: (id, c) =>
+        reply("storeLinks.status", () =>
+          ws(id) && linkResults.has(c.key) ? ok({ outcome: "applied" as const }) : notFound,
+        ),
+    },
     // M3 PR-1: one fixture store with the Listings agent, and the catalogue version 1
     // listing (no provider strings, prices or tokens). Scripted, not simulated: the
     // server's kernel, document binding and stops are proved by lab:listings-authority.
     agents: {
       listingsStatus: (id, storeId) =>
         reply<ListingsAgentView>("agents.listingsStatus", () =>
-          ws(id) && storeId === fixtureStore.id ? ok(listingsView()) : notFound,
+          ws(id) && storeId === fixtureStore.storeId ? ok(listingsView()) : notFound,
         ),
       listingsDocument: (id, storeId, c) =>
         command("agents.listingsDocument", c, () => {
-          if (!ws(id) || storeId !== fixtureStore.id) return notFound;
+          if (!ws(id) || storeId !== fixtureStore.storeId) return notFound;
           const view = listingsView();
           const purpose = view.actions.enable ? "enable" : view.actions.resume ? "resume" : null;
           if (purpose === null)
@@ -380,7 +436,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
       listingsEnable: (id, storeId, c) =>
         command("agents.listingsEnable", c, () => {
           const doc = listings.document;
-          if (!ws(id) || storeId !== fixtureStore.id) return notFound;
+          if (!ws(id) || storeId !== fixtureStore.storeId) return notFound;
           if (!doc || doc.documentDigest !== c.body.documentDigest || doc.nonce !== c.body.nonce)
             return {
               kind: "conflict",
@@ -400,7 +456,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         }),
       listingsStop: (id, storeId, c) =>
         command("agents.listingsStop", c, () => {
-          if (!ws(id) || storeId !== fixtureStore.id || listings.installationId === null)
+          if (!ws(id) || storeId !== fixtureStore.storeId || listings.installationId === null)
             return notFound;
           if (listings.status === "active") listings.revision += 1;
           listings.status = "disabled";

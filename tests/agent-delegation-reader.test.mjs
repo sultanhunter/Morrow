@@ -19,10 +19,7 @@ import {
   createLeaseDelegationReader,
   DelegationFactsUnavailable,
 } from "../packages/work/src/agents/delegation-reader.ts";
-import {
-  BillingFactsUnavailable,
-  createBillingFactsReader,
-} from "../packages/work/src/agents/billing-facts-stub.ts";
+import { createBillingFactsReader } from "../packages/work/src/billing/facts.ts";
 import { listingsScope } from "../packages/work/src/agents/listings.ts";
 import { directLink, payerFacts, rawFacts, library } from "../scripts/billing-route-fixtures.mjs";
 
@@ -523,7 +520,7 @@ test("providers and entitlement: a stopped or unlinked store, and no entitlement
   );
 });
 
-test("missing or malformed facts, a reader failure or the unwired billing stub deny", async () => {
+test("missing or malformed facts, or a billing reader failure, deny", async () => {
   const unavailable = (e) =>
     e instanceof AgentAuthorityError && e.code === "AGENT_POLICY_AUTHORITY_UNAVAILABLE";
   for (const facts of [
@@ -550,7 +547,7 @@ test("missing or malformed facts, a reader failure or the unwired billing stub d
     },
   ])
     await assert.rejects(decide(world(), operation(), { facts }).result, unavailable);
-  // A billing reader that throws denies; M5 PR-1's reader is stubbed to throw until it lands.
+  // A billing reader that throws denies.
   await assert.rejects(
     decide(world(), operation(), {
       billing: {
@@ -561,15 +558,21 @@ test("missing or malformed facts, a reader failure or the unwired billing stub d
     }).result,
     unavailable,
   );
-  const stub = createBillingFactsReader(async () => []);
-  await assert.rejects(stub.read({ organizationId: O, workspaceId: W }), BillingFactsUnavailable);
-  await assert.rejects(decide(world(), operation(), { billing: stub }).result, unavailable);
-  assert.throws(() => createBillingFactsReader(null), BillingFactsUnavailable);
+  // M5 PR-1's own reader (@morrow/work/billing createBillingFactsReader): a failed read
+  // denies, and a workspace with no billing records is never entitled.
+  const down = createBillingFactsReader(async () => {
+    throw Error("down");
+  });
+  await assert.rejects(down.read({ organizationId: O, workspaceId: W }), /down/);
+  await assert.rejects(decide(world(), operation(), { billing: down }).result, unavailable);
+  const empty = createBillingFactsReader(async () => []);
+  assert.equal((await empty.read({ organizationId: O, workspaceId: W })).billingPeriod, null);
+  assert.equal(await reason(world(), operation(), { billing: empty }), "entitlement_denied");
   // The reader requires every port, and automation never authorises anything.
   assert.throws(() => createLeaseDelegationReader({}), DelegationFactsUnavailable);
   const reader = createLeaseDelegationReader({
     facts: async () => null,
-    billing: stub,
+    billing: down,
     environment: "staging",
     clock: () => new Date(at),
   });

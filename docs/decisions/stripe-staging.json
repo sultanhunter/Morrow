@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "environment_kind": "staging",
+  "mode": "test",
+  "portal_configuration_id": null,
+  "automatic_tax": false,
+  "billing_address_collection": "auto",
+  "observed_on": null,
+  "scope": "The reviewed Stripe test-mode selectors of the staging broker's STRIPE_CONFIGURATION_JSON (M5 PR-1): the saved customer portal configuration and the tax flags. Identifiers only; never a key, a webhook secret or a live object. The owner records the portal configuration id (and observed_on) in a reviewed commit after creating it under per-action approval with a docs/evidence/live record; edge:check then admits exactly that id, only inside the broker's env.staging.vars STRIPE_CONFIGURATION_JSON."
+}

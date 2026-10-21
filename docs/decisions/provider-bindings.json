@@ -3023,6 +3023,55 @@
       "unknown_outcome": "retry bounded reads or reconcile persisted internal command"
     },
     {
+      "capability": "governance.billing.manage",
+      "provider": "stripe",
+      "mode": "api",
+      "operations": [
+        "POST /v1/customers",
+        "GET /v1/customers/search",
+        "POST /v1/checkout/sessions",
+        "GET /v1/checkout/sessions/{id}",
+        "GET /v1/checkout/sessions?customer={id}",
+        "POST /v1/billing_portal/sessions",
+        "GET /v1/invoices/{id}",
+        "GET /v1/subscriptions/{id}"
+      ],
+      "required_scopes": [
+        "rak_customer_write",
+        "rak_checkout_session_write",
+        "rak_customer_portal_write",
+        "rak_invoice_read",
+        "rak_subscription_read"
+      ],
+      "sources": [
+        "S139",
+        "S140",
+        "S141",
+        "S142",
+        "S143",
+        "S144",
+        "S145",
+        "S146"
+      ],
+      "readback": "Every write is read back on the pinned version (customer search by metadata, session by id or by customer, invoice and subscription by id) before an operation is verified; webhook objects are read back with the broker's own key.",
+      "restriction": "Test mode only until M6; restricted rk_test_ key and whsec_ secret bind only to the broker (development and staging). Morrow-direct route only (ADR-0015); never for a Shopify-bound workspace.",
+      "remaining_gap": null,
+      "version": "api:2025-03-31.basil;sdk:none",
+      "provider_dependency": "D21",
+      "effect": "control",
+      "hosts": [
+        "standalone"
+      ],
+      "activation": "blocked",
+      "payload_schema_status": "contract_defined_implementation_pending",
+      "scope_status": "pending_conformance",
+      "conformance_tasks": [
+        "P18.T01"
+      ],
+      "logical_idempotency": "one operation per Stripe write; Idempotency-Key morrow-<environment>-<operationId>; a retry never uses a new key",
+      "unknown_outcome": "read back first; replay with the same key only after proven absence and within 23 hours; never promote an unknown outcome"
+    },
+    {
       "capability": "governance.model_default.revise",
       "provider": "morrow",
       "mode": "internal",

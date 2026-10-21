@@ -126,6 +126,51 @@ const published = [
     "0024.membership-lease-revocation.sql",
     "00c64ae0bbb21fc245cf5e3521bdedbd7cbfeb33aec442b1b684426b06b6902b",
   ],
+  // M2 PR-2: the Shopify install and link (0025 and 0027 by the work owner).
+  [
+    25,
+    "0025.shopify-link-route-read.sql",
+    "638644700bdee4471af801475515aa4562da7ffef285425cc5b450318d6fbcfa",
+  ],
+  [
+    26,
+    "0026.shopify-install-identity.sql",
+    "b93538595f502d6cc7e3ce1ecfcf4c5c9c7986a80578c555db1afd7b20e40957",
+  ],
+  [
+    27,
+    "0027.shopify-vault-install.sql",
+    "c056d8f7f0dba9f6769b13f4c1d19733413f5a7b79e5f745f855b60c18cd5147",
+  ],
+  // M5 PR-1: billing (0028 by the identity owner, 0029 by the work owner).
+  [
+    28,
+    "0028.billing-identity-bridge.sql",
+    "dee383f50ac1279fa1fe671d2469b86f65d5e4888b2a965548a34c506e5b7cc2",
+  ],
+  [
+    29,
+    "0029.billing-records.sql",
+    "e40ebb5ae3416758c28389760c7f0c639e1c136e06008a4e47723e9616a03bb2",
+  ],
+  // M3 PR-1: listings authority, stops and credits (0030 by the identity owner, 0031-0033
+  // by the work owner).
+  [
+    30,
+    "0030.listings-identity-bridge.sql",
+    "e1b5f091bd6baf6cc676e4ba7b73bf0b22a0a1ac523d17ab4cd869556aa55791",
+  ],
+  [
+    31,
+    "0031.listings-authority.sql",
+    "e5e5aed05c222d56029fd6d22c7b6734fbe66c670caf72b19c3a681eb8df16c3",
+  ],
+  [
+    32,
+    "0032.agent-proposals.sql",
+    "5ebd3f69f30bfcd5f6f54453f791c703c5982892609e67ce50810f3544f19f6d",
+  ],
+  [33, "0033.run-credits.sql", "56426f72fe2057051df3de71dfb219959a297080b72335d3ed0dd0eae62342ff"],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each
 // published row keeps exactly these pinned files, and a later role goes in a new file on its
@@ -195,9 +240,13 @@ const publishedPrerequisites = new Map([
 ]);
 // The role each published migration was applied under: the identity owner, except the
 // work-state tables (P06.T01a), the approval records (P06.T01b), the spine foundation and
-// its member-lease revocation (M2 PR-1), which the work owner creates.
+// its member-lease revocation (M2 PR-1), the Shopify link route read and vault install
+// definers (M2 PR-2), the billing records (M5 PR-1), and the listings authority, agent
+// proposals and run credits (M3 PR-1), which the work owner creates.
 const publishedExecuteAs = (sequence) =>
-  [15, 18, 20, 23].includes(sequence) ? "morrow_work_owner" : "morrow_identity_owner";
+  [15, 18, 20, 23, 25, 27, 29, 31, 32, 33].includes(sequence)
+    ? "morrow_work_owner"
+    : "morrow_identity_owner";
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 
@@ -241,10 +290,11 @@ test("migrations after the published prefix continue the sequence", () => {
 // ---------------------------------------------------------------------------
 // ADR-0020 item 7 (P04.T01j D6): the one-time rebaseline of 0005-0015, so that a
 // non-superuser CREATEROLE administrator can apply the chain. Exactly one record exists;
-// a second needs a new owner-approved ADR. `closedBy` stays null until a persistent
-// database first applies any of 0005-0015, and then names that live record (P04.T01i
-// PR-D part 2). After closure every fix is a forward migration. The superseded digests
-// are the bytes of `main` f8314e8.
+// a second needs a new owner-approved ADR. `closedBy` names the live record of the first
+// persistent apply of any of 0005-0015 (P04.T01i PR-D part 2): `staging:migrate` on the
+// Neon `staging` branch, 2026-10-20, from `main` 3744c96 (migrations 1-24). The exception
+// is closed: every fix is a forward migration. The superseded digests are the bytes of
+// `main` f8314e8.
 const rebaselines = Object.freeze([
   Object.freeze({
     adr: "ADR-0020",
@@ -262,7 +312,7 @@ const rebaselines = Object.freeze([
       14: "efd6112f419df1b5270b5a7a308f00816cfc14900a7c28b6e25ae56aa38b5201",
       15: "06b0457b93a211866d981ade631f29618f34ff58f6bba309008886e1cfbdcfd9",
     }),
-    closedBy: null,
+    closedBy: "docs/evidence/live/2026-10-20-neon-staging-migrate.md",
   }),
 ]);
 const supersededDigests = new Set(rebaselines.flatMap((r) => Object.values(r.superseded)));

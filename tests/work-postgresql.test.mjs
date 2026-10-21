@@ -170,13 +170,28 @@ test("bridge: the organization interlock is shared in commands and exclusive in 
       name,
     );
   }
-  // No later migration redefines them without the interlock.
-  for (const m of manifest.migrations.filter((x) => x.sequence > 14))
+  // No later migration redefines them without the interlock. M2 PR-2's identity migration
+  // (located by slug) replaces link_workspace_store; its new definition keeps the exclusive
+  // interlock before the organization FOR UPDATE.
+  for (const m of manifest.migrations.filter((x) => x.sequence > 14)) {
+    const text = read("migrations/" + m.file);
     assert.doesNotMatch(
-      read("migrations/" + m.file),
-      /FUNCTION morrow_identity\.(revoke_workspace_access|link_workspace_store|admit_browser_family)\(/,
+      text,
+      /FUNCTION morrow_identity\.(revoke_workspace_access|admit_browser_family)\(/,
       m.file,
     );
+    if (!/FUNCTION morrow_identity\.link_workspace_store\(/.test(text)) continue;
+    assert.ok(m.file.endsWith(".shopify-install-identity.sql"), m.file);
+    const replaced = definition(text, "link_workspace_store");
+    const lock = replaced.indexOf(interlock("", "p_org"));
+    assert.ok(
+      lock > 0 &&
+        lock <
+          replaced.indexOf("FROM morrow_identity.organizations WHERE id::text=p_org FOR UPDATE"),
+      m.file,
+    );
+    assert.equal(replaced.split(interlock("", "p_org")).length, 2, m.file);
+  }
   // The laboratory's owner-maintenance revocation reproduces the same lock order.
   for (const sql of [revocationSql, restoreSql].map((f) =>
     f({ org: "org_o", workspace: "ws_w", membership: "m" }),
@@ -319,16 +334,21 @@ test("laboratories: each P06.T01a lab runs once, in the pg-work group", () => {
     pkg.scripts["lab:spine-foundation"],
     "node --import tsx scripts/spine-foundation-lab.mjs",
   );
-  // M3 PR-1 appends its listings authority lab; its run-credits lab rides pg-linking.
+  // M2 PR-2 appends its workerd install-and-link lab; M5 PR-1 its workerd api and broker
+  // billing lab; M3 PR-1 its listings authority lab (its run-credits lab rides pg-linking).
+  assert.equal(
+    pkg.scripts["lab:group:pg-work"],
+    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation && npm run lab:shopify-connect-workers && npm run lab:billing-workers && npm run lab:listings-authority",
+  );
+  assert.equal(
+    pkg.scripts["lab:billing-workers"],
+    "node --import tsx scripts/billing-workers-lab.mjs",
+  );
   assert.equal(
     pkg.scripts["lab:listings-authority"],
     "node --import tsx scripts/listings-authority-lab.mjs",
   );
   assert.equal(pkg.scripts["lab:run-credits"], "node --import tsx scripts/run-credits-lab.mjs");
-  assert.equal(
-    pkg.scripts["lab:group:pg-work"],
-    "npm run lab:tenant-conformance && npm run lab:work-postgresql && npm run lab:work-workers && npm run lab:spine-foundation && npm run lab:listings-authority",
-  );
   assert.ok(pkg.scripts["lab:group:pg-linking"].endsWith(" && npm run lab:run-credits"));
   // The `work` leg of the ci.yml postgres matrix (P03.T04f).
   assert.match(

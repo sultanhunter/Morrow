@@ -1552,10 +1552,26 @@ INSERT INTO morrow_identity.workspace_memberships VALUES('org_r${n}','ws_r${n}',
         ),
         "row-level security|BILLING_ROUTE_INVALID",
       ) &&
+        // M5 PR-1 (billing-records): the command role holds UPDATE on the six fix columns
+        // only for the receipt application, whose policy needs a receipt context; outside
+        // one no route row is visible, so an update matches nothing, and origin or
+        // shopify_bound_at are never writable.
+        last(
+          db.sql(
+            asCommandRole(
+              P.A,
+              "WITH u AS (UPDATE morrow_billing.workspace_billing_routes SET revision=revision+1 RETURNING 1) SELECT count(*) FROM u;",
+            ),
+          ),
+        ) === "0" &&
+        refused(
+          asCommandRole(P.A, "UPDATE morrow_billing.workspace_billing_routes SET origin=origin;"),
+          "permission denied",
+        ) &&
         refused(
           asCommandRole(
             P.A,
-            "UPDATE morrow_billing.workspace_billing_routes SET revision=revision+1;",
+            "UPDATE morrow_billing.workspace_billing_routes SET shopify_bound_at=shopify_bound_at;",
           ),
           "permission denied",
         ),

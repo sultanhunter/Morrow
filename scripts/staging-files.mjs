@@ -111,6 +111,18 @@ export function stagingFileSpecs({ brokerSecretNames }) {
       secret: "TURNSTILE_SECRET_KEY",
       format: (v) => /^0x[0-9A-Za-z_-]{20,128}$/.test(v),
     },
+    // M5 PR-1 (ADR-0022 items 7 and 12): the Stripe restricted test key (never sk_, never
+    // live) and the webhook endpoint's signing secret, placed by the owner with morrow_put.
+    "stripe-restricted-key": {
+      required: true,
+      secret: "STRIPE_RESTRICTED_KEY",
+      format: (v) => /^rk_test_[A-Za-z0-9]{16,250}$/.test(v),
+    },
+    "stripe-webhook-secret": {
+      required: true,
+      secret: "STRIPE_WEBHOOK_SECRET",
+      format: (v) => /^whsec_[A-Za-z0-9+/=_-]{16,256}$/.test(v),
+    },
     ...Object.fromEntries(
       brokerSecretNames
         .filter((name) => vaultKekFile(name) !== null)

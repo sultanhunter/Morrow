@@ -268,6 +268,13 @@ export function cloudflareApi({
     if (response.status !== 200 || parsed?.success !== true)
       throw new StagingError("STAGING_CLOUDFLARE_REQUEST_FAILED", {
         status: Number.isSafeInteger(response.status) ? response.status : null,
+        // Cloudflare's numeric error codes only (never its messages), at most five.
+        codes: Array.isArray(parsed?.errors)
+          ? parsed.errors
+              .map((e) => e?.code)
+              .filter((c) => Number.isSafeInteger(c))
+              .slice(0, 5)
+          : [],
       });
     return parsed;
   }

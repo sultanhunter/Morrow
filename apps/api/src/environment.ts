@@ -53,9 +53,11 @@ export const apiEnvironmentValueBindings = Object.freeze([
   ["LOGIN_CAPSULE_KEYRING", "keyring", 4096],
 ] as const);
 const environments: readonly string[] = ["development", "staging", "production"];
-// MORROW_VAULT_: the vault KEKs (ADR-0022 item 7) are broker-only.
+// MORROW_VAULT_: the vault KEKs (ADR-0022 item 7) are broker-only. STRIPE_ (M5 PR-1): the
+// restricted key, the webhook secret and even the Stripe configuration bind only to the
+// broker.
 const providerPrefix =
-  /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG)/i;
+  /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG|STRIPE_)/i;
 const credentialWord = /KEY|SECRET|PASSWORD|TOKEN/i;
 const encoder = new TextEncoder();
 const fail = (code: ApiEnvironmentCode): ApiEnvironmentMapping =>

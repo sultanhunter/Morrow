@@ -1,6 +1,6 @@
 // M3 PR-1: the Listings agent card of one connected store (ADR-0022 item 3 and its
-// 2026-10-20 amendment; item 15). It belongs on M2 PR-2's connection detail screen; until
-// that screen merges, the app mounts it on the connection route by itself.
+// 2026-10-20 amendment; item 15), on M2 PR-2's connection detail screen
+// (/w/:ws/connections/:connectionId) for that connection's store.
 //   * Enable (and resume after the owner's own "Stop AI work") is two steps: the server
 //     builds the installation document (agent version, permissions on this store, product
 //     fields), the person reviews exactly that, and Confirm sends its digest and its
@@ -268,24 +268,5 @@ export function ListingsAgentCard({
         <StopDialog ws={ws} storeId={storeId} onDone={done} onCancel={() => setStopping(false)} />
       ) : null}
     </section>
-  );
-}
-
-/**
- * BRANCH-LOCAL mount, replaced at rebase: M2 PR-2's ConnectionScreen hosts the card for
- * its store. Until then the connection route shows the card alone, for the store the
- * route names (in this branch a store's id is its connection's, the M2 bridge stub).
- */
-export function ConnectionAgentsScreen({
-  workspace,
-  storeId,
-}: {
-  readonly workspace: WorkspaceView;
-  readonly storeId: Id;
-}) {
-  return (
-    <div className="page">
-      <ListingsAgentCard workspace={workspace} storeId={storeId} />
-    </div>
   );
 }

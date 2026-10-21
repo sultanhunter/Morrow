@@ -11,6 +11,14 @@
 // broker's fixed URL (AC01, AC02, AC03, AC04, AC05, AC09, AC10 and the fourth method).
 // M2 PR-1 adds the trust model v1 entrypoints (ConnectorBroker, RuntimeBroker): each
 // serves only its own role lease and health, and a bad vault KEK disables the vault only.
+// M2 PR-2 binds the connector bundle to the broker's ConnectorBroker: unconfigured it is
+// deny-all; configured, syntactic refusals reach no database, the Shopify methods exist on
+// ConnectorBroker only, and an unreachable vault login fails closed. The PR-2 review adds
+// the connector's committed per-address ingress limits: no address fails closed and the
+// limit's next request is 429 with no broker call.
+// M5 PR-1 adds the four ApiBroker Stripe methods (held without the capability; with it,
+// an unreachable vault login holds every write before any Stripe request) and the unbound
+// api's billing and webhook paths.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,6 +27,7 @@ import { Log, LogLevel, Miniflare } from "miniflare";
 import { writeArtifact } from "./artifacts.mjs";
 import {
   captureConsole,
+  edgeConnectorRateLimits,
   edgeDryRun,
   edgeRateLimits,
   edgeRefusals,
@@ -101,10 +110,28 @@ check(
     })),
   ) === JSON.stringify(edgeRateLimits("development")),
 );
+// M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint (trust model v1);
+// the orchestrator binds nothing until its first caller (M3 PR-2).
 check(
-  "orchestrator_and_connector_have_no_service_bindings",
-  Object.keys(options.orchestrator.serviceBindings ?? {}).length === 0 &&
-    Object.keys(options.connector.serviceBindings ?? {}).length === 0,
+  "orchestrator_has_no_service_bindings",
+  Object.keys(options.orchestrator.serviceBindings ?? {}).length === 0,
+);
+check(
+  "M2PR2:connector_binds_the_same_environment_connector_broker_entrypoint",
+  JSON.stringify(options.connector.serviceBindings) ===
+    JSON.stringify({ BROKER: { name: names.broker, entrypoint: "ConnectorBroker" } }),
+);
+// M2 PR-2 review: the connector's Miniflare `ratelimits` are its committed development
+// ingress limiters, never a lab override.
+check(
+  "M2PR2:wrangler_options_bind_the_connector_development_limiters",
+  JSON.stringify(
+    Object.values(options.connector.ratelimits ?? {}).map(({ name, namespace_id, simple }) => ({
+      name,
+      namespace_id,
+      simple,
+    })),
+  ) === JSON.stringify(edgeConnectorRateLimits("development")),
 );
 
 // Synthetic configuration; every marker is built at runtime and never written.
@@ -307,6 +334,9 @@ async function instance(name, { api = {}, broker = {}, extra = [], assets } = {}
     neon: 0,
     siteverify: 0,
     unexpected: 0,
+    // M2 PR-2: the broker's vault login and the connector's own login (never answered).
+    brokerNeon: 0,
+    connectorOutbound: 0,
   };
   const apiOptions = assets
     ? workerOptions(apiWorker, { assets: { directory: assets } })
@@ -357,6 +387,10 @@ async function instance(name, { api = {}, broker = {}, extra = [], assets } = {}
           observed.siteverify++;
           return siteverify.handleRequest(request);
         }
+        if (url.hostname === databaseBinding.hostname) {
+          observed.brokerNeon++;
+          return new Response(null, { status: 503 });
+        }
         observed.unexpected++;
         return new Response(null, { status: 503 });
       },
@@ -380,7 +414,17 @@ async function instance(name, { api = {}, broker = {}, extra = [], assets } = {}
             }),
       },
     },
-    ...extra,
+    ...extra.map((worker) =>
+      worker.name === names.connector
+        ? {
+            ...worker,
+            outboundService() {
+              observed.connectorOutbound++;
+              return new Response(null, { status: 503 });
+            },
+          }
+        : worker,
+    ),
   ];
   const mf = new Miniflare({
     workers,
@@ -437,6 +481,8 @@ async function instance(name, { api = {}, broker = {}, extra = [], assets } = {}
       apiProvider: observed.apiProvider,
       brokerProvider: observed.brokerProvider.length,
       neon: observed.neon,
+      brokerNeon: observed.brokerNeon,
+      connectorOutbound: observed.connectorOutbound,
       siteverify: observed.siteverify,
       unexpected: observed.unexpected,
     },
@@ -494,6 +540,21 @@ await instance("AC06_unbound_api_spa_and_denials", {}, async ({ fetchApi, observ
   check(
     "AC06:reserved_unknown_worker_404",
     api.status === 404 && api.body === '{"code":"not_found"}',
+  );
+  // M5 PR-1: the unbound api answers billing 401 and the Stripe webhook 404, with no
+  // network, database or broker call (checked below with the rest of AC06).
+  const billing = await fetchApi("/workspace/workspace_a/billing");
+  const webhook = await fetchApi("/api/billing/stripe/webhook", {
+    method: "POST",
+    headers: { "stripe-signature": "t=1,v1=" + "a".repeat(64) },
+    body: "{}",
+  });
+  check(
+    "M5:unbound_billing_401_and_webhook_404",
+    billing.status === 401 &&
+      json(billing.body)?.code === "denied" &&
+      webhook.status === 404 &&
+      webhook.body === '{"code":"not_found"}',
   );
   const loginResponse = await fetchApi("/auth/login", { method: "POST" });
   check(
@@ -1034,6 +1095,85 @@ await instance(
   },
 );
 
+// M5 PR-1 (ADR-0022 items 7 and 12): the four ApiBroker Stripe methods over the real RPC
+// binding. Without the Stripe secrets the capability is held (init stripe:false) and every
+// method answers BROKER_HELD; malformed arguments are refused first. With them the
+// capability initialises, and each write first opens its operation on the vault login
+// (M2 PR-2's transport): the lab answers that database 503, so every call is held before
+// any network and no Stripe request leaves the broker.
+const stripeOperation = "00000000-0000-4000-8000-0000000000a5";
+const stripeCalls = [
+  ["stripeCustomerEnsure", [stripeOperation, 1000]],
+  ["stripeCheckoutCreate", [stripeOperation, 1000]],
+  ["stripePortalCreate", [stripeOperation, 1000]],
+  ["stripeWebhookVerify", ["e30=", "t=1,v1=" + "a".repeat(64), 1000]],
+  ["stripeCustomerEnsure", ["not-an-operation", 1000]],
+  ["stripeCheckoutCreate", [stripeOperation, 10001]],
+  ["stripeWebhookVerify", ["", "t=1", 1000]],
+];
+await instance(
+  "M5_stripe_methods_without_the_capability",
+  {},
+  async ({ probe, events, observed }) => {
+    const replies = [];
+    for (const [op, args] of stripeCalls) replies.push((await probe({ op, args }))[0]);
+    check(
+      "M5:stripe_methods_held_without_the_capability",
+      replies.every((r) => r.ok === false && r.message === "BROKER_HELD" && remoteOnly(r.keys)),
+    );
+    check("M5:init_reports_stripe_held", events("morrow_broker_init")[0]?.stripe === false);
+    check(
+      "M5:refusals_are_fixed_codes",
+      JSON.stringify(
+        events("morrow_broker")
+          .filter((row) => row.method.startsWith("stripe"))
+          .map((row) => row.code),
+      ) ===
+        JSON.stringify([
+          "CAPABILITY_UNAVAILABLE",
+          "CAPABILITY_UNAVAILABLE",
+          "CAPABILITY_UNAVAILABLE",
+          "CAPABILITY_UNAVAILABLE",
+          "INPUT_INVALID",
+          "BUDGET_INVALID",
+          "INPUT_INVALID",
+        ]),
+    );
+    check("M5:no_outbound_without_the_capability", observed.unexpected === 0);
+  },
+);
+const stripeKey = "rk_test_" + randomBytes(16).toString("hex");
+const stripeWebhookSecret = "whsec_" + randomBytes(16).toString("hex");
+privateMarkers.push(stripeKey, stripeWebhookSecret);
+await instance(
+  "M5_stripe_capability_with_an_unreachable_vault",
+  {
+    broker: {
+      bindings: brokerBindings({
+        STRIPE_RESTRICTED_KEY: stripeKey,
+        STRIPE_WEBHOOK_SECRET: stripeWebhookSecret,
+        STRIPE_CONFIGURATION_JSON: JSON.stringify({
+          schemaVersion: 1,
+          portalConfigurationId: "bpc_" + "Lab".padEnd(24, "0"),
+          automaticTax: false,
+          billingAddressCollection: "auto",
+        }),
+      }),
+    },
+  },
+  async ({ probe, events, observed }) => {
+    const replies = [];
+    for (const [op, args] of stripeCalls.slice(0, 3)) replies.push((await probe({ op, args }))[0]);
+    check("M5:init_reports_stripe_ready", events("morrow_broker_init")[0]?.stripe === true);
+    check(
+      "M5:an_unreachable_vault_holds_every_write_before_any_stripe_request",
+      replies.every((r) => r.ok === false && r.message === "BROKER_HELD") &&
+        observed.brokerNeon >= replies.length &&
+        observed.unexpected === 0,
+    );
+  },
+);
+
 await instance("AC29_cold_initialisation", {}, async ({ probe, events }) => {
   const replies = await probe({ op: "health", count: 20 });
   check(
@@ -1092,34 +1232,222 @@ await instance(
   },
 );
 
+// ---- M2 PR-2: the connector bundle bound to the real broker's ConnectorBroker ----
 {
-  const extra = [
+  const connectorOrigin = "https://connector.example.test";
+  const connectorWorkerOptions = (bindings) => [
     {
       ...options.connector,
       name: names.connector,
       modules: true,
       script: bundle(connectorWorker),
-      bindings: { MORROW_ENVIRONMENT: "development" },
+      bindings,
     },
   ];
-  await instance("AC10_connector_placeholder", { extra }, async ({ mf }) => {
-    const connector = await mf.getWorker(names.connector);
-    const health = await connector.fetch("https://connector.internal/healthz");
-    check(
-      "AC10:connector_healthz",
-      health.status === 200 &&
-        (await health.text()) === '{"schemaVersion":1,"service":"connector","mode":"placeholder"}',
-    );
-    for (const path of ["/", "/auth", "/webhooks/app"]) {
-      const response = await connector.fetch("https://connector.internal" + path, {
+  // Every request carries a client address unless `address` is null (the edge sets
+  // CF-Connecting-IP; its absence fails closed).
+  const connectorFetch = async (mf, path, init = {}, address = "198.51.100.20") => {
+    const worker = await mf.getWorker(names.connector);
+    const headers = { ...(init.headers ?? {}) };
+    if (address !== null) headers["CF-Connecting-IP"] = address;
+    const response = await worker.fetch(connectorOrigin + path, {
+      redirect: "manual",
+      ...init,
+      headers,
+    });
+    return { status: response.status, headers: response.headers, body: await response.text() };
+  };
+  const unavailableBody = '{"code":"connector_unavailable"}';
+  // Committed configuration: MORROW_ENVIRONMENT and the broker binding only. Deny-all:
+  // every path is 503 and /healthz says not ready, with no RPC, database or network.
+  await instance(
+    "M2PR2_connector_unconfigured",
+    { extra: connectorWorkerOptions({ MORROW_ENVIRONMENT: "development" }) },
+    async ({ mf, observed, events }) => {
+      const health = await connectorFetch(mf, "/healthz");
+      check(
+        "M2PR2:unconfigured_healthz_not_ready",
+        health.status === 200 &&
+          health.body === '{"schemaVersion":1,"service":"connector","ready":false}',
+      );
+      for (const [path, method] of [
+        ["/", "GET"],
+        ["/shopify/a/lab-app/launch?shop=lab.myshopify.com&hmac=00", "GET"],
+        ["/shopify/a/lab-app/callback?state=x", "GET"],
+        ["/shopify/a/lab-app/webhooks", "POST"],
+        ["/auth", "POST"],
+      ]) {
+        const response = await connectorFetch(mf, path, { method });
+        check(
+          "M2PR2:unconfigured_503" + path.split("?")[0],
+          response.status === 503 && response.body === unavailableBody,
+        );
+      }
+      check(
+        "M2PR2:unconfigured_logs_its_code",
+        events("morrow_connector_unbound").some((row) => row.code === "CONNECTOR_ENV_UNBOUND"),
+      );
+      check(
+        "M2PR2:unconfigured_sends_nothing",
+        observed.connectorOutbound === 0 && observed.brokerNeon === 0 && observed.unexpected === 0,
+      );
+    },
+  );
+  // A Shopify-credential name bound to the connector fails closed (ADR-0008 item 2).
+  await instance(
+    "M2PR2_connector_refuses_a_credential_binding",
+    {
+      extra: connectorWorkerOptions({
+        MORROW_ENVIRONMENT: "development",
+        SHOPIFY_API_SECRET: "x".repeat(32),
+      }),
+    },
+    async ({ mf, events }) => {
+      const launch = await connectorFetch(mf, "/shopify/a/lab-app/launch?shop=a.myshopify.com");
+      check(
+        "M2PR2:credential_binding_is_deny_all",
+        launch.status === 503 &&
+          launch.body === unavailableBody &&
+          events("morrow_connector_unbound").some(
+            (row) => row.code === "CONNECTOR_ENV_FORBIDDEN_CREDENTIAL_BINDING",
+          ),
+      );
+    },
+  );
+  // Configured with the reviewed identifiers, against the real broker with its vault: the
+  // syntactic refusals reach no database, the session cookie means nothing here, and the
+  // vault login is the only database the broker tries (the lab answers it 503: fail closed).
+  await instance(
+    "M2PR2_connector_configured",
+    {
+      api: { bindings: apiBindings() },
+      extra: connectorWorkerOptions({
+        MORROW_ENVIRONMENT: "development",
+        CONNECTOR_CONFIGURATION_JSON: JSON.stringify({
+          schemaVersion: 1,
+          origin: connectorOrigin,
+          apiOrigin: origin,
+        }),
+        MORROW_DATABASE_BINDING_JSON: JSON.stringify(databaseBinding),
+      }),
+    },
+    async ({ mf, observed, probe }) => {
+      const health = await connectorFetch(mf, "/healthz");
+      check(
+        "M2PR2:configured_healthz_ready",
+        health.status === 200 &&
+          health.body === '{"schemaVersion":1,"service":"connector","ready":true}',
+      );
+      // Refused before any database: a foreign shop, an oversize query, a callback with no
+      // state cookie (a Morrow session cookie is not one), a webhook with no signature.
+      const foreign = await connectorFetch(
+        mf,
+        "/shopify/a/lab-app/launch?hmac=00&shop=evil.example.com&timestamp=1",
+      );
+      const oversize = await connectorFetch(
+        mf,
+        "/shopify/a/lab-app/launch?shop=a.myshopify.com&x=" + "a".repeat(2100),
+      );
+      const noCookie = await connectorFetch(
+        mf,
+        "/shopify/a/lab-app/callback?code=c&shop=a.myshopify.com&state=" + "s".repeat(43),
+        { headers: { Cookie: cookie } },
+      );
+      const unsigned = await connectorFetch(mf, "/shopify/a/lab-app/webhooks", {
         method: "POST",
+        headers: { "content-type": "application/json", Cookie: cookie },
+        body: "{}",
+      });
+      const unknownPath = await connectorFetch(mf, "/shopify/a/lab-app/install?shop=a");
+      check(
+        "M2PR2:refusals_before_any_database",
+        foreign.status === 403 &&
+          oversize.status === 400 &&
+          noCookie.status === 403 &&
+          (noCookie.headers.get("set-cookie") ?? "").startsWith("__Host-morrow_shopify_state=;") &&
+          unsigned.status === 401 &&
+          unknownPath.status === 404 &&
+          observed.brokerNeon === 0 &&
+          observed.connectorOutbound === 0,
+      );
+      check(
+        "M2PR2:connector_pages_set_no_session_cookie",
+        [foreign, oversize, noCookie, unsigned].every(
+          (r) => !(r.headers.get("set-cookie") ?? "").includes("morrow_session"),
+        ),
+      );
+      // A well-formed launch needs the registry and the app secret: the broker's vault login
+      // tries its database (the lab refuses it), and the connector fails closed.
+      const launch = await connectorFetch(
+        mf,
+        "/shopify/a/lab-app/launch?hmac=" +
+          "0".repeat(64) +
+          "&shop=lab-dev-store.myshopify.com&timestamp=" +
+          Math.floor(Date.now() / 1000),
+      );
+      check(
+        "M2PR2:an_unreachable_vault_fails_closed",
+        launch.status === 503 &&
+          !launch.headers.has("location") &&
+          observed.brokerNeon >= 1 &&
+          observed.connectorOutbound === 0,
+      );
+      // The ingress limits (M2 PR-2 review): a request with no client address fails closed
+      // before any broker call; from one address the 21st launch in a window is 429 and
+      // reaches no broker or database.
+      const signedLaunch = () =>
+        "/shopify/a/lab-app/launch?hmac=" +
+        "0".repeat(64) +
+        "&shop=lab-dev-store.myshopify.com&timestamp=" +
+        Math.floor(Date.now() / 1000);
+      const beforeNoAddress = observed.brokerNeon;
+      const noAddress = await connectorFetch(mf, signedLaunch(), {}, null);
+      check(
+        "M2PR2:connector_without_an_address_fails_closed",
+        noAddress.status === 503 && observed.brokerNeon === beforeNoAddress,
+      );
+      const left = 60000 - (Date.now() % 60000);
+      if (left < 25000) await new Promise((resolve) => setTimeout(resolve, left + 250));
+      const burst = [];
+      for (let i = 0; i < 20; i++)
+        burst.push((await connectorFetch(mf, signedLaunch(), {}, "198.51.100.21")).status);
+      const beforeLimited = observed.brokerNeon;
+      const limited = await connectorFetch(mf, signedLaunch(), {}, "198.51.100.21");
+      const afterLimited = observed.brokerNeon;
+      const other = await connectorFetch(mf, signedLaunch(), {}, "198.51.100.22");
+      check(
+        "M2PR2:connector_install_limit_is_20_per_address",
+        burst.every((status) => status === 503) &&
+          limited.status === 429 &&
+          limited.body.includes("Too many attempts") &&
+          afterLimited === beforeLimited &&
+          other.status === 503 &&
+          observed.brokerNeon > afterLimited &&
+          observed.connectorOutbound === 0,
+      );
+      // The Shopify methods exist on ConnectorBroker only.
+      const [refused] = await probe({
+        op: "shopifyLaunchVerify",
+        binding: "BROKER_CONNECTOR",
+        args: ["lab-app", "shop=evil.example.com"],
       });
       check(
-        "AC10:connector_503" + path,
-        response.status === 503 && (await response.text()) === '{"code":"connector_unavailable"}',
+        "M2PR2:connector_broker_serves_the_shopify_methods",
+        refused.ok &&
+          json(refused.value)?.verdict === "refused" &&
+          json(refused.value).shop === null,
       );
-    }
-  });
+      const others = [];
+      for (const binding of ["BROKER", "BROKER_RUNTIME"])
+        for (const op of ["shopifyLaunchVerify", "shopifyInstallComplete", "shopifyWebhookVerify"])
+          others.push((await probe({ op, binding, args: [] }))[0]);
+      check(
+        "M2PR2:api_and_runtime_entrypoints_have_no_shopify_method",
+        others.every((r) => r.ok === false && r.name === "TypeError"),
+      );
+      check("M2PR2:no_unexpected_outbound", observed.unexpected === 0);
+    },
+  );
 }
 // ---- P05.T01ab: the sign-in abuse guard over the real development bundles ----
 const loginUnavailable = '{"schemaVersion":1,"outcome":"login_unavailable"}';

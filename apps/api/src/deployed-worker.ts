@@ -9,13 +9,17 @@ import {
 } from "../../../packages/identity/src/managed-workspace-api.js";
 import { captureManagedWorkspaceBinding } from "../../../packages/identity/src/managed-workspace-binding.js";
 import { createNeonWorkConnector } from "../../../packages/work/src/neon-connector.js";
+import { createConnectionKernel } from "../../../packages/policy/src/connection-authority.js";
 import type { WorkApiDependencies } from "../../../packages/work/src/http.js";
+import type { BillingApiDependencies } from "../../../packages/work/src/billing/http.js";
+import type { StripeWebhookDependencies } from "../../../packages/work/src/billing/webhook.js";
 import { createAbuseGuard, type AbuseGuard } from "./abuse-guard.js";
 import {
   createBrokerChallengeVerifier,
   createBrokerHealth,
   createBrokerNeonCredentialBroker,
   createBrokerSessionPageReader,
+  createBrokerStripe,
 } from "./broker-client.js";
 import {
   mapApiEnvironment,
@@ -45,6 +49,7 @@ export function composeApiDependencies(
   values: Readonly<ApiEnvironmentValues>,
   broker: ApiBrokerRpc,
   now: () => number,
+  environment: "development" | "staging" | "production" = "development",
 ) {
   const port = createLazyWorkosLoginPort(values.login, now);
   const credentialBroker = createBrokerNeonCredentialBroker(broker, now);
@@ -67,6 +72,9 @@ export function composeApiDependencies(
     },
     workspaceConfigurationJson: values.workspace,
     logoutConfigurationJson: values.logout,
+    // M2 PR-2 (P09.T02a): the human kernel for governance.connection.connect administer,
+    // used by the Shopify link issuer and the connections read.
+    connections: createConnectionKernel(),
   };
   // P06.T01a: the work API on the same origin, with one morrow_api_worker lease
   // per request from the same broker binding (ADR-0010 item 2, ADR-0007).
@@ -83,9 +91,28 @@ export function composeApiDependencies(
     ),
     now,
   });
+  // M5 PR-1: the billing API and the Stripe webhook on the same origin and work login, with
+  // the broker's Stripe methods behind the ApiBroker binding. The environment is the
+  // Worker's own (production never maps, ADR-0007 item 9).
+  const stripe = createBrokerStripe(broker);
+  const billing: BillingApiDependencies = Object.freeze({
+    origin: work.origin,
+    connector: work.connector,
+    environment,
+    broker: stripe,
+    now,
+  });
+  const webhook: StripeWebhookDependencies = Object.freeze({
+    connector: work.connector,
+    environment,
+    broker: stripe,
+    now,
+  });
   return Object.freeze({
     dependencies,
     work,
+    billing,
+    webhook,
     readiness: () => port.readiness(values.keyring),
     brokerHealth: createBrokerHealth(broker, now),
   });
@@ -107,9 +134,19 @@ function select(env: unknown): Selected {
   if (!mapped.ok) selected = unbound(mapped.code);
   else
     try {
-      const composed = composeApiDependencies(mapped.values, mapped.broker, () => Date.now());
+      const composed = composeApiDependencies(
+        mapped.values,
+        mapped.broker,
+        () => Date.now(),
+        mapped.environment,
+      );
       selected = {
-        api: createWorkspaceApiWorker(composed.dependencies, composed.work),
+        api: createWorkspaceApiWorker(
+          composed.dependencies,
+          composed.work,
+          composed.billing,
+          composed.webhook,
+        ),
         guard: createAbuseGuard(mapped.guard, createBrokerChallengeVerifier(mapped.broker)),
         readiness: composed.readiness,
         brokerHealth: composed.brokerHealth,

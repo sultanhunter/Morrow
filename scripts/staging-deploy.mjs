@@ -138,25 +138,51 @@ export async function workersDevState(api, script) {
 
 // ---------------------------------------------------------------------------
 // The account census (M-C2; at every deploy): every script with its workers.dev and
-// preview state, every service binding naming the staging broker (scripts and Pages),
-// dispatch namespaces and members.
+// preview state, every service binding naming the staging broker (scripts and Pages) with
+// the entrypoint it binds, dispatch namespaces and members. `dispatchNamespaces` is a count,
+// or the census's reading of Cloudflare's 403 with code 10121 alone (no Workers for
+// Platforms; collectCensus).
+export const dispatchNamespacesUnavailable = "unavailable_10121";
+// Broker trust model v1 (ADR-0022 item 7): which Morrow Worker may bind the broker, and
+// through which entrypoint only. M2 PR-2 adds the connector's ConnectorBroker binding;
+// the orchestrator's RuntimeBroker row joins with its first caller (M3 PR-2). Any other
+// script, a Pages project, another entrypoint or a binding with no entrypoint (the
+// broker's default export) is BROKER_BOUND_ELSEWHERE.
+export const brokerBindingAllowTable = Object.freeze({
+  api: "ApiBroker",
+  connector: "ConnectorBroker",
+});
+export function brokerBindingAllowed(script, workers) {
+  const key = Object.keys(brokerBindingAllowTable).find((k) => workers[k] === script.name);
+  const entrypoints = Array.isArray(script.brokerEntrypoints) ? script.brokerEntrypoints : [];
+  return (
+    key !== undefined &&
+    entrypoints.length > 0 &&
+    entrypoints.every((entrypoint) => entrypoint === brokerBindingAllowTable[key])
+  );
+}
 export function censusFindings(snapshot, staging) {
   const workers = staging.cloudflare.workers;
   const morrow = new Set(Object.values(workers));
   const findings = [];
   for (const script of snapshot.scripts) {
     if (!morrow.has(script.name)) findings.push({ code: "NOT_MORROW_SCRIPT", name: script.name });
+    // Only the api is on workers.dev (staging-card-1 E1); the connector's hostname waits
+    // for the card change, so its workers.dev is still a finding.
     if (script.workersDev && script.name !== workers.api)
       findings.push({ code: "WORKERS_DEV_EXPOSED", name: script.name });
     if (script.previews) findings.push({ code: "PREVIEWS_ENABLED", name: script.name });
-    if (script.bindsBroker && script.name !== workers.api)
+    if (script.bindsBroker && !brokerBindingAllowed(script, workers))
       findings.push({ code: "BROKER_BOUND_ELSEWHERE", name: script.name });
   }
   for (const project of snapshot.pages) {
     findings.push({ code: "PAGES_PROJECT", name: project.name });
     if (project.bindsBroker) findings.push({ code: "BROKER_BOUND_ELSEWHERE", name: project.name });
   }
-  if (snapshot.dispatchNamespaces > 0)
+  if (
+    snapshot.dispatchNamespaces !== dispatchNamespacesUnavailable &&
+    snapshot.dispatchNamespaces !== 0
+  )
     findings.push({ code: "DISPATCH_NAMESPACES", count: snapshot.dispatchNamespaces });
   if (snapshot.members !== 1) findings.push({ code: "ACCOUNT_MEMBERS", count: snapshot.members });
   return findings;
@@ -175,17 +201,30 @@ export async function collectCensus(api, staging) {
   for (const entry of listed) {
     const name = printableName(entry?.id);
     if (name === "[unprintable]") {
-      scripts.push({ name, workersDev: true, previews: true, bindsBroker: false });
+      scripts.push({
+        name,
+        workersDev: true,
+        previews: true,
+        bindsBroker: false,
+        brokerEntrypoints: [],
+      });
       continue;
     }
     const subdomain = await api.get(["workers", "scripts", name, "subdomain"]);
     const settings = await api.get(["workers", "scripts", name, "settings"]);
+    const brokerBindings = (settings?.bindings ?? []).filter(
+      (b) => b?.type === "service" && b?.service === broker,
+    );
     scripts.push({
       name,
       workersDev: subdomain?.enabled !== false,
       previews: subdomain?.previews_enabled !== false,
-      bindsBroker: (settings?.bindings ?? []).some(
-        (b) => b?.type === "service" && b?.service === broker,
+      bindsBroker: brokerBindings.length > 0,
+      // A printable entrypoint name, or null (none, or not a name): never allowed.
+      brokerEntrypoints: brokerBindings.map((b) =>
+        typeof b.entrypoint === "string" && /^[A-Z][A-Za-z0-9]{0,62}$/.test(b.entrypoint)
+          ? b.entrypoint
+          : null,
       ),
     });
   }
@@ -195,12 +234,32 @@ export async function collectCensus(api, staging) {
       servicesBind(project?.deployment_configs?.production?.services, broker) ||
       servicesBind(project?.deployment_configs?.preview?.services, broker),
   }));
-  const namespaces = await api.get(["workers", "dispatch", "namespaces"]);
+  // An account without Workers for Platforms cannot hold a dispatch namespace: Cloudflare
+  // answers 403 with error 10121 alone ("You do not have access to dispatch namespaces";
+  // observed 2026-10-20 on the staging account), which the census reports as
+  // `unavailable_10121` and counts as no namespace (the packet's PR-B notes, deviation 17).
+  // Any other status, any other code beside it, or any other failure still stops the
+  // census. Re-validate this if Workers for Platforms is ever enabled on the account.
+  let namespaces;
+  try {
+    const listed = await api.get(["workers", "dispatch", "namespaces"]);
+    namespaces = Array.isArray(listed) ? listed.length : 1;
+  } catch (error) {
+    if (
+      error?.code === "STAGING_CLOUDFLARE_REQUEST_FAILED" &&
+      error.details?.status === 403 &&
+      Array.isArray(error.details?.codes) &&
+      error.details.codes.length === 1 &&
+      error.details.codes[0] === 10121
+    )
+      namespaces = dispatchNamespacesUnavailable;
+    else throw error;
+  }
   const members = await api.list(["members"]);
   const snapshot = {
     scripts,
     pages,
-    dispatchNamespaces: Array.isArray(namespaces) ? namespaces.length : 1,
+    dispatchNamespaces: namespaces,
     members: members.length,
   };
   return { ...snapshot, findings: censusFindings(snapshot, staging) };

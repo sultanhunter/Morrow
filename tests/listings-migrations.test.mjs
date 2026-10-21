@@ -24,11 +24,8 @@ const sha = (text) => createHash("sha256").update(text).digest("hex");
 const code = (text) => text.replace(/--.*$/gm, "");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 const brief = "docs/briefs/M3-listings-agent.md";
-// This branch's rows, in order: two branch-local stubs (deleted at rebase), then this PR's
-// four migrations.
+// This PR's four migrations, in order, after M2 PR-2's and M5 PR-1's (0025-0029).
 const slugs = [
-  ["m2-store-installations-stub", "morrow_identity_owner", brief + "#branch-local-stubs"],
-  ["m5-credit-wallets-stub", "morrow_work_owner", brief + "#branch-local-stubs"],
   ["listings-identity-bridge", "morrow_identity_owner", brief],
   ["listings-authority", "morrow_work_owner", brief],
   ["agent-proposals", "morrow_work_owner", brief],
@@ -37,7 +34,7 @@ const slugs = [
 const rowOf = (slug) => manifest.migrations.find((m) => m.file.endsWith("." + slug + ".sql"));
 const textOf = (slug) => readFileSync("migrations/" + rowOf(slug).file, "utf8");
 const texts = Object.fromEntries(slugs.map(([slug]) => [slug, textOf(slug)]));
-const own = slugs.slice(2).map(([slug]) => slug);
+const own = slugs.map(([slug]) => slug);
 
 test("manifest: contiguous rows after the published head, executeAs, digests, no prerequisites", () => {
   const rows = slugs.map(([slug]) => rowOf(slug));
@@ -56,9 +53,12 @@ test("manifest: contiguous rows after the published head, executeAs, digests, no
     assert.equal(row.sha256, sha(texts[slug]), slug);
     assert.equal(row.prerequisites, undefined, slug);
   }
-  // The stubs say what they are and that they are never merged.
-  for (const [slug] of slugs.slice(0, 2))
-    assert.match(texts[slug], /^BEGIN;\n-- BRANCH-LOCAL STUB, never merged/, slug);
+  // They follow M5 PR-1's billing records directly, and no branch-local stub remains.
+  assert.equal(manifest.migrations[first - 2].file.endsWith(".billing-records.sql"), true);
+  assert.equal(
+    manifest.migrations.some((m) => /stub/.test(m.file)),
+    false,
+  );
   for (const slug of own) assert.doesNotMatch(texts[slug], /BRANCH-LOCAL STUB/, slug);
   // The one chain module the harness and every lab read applies them under those roles.
   const chain = loadMigrationChain();
@@ -471,6 +471,29 @@ test("review fixes: stale prior state, one delegation chain, agent principal key
     /FOR UPDATE;\n IF NOT FOUND THEN RETURN QUERY SELECT 'wallet_not_found'::text,NULL::text; RETURN; END IF;/,
   );
   assert.equal((credits.match(/RAISE EXCEPTION 'CREDIT_WALLET_INVALID'/g) ?? []).length, 2);
+  // M5 PR-1's wallet (0029): no wallet table, guard or insert here; every reservation
+  // names its wallet; the lease twins of the session policies read and update, never insert.
+  const creditsCode = code(credits);
+  assert.doesNotMatch(
+    creditsCode,
+    /CREATE TABLE morrow_billing\.credit_wallets|wallet_guard\(\) RETURNS/,
+  );
+  assert.doesNotMatch(creditsCode, /INSERT INTO morrow_billing\.credit_wallets/);
+  assert.match(
+    creditsCode,
+    /ADD CONSTRAINT credit_reservations_wallet FOREIGN KEY \(organization_id,workspace_id,billing_account_id\)\n REFERENCES morrow_billing\.credit_wallets\(organization_id,workspace_id,billing_account_id\);/,
+  );
+  assert.deepEqual(
+    [
+      ...creditsCode.matchAll(
+        /CREATE POLICY (\w+) ON morrow_billing\.credit_wallets (FOR \w+ )?TO (\w+)/g,
+      ),
+    ].map((m) => [m[1], m[2], m[3]]),
+    [
+      ["tenant_lease_read", "FOR SELECT ", "morrow_work_command"],
+      ["tenant_lease_update", "FOR UPDATE ", "morrow_work_command"],
+    ],
+  );
 });
 
 test("resolve_call: broker only, one refusal code on any doubt, its settings cleared", () => {

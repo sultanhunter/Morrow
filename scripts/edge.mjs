@@ -2,7 +2,8 @@
 // no Cloudflare account, credential or network:
 //   types [--check]   Env typings, generated in a clean temporary copy of each Worker
 //   typecheck         Worker sources against the pinned 2026-07-30 runtime types
-//   verify-config     resolved wrangler configuration of all 4 Workers x 3 environments
+//   verify-config     resolved wrangler configuration of all 4 Workers x 3 environments,
+//                     and the reviewed staging values (P04.T01i D1)
 //   dry-run           `wrangler deploy --dry-run` bundles, metafiles and sizes.json
 //   dev               unbound local api + broker on https://127.0.0.1:8787
 //   smoke-dev         dev over http, then https: /healthz, /, SIGTERM, port closed
@@ -55,7 +56,7 @@ export const edgeWorkers = Object.freeze(
     {
       key: "connector",
       dir: "apps/shopify-connector",
-      entry: "worker/placeholder.ts",
+      entry: "worker/index.ts",
       tsconfig: "tsconfig.worker.json",
     },
   ].map((worker) => Object.freeze(worker)),
@@ -349,6 +350,28 @@ export function edgeTypecheck({ root = repositoryRoot } = {}) {
     );
     if (work.status !== 0)
       throw Error("EDGE_WORK_DECLARATIONS_FAILED\n" + work.stdout + work.stderr);
+    // M2 PR-2: the api composes the policy package's connection kernel
+    // (packages/policy/src/connection-authority.ts), consumed the same way: through its
+    // emitted declarations, at their repository-relative paths.
+    const policy = spawnSync(
+      process.execPath,
+      [
+        tscBin,
+        "-p",
+        "packages/policy/tsconfig.json",
+        "--noEmit",
+        "false",
+        "--declaration",
+        "--emitDeclarationOnly",
+        "--rootDir",
+        ".",
+        "--outDir",
+        staging,
+      ],
+      { cwd: root, encoding: "utf8" },
+    );
+    if (policy.status !== 0)
+      throw Error("EDGE_POLICY_DECLARATIONS_FAILED\n" + policy.stdout + policy.stderr);
     cpSync(join(root, "tsconfig.base.json"), join(staging, "tsconfig.base.json"));
     symlinkSync(join(root, "node_modules"), join(staging, "node_modules"), "dir");
     const results = [];
@@ -406,6 +429,8 @@ const settingKeys = new Set([
   "logpush",
   "upload_source_maps",
   "observability",
+  // Checked exactly below (EDGE_PLACEMENT_*).
+  "placement",
   "python_modules",
   "dev",
   "no_bundle",
@@ -421,11 +446,24 @@ const allowedBindings = Object.freeze({
   api: ["vars", "services", "secrets", "assets", "ratelimits"],
   broker: ["vars", "secrets"],
   orchestrator: ["workflows", "queues", "secrets"],
-  connector: ["vars", "secrets"],
+  // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint and, since the
+  // PR-2 review, its two per-address ingress limits (edgeConnectorRateLimits).
+  connector: ["vars", "services", "secrets", "ratelimits"],
 });
-// MORROW_VAULT_ (the vault KEKs, ADR-0022 item 7) binds only to the broker as well.
+// The reviewed packages/ files the connector bundle may include (M2 PR-2): the shared
+// broker protocol and the role preflight text, with the JSON helpers they import, and the
+// per-address limiter key (WebCrypto only). No pool, SQL module, validator or policy code.
+export const connectorPackageAllowlist = Object.freeze([
+  "packages/identity/src/broker-protocol.ts",
+  "packages/identity/src/edge-limiter.ts",
+  "packages/identity/src/executor-role-preflight.ts",
+  "packages/identity/src/standalone-login-protocol.ts",
+  "packages/identity/src/workos-session-status-json.ts",
+]);
+// MORROW_VAULT_ (the vault KEKs, ADR-0022 item 7) binds only to the broker as well, and so
+// does STRIPE_ (M5 PR-1: the restricted key, the webhook secret and the configuration).
 const providerCredentialName =
-  /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG)/i;
+  /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG|STRIPE_)/i;
 const credentialWord = /KEY|SECRET|PASSWORD|TOKEN/i;
 // Hosted identifiers that P04.T02a must not commit (P04.T01i later allows only the
 // reviewed staging identifiers in env.staging.vars).
@@ -438,6 +476,12 @@ export const committedIdentifierPatterns = Object.freeze([
   ["neon_branch", /\bbr-[a-z0-9-]+/],
   ["neon_password", /\bnpg_[A-Za-z0-9]/],
   ["workos_key", /\bsk_(?:test|live)_/],
+  // M5 PR-1: a Stripe restricted key or a webhook signing secret is never committed; a
+  // portal configuration only as the reviewed id of docs/decisions/stripe-staging.json,
+  // inside the staging broker's STRIPE_CONFIGURATION_JSON and nowhere else.
+  ["stripe_restricted_key", /\brk_(?:test|live)_/],
+  ["stripe_webhook_secret", /\bwhsec_/],
+  ["stripe_portal_configuration", /\bbpc_[A-Za-z0-9]+/],
   ["cloudflare_account", /"account_id"|\b[0-9a-f]{32}\b/],
   ["route", /"routes?"\s*:/],
 ]);
@@ -458,10 +502,361 @@ export function edgeRateLimits(environment) {
   }));
 }
 
-// Resolved-configuration checks for AC01, AC04, AC22 (static) and AC24.
+// M2 PR-2 review (ADR-0019 items 6 and 8 applied to the connector, the second public
+// Worker): the connector's per-address Shopify ingress limits, exact per environment:
+// launch, status and callback 20 and webhooks 300 per 60 s, in namespaces 7004-7005
+// (development), 7104-7105 (staging) and 7204-7205 (production), after the api's. Webhooks
+// are keyed by address too, never by app key (an unknown app key would be a fresh budget,
+// and a public one would let anyone starve that store's deliveries), with the higher limit
+// because Shopify's delivery addresses carry every store's webhooks.
+export function edgeConnectorRateLimits(environment) {
+  const base = { development: 7004, staging: 7104, production: 7204 }[environment];
+  return [
+    ["INSTALL_LIMITER", 20],
+    ["WEBHOOK_LIMITER", 300],
+  ].map(([name, limit], i) => ({
+    name,
+    namespace_id: String(base + i),
+    simple: { limit, period: 60 },
+  }));
+}
+
+// P04.T01i D1 and D6 (AC01, AC02): only the staging api is on workers.dev; every staging
+// Worker keeps Workers Logs (invocation logs and traces off); development and production
+// keep observability off. Compared exactly, per Worker and environment.
+export const edgeStagingObservability = Object.freeze({
+  enabled: true,
+  head_sampling_rate: 1,
+  traces: Object.freeze({ enabled: false }),
+  logs: Object.freeze({
+    enabled: true,
+    invocation_logs: false,
+    head_sampling_rate: 1,
+    persist: true,
+  }),
+});
+export const edgeObservability = (environment) =>
+  environment === "staging" ? edgeStagingObservability : Object.freeze({ enabled: false });
+export const edgeWorkersDev = (worker, environment) =>
+  worker === "api" && environment === "staging";
+// P04.T01i D1 (placement, 2026-10-21): the staging api and broker run in the region of the
+// committed Neon endpoint, so the api's sequential database round trips stay inside that
+// region instead of crossing from the edge nearest the caller (the first deploy's
+// SMOKE_DATABASE_PATH). It is a performance setting and changes no binding, route, secret
+// or trust boundary. Development has no hosted database and production waits for its own,
+// so neither has placement; the orchestrator and the connector never have it.
+export const edgePlacementWorkers = Object.freeze(["api", "broker"]);
+// Neon's AWS region id ("aws-us-east-1") and its Cloudflare targeted-placement region
+// ("aws:us-east-1"). Any other shape, another cloud included, is null and fails the check.
+const neonAwsRegion = (regionId) =>
+  typeof regionId === "string"
+    ? (/^aws-([a-z]{2}-[a-z]+-[1-9])$/.exec(regionId)?.[1] ?? null)
+    : null;
+export function edgePlacementRegion(regionId) {
+  const region = neonAwsRegion(regionId);
+  return region === null ? null : "aws:" + region;
+}
+// P04.T01i D1 (AC01): each Worker's var names, exactly, per environment. Only the staging
+// api and broker carry configuration; the orchestrator has no vars at all.
+export function edgeVarNames(worker, environment) {
+  if (worker === "orchestrator") return [];
+  if (environment !== "staging" || worker === "connector") return ["MORROW_ENVIRONMENT"];
+  return worker === "api"
+    ? [
+        "MORROW_ENVIRONMENT",
+        "LOGIN_CONFIGURATION_JSON",
+        "WORKSPACE_CONFIGURATION_JSON",
+        "LOGOUT_CONFIGURATION_JSON",
+        "MORROW_DATABASE_BINDING_JSON",
+        "LOGIN_CHALLENGE_JSON",
+      ]
+    : [
+        "MORROW_ENVIRONMENT",
+        "LOGIN_CONFIGURATION_JSON",
+        "MORROW_DATABASE_BINDING_JSON",
+        "TURNSTILE_CONFIGURATION_JSON",
+      ];
+}
+// M5 PR-1: the optional staging vars, each admitted only with its reviewed record. The
+// staging broker may carry STRIPE_CONFIGURATION_JSON (docs/decisions/stripe-staging.json);
+// without it the broker holds Stripe and billing answers 503.
+export function edgeOptionalVarNames(worker, environment) {
+  return worker === "broker" && environment === "staging" ? ["STRIPE_CONFIGURATION_JSON"] : [];
+}
+// The reviewed staging Stripe record: test mode, the portal configuration id (null until
+// the owner creates it) and the tax flags. Returns the exact STRIPE_CONFIGURATION_JSON
+// text the record admits (null while it names no portal configuration), or throws.
+export function reviewedStripeConfiguration(record) {
+  if (
+    !record ||
+    typeof record !== "object" ||
+    Array.isArray(record) ||
+    Object.keys(record).sort().join() !==
+      "automatic_tax,billing_address_collection,environment_kind,mode,observed_on,portal_configuration_id,schema_version,scope" ||
+    record.schema_version !== 1 ||
+    record.environment_kind !== "staging" ||
+    record.mode !== "test" ||
+    typeof record.automatic_tax !== "boolean" ||
+    !["auto", "required"].includes(record.billing_address_collection) ||
+    typeof record.scope !== "string" ||
+    (record.portal_configuration_id !== null &&
+      (typeof record.portal_configuration_id !== "string" ||
+        !/^bpc_[A-Za-z0-9]{8,64}$/.test(record.portal_configuration_id) ||
+        typeof record.observed_on !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(record.observed_on))) ||
+    (record.portal_configuration_id === null && record.observed_on !== null)
+  )
+    throw Error("EDGE_STAGING_STRIPE_RECORD");
+  return record.portal_configuration_id === null
+    ? null
+    : JSON.stringify({
+        schemaVersion: 1,
+        portalConfigurationId: record.portal_configuration_id,
+        automaticTax: record.automatic_tax,
+        billingAddressCollection: record.billing_address_collection,
+      });
+}
+// Key-order-free comparison for the observability blocks.
+const canonicalJson = (value) =>
+  JSON.stringify(value, (_key, child) =>
+    child && typeof child === "object" && !Array.isArray(child)
+      ? Object.fromEntries(
+          Object.keys(child)
+            .sort()
+            .map((key) => [key, child[key]]),
+        )
+      : child,
+  );
+const globalPattern = (pattern) =>
+  new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g");
+const matchesOf = (pattern, text) => [...text.matchAll(globalPattern(pattern))].map((m) => m[0]);
+const readJson = (path) => {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+};
+
+// The runtimes' own parsers, loaded once per process.
+let stagingParsers;
+const loadStagingParsers = () =>
+  (stagingParsers ??= (async () => {
+    const { tsImport } = await import("tsx/esm/api");
+    const here = import.meta.url;
+    const [binding, login, protocol, guard] = await Promise.all([
+      tsImport("../packages/identity/src/managed-workspace-binding.ts", here),
+      tsImport("../packages/identity/src/standalone-login-protocol.ts", here),
+      tsImport("../packages/identity/src/broker-protocol.ts", here),
+      tsImport("../apps/api/src/abuse-guard.ts", here),
+    ]);
+    return Object.freeze({
+      captureManagedWorkspaceBinding: binding.captureManagedWorkspaceBinding,
+      parseLoginConfiguration: login.parseLoginConfiguration,
+      parseBrokerDatabaseBinding: protocol.parseBrokerDatabaseBinding,
+      parseTurnstileConfiguration: protocol.parseTurnstileConfiguration,
+      parseStripeConfiguration: protocol.parseStripeConfiguration,
+      turnstileHostnameMismatch: protocol.turnstileHostnameMismatch,
+      parseLoginChallengeConfiguration: guard.parseLoginChallengeConfiguration,
+    });
+  })());
+
+// P04.T01i D1 "Rules" (AC01) on the staging vars, with the runtimes' own parsers, and the
+// narrowed P04.T02a AC24: a staging var may name only the reviewed WorkOS environment,
+// application and client (docs/decisions/workos-staging.json), and from staging.json the
+// bound `br-…` branch, the branch's direct endpoint (`neon.endpoint_host`, never `-pooler`),
+// the Turnstile site key (`cloudflare.turnstile.site_key`, in LOGIN_CHALLENGE_JSON only) and
+// the origin. Every origin use is D1's
+// `https://${env.staging.name}.${workers_dev_subdomain}.workers.dev`, with the subdomain read
+// from staging.json; the only other URLs are its callback and the WorkOS issuer, which the
+// login parser fixes to the client. M5 PR-1: the broker's optional STRIPE_CONFIGURATION_JSON
+// must be byte-equal to the text docs/decisions/stripe-staging.json admits (its portal
+// configuration id and tax flags) and parse with the broker's own parser; that id is then
+// admitted inside that one var only. Returns the problems, the identifiers a committed file
+// may name, and `allowedIn(worker, name)`, the identifiers admitted in one var.
+async function stagingValueChecks({ vars, apiName, staging, workos, stripe }) {
+  const {
+    captureManagedWorkspaceBinding,
+    parseLoginConfiguration,
+    parseBrokerDatabaseBinding,
+    parseTurnstileConfiguration,
+    parseStripeConfiguration,
+    turnstileHostnameMismatch,
+    parseLoginChallengeConfiguration,
+  } = await loadStagingParsers();
+  const problems = [];
+  const problem = (code, where) => problems.push(code + ":" + where);
+  const text = (worker, name) =>
+    typeof vars[worker]?.[name] === "string" ? vars[worker][name] : null;
+  const subdomain = staging?.cloudflare?.workers_dev_subdomain;
+  const origin =
+    typeof subdomain === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)
+      ? `https://${apiName}.${subdomain}.workers.dev`
+      : null;
+  if (origin === null || staging?.cloudflare?.origin !== origin)
+    problem("EDGE_STAGING_ORIGIN", "staging.json");
+  const neon = staging?.neon ?? {};
+  const allowed = new Set(
+    [workos?.environment_id, workos?.application_id, workos?.client_id, neon.branch_id].filter(
+      (value) => typeof value === "string",
+    ),
+  );
+  // The api's four configuration values together, as mapper step 7 reads them, then the
+  // full login parser the broker and gate 4 use.
+  const login = text("api", "LOGIN_CONFIGURATION_JSON");
+  try {
+    const captured = captureManagedWorkspaceBinding({
+      loginConfigurationJson: login,
+      workspaceConfigurationJson: text("api", "WORKSPACE_CONFIGURATION_JSON"),
+      logoutConfigurationJson: text("api", "LOGOUT_CONFIGURATION_JSON"),
+      bindingJson: text("api", "MORROW_DATABASE_BINDING_JSON"),
+    });
+    const parsed = await parseLoginConfiguration(login);
+    if (parsed.retentionTier !== "staging" || parsed.origin !== captured.origin)
+      problem("EDGE_STAGING_LOGIN_CONFIGURATION", "api:staging");
+    // The login, workspace and logout origins and the redirect base are one value here.
+    if (origin === null || captured.origin !== origin)
+      problem("EDGE_STAGING_ORIGIN", "api:staging");
+  } catch {
+    problem("EDGE_STAGING_LOGIN_CONFIGURATION", "api:staging");
+  }
+  // The binding: the committed `staging` branch of the committed project, through that
+  // branch's committed direct endpoint (any other well-formed `ep-` host, such as the root
+  // branch's, fails), never a pooler.
+  try {
+    const binding = parseBrokerDatabaseBinding(text("api", "MORROW_DATABASE_BINDING_JSON"));
+    const label = binding.hostname.split(".")[0];
+    if (
+      binding.environment !== "staging" ||
+      binding.projectId !== neon.project_id ||
+      binding.branchId !== neon.branch_id ||
+      binding.branchId === neon.root_branch_id ||
+      binding.database !== "morrow" ||
+      typeof neon.endpoint_host !== "string" ||
+      binding.hostname !== neon.endpoint_host ||
+      label.includes("-pooler") ||
+      !binding.hostname.endsWith(".aws.neon.tech")
+    )
+      throw Error("EDGE_STAGING_BINDING");
+    allowed.add(binding.hostname);
+  } catch {
+    problem("EDGE_STAGING_BINDING", "api:staging");
+  }
+  for (const name of ["LOGIN_CONFIGURATION_JSON", "MORROW_DATABASE_BINDING_JSON"])
+    if (text("broker", name) === null || text("broker", name) !== text("api", name))
+      problem("EDGE_STAGING_SHARED_VARS", "broker:staging:" + name);
+  // The two challenge vars: each runtime's parser, the Turnstile hostname the origin's, and
+  // the actions byte-equal (both parsers refuse a duplicate member, so JSON.parse agrees).
+  // The site key is staging.json's widget's: another well-formed `0x` key fails.
+  const reviewedSiteKey = staging?.cloudflare?.turnstile?.site_key;
+  let siteKey = null;
+  let apiActions = null;
+  let brokerActions = null;
+  try {
+    siteKey = parseLoginChallengeConfiguration(text("api", "LOGIN_CHALLENGE_JSON")).siteKey;
+    apiActions = JSON.stringify(JSON.parse(text("api", "LOGIN_CHALLENGE_JSON")).actions);
+  } catch {
+    problem("EDGE_STAGING_CHALLENGE", "api:staging");
+  }
+  try {
+    parseTurnstileConfiguration(text("broker", "TURNSTILE_CONFIGURATION_JSON"), origin);
+    brokerActions = JSON.stringify(
+      JSON.parse(text("broker", "TURNSTILE_CONFIGURATION_JSON")).actions,
+    );
+  } catch (error) {
+    problem(
+      error?.message === turnstileHostnameMismatch
+        ? "EDGE_STAGING_ORIGIN"
+        : "EDGE_STAGING_CHALLENGE",
+      "broker:staging",
+    );
+  }
+  if (apiActions !== null && brokerActions !== null && apiActions !== brokerActions)
+    problem("EDGE_STAGING_CHALLENGE_ACTIONS", "staging");
+  // M5 PR-1: the Stripe configuration, pinned to its reviewed record.
+  const scoped = new Map();
+  let reviewedStripe = null;
+  try {
+    reviewedStripe = reviewedStripeConfiguration(stripe);
+  } catch {
+    problem("EDGE_STAGING_STRIPE_RECORD", "stripe-staging.json");
+  }
+  const stripeJson = vars.broker?.STRIPE_CONFIGURATION_JSON;
+  if (stripeJson !== undefined) {
+    let parsed = null;
+    try {
+      parsed = parseStripeConfiguration(stripeJson);
+    } catch {
+      parsed = null;
+    }
+    if (parsed === null || reviewedStripe === null || stripeJson !== reviewedStripe)
+      problem("EDGE_STAGING_STRIPE_CONFIGURATION", "broker:staging");
+    else scoped.set("broker:STRIPE_CONFIGURATION_JSON", new Set([parsed.portalConfigurationId]));
+  }
+  const allowedIn = (worker, name) => scoped.get(worker + ":" + name) ?? new Set();
+  // Every value of every staging Worker: identifiers, URLs, workers.dev hosts and keys.
+  const urls = new Set(
+    origin === null
+      ? []
+      : [
+          origin,
+          origin + "/auth/workos/callback",
+          "https://api.workos.com/user_management/" + workos?.client_id,
+        ],
+  );
+  const host = origin === null ? null : new URL(origin).hostname;
+  for (const [worker, record] of Object.entries(vars))
+    for (const [name, value] of Object.entries(record ?? {})) {
+      if (typeof value !== "string") continue;
+      const where = worker + ":staging:" + name;
+      for (const [kind, pattern] of committedIdentifierPatterns)
+        if (
+          matchesOf(pattern, value).some(
+            (match) => !allowed.has(match) && !allowedIn(worker, name).has(match),
+          )
+        )
+          problem("EDGE_STAGING_VALUE_" + kind.toUpperCase(), where);
+      if (matchesOf(/https?:\/\/[^\s"\\]*/i, value).some((url) => !urls.has(url)))
+        problem("EDGE_STAGING_VALUE_URL", where);
+      if (matchesOf(/[A-Za-z0-9.-]*\.workers\.dev\b/i, value).some((match) => match !== host))
+        problem("EDGE_STAGING_VALUE_HOSTNAME", where);
+      const keys = matchesOf(/\b0x[0-9A-Za-z_-]*/, value);
+      if (
+        keys.length &&
+        (worker !== "api" ||
+          name !== "LOGIN_CHALLENGE_JSON" ||
+          typeof reviewedSiteKey !== "string" ||
+          keys.some((key) => key !== siteKey || key !== reviewedSiteKey))
+      )
+        problem("EDGE_STAGING_VALUE_SITE_KEY", where);
+    }
+  return { problems, allowed, allowedIn };
+}
+
+// One Worker's resolved wrangler configuration (no account, credential or network).
+export async function resolvedEdgeConfig(workerKey, environment, root = repositoryRoot) {
+  const worker = edgeWorkers.find((candidate) => candidate.key === workerKey);
+  if (!worker || !edgeEnvironments.includes(environment)) throw Error("EDGE_USAGE");
+  const { unstable_readConfig } = await loadWranglerApi();
+  return captureConsole(() =>
+    unstable_readConfig(
+      {
+        config: workerConfigPath(worker, root),
+        env: environment === "development" ? undefined : environment,
+      },
+      {},
+    ),
+  ).value;
+}
+
+// Resolved-configuration checks for AC01, AC04, AC22 (static) and AC24, and P04.T01i AC01
+// and AC02.
 export async function verifyEdgeConfig({
   root = repositoryRoot,
   routesPath = join(repositoryRoot, "docs/contracts/workspace-routes.json"),
+  stagingPath = join(repositoryRoot, "infra/environments/staging.json"),
+  workosPath = join(repositoryRoot, "docs/decisions/workos-staging.json"),
+  stripePath = join(repositoryRoot, "docs/decisions/stripe-staging.json"),
 } = {}) {
   const { tsImport } = await import("tsx/esm/api");
   const here = import.meta.url;
@@ -477,13 +872,14 @@ export async function verifyEdgeConfig({
   const { unstable_readConfig } = await loadWranglerApi();
   const problems = [];
   const resolved = {};
+  const texts = {};
+  const stagingVars = {};
+  const stagingPlacements = {};
+  let apiStagingName = null;
   const problem = (code, where) => problems.push(code + ":" + where);
   for (const worker of edgeWorkers) {
     const path = workerConfigPath(worker, root);
-    const text = readFileSync(path, "utf8");
-    for (const [kind, pattern] of committedIdentifierPatterns)
-      if (pattern.test(text))
-        problem("EDGE_COMMITTED_IDENTIFIER_" + kind.toUpperCase(), worker.key);
+    texts[worker.key] = readFileSync(path, "utf8");
     for (const environment of edgeEnvironments) {
       const where = worker.key + ":" + environment;
       let config;
@@ -508,8 +904,9 @@ export async function verifyEdgeConfig({
         !same(config.compatibility_flags, edgeCompatibility.flags)
       )
         problem("EDGE_COMPATIBILITY", where);
+      if (config.workers_dev !== edgeWorkersDev(worker.key, environment))
+        problem("EDGE_FLAG_WORKERS_DEV", where);
       for (const key of [
-        "workers_dev",
         "preview_urls",
         "logpush",
         "upload_source_maps",
@@ -517,12 +914,26 @@ export async function verifyEdgeConfig({
         "send_metrics",
       ])
         if (config[key] !== false) problem("EDGE_FLAG_" + key.toUpperCase(), where);
-      if (
-        config.observability?.enabled !== false ||
-        !same(Object.keys(config.observability), ["enabled"])
-      )
+      if (canonicalJson(config.observability) !== canonicalJson(edgeObservability(environment)))
         problem("EDGE_FLAG_OBSERVABILITY", where);
       if (!emptyValue(config.routes) || !emptyValue(config.route)) problem("EDGE_ROUTES", where);
+      // Placement (P04.T01i D1): exactly {mode: "targeted", region} on the staging api and
+      // broker, its region checked against staging.json below; absent everywhere else, an
+      // explicit `{mode: "off"}` included.
+      const placement = config.placement;
+      if (!edgePlacementWorkers.includes(worker.key)) {
+        if (placement !== undefined) problem("EDGE_PLACEMENT_WORKER", where);
+      } else if (environment !== "staging") {
+        if (placement !== undefined) problem("EDGE_PLACEMENT_ENVIRONMENT", where);
+      } else if (
+        placement === null ||
+        typeof placement !== "object" ||
+        !same(Object.keys(placement).sort(), ["mode", "region"]) ||
+        placement.mode !== "targeted" ||
+        typeof placement.region !== "string"
+      )
+        problem("EDGE_PLACEMENT_STAGING", where);
+      else stagingPlacements[worker.key] = placement.region;
       const allowed = allowedBindings[worker.key];
       for (const [key, value] of Object.entries(config))
         if (!settingKeys.has(key) && !allowed.includes(key) && !emptyValue(value))
@@ -537,10 +948,28 @@ export async function verifyEdgeConfig({
         names.some((name) => providerCredentialName.test(name) || credentialWord.test(name))
       )
         problem("EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER", where);
-      const environmentVars = { MORROW_ENVIRONMENT: environment };
-      if (worker.key === "orchestrator") {
-        if (!emptyValue(vars)) problem("EDGE_VARS", where);
-      } else if (!same(vars, environmentVars)) problem("EDGE_VARS", where);
+      // The var allowlist (P04.T01i AC01): exactly these names (plus, M5 PR-1, the optional
+      // ones each admitted with its reviewed record), string values, and the Worker's own
+      // environment.
+      const varNames = edgeVarNames(worker.key, environment);
+      const optionalNames = edgeOptionalVarNames(worker.key, environment);
+      if (
+        vars === null ||
+        typeof vars !== "object" ||
+        !same(
+          Object.keys(vars)
+            .filter((name) => !optionalNames.includes(name))
+            .sort(),
+          [...varNames].sort(),
+        ) ||
+        Object.values(vars).some((value) => typeof value !== "string") ||
+        (varNames.includes("MORROW_ENVIRONMENT") && vars.MORROW_ENVIRONMENT !== environment)
+      )
+        problem("EDGE_VARS", where);
+      if (environment === "staging") {
+        stagingVars[worker.key] = vars;
+        if (worker.key === "api") apiStagingName = config.name;
+      }
       if (worker.key === "broker") {
         if (
           !Array.isArray(required) ||
@@ -549,6 +978,18 @@ export async function verifyEdgeConfig({
         )
           problem("EDGE_BROKER_SECRETS", where);
       } else if (!same(required, [])) problem("EDGE_SECRETS_REQUIRED_NOT_EMPTY", where);
+      if (
+        worker.key === "connector" &&
+        !same(config.services, [
+          { binding: "BROKER", service: expected.broker, entrypoint: "ConnectorBroker" },
+        ])
+      )
+        problem("EDGE_CONNECTOR_BROKER_BINDING", where);
+      if (
+        worker.key === "connector" &&
+        !same(config.ratelimits, edgeConnectorRateLimits(environment))
+      )
+        problem("EDGE_CONNECTOR_RATELIMITS", where);
       if (worker.key === "api") {
         if (
           !same(config.services, [
@@ -594,9 +1035,61 @@ export async function verifyEdgeConfig({
         )
           problem("EDGE_ORCHESTRATOR_BINDINGS", where);
       }
-      resolved[where] = { name: config.name, bindings: names, services: config.services ?? [] };
+      resolved[where] = {
+        name: config.name,
+        bindings: names,
+        services: config.services ?? [],
+        placement: placement ?? null,
+      };
     }
   }
+  // P04.T01i D1: the staging values, then the committed text. A reviewed staging identifier
+  // may appear only inside the api's or the broker's own env.staging.vars values. Each
+  // file's matches are counted as a multiset, the reviewed matches inside that Worker's
+  // resolved staging values are taken away, and any remainder (a comment, another block,
+  // a second copy) is refused; the other Workers' files name none.
+  const staging = readJson(stagingPath);
+  const workos = readJson(workosPath);
+  const stripe = readJson(stripePath);
+  if (staging === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "staging.json");
+  if (workos === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "workos-staging.json");
+  if (stripe === null) problem("EDGE_STAGING_RECORD_UNREADABLE", "stripe-staging.json");
+  const checked = await stagingValueChecks({
+    vars: stagingVars,
+    apiName: apiStagingName ?? selectedConfiguration("staging").cloudflare.workers.api,
+    staging,
+    workos,
+    stripe,
+  });
+  problems.push(...checked.problems);
+  // The placement region is the region of staging.json's Neon project (`neon.region_id`,
+  // Neon's `aws-<region>`), and the committed endpoint lies in that region, so the staging
+  // api and broker run beside the database the binding names.
+  const placementRegion = edgePlacementRegion(staging?.neon?.region_id);
+  const endpointHost = staging?.neon?.endpoint_host;
+  if (
+    placementRegion === null ||
+    typeof endpointHost !== "string" ||
+    !endpointHost.endsWith("." + neonAwsRegion(staging.neon.region_id) + ".aws.neon.tech")
+  )
+    problem("EDGE_PLACEMENT_REGION", "staging.json");
+  for (const [worker, region] of Object.entries(stagingPlacements))
+    if (placementRegion === null || region !== placementRegion)
+      problem("EDGE_PLACEMENT_REGION", worker + ":staging");
+  for (const worker of edgeWorkers)
+    for (const [kind, pattern] of committedIdentifierPatterns) {
+      const remaining = new Map();
+      for (const match of matchesOf(pattern, texts[worker.key]))
+        remaining.set(match, (remaining.get(match) ?? 0) + 1);
+      if (["api", "broker"].includes(worker.key))
+        for (const [name, value] of Object.entries(stagingVars[worker.key] ?? {}))
+          if (typeof value === "string")
+            for (const match of matchesOf(pattern, value))
+              if (checked.allowed.has(match) || checked.allowedIn(worker.key, name).has(match))
+                remaining.set(match, (remaining.get(match) ?? 0) - 1);
+      if ([...remaining.values()].some((count) => count > 0))
+        problem("EDGE_COMMITTED_IDENTIFIER_" + kind.toUpperCase(), worker.key);
+    }
   // No SPA route may fall under a Worker-reserved prefix (AC22).
   const routes = JSON.parse(readFileSync(routesPath, "utf8")).routes;
   const bases = [...new Set(reservedWorkerPaths.map((path) => path.replace(/\/\*$/, "")))];
@@ -619,17 +1112,36 @@ export function bundleExclusions(worker, inputs, bundleText) {
           [/^apps\/broker\//, "broker_source"],
           [/(^|\/)ajv\/dist\/compile\//, "ajv_compile"],
           [/(^|\/)node_modules\/unenv\/.*\/node\/https?(\/|\.mjs$)/, "node_http"],
+          [/(^|\/)@shopify\//, "shopify_library"],
         ]
       : worker.key === "broker"
         ? [
-            [/@neondatabase\/serverless/, "neon_driver"],
+            // M2 PR-2: the Neon driver is allowed (the vault login's transport,
+            // vault-database.ts); the pool, the validators and the api stay out.
             [/controlled-neon-login-pool\.ts$/, "neon_pool"],
             [/runtime-validators\.mjs$/, "runtime_validators"],
             [/^apps\/api\//, "api_source"],
+            // ADR-0008 item 1 as amended (owner answer 4): Shopify calls are hand-written
+            // in the broker; no @shopify/ library is ever deployed.
+            [/(^|\/)@shopify\//, "shopify_library"],
           ]
-        : [[/^packages\//, "package_source"]];
+        : worker.key === "connector"
+          ? [
+              [/^apps\/(api|broker|workers|workspace-web)\//, "other_worker_source"],
+              [/runtime-validators\.mjs$/, "runtime_validators"],
+              [/(^|\/)@shopify\//, "shopify_library"],
+            ]
+          : [[/^packages\//, "package_source"]];
   for (const [pattern, name] of banned)
     if (inputs.some((input) => pattern.test(input))) failures.push(name);
+  // The connector may include only its reviewed packages/ allowlist.
+  if (
+    worker.key === "connector" &&
+    inputs.some(
+      (input) => input.startsWith("packages/") && !connectorPackageAllowlist.includes(input),
+    )
+  )
+    failures.push("package_source");
   if (
     worker.key === "api" &&
     /(?:from\s*|import\s*\(?\s*|require\s*\(\s*)["'](?:node:)?https?["']/.test(bundleText)

@@ -372,7 +372,7 @@ test("the HTTP port: reads, PUT under the POST rules, and the outcome mapping", 
 test("the fixture adapter: enable through the document, stop, resume, and the model default", async () => {
   const port = createFixtureAdapter("ready");
   const W = fixtureWorkspace.id;
-  const S = fixtureStore.id;
+  const S = fixtureStore.storeId;
   const status = await port.agents.listingsStatus(W, S);
   assert.equal(status.value.actions.enable, true);
   const doc = await port.agents.listingsDocument(W, S, { key: key(), body: {} });

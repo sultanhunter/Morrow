@@ -7186,6 +7186,69 @@
       "activation": "blocked_until_contract_and_provider_qualified"
     },
     {
+      "id": "governance.billing.manage",
+      "name": "Open a Morrow-direct plan checkout or billing portal session",
+      "domain": "Governance",
+      "contract_version": "0.1.0-draft",
+      "status": "Proposed",
+      "owner": "Morrow platform owner",
+      "effect": "control",
+      "provider_dependency": "D21",
+      "input": {
+        "envelope": "ScopedRequestV1",
+        "fields": {
+          "action": {
+            "type": "BillingManageAction",
+            "required": true,
+            "nullable": false
+          },
+          "priceKey": {
+            "type": "NullableStripePriceKey",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "output": {
+        "envelope": "EvidenceResultV1",
+        "fields": {
+          "operationId": {
+            "type": "Id",
+            "required": true,
+            "nullable": false
+          }
+        }
+      },
+      "eligible_principal": "human_or_bounded_installation_with_explicit_capability_grant",
+      "grant": "governance.billing.manage",
+      "resource_scope": "Trusted organization/workspace; explicit stores and connection account; selected resources; installation mandate intersection; operator namespace isolated when applicable.",
+      "field_scope": [
+        "purchase action",
+        "plan price"
+      ],
+      "source_authority": "Verified provider records for live external facts; approved merchant evidence for business claims; Morrow records for work and decisions. Generated content is a proposal, never source authority.",
+      "retention_class": "R04",
+      "review_required": false,
+      "executor": "human_only",
+      "kill_switch": false,
+      "irreversible": false,
+      "verification": "Only a server-verified paid invoice fixes the route and grants credits; a checkout return or client value never does",
+      "failure_behavior": "Deny without leaking inaccessible facts; request missing input separately. Conflict requires reread. Uncertain external effect requires reconciliation, never blind replay.",
+      "journey": "J13",
+      "hosts": [
+        "standalone"
+      ],
+      "layout": "Same workflow and record IDs; secondary panels collapse to tabs or drawers at narrow content widths.",
+      "implementation_tasks": [
+        "P18.T01"
+      ],
+      "acceptance_cases": [
+        "P01.A01",
+        "P18.A01"
+      ],
+      "activation": "blocked_until_contract_and_provider_qualified"
+    },
+    {
       "id": "governance.model_default.revise",
       "name": "Revise the workspace default model selection and member ceiling",
       "domain": "Governance",

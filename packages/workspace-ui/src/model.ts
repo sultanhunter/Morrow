@@ -60,6 +60,43 @@ export interface AnswerView {
   readonly answeredBy: PersonRef;
   readonly createdAt: string;
 }
+// M2 PR-2: GET /workspace/:ws/connections (WorkspaceConnections@1). One store installation
+// of the workspace (StoreInstallation@1, decoded); never a credential or token.
+export interface StoreConnectionView {
+  readonly installationId: Id;
+  readonly connectionId: Id;
+  readonly storeId: Id | null;
+  readonly shopDomain: string;
+  /** unlinked | linked | suspended | uninstalled; an unknown value renders as its text. */
+  readonly status: string;
+  readonly grantedScopes: readonly string[];
+  readonly updatedAt: string;
+}
+export type InstallLinkReason =
+  | "offered"
+  | "linked"
+  | "not_permitted"
+  | "not_registered"
+  | "route_not_ready";
+export interface InstallLinkView {
+  readonly offered: boolean;
+  /** The registered https install link, only when offered. */
+  readonly url: string | null;
+  readonly reason: InstallLinkReason;
+}
+export interface ConnectionsView {
+  readonly installations: readonly StoreConnectionView[];
+  readonly installLink: InstallLinkView;
+}
+/** The store-link preview: the installation it links and the CSRF value apply sends back. */
+export interface StoreLinkPreviewView {
+  readonly installationId: Id;
+  readonly csrfToken: string;
+}
+/** A recorded link decision (apply or status): applied, or denied with nothing changed. */
+export interface StoreLinkResultView {
+  readonly outcome: "applied" | "denied";
+}
 // M3 PR-1: the Listings agent of one connected store (ADR-0022 item 3 and its amendment)
 // and the workspace's model default (item 16).
 export interface ListingsAgentView {
