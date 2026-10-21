@@ -24,7 +24,7 @@ In progress:
 - 2026-10-21: `migrate` 0025–0027 from `2f72ce3` (12:36Z; ledger 27; schema head `c41acf8e…`); M-O1 passed; M-N1+ recorded.
 - **2026-10-21, the placement deploy:** `staging:unkill` at 15:30Z (the owner's "set the flag": `STAGING_DEPLOY_ENABLED=1`), then a local `staging:deploy` of `0083b4b`. Every gate ok; broker `86301bfc-…`, orchestrator `17cdb089-…`, connector `f3fe1bf8-…`, api `e60e8761-…`, all deployed; health ready after 1 poll; census clean before and after. **The smoke passed every check**, the database path included. Measured after: `GET /workspaces` 2.25 s cold, then about 0.85 s (0.85 s, 0.88 s; about 5.0 s before placement). No unknown outcome.
 - The flag is on, so every green push to `main` deploys through CI. A merge that adds migrations (#37's 0028–0029, M3's 0030–0033) stops its deploy at gate 3, uploading nothing, until `staging:migrate` (E3) applies them; then rerun it. With Stripe off, gate 6 keeps expecting the broker's 14 names.
-- Drafted, not yet committed: the live records `2026-10-21-neon-staging-migrate-0025-0027.md` and `2026-10-21-cloudflare-deploy-placement.md`.
+- Live records committed with this PR: `2026-10-21-neon-staging-migrate-0025-0027.md` and `2026-10-21-cloudflare-deploy-placement.md`.
 
 ## Decisions recorded 2026-10-18 to 2026-10-21 (owner, in chat)
 
@@ -46,7 +46,7 @@ In progress:
 2. M3 PR-1: re-merge M5, verify pass, PR, CI, merge; `staging:migrate` for 0030–0033; rerun the deploy.
 3. The staging test entitlement PR (decision (b)), then its first use on a named staging workspace under per-action approval with a live record.
 4. With the smoke green: the AC11 acceptance run (bogus token, the 429), then the owner's assisted sign-in (D9 step 11; AC12a).
-5. Commit the two drafted live records. Then M4 (approve and apply) and M6 (the deletion and privacy path, and the live-store ADR of decision (a)).
+5. Then M4 (approve and apply) and M6 (the deletion and privacy path, and the live-store ADR of decision (a)).
 6. Follow-ups: a KEK fingerprint check in `staging:put-secret`; the #30 advisories (a production broker must hold non-api callers; the 18 → 0019 replay case; `identityConstants` via `brokerRequiredSecretsFor("staging")`; the spine T1 preflight refusal); the `ci` PR above.
 
 Open plan follow-ups: work routes in production must be gated on P09.T05 when production mapping is enabled (ADR-0007 item 9; packet hard ordering b); superseded banners on `docs/references/*`; check against the WorkOS docs whether a user's session list can hold expired or ended sessions (`packages/identity/src/workos-session-status.ts` refuses the whole page on such a row; found in the P14.T01a AC30 hold); a forward migration routing the 0006, 0007, 0009 and 0011 definer guards through `executor_role_safe` (informational; 0017–0018 are P06.T01b); a forward migration adding P01.T02c's eight v1.1 capabilities to `morrow_work.review_capabilities` once a consumer needs them; P05.T01y: rebind linking handoffs, reviews and status to the family (P09.T01a/T02a) and the revocation receipt (P05.T01z), and the production custody decision (ADR-0007 item 9) revisits the two R1 widenings accepted for staging; timing fixes if hosted `unit-stress` confirms them (`tests/broker-client.test.mjs` AC30, the 5,000 ms entry-timeout case in `tests/standalone-login-http.test.mjs`).

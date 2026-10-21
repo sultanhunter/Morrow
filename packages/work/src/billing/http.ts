@@ -1,12 +1,9 @@
 import type { Core_ErrorEnvelope } from "@morrow/contracts";
 import { validateDefinition } from "@morrow/contracts/validation";
 import {
-  billingCallToAction,
   billingEnvironments,
   environmentMode,
-  type BillingCallToAction,
   type BillingDenial,
-  type WorkspaceBillingState,
 } from "@morrow/policy/billing-state";
 import {
   WorkOutcomeUnknown,
@@ -41,6 +38,7 @@ import {
 } from "./commands.js";
 import type { BillingBrokerPort, BillingEnvironmentName } from "./port.js";
 import { subscriptionEntry } from "./terms.js";
+import { billingViewCallToAction } from "./view.js";
 
 // The billing HTTP API (M5 PR-1; P18.T01a; docs/contracts/billing-api.md). Routes under
 // /workspace/:ws/billing on the api Worker's origin, for Morrow's own SPA: the billing view
@@ -536,25 +534,6 @@ function checkoutAdmissible(c: Awaited<ReturnType<typeof readBillingContext>>): 
     route.shopifyBoundAt === null &&
     c.read.facts.associations.length === 0
   );
-}
-
-/**
- * The view's call to action: billingCallToAction's (P01.T04a §9), or none. None for a
- * viewer without `view` on governance.billing.manage, and none in place of the Morrow
- * plans link while the Stripe switch is off (owner decision (c), 2026-10-21): with no
- * broker Stripe port the plans offer nothing and checkout and the portal answer
- * unavailable, so "Choose a plan" or "Manage plan" would lead nowhere. A Shopify phase's
- * plan page is App Pricing, not Stripe, so the switch leaves it as it is. Nothing here
- * makes a link or wording of its own.
- */
-export function billingViewCallToAction(
-  state: WorkspaceBillingState,
-  mayPurchase: boolean,
-  stripeOn: boolean,
-): BillingCallToAction {
-  if (!mayPurchase) return Object.freeze({ kind: "none" });
-  const action = billingCallToAction(state);
-  return action.kind === "morrow_plans" && !stripeOn ? Object.freeze({ kind: "none" }) : action;
 }
 
 /**

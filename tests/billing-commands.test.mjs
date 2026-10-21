@@ -31,10 +31,8 @@ import {
   workspaceBillingState,
 } from "../packages/policy/src/billing-state.ts";
 import { billingFactsInput } from "../packages/work/src/billing/facts.ts";
-import {
-  billingRequestAbortMs,
-  billingViewCallToAction,
-} from "../packages/work/src/billing/http.ts";
+import { billingRequestAbortMs } from "../packages/work/src/billing/http.ts";
+import { billingViewCallToAction } from "../packages/work/src/billing/view.ts";
 import {
   billingState,
   directLink,
