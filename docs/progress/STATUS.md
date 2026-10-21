@@ -50,12 +50,9 @@ None for local work. Sign-in on staging waits for a passing database-path smoke.
 
 ## Pending owner questions
 
-1. M2: accept the per-isolate (not global) ingress bound on the vault login for staging with development stores, or add a separate ingress login (ADR-0022 item 8 amendment)?
-2. M2: is the "linking owner" the organization's founding principal (an ADR-0022 item 3 clarification)?
-3. M5: may the operator "abandon" path settle an unknown Stripe customer-create as failed, on attestation after a Stripe inspection?
-4. A `staging-card-1` change for the connector's workers.dev hostname, before any Shopify install smoke.
-5. Acknowledge that `migrate` ran on 2026-10-20 before P04.T01j's M-N1+ items 2–5 were recorded (an AC15 precondition, ADR-0020). The apply's own checks (the migrations' guards and the runner's) covered items 3 and 4 and item 5 in part; items 2 and 5 follow by read-only catalog reads (`2026-10-20-neon-staging-migrate.md`, Deviation).
-6. Acknowledge setting `STAGING_DEPLOY_ENABLED=1` before a passing smoke. D9 step 10 sets it after the smoke, M-O1 and M-R1, but the placement can only roll forward through a deploy, and every deploy after `--first` needs the flag at 1. E10 allows the write; M-O1 runs first; the kill switch is the stop.
+Answered 2026-10-21: (1) "Accept for staging (Recommended)": the per-isolate ingress bound, recorded in the M2 brief; (2) "Founder only (Recommended)" and (3) "Allow operator abandon (Recommended)": the ADR-0022 item 3 and 12 amendments; (4) "Approve card change (Recommended)": the card's E1 amendment. Still open:
+1. Acknowledge that items 2–5 of P04.T01j's M-N1+ were recorded after `migrate` (`2026-10-21-neon-mn1plus-catalog.md`; all five match ADR-0020).
+2. Acknowledge setting `STAGING_DEPLOY_ENABLED=1` before a passing smoke (D9 step 10 order). E10 allows the write; M-O1 runs first; the kill switch is the stop.
 
 ## Pending owner actions
 
