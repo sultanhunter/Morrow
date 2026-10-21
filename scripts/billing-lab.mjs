@@ -1462,7 +1462,7 @@ ${insert}; ROLLBACK;`,
           // An account without a recorded subscription (owner maintenance fixture).
           db.workOwner(
             `UPDATE morrow_billing.workspace_billing_routes SET route='morrow_direct',mode='test',route_fixed_at=date_trunc('milliseconds',clock_timestamp()),fixing_payment_key=${lit("stripe:invoice:in_LabFc" + n + "Owner01")},revision=revision+1,updated_at=greatest(updated_at,date_trunc('milliseconds',clock_timestamp())) WHERE workspace_id=${lit(p.workspace)};
-INSERT INTO morrow_billing.billing_accounts VALUES(${lit(p.org)},${lit(p.workspace)},${lit(randomUUID())},'morrow_direct','test','USD','active',1,date_trunc('milliseconds',clock_timestamp()),date_trunc('milliseconds',clock_timestamp()));`,
+INSERT INTO morrow_billing.billing_accounts VALUES(${lit(p.org)},${lit(p.workspace)},${lit(randomUUID())},'morrow_direct','test','USD','active',1,date_trunc('milliseconds',transaction_timestamp()),date_trunc('milliseconds',transaction_timestamp()));`,
           );
         } else {
           await deliver(

@@ -1131,7 +1131,7 @@ VALUES(${literal("hand_" + suffix)},${literal(p.org)},${literal(ws)},${literal(p
       w2.body.installLink.reason === "route_not_ready" && w2.body.installLink.url === null,
     );
     db.workOwner(
-      `INSERT INTO morrow_billing.workspace_billing_routes(organization_id,workspace_id,origin,shopify_bound_at,route,mode,route_fixed_at,fixing_payment_key,revision,created_at,updated_at) VALUES(${literal(ids.org)},${literal(ids.ws2)},'website',NULL,NULL,NULL,NULL,NULL,1,date_trunc('milliseconds',clock_timestamp()),date_trunc('milliseconds',clock_timestamp()));
+      `INSERT INTO morrow_billing.workspace_billing_routes(organization_id,workspace_id,origin,shopify_bound_at,route,mode,route_fixed_at,fixing_payment_key,revision,created_at,updated_at) VALUES(${literal(ids.org)},${literal(ids.ws2)},'website',NULL,NULL,NULL,NULL,NULL,1,date_trunc('milliseconds',transaction_timestamp()),date_trunc('milliseconds',transaction_timestamp()));
 UPDATE morrow_billing.workspace_billing_routes SET route='morrow_direct',mode='test',route_fixed_at=date_trunc('milliseconds',clock_timestamp()),fixing_payment_key='stripe:invoice:in_lab00000002',revision=2,updated_at=date_trunc('milliseconds',clock_timestamp()) WHERE workspace_id=${literal(ids.ws2)};`,
     );
     const offered = await connectionsOf("F", ids.ws2);
