@@ -143,3 +143,11 @@ Each of these needs a per-action approval:
   - E6, 2026-10-20: the WorkOS redirect, saved by the owner (`docs/evidence/live/2026-10-20-workos-staging-redirect.md`).
   - E9, 2026-10-20: the census and the operator token's permission reads (`docs/evidence/live/2026-10-20-cloudflare-census-and-queues.md`); read-only settings reads of the staging `morrow` database (`docs/evidence/live/2026-10-20-neon-password-path-experiments.md`).
   - The owner's D9 steps that Claude performed on per-action approval (2026-10-19) are recorded in `docs/evidence/live/2026-10-19-*`, and the owner's own Neon `morrow` database and `staging` branch in `docs/evidence/live/2026-10-20-neon-staging-branch.md`. The owner's preconditions for the first deploy, and the vault KEK file, are in `docs/evidence/live/2026-10-20-owner-preconditions.md`; the owner ran `staging:keyring` (D9 step 9) before the first deploy.
+
+## Amendments
+
+### 2026-10-21: E1, the connector's workers.dev hostname
+
+E1's sentence "Only the api is on workers.dev." now reads: "Only the api is on workers.dev; after M2 PR-2 has merged, `morrow-staging-connector` may be on workers.dev too, with the census admitting it only through M2's entrypoint allow table (`connector → ConnectorBroker`) and its rate-limit bindings pinned by verify-config." The broker and the orchestrator stay off workers.dev. The amendment creates no Shopify app, store or install: each app deploy, vault secret, registration and the development-store install still needs its own owner step or per-action approval (M2 brief, owner actions).
+
+Owner decision, 2026-10-21, in chat. The question was: "To test a Shopify install on staging, the connector Worker needs its own public workers.dev address. The staging approval card currently allows only the api to be public. Change the card?" The owner answered: "Approve card change (Recommended)". The option read: "Amend staging-card-1 E1 so `morrow-staging-connector` may also be on workers.dev, after M2 merges and only with M2's census rules. Nothing is installed until you create the Shopify app and development store."
