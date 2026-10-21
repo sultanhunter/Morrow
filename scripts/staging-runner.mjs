@@ -1142,7 +1142,7 @@ export async function seedPlatform({ connect, binding, administrator, rows, self
 // billing module before calling this). Written as morrow_work_owner, in revision order, in
 // one transaction under the D4 SET-row protocol, idempotent, and refused on drift: a
 // stored revision that differs from the file, or one the file does not have. The table's
-// own guard (0027 terms_guard) also refuses a gap or any change.
+// own guard (0029 terms_guard) also refuses a gap or any change.
 const termsStatements = Object.freeze({
   lock: "LOCK TABLE morrow_billing.billing_terms IN SHARE ROW EXCLUSIVE MODE",
   count: "SELECT count(*)::int AS n FROM morrow_billing.billing_terms",

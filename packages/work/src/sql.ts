@@ -66,7 +66,7 @@ export const workStatements = Object.freeze({
   ...approvalStatements,
   // The M2 PR-1 spine reads: the billing route row and the stop state (migration 0020).
   ...spineStatements,
-  // M5 PR-1: billing reads, commands and the receipt ingress (migration 0027).
+  // M5 PR-1: billing reads, commands and the receipt ingress (migration 0029).
   ...billingStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

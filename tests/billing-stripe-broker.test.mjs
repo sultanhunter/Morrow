@@ -1,6 +1,6 @@
 // M5 PR-1: the broker's Stripe writes (apps/broker/src/stripe.ts) against the fake Stripe
 // origin (scripts/fixtures/stripe-fake.mjs), with the broker login's definers replaced by
-// an in-memory operation that follows migration 0027's stripe_op_begin/settle rules. The
+// an in-memory operation that follows migration 0029's stripe_op_begin/settle rules. The
 // SQL itself runs in lab:billing (section G drives this same code over PostgreSQL 17).
 // Covers: closed request builders on the pinned version, the operation-bound
 // Idempotency-Key, the request digest recomputed from the database's parameters, outcome
@@ -49,7 +49,7 @@ const purposeParts = {
   portal_session_create: (op, p) => [op, p.organizationId, p.workspaceId, p.customerId],
 };
 
-// One stripe_write operation as migration 0027 keeps it: authorized -> (send fence)
+// One stripe_write operation as migration 0029 keeps it: authorized -> (send fence)
 // dispatching -> verified | failed | uncertain; a fenced dispatching operation begins
 // again as uncertain ('reconcile'); settle never promotes without a provider result.
 function operation(purpose, params = {}, { createdAtMs = Date.now() } = {}) {

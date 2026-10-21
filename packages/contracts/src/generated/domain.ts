@@ -462,6 +462,8 @@ export type CoreV1_1_StopRecord = ({ "schemaVersion": 1; "id": Core_Id; "stopCon
 export type CoreV1_1_ResourceRef = (unknown & { "organizationId": Core_Id; "workspaceId": Core_Id; "storeId": (Core_Id | null); "connectionId": (Core_Id | null); "kind": "product" | "variant" | "collection" | "publication" | "inventory_item" | "location" | "order" | "fulfillment" | "return" | "refund" | "ad_account" | "campaign" | "audience" | "segment" | "case" | "theme" | "extension" | "artifact" | "task" | "goal" | "installation" | "member" | "knowledge" | "budget" | "subject" | "workspace" | "release" | "store"; "id": Core_Id; });
 export type CoreV1_1_Scope = { "organizationId": Core_Id; "workspaceId": Core_Id; "storeIds": Array<Core_Id>; "accountIds": Array<Core_Id>; "resources": Array<CoreV1_1_ResourceRef>; "fields": Array<Core_FieldPath>; };
 export type CoreV1_1_Grant = { "id": Core_Id; "principal": Core_ActorRef; "capabilityId": Core_CapabilityId; "verbs": Array<"view" | "propose" | "approve" | "execute" | "delegate" | "administer">; "scope": CoreV1_1_Scope; "issuedBy": Core_ActorRef; "validFrom": Core_UtcTime; "expiresAt": (Core_UtcTime | null); "revokedAt": (Core_UtcTime | null); "policyRevision": Core_Revision; };
+export type CoreV1_1_InstallLinkOffer = ({ "offered": true; "url": string; "reason": "offered"; } | { "offered": false; "url": null; "reason": "linked" | "not_permitted" | "not_registered" | "route_not_ready"; });
+export type CoreV1_1_WorkspaceConnections = { "schemaVersion": 1; "installations": Array<Core_StoreInstallation>; "installLink": CoreV1_1_InstallLinkOffer; };
 export type CoreV1_1_BillingManageAction = "subscribe" | "billing_portal";
 export type CoreV1_1_NullableStripePriceKey = (string | null);
 export type CoreV1_1_ModelOptionKey = string;
@@ -624,6 +626,7 @@ export interface CurrentDefinitions {
   "InboxMarkInput": CoreV1_1_InboxMarkInput;
   "InboxPage": CoreV1_1_InboxPage;
   "InboxSubject": CoreV1_1_InboxSubject;
+  "InstallLinkOffer": CoreV1_1_InstallLinkOffer;
   "InstallationStatus": Core_InstallationStatus;
   "InventoryList": Core_InventoryList;
   "KillSwitchControl": CoreV1_1_KillSwitchControl;
@@ -763,6 +766,7 @@ export interface CurrentDefinitions {
   "UsageList": Core_UsageList;
   "UtcTime": Core_UtcTime;
   "ViewportList": Core_ViewportList;
+  "WorkspaceConnections": CoreV1_1_WorkspaceConnections;
   "integer": Core_integer;
   "string": Core_string;
 }
@@ -869,6 +873,7 @@ export type Current_InboxKind = CoreV1_1_InboxKind;
 export type Current_InboxMarkInput = CoreV1_1_InboxMarkInput;
 export type Current_InboxPage = CoreV1_1_InboxPage;
 export type Current_InboxSubject = CoreV1_1_InboxSubject;
+export type Current_InstallLinkOffer = CoreV1_1_InstallLinkOffer;
 export type Current_InstallationStatus = Core_InstallationStatus;
 export type Current_InventoryList = Core_InventoryList;
 export type Current_KillSwitchControl = CoreV1_1_KillSwitchControl;
@@ -1008,6 +1013,7 @@ export type Current_UrlList = Core_UrlList;
 export type Current_UsageList = Core_UsageList;
 export type Current_UtcTime = Core_UtcTime;
 export type Current_ViewportList = Core_ViewportList;
+export type Current_WorkspaceConnections = CoreV1_1_WorkspaceConnections;
 export type Current_integer = Core_integer;
 export type Current_string = Core_string;
 export interface CurrentBillingDefinitions {

@@ -15,6 +15,7 @@ import test from "node:test";
 import {
   bundleExclusions,
   edgeChildEnvironment,
+  edgeConnectorRateLimits,
   edgeEnvironments,
   devBindingTables,
   edgeObservability,
@@ -263,6 +264,20 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
       { broker: (c) => (c.ratelimits = structuredClone(edgeRateLimits("development"))) },
       "EDGE_UNEXPECTED_BINDING_RATELIMITS",
     ],
+    // M2 PR-2 review: the connector's ingress limiters are exact per environment.
+    [{ connector: (c) => (c.ratelimits[0].simple.limit = 1000) }, "EDGE_CONNECTOR_RATELIMITS"],
+    [{ connector: (c) => delete c.env.staging.ratelimits }, "EDGE_CONNECTOR_RATELIMITS"],
+    [
+      { connector: (c) => (c.env.production.ratelimits[1].namespace_id = "7201") },
+      "EDGE_CONNECTOR_RATELIMITS",
+    ],
+    [
+      {
+        orchestrator: (c) =>
+          (c.ratelimits = structuredClone(edgeConnectorRateLimits("development"))),
+      },
+      "EDGE_UNEXPECTED_BINDING_RATELIMITS",
+    ],
     [
       {
         broker: (c) =>
@@ -502,8 +517,73 @@ test("AC05 (rules): bundle exclusions name the forbidden inputs", () => {
       ],
       "",
     ),
-    ["neon_driver", "neon_pool", "runtime_validators", "api_source"],
+    // M2 PR-2: the Neon driver is the vault login's own transport (vault-database.ts).
+    ["neon_pool", "runtime_validators", "api_source"],
   );
+  // No @shopify/ library is ever deployed (ADR-0008 item 1 as amended, owner answer 4):
+  // not in the broker, which hand-writes its Shopify calls, and not in the api.
+  assert.deepEqual(
+    bundleExclusions(broker, ["node_modules/@shopify/shopify-api/dist/esm/index.mjs"], ""),
+    ["shopify_library"],
+  );
+  assert.deepEqual(
+    bundleExclusions(api, ["node_modules/@shopify/admin-api-client/dist/index.mjs"], ""),
+    ["shopify_library"],
+  );
+  // M2 PR-2: the connector may include only its reviewed packages/ allowlist, never
+  // another Worker's source, the validators or a Shopify library (ADR-0008 item 1).
+  const connector = edgeWorkers.find((worker) => worker.key === "connector");
+  assert.equal(connector.entry, "worker/index.ts");
+  assert.deepEqual(
+    bundleExclusions(
+      connector,
+      [
+        "apps/shopify-connector/worker/index.ts",
+        "node_modules/@neondatabase/serverless/index.mjs",
+        "packages/identity/src/broker-protocol.ts",
+        "packages/identity/src/edge-limiter.ts",
+        "packages/identity/src/executor-role-preflight.ts",
+        "packages/identity/src/standalone-login-protocol.ts",
+        "packages/identity/src/workos-session-status-json.ts",
+      ],
+      "",
+    ),
+    [],
+  );
+  assert.deepEqual(
+    bundleExclusions(
+      connector,
+      [
+        "apps/broker/src/vault.ts",
+        "packages/contracts/src/generated/runtime-validators.mjs",
+        "node_modules/@shopify/shopify-api/dist/esm/index.mjs",
+        "packages/identity/src/controlled-neon-login-pool.ts",
+      ],
+      "",
+    ),
+    ["other_worker_source", "runtime_validators", "shopify_library", "package_source"],
+  );
+});
+
+test("M2 PR-2 review: the connector's ingress limiter bindings, exact per environment", () => {
+  const expected = (base) => [
+    { name: "INSTALL_LIMITER", namespace_id: String(base), simple: { limit: 20, period: 60 } },
+    { name: "WEBHOOK_LIMITER", namespace_id: String(base + 1), simple: { limit: 300, period: 60 } },
+  ];
+  assert.deepEqual(edgeConnectorRateLimits("development"), expected(7004));
+  assert.deepEqual(edgeConnectorRateLimits("staging"), expected(7104));
+  assert.deepEqual(edgeConnectorRateLimits("production"), expected(7204));
+  const config = parseConfig(readFileSync("apps/shopify-connector/wrangler.jsonc", "utf8"));
+  assert.deepEqual(config.ratelimits, expected(7004));
+  assert.deepEqual(config.env.staging.ratelimits, expected(7104));
+  assert.deepEqual(config.env.production.ratelimits, expected(7204));
+  // No namespace is shared with the api's sign-in limiters.
+  const namespaces = edgeEnvironments.flatMap((environment) =>
+    [...edgeRateLimits(environment), ...edgeConnectorRateLimits(environment)].map(
+      (limiter) => limiter.namespace_id,
+    ),
+  );
+  assert.equal(new Set(namespaces).size, namespaces.length);
 });
 
 test("P05.T01ab: the api's limiter bindings are the packet's D1 values", () => {

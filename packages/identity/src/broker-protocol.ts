@@ -125,9 +125,20 @@ export interface ApiBrokerRpc {
 // M2 PR-1 (ADR-0022 item 7, spine §4): the connector's and the orchestrator's own
 // entrypoints. PR-1 gives each its health and its own role lease; the Shopify and model
 // methods join with the PRs that add their database definers (M2 PR-2/PR-3, M3, M4).
+// M2 PR-2 (ADR-0008 item 2, amended item 1): the connector's three Shopify methods. Each
+// takes the raw request text the connector received and returns one closed JSON string
+// (encode/decode below); a held broker throws BROKER_HELD.
 export interface ConnectorBrokerRpc {
   health(): Promise<boolean>;
   neonLease(namespaceJson: string): Promise<string>;
+  shopifyLaunchVerify(appKey: string, rawQuery: string): Promise<string>;
+  shopifyInstallComplete(
+    appKey: string,
+    rawCallbackQuery: string,
+    stateDigest: string,
+    budgetMs: number,
+  ): Promise<string>;
+  shopifyWebhookVerify(appKey: string, headersJson: string, rawBodyBase64: string): Promise<string>;
 }
 export interface RuntimeBrokerRpc {
   health(): Promise<boolean>;
@@ -352,6 +363,264 @@ export function decodeNeonLeaseGrant(text: unknown): string {
 }
 
 // ---------------------------------------------------------------------------
+// M2 PR-2: the ConnectorBroker Shopify protocol (ADR-0022 items 4 and 7; ADR-0008 item 2,
+// item 1 as amended 2026-10-20). Only strings and an integer budget cross the binding. The
+// broker checks every Shopify signature with the app secret it decrypts from its vault,
+// performs the code exchange and the one fixed Admin GraphQL read, and writes the install
+// through its own login; the connector learns only these closed verdicts, never a token,
+// secret or provider text. Shared by the broker (encode) and the connector (decode), so
+// both sides admit exactly the same shapes.
+export const shopifyLimits = Object.freeze({
+  /** The launch, status or callback query string, without the leading "?". */
+  queryMaxBytes: 2048,
+  /** A webhook's raw body (Shopify's own limit is far larger; compliance bodies are small). */
+  webhookBodyMaxBytes: 262144,
+  /** The selected X-Shopify-* headers as one JSON object. */
+  webhookHeadersMaxBytes: 4096,
+  /** The install's whole budget: claim, exchange, identity read and the install write. */
+  budgetMaxMs: 10000,
+  /** A Shopify-signed query's timestamp may differ from the broker's clock by this much. */
+  timestampToleranceSeconds: 90,
+  /** A verdict string. */
+  verdictMaxBytes: 8192,
+});
+export const shopifyAppKeyPattern = /^[a-z0-9][a-z0-9-]{2,62}$/;
+// A *.myshopify.com domain as Shopify sends it in `shop` (lowercase, no scheme or path).
+export const shopifyShopPattern = /^[a-z0-9][a-z0-9-]{0,62}\.myshopify\.com$/;
+// The OAuth state, a continuation token: 32 random bytes as canonical base64url (43 chars).
+export const shopifySecretPattern = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
+export const shopifyDigestPattern = /^[a-f0-9]{64}$/;
+const workspacePattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+export type ShopifyInstallationState = "none" | "unlinked" | "linked" | "suspended" | "uninstalled";
+const installationStates: readonly string[] = [
+  "none",
+  "unlinked",
+  "linked",
+  "suspended",
+  "uninstalled",
+];
+export type ShopifyLaunchVerdict =
+  | Readonly<{
+      verdict: "verified";
+      shop: string;
+      installation: ShopifyInstallationState;
+      workspaceId: string;
+    }>
+  | Readonly<{ verdict: "refused" }>;
+export type ShopifyInstallOutcome =
+  | "installed"
+  | "reauthorised"
+  | "refused"
+  | "state_invalid"
+  | "scopes_mismatch"
+  | "store_not_development"
+  | "exchange_uncertain"
+  | "outcome_unknown";
+export const shopifyInstallOutcomes: readonly ShopifyInstallOutcome[] = Object.freeze([
+  "installed",
+  "reauthorised",
+  "refused",
+  "state_invalid",
+  "scopes_mismatch",
+  "store_not_development",
+  "exchange_uncertain",
+  "outcome_unknown",
+]);
+export interface ShopifyInstallResult {
+  readonly outcome: ShopifyInstallOutcome;
+  /** The invited workspace, for installed and reauthorised only. */
+  readonly workspaceId: string | null;
+  /** Only when a continuation was created (an unlinked installation). */
+  readonly continuationToken: string | null;
+}
+// The five topics ADR-0022 item 4 subscribes (no product topics).
+export const shopifyWebhookTopics = Object.freeze([
+  "app/uninstalled",
+  "app/scopes_update",
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact",
+] as const);
+export type ShopifyWebhookTopic = (typeof shopifyWebhookTopics)[number];
+// The selected X-Shopify-* headers, lower-case, that the connector forwards as JSON.
+export const shopifyWebhookHeaderNames = Object.freeze([
+  "x-shopify-api-version",
+  "x-shopify-hmac-sha256",
+  "x-shopify-shop-domain",
+  "x-shopify-topic",
+  "x-shopify-webhook-id",
+] as const);
+export type ShopifyWebhookVerdict =
+  | Readonly<{
+      verdict: "verified";
+      topic: ShopifyWebhookTopic;
+      shopDomain: string;
+      webhookId: string;
+      /** Ids and keyed digests only (spine §11); never an email, phone or order id. */
+      minimisedBody: Readonly<Record<string, string | readonly string[] | null>>;
+    }>
+  | Readonly<{ verdict: "refused" }>;
+
+const verdictJson = (value: unknown, names: readonly string[]) => {
+  try {
+    return loginJson(value, shopifyLimits.verdictMaxBytes, names);
+  } catch {
+    throw invalid();
+  }
+};
+export function encodeShopifyLaunchVerdict(v: ShopifyLaunchVerdict): string {
+  if (v.verdict === "refused")
+    return JSON.stringify({
+      schemaVersion: 1,
+      verdict: "refused",
+      shop: null,
+      installation: null,
+      workspaceId: null,
+    });
+  if (
+    !exact(shopifyShopPattern, v.shop) ||
+    !installationStates.includes(v.installation) ||
+    !exact(workspacePattern, v.workspaceId)
+  )
+    throw invalid();
+  return JSON.stringify({
+    schemaVersion: 1,
+    verdict: "verified",
+    shop: v.shop,
+    installation: v.installation,
+    workspaceId: v.workspaceId,
+  });
+}
+export function decodeShopifyLaunchVerdict(text: unknown): ShopifyLaunchVerdict {
+  const v = verdictJson(text, ["schemaVersion", "verdict", "shop", "installation", "workspaceId"]);
+  if (v.schemaVersion !== 1) throw invalid();
+  if (v.verdict === "refused") {
+    if (v.shop !== null || v.installation !== null || v.workspaceId !== null) throw invalid();
+    return Object.freeze({ verdict: "refused" });
+  }
+  if (
+    v.verdict !== "verified" ||
+    !exact(shopifyShopPattern, v.shop) ||
+    typeof v.installation !== "string" ||
+    !installationStates.includes(v.installation) ||
+    !exact(workspacePattern, v.workspaceId)
+  )
+    throw invalid();
+  return Object.freeze({
+    verdict: "verified",
+    shop: v.shop,
+    installation: v.installation as ShopifyInstallationState,
+    workspaceId: v.workspaceId,
+  });
+}
+export function encodeShopifyInstallResult(r: ShopifyInstallResult): string {
+  const text = JSON.stringify({
+    schemaVersion: 1,
+    outcome: r.outcome,
+    workspaceId: r.workspaceId,
+    continuationToken: r.continuationToken,
+  });
+  decodeShopifyInstallResult(text);
+  return text;
+}
+export function decodeShopifyInstallResult(text: unknown): ShopifyInstallResult {
+  const v = verdictJson(text, ["schemaVersion", "outcome", "workspaceId", "continuationToken"]);
+  const outcome = v.outcome as ShopifyInstallOutcome;
+  const done = outcome === "installed" || outcome === "reauthorised";
+  if (
+    v.schemaVersion !== 1 ||
+    !shopifyInstallOutcomes.includes(outcome) ||
+    (done ? !exact(workspacePattern, v.workspaceId) : v.workspaceId !== null) ||
+    (done
+      ? !(v.continuationToken === null || exact(shopifySecretPattern, v.continuationToken))
+      : v.continuationToken !== null)
+  )
+    throw invalid();
+  return Object.freeze({
+    outcome,
+    workspaceId: v.workspaceId as string | null,
+    continuationToken: v.continuationToken as string | null,
+  });
+}
+const minimisedKey = /^[a-z][A-Za-z0-9]{0,31}$/;
+const minimisedValue = /^[A-Za-z0-9_.:/-]{1,128}$/;
+function minimised(value: unknown): Readonly<Record<string, string | readonly string[] | null>> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw invalid();
+  const out: Record<string, string | readonly string[] | null> = {};
+  const entries = Object.entries(value);
+  if (entries.length > 8) throw invalid();
+  for (const [key, item] of entries) {
+    if (!minimisedKey.test(key)) throw invalid();
+    if (item === null || exact(minimisedValue, item)) out[key] = item as string | null;
+    else if (
+      Array.isArray(item) &&
+      item.length <= 32 &&
+      item.every((x: unknown) => exact(minimisedValue, x))
+    )
+      out[key] = Object.freeze([...(item as string[])]);
+    else throw invalid();
+  }
+  return Object.freeze(out);
+}
+export function encodeShopifyWebhookVerdict(v: ShopifyWebhookVerdict): string {
+  const value =
+    v.verdict === "refused"
+      ? {
+          schemaVersion: 1,
+          verdict: "refused",
+          topic: null,
+          shopDomain: null,
+          webhookId: null,
+          minimisedBody: null,
+        }
+      : {
+          schemaVersion: 1,
+          verdict: "verified",
+          topic: v.topic,
+          shopDomain: v.shopDomain,
+          webhookId: v.webhookId,
+          minimisedBody: v.minimisedBody,
+        };
+  const text = JSON.stringify(value);
+  decodeShopifyWebhookVerdict(text);
+  return text;
+}
+export function decodeShopifyWebhookVerdict(text: unknown): ShopifyWebhookVerdict {
+  const v = verdictJson(text, [
+    "schemaVersion",
+    "verdict",
+    "topic",
+    "shopDomain",
+    "webhookId",
+    "minimisedBody",
+  ]);
+  if (v.schemaVersion !== 1) throw invalid();
+  if (v.verdict === "refused") {
+    if (
+      v.topic !== null ||
+      v.shopDomain !== null ||
+      v.webhookId !== null ||
+      v.minimisedBody !== null
+    )
+      throw invalid();
+    return Object.freeze({ verdict: "refused" });
+  }
+  if (
+    v.verdict !== "verified" ||
+    !(shopifyWebhookTopics as readonly unknown[]).includes(v.topic) ||
+    !exact(shopifyShopPattern, v.shopDomain) ||
+    !exact(/^[A-Za-z0-9-]{1,128}$/, v.webhookId)
+  )
+    throw invalid();
+  return Object.freeze({
+    verdict: "verified",
+    topic: v.topic as ShopifyWebhookTopic,
+    shopDomain: v.shopDomain,
+    webhookId: v.webhookId,
+    minimisedBody: minimised(v.minimisedBody),
+  });
+}
+
 // M5 PR-1: the ApiBroker Stripe protocol. Closed result JSON with fixed codes; never
 // provider text. A hosted URL is returned to the caller and never stored (ADR-0022
 // item 13); it is accepted only on Stripe's own hosts.

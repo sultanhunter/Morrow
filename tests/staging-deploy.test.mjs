@@ -184,6 +184,18 @@ test("AC04: a green CI deploy runs the gates, then broker, orchestrator, connect
     assert.deepEqual(result.smoke.failures, []);
     assert.deepEqual(result.censusBefore.findings, []);
     assert.deepEqual(result.census.findings, []);
+    // M2 PR-2: the deployed connector binds the broker's ConnectorBroker entrypoint, which
+    // the census allow table admits, so continuous deploy keeps running after the merge.
+    assert.deepEqual(
+      result.census.scripts
+        .filter((s) => s.bindsBroker)
+        .map((s) => [s.name, s.brokerEntrypoints])
+        .sort(),
+      [
+        ["morrow-staging-api", ["ApiBroker"]],
+        ["morrow-staging-connector", ["ConnectorBroker"]],
+      ],
+    );
     // CI never reads a variable through the API (its token cannot); it re-reads the
     // workflow's state at gate 2, before every upload and after the api deploy.
     const ghApi = w.fake.calls.filter((c) => c.tool === "gh").map((c) => c.args.join(" "));
@@ -724,7 +736,8 @@ test("AC04: a census finding before any upload deploys nothing; every path with 
         name,
         enabled: name === scriptOf.api,
         previews: false,
-        bindings: name === scriptOf.api ? [scriptOf.broker] : [],
+        bindings:
+          name === scriptOf.api ? [{ service: scriptOf.broker, entrypoint: "ApiBroker" }] : [],
       })),
       { name: "other-product", enabled: false, previews: false, bindings: [scriptOf.broker] },
     ],

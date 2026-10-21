@@ -13,6 +13,7 @@
 // Uses only WebCrypto, so the same code runs in workerd and in Node 24.
 
 import { billingVaultStatements } from "./vault-statements-billing.js";
+import { shopifyVaultStatements } from "./vault-statements-shopify.js";
 
 // Trust model v1 custody covers development and staging only (ADR-0022 item 7). Production
 // custody needs its own ADR (ADR-0007 item 9), so no keyring, envelope or additional data
@@ -398,6 +399,7 @@ export async function openVaultRecord(
 export const vaultStatements = Object.freeze({
   appSecretGet:
     "SELECT outcome,version,kek_version,wrapped_key,sealed_value FROM morrow_vault.app_secret_get($1)",
+  ...shopifyVaultStatements,
   ...billingVaultStatements,
 } as const);
 /** One fixed statement on a connection logged in as morrow_vault_broker. */

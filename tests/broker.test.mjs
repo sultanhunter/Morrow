@@ -463,13 +463,21 @@ test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 40
     "stripeWebhookVerify",
     "workosSessionPage",
   ]);
-  // Trust model v1: one class per caller, exactly its own methods.
-  for (const name of ["ConnectorBroker", "RuntimeBroker"])
-    assert.deepEqual(Object.getOwnPropertyNames(module[name].prototype).sort(), [
-      "constructor",
-      "health",
-      "neonLease",
-    ]);
+  // Trust model v1: one class per caller, exactly its own methods. M2 PR-2 gives the
+  // connector its three Shopify methods; the orchestrator's are unchanged.
+  assert.deepEqual(Object.getOwnPropertyNames(module.ConnectorBroker.prototype).sort(), [
+    "constructor",
+    "health",
+    "neonLease",
+    "shopifyInstallComplete",
+    "shopifyLaunchVerify",
+    "shopifyWebhookVerify",
+  ]);
+  assert.deepEqual(Object.getOwnPropertyNames(module.RuntimeBroker.prototype).sort(), [
+    "constructor",
+    "health",
+    "neonLease",
+  ]);
   assert.deepEqual(Object.keys(module).sort(), [
     "ApiBroker",
     "ConnectorBroker",
@@ -527,6 +535,23 @@ test("AC10: ApiBroker has exactly eight prototype methods, arity checks and a 40
     assert.equal(await caller.health(), true);
     assert.ok(JSON.parse(await caller.neonLease(neonLeaseNamespace(parsed, role))).password);
     assert.equal(typeof caller.workosSessionPage, "undefined");
+  }
+  // M2 PR-2: the Shopify methods check their exact arity; the api and the orchestrator
+  // have none of them.
+  const connector = new module.ConnectorBroker({}, env);
+  logs.length = 0;
+  await failure(connector.shopifyLaunchVerify("app-1"));
+  await failure(connector.shopifyLaunchVerify("app-1", "q", "x"));
+  await failure(connector.shopifyInstallComplete("app-1", "q", "d"));
+  await failure(connector.shopifyInstallComplete("app-1", "q", "d", 1000, 1));
+  await failure(connector.shopifyWebhookVerify("app-1", "{}"));
+  assert.deepEqual(
+    logs.map((line) => [JSON.parse(line).entrypoint, JSON.parse(line).code]),
+    Array(5).fill(["ConnectorBroker", "INPUT_INVALID"]),
+  );
+  for (const name of ["shopifyLaunchVerify", "shopifyInstallComplete", "shopifyWebhookVerify"]) {
+    assert.equal(typeof new module.ApiBroker({}, env)[name], "undefined");
+    assert.equal(typeof new module.RuntimeBroker({}, env)[name], "undefined");
   }
   await failure(entry.neonLease(neonLeaseNamespace(parsed, "morrow_runtime_executor")));
 });

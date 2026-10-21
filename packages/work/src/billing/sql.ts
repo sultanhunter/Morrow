@@ -1,4 +1,4 @@
-// The api's billing statements (M5 PR-1; migration 0027), merged into workStatements so
+// The api's billing statements (M5 PR-1; migration 0029), merged into workStatements so
 // WorkTx.run accepts no other text. Source-fixed: values travel only as bind parameters,
 // every selected column is text. The session reads run as morrow_work_api under the
 // tenant_read policies and column grants; the commands and the receipt ingress call the

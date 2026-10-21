@@ -5,7 +5,7 @@
 // three closed shapes: ids, integer amounts, statuses and whole-second times only (no
 // email, card, address or URL; ADR-0022 item 13). The shape and its digest are recorded on
 // stripe_event_receipts; the api plans an application from the shape, and receipt_apply
-// re-derives the money from it in SQL (migration 0027 receipt_object_valid). Field mapping
+// re-derives the money from it in SQL (migration 0029 receipt_object_valid). Field mapping
 // on the pinned version (docs/briefs/M5-billing.md): the invoice's subscription and its
 // metadata from parent.subscription_details, the price and period from the first line
 // (pricing.price_details.price, period), the period end from the subscription item, and
@@ -353,7 +353,7 @@ export function usdAmount(minorUnits: string): string {
 }
 
 /**
- * The request digest of one Stripe operation (migration 0027 cmd_checkout_open and
+ * The request digest of one Stripe operation (migration 0029 cmd_checkout_open and
  * cmd_portal_open): SHA-256 of the JSON array that PostgreSQL's array_to_json writes for the
  * same text parts. Parts are ids, keys and integers only, so both serialise identically.
  */

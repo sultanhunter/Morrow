@@ -1,7 +1,7 @@
 // M5 PR-1: the broker's webhook verification (apps/broker/src/stripe.ts stripeWebhookVerify)
 // and the Stripe capability (apps/broker/src/capabilities.ts). Events are signed by the fake
 // Stripe origin; the object is read back from it with the broker's key; the receipt record
-// is an in-memory stand-in for migration 0027's stripe_receipt_record (lab:billing runs the
+// is an in-memory stand-in for migration 0029's stripe_receipt_record (lab:billing runs the
 // SQL). Covers: the HMAC over the raw bytes in constant time, the 300 s tolerance both
 // ways, several v1 values, malformed headers and bodies, livemode, the readback proving the
 // account (404 elsewhere), the closed normalised object and its digest, duplicates, and
@@ -463,7 +463,7 @@ test("capability: rk_test_ only, whsec_, the closed configuration, never product
   assert.doesNotMatch(text, /rk_test_|whsec_|bpc_/);
 });
 
-test("broker handlers: closed inputs first, then BROKER_HELD; this branch's vault transport is held", async () => {
+test("broker handlers: closed inputs first, then BROKER_HELD; an unreachable vault login holds", async () => {
   logs.length = 0;
   const env = brokerEnv();
   const held = async (pending) => {
@@ -475,9 +475,31 @@ test("broker handlers: closed inputs first, then BROKER_HELD; this branch's vaul
   await held(brokerStripeWebhookVerify(env, "", "t=1", 1000));
   await held(brokerStripeWebhookVerify(env, "e30=", "", 1000));
   await held(brokerStripeWebhookVerify(env, "e30=", "x".repeat(4097), 1000));
-  // Valid inputs: the vault transport stub (M2 PR-2 owns the real one) fails closed.
-  await held(brokerStripeCustomerEnsure(env, operationId, 1000));
-  await held(brokerStripeCustomerEnsure(brokerEnv("production"), operationId, 1000));
+  // Valid inputs: the operation is first opened on the vault login (M2 PR-2's transport).
+  // Here its one pinned socket is refused (and the driver's own Upgrade fallback to the same
+  // host fails too), so the call holds before any Stripe request. Production has no Stripe
+  // capability at all.
+  const sockets = [];
+  const fetches = [];
+  const { WebSocket: nativeSocket, fetch: nativeFetch } = globalThis;
+  globalThis.WebSocket = function (url) {
+    sockets.push(String(url));
+    throw Error("lab: no network");
+  };
+  globalThis.fetch = async (request) => {
+    fetches.push(String(request?.url ?? request));
+    throw Error("lab: no network");
+  };
+  try {
+    await held(brokerStripeCustomerEnsure(env, operationId, 1000));
+    await held(brokerStripeCustomerEnsure(brokerEnv("production"), operationId, 1000));
+  } finally {
+    globalThis.WebSocket = nativeSocket;
+    globalThis.fetch = nativeFetch;
+  }
+  const { hostname } = JSON.parse(env.MORROW_DATABASE_BINDING_JSON);
+  assert.deepEqual(sockets, [`wss://${hostname}/v2?address=${hostname}:5432`]);
+  assert.ok(fetches.every((url) => url === `https://${hostname}/v2?address=${hostname}:5432`));
   const codes = logs
     .map((l) => JSON.parse(l))
     .filter((l) => l.event === "morrow_broker")

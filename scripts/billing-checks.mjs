@@ -768,7 +768,7 @@ export const capabilityEffects = [
   "billable_job",
 ];
 export const permissionVerbs = ["view", "propose", "approve", "execute", "delegate", "administer"];
-// M5 PR-1: owner-bootstrap-v2 (ADR-0022 item 3) is the signup template from 0026 on; v1 stays
+// M5 PR-1: owner-bootstrap-v2 (ADR-0022 item 3) is the signup template from 0028 on; v1 stays
 // recorded for the signups made before it.
 export const grantTemplateIds = [
   "owner-bootstrap-v1",

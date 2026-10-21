@@ -1,4 +1,4 @@
-// M5 PR-1: the vault login's fixed billing statements (migration 0027). One frozen map per
+// M5 PR-1: the vault login's fixed billing statements (migration 0029). One frozen map per
 // PR, spread into vault.ts's vaultStatements registry, the only statements the vault
 // transport (vault-database.ts) sends. Each calls one SECURITY DEFINER function that only
 // morrow_vault_broker may execute; values travel as text parameters, and an absent

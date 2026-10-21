@@ -1,6 +1,6 @@
 BEGIN;
 -- M5 PR-1: owner grant template v2 (ADR-0022 item 3; docs/briefs/M5-billing.md). Executes
--- AS morrow_identity_owner, after 0025. ADR-0022 item 3 adds governance.billing.manage
+-- AS morrow_identity_owner, after 0027. ADR-0022 item 3 adds governance.billing.manage
 -- {view, execute} and governance.model_default.revise {execute} to the signup template, and
 -- a forward migration backfills existing owners:
 --   * owner_bootstrap_grants_v2(): the eight owner-bootstrap-v1 rows (0013) plus those two,

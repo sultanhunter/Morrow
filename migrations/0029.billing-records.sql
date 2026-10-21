@@ -1,7 +1,7 @@
 BEGIN;
 -- M5 PR-1 billing records (docs/briefs/M5-billing.md; ADR-0015; ADR-0022 items 2, 9, 11
 -- and 12 with the 2026-10-20 amendments to items 9 and 11; billing-entitlements.md
--- persistence items 3-8). Executes AS morrow_work_owner, after 0026. On the ADR-0010
+-- persistence items 3-8). Executes AS morrow_work_owner, after 0028. On the ADR-0010
 -- tenant pattern: composite tenant keys, ENABLE and FORCE RLS everywhere, definers owned by
 -- morrow_work_command, INVOKER triggers and helpers owned by the owner.
 --   * billing_terms: Morrow's versioned terms table (BillingTerms@1, R10) with display

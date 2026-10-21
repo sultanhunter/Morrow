@@ -56,7 +56,7 @@ export const edgeWorkers = Object.freeze(
     {
       key: "connector",
       dir: "apps/shopify-connector",
-      entry: "worker/placeholder.ts",
+      entry: "worker/index.ts",
       tsconfig: "tsconfig.worker.json",
     },
   ].map((worker) => Object.freeze(worker)),
@@ -350,6 +350,28 @@ export function edgeTypecheck({ root = repositoryRoot } = {}) {
     );
     if (work.status !== 0)
       throw Error("EDGE_WORK_DECLARATIONS_FAILED\n" + work.stdout + work.stderr);
+    // M2 PR-2: the api composes the policy package's connection kernel
+    // (packages/policy/src/connection-authority.ts), consumed the same way: through its
+    // emitted declarations, at their repository-relative paths.
+    const policy = spawnSync(
+      process.execPath,
+      [
+        tscBin,
+        "-p",
+        "packages/policy/tsconfig.json",
+        "--noEmit",
+        "false",
+        "--declaration",
+        "--emitDeclarationOnly",
+        "--rootDir",
+        ".",
+        "--outDir",
+        staging,
+      ],
+      { cwd: root, encoding: "utf8" },
+    );
+    if (policy.status !== 0)
+      throw Error("EDGE_POLICY_DECLARATIONS_FAILED\n" + policy.stdout + policy.stderr);
     cpSync(join(root, "tsconfig.base.json"), join(staging, "tsconfig.base.json"));
     symlinkSync(join(root, "node_modules"), join(staging, "node_modules"), "dir");
     const results = [];
@@ -422,8 +444,20 @@ const allowedBindings = Object.freeze({
   api: ["vars", "services", "secrets", "assets", "ratelimits"],
   broker: ["vars", "secrets"],
   orchestrator: ["workflows", "queues", "secrets"],
-  connector: ["vars", "secrets"],
+  // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint and, since the
+  // PR-2 review, its two per-address ingress limits (edgeConnectorRateLimits).
+  connector: ["vars", "services", "secrets", "ratelimits"],
 });
+// The reviewed packages/ files the connector bundle may include (M2 PR-2): the shared
+// broker protocol and the role preflight text, with the JSON helpers they import, and the
+// per-address limiter key (WebCrypto only). No pool, SQL module, validator or policy code.
+export const connectorPackageAllowlist = Object.freeze([
+  "packages/identity/src/broker-protocol.ts",
+  "packages/identity/src/edge-limiter.ts",
+  "packages/identity/src/executor-role-preflight.ts",
+  "packages/identity/src/standalone-login-protocol.ts",
+  "packages/identity/src/workos-session-status-json.ts",
+]);
 // MORROW_VAULT_ (the vault KEKs, ADR-0022 item 7) binds only to the broker as well, and so
 // does STRIPE_ (M5 PR-1: the restricted key, the webhook secret and the configuration).
 const providerCredentialName =
@@ -459,6 +493,25 @@ export function edgeRateLimits(environment) {
     ["LOGIN_START_LIMITER", 10],
     ["LOGIN_CALLBACK_LIMITER", 20],
     ["SIGNUP_LIMITER", 5],
+  ].map(([name, limit], i) => ({
+    name,
+    namespace_id: String(base + i),
+    simple: { limit, period: 60 },
+  }));
+}
+
+// M2 PR-2 review (ADR-0019 items 6 and 8 applied to the connector, the second public
+// Worker): the connector's per-address Shopify ingress limits, exact per environment:
+// launch, status and callback 20 and webhooks 300 per 60 s, in namespaces 7004-7005
+// (development), 7104-7105 (staging) and 7204-7205 (production), after the api's. Webhooks
+// are keyed by address too, never by app key (an unknown app key would be a fresh budget,
+// and a public one would let anyone starve that store's deliveries), with the higher limit
+// because Shopify's delivery addresses carry every store's webhooks.
+export function edgeConnectorRateLimits(environment) {
+  const base = { development: 7004, staging: 7104, production: 7204 }[environment];
+  return [
+    ["INSTALL_LIMITER", 20],
+    ["WEBHOOK_LIMITER", 300],
   ].map(([name, limit], i) => ({
     name,
     namespace_id: String(base + i),
@@ -888,6 +941,18 @@ export async function verifyEdgeConfig({
         )
           problem("EDGE_BROKER_SECRETS", where);
       } else if (!same(required, [])) problem("EDGE_SECRETS_REQUIRED_NOT_EMPTY", where);
+      if (
+        worker.key === "connector" &&
+        !same(config.services, [
+          { binding: "BROKER", service: expected.broker, entrypoint: "ConnectorBroker" },
+        ])
+      )
+        problem("EDGE_CONNECTOR_BROKER_BINDING", where);
+      if (
+        worker.key === "connector" &&
+        !same(config.ratelimits, edgeConnectorRateLimits(environment))
+      )
+        problem("EDGE_CONNECTOR_RATELIMITS", where);
       if (worker.key === "api") {
         if (
           !same(config.services, [
@@ -991,17 +1056,36 @@ export function bundleExclusions(worker, inputs, bundleText) {
           [/^apps\/broker\//, "broker_source"],
           [/(^|\/)ajv\/dist\/compile\//, "ajv_compile"],
           [/(^|\/)node_modules\/unenv\/.*\/node\/https?(\/|\.mjs$)/, "node_http"],
+          [/(^|\/)@shopify\//, "shopify_library"],
         ]
       : worker.key === "broker"
         ? [
-            [/@neondatabase\/serverless/, "neon_driver"],
+            // M2 PR-2: the Neon driver is allowed (the vault login's transport,
+            // vault-database.ts); the pool, the validators and the api stay out.
             [/controlled-neon-login-pool\.ts$/, "neon_pool"],
             [/runtime-validators\.mjs$/, "runtime_validators"],
             [/^apps\/api\//, "api_source"],
+            // ADR-0008 item 1 as amended (owner answer 4): Shopify calls are hand-written
+            // in the broker; no @shopify/ library is ever deployed.
+            [/(^|\/)@shopify\//, "shopify_library"],
           ]
-        : [[/^packages\//, "package_source"]];
+        : worker.key === "connector"
+          ? [
+              [/^apps\/(api|broker|workers|workspace-web)\//, "other_worker_source"],
+              [/runtime-validators\.mjs$/, "runtime_validators"],
+              [/(^|\/)@shopify\//, "shopify_library"],
+            ]
+          : [[/^packages\//, "package_source"]];
   for (const [pattern, name] of banned)
     if (inputs.some((input) => pattern.test(input))) failures.push(name);
+  // The connector may include only its reviewed packages/ allowlist.
+  if (
+    worker.key === "connector" &&
+    inputs.some(
+      (input) => input.startsWith("packages/") && !connectorPackageAllowlist.includes(input),
+    )
+  )
+    failures.push("package_source");
   if (
     worker.key === "api" &&
     /(?:from\s*|import\s*\(?\s*|require\s*\(\s*)["'](?:node:)?https?["']/.test(bundleText)

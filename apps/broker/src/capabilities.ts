@@ -20,6 +20,7 @@ import {
   turnstileKeyPattern,
   workosSessionNamespace,
   type BrokerCaller,
+  type BrokerDatabaseBinding,
 } from "../../../packages/identity/src/broker-protocol.js";
 import type { BrokerStripe } from "./stripe.js";
 import { createVaultKeyring, type VaultKeyring } from "./vault.js";
@@ -32,12 +33,16 @@ import { createVaultKeyring, type VaultKeyring } from "./vault.js";
 // its own role lease; the vault keys stay inside the broker and never cross RPC.
 
 export type BrokerEntrypoint = "ApiBroker" | "ConnectorBroker" | "RuntimeBroker";
-// Append-only (integration: each PR adds only its own entrypoint's methods).
+// Append-only: each PR adds its own entrypoint's methods (M2 PR-2: ConnectorBroker's three
+// Shopify methods; M5 PR-1: ApiBroker's four Stripe methods).
 export type BrokerMethod =
   | "health"
   | "neonLease"
   | "workosSessionPage"
   | "challengeVerify"
+  | "shopifyLaunchVerify"
+  | "shopifyInstallComplete"
+  | "shopifyWebhookVerify"
   // M5 PR-1 (ApiBroker): Stripe on one pinned API version, ids only.
   | "stripeCustomerEnsure"
   | "stripeCheckoutCreate"
@@ -49,6 +54,8 @@ export type BrokerFailureCode =
   | "CAPABILITY_UNAVAILABLE"
   | "BUDGET_INVALID"
   | "PROVIDER_HELD"
+  // M2 PR-2 review: the isolate's Shopify ingress slots on the vault login are all in use.
+  | "INGRESS_BUSY"
   | "STATE_INVALID";
 export class BrokerHold extends Error {
   constructor(readonly code: BrokerFailureCode) {
@@ -63,11 +70,13 @@ export interface BrokerDatabase {
   // Exact namespace JSON -> that role's static password. Lookup is byte equality.
   readonly leases: ReadonlyMap<string, string>;
 }
-// The vault (ADR-0022 item 7): the KEK keyring and the broker's own database login.
-// Neither is ever returned by a method.
+// The vault (ADR-0022 item 7): the KEK keyring and the broker's own database login, with
+// the database binding its transport connects to (M2 PR-2, vault-database.ts). None of it
+// is ever returned by a method.
 export interface BrokerVault {
   readonly keyring: VaultKeyring;
   readonly databasePassword: string;
+  readonly binding: Readonly<BrokerDatabaseBinding>;
 }
 // P05.T01ab: siteverify for the configured hostname and the two configured actions.
 export interface BrokerChallenge {
@@ -193,7 +202,7 @@ async function vault(env: object, environment: string): Promise<Readonly<BrokerV
       keks.set(Number(match[1]), own(env, name));
     }
     const keyring = await createVaultKeyring(environment, keks);
-    return Object.freeze({ keyring, databasePassword });
+    return Object.freeze({ keyring, databasePassword, binding });
   } catch {
     return null;
   }

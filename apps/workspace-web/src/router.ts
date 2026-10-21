@@ -1,6 +1,8 @@
 // One History-API router on the single matcher (P14.T01a §4.5). Paths come from
 // `buildWorkspacePath`; queries and fragments carry no state, so a path with either
-// renders NotFound. Back and forward restore the logical path, and pass the leave guard:
+// renders NotFound. The one exception, the install continuation of
+// `/w/:ws/connections#handoff=` (M2 PR-2), is taken out of the address by handoff.ts
+// before a router exists, so the router never sees it. Back and forward restore the logical path, and pass the leave guard:
 // a blocked `popstate` re-pushes the current path and asks first.
 import { matchWorkspacePath, workspaceRoutes, type RouteMatch } from "@morrow/contracts/routes";
 

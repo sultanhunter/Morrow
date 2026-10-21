@@ -1,6 +1,6 @@
 // M5 PR-1 PostgreSQL 17 laboratory (lab:billing, pg-http): the billing records (migrations
-// 0026-0027 of this branch) on an isolated network-none engine with the whole manifest.
-//   A  owner template v2: the founder backfill (founders seeded before 0026), idempotence,
+// 0028-0029) on an isolated network-none engine with the whole manifest.
+//   A  owner template v2: the founder backfill (founders seeded before 0028), idempotence,
 //      the widened grant_template CHECK.
 //   B  checkout through the real billing HTTP handler and the purchase guard: replay,
 //      command conflict, reuse, one open intent under concurrency, the lazy close, denials
@@ -112,7 +112,7 @@ await withWorkDatabase(
     const sql = (text) => psql(db.id, text);
     const scalar = (text) => sql(text).split("\n").at(-1);
     // -----------------------------------------------------------------------------
-    // A. Template v2 backfill: founders recorded by organization_signups before 0026.
+    // A. Template v2 backfill: founders recorded by organization_signups before 0028.
     const profile = "profile_billing_lab";
     const founders = [
       { key: "f1", active: true },
@@ -136,7 +136,7 @@ INSERT INTO morrow_identity.organization_signups(principal_id,command_id,request
  VALUES(${lit(profile)},'workos','environment_'||repeat('A',26),'app_'||repeat('A',26),'client_'||repeat('A',26),'https://api.workos.com/user_management/client_'||repeat('A',26),1,repeat('b',64));
 ${founderSql}`,
     );
-    // The rest of the chain: the backfill runs in 0026.
+    // The rest of the chain: the backfill runs in 0028.
     for (const step of migrationPlan(chain.filter((m) => m.sequence >= firstBilling.sequence))) {
       if (step.kind === "prerequisite") sql(step.text);
       else sql("SET ROLE " + step.executeAs + ";\n" + step.text);

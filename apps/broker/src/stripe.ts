@@ -224,7 +224,7 @@ const metadataOf = (json: Record<string, unknown>): Record<string, unknown> => {
 };
 
 // ---------------------------------------------------------------------------
-// The operation protocol (migration 0027 stripe_op_begin and stripe_op_settle).
+// The operation protocol (migration 0029 stripe_op_begin and stripe_op_settle).
 interface Begun {
   readonly outcome: string;
   readonly purpose: string;

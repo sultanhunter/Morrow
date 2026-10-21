@@ -9,6 +9,11 @@ import { brokerCallerHealth, brokerHealth, brokerInputInvalid } from "./capabili
 import { brokerChallengeVerify } from "./challenge.js";
 import { brokerNeonLease } from "./neon-lease.js";
 import {
+  brokerShopifyInstallComplete,
+  brokerShopifyLaunchVerify,
+  brokerShopifyWebhookVerify,
+} from "./shopify-install.js";
+import {
   brokerStripeCheckoutCreate,
   brokerStripeCustomerEnsure,
   brokerStripePortalCreate,
@@ -73,8 +78,10 @@ export class ApiBroker extends WorkerEntrypoint<unknown> implements ApiBrokerRpc
   }
 }
 
-// The connector Worker's entrypoint (M2 PR-1): its health and its own role lease only.
-// The Shopify methods join in M2 PR-2/PR-3, with their database definers.
+// The connector Worker's entrypoint (M2 PR-1): its health and its own role lease. M2 PR-2
+// adds the three Shopify methods (ADR-0008 item 2, item 1 as amended): the launch and
+// webhook signature checks and the install's claim, exchange, identity read and vault
+// write. shopifyCredentialDestroy and shopifyRead join in M2 PR-3.
 export class ConnectorBroker extends WorkerEntrypoint<unknown> implements ConnectorBrokerRpc {
   health(): Promise<boolean> {
     return arguments.length === 0
@@ -85,6 +92,30 @@ export class ConnectorBroker extends WorkerEntrypoint<unknown> implements Connec
     return arguments.length === 1
       ? brokerNeonLease(this.env, namespaceJson, "connector")
       : brokerInputInvalid("neonLease", "ConnectorBroker");
+  }
+  shopifyLaunchVerify(appKey: string, rawQuery: string): Promise<string> {
+    return arguments.length === 2
+      ? brokerShopifyLaunchVerify(this.env, appKey, rawQuery)
+      : brokerInputInvalid("shopifyLaunchVerify", "ConnectorBroker");
+  }
+  shopifyInstallComplete(
+    appKey: string,
+    rawCallbackQuery: string,
+    stateDigest: string,
+    budgetMs: number,
+  ): Promise<string> {
+    return arguments.length === 4
+      ? brokerShopifyInstallComplete(this.env, appKey, rawCallbackQuery, stateDigest, budgetMs)
+      : brokerInputInvalid("shopifyInstallComplete", "ConnectorBroker");
+  }
+  shopifyWebhookVerify(
+    appKey: string,
+    headersJson: string,
+    rawBodyBase64: string,
+  ): Promise<string> {
+    return arguments.length === 3
+      ? brokerShopifyWebhookVerify(this.env, appKey, headersJson, rawBodyBase64)
+      : brokerInputInvalid("shopifyWebhookVerify", "ConnectorBroker");
   }
 }
 
