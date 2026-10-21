@@ -104,8 +104,8 @@
     // Production holds the vault and Stripe until the production custody ADR (ADR-0007
     // item 9), so it requires neither the vault login's password, a KEK nor a Stripe secret
     // and has no Stripe switch (brokerRequiredSecretsFor). No placement in development or
-    // production, which waits
-    // for its own database and region (verify-config requires the key absent outside staging).
+    // production, which waits for its own database and region (verify-config requires the
+    // key absent outside staging).
     "production": {
       "name": "morrow-production-broker",
       "vars": { "MORROW_ENVIRONMENT": "production" },

@@ -10,7 +10,8 @@ Owner decision (c), 2026-10-21 ("Merge with Stripe off"): `switch` in `docs/deci
 - `GET /workspace/:ws/billing/morrow/plans` lists no offer and allows neither `subscribe` nor `billingPortal`.
 - `POST /api/billing/stripe/webhook` answers `503 {"code":"unavailable"}` to every request before reading its body: no broker call and no receipt.
 - Each ApiBroker Stripe method is `BROKER_HELD` with the fixed code `STRIPE_UNAVAILABLE` before its inputs are read; the broker reads no Stripe secret or configuration.
-- `GET /workspace/:ws/billing` (plan, credits, billing period), the wallet, entitlements and the receipt definers are unchanged.
+- `GET /workspace/:ws/billing` still reads the plan, credits and billing period, but its call to action is `{kind: "none"}` wherever it would be `morrow_plans` ("Choose a plan" or "Manage plan"), since those plans would offer nothing (`billingViewCallToAction`). A Shopify phase's `shopify_plan_page` is App Pricing, not Stripe, and is unchanged.
+- The wallet, entitlements and the receipt definers are unchanged.
 
 ## Routes
 
@@ -24,7 +25,7 @@ All workspace routes live under `/workspace/:ws/billing` and use the generalised
 | `POST /workspace/:ws/billing/morrow/portal` | `execute` on `governance.billing.manage` with `{action: "billing_portal", priceKey: null}`; purchase guard (billing_portal) | `{}` | `201` (or `200` replayed) `{operationId, portalUrl}` |
 | `POST /api/billing/stripe/webhook` | none (sessionless): the broker's signature check and readback | Stripe's raw event bytes | `200 {"received": true}` after commit |
 
-The billing view carries the phase and state, the plan's status and validity, the credits (available, reserved, consumed), the billing period (the line period of the latest granted subscription invoice), any checkout in progress, `setupHold` (`{operationId, heldAt}` when the workspace's Stripe customer setup is held for Morrow support, else `null`; the operation id is the support reference), and one call to action, taken only from `billingCallToAction` (`{kind: "none"}` for a viewer without `view` on `governance.billing.manage`). It carries no provider id, price id or URL.
+The billing view carries the phase and state, the plan's status and validity, the credits (available, reserved, consumed), the billing period (the line period of the latest granted subscription invoice), any checkout in progress, `setupHold` (`{operationId, heldAt}` when the workspace's Stripe customer setup is held for Morrow support, else `null`; the operation id is the support reference), and one call to action, taken only from `billingCallToAction` (`{kind: "none"}` for a viewer without `view` on `governance.billing.manage`, and in place of `morrow_plans` while the Stripe switch is off). It carries no provider id, price id or URL.
 
 ### The purchase guard
 

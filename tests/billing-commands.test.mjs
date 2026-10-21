@@ -26,11 +26,21 @@ import {
 } from "../packages/work/src/http-guard.ts";
 import { apiDispatch, createWorkspaceApiWorker } from "../apps/api/src/worker.ts";
 import {
+  billingCallToAction,
   parseWorkspaceBillingFacts,
   workspaceBillingState,
 } from "../packages/policy/src/billing-state.ts";
 import { billingFactsInput } from "../packages/work/src/billing/facts.ts";
 import { billingRequestAbortMs } from "../packages/work/src/billing/http.ts";
+import { billingViewCallToAction } from "../packages/work/src/billing/view.ts";
+import {
+  billingState,
+  directLink,
+  library,
+  link,
+  payerFacts,
+  rawFacts,
+} from "../scripts/billing-route-fixtures.mjs";
 import { brokerStripeBudgetMs } from "../apps/api/src/broker-client.ts";
 
 const origin = "https://work.morrow.test";
@@ -584,6 +594,55 @@ test("M5: with the Stripe switch off, checkout, the portal and the webhook fail 
         }),
       /STRIPE_WEBHOOK_CONFIGURATION_INVALID/,
     );
+});
+
+// The billing view's call to action follows the switch: off, the Morrow plans link ("Choose
+// a plan" in phase open, "Manage plan" in morrow_direct) becomes none, because the plans
+// would offer nothing and checkout and the portal answer unavailable. A Shopify phase's
+// plan page is not Stripe and is unchanged; a viewer without the billing grant gets none
+// either way. lab:billing D1b reads the same through the route on PostgreSQL.
+test("M5: with the Stripe switch off, the billing view offers no Morrow plans call to action", () => {
+  const L = library();
+  const status = (key) => ({ entitlement: { ...L.entitlements[key], status: "active" } });
+  const phases = {
+    open: billingState(rawFacts({ route: L.routes.open })),
+    morrow_direct: billingState(
+      rawFacts({
+        route: L.routes.morrow_direct,
+        associations: [directLink("iA")],
+        payers: [payerFacts("morrow_w", status("morrow_w"))],
+      }),
+    ),
+    shopify_bound: billingState(
+      rawFacts({ route: L.routes.shopify_install_bound, associations: [link("iA")] }),
+    ),
+    shopify_app_pricing: billingState(
+      rawFacts({
+        route: L.routes.shopify_app_pricing,
+        associations: [link("iA")],
+        payers: [payerFacts("shopify_a", status("shopify_a"))],
+      }),
+    ),
+  };
+  const expected = {
+    open: ["morrow_plans", "Choose a plan"],
+    morrow_direct: ["morrow_plans", "Manage plan"],
+    shopify_bound: ["shopify_plan_page", "Choose a plan"],
+    shopify_app_pricing: ["shopify_plan_page", "Manage plan"],
+  };
+  for (const [phase, state] of Object.entries(phases)) {
+    assert.equal(state.phase, phase);
+    const [kind, label] = expected[phase];
+    const on = billingViewCallToAction(state, true, true);
+    // On, it is billingCallToAction's own, link and wording unchanged.
+    assert.deepEqual(on, billingCallToAction(state), phase);
+    assert.deepEqual([on.kind, on.label], [kind, label], phase);
+    const off = billingViewCallToAction(state, true, false);
+    if (kind === "morrow_plans") assert.deepEqual(off, { kind: "none" }, phase);
+    else assert.deepEqual(off, on, phase);
+    for (const stripeOn of [true, false])
+      assert.deepEqual(billingViewCallToAction(state, false, stripeOn), { kind: "none" }, phase);
+  }
 });
 
 test("the request's abort covers the database phase and both broker calls of a first checkout", () => {
