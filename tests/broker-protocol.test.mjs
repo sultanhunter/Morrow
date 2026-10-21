@@ -270,8 +270,9 @@ test("Shopify verdicts: closed shapes both ways; no secret, token or extra field
     encodeShopifyWebhookVerdict,
     shopifyLimits,
   } = await import("../packages/identity/src/broker-protocol.ts");
-  // No broker secret name is added for Shopify: app secrets and tokens are vault rows.
-  assert.equal(required("development").length, 14);
+  // No broker secret name is added for Shopify: app secrets and tokens are vault rows. The
+  // development and staging list is sixteen with M5 PR-1's two Stripe names.
+  assert.equal(required("development").length, 16);
   assert.equal(required("production").length, 12);
   assert.ok(!required("development").some((name) => name.startsWith("SHOPIFY_")));
   assert.deepEqual(
