@@ -1,5 +1,5 @@
 // The staging test entitlement (owner decision (b), 2026-10-21; the ADR-0022 item 5
-// amendment; migration 0030): the contract v1.1 billing shapes it writes, the terms entry
+// amendment; migrations 0030-0031): the contract v1.1 billing shapes it writes, the terms entry
 // its credits come from, and how the api's facts reader and the billing library read the
 // result. The SQL itself runs in lab:test-entitlement (pg-http).
 //   * OperatorEntitlementKey; a test-mode Morrow-direct WorkspaceBillingRoute and

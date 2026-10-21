@@ -1145,7 +1145,7 @@ export async function seedPlatform({ connect, binding, administrator, rows, self
 // own guard (0029 terms_guard) also refuses a gap or any change.
 // ADR-0022 item 5 amendment (owner decision (b), 2026-10-21): the same transaction marks
 // the database's platform environment, once, as staging (morrow_billing.platform_environment,
-// migration 0030; never changed). This tool is staging's alone, so the mark it writes is
+// migration 0031; never changed). This tool is staging's alone, so the mark it writes is
 // always staging; a database marked otherwise is drift. The mark is written after the terms
 // drift checks and before any terms insert: an operator_test_entitlement entry needs it.
 export const platformEnvironment = "staging";
@@ -1327,7 +1327,7 @@ export async function resolveHeldCustomerOperation({ connect, binding, administr
 // ADR-0022 item 5 amendment; card E13). While the Stripe switch is off, the operator puts
 // one named staging workspace on the beta plan: under the owner's per-use approval in chat
 // and a committed docs/evidence/live record, the operator runs
-// morrow_billing.operator_test_entitlement_grant (migration 0030) as morrow_work_owner under
+// morrow_billing.operator_test_entitlement_grant (migration 0031) as morrow_work_owner under
 // the D4 SET-row protocol. It fixes the route to morrow_direct (test) as a verified payment
 // would and funds the wallet from the terms' operator entry, recorded as an operator grant,
 // never a payment. Only granted or replayed commits, after the closed result is read;

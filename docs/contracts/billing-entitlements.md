@@ -49,7 +49,7 @@ An **association** is an installation's `workspace_store_links` row (migration 0
 
 ## Staging operator test entitlement (ADR-0022 item 5 amendment, 2026-10-21)
 
-Not a seed. While the Stripe switch is off, the owner's operator command (`staging:test-entitlement`, staging-card-1 E13, approved and recorded per use) puts one named staging workspace on the beta plan without Stripe. In one transaction (`morrow_billing.operator_test_entitlement_grant`, migration 0030) it:
+Not a seed. While the Stripe switch is off, the owner's operator command (`staging:test-entitlement`, staging-card-1 E13, approved and recorded per use) puts one named staging workspace on the beta plan without Stripe. In one transaction (`morrow_billing.operator_test_entitlement_grant`, migration 0031) it:
 - fixes the route to `morrow_direct` in test mode with the same columns and guards a verified payment's fix uses, naming `morrow:operator_entitlement:<id>` (an `OperatorEntitlementKey`) in place of a payment key;
 - creates the storeless account and an operator grant record (`operator_test_entitlements`);
 - funds the wallet from that record with the credits of the current terms' one `operator_test_entitlement` entry (300, R10);

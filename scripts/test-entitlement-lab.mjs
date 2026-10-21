@@ -1,5 +1,5 @@
 // lab:test-entitlement (pg-http): the staging test entitlement (owner decision (b),
-// 2026-10-21; the ADR-0022 item 5 amendment; card E13; migration 0030) on an isolated,
+// 2026-10-21; the ADR-0022 item 5 amendment; card E13; migrations 0030-0031) on an isolated,
 // network-none PostgreSQL 17 engine with the whole manifest, applied by a Neon-shaped
 // non-superuser CREATEROLE administrator (ADR-0020, the hosted shape). The runner's own
 // code (scripts/staging-runner.mjs) seeds the staging mark and staging's published terms
@@ -11,7 +11,9 @@
 //      immutable.
 //   R  refusals: every runtime login and role, the superuser without the owner role, a
 //      work session context, a reused approval, a fixed route, a Stripe customer, a
-//      Stripe receipt, a missing route row; forged operator keys on the route and snapshot.
+//      Stripe receipt, a missing route row, a store association (an installation that is
+//      or was linked; one never linked is not one); forged operator keys on the route and
+//      snapshot.
 //   G  the grant: route, account, wallet, snapshot and grant record in one commit; replay
 //      writes nothing; no receipt, payment event or payment credit grant anywhere; the
 //      wallet's sum is the grant's units and only moves keep it.
@@ -121,12 +123,35 @@ ${grantInsert(p, fixtureGrant(p, "governance.billing.manage", ["view", "execute"
     const C = tenant("te_c");
     const D = tenant("te_d", { route: false });
     const E = tenant("te_e");
+    const F = tenant("te_f");
     const input = (p, n, slug = p.key.replace("_", "-"), operator = "operator_lab") => ({
       operatorId: operator,
       workspaceId: p.workspace,
       approvalRef: approval(n),
       evidenceRef: evidence(slug),
     });
+    // A store installation through M2 PR-2's identity tables (identity-owner fixtures, as
+    // lab:billing's): the app registry row, the installation (born unlinked, as
+    // shopify_preserve_record requires) and, with `link`, the 0005 candidate and link and
+    // the installation's unlinked -> linked change. morrow_identity.work_store_installations
+    // reads exactly these rows; an association is an installation that is or was linked.
+    // The linking rule never links into an unfixed route, so the linked fixture stands for
+    // any path that might: the operator function must refuse it like every route fix.
+    const installStore = (p, key, shopId, { link }) => {
+      const app = "lab-" + key.replaceAll("_", "-");
+      const shop = app + ".myshopify.com";
+      const installation = "installation_" + key;
+      const at = "date_trunc('milliseconds',clock_timestamp())";
+      db.admin(`INSERT INTO morrow_identity.shopify_apps(app_key,client_id,environment_id,intended_shop_digest,invited_organization_id,invited_workspace_id,scopes,api_version,install_url,status,revision,created_at,retired_at)
+ VALUES(${lit(app)},md5(${lit(key)}),'development',encode(sha256(convert_to(${lit(shop)},'UTF8')),'hex'),${lit(p.org)},${lit(p.workspace)},'read_products,write_products','2026-10',${lit("https://" + shop + "/admin/oauth/install_custom_app")},'active',1,${at},NULL);
+INSERT INTO morrow_identity.store_installations(organization_id,workspace_id,id,app_key,shop_id,shop_domain,store_id,connection_id,generation,status,granted_scopes,credential_id,credential_version,development_store,link_id,revision,created_at,updated_at,reauthorised_at,linked_at)
+ SELECT ${lit(p.org)},${lit(p.workspace)},${lit(installation)},${lit(app)},${lit(shopId)},${lit(shop)},${lit("store_" + key)},${lit("connection_" + key)},1,'unlinked',ARRAY['read_products','write_products'],${lit("credential_" + key)},1,true,NULL,1,t,t,NULL,NULL FROM (SELECT ${at} AS t) x;`);
+      if (!link) return installation;
+      db.admin(`INSERT INTO morrow_identity.linking_candidates VALUES(${lit("candidate_" + key)},'shopify','synthetic_app','synthetic_env',${lit(shopId)},${lit(shop)},${lit(installation)},1,true,1,'controlled_fixture',${lit("proof_" + key)},1,repeat('a',64),${lit(p.principal)},clock_timestamp()-interval '1 minute',clock_timestamp()+interval '1 minute',NULL);
+INSERT INTO morrow_identity.workspace_store_links VALUES(${lit("link_" + key)},${lit("candidate_" + key)},${lit(p.org)},${lit(p.workspace)},${lit(installation)},1,1,${lit(p.principal)},clock_timestamp());
+UPDATE morrow_identity.store_installations SET status='linked',link_id=${lit("link_" + key)},linked_at=greatest(${at},created_at),updated_at=greatest(${at},created_at),revision=revision+1 WHERE id=${lit(installation)};`);
+      return installation;
+    };
     const linkRoute = (p) =>
       scalar(
         `SET ROLE morrow_identity_owner; SELECT morrow_billing.link_route_current(${lit(p.org)},${lit(p.workspace)});`,
@@ -254,6 +279,36 @@ INSERT INTO morrow_billing.stripe_event_receipts(organization_id,workspace_id,id
         refusals.stripeReceipt?.details?.outcome === "stripe_conflict" &&
         refusals.noRoute?.details?.outcome === "route_missing" &&
         Object.values(refusals).every((e) => e?.code === "STAGING_TEST_ENTITLEMENT_REFUSED") &&
+        same(counts(), before) &&
+        morrowSetRows(db.id) === 0,
+    );
+    // F has a linked store (an association) on its unfixed website route; A has an
+    // installation that was never linked, which is no association and does not block
+    // its grant below.
+    installStore(F, "te_f_linked", "3001", { link: true });
+    installStore(A, "te_a_unlinked", "3002", { link: false });
+    // The work owner reads the associations through M2 PR-2's bridge (0030's grant); the
+    // runtime logins and the api role still cannot.
+    const associations = (p) => {
+      const r = db.tryRun(
+        `SET ROLE morrow_work_owner; SELECT count(*) FILTER (WHERE linked_at IS NOT NULL)||'/'||count(*) FROM morrow_identity.work_store_installations(${lit(p.org)},${lit(p.workspace)});`,
+      );
+      return r.ok ? r.stdout.split("\n").at(-1) : "error";
+    };
+    const bridgeSql = `SELECT count(*) FROM morrow_identity.work_store_installations(${lit(F.org)},${lit(F.workspace)});`;
+    const readers = [
+      ...logins.map((user) => db.tryRun(bridgeSql, { user })),
+      db.tryRun("SET ROLE morrow_work_api; " + bridgeSql),
+    ];
+    const linkedStore = await rejection(grant(input(F, 7)));
+    check(
+      "R_a_store_association_is_refused_and_an_installation_never_linked_is_not_one",
+      linkedStore?.code === "STAGING_TEST_ENTITLEMENT_REFUSED" &&
+        linkedStore.details.outcome === "route_conflict" &&
+        associations(F) === "1/1" &&
+        associations(A) === "0/1" &&
+        readers.every((r) => !r.ok && /permission denied/.test(r.stderr)) &&
+        linkRoute(F) === "unfixed" &&
         same(counts(), before) &&
         morrowSetRows(db.id) === 0,
     );

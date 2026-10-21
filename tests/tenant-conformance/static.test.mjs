@@ -15,6 +15,7 @@ import {
   vaultTables,
   workDomains,
   workFunctions,
+  workOwnerBridges,
   workRouteProbes,
   workRoles,
   workTables,
@@ -438,9 +439,13 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
       const [p] = rows(
         `SELECT has_function_privilege('${role}','morrow_identity.${signature}','EXECUTE') AS x, p.prosecdef, p.proowner::regrole::text AS owner FROM pg_proc p WHERE p.oid='morrow_identity.${signature}'::regprocedure`,
       );
+      // The command role executes every bridge; the work owner only its registered ones
+      // (workOwnerBridges: 0030, the operator test entitlement's association read).
       assert.equal(
         p.x,
-        role === workRoles.command || role === "morrow_identity_owner",
+        role === workRoles.command ||
+          role === "morrow_identity_owner" ||
+          (role === workRoles.owner && workOwnerBridges.includes(signature)),
         role + " " + signature,
       );
       assert.ok(p.prosecdef && p.owner === "morrow_identity_owner");
@@ -505,13 +510,24 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
       )
       .sort(),
   );
+  // Besides them, the work owner executes exactly its registered identity bridges (0030:
+  // the store-association read of the operator test entitlement, 0031).
   for (const f of identityFunctions) {
-    const bridge = bridgeFunctions.includes(f.signature.replace("morrow_identity.", ""));
+    const name = f.signature.replace("morrow_identity.", "");
+    const bridge = bridgeFunctions.includes(name);
     assert.equal(f.c, bridge, f.signature);
-    assert.equal(f.o, workOwnerHelpers.includes(f.signature), f.signature);
+    assert.equal(
+      f.o,
+      workOwnerHelpers.includes(f.signature) || workOwnerBridges.includes(name),
+      f.signature,
+    );
     assert.ok(!f.a && !f.l, f.signature);
   }
-  assert.equal(identityFunctions.filter((f) => f.o).length, workOwnerHelpers.length);
+  assert.ok(workOwnerBridges.every((name) => bridgeFunctions.includes(name)));
+  assert.equal(
+    identityFunctions.filter((f) => f.o).length,
+    workOwnerHelpers.length + workOwnerBridges.length,
+  );
   // The five ADR-0020 helpers: owned by the identity owner, no PUBLIC EXECUTE, and no
   // executor may run any of them.
   const helperAcl = rows(

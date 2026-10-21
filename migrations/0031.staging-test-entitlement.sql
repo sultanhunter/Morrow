@@ -1,13 +1,13 @@
 BEGIN;
 -- The staging test entitlement (owner decision (b), 2026-10-21; ADR-0022 item 5 amendment;
 -- staging-card-1 E13; docs/briefs/staging-test-entitlement.md). Executes AS
--- morrow_work_owner, after 0029. While the Stripe switch is off, an operator command,
--- approved by the owner and recorded per use, puts one named staging workspace on the beta
--- plan without Stripe: its route is fixed to morrow_direct (test) exactly as a verified
--- payment fixes it, with its billing account, its first entitlement snapshot and a funded
--- credit wallet, all in one transaction. It is an operator grant, never a payment: no
--- receipt, verified payment event or credit_grants row is written, and the keys it uses
--- (morrow:operator_entitlement:<id>) are not payment keys.
+-- morrow_work_owner, after 0030 (its identity bridge). While the Stripe switch is off, an
+-- operator command, approved by the owner and recorded per use, puts one named staging
+-- workspace on the beta plan without Stripe: its route is fixed to morrow_direct (test)
+-- exactly as a verified payment fixes it, with its billing account, its first entitlement
+-- snapshot and a funded credit wallet, all in one transaction. It is an operator grant,
+-- never a payment: no receipt, verified payment event or credit_grants row is written, and
+-- the keys it uses (morrow:operator_entitlement:<id>) are not payment keys.
 --   * platform_environment: the platform's one environment mark (development, staging or
 --     production), written once by the owner's seed (staging:seed-platform) and never
 --     changed. The operator path refuses unless it says staging.
@@ -29,7 +29,10 @@ BEGIN;
 --     runner shape; staging:test-entitlement). Not SECURITY DEFINER: a definer would act as
 --     the owner for any future EXECUTE grantee, while INVOKER with the current_user check
 --     admits only a session that has SET ROLE morrow_work_owner. It refuses every work
---     session, lease or receipt context and every Morrow login as session user.
+--     session, lease or receipt context and every Morrow login as session user. Like
+--     every route fix (P01.T04a R2, R3) it refuses a workspace with a store association,
+--     read through M2 PR-2's morrow_identity.work_store_installations, which 0030 lets the
+--     work owner execute.
 -- No runtime login, session or definer gains a privilege; checkout, the receipt ingress and
 -- the broker's definers are unchanged.
 DO $$ BEGIN
@@ -43,6 +46,7 @@ DO $$ BEGIN
  OR to_regprocedure('morrow_billing.receipt_tenant(text,text)') IS NULL
  OR to_regprocedure('morrow_work.sha256_text(text)') IS NULL OR to_regprocedure('morrow_work.utc_text(timestamp with time zone)') IS NULL
  OR to_regprocedure('morrow_work.append_only()') IS NULL
+ OR NOT pg_catalog.has_function_privilege('morrow_work_owner','morrow_identity.work_store_installations(text,text)','EXECUTE')
  OR to_regclass('morrow_billing.platform_environment') IS NOT NULL OR to_regclass('morrow_billing.operator_test_entitlements') IS NOT NULL
  OR to_regprocedure('morrow_billing.operator_test_entitlement_grant(text,text,text,text)') IS NOT NULL
  OR (SELECT count(*) FROM pg_catalog.pg_constraint c WHERE c.contype='c' AND (c.conrelid,c.conname) IN (
@@ -277,9 +281,11 @@ END $$;
 --   refuses: any work session, lease or receipt context, any Morrow login as session user
 --   (denied); a database not marked staging (not_staging); a reused approval for another
 --   workspace, operator or record (approval_conflict); no route row (route_missing); a
---   route already fixed, Shopify-bound or not website, or an account or grant already
---   present (route_conflict); any Stripe customer, operation, intent or receipt of the
---   workspace (stripe_conflict); no operator entry in the current terms (terms_missing).
+--   route already fixed, Shopify-bound or not website, any store association (an
+--   installation that is or was linked: the phase-open rule every route fix applies), or
+--   an account or grant already present (route_conflict); any Stripe customer, operation,
+--   intent or receipt of the workspace (stripe_conflict); no operator entry in the current
+--   terms (terms_missing).
 --   replays: the same approval for the same workspace, operator and record (replayed),
 --   writing nothing.
 --   grants, in this order and this one transaction: the Morrow-direct test account
@@ -337,7 +343,10 @@ BEGIN
   x.updated_at INTO r FROM morrow_billing.workspace_billing_routes x WHERE x.workspace_id=p_workspace_id FOR UPDATE;
  IF NOT FOUND THEN RETURN QUERY SELECT 'route_missing'::text,NULL::text; RETURN; END IF;
  v_org:=r.organization_id;
+ -- Phase open only (P01.T04a R2, R3), as checkout and the receipt application require:
+ -- website origin, never bound, no store association, nothing fixed or granted yet.
  IF r.route IS NOT NULL OR r.origin<>'website' OR r.shopify_bound_at IS NOT NULL
+  OR EXISTS(SELECT 1 FROM morrow_identity.work_store_installations(v_org,p_workspace_id) a WHERE a.linked_at IS NOT NULL)
   OR EXISTS(SELECT 1 FROM morrow_billing.billing_accounts x WHERE x.organization_id=v_org AND x.workspace_id=p_workspace_id)
   OR EXISTS(SELECT 1 FROM morrow_billing.operator_test_entitlements x WHERE x.organization_id=v_org AND x.workspace_id=p_workspace_id) THEN
   RETURN QUERY SELECT 'route_conflict'::text,NULL::text; RETURN;

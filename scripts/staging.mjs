@@ -811,8 +811,9 @@ command("billing-customer-resolve", {
 // The staging test entitlement (owner decision (b), 2026-10-21; the ADR-0022 item 5
 // amendment; card E13). Each use needs the owner's own approval in chat for this workspace,
 // recorded in a docs/evidence/live record committed to main before the run: the record
-// must name the approval reference and the workspace. Under the active card that carries
-// E13, with an approval reference of that card and effect dated from the amendment to today.
+// must name the approval reference and the workspace (requireTestEntitlementRecord). Under
+// the active card that carries E13, with an approval reference of that card and effect
+// dated from the amendment to today.
 // Prints the closed result: the outcome, ids, credit units, the terms revision and the period.
 export function requireTestEntitlementApproval(card, approvalRef, now) {
   const e13 = card?.e13;
@@ -836,6 +837,35 @@ export function requireTestEntitlementApproval(card, approvalRef, now) {
     match[3] > today
   )
     throw new StagingError("STAGING_APPROVAL_INVALID");
+}
+// The record names the run on two labelled lines, each exactly once: a plain line or a
+// Markdown list item, the label optionally in bold, the value alone, bare or in backticks:
+//   - Approval reference: `staging-card-1.e13.2026-10-22.1`
+//   - Workspace: `ws_...`
+// Each value must equal the run's approval reference or workspace id exactly. A substring
+// never matches (approval .1 is not named by a record of .10, nor a workspace id by a
+// longer one), and a labelled line whose value is not one delimited token, or a second
+// line with the same label, refuses the run.
+const recordLabel =
+  /^(?:[-*] +)?(?:\*\*(Approval reference|Workspace):\*\*|(Approval reference|Workspace):)(.*)$/;
+const recordValue = /^ +(?:`([^`\s]+)`|([^`\s]+)) *$/;
+export function requireTestEntitlementRecord(text, { approvalRef, workspaceId }) {
+  const named = { "Approval reference": [], Workspace: [] };
+  for (const line of String(text).split(/\r?\n/)) {
+    const label = recordLabel.exec(line.trim());
+    if (!label) continue;
+    const value = recordValue.exec(label[3]);
+    named[label[1] ?? label[2]].push(value ? (value[1] ?? value[2]) : null);
+  }
+  const approvals = named["Approval reference"];
+  const workspaces = named.Workspace;
+  if (
+    approvals.length !== 1 ||
+    approvals[0] !== approvalRef ||
+    workspaces.length !== 1 ||
+    workspaces[0] !== workspaceId
+  )
+    throw new StagingError("STAGING_EVIDENCE_MISMATCH");
 }
 command("test-entitlement", {
   usage:
@@ -868,9 +898,7 @@ command("test-entitlement", {
     const record = join(ctx.root, input.evidenceRef);
     if (!existsSync(record) || !lstatSync(record).isFile())
       throw new StagingError("STAGING_EVIDENCE_MISSING");
-    const text = readFileSync(record, "utf8");
-    if (!text.includes(input.approvalRef) || !text.includes(input.workspaceId))
-      throw new StagingError("STAGING_EVIDENCE_MISMATCH");
+    requireTestEntitlementRecord(readFileSync(record, "utf8"), input);
     const binding = await stagingBinding(ctx, config);
     await mainPreconditions(ctx, repositoryOf(config.staging));
     const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());

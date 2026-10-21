@@ -64,6 +64,7 @@ import {
   main,
   mainPreconditions,
   requireTestEntitlementApproval,
+  requireTestEntitlementRecord,
   stagingBillingTermsRows,
 } from "../scripts/staging.mjs";
 import { parseOwnerUrl } from "../scripts/staging-files.mjs";
@@ -2456,7 +2457,7 @@ test("billing terms seed: as the work owner, idempotent, refused on drift, D4 in
     s.text.startsWith("INSERT INTO morrow_billing.billing_terms"),
   );
   assert.deepEqual(insert.params, [...rows[0]]);
-  // The staging mark (0030), after the drift checks and before the first terms insert.
+  // The staging mark (0031), after the drift checks and before the first terms insert.
   const mark = fresh.texts.findIndex((t) =>
     t.startsWith("INSERT INTO morrow_billing.platform_environment"),
   );
@@ -2780,6 +2781,51 @@ test("test-entitlement: the card must carry E13 and the approval must name this 
     );
 });
 
+test("test-entitlement: the record names the approval reference and the workspace exactly, once each", () => {
+  const { approvalRef, workspaceId } = entitlementInput;
+  const named = (approval, workspace, extra = "") =>
+    `# Record\n\n- **Approval.** The owner approved in chat.\n- Approval reference: \`${approval}\`\n- Workspace: \`${workspace}\`\n${extra}`;
+  for (const text of [
+    named(approvalRef, workspaceId),
+    `Approval reference: ${approvalRef}\r\nWorkspace: ${workspaceId}\r\n`,
+    `* **Approval reference:** \`${approvalRef}\`\n  - **Workspace:** ${workspaceId}  \n`,
+    // The exact command line names both again; only the labelled lines count.
+    named(
+      approvalRef,
+      workspaceId,
+      `- Command: \`--approval ${approvalRef}0 --workspace ${workspaceId}_2\`\n`,
+    ),
+  ])
+    requireTestEntitlementRecord(text, entitlementInput);
+  const prefixed = { ...entitlementInput, approvalRef: "staging-card-1.e13.2026-10-22.10" };
+  for (const [text, input] of [
+    // The prefix case: the run's .1 is not named by a record of .10, nor .10 by .1.
+    [named("staging-card-1.e13.2026-10-22.10", workspaceId), entitlementInput],
+    [named(approvalRef, workspaceId), prefixed],
+    // A workspace id inside a longer one, or a longer one around it, is not it.
+    [named(approvalRef, workspaceId + "_2"), entitlementInput],
+    [named(approvalRef, workspaceId), { ...entitlementInput, workspaceId: "ws_staging" }],
+    // Substrings anywhere else (the old check) no longer count.
+    [`Approval: ${approvalRef}\nWorkspace id ${workspaceId}\n`, entitlementInput],
+    [`Approved ${approvalRef} for ${workspaceId}.\n`, entitlementInput],
+    // A value that is not one delimited token, a missing label, or a label twice.
+    [named(`${approvalRef} (second)`, workspaceId), entitlementInput],
+    [named(approvalRef, `\`${workspaceId}\``), entitlementInput],
+    [`- Approval reference: \`${approvalRef}\`\n`, entitlementInput],
+    [named(approvalRef, workspaceId, `- Workspace: \`ws_other\`\n`), entitlementInput],
+    [
+      named(approvalRef, workspaceId, `- Approval reference: \`${approvalRef}\`\n`),
+      entitlementInput,
+    ],
+    ["", entitlementInput],
+  ])
+    assert.equal(
+      codeOf(() => requireTestEntitlementRecord(text, input)),
+      "STAGING_EVIDENCE_MISMATCH",
+      JSON.stringify([text, input.approvalRef, input.workspaceId]),
+    );
+});
+
 test("cli: test-entitlement needs the card with E13, the committed record naming the approval and workspace, and main", async () => {
   const planted = plantedHome({
     "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
@@ -2845,14 +2891,22 @@ test("cli: test-entitlement needs the card with E13, the committed record naming
       assert.equal(JSON.parse(w.err.at(-1)).code, code);
       assert.deepEqual(w.db.statements, [], code);
     }
-    writeFileSync(record, `Approval: ${entitlementInput.approvalRef}\n`);
-    const unnamed = await world();
-    assert.equal(await main(argv, unnamed.ctx), 1);
-    assert.equal(JSON.parse(unnamed.err.at(-1)).code, "STAGING_EVIDENCE_MISMATCH");
-    assert.deepEqual(unnamed.db.statements, []);
+    // The record must name both exactly on their labelled lines: a substring (the old
+    // check) or a prefix of another reference refuses before any SQL.
+    for (const text of [
+      `- Approval reference: \`${entitlementInput.approvalRef}\`\n`,
+      `Approval: ${entitlementInput.approvalRef}\nWorkspace: ${entitlementInput.workspaceId}x\n`,
+      `- Approval reference: \`${entitlementInput.approvalRef}0\`\n- Workspace: \`${entitlementInput.workspaceId}\`\n`,
+    ]) {
+      writeFileSync(record, text);
+      const unnamed = await world();
+      assert.equal(await main(argv, unnamed.ctx), 1, text);
+      assert.equal(JSON.parse(unnamed.err.at(-1)).code, "STAGING_EVIDENCE_MISMATCH", text);
+      assert.deepEqual(unnamed.db.statements, [], text);
+    }
     writeFileSync(
       record,
-      `Approval: ${entitlementInput.approvalRef}\nWorkspace: ${entitlementInput.workspaceId}\n`,
+      `- Approval reference: \`${entitlementInput.approvalRef}\`\n- Workspace: \`${entitlementInput.workspaceId}\`\n`,
     );
     const branch = await world({ tools: { git: { head: fakeSha("branch") } } });
     assert.equal(await main(argv, branch.ctx), 1);

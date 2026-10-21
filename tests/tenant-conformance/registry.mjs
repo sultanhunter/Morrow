@@ -285,13 +285,19 @@ export const bridgeFunctions = Object.freeze([
   "work_signup_workspace(text,text)",
   // M2 PR-2 (0026): the vault login's identity bridges, called only by 0027's vault
   // definers, and the shared store-installation read for the work and billing definers
-  // (M5 PR-1's workspace_associations and checkout precondition call it).
+  // (M5 PR-1's workspace_associations and checkout precondition call it; 0030 also lets
+  // the work owner execute it, for the operator test entitlement's precondition:
+  // workOwnerBridges below).
   "work_shopify_install_prepare(text,text,text,text)",
   "work_shopify_install_record(text,text,text,text,text,text,text,text,text,text,text,text)",
   "work_shopify_launch(text,text)",
   "work_shopify_state_claim(text,text)",
   "work_store_installations(text,text)",
 ]);
+// Identity bridges the work owner executes besides the three ADR-0020 membership helpers
+// (0014): the staging test entitlement's operator function (0031) runs as the owner and
+// reads the store associations through this one (0030). No other work role gains it.
+export const workOwnerBridges = Object.freeze(["work_store_installations(text,text)"]);
 // M2 PR-1 (0020): the two schemas the work owner creates beside morrow_work. The billing
 // route is tenant-readable with one extra insert policy for the signup bridge; the vault
 // is readable only while the session user is the broker's login (vault_broker).
@@ -581,7 +587,7 @@ export const billingTables = Object.freeze({
       ],
     ),
   },
-  // The staging test entitlement (0030; ADR-0022 item 5 amendment, 2026-10-21): the
+  // The staging test entitlement (0031; ADR-0022 item 5 amendment, 2026-10-21): the
   // platform's environment mark (one row, the owner's seed) and the operator grant record
   // (the owner's operator function only). No runtime role holds anything on either.
   platform_environment: {
@@ -640,7 +646,7 @@ export const billingFunctions = Object.freeze({
     kind: "operator",
     grantees: [],
   },
-  // The staging test entitlement (0030): INVOKER, owned by the owner, granted to nobody.
+  // The staging test entitlement (0031): INVOKER, owned by the owner, granted to nobody.
   "operator_test_entitlement_grant(text,text,text,text)": { kind: "operator", grantees: [] },
   // INVOKER helpers the policies and definers evaluate as the command role.
   "receipt_ingress()": { kind: "check", grantees: ["morrow_work_command"] },

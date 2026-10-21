@@ -244,8 +244,15 @@
     },
     {
       "sequence": 30,
-      "file": "0030.staging-test-entitlement.sql",
-      "sha256": "f96147f2ec9df52355b259a567bfc3816842dbf662953c19f1bbaab2ab3e7af6",
+      "file": "0030.staging-entitlement-identity-bridge.sql",
+      "sha256": "3400f1c680f6fc552ca969d6e4382c85818536684ea7073e18f8676fdfcdf747",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/staging-test-entitlement.md"
+    },
+    {
+      "sequence": 31,
+      "file": "0031.staging-test-entitlement.sql",
+      "sha256": "15108c018180ccb980ba7b3d5969391dd822eb0ade664a7af0dda86d8fd4c046",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/staging-test-entitlement.md"
     }

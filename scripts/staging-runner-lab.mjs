@@ -13,7 +13,7 @@
 //   through a kill before COMMIT and a lost acknowledgement, a superseded digest, and a
 //   planted SET row; zero Morrow SET rows and closed memberships at rest.
 // The chain runs through its head (M2 PR-1: 0019-0024; M2 PR-2: 0025-0027; M5 PR-1:
-// 0028-0029; the staging test entitlement: 0030; none of 0025-0030 adds a login, and the
+// 0028-0029; the staging test entitlement: 0030-0031; none of 0025-0031 adds a login, and the
 // entries after origin/main's head
 // replay after provisioning), so provisioning covers the eleven broker logins, the vault
 // login included, and the first-deploy file the broker names, with the owner's vault KEK
