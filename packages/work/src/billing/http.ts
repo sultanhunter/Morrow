@@ -1,7 +1,6 @@
 import type { Core_ErrorEnvelope } from "@morrow/contracts";
 import { validateDefinition } from "@morrow/contracts/validation";
 import {
-  billingCallToAction,
   billingEnvironments,
   environmentMode,
   type BillingDenial,
@@ -39,6 +38,7 @@ import {
 } from "./commands.js";
 import type { BillingBrokerPort, BillingEnvironmentName } from "./port.js";
 import { subscriptionEntry } from "./terms.js";
+import { billingViewCallToAction } from "./view.js";
 
 // The billing HTTP API (M5 PR-1; P18.T01a; docs/contracts/billing-api.md). Routes under
 // /workspace/:ws/billing on the api Worker's origin, for Morrow's own SPA: the billing view
@@ -50,7 +50,12 @@ export interface BillingApiDependencies {
   readonly origin: string;
   readonly connector: WorkSqlConnector;
   readonly environment: BillingEnvironmentName;
-  /** null: the api has no broker Stripe adapters; purchases answer 503. */
+  /**
+   * null: no broker Stripe adapters, which is the deployed api while the Stripe switch is off
+   * (owner decision (c), 2026-10-21). Checkout and portal then answer 503 unavailable before
+   * any database access or broker call, and the plans offer neither action; the billing view
+   * (plan, credits, period) still reads the database.
+   */
   readonly broker: BillingBrokerPort | null;
   readonly now: () => number;
 }
@@ -286,7 +291,7 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
         if (!parsePortalBody(g.body)) return respond("invalid", "invalid");
         digest = await billingRequestDigest("portal", g.workspaceId, {});
       }
-      if (!read && !configured.broker) return respond("unavailable", "broker_unbound");
+      if (!read && !configured.broker) return respond("unavailable", "stripe_off");
       let connection: WorkSqlConnection;
       try {
         connection = await configured.connector.open({
@@ -320,7 +325,10 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
             await authorizeBillingView(a);
             const c = await readBillingContext(tx, a, configured.environment);
             const mayPurchase = await decideBilling(a, "governance.billing.manage", "view");
-            return { kind: "view" as const, body: billingView(c, mayPurchase) };
+            return {
+              kind: "view" as const,
+              body: billingView(c, mayPurchase, configured.broker !== null),
+            };
           }
           if (g.route.key === "GET /morrow/plans") {
             if (!(await decideBilling(a, "governance.billing.manage", "view")))
@@ -329,9 +337,14 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
             const actions = requirePurchase(c, "GET /morrow/plans");
             // Only what POST /morrow/checkout can perform: the guard's subscribe, and
             // cmd_checkout_open's own precondition (an unfixed website route, never bound,
-            // with no association) and no customer setup held for the operator.
+            // with no association) and no customer setup held for the operator. With the
+            // Stripe switch off neither purchase can run, so neither is offered.
+            const stripeOn = configured.broker !== null;
             const subscribe =
-              actions.includes("subscribe") && checkoutAdmissible(c) && !c.read.setupHold;
+              stripeOn &&
+              actions.includes("subscribe") &&
+              checkoutAdmissible(c) &&
+              !c.read.setupHold;
             return {
               kind: "view" as const,
               body: {
@@ -339,7 +352,7 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
                 offers: subscribe ? currentOffers(c.terms, configured.environment) : [],
                 actions: {
                   subscribe,
-                  billingPortal: actions.includes("billing_portal"),
+                  billingPortal: stripeOn && actions.includes("billing_portal"),
                 },
               },
             };
@@ -526,10 +539,15 @@ function checkoutAdmissible(c: Awaited<ReturnType<typeof readBillingContext>>): 
 /**
  * The billing view: the phase and state, the plan's status and validity, the credits and
  * the billing period, any checkout in progress, a customer setup held for the operator
- * (its operation id, the reference for Morrow support), and the one call to action, which
- * comes only from billingCallToAction (P01.T04a §9). No provider id, price or URL.
+ * (its operation id, the reference for Morrow support), and the one call to action
+ * (billingViewCallToAction). No provider id, price or URL. The Stripe switch changes only
+ * the call to action: plan, credits and period read the same either way.
  */
-function billingView(c: Awaited<ReturnType<typeof readBillingContext>>, mayPurchase: boolean) {
+function billingView(
+  c: Awaited<ReturnType<typeof readBillingContext>>,
+  mayPurchase: boolean,
+  stripeOn: boolean,
+) {
   const s = c.state;
   const snapshot = c.read.snapshot;
   const wallet = c.read.wallet;
@@ -551,6 +569,6 @@ function billingView(c: Awaited<ReturnType<typeof readBillingContext>>, mayPurch
     setupHold: c.read.setupHold
       ? { operationId: c.read.setupHold.operationId, heldAt: c.read.setupHold.heldAt }
       : null,
-    callToAction: mayPurchase ? billingCallToAction(s) : { kind: "none" },
+    callToAction: billingViewCallToAction(s, mayPurchase, stripeOn),
   };
 }

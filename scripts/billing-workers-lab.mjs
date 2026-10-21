@@ -282,6 +282,9 @@ ${grantInsert(p, grant)}`);
             MORROW_DATABASE_BINDING_JSON: JSON.stringify(binding),
             MORROW_DB_PASSWORD_MORROW_VAULT_BROKER: vaultPassword,
             MORROW_VAULT_KEK_V1: kek,
+            // The Stripe switch on (owner decision (c), 2026-10-21; its runtime image): this
+            // lab is the switched-on pair. Switched off is lab:edge-workers' and lab:billing D1b.
+            MORROW_STRIPE_MODE: "test",
             STRIPE_RESTRICTED_KEY: fakeStripeKey,
             STRIPE_WEBHOOK_SECRET: fakeStripeWebhookSecret,
             STRIPE_CONFIGURATION_JSON: JSON.stringify({

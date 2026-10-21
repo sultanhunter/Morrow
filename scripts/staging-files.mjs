@@ -98,7 +98,23 @@ export function vaultKekFile(name) {
 
 // The closed set of files the tools know. `required` files must exist for
 // secrets-status to pass; transient ones are reported and expected to be removed. Every
-// vault KEK among the broker's names has its own required owner file.
+// vault KEK among the broker's names has its own required owner file, and so does each
+// Stripe secret among them: only while the Stripe switch is on (M5; owner decision (c),
+// 2026-10-21), so while it is off the tools neither require nor read a Stripe file.
+const stripeFileSpecs = Object.freeze({
+  // M5 PR-1 (ADR-0022 items 7 and 12): the Stripe restricted test key (never sk_, never
+  // live) and the webhook endpoint's signing secret, placed by the owner with morrow_put.
+  "stripe-restricted-key": {
+    required: true,
+    secret: "STRIPE_RESTRICTED_KEY",
+    format: (v) => /^rk_test_[A-Za-z0-9]{16,250}$/.test(v),
+  },
+  "stripe-webhook-secret": {
+    required: true,
+    secret: "STRIPE_WEBHOOK_SECRET",
+    format: (v) => /^whsec_[A-Za-z0-9+/=_-]{16,256}$/.test(v),
+  },
+});
 export function stagingFileSpecs({ brokerSecretNames }) {
   return Object.freeze({
     "workos-api-key": {
@@ -111,18 +127,9 @@ export function stagingFileSpecs({ brokerSecretNames }) {
       secret: "TURNSTILE_SECRET_KEY",
       format: (v) => /^0x[0-9A-Za-z_-]{20,128}$/.test(v),
     },
-    // M5 PR-1 (ADR-0022 items 7 and 12): the Stripe restricted test key (never sk_, never
-    // live) and the webhook endpoint's signing secret, placed by the owner with morrow_put.
-    "stripe-restricted-key": {
-      required: true,
-      secret: "STRIPE_RESTRICTED_KEY",
-      format: (v) => /^rk_test_[A-Za-z0-9]{16,250}$/.test(v),
-    },
-    "stripe-webhook-secret": {
-      required: true,
-      secret: "STRIPE_WEBHOOK_SECRET",
-      format: (v) => /^whsec_[A-Za-z0-9+/=_-]{16,256}$/.test(v),
-    },
+    ...Object.fromEntries(
+      Object.entries(stripeFileSpecs).filter(([, spec]) => brokerSecretNames.includes(spec.secret)),
+    ),
     ...Object.fromEntries(
       brokerSecretNames
         .filter((name) => vaultKekFile(name) !== null)

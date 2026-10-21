@@ -11,6 +11,8 @@ import {
   brokerRequiredSecretsFor,
   brokerStripeSecrets,
   decodeNeonLeaseGrant,
+  stripeModeTest,
+  stripeModeVar,
   encodeNeonLeaseGrant,
   neonLeaseNamespace,
   parseBrokerDatabaseBinding,
@@ -83,21 +85,40 @@ test("one role table drives the ten role secrets and the broker's required secre
     ...brokerNeonRoleNames.map((role) => "MORROW_DB_PASSWORD_" + role.toUpperCase()),
     "MORROW_DB_PASSWORD_MORROW_VAULT_BROKER",
     "MORROW_VAULT_KEK_V1",
-    // M5 PR-1 (ADR-0022 items 7 and 12): Stripe, development and staging only.
+  ]);
+  // M5 (owner decision (c), 2026-10-21): with the Stripe switch off (the default) the
+  // broker requires no Stripe secret: fourteen names, the deployed staging broker's.
+  assert.equal(brokerRequiredSecrets.length, 14);
+  assert.deepEqual(brokerStripeSecrets, ["STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"]);
+  assert.equal(brokerRequiredSecretsFor("development"), brokerRequiredSecrets);
+  assert.equal(brokerRequiredSecretsFor("staging"), brokerRequiredSecrets);
+  assert.equal(brokerRequiredSecretsFor("staging", "off"), brokerRequiredSecrets);
+  // On (M5 PR-1, ADR-0022 items 7 and 12): the restricted key and the webhook secret join.
+  assert.deepEqual(brokerRequiredSecretsFor("staging", "on"), [
+    ...brokerRequiredSecrets,
     "STRIPE_RESTRICTED_KEY",
     "STRIPE_WEBHOOK_SECRET",
   ]);
-  assert.equal(brokerRequiredSecrets.length, 16);
-  assert.deepEqual(brokerStripeSecrets, ["STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"]);
+  assert.equal(brokerRequiredSecretsFor("staging", "on").length, 16);
+  assert.ok(Object.isFrozen(brokerRequiredSecretsFor("staging", "on")));
   // Production holds the vault and Stripe (ADR-0022 item 7; ADR-0007 item 9): a production
-  // deploy requires neither the vault login's password, a KEK nor a Stripe secret (12).
-  assert.equal(brokerRequiredSecretsFor("development"), brokerRequiredSecrets);
-  assert.equal(brokerRequiredSecretsFor("staging"), brokerRequiredSecrets);
+  // deploy requires neither the vault login's password, a KEK nor a Stripe secret (12), and
+  // has no Stripe switch to turn on.
   assert.deepEqual(
     brokerRequiredSecretsFor("production"),
     brokerRequiredSecrets.filter((name) => !/VAULT|STRIPE/.test(name)),
   );
   assert.equal(brokerRequiredSecretsFor("production").length, 12);
+  assert.throws(() => brokerRequiredSecretsFor("production", "on"), /BROKER_STRIPE_SWITCH_INVALID/);
+  for (const value of ["test", "", null, true, "ON"])
+    assert.throws(
+      () => brokerRequiredSecretsFor("staging", value),
+      /BROKER_STRIPE_SWITCH_INVALID/,
+      String(value),
+    );
+  // The switch's one runtime image, read by the api and the broker.
+  assert.equal(stripeModeVar, "MORROW_STRIPE_MODE");
+  assert.equal(stripeModeTest, "test");
   assert.deepEqual(brokerLimits, {
     namespaceMaxBytes: 1024,
     selectorMaxBytes: 2048,
@@ -271,8 +292,8 @@ test("Shopify verdicts: closed shapes both ways; no secret, token or extra field
     shopifyLimits,
   } = await import("../packages/identity/src/broker-protocol.ts");
   // No broker secret name is added for Shopify: app secrets and tokens are vault rows. The
-  // development and staging list is sixteen with M5 PR-1's two Stripe names.
-  assert.equal(required("development").length, 16);
+  // development and staging list is fourteen while the Stripe switch is off (M5).
+  assert.equal(required("development").length, 14);
   assert.equal(required("production").length, 12);
   assert.ok(!required("development").some((name) => name.startsWith("SHOPIFY_")));
   assert.deepEqual(

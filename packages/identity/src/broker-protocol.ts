@@ -53,21 +53,32 @@ export const brokerVaultKekSecrets: readonly string[] = Object.freeze(["MORROW_V
 export const brokerPasswordSecret = (role: BrokerNeonRole | typeof brokerVaultRole) =>
   `MORROW_DB_PASSWORD_${role.toUpperCase()}`;
 // M5 PR-1 (ADR-0022 items 7 and 12): the Stripe restricted key (rk_test_ only) and the
-// webhook signing secret, bound only to the broker, in development and staging only.
+// webhook signing secret, bound only to the broker, and only while the Stripe switch is on.
 export const brokerStripeSecrets: readonly string[] = Object.freeze([
   "STRIPE_RESTRICTED_KEY",
   "STRIPE_WEBHOOK_SECRET",
 ]);
-// Development and staging: every secret, the vault's and Stripe's included (16 names).
-// P05.T01ab (ADR-0019 item 6): the Turnstile secret is the one provider credential admitted
-// beside WorkOS under v0. It verifies tokens and cannot mint them.
+// The reviewed Stripe switch (owner decision (c), 2026-10-21: "Merge with Stripe off"). It
+// is off by default everywhere. It is turned on by one reviewed commit of `switch` in
+// docs/decisions/stripe-staging.json, which edge:check and the staging tools read (staging
+// only: development's committed config never carries Stripe, and production holds it until
+// the ADR-0007 item 9 custody ADR). While it is off the broker requires no Stripe secret
+// and the Stripe methods and billing purchase routes answer a fixed unavailable code.
+export type BrokerStripeSwitch = "off" | "on";
+// The switch's one runtime image: the api's and the broker's var MORROW_STRIPE_MODE, exactly
+// "test" while the switch is on and absent while it is off (live mode waits for M6). The
+// broker treats any other value as off; the api refuses it (API_ENV_VALUE_INVALID).
+export const stripeModeVar = "MORROW_STRIPE_MODE";
+export const stripeModeTest = "test";
+// Development and staging with the switch off (the deployed broker's 14 names). P05.T01ab
+// (ADR-0019 item 6): the Turnstile secret is the one provider credential admitted beside
+// WorkOS under v0. It verifies tokens and cannot mint them.
 export const brokerRequiredSecrets: readonly string[] = Object.freeze([
   "WORKOS_API_KEY",
   "TURNSTILE_SECRET_KEY",
   ...brokerNeonRoleNames.map(brokerPasswordSecret),
   brokerPasswordSecret(brokerVaultRole),
   ...brokerVaultKekSecrets,
-  ...brokerStripeSecrets,
 ]);
 // Production holds the vault and Stripe (trust model v1 custody is development and staging
 // only, ADR-0022 item 7, until the ADR-0007 item 9 production custody ADR), so a production
@@ -76,16 +87,23 @@ export const brokerVaultSecrets: readonly string[] = Object.freeze([
   brokerPasswordSecret(brokerVaultRole),
   ...brokerVaultKekSecrets,
 ]);
+const brokerRequiredSecretsWithStripe: readonly string[] = Object.freeze([
+  ...brokerRequiredSecrets,
+  ...brokerStripeSecrets,
+]);
+const brokerRequiredSecretsInProduction: readonly string[] = Object.freeze(
+  brokerRequiredSecrets.filter((name) => !brokerVaultSecrets.includes(name)),
+);
+// The broker's exact `secrets.required` (development and staging: 14 with the switch off,
+// 16 with it on; production: 12). Production has no Stripe switch: "on" there is refused.
 export function brokerRequiredSecretsFor(
   environment: "development" | "staging" | "production",
+  stripe: BrokerStripeSwitch = "off",
 ): readonly string[] {
-  return environment === "production"
-    ? Object.freeze(
-        brokerRequiredSecrets.filter(
-          (name) => !brokerVaultSecrets.includes(name) && !brokerStripeSecrets.includes(name),
-        ),
-      )
-    : brokerRequiredSecrets;
+  if ((stripe !== "off" && stripe !== "on") || (environment === "production" && stripe === "on"))
+    throw Error("BROKER_STRIPE_SWITCH_INVALID");
+  if (environment === "production") return brokerRequiredSecretsInProduction;
+  return stripe === "on" ? brokerRequiredSecretsWithStripe : brokerRequiredSecrets;
 }
 export const brokerLimits = Object.freeze({
   namespaceMaxBytes: 1024,
@@ -111,7 +129,9 @@ export interface ApiBrokerRpc {
   challengeVerify(action: string, token: string, budgetMs: number): Promise<ChallengeVerdict>;
   // M5 PR-1 (ADR-0022 items 7 and 12): Stripe on one pinned API version, ids only. Each
   // write names an authorized stripe_write operation; the broker loads its customer, price,
-  // metadata and URLs from the database. Results are the closed JSON strings below.
+  // metadata and URLs from the database. Results are the closed JSON strings below. While
+  // the Stripe switch is off (no MORROW_STRIPE_MODE), each one is BROKER_HELD with the fixed
+  // code STRIPE_UNAVAILABLE before any input, database or Stripe access.
   stripeCustomerEnsure(operationId: string, budgetMs: number): Promise<string>;
   stripeCheckoutCreate(operationId: string, budgetMs: number): Promise<string>;
   stripePortalCreate(operationId: string, budgetMs: number): Promise<string>;

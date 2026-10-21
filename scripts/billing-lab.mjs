@@ -29,6 +29,10 @@
 //      customer operation uncertain past 24 hours is settled absent or verified by the
 //      customer list, or held for the operator (the billing view shows it, checkout refuses
 //      it, and the operator's retry or abandon resolves it).
+//   D  also: with the Stripe switch off (owner decision (c), 2026-10-21; the deployed api
+//      then has no broker Stripe port) a funded workspace's view still reads its plan and
+//      credits, the plans offer no purchase, the portal is 503 unavailable and the webhook
+//      503 {"code":"unavailable"}, with no new operation, receipt or broker call.
 // Sections B-F drive the broker definers through a fake broker port with synthetic
 // provider results; G runs the real broker. Owner-seeded synthetic fixtures only.
 import { createHash, randomUUID } from "node:crypto";
@@ -449,6 +453,20 @@ UPDATE morrow_identity.store_installations SET status='linked',link_id=${lit("li
       broker,
       now: () => Date.now(),
     });
+    // The Stripe switch off: the same handlers as the deployed api composes them then.
+    const switchedOff = createBillingApiHandler({
+      origin: workFixtureOrigin,
+      connector: db.connector(),
+      environment: "development",
+      broker: null,
+      now: () => Date.now(),
+    });
+    const webhookOff = createStripeWebhookHandler({
+      connector: db.connector(),
+      environment: "development",
+      broker: null,
+      now: () => Date.now(),
+    });
     const ctx = { waitUntil() {} };
     async function call(p, method, path, body, options = {}) {
       const headers = {
@@ -464,7 +482,7 @@ UPDATE morrow_identity.store_installations SET status='linked',link_id=${lit("li
           "X-Morrow-Request": "1",
           "Idempotency-Key": options.key ?? randomUUID(),
         });
-      const response = await api.fetch(
+      const response = await (options.api ?? api).fetch(
         new Request(
           workFixtureOrigin +
             "/workspace/" +
@@ -519,6 +537,16 @@ UPDATE morrow_identity.store_installations SET status='linked',link_id=${lit("li
         view.body.callToAction.kind === "morrow_plans" &&
         view.body.callToAction.href === `/workspace/${P.A.workspace}/billing/morrow/plans` &&
         view.body.credits === null,
+    );
+    // The Stripe switch off: the same view with no call to action ("Choose a plan" would
+    // lead to plans that offer nothing).
+    const viewOff = await call(P.A, "GET", "", undefined, { api: switchedOff });
+    check(
+      "B_switch_off_billing_view_open_phase_without_a_call_to_action",
+      viewOff.status === 200 &&
+        JSON.stringify({ ...viewOff.body, callToAction: null }) ===
+          JSON.stringify({ ...view.body, callToAction: null }) &&
+        JSON.stringify(viewOff.body.callToAction) === '{"kind":"none"}',
     );
     const plans = await call(P.A, "GET", "/morrow/plans");
     check(
@@ -903,6 +931,59 @@ INSERT INTO morrow_billing.checkout_intents VALUES(${lit(P.A2.org)},${lit(P.A2.w
         billable.body.billingPeriod.end === new Date(periodNow.end * 1000).toISOString() &&
         billable.body.callToAction.label === "Manage plan",
     );
+    // D1b. The Stripe switch off: the plan, credits and period still read; no purchase is
+    // offered ("Manage plan" is none) or performed and no webhook is read, with no write or
+    // broker call.
+    {
+      const calls = { ...brokerCalls };
+      const operationsBefore = count("SELECT 1 FROM morrow_work.operations");
+      const receiptsBefore = count("SELECT 1 FROM morrow_billing.stripe_event_receipts");
+      const offView = await call(P.A, "GET", "", undefined, { api: switchedOff });
+      const offPlans = await call(P.A, "GET", "/morrow/plans", undefined, { api: switchedOff });
+      const offPortal = await call(P.A, "POST", "/morrow/portal", {}, { api: switchedOff });
+      const offCheckout = await call(
+        P.A2,
+        "POST",
+        "/morrow/checkout",
+        { priceKey: PRICE },
+        { api: switchedOff },
+      );
+      const offWebhook = await webhookOff.fetch(
+        new Request("https://work.morrow.test/api/billing/stripe/webhook", {
+          method: "POST",
+          headers: { "stripe-signature": "t=1,v1=lab", "content-type": "application/json" },
+          body: JSON.stringify({ eventId: "evt_labswitchoff", type: "invoice.paid" }),
+        }),
+        {},
+        ctx,
+      );
+      check(
+        "D_switch_off_reads_the_plan_and_credits_and_performs_no_purchase",
+        offView.status === 200 &&
+          offView.body.state === "billable" &&
+          offView.body.credits.available === "300" &&
+          offView.body.plan.status === "active" &&
+          JSON.stringify(offView.body.billingPeriod) ===
+            JSON.stringify(billable.body.billingPeriod) &&
+          JSON.stringify(offView.body.callToAction) === '{"kind":"none"}' &&
+          offPlans.status === 200 &&
+          offPlans.body.offers.length === 0 &&
+          offPlans.body.actions.subscribe === false &&
+          offPlans.body.actions.billingPortal === false &&
+          [offPortal, offCheckout].every(
+            (r) =>
+              r.status === 503 &&
+              r.body.code === "unavailable" &&
+              r.body.retryClass === "recheck_before_retry" &&
+              r.body.operationId === null,
+          ) &&
+          offWebhook.status === 503 &&
+          (await offWebhook.text()) === '{"code":"unavailable"}' &&
+          count("SELECT 1 FROM morrow_work.operations") === operationsBefore &&
+          count("SELECT 1 FROM morrow_billing.stripe_event_receipts") === receiptsBefore &&
+          JSON.stringify(brokerCalls) === JSON.stringify(calls),
+      );
+    }
     // D2. The same event again, and a second event for the same invoice.
     const again = await deliverEvent(
       paid.eventId,

@@ -25,6 +25,7 @@ import {
   mapApiEnvironment,
   type ApiEnvironmentCode,
   type ApiEnvironmentValues,
+  type ApiStripeMode,
 } from "./environment.js";
 import { createWorkspaceApiWorker } from "./worker.js";
 import { createLazyWorkosLoginPort, type ApiKeyringReadiness } from "./workos-port.js";
@@ -50,6 +51,7 @@ export function composeApiDependencies(
   broker: ApiBrokerRpc,
   now: () => number,
   environment: "development" | "staging" | "production" = "development",
+  stripeMode: ApiStripeMode = "off",
 ) {
   const port = createLazyWorkosLoginPort(values.login, now);
   const credentialBroker = createBrokerNeonCredentialBroker(broker, now);
@@ -93,8 +95,11 @@ export function composeApiDependencies(
   });
   // M5 PR-1: the billing API and the Stripe webhook on the same origin and work login, with
   // the broker's Stripe methods behind the ApiBroker binding. The environment is the
-  // Worker's own (production never maps, ADR-0007 item 9).
-  const stripe = createBrokerStripe(broker);
+  // Worker's own (production never maps, ADR-0007 item 9). While the Stripe switch is off
+  // (owner decision (c), 2026-10-21) there are no Stripe adapters: checkout and portal
+  // answer 503 unavailable before any database access and the webhook 503 before reading
+  // its body; the billing view and the plans keep working from the database.
+  const stripe = stripeMode === "test" ? createBrokerStripe(broker) : null;
   const billing: BillingApiDependencies = Object.freeze({
     origin: work.origin,
     connector: work.connector,
@@ -139,6 +144,7 @@ function select(env: unknown): Selected {
         mapped.broker,
         () => Date.now(),
         mapped.environment,
+        mapped.stripe,
       );
       selected = {
         api: createWorkspaceApiWorker(

@@ -15,7 +15,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { repositoryRoot, writeArtifact } from "./artifacts.mjs";
-import { captureConsole, loadWranglerApi } from "./edge.mjs";
+import { captureConsole, loadWranglerApi, reviewedStripeRecord } from "./edge.mjs";
 import { buildLoginKeyring } from "./login-keyring.mjs";
 import { loadMigrationChain, schemaHead } from "./migration-chain.mjs";
 import { StagingError, closedValue, failureRecord } from "./staging-common.mjs";
@@ -94,7 +94,24 @@ export const workerConfigs = Object.freeze({
 });
 export const githubSecrets = Object.freeze(["CLOUDFLARE_API_TOKEN"]);
 
-export async function identityConstants() {
+// M5, the Stripe switch (owner decision (c), 2026-10-21): the committed
+// docs/decisions/stripe-staging.json `switch`, checked with edge:check's own rule
+// (reviewedStripeRecord). "off" (the committed state) or "on"; anything else stops the
+// command before any effect.
+export function stagingStripeSwitch(root) {
+  try {
+    return reviewedStripeRecord(
+      JSON.parse(readFileSync(join(root, "docs/decisions/stripe-staging.json"), "utf8")),
+    ).switch;
+  } catch {
+    throw new StagingError("STAGING_STRIPE_RECORD_INVALID");
+  }
+}
+
+// `stripe` is the Stripe switch (stagingStripeSwitch): off by default, so a caller that
+// does not read the record never expects a Stripe secret.
+export async function identityConstants({ stripe = "off" } = {}) {
+  if (stripe !== "off" && stripe !== "on") throw new StagingError("STAGING_STRIPE_RECORD_INVALID");
   const { tsImport } = await import("tsx/esm/api");
   const protocol = await tsImport("../packages/identity/src/broker-protocol.ts", import.meta.url);
   return Object.freeze({
@@ -103,18 +120,20 @@ export async function identityConstants() {
     // item 7). Each gets LOGIN, the limit, both timeouts and a generated password.
     roles: [...protocol.brokerNeonRoleNames, protocol.brokerVaultRole],
     passwordSecret: protocol.brokerPasswordSecret,
-    // The broker's sixteen names (D1, AC02): WORKOS_API_KEY, P05.T01ab's
-    // TURNSTILE_SECRET_KEY, the eleven role passwords, M2 PR-1's MORROW_VAULT_KEK_V1 and
-    // M5 PR-1's STRIPE_RESTRICTED_KEY and STRIPE_WEBHOOK_SECRET.
-    // brokerRequiredSecrets is the one list: the wrangler `secrets.required` of development
-    // and staging, verify-config, gate 6, secrets-status and the first-deploy file all use
-    // it (production requires its vault-free subset, brokerRequiredSecretsFor).
-    brokerSecrets: [...protocol.brokerRequiredSecrets].sort(),
+    // The broker's names (D1, AC02): WORKOS_API_KEY, P05.T01ab's TURNSTILE_SECRET_KEY, the
+    // eleven role passwords and M2 PR-1's MORROW_VAULT_KEK_V1 (fourteen), and, only while
+    // the Stripe switch is on, M5 PR-1's STRIPE_RESTRICTED_KEY and STRIPE_WEBHOOK_SECRET
+    // (sixteen). brokerRequiredSecretsFor("staging", stripe) is the one list: the staging
+    // wrangler `secrets.required`, verify-config, gate 6, secrets-status and the
+    // first-deploy file all use it (production requires its vault-free subset).
+    brokerSecrets: [...protocol.brokerRequiredSecretsFor("staging", stripe)].sort(),
     // The vault KEKs (ADR-0022 item 7) are the owner's: each is read from its owner file
     // (`vault-kek-v<n>`, written by `npm run vault -- kek`) and never generated here.
     vaultKekSecrets: [...protocol.brokerVaultKekSecrets],
-    // M5 PR-1: the Stripe secrets, read from their owner files like the WorkOS key.
-    stripeSecrets: [...protocol.brokerStripeSecrets],
+    // M5: the switch, and the Stripe secrets it requires (none while off), read from their
+    // owner files like the WorkOS key.
+    stripe,
+    stripeSecrets: stripe === "on" ? [...protocol.brokerStripeSecrets] : [],
     parseBinding: protocol.parseBrokerDatabaseBinding,
   });
 }
@@ -150,9 +169,13 @@ export async function loadStagingConfiguration(root) {
       loginConfigurationJson: text(brokerVars, "LOGIN_CONFIGURATION_JSON"),
       bindingJson: text(brokerVars, "MORROW_DATABASE_BINDING_JSON"),
       // M5 PR-1: the saved portal configuration and tax flags, a reviewed identifier that
-      // arrives on the PR-D path; absent, the broker holds Stripe and billing answers 503.
+      // arrives on the PR-D path, and the Stripe switch's mode; both only while the switch
+      // is on (checkStripeConfiguration).
       stripeJson: text(brokerVars, "STRIPE_CONFIGURATION_JSON"),
+      stripeMode: text(brokerVars, "MORROW_STRIPE_MODE"),
     }),
+    // M5: the api's Stripe switch mode (only while the switch is on).
+    stripeMode: text(vars, "MORROW_STRIPE_MODE"),
   });
 }
 
@@ -237,12 +260,25 @@ export async function checkChallengeConfiguration(loaded) {
   });
 }
 
-// M5 PR-1: the broker's STRIPE_CONFIGURATION_JSON, if present, must be the closed shape
-// the broker itself parses (parseStripeConfiguration); a malformed one stops the deploy
-// before upload. Absent is allowed: the broker then holds Stripe and billing fails closed.
-export async function checkStripeConfiguration(loaded) {
+// M5 PR-1 and the Stripe switch (owner decision (c), 2026-10-21), part of gate 4 before
+// any upload. Off (the committed state): neither Worker carries MORROW_STRIPE_MODE and the
+// broker carries no STRIPE_CONFIGURATION_JSON (gate 6 then expects no Stripe secret). On:
+// both carry MORROW_STRIPE_MODE "test", and the broker's STRIPE_CONFIGURATION_JSON is
+// present and the closed shape the broker itself parses (parseStripeConfiguration). Any
+// other combination is STAGING_STRIPE_SWITCH_MIXED; edge:check (gate 5) also pins the
+// configuration to its reviewed record.
+export async function checkStripeConfiguration(loaded, stripe = "off") {
   const json = loaded?.broker?.stripeJson ?? null;
-  if (json === null) return Object.freeze({ present: false });
+  const modes = [loaded?.stripeMode ?? null, loaded?.broker?.stripeMode ?? null];
+  if (stripe === "off") {
+    if (json !== null || modes.some((mode) => mode !== null))
+      throw new StagingError("STAGING_STRIPE_SWITCH_MIXED", { stripe });
+    return Object.freeze({ stripe, present: false });
+  }
+  if (stripe !== "on" || json === null || modes.some((mode) => mode !== "test"))
+    throw new StagingError("STAGING_STRIPE_SWITCH_MIXED", {
+      stripe: stripe === "on" ? "on" : null,
+    });
   const { tsImport } = await import("tsx/esm/api");
   const { parseStripeConfiguration } = await tsImport(
     "../packages/identity/src/broker-protocol.ts",
@@ -250,7 +286,7 @@ export async function checkStripeConfiguration(loaded) {
   );
   try {
     const parsed = parseStripeConfiguration(json);
-    return Object.freeze({ present: true, automaticTax: parsed.automaticTax });
+    return Object.freeze({ stripe, present: true, automaticTax: parsed.automaticTax });
   } catch {
     throw new StagingError("STAGING_STRIPE_CONFIGURATION_INVALID");
   }
@@ -511,25 +547,31 @@ command("provision-roles", {
       const fileNames = (names) => [...names].sort().join("\n");
       const expected = fileNames(constants.brokerSecrets);
       const kekNames = constants.vaultKekSecrets;
+      const stripeNames = constants.stripeSecrets;
       const planned = [
         "WORKOS_API_KEY",
         "TURNSTILE_SECRET_KEY",
         ...roles.map(constants.passwordSecret),
         ...kekNames,
-        // M5 PR-1: the two Stripe secrets, from their owner files.
-        "STRIPE_RESTRICTED_KEY",
-        "STRIPE_WEBHOOK_SECRET",
+        // M5 PR-1: the two Stripe secrets, from their owner files, only while the Stripe
+        // switch is on (none while it is off: the owner files are then never read).
+        ...stripeNames,
       ];
       if (
         new Set(planned).size !== planned.length ||
         fileNames(planned) !== expected ||
-        !kekNames.every((name) => vaultKekFile(name) !== null)
+        !kekNames.every((name) => vaultKekFile(name) !== null) ||
+        !stripeNames.every((name) => Object.hasOwn(stripeSecretFiles, name))
       )
         throw new StagingError("STAGING_BROKER_FILE_NAMES_INVALID");
       const workos = readCredentialFile(ctx.directory, "workos-api-key", specs);
       const turnstile = readCredentialFile(ctx.directory, "turnstile-secret", specs);
-      const stripeKey = readCredentialFile(ctx.directory, "stripe-restricted-key", specs);
-      const stripeWebhook = readCredentialFile(ctx.directory, "stripe-webhook-secret", specs);
+      const stripeValues = Object.fromEntries(
+        stripeNames.map((name) => [
+          name,
+          readCredentialFile(ctx.directory, stripeSecretFiles[name], specs),
+        ]),
+      );
       // M2 PR-1: the owner's KEK files, read like the WorkOS key; the tool never makes one.
       const keks = Object.fromEntries(
         kekNames.map((name) => [
@@ -555,8 +597,7 @@ command("provision-roles", {
       const secrets = {
         WORKOS_API_KEY: workos,
         TURNSTILE_SECRET_KEY: turnstile,
-        STRIPE_RESTRICTED_KEY: stripeKey,
-        STRIPE_WEBHOOK_SECRET: stripeWebhook,
+        ...stripeValues,
         ...keks,
       };
       for (const role of roles)
@@ -620,15 +661,21 @@ command("provision-roles", {
   },
 });
 
-// M5 PR-1 adds the two Stripe secrets. This deliberately reverses the P04.T01i note that
-// put-secret only re-places names the running broker already holds: a broker deployed
-// before M5 lacks both Stripe names, and gate 6 holds every deploy until the owner places
-// them, so put-secret adds them (docs/packets/P04.T01i.md, the M5 PR-1 note).
+// M5 PR-1 adds the two Stripe secrets, only while the Stripe switch is on (owner decision
+// (c), 2026-10-21). While it is off put-secret refuses both (STAGING_STRIPE_OFF) before
+// any effect: gate 6 and secrets-status then expect the broker to hold neither. Once a
+// reviewed commit turns the switch on, this deliberately reverses the P04.T01i note that
+// put-secret only re-places names the running broker already holds: the running broker
+// lacks both Stripe names and gate 6 holds every deploy until the owner places them, so
+// put-secret adds them (docs/packets/P04.T01i.md, the M5 PR-1 note).
+const stripeSecretFiles = Object.freeze({
+  STRIPE_RESTRICTED_KEY: "stripe-restricted-key",
+  STRIPE_WEBHOOK_SECRET: "stripe-webhook-secret",
+});
 const putSecretFiles = Object.freeze({
   WORKOS_API_KEY: "workos-api-key",
   TURNSTILE_SECRET_KEY: "turnstile-secret",
-  STRIPE_RESTRICTED_KEY: "stripe-restricted-key",
-  STRIPE_WEBHOOK_SECRET: "stripe-webhook-secret",
+  ...stripeSecretFiles,
 });
 // M2 PR-1: a vault KEK (MORROW_VAULT_KEK_V<n>) is re-placed from the owner's own file,
 // with the same value; a new KEK is a new version, never a new value under an old name.
@@ -643,11 +690,11 @@ command("put-secret", {
     return { name: args[0] };
   },
   async run(ctx, { name }) {
-    if (
-      !Object.hasOwn(putSecretFiles, name) &&
-      !(await ctx.constants()).vaultKekSecrets.includes(name)
-    )
+    const constants = await ctx.constants();
+    if (!Object.hasOwn(putSecretFiles, name) && !constants.vaultKekSecrets.includes(name))
       throw new StagingError("STAGING_USAGE");
+    if (Object.hasOwn(stripeSecretFiles, name) && !constants.stripeSecrets.includes(name))
+      throw new StagingError("STAGING_STRIPE_OFF");
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
     await mainPreconditions(ctx, repositoryOf(config.staging));
@@ -1037,11 +1084,11 @@ command("deploy", {
       checkpoint: writeReport,
       preconditions: () => mainPreconditions(ctx, github.repository),
       loginDigest: async () => (await ctx.loginConfiguration(config)).configurationDigest,
-      // Gate 4 also checks M5 PR-1's reviewed broker var: a present
-      // STRIPE_CONFIGURATION_JSON must parse (absent, billing fails closed with 503).
+      // Gate 4 also checks the Stripe switch's vars against the committed switch (M5): none
+      // while it is off; while it is on, both modes and a broker configuration that parses.
       async challenge() {
         await ctx.challengeConfiguration(config);
-        await checkStripeConfiguration(config);
+        await checkStripeConfiguration(config, constants.stripe);
       },
       // The two owner files: exact key sets (their format checks), and the keyring bound
       // to the committed login configuration's digest.
@@ -1375,7 +1422,8 @@ export function defaultContext() {
     stdout: (line) => process.stdout.write(line + "\n"),
     stderr: (line) => process.stderr.write(line + "\n"),
     administrator: Object.freeze({ name: "neondb_owner", mode: "createrole" }),
-    constants: async () => (constants ??= await identityConstants()),
+    constants: async () =>
+      (constants ??= await identityConstants({ stripe: stagingStripeSwitch(root) })),
     specs: async () =>
       (specs ??= stagingFileSpecs({ brokerSecretNames: (await ctx.constants()).brokerSecrets })),
     config: async () => (config ??= await loadStagingConfiguration(root)),

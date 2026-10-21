@@ -14,10 +14,14 @@
 //   planted SET row; zero Morrow SET rows and closed memberships at rest.
 // The chain runs through its head (M2 PR-1: 0019-0024; M2 PR-2: 0025-0027; M5 PR-1:
 // 0028-0029; M3 PR-1: 0030-0033; none of 0025-0033 adds a login, and the entries after
-// origin/main's head replay after provisioning), so provisioning covers the eleven broker logins, the vault
-// login included, and the first-deploy file the sixteen broker names, with the owner's
-// vault KEK and M5 PR-1's two Stripe secrets read from their planted files. In createrole
-// mode the lab also runs M5 PR-1's billing terms seed (idempotent, drift).
+// origin/main's head replay after provisioning), so provisioning covers the eleven broker
+// logins, the vault login included, and the first-deploy file the broker names, with the
+// owner's vault KEK read from its planted file. The Stripe switch (owner decision (c),
+// 2026-10-21): the superuser run turns it on, so the file holds sixteen names with M5
+// PR-1's two Stripe secrets read from their planted files; the createrole run keeps it off
+// (the committed state), so the file holds fourteen and the planted Stripe files are never
+// read. In createrole mode the lab also runs M5 PR-1's billing terms seed (idempotent,
+// drift).
 // Provisioning sends each generated plaintext once, in its own ALTER ROLE (P04.T01i M-N3
 // as amended 2026-10-20: Neon takes only plaintexts), after refusing a database whose
 // statistics cannot be read or hold the extension, non-SCRAM storage, statement logging
@@ -334,6 +338,8 @@ const superuserLab = async ({ id, sql, image, version }) => {
     tools: fakes.tools,
     administrator: superuser,
     database: ({ binding }) => (binding.database === "neondb" ? scratchConnector : connector),
+    // M5: the Stripe switch on, so the first-deploy file carries the Stripe secrets.
+    stripe: "on",
   });
   const ctx = base.ctx;
   const run = async (argv, context = ctx) => {
@@ -1181,6 +1187,15 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
   // plaintext was sent once, in its own ALTER ROLE, and is in no output.
   const createroleSecrets = JSON.parse(
     readFileSync(join(planted.directory, "tmp/broker-secrets.json"), "utf8"),
+  );
+  // M5: the committed Stripe switch is off: the file holds the fourteen names and neither
+  // planted Stripe file is read into it.
+  check(
+    "createrole_first_deploy_file_has_no_stripe_secret_while_switched_off",
+    base.constants.stripe === "off" &&
+      Object.keys(createroleSecrets).sort().join() === base.constants.brokerSecrets.join() &&
+      base.constants.brokerSecrets.length === 14 &&
+      !Object.keys(createroleSecrets).some((name) => name.startsWith("STRIPE_")),
   );
   const createrolePasswords = rolePasswords(base.constants, createroleSecrets);
   check(

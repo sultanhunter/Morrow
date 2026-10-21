@@ -27,7 +27,10 @@ import type { VaultQuery } from "./vault.js";
 // The ApiBroker's Stripe methods (M5 PR-1): handlers that check the closed inputs, build the
 // Stripe dependencies from the broker's own capabilities (the restricted key and webhook
 // secret never leave the broker) and return the closed result JSON. Every failure is
-// BROKER_HELD with one fixed log line (invokeBrokerMethod).
+// BROKER_HELD with one fixed log line (invokeBrokerMethod). While the Stripe switch is off
+// (owner decision (c), 2026-10-21; no MORROW_STRIPE_MODE), every method is refused first
+// with the fixed code STRIPE_UNAVAILABLE: no input is parsed and no vault transaction,
+// database row or Stripe request is made.
 //
 // createStripeBroker takes the three seams the handlers use, as M2 PR-2's
 // createShopifyBroker does: the deployed broker passes the vault login's real transport
@@ -64,6 +67,10 @@ const writeInputs = (operationId: unknown, budgetMs: unknown) => {
 };
 
 export function createStripeBroker(seams: Readonly<StripeBrokerSeams>) {
+  async function switchedOn(env: unknown): Promise<void> {
+    if ((await brokerCapabilities(env)).stripeMode !== "test")
+      throw new BrokerHold("STRIPE_UNAVAILABLE");
+  }
   async function dependencies(env: unknown): Promise<StripeDependencies> {
     const capabilities = await brokerCapabilities(env);
     const vault = capabilities.vault;
@@ -80,6 +87,7 @@ export function createStripeBroker(seams: Readonly<StripeBrokerSeams>) {
   return Object.freeze({
     customerEnsure: (env: unknown, operationId: unknown, budgetMs: unknown) =>
       held(async () => {
+        await switchedOn(env);
         writeInputs(operationId, budgetMs);
         const deps = await dependencies(env);
         return encodeStripeCustomerResult(
@@ -88,6 +96,7 @@ export function createStripeBroker(seams: Readonly<StripeBrokerSeams>) {
       }),
     checkoutCreate: (env: unknown, operationId: unknown, budgetMs: unknown) =>
       held(async () => {
+        await switchedOn(env);
         writeInputs(operationId, budgetMs);
         const deps = await dependencies(env);
         return encodeStripeCheckoutResult(
@@ -96,6 +105,7 @@ export function createStripeBroker(seams: Readonly<StripeBrokerSeams>) {
       }),
     portalCreate: (env: unknown, operationId: unknown, budgetMs: unknown) =>
       held(async () => {
+        await switchedOn(env);
         writeInputs(operationId, budgetMs);
         const deps = await dependencies(env);
         return encodeStripePortalResult(
@@ -109,6 +119,7 @@ export function createStripeBroker(seams: Readonly<StripeBrokerSeams>) {
       budgetMs: unknown,
     ) =>
       held(async () => {
+        await switchedOn(env);
         if (
           typeof rawBodyBase64 !== "string" ||
           rawBodyBase64.length === 0 ||

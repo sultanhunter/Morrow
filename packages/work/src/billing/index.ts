@@ -82,6 +82,7 @@ export {
   stripeWebhookPath,
   type StripeWebhookDependencies,
 } from "./webhook.js";
+export { billingViewCallToAction } from "./view.js";
 export { billingStatements, type BillingStatementName } from "./sql.js";
 export type { BillingBrokerPort, BillingEnvironmentName } from "./port.js";
 export * from "./stripe-objects.js";
