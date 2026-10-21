@@ -1230,14 +1230,51 @@ test("census: findings for anything that is not exactly Morrow's staging", async
   const staging = JSON.parse(read("infra/environments/staging.json"));
   const clean = {
     scripts: [
-      { name: "morrow-staging-api", workersDev: true, previews: false, bindsBroker: true },
+      {
+        name: "morrow-staging-api",
+        workersDev: true,
+        previews: false,
+        bindsBroker: true,
+        brokerEntrypoints: ["ApiBroker"],
+      },
       { name: "morrow-staging-broker", workersDev: false, previews: false, bindsBroker: false },
+      // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint.
+      {
+        name: "morrow-staging-connector",
+        workersDev: false,
+        previews: false,
+        bindsBroker: true,
+        brokerEntrypoints: ["ConnectorBroker"],
+      },
     ],
     pages: [],
     dispatchNamespaces: 0,
     members: 1,
   };
   assert.deepEqual(censusFindings(clean, staging), []);
+  // The allow table is entrypoint-checked: another entrypoint, a second binding, a missing
+  // entrypoint, the orchestrator (no row yet) or the connector on workers.dev is a finding.
+  const bound = (name, brokerEntrypoints, workersDev = false) =>
+    censusFindings(
+      {
+        ...clean,
+        scripts: [{ name, workersDev, previews: false, bindsBroker: true, brokerEntrypoints }],
+      },
+      staging,
+    ).map((f) => f.code);
+  assert.deepEqual(bound("morrow-staging-connector", ["ApiBroker"]), ["BROKER_BOUND_ELSEWHERE"]);
+  assert.deepEqual(bound("morrow-staging-api", ["ConnectorBroker"]), ["BROKER_BOUND_ELSEWHERE"]);
+  assert.deepEqual(bound("morrow-staging-api", ["ApiBroker", "RuntimeBroker"]), [
+    "BROKER_BOUND_ELSEWHERE",
+  ]);
+  assert.deepEqual(bound("morrow-staging-connector", [null]), ["BROKER_BOUND_ELSEWHERE"]);
+  assert.deepEqual(bound("morrow-staging-connector", []), ["BROKER_BOUND_ELSEWHERE"]);
+  assert.deepEqual(bound("morrow-staging-orchestrator", ["RuntimeBroker"]), [
+    "BROKER_BOUND_ELSEWHERE",
+  ]);
+  assert.deepEqual(bound("morrow-staging-connector", ["ConnectorBroker"], true), [
+    "WORKERS_DEV_EXPOSED",
+  ]);
   const findings = censusFindings(
     {
       scripts: [

@@ -62,6 +62,10 @@ export const controlledNeonWorkspaceProfiles = Object.freeze({
       ...workspaceStoreLinkingSql,
       lookup: workspaceStoreLinkingControlSql.lookup,
       status: workspaceStoreLinkingControlSql.status,
+      // M2 PR-2 (P09.T02a): the kernel's authority read, the issuer and the connections read.
+      authority: workspaceStoreLinkingControlSql.authority,
+      issue: workspaceStoreLinkingControlSql.issue,
+      connections: workspaceStoreLinkingControlSql.connections,
     },
     {
       readOnlyBegin: 0,
@@ -73,6 +77,9 @@ export const controlledNeonWorkspaceProfiles = Object.freeze({
       lookup: 4,
       status: 4,
       apply: 11,
+      authority: 2,
+      issue: 5,
+      connections: 2,
       commit: 0,
       rollback: 0,
     },

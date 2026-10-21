@@ -4,16 +4,17 @@ Updated 2026-10-21. Rewrite this file in place (at most 80 lines). The pre-overh
 
 ## Active packets
 
-`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#34; `main` is at `3a48d11`. The latest:
+`main` is the trunk (ADR-0014), with branch protection since 2026-10-19 (requires `foundation`, enforce_admins, no review). Merged: PRs #1–#34 and #36; `main` is at `2f72ce3`. The latest:
 - #10–#24: P05.T01x Part B, P06.T01a, the ADR-0018 edit, P01.T04a PR-A/PR-B, P14.T01a PR-1/PR-2 (provisional), P03.T04e PR-A (its AC22 dispatch run and AC04/AC05 hosted totals still open), P03.T04f CI cost reduction, PR #17 docs (ADR-0019–0021, `staging-card-1`, `docs/plan/mvp.md`), P01.T02c PR-A, P04.T01j PR-B (#21; AC14 implemented, AC15 recorded (owner acknowledgement pending), AC16 closed by PR-D part 2), P05.T01y, P06.T01b PR-1; #25 MVP design (ADR-0022, model catalogue v1, briefs M2–M5).
 - #26 postgres legs `[core, http, linking, work]`; #27 P05.T01ab = P04.T01i PR-C (sign-in abuse guard); #28 P04.T01i PR-B, trimmed (`bb882ad`; staging tooling, gates 1–6, census, kill/unkill, E11 suspended) and #29 the bounded Neon connect (`1a2e189`).
 - #30 M2 PR-1 (`6d744ae`): migrations 0019–0024 (spine executor logins, leases, stops, operations, the vault, the billing route); `ConnectorBroker`/`RuntimeBroker` (trust model v1); 14 broker secret names with `MORROW_VAULT_KEK_V1` (production 12).
 - #31 docs (`d12379e`): ADR-0008 item 1 and ADR-0022 items 3, 9, 11 amendments. #32 P04.T01i PR-D part 1 (`0e056e5`): the reviewed staging identifiers and verify-config var allowlists. #33 M2-PR2a (`3744c96`): v1.1 `ResourceRef` kind `store`, `storeResource`, `listingFieldPaths`, the S7 per-table ACL spec.
 - #34 P04.T01i M-N3 (`3a48d11`): role passwords as plaintext over TLS, each once in its own `ALTER ROLE`, then a verified wipe of `pg_stat_statements` from `neondb` (only SHA-256 digests sent); the staging CLI's 3000 ms happy-eyeballs connect timeout.
+- #36 M2 PR-2 (`2f72ce3`): Shopify install and link: migrations 0025–0027, `ConnectorBroker` Shopify checks (hand-written, ADR-0008 item 1), the vault transport, the connector Worker with per-address rate limits, the census entrypoint allow table, the connections screens.
 
 In progress:
 - **P04.T01i PR-D part 2** (PR #35, `claude/p04-t01i-d2-placement-evidence`, from `3a48d11`; hosted CI green). The staging api and broker get `placement` `{mode: "targeted", region: "aws:us-east-1"}`, the Cloudflare form of `staging.json`'s `neon.region_id`; verify-config holds it exactly (`EDGE_PLACEMENT_STAGING`, `_REGION`, `_ENVIRONMENT`, `_WORKER`). The live records (migrate, provision-roles and seed, owner preconditions, the first deploy), the card's effects used, the rebaseline `closedBy` (P04.T01j-AC16), the P04 and P05 rows, and this file. The AI review (separate context, same model family; 2026-10-21) found six issues, all applied (packet notes). Open: merge.
-- **MVP build wave:** M2-PR2 (`claude/m2-shopify-connect`), M5-PR1 (`claude/m5-billing`) and M3-PR1 (`claude/m3-listings-agent`) are local worktrees, merged in that order; each takes its migration numbers at its final rebase (M5 replaces its stubs; M3 swaps its stubs for M5's).
+- **MVP build wave:** M2-PR2 merged as #36 (`2f72ce3`); M5-PR1 (`claude/m5-billing`, rebasing onto it: stubs out, migrations 0028–0029) and M3-PR1 (`claude/m3-listings-agent`, then 0030–0033) follow, each with a verify pass, PR, CI and merge. Before the next staging deploy after #36: `staging:migrate` applies 0025–0027 (E3), or gate 3 stops the deploy.
 
 ## Staging (live, `staging-card-1`)
 

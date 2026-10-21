@@ -9,6 +9,7 @@ import {
 } from "../../../packages/identity/src/managed-workspace-api.js";
 import { captureManagedWorkspaceBinding } from "../../../packages/identity/src/managed-workspace-binding.js";
 import { createNeonWorkConnector } from "../../../packages/work/src/neon-connector.js";
+import { createConnectionKernel } from "../../../packages/policy/src/connection-authority.js";
 import type { WorkApiDependencies } from "../../../packages/work/src/http.js";
 import { createAbuseGuard, type AbuseGuard } from "./abuse-guard.js";
 import {
@@ -67,6 +68,9 @@ export function composeApiDependencies(
     },
     workspaceConfigurationJson: values.workspace,
     logoutConfigurationJson: values.logout,
+    // M2 PR-2 (P09.T02a): the human kernel for governance.connection.connect administer,
+    // used by the Shopify link issuer and the connections read.
+    connections: createConnectionKernel(),
   };
   // P06.T01a: the work API on the same origin, with one morrow_api_worker lease
   // per request from the same broker binding (ADR-0010 item 2, ADR-0007).

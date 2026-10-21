@@ -206,6 +206,27 @@
       "sha256": "00c64ae0bbb21fc245cf5e3521bdedbd7cbfeb33aec442b1b684426b06b6902b",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 25,
+      "file": "0025.shopify-link-route-read.sql",
+      "sha256": "638644700bdee4471af801475515aa4562da7ffef285425cc5b450318d6fbcfa",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 26,
+      "file": "0026.shopify-install-identity.sql",
+      "sha256": "b93538595f502d6cc7e3ce1ecfcf4c5c9c7986a80578c555db1afd7b20e40957",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 27,
+      "file": "0027.shopify-vault-install.sql",
+      "sha256": "c056d8f7f0dba9f6769b13f4c1d19733413f5a7b79e5f745f855b60c18cd5147",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M2-shopify-connect.md"
     }
   ]
 }

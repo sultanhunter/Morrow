@@ -81,10 +81,12 @@ test("S7 registry: every billing and vault table carries a well-formed per-table
   // The reviewed 0020 shape, as the old hard-coded S7 asserted it.
   assert.deepEqual(billingTables.workspace_billing_routes.commandPrivileges, ["INSERT", "SELECT"]);
   assert.equal(billingTables.workspace_billing_routes.apiColumns.length, 11);
-  for (const table of ["app_secrets", "credentials"]) {
-    assert.deepEqual(vaultTables[table].commandPrivileges, ["SELECT"], table);
+  for (const table of ["app_secrets", "credentials"])
     assert.deepEqual(vaultTables[table].apiColumns, [], table);
-  }
+  assert.deepEqual(vaultTables.app_secrets.commandPrivileges, ["SELECT"]);
+  // M2 PR-2 (0027): the broker's install definer is the first credentials writer: insert a
+  // version, and destroy the active one (its column UPDATEs are pinned below); never DELETE.
+  assert.deepEqual(vaultTables.credentials.commandPrivileges, ["INSERT", "SELECT"]);
   // Planted malformed specs are reported.
   const good = billingTables.workspace_billing_routes;
   for (const [name, change] of [
@@ -146,7 +148,8 @@ test("S7 registry: schema USAGE agrees with the command role and each executor l
 // The reviewed 0020 column grants, pinned by name as the old hard-coded S7 implied them
 // (migration 0020): the api role reads exactly the route's eleven columns, and the command
 // role holds no column UPDATE on the route or either vault table. A later PR that widens
-// one of these tables changes this expectation beside its registry entry and migration.
+// one of these tables changes this expectation beside its registry entry and migration
+// (M2 PR-2: credentials, 0027).
 test("S7 registry: the reviewed 0020 column grants", () => {
   assert.deepEqual(billingTables.workspace_billing_routes.apiColumns, [
     "created_at",
@@ -164,5 +167,13 @@ test("S7 registry: the reviewed 0020 column grants", () => {
   // One line per table, so a PR that widens one table changes only its line.
   assert.deepEqual(billingTables.workspace_billing_routes.commandColumnUpdates, []);
   assert.deepEqual(vaultTables.app_secrets.commandColumnUpdates, []);
-  assert.deepEqual(vaultTables.credentials.commandColumnUpdates, []);
+  // M2 PR-2 (0027) widens credentials: destroying the active version sets its status and
+  // erases its key material (vault_guard), so the command role may UPDATE exactly these.
+  assert.deepEqual(vaultTables.credentials.commandColumnUpdates, [
+    "destroy_reason",
+    "destroyed_at",
+    "sealed_value",
+    "status",
+    "wrapped_key",
+  ]);
 });
