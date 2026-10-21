@@ -18,6 +18,7 @@ import {
   validateDefinition,
 } from "../packages/contracts/src/validation.ts";
 import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
+import { storeLinkGrantTemplate } from "../packages/policy/src/store-link-template.ts";
 import { canonicalJson } from "../packages/work/src/digest.ts";
 import { WorkReject } from "../packages/work/src/connection.ts";
 import {
@@ -37,7 +38,9 @@ import {
 } from "../packages/work/src/agents/bodies.ts";
 import {
   buildInstallationDocument,
+  disableFields,
   documentLifetimeMs,
+  enableRequestFields,
   installationGrants,
   installationResource,
   installationScope,
@@ -406,6 +409,111 @@ test("installation grants: the owner issues exactly the release's verbs to the a
   );
   assert.deepEqual(disable.scope, installationScope(store(), I));
   assert.equal(validateCurrentDefinition("Grant", disable), true);
+});
+
+// ---------------------------------------------------------------------------
+// M2 PR-2's store-link template (store_link_grants_v1() in its migration and the TypeScript
+// twin) is what the linking owner holds on the store, and the linking owner is the
+// organization's founding principal (ADR-0022 item 3 and its 2026-10-21 amendment). The
+// installation and the enable request stay inside it, and nothing in M3 issues
+// agents.installation.activate. lab:listings-authority G3 and G4 prove the same on the
+// applied catalog; lab:shopify-install K4 and L16 prove the founder-only link.
+const shopifySql = migration("shopify-install-identity");
+const code = (sql) => sql.replace(/--[^\n]*/g, "");
+function sqlStoreLinkTemplate() {
+  const body =
+    /CREATE FUNCTION morrow_identity\.store_link_grants_v1\(\)[\s\S]*?\$\$([\s\S]*?)\$\$/.exec(
+      shopifySql,
+    )?.[1];
+  assert.ok(body, "store_link_grants_v1 body");
+  return [...body.matchAll(/\('([a-z.]+)','(\[[^\]]*\])','(\[[^\]]*\])'\)/g)].map((m) => ({
+    capabilityId: m[1],
+    verbs: JSON.parse(m[2]),
+    fields: JSON.parse(m[3]),
+  }));
+}
+
+test("the installation and the enable request stay inside M2's store-link template", () => {
+  const sqlRows = sqlStoreLinkTemplate();
+  assert.equal(sqlRows.length, 4);
+  const scope = listingsScope(store());
+  for (const rows of [storeLinkGrantTemplate, sqlRows]) {
+    const row = (id) => rows.find((r) => r.capabilityId === id);
+    // Enable and resume: agents.installation.activate {execute} with the request's fields.
+    const activate = row("agents.installation.activate");
+    assert.ok(activate?.verbs.includes("execute"));
+    for (const field of enableRequestFields) assert.ok(activate.fields.includes(field), field);
+    // Each grant the installation receives: its verbs, delegate (the owner delegates what
+    // the installation receives) and every field of the installation's scope.
+    for (const g of listingsGrantSet) {
+      const r = row(g.capabilityId);
+      assert.ok(r, g.capabilityId);
+      for (const verb of [...g.verbs, "delegate"])
+        assert.ok(r.verbs.includes(verb), g.capabilityId + " " + verb);
+      for (const field of scope.fields)
+        assert.ok(r.fields.includes(field), g.capabilityId + " " + field);
+    }
+    // The owner's disable grant is not the template's: morrow.agents issues it at enable.
+    assert.equal(row("agents.installation.disable"), undefined);
+  }
+  // The SQL grant set and scope fields are the TypeScript ones (pinned above), so the
+  // definers' derivation (listings_grant_set, listing_fields) stays inside too.
+  assert.ok(authoritySql.includes(`SELECT '${JSON.stringify([...listingFieldPaths])}'::jsonb`));
+  assert.deepEqual([...disableFields], ["control", "installationId"]);
+});
+
+test("only the founding principal holds agents.installation.activate: M3 never issues it", () => {
+  // M3's grants are the installation's three and the owner's disable grant.
+  const grants = installationGrants({
+    store: store(),
+    installationId: I,
+    agentPrincipalId: "agent_" + randomUUID(),
+    issuer: owner,
+    validFrom: "2026-10-20T12:00:00.000Z",
+    policyRevision: 1,
+    ids: ["g1", "g2", "g3"],
+  });
+  assert.ok(grants.every((g) => g.capabilityId.startsWith("catalog.")));
+  const disable = ownerDisableGrant({
+    store: store(),
+    installationId: I,
+    owner,
+    validFrom: "2026-10-20T12:00:00.000Z",
+    policyRevision: 1,
+    id: "g4",
+  });
+  assert.equal(disable.capabilityId, "agents.installation.disable");
+  // No migration's code names agents.installation.activate except M2's template row and
+  // the review-capability row (0018); M3's migrations name it in comments only.
+  const named = manifest.migrations
+    .filter((m) =>
+      code(readFileSync("migrations/" + m.file, "utf8")).includes("agents.installation.activate"),
+    )
+    .map((m) => m.file.replace(/^[0-9]+\./, ""));
+  assert.deepEqual(named, ["approval-records.sql", "shopify-install-identity.sql"]);
+  // The template is issued only by link_workspace_store (CREATE, REVOKE and one use in all
+  // migrations), only when applied, and only to the founding principal: any other actor
+  // is actor_ineligible.
+  const uses = manifest.migrations.flatMap((m) => [
+    ...code(readFileSync("migrations/" + m.file, "utf8")).matchAll(/store_link_grants_v1\(\)/g),
+  ]);
+  assert.equal(uses.length, 3);
+  const link =
+    /CREATE OR REPLACE FUNCTION morrow_identity\.link_workspace_store\([\s\S]*?END \$\$;/.exec(
+      code(shopifySql),
+    )?.[0];
+  assert.ok(link, "link_workspace_store");
+  assert.ok(link.includes("FROM morrow_identity.store_link_grants_v1() x"));
+  assert.ok(
+    link.includes(
+      "owner_ok:=c.proof_kind<>'shopify_oauth' OR EXISTS(SELECT 1 FROM morrow_identity.organization_signups s\n   WHERE s.organization_id=h.organization_id AND s.principal_id=h.actor_principal_id);",
+    ),
+  );
+  assert.ok(link.includes("WHEN NOT actor_ok OR owner_ok IS NOT TRUE THEN 'actor_ineligible'"));
+  assert.ok(
+    link.indexOf("IF reason_code='applied' THEN") <
+      link.indexOf("INSERT INTO morrow_identity.grants"),
+  );
 });
 
 test("enable needs activate on the store and every verb the installation receives", async () => {

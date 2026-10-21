@@ -113,4 +113,9 @@ test("the check fails a new store table without a handler, and a stray or duplic
   assert.deepEqual(contentProblems(extra({ table: "morrow_work.x", action: "ignore" })), [
     "HANDLER_INVALID:morrow_work.x",
   ]);
+  // `executable` names a PR still to come (M2 PR-3); a handler waiting on M3 PR-1, this
+  // PR, is invalid.
+  assert.deepEqual(contentProblems(extra({ table: "morrow_work.y", executable: "M3 PR-1" })), [
+    "HANDLER_INVALID:morrow_work.y",
+  ]);
 });

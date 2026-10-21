@@ -18,7 +18,11 @@
 //      its recorded result (also after settlement), anything else under the id conflicts,
 //      and every booking needs an id;
 //   C10 a wallet the settling context cannot see is a refusal that leaves the reservation
-//      open, never a settlement that strands the reserved credits.
+//      open, never a settlement that strands the reserved credits;
+//   C11 a lease context cannot create a wallet (0033 adds no INSERT policy), and its UPDATE
+//      that raises available without a credit grant or lowers consumed is refused by M5's
+//      wallet_guard; a sum-preserving move of its own wallet passes, another tenant's
+//      wallet is invisible.
 // The wallets are M5 PR-1's (0029): one Morrow-direct billing account and wallet per
 // workspace, so each scenario reserves from its own synthetic workspace's wallet. Each wallet
 // is born empty through wallet_guard; its funding (M5's grant-funded increase from a verified
@@ -91,9 +95,36 @@ BEGIN
  SELECT * INTO r FROM morrow_billing.run_settle(p_org,p_ws,p_run,1);
  RETURN r.outcome;
 END $$;
+-- C11: direct wallet writes in the entered lease context (no helper), the shapes a run step
+-- definer could attempt.
+CREATE FUNCTION lab_credits.wallet_insert(p_account text) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE l record;
+BEGIN
+ SELECT * INTO l FROM morrow_work.current_lease();
+ IF NOT FOUND THEN RETURN 'denied'; END IF;
+ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_account_id,available,reserved,consumed,rate_revision,
+  terms_revision,revision,created_at,updated_at)
+  SELECT l.organization_id,l.workspace_id,p_account,0,0,0,1,1,1,t,t FROM (SELECT date_trunc('milliseconds',clock_timestamp()) AS t) x;
+ RETURN 'inserted';
+END $$;
+CREATE FUNCTION lab_credits.wallet_move(p_org text,p_ws text,p_account text,p_available bigint,p_reserved bigint,p_consumed bigint)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+DECLARE l record; n integer;
+BEGIN
+ SELECT * INTO l FROM morrow_work.current_lease();
+ IF NOT FOUND THEN RETURN 'denied'; END IF;
+ UPDATE morrow_billing.credit_wallets x SET available=x.available+p_available,reserved=x.reserved+p_reserved,consumed=x.consumed+p_consumed,
+  revision=x.revision+1,updated_at=greatest(date_trunc('milliseconds',clock_timestamp()),x.updated_at)
+  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.billing_account_id=p_account;
+ GET DIAGNOSTICS n=ROW_COUNT;
+ RETURN 'moved|'||n;
+END $$;
 ALTER FUNCTION lab_credits.book(text,text,numeric,text) OWNER TO morrow_work_command;
 ALTER FUNCTION lab_credits.settle(text,integer) OWNER TO morrow_work_command;
 ALTER FUNCTION lab_credits.foreign_settle(text,text,text) OWNER TO morrow_work_command;
+ALTER FUNCTION lab_credits.wallet_insert(text) OWNER TO morrow_work_command;
+ALTER FUNCTION lab_credits.wallet_move(text,text,text,bigint,bigint,bigint) OWNER TO morrow_work_command;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA lab_credits FROM PUBLIC;
 GRANT USAGE ON SCHEMA lab_credits TO morrow_runtime_executor;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA lab_credits TO morrow_runtime_executor;`;
@@ -787,6 +818,97 @@ COMMIT;`);
         after.revision === before.revision &&
         release("run_hidden") === "released|0",
       { opened, hidden, before, after },
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  phase("lease_wallet");
+  {
+    // C11: the lease twins of 0029's wallet policies (0033) read and update, never insert,
+    // and M5's wallet_guard holds in the lease context. A workspace with a billing account
+    // and no wallet (owner-seeded) cannot get one from its run lease. Under the funded
+    // workspace's run lease, after a settlement (consumed 1): raising available without a
+    // credit grant, or a sum-preserving move that lowers consumed, is BILLING_WALLET_INVALID;
+    // a sum-preserving reserve passes (rolled back); another tenant's wallet matches no row;
+    // no lease, nothing. The wallet ends as the settlement left it.
+    fund("account_wallet", 100);
+    const a = accountOf("account_wallet");
+    reserve("account_wallet", "run_wallet", "claude_sonnet_5_5", "low", 2, { period: laterPeriod });
+    const leaseOf = (p, run) => {
+      const [line] = cmd(
+        p,
+        `SELECT concat_ws('|',outcome,lease_id,generation) FROM morrow_work.lease_open('run',${literal(run)},'store_1','connection_1','installation_1');`,
+      );
+      return line.split("|");
+    };
+    const [opened, leaseId] = leaseOf(a.p, "run_wallet");
+    const bare = { ...P.A, workspace: "ws_account_bare" };
+    db.admin(`INSERT INTO morrow_identity.workspaces VALUES(${literal(bare.workspace)},${literal(bare.org)},'Synthetic credits',true);
+INSERT INTO morrow_identity.workspace_memberships VALUES(${literal(bare.org)},${literal(bare.workspace)},${literal(bare.membership)},true);`);
+    db.workOwner(`INSERT INTO morrow_billing.billing_accounts(organization_id,workspace_id,id,route,mode,currency,status,revision,created_at,updated_at)
+ SELECT ${literal(bare.org)},${literal(bare.workspace)},'account_bare','morrow_direct','test','USD','active',1,t,t FROM (SELECT ${ms} AS t) x;`);
+    const [bareOpened, bareLease] = leaseOf(bare, "run_bare");
+    const underLease = (lease, statements, end = "COMMIT") =>
+      attempt(
+        `BEGIN; SELECT outcome FROM morrow_work.enter_lease(${literal(lease)},'1'); ${statements} ${end};`,
+        "morrow_runtime_executor",
+      );
+    const move = (o, available, reserved, consumed, end) =>
+      underLease(
+        o.lease ?? leaseId,
+        `SELECT lab_credits.wallet_move(${literal(o.org)},${literal(o.ws)},${literal(o.account)},${available},${reserved},${consumed});`,
+        end,
+      );
+    const own = { org: a.org, ws: a.ws, account: "account_wallet" };
+    const insert = underLease(bareLease, "SELECT lab_credits.wallet_insert('account_bare');");
+    const bareWallets = () =>
+      db.rows(
+        "SELECT count(*)::int AS n FROM morrow_billing.credit_wallets WHERE billing_account_id='account_bare'",
+      )[0].n;
+    const settled = underLease(leaseId, "SELECT lab_credits.settle('run_wallet',1);");
+    const settledWallet = wallet("account_wallet");
+    const raise = move(own, 5, 0, 0);
+    const lower = move(own, 1, 0, -1);
+    const control = move(own, -1, 1, 0, "ROLLBACK");
+    const y = accountOf("account_lease_y");
+    const foreign = move({ org: y.org, ws: y.ws, account: "account_lease_y" }, -1, 1, 0);
+    const noLease = attempt(
+      `BEGIN; SELECT lab_credits.wallet_move(${literal(a.org)},${literal(a.ws)},'account_wallet',-1,1,0); ROLLBACK;`,
+      "morrow_runtime_executor",
+    );
+    const after = wallet("account_wallet");
+    const out = (r) =>
+      r.ok ? last(r.stdout) : "error:" + (r.stderr.match(/ERROR:\s*([^\n]*)/)?.[1] ?? "");
+    check(
+      "C11:lease_context_cannot_create_or_inflate_a_wallet",
+      opened === "opened" &&
+        bareOpened === "opened" &&
+        !insert.ok &&
+        /row-level security/.test(insert.stderr) &&
+        bareWallets() === 0 &&
+        out(settled) === "settled|1" &&
+        settledWallet.consumed === 1 &&
+        !raise.ok &&
+        /BILLING_WALLET_INVALID/.test(raise.stderr) &&
+        !lower.ok &&
+        /BILLING_WALLET_INVALID/.test(lower.stderr) &&
+        out(control) === "moved|1" &&
+        out(foreign) === "moved|0" &&
+        out(noLease) === "denied" &&
+        JSON.stringify(after) === JSON.stringify(settledWallet),
+      {
+        opened,
+        bareOpened,
+        insert: out(insert),
+        settled: out(settled),
+        settledWallet,
+        raise: out(raise),
+        lower: out(lower),
+        control: out(control),
+        foreign: out(foreign),
+        noLease: out(noLease),
+        after,
+      },
     );
   }
   return { checks, failures };

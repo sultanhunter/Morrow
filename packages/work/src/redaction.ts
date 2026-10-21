@@ -35,7 +35,7 @@ export interface StoreContentHandler {
   /** The definer or broker method that runs it; null until it lands. */
   readonly executor: string | null;
   /** The PR that makes the handler executable, before the table holds store content. */
-  readonly executable: "M2 PR-3" | "M3 PR-1";
+  readonly executable: "M2 PR-3";
 }
 
 export const storeContentHandlers: readonly StoreContentHandler[] = Object.freeze(

@@ -5,6 +5,9 @@
 // handler (Node, the psql work connector logged in as morrow_api_worker) and direct SQL
 // as each login, it proves:
 //   G  agent grants: membership null exactly for agents; the identity bridges' refusals;
+//      the installation's grant set and the enable request inside M2's store-link template
+//      (store_link_grants_v1()); agents.installation.activate held only by the
+//      organization's founding principal (the ADR-0022 item 3 amendment of 2026-10-21);
 //   E  "Enable Listings agent" (the ADR-0022 item 3 amendment): the server-built document,
 //      bound to actor, session, five minutes and a single-use nonce; the confirmation
 //      creates the installation, its principals and grants; replay, reuse, expiry,
@@ -19,10 +22,15 @@
 //   D  delegation_facts as morrow_runtime_executor feeding the real agent kernel through
 //      createLeaseDelegationReader (allow, and the P05.A02/A03 deny cases); an envelope with
 //      several children gives each executor its own chain, and two chains are ambiguous;
+//      a store whose M2 installation is not linked denies every step and refuses
+//      resolve_call;
 //   P  catalog proposals (the agent-proposals migration) and parameter redaction;
 //   M  workspace_model_defaults through GET /models and PUT /settings/model-default;
 //   T  the owner-run platform stop through the staging runner's admin transaction, and a
-//      resume confirmed under it changes nothing.
+//      resume confirmed under it changes nothing;
+//   L  M2's store installation unlinked, suspended or uninstalled: enable and resume are
+//      refused at both steps, in TypeScript and in SQL, and change nothing; linked again,
+//      the same documents apply; "Stop AI work" needs no link.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Runs in
 // the CI pg-work group. The local superuser is used only for fixtures and the shapes
 // marked "sim".
@@ -35,7 +43,10 @@ import { listingFieldPaths, storeResource } from "../packages/policy/src/store-r
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
 import { createAgentsApiHandler } from "../packages/work/src/agents/http.ts";
 import { createLeaseDelegationReader } from "../packages/work/src/agents/delegation-reader.ts";
-import { buildInstallationDocument } from "../packages/work/src/agents/listings.ts";
+import {
+  buildInstallationDocument,
+  enableRequestFields,
+} from "../packages/work/src/agents/listings.ts";
 import { createWorkApiHandler, workErrorResponse } from "../packages/work/src/http.ts";
 import { createRuntimeAttempt, runLeaseStep } from "../packages/work/src/runtime/leases.ts";
 import {
@@ -176,7 +187,13 @@ export async function runListingsAuthorityLab(db) {
   };
   function storeGrant(p, capabilityId, verbs, fields = [...listingFieldPaths], resource = store) {
     const g = {
-      id: "g_" + p.key.toLowerCase() + "_" + capabilityId.replaceAll(".", "_"),
+      // A grant on a store other than S carries its store id.
+      id:
+        "g_" +
+        p.key.toLowerCase() +
+        "_" +
+        capabilityId.replaceAll(".", "_") +
+        (resource.storeId === null || resource.storeId === S ? "" : "_" + resource.storeId),
       principal: actorOf(p),
       capabilityId,
       verbs,
@@ -197,20 +214,31 @@ export async function runListingsAuthorityLab(db) {
     if (!validateCurrentDefinition("Grant", g)) throw Error("LAB_GRANT_INVALID");
     return `INSERT INTO morrow_identity.grants(id,organization_id,workspace_id,membership_id,principal_id,payload) VALUES(${literal(g.id)},${literal(O)},${literal(W)},${literal(p.membership)},${literal(p.principal)},${literal(JSON.stringify(g))}::jsonb);`;
   }
-  const catalogGrants = (p) => [
-    storeGrant(p, "catalog.products.read", ["view", "delegate"]),
-    storeGrant(p, "catalog.content.propose", ["execute", "delegate"]),
-    storeGrant(p, "catalog.content.publish", ["propose", "approve", "execute", "delegate"]),
+  const catalogGrants = (p, resource = store) => [
+    storeGrant(p, "catalog.products.read", ["view", "delegate"], undefined, resource),
+    storeGrant(p, "catalog.content.propose", ["execute", "delegate"], undefined, resource),
+    storeGrant(
+      p,
+      "catalog.content.publish",
+      ["propose", "approve", "execute", "delegate"],
+      undefined,
+      resource,
+    ),
   ];
+  const activateFields = ["evaluation", "grant", "installationId", "revision"];
+  // The four rows of M2's store-link template (store_link_grants_v1()) on one store, as the
+  // link issues them to the organization's founding principal (G3 pins the equality).
+  const storeLinkGrants = (p, resource = store) => [
+    ...catalogGrants(p, resource),
+    storeGrant(p, "agents.installation.activate", ["execute"], activateFields, resource),
+  ];
+  // A founded O (its website signup, 0013): M2's link issues the store-link template only to
+  // the organization's founding principal (ADR-0022 item 3 amendment, 2026-10-21).
+  db.admin(`INSERT INTO morrow_identity.identity_verification_profiles(id,provider_id,environment_id,application_id,client_id,issuer,token_profile_revision,token_profile_digest,record_revision,state) VALUES('profile_listings','workos','environment_${"A".repeat(26)}','app_${"A".repeat(26)}','client_${"A".repeat(26)}','https://api.workos.com/user_management/client_${"A".repeat(26)}',1,${literal("a".repeat(64))},1,'active');
+INSERT INTO morrow_identity.organization_signups VALUES(${literal(P.A.principal)},${literal(randomUUID())},${literal("b".repeat(64))},'profile_listings',${literal(O)},${literal(W)},${literal(P.A.membership)},'owner-bootstrap-v1',clock_timestamp());`);
   db.admin(
     [
-      ...catalogGrants(P.A),
-      storeGrant(
-        P.A,
-        "agents.installation.activate",
-        ["execute"],
-        ["evaluation", "grant", "installationId", "revision"],
-      ),
+      ...storeLinkGrants(P.A),
       storeGrant(
         P.A,
         "governance.model_default.revise",
@@ -238,6 +266,32 @@ export async function runListingsAuthorityLab(db) {
     return r.stdout.split("\n").slice(1);
   };
   const count = (query) => Number(last(db.sql(`SELECT (${query})::bigint;`)));
+  // The state of one M2 store installation as M2 PR-3's uninstall, suspension and disconnect
+  // paths will write it (sim: 0026's shopify_record_guard admits only unlinked -> linked, so
+  // the edit runs with that trigger disabled). `unlinked` clears the link reference; `linked`
+  // restores the installation's own link and link time. Returns the state that
+  // work_store_installations reports.
+  const linkedRows = new Map();
+  const storeState = (installation, status) => {
+    if (!linkedRows.has(installation))
+      linkedRows.set(
+        installation,
+        db.rows(
+          `SELECT link_id::text AS link_id,${utc("linked_at")} AS linked_at FROM morrow_identity.store_installations WHERE id=${literal(installation)}`,
+        )[0],
+      );
+    const linked = linkedRows.get(installation);
+    const keep = status !== "unlinked";
+    db.sql(`BEGIN; ALTER TABLE morrow_identity.store_installations DISABLE TRIGGER shopify_record_guard;
+UPDATE morrow_identity.store_installations SET status=${literal(status)},revision=revision+1,updated_at=greatest(${ms},updated_at),link_id=${keep ? literal(linked.link_id) : "NULL"},linked_at=${keep ? literal(linked.linked_at) + "::timestamptz" : "NULL"} WHERE id=${literal(installation)};
+ALTER TABLE morrow_identity.store_installations ENABLE TRIGGER shopify_record_guard; COMMIT;`);
+    return last(
+      db.sql(
+        `SELECT status FROM morrow_identity.work_store_installations(${literal(O)},${literal(W)}) WHERE installation_id=${literal(installation)};`,
+      ),
+    );
+  };
+  const linkStates = ["unlinked", "suspended", "uninstalled"];
   const ctx = { waitUntil() {} };
   const handler = createAgentsApiHandler({
     origin: workFixtureOrigin,
@@ -538,6 +592,109 @@ INSERT INTO morrow_identity.agent_principals VALUES(${literal(agent2)},'agent',$
         ),
         "permission denied",
       ) && refused(asApi(P.A, issue(three())), "permission denied", "morrow_api_worker"),
+    );
+    // G3: the installation never exceeds M2's store-link template (store_link_grants_v1(),
+    // as applied): each capability of the installation's grant set is a template row whose
+    // verbs and fields contain the installation's and which carries delegate (the owner
+    // delegates what the installation receives); the enable request's fields are inside the
+    // activate row. The lab's owner-seeded store-link grants are exactly the template.
+    const template = db.rows(
+      "SELECT capability_id,verbs,fields FROM morrow_identity.store_link_grants_v1()",
+    );
+    const inside = Number(
+      last(
+        db.sql(
+          `SELECT count(*) FROM jsonb_array_elements(morrow_work.listings_grant_set(${literal(O)},${literal(W)},${literal(S)},${literal(C)})) g JOIN morrow_identity.store_link_grants_v1() t ON t.capability_id=g->>'capabilityId' WHERE (g->'verbs')<@t.verbs AND t.verbs ? 'delegate' AND (g#>'{scope,fields}')<@t.fields;`,
+        ),
+      ),
+    );
+    const seeded = db.rows(
+      `SELECT payload->>'capabilityId' AS capability_id,payload->'verbs' AS verbs,payload#>'{scope,fields}' AS fields FROM morrow_identity.grants WHERE membership_id=${literal(P.A.membership)} AND payload#>>'{scope,resources,0,kind}'='store' AND payload#>>'{scope,resources,0,id}'=${literal(S)}`,
+    );
+    const key = (r) => JSON.stringify([r.capability_id, r.verbs, r.fields]);
+    check(
+      "G3:installation_and_enable_inside_the_store_link_template",
+      template.length === 4 &&
+        inside === 3 &&
+        template.some(
+          (t) =>
+            t.capability_id === "agents.installation.activate" &&
+            t.verbs.includes("execute") &&
+            enableRequestFields.every((f) => t.fields.includes(f)),
+        ) &&
+        seeded.map(key).sort().join() === template.map(key).sort().join(),
+      { template, inside, seeded },
+    );
+    // Neither agents bridge issues agents.installation.activate: not in an installation's
+    // grant set, and not as the owner's grant (whose control, the disable grant, issues).
+    const policyRevision = Number(
+      last(
+        db.sql(`SELECT policy_revision FROM morrow_identity.organizations WHERE id=${literal(O)};`),
+      ),
+    );
+    const ownerBridge = (capabilityId, fields) =>
+      last(
+        cmd(
+          P.A,
+          `SELECT outcome FROM morrow_identity.work_owner_disable_grant_issue(${literal(O)},${literal(W)},replace(${literal(
+            JSON.stringify({
+              id: "g_owner_" + randomUUID().slice(0, 8),
+              principal: actorOf(P.A),
+              capabilityId,
+              verbs: ["execute"],
+              scope: {
+                organizationId: O,
+                workspaceId: W,
+                storeIds: [S],
+                accountIds: [],
+                resources: [
+                  {
+                    organizationId: O,
+                    workspaceId: W,
+                    storeId: S,
+                    connectionId: C,
+                    kind: "installation",
+                    id: "installation_g",
+                  },
+                ],
+                fields,
+              },
+              issuedBy: {
+                kind: "service",
+                principalId: "morrow.agents",
+                organizationId: O,
+                workspaceId: W,
+                membershipId: null,
+                installationId: null,
+                mandateId: null,
+              },
+              validFrom: "__NOW__",
+              expiresAt: null,
+              revokedAt: null,
+              policyRevision,
+            }),
+          )},'__NOW__',${utc(ms)})::jsonb);`,
+        ),
+      );
+    const disableControl = ownerBridge("agents.installation.disable", [
+      "control",
+      "installationId",
+    ]);
+    const ownerActivate = ownerBridge("agents.installation.activate", activateFields);
+    const agentActivate = bridgeCall([
+      three()[0],
+      three()[1],
+      forBridge({
+        capabilityId: "agents.installation.activate",
+        verbs: ["execute"],
+        validFrom: "__NOW__",
+        scope: { ...payload(agentActor, "x").scope, fields: activateFields },
+      }),
+    ]);
+    check(
+      "G3:no_agents_bridge_issues_activate",
+      disableControl === "issued" && ownerActivate === "invalid" && agentActivate === "invalid",
+      { disableControl, ownerActivate, agentActivate },
     );
   }
 
@@ -1131,8 +1288,8 @@ INSERT INTO morrow_work.delegation_hops VALUES(${literal(O)},${literal(W)},${lit
       ownerGone === "origin_denied" || ownerGone === "membership_revoked",
       ownerGone,
     );
-    // Entitlement only from entitlementFor: an open route is entitlement_denied; the
-    // unwired billing stub (M5 PR-1 lands the reader) fails closed.
+    // Entitlement only from entitlementFor: an open route is entitlement_denied, and a failed
+    // read through M5 PR-1's billing facts reader (@morrow/work/billing) denies the step.
     const open = {
       read: async () => ({
         facts: JSON.parse(
@@ -1144,7 +1301,6 @@ INSERT INTO morrow_work.delegation_hops VALUES(${literal(O)},${literal(W)},${lit
         billingPeriod: null,
       }),
     };
-    // M5 PR-1's reader (@morrow/work/billing): a failed billing read denies the step.
     const { createBillingFactsReader } = await import("../packages/work/src/billing/facts.ts");
     check(
       "D8:entitlement_only_via_entitlement_for",
@@ -1230,6 +1386,54 @@ INSERT INTO morrow_work.delegation_hops VALUES(${literal(O)},${literal(W)},${lit
           `SET ROLE morrow_work_owner; ${otherInstallation("installation_h", "store_h", coordinatorPrincipal)}`,
           "violates foreign key",
         ),
+    );
+    // D11: the store's M2 installation not linked (unlinked, suspended or uninstalled; sim,
+    // storeState). A run admitted while the store was linked gets no further: the step's
+    // facts report the store not current and the kernel denies (provider_denied), and
+    // resolve_call refuses the run lease's model call and Shopify read and a read lease's
+    // Shopify read (connection_inactive). Linked again, the same lease steps and resolves.
+    const storeCurrent = () =>
+      last(
+        as("morrow_runtime_executor")(
+          `BEGIN; SELECT outcome FROM morrow_work.enter_lease(${literal(run.id)},'1'); SELECT store_current FROM morrow_work.delegation_facts('envelope_ok',${literal(installationId)},'catalog.products.read'); ROLLBACK;`,
+        ),
+      );
+    const notLinked = {};
+    for (const state of linkStates) {
+      const read = openLease(P.A1, "read", "read_d11_" + state);
+      const reported = storeState(SI, state);
+      notLinked[state] = {
+        reported,
+        storeCurrent: storeCurrent(),
+        step: await decide("envelope_ok"),
+        model: resolve(run.id, "model", "run_d1"),
+        runRead: resolve(run.id, "shopify_read", "run_d1"),
+        read: resolve(read.id, "shopify_read", "read_d11_" + state),
+      };
+      storeState(SI, "linked");
+    }
+    const relinked = {
+      storeCurrent: storeCurrent(),
+      step: await decide("envelope_ok"),
+      model: resolve(run.id, "model", "run_d1"),
+      runRead: resolve(run.id, "shopify_read", "run_d1"),
+    };
+    check(
+      "D11:store_not_linked_denies_steps_and_resolve_call",
+      linkStates.every(
+        (state) =>
+          notLinked[state].reported === state &&
+          notLinked[state].storeCurrent === "false" &&
+          notLinked[state].step === "provider_denied" &&
+          notLinked[state].model === "connection_inactive" &&
+          notLinked[state].runRead === "connection_inactive" &&
+          notLinked[state].read === "connection_inactive",
+      ) &&
+        relinked.storeCurrent === "true" &&
+        relinked.step === "allowed" &&
+        relinked.model === "resolved" &&
+        relinked.runRead === "resolved",
+      { notLinked, relinked },
     );
     // Keep the run lease for the stop section.
     delegationRun = run;
@@ -1967,6 +2171,265 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
   }
 
   // -------------------------------------------------------------------------
+  phase("link_states");
+  {
+    // L: M2 PR-2's store installation in a state other than linked (unlinked, suspended or
+    // uninstalled, as work_store_installations reports them; sim, storeState). Store Z is
+    // linked through M2's tables with the founder's store-link grants. For each state, a
+    // document built while Z was linked is refused at both steps, in TypeScript (404: the
+    // store has no current association) and in SQL with TypeScript bypassed (the document
+    // definer not_found, the confirmation state_conflict), and nothing changes. Linked again,
+    // the SQL controls (rolled back) get past the store check, and the last document applies.
+    // Store N was born unlinked (M2's own unlinked state) and was never linked.
+    const Z = "store_lz",
+      ZC = "connection_lz",
+      ZI = "storeinst_lz",
+      N = "store_ln";
+    link(Z);
+    db.admin(storeLinkGrants(P.A, storeResource(O, W, Z, ZC)).join("\n"));
+    db.admin(
+      storeInstallationSql({
+        org: O,
+        workspace: W,
+        principal: P.A.principal,
+        storeId: N,
+        connectionId: "connection_ln",
+        installationId: "storeinst_ln",
+        link: false,
+      }),
+    );
+    const zPath = `/stores/${Z}/agents/listings`;
+    const nPath = `/stores/${N}/agents/listings`;
+    const confirmOf = (reply) => ({
+      documentDigest: reply.body.documentDigest,
+      nonce: reply.body.nonce,
+    });
+    // The document definer with a document of this store, dated inside its own transaction.
+    const documentSql = async (storeId, connectionId, purpose, installation) => {
+      const built = await buildInstallationDocument({
+        id: randomUUID(),
+        purpose,
+        store: storeResource(O, W, storeId, connectionId),
+        installationId: installation,
+        actor: actorOf(P.A),
+        createdAtMs: Date.parse("2026-01-01T00:00:00.000Z"),
+      });
+      const text = built.canonical
+        .replace('"createdAt":"2026-01-01T00:00:00.000Z"', '"createdAt":"__CREATED__"')
+        .replace('"expiresAt":"2026-01-01T00:05:00.000Z"', '"expiresAt":"__EXPIRES__"');
+      const command = randomUUID();
+      const at = "date_trunc('milliseconds',transaction_timestamp())";
+      return last(
+        db.sql(
+          asApi(
+            P.A,
+            `WITH t AS (SELECT replace(replace(${literal(text)},'__CREATED__',${utc(at)}),'__EXPIRES__',${utc(at + "+interval '5 minutes'")}) AS c) SELECT x.outcome FROM t,morrow_work.cmd_listings_enable_document(${literal(command)},${literal(sha(command))},'corr',${literal(storeId)},${literal(purpose)},${literal(installation)},${literal(built.document.id)},t.c,encode(sha256(convert_to(t.c,'UTF8')),'hex'),${literal(sha(randomUUID()))}) x;`,
+          ),
+          { user: "morrow_api_worker" },
+        ),
+      );
+    };
+    // The confirmation definer. An enable confirmation carries principal ids and an empty
+    // grant list, so on a linked store it passes the store check and stops at the grants
+    // (invalid); a resume carries none.
+    const confirmSql = (reply, purpose) =>
+      last(
+        db.sql(
+          asApi(
+            P.A,
+            `SELECT outcome FROM morrow_work.cmd_listings_enable(${literal(randomUUID())},${literal("a".repeat(64))},'corr',${literal(Z)},${literal(reply.body.documentDigest)},${literal(reply.body.nonce)},${purpose === "enable" ? `${literal("agent_" + randomUUID())},${literal("agent_" + randomUUID())},'[]','{}'` : "NULL,NULL,NULL,NULL"});`,
+          ),
+          { user: "morrow_api_worker" },
+        ),
+      );
+    const unconsumed = (reply) =>
+      count(
+        `SELECT count(*) FROM morrow_work.agent_enable_documents WHERE digest=${literal(reply.body.documentDigest ?? "")} AND consumed_at IS NULL`,
+      ) === 1;
+
+    // L0: a store that was never linked has no Listings status and no document.
+    const neverReported = last(
+      db.sql(
+        `SELECT status FROM morrow_identity.work_store_installations(${literal(O)},${literal(W)}) WHERE installation_id='storeinst_ln';`,
+      ),
+    );
+    const neverStatus = await send(P.A, "GET", nPath);
+    const neverDocument = await send(P.A, "POST", nPath + "/document", {});
+    const neverDefiner = await documentSql(N, "connection_ln", "enable", randomUUID());
+    check(
+      "L0:a_store_never_linked_is_not_found",
+      neverReported === "unlinked" &&
+        is(neverStatus, "not_found") &&
+        is(neverDocument, "not_found") &&
+        neverDefiner === "not_found" &&
+        count(
+          `SELECT count(*) FROM morrow_work.agent_enable_documents WHERE store_id=${literal(N)}`,
+        ) === 0,
+      {
+        neverReported,
+        neverStatus: neverStatus.body,
+        neverDocument: neverDocument.body,
+        neverDefiner,
+      },
+    );
+
+    // L1: enable.
+    const zInstallations = () =>
+      count(`SELECT count(*) FROM morrow_work.agent_installations WHERE store_id=${literal(Z)}`);
+    const enableRuns = {};
+    let pending;
+    for (const state of linkStates) {
+      pending = await send(P.A, "POST", zPath + "/document", {});
+      const reported = storeState(ZI, state);
+      const status = await send(P.A, "GET", zPath);
+      const document = await send(P.A, "POST", zPath + "/document", {});
+      const documentDefiner = await documentSql(Z, ZC, "enable", randomUUID());
+      const confirm = await send(P.A, "POST", zPath, confirmOf(pending));
+      const confirmDefiner = confirmSql(pending, "enable");
+      const unchanged = zInstallations() === 0 && unconsumed(pending);
+      storeState(ZI, "linked");
+      enableRuns[state] = {
+        pending: pending.status === 201 && pending.body.purpose === "enable",
+        reported,
+        status: is(status, "not_found"),
+        document: is(document, "not_found"),
+        documentDefiner,
+        confirm: is(confirm, "not_found"),
+        confirmDefiner,
+        unchanged,
+        controlDocument: await documentSql(Z, ZC, "enable", randomUUID()),
+        controlConfirm: confirmSql(pending, "enable"),
+      };
+    }
+    const enabled = await send(P.A, "POST", zPath, confirmOf(pending));
+    check(
+      "L1:enable_refused_unless_linked",
+      linkStates.every((state) => {
+        const r = enableRuns[state];
+        return (
+          r.pending &&
+          r.reported === state &&
+          r.status &&
+          r.document &&
+          r.documentDefiner === "not_found" &&
+          r.confirm &&
+          r.confirmDefiner === "state_conflict" &&
+          r.unchanged &&
+          r.controlDocument === "applied" &&
+          r.controlConfirm === "invalid"
+        );
+      }) &&
+        enabled.status === 200 &&
+        enabled.body.status === "active" &&
+        enabled.body.purpose === "enable",
+      { enableRuns, enabled: enabled.body },
+    );
+
+    // L2: resume after the owner's own "Stop AI work".
+    const zInstallation = enabled.body.installationId;
+    const zStopped = await send(P.A, "POST", zPath + "/stop", {
+      control: { reason: "Pause before the link checks", sourceProposalRef: null },
+    });
+    const humanStop = () =>
+      db.rows(
+        `SELECT id FROM morrow_work.stop_controls WHERE scope='installation' AND target_id=${literal(zInstallation ?? "")} AND lifted_at IS NULL AND set_by_kind='human'`,
+      )[0]?.id;
+    const ownerStopId = humanStop();
+    const disabled = () =>
+      count(
+        `SELECT count(*) FROM morrow_work.agent_installations WHERE id=${literal(zInstallation ?? "")} AND status='disabled'`,
+      ) === 1;
+    const resumeRuns = {};
+    for (const state of linkStates) {
+      pending = await send(P.A, "POST", zPath + "/document", {});
+      const reported = storeState(ZI, state);
+      const status = await send(P.A, "GET", zPath);
+      const document = await send(P.A, "POST", zPath + "/document", {});
+      const documentDefiner = await documentSql(Z, ZC, "resume", zInstallation);
+      const confirm = await send(P.A, "POST", zPath, confirmOf(pending));
+      const confirmDefiner = confirmSql(pending, "resume");
+      const unchanged = disabled() && humanStop() === ownerStopId && unconsumed(pending);
+      storeState(ZI, "linked");
+      resumeRuns[state] = {
+        pending: pending.status === 201 && pending.body.purpose === "resume",
+        reported,
+        status:
+          status.status === 200 &&
+          status.body.linked === false &&
+          status.body.installation?.status === "disabled" &&
+          status.body.actions.enable === false &&
+          status.body.actions.resume === false &&
+          status.body.actions.stop === true,
+        document: is(document, "not_found"),
+        documentDefiner,
+        confirm: is(confirm, "not_found"),
+        confirmDefiner,
+        unchanged,
+        controlDocument: await documentSql(Z, ZC, "resume", zInstallation),
+        controlConfirm: confirmSql(pending, "resume"),
+      };
+    }
+    const resumed = await send(P.A, "POST", zPath, confirmOf(pending));
+    check(
+      "L2:resume_refused_unless_linked",
+      zStopped.status === 200 &&
+        typeof ownerStopId === "string" &&
+        linkStates.every((state) => {
+          const r = resumeRuns[state];
+          return (
+            r.pending &&
+            r.reported === state &&
+            r.status &&
+            r.document &&
+            r.documentDefiner === "not_found" &&
+            r.confirm &&
+            r.confirmDefiner === "state_conflict" &&
+            r.unchanged &&
+            r.controlDocument === "applied" &&
+            r.controlConfirm === "applied"
+          );
+        }) &&
+        resumed.status === 200 &&
+        resumed.body.status === "active" &&
+        resumed.body.purpose === "resume" &&
+        humanStop() === undefined,
+      { resumeRuns, resumed: resumed.body },
+    );
+
+    // L3: "Stop AI work" needs no current store. Z uninstalled: its run lease resolves
+    // nothing, and the owner's stop still applies and revokes that lease.
+    const zRun = openLease(P.A, "run", "run_lz", {
+      store: Z,
+      connection: ZC,
+      installation: zInstallation,
+    });
+    const resolvedLinked = resolve(zRun.id, "model", "run_lz");
+    const reported = storeState(ZI, "uninstalled");
+    const resolvedUninstalled = resolve(zRun.id, "model", "run_lz");
+    const stopped = await send(P.A, "POST", zPath + "/stop", {
+      control: { reason: "Store uninstalled", sourceProposalRef: null },
+    });
+    const lease = db.rows(
+      `SELECT status,revoked_reason FROM morrow_work.work_leases WHERE id=${literal(zRun.id ?? "")}`,
+    )[0];
+    storeState(ZI, "linked");
+    check(
+      "L3:stop_ai_work_needs_no_link",
+      zRun.outcome === "opened" &&
+        resolvedLinked === "resolved" &&
+        reported === "uninstalled" &&
+        resolvedUninstalled === "connection_inactive" &&
+        stopped.status === 200 &&
+        stopped.body.status === "disabled" &&
+        stopped.body.priorStateObserved === "active" &&
+        lease?.status === "revoked" &&
+        lease.revoked_reason === "stop" &&
+        disabled(),
+      { resolvedLinked, resolvedUninstalled, stopped: stopped.body, lease },
+    );
+  }
+
+  // -------------------------------------------------------------------------
   phase("model_default");
   {
     const models = await send(P.A1, "GET", "/models");
@@ -2076,6 +2539,29 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
     );
   }
 
+  // G4 (ADR-0022 item 3 amendment, 2026-10-21): after every enable, resume and stop above,
+  // agents.installation.activate is held only by the organization's founding principal, as
+  // M2's store-link grants issued by morrow.linking (one per linked store, S and Z); no agent
+  // principal, Coordinator or other member holds it.
+  const activateHolders = db.rows(
+    `SELECT g.principal_id::text AS principal,g.principal_kind AS kind,g.payload#>>'{issuedBy,principalId}' AS issuer,g.payload#>>'{scope,storeIds,0}' AS store,EXISTS(SELECT 1 FROM morrow_identity.organization_signups s WHERE s.organization_id=g.organization_id AND s.principal_id=g.principal_id) AS founder FROM morrow_identity.grants g WHERE g.organization_id=${literal(O)} AND g.payload->>'capabilityId'='agents.installation.activate' ORDER BY 4`,
+  );
+  check(
+    "G4:only_the_founder_holds_activate",
+    activateHolders
+      .map((h) => h.store)
+      .sort()
+      .join() === [S, "store_lz"].sort().join() &&
+      activateHolders.every(
+        (h) =>
+          h.founder === true &&
+          h.principal === P.A.principal &&
+          h.kind === "human" &&
+          h.issuer === "morrow.linking",
+      ),
+    activateHolders,
+  );
+
   // Every agents request logged exactly one fixed line.
   check(
     "W1:one_fixed_log_line_per_request",
@@ -2121,7 +2607,8 @@ async function main() {
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
       "The agents handler runs in Node over a psql connector logged in as morrow_api_worker, not in workerd over the Neon transport.",
       "The store installation (M2 PR-2's tables, read through work_store_installations) and the store-link and model-default grants are owner-seeded; M5 PR-1's billing facts reader runs over fixture facts, since a lease step has no billing read.",
-      "Shapes marked sim (a stop inserted with stop_guard disabled, a membership deactivated with its triggers disabled, grant and installation edits as the owner) stand in for states no API path reaches.",
+      "Shapes marked sim (a stop inserted with stop_guard disabled, a membership deactivated with its triggers disabled, grant and installation edits as the owner, a store installation set unlinked, suspended or uninstalled with shopify_record_guard disabled until M2 PR-3 writes those states) stand in for states no API path reaches.",
+      "The founder's signup row (organization_signups) is owner-seeded; lab:shopify-install K4 and L16 prove that M2's link issues the store-link template only to the founding principal.",
       "Work envelopes, delegation hops and catalog proposals are owner-inserted; their writers (run admission and the agent submit definer) are M3 PR-2's.",
     ],
   });
