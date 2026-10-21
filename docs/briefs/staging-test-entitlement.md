@@ -1,0 +1,90 @@
+# Staging test entitlement
+
+- Status: brief, 2026-10-22. Owner decision (b) of 2026-10-21 ("Staging test entitlement (Recommended)"; quoted in [M5-billing.md](M5-billing.md)). Material choices: the ADR-0022 item 5 amendment (2026-10-21) and the staging-card-1 E13 amendment, both in this PR.
+- Plan IDs: P18.T01a (the Morrow-direct route), with its persistence items 3–5 of `docs/contracts/billing-entitlements.md`. Branch `claude/staging-test-entitlement`, from `claude/m5-billing` (it writes M5's billing tables); one PR, opened after PR #37 (M5 PR-1) merges. Migration `0030` here; renumbered at merge after M3's 0030–0033 if M3 merges first.
+
+## Goal
+
+While the Stripe switch is off, the owner can put one named staging workspace on the beta plan (300 test credits) without Stripe, so that workspace can link the development store and run the Listings agent. Each use is approved by the owner in chat and recorded. Production still needs a real Stripe payment.
+
+## Scope
+
+- **Migration `0030.staging-test-entitlement.sql`** (as `morrow_work_owner`):
+  - `morrow_billing.platform_environment`: the database's one environment mark, written once and never changed.
+  - `morrow_billing.operator_test_entitlements`: the operator grant record. It holds the approval reference, the operator, the live record's path, the credits and terms revision, the 30-day period and a digest. It is append-only, owner-only and one per workspace and per approval.
+  - Forward changes to 0020 and 0029 so those tables can hold it:
+    - the route variant admits `morrow:operator_entitlement:<id>` in test mode;
+    - a snapshot names either a receipt or an operator entitlement;
+    - a terms revision may carry one `operator_test_entitlement` entry and no offer;
+    - `wallet_guard`, `snapshot_guard`, `route_fix_guard` and `terms_guard` admit these only from the owner and only for the grant of the same tenant.
+  - `morrow_billing.operator_test_entitlement_grant(operator, workspace, approval, record)`: the operator function (owned by the owner, INVOKER, granted to nobody).
+- **Contract v1.1 billing:** `OperatorEntitlementKey`; test-mode Morrow-direct variants of `WorkspaceBillingRoute` and `EntitlementSnapshot`; the `BillingTerms` operator entry. `CreditWallet` and `CreditGrant` are unchanged.
+- **Terms:** staging's revision 1 in `docs/decisions/billing-terms.json` holds only the operator entry (300 credits, priceKey `morrow:operator_plan:beta`, no offer), pinned by `verify:billing`.
+- **Staging tools:** `staging:seed-platform` writes the staging mark (before any terms insert). It refuses a database marked otherwise (`STAGING_SEED_DRIFT`, table `platform_environment`). New command `npm run staging:test-entitlement -- --workspace <id> --approval <staging-card-1.e13.YYYY-MM-DD.n> --record <docs/evidence/live/....md> --operator <id>`.
+- **Api:** the billing period read (`billingPeriodLatest`) also reads an operator entitlement's snapshot period. M3's run admission keys its ledger on that period.
+
+Non-goals: renewal (one 30-day period per workspace); any change to checkout, the receipt ingress, the broker or the Stripe switch; `TestEntitlementSeed`; production.
+
+## Interfaces touched
+
+`migrations/0030*` and the manifest; `docs/contracts/schemas/v1.1/billing.schema.json`, the regenerated bundle and the release baseline; `packages/work/src/billing/{terms,sql,facts}.ts`; `scripts/{staging,staging-runner,verify-billing}.mjs`; `docs/decisions/{billing-terms.json,data-lifecycle.md}`; `docs/decisions/approvals/{staging.md,staging-card.json}`; ADR-0022; the tenant-conformance registry.
+
+## Security notes
+
+- **Who can run it.** Only the administrator path, as `morrow_work_owner` under the D4 SET-row protocol. Every runtime login and role lacks EXECUTE. The function also refuses:
+  - a current user other than the owner;
+  - a Morrow login as session user;
+  - any work session, lease or receipt context.
+- **INVOKER, not SECURITY DEFINER.** The repository's operator idiom (0020, 0026, 0029) is INVOKER and granted to nobody, so the role check inside the function stays meaningful. A definer would act as the owner for any future EXECUTE grantee.
+- **Staging only.** The function refuses unless the mark says `staging`. Further safeguards:
+  - `terms_guard` refuses an operator entry unless the mark is `development` or `staging`;
+  - production terms carry none (`verify:billing`);
+  - a production reader refuses the test-mode route (R9).
+- **Never a payment.** No receipt, verified payment event or `credit_grants` row is written; the operator key is not a payment, subscription or price key. The wallet is funded by the grant record alone, for its revision 2 and its exact units. After that, only sum-keeping moves are admitted.
+- **Refusals.** The function refuses any workspace with a route, an account, a Stripe customer, a Stripe operation, a checkout or a receipt. A reused approval is `approval_conflict`; the same approval for the same workspace replays and writes nothing.
+- **Before any database effect, the CLI needs:**
+  - the active card carrying E13;
+  - an approval reference of that card and effect, dated from the amendment to today;
+  - the record committed to `main`, naming the reference and the workspace;
+  - `main` at a green `foundation`.
+
+## Owner steps for the first use (each per action)
+
+1. Merge (after PR #37).
+2. `staging:migrate` (E3).
+3. `staging:seed-platform` (E3), which writes the staging mark and terms revision 1.
+4. The owner's approval in chat for the named workspace.
+5. Commit the live record `docs/evidence/live/YYYY-MM-DD-neon-test-entitlement-<slug>.md` to `main`.
+6. `npm run staging:test-entitlement -- ...` (E13).
+7. Complete the record with the printed outcome.
+
+## Test checklist
+
+- [x] Unit (`tests/staging-runner.test.mjs`):
+  - the closed input and result;
+  - the D4 statements;
+  - commits only on `granted` or `replayed`; every other outcome, or a malformed result, commits nothing;
+  - the card, E13 and approval-date rules;
+  - the CLI refuses before any SQL without the card, E13, the record, or a record naming the approval and workspace, and on an unmerged HEAD;
+  - the CLI's closed output;
+  - the seed's staging mark (inserted, present, drift).
+- [x] Unit (`tests/billing-operator-entitlement.test.mjs`):
+  - the contract variants and the key;
+  - the terms entry and its exclusions;
+  - the facts reader;
+  - billable on staging, `mode_refused` in production, `entitlement_stale` after 30 days.
+- [x] Lab `lab:test-entitlement` (pg-http, PostgreSQL 17, CREATEROLE administrator; 19 checks):
+  - refused without the staging mark and in a database marked development; the operator terms entry refused under a production mark, and a priced revision without an offer refused;
+  - the seed's mark is written once, idempotent and immutable;
+  - every runtime login and role refused, as are the superuser without the owner role and a session context;
+  - a Stripe customer, a Stripe-fixed route, a receipt and a missing route row refused, as are forged operator keys;
+  - the grant writes route, account, wallet, snapshot and grant record in one commit;
+  - no receipt, payment event or payment credit grant is written;
+  - replay writes nothing; a reused approval conflicts;
+  - the wallet sum equals the grant, and only moves keep it;
+  - the route then admits linking (`link_route_current`);
+  - the real billing handler on staging reads the plan, credits and period and offers no purchase; production reads `not_billable`.
+- [x] `lab:tenant-conformance` (the two tables and the function registered), `verify:billing` (staging's pinned terms), `contracts:generate` clean.
+- [ ] Tier 2 AI review (separate context, same model family) with the security lens.
+- [ ] Hosted CI on the PR head.
+- [ ] (Owner, after merge) The first use, as above, with its live record.

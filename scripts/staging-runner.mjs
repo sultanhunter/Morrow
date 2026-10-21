@@ -1143,6 +1143,17 @@ export async function seedPlatform({ connect, binding, administrator, rows, self
 // one transaction under the D4 SET-row protocol, idempotent, and refused on drift: a
 // stored revision that differs from the file, or one the file does not have. The table's
 // own guard (0029 terms_guard) also refuses a gap or any change.
+// ADR-0022 item 5 amendment (owner decision (b), 2026-10-21): the same transaction marks
+// the database's platform environment, once, as staging (morrow_billing.platform_environment,
+// migration 0030; never changed). This tool is staging's alone, so the mark it writes is
+// always staging; a database marked otherwise is drift. The mark is written after the terms
+// drift checks and before any terms insert: an operator_test_entitlement entry needs it.
+export const platformEnvironment = "staging";
+const platformStatements = Object.freeze({
+  insert:
+    "INSERT INTO morrow_billing.platform_environment(singleton, environment, recorded_at) VALUES (true, $1::text, date_trunc('milliseconds', clock_timestamp())) ON CONFLICT (singleton) DO NOTHING",
+  read: "SELECT environment FROM morrow_billing.platform_environment",
+});
 const termsStatements = Object.freeze({
   lock: "LOCK TABLE morrow_billing.billing_terms IN SHARE ROW EXCLUSIVE MODE",
   count: "SELECT count(*)::int AS n FROM morrow_billing.billing_terms",
@@ -1188,7 +1199,12 @@ export async function seedBillingTerms({ connect, binding, administrator, rows }
     throw new StagingError("STAGING_TERMS_INVALID");
   const connection = await connectChecked(connect, binding, administrator);
   const admin = administrator.name;
-  const written = { termsRevisions: rows.length, termsInserted: 0 };
+  const written = {
+    termsRevisions: rows.length,
+    termsInserted: 0,
+    environment: platformEnvironment,
+    environmentMark: "present",
+  };
   try {
     try {
       await connection.exec("BEGIN");
@@ -1207,6 +1223,15 @@ export async function seedBillingTerms({ connect, binding, administrator, rows }
         if (same?.same !== "true")
           throw new StagingError("STAGING_SEED_DRIFT", { table: "billing_terms" });
       }
+      const [before] = await connection.query(platformStatements.read);
+      if (before === undefined) {
+        await connection.query(platformStatements.insert, [platformEnvironment]);
+        written.environmentMark = "inserted";
+      }
+      const [mark] =
+        before === undefined ? await connection.query(platformStatements.read) : [before];
+      if (mark?.environment !== platformEnvironment)
+        throw new StagingError("STAGING_SEED_DRIFT", { table: "platform_environment" });
       for (const row of rows.slice(stored)) {
         await connection.query(termsStatements.insert, row);
         written.termsInserted++;
@@ -1292,6 +1317,125 @@ export async function resolveHeldCustomerOperation({ connect, binding, administr
       outcome: row.outcome,
       operationStatus: typeof row.operation_status === "string" ? row.operation_status : null,
     });
+  } finally {
+    await connection.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The staging test entitlement (`test-entitlement`; owner decision (b), 2026-10-21; the
+// ADR-0022 item 5 amendment; card E13). While the Stripe switch is off, the operator puts
+// one named staging workspace on the beta plan: under the owner's per-use approval in chat
+// and a committed docs/evidence/live record, the operator runs
+// morrow_billing.operator_test_entitlement_grant (migration 0030) as morrow_work_owner under
+// the D4 SET-row protocol. It fixes the route to morrow_direct (test) as a verified payment
+// would and funds the wallet from the terms' operator entry, recorded as an operator grant,
+// never a payment. Only granted or replayed commits, after the closed result is read;
+// anything else commits nothing.
+export const testEntitlementOutcomes = Object.freeze([
+  "granted",
+  "replayed",
+  "approval_conflict",
+  "route_missing",
+  "route_conflict",
+  "stripe_conflict",
+  "terms_missing",
+  "not_staging",
+  "invalid",
+  "denied",
+]);
+const testEntitlementStatement =
+  "SELECT outcome, result FROM morrow_billing.operator_test_entitlement_grant($1, $2, $3, $4)";
+const recordId = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const uuidText = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+const utcMs = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+// The approval reference: the card, its effect, the day of the owner's answer and its
+// number that day (staging-card-1.e13.2026-10-22.1); the definer holds the same grammar.
+export const testEntitlementApproval =
+  /^([a-z0-9][a-z0-9-]{0,40})\.(e[1-9][0-9]{0,2})\.(\d{4}-\d{2}-\d{2})\.[1-9][0-9]{0,2}$/;
+export const liveEvidenceRef = /^docs\/evidence\/live\/\d{4}-\d{2}-\d{2}-[a-z0-9-]{1,80}\.md$/;
+export function testEntitlementInput({ operatorId, workspaceId, approvalRef, evidenceRef }) {
+  if (
+    typeof operatorId !== "string" ||
+    !recordId.test(operatorId) ||
+    typeof workspaceId !== "string" ||
+    !recordId.test(workspaceId) ||
+    typeof approvalRef !== "string" ||
+    !testEntitlementApproval.test(approvalRef) ||
+    typeof evidenceRef !== "string" ||
+    !liveEvidenceRef.test(evidenceRef)
+  )
+    throw new StagingError("STAGING_USAGE");
+  return Object.freeze([operatorId, workspaceId, approvalRef, evidenceRef]);
+}
+const testEntitlementResultKeys =
+  "billingAccountId,creditUnits,entitlementId,organizationId,periodEnd,periodStart,routeRevision,termsRevision,workspaceId";
+/** The definer's result for `workspaceId`, closed: ids, units, revisions and the period. */
+export function testEntitlementReport(result, workspaceId) {
+  let value;
+  try {
+    value = JSON.parse(result);
+  } catch {
+    value = null;
+  }
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join() !== testEntitlementResultKeys ||
+    !Object.values(value).every((v) => typeof v === "string") ||
+    !uuidText.test(value.entitlementId) ||
+    !uuidText.test(value.billingAccountId) ||
+    !recordId.test(value.organizationId) ||
+    value.workspaceId !== workspaceId ||
+    !/^[1-9][0-9]{0,17}$/.test(value.creditUnits) ||
+    !/^[1-9][0-9]{0,15}$/.test(value.termsRevision) ||
+    !/^[1-9][0-9]{0,15}$/.test(value.routeRevision) ||
+    !utcMs.test(value.periodStart) ||
+    !utcMs.test(value.periodEnd) ||
+    !(Date.parse(value.periodEnd) > Date.parse(value.periodStart))
+  )
+    throw new StagingError("STAGING_TEST_ENTITLEMENT_RESULT_INVALID");
+  return Object.freeze({
+    entitlementId: value.entitlementId,
+    organizationId: value.organizationId,
+    workspaceId: value.workspaceId,
+    billingAccountId: value.billingAccountId,
+    creditUnits: value.creditUnits,
+    termsRevision: value.termsRevision,
+    periodStart: value.periodStart,
+    periodEnd: value.periodEnd,
+    routeRevision: value.routeRevision,
+  });
+}
+export async function grantTestEntitlement({ connect, binding, administrator, input }) {
+  checkAdministrator(administrator);
+  const values = testEntitlementInput(input ?? {});
+  const connection = await connectChecked(connect, binding, administrator);
+  const admin = administrator.name;
+  try {
+    let outcome, report;
+    try {
+      await connection.exec("BEGIN");
+      if (administrator.mode === "createrole")
+        await connection.exec(
+          `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+        );
+      await connection.exec("SET LOCAL ROLE morrow_work_owner");
+      const [row] = await connection.query(testEntitlementStatement, [...values]);
+      outcome = testEntitlementOutcomes.includes(row?.outcome) ? row.outcome : "unknown";
+      if (outcome !== "granted" && outcome !== "replayed")
+        throw new StagingError("STAGING_TEST_ENTITLEMENT_REFUSED", { outcome });
+      report = testEntitlementReport(row.result, values[1]);
+      await connection.exec("RESET ROLE");
+      if (administrator.mode === "createrole")
+        await connection.exec(`REVOKE morrow_work_owner FROM ${admin} GRANTED BY ${admin}`);
+      await connection.exec("COMMIT");
+    } catch (error) {
+      throw sqlFailure("STAGING_TEST_ENTITLEMENT_FAILED", error);
+    }
+    await assertNoSetRows(connection);
+    return Object.freeze({ outcome, ...report });
   } finally {
     await connection.close();
   }

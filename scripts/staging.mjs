@@ -9,7 +9,7 @@
 // reads and local commands do not. `ctx` is the one injection seam: tests and the
 // PostgreSQL lab pass fakes for tools, the Cloudflare API and the database.
 import "./staging-token.mjs"; // FIRST: removes CLOUDFLARE_API_TOKEN and GH_TOKEN from process.env.
-import { appendFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, readFileSync, unlinkSync } from "node:fs";
 import { setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -35,6 +35,7 @@ import {
   billingTermsSeedRows,
   connectionCensus,
   customerResolutionInput,
+  grantTestEntitlement,
   neonConnector,
   platformSeedRows,
   provisionRoles,
@@ -46,6 +47,8 @@ import {
   sessionIdentity,
   checkIdentity,
   statementStatsScratchDatabase,
+  testEntitlementApproval,
+  testEntitlementInput,
 } from "./staging-runner.mjs";
 import { cloudflareCredential, githubCredential } from "./staging-token.mjs";
 import {
@@ -802,6 +805,82 @@ command("billing-customer-resolve", {
       administrator: ctx.administrator,
       input,
     });
+  },
+});
+
+// The staging test entitlement (owner decision (b), 2026-10-21; the ADR-0022 item 5
+// amendment; card E13). Each use needs the owner's own approval in chat for this workspace,
+// recorded in a docs/evidence/live record committed to main before the run: the record
+// must name the approval reference and the workspace. Under the active card that carries
+// E13, with an approval reference of that card and effect dated from the amendment to today.
+// Prints the closed result: the outcome, ids, credit units, the terms revision and the period.
+export function requireTestEntitlementApproval(card, approvalRef, now) {
+  const e13 = card?.e13;
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (
+    !e13 ||
+    typeof e13 !== "object" ||
+    Object.keys(e13).join() !== "amendedOn" ||
+    !day.test(e13.amendedOn ?? "") ||
+    !(e13.amendedOn >= card.approvedOn && e13.amendedOn <= card.expiresOn)
+  )
+    throw new StagingError("STAGING_CARD_EFFECT_MISSING", { effect: "E13" });
+  const match = testEntitlementApproval.exec(approvalRef);
+  const today = new Date(now).toISOString().slice(0, 10);
+  if (
+    !match ||
+    match[1] !== card.id ||
+    match[2] !== "e13" ||
+    !Number.isFinite(Date.parse(match[3] + "T00:00:00Z")) ||
+    match[3] < e13.amendedOn ||
+    match[3] > today
+  )
+    throw new StagingError("STAGING_APPROVAL_INVALID");
+}
+command("test-entitlement", {
+  usage:
+    "test-entitlement --workspace <id> --approval <staging-card-1.e13.YYYY-MM-DD.n> --record <docs/evidence/live/....md> --operator <id>",
+  parse(args) {
+    const flags = {};
+    for (let i = 0; i < args.length; i += 2) {
+      const [flag, value] = [args[i], args[i + 1]];
+      if (
+        !["--workspace", "--approval", "--record", "--operator"].includes(flag) ||
+        typeof value !== "string" ||
+        Object.hasOwn(flags, flag)
+      )
+        throw new StagingError("STAGING_USAGE");
+      flags[flag] = value;
+    }
+    const input = {
+      operatorId: flags["--operator"],
+      workspaceId: flags["--workspace"],
+      approvalRef: flags["--approval"],
+      evidenceRef: flags["--record"],
+    };
+    testEntitlementInput(input);
+    return { input };
+  },
+  async run(ctx, { input }) {
+    const config = await ctx.config();
+    requireActiveCard(config.card, ctx.now());
+    requireTestEntitlementApproval(config.card, input.approvalRef, ctx.now());
+    const record = join(ctx.root, input.evidenceRef);
+    if (!existsSync(record) || !lstatSync(record).isFile())
+      throw new StagingError("STAGING_EVIDENCE_MISSING");
+    const text = readFileSync(record, "utf8");
+    if (!text.includes(input.approvalRef) || !text.includes(input.workspaceId))
+      throw new StagingError("STAGING_EVIDENCE_MISMATCH");
+    const binding = await stagingBinding(ctx, config);
+    await mainPreconditions(ctx, repositoryOf(config.staging));
+    const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
+    const granted = await grantTestEntitlement({
+      connect: ctx.database({ ownerUrl, binding }).connect,
+      binding,
+      administrator: ctx.administrator,
+      input,
+    });
+    return { ...granted, approvalRef: input.approvalRef, record: input.evidenceRef };
   },
 });
 

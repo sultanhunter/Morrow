@@ -581,6 +581,23 @@ export const billingTables = Object.freeze({
       ],
     ),
   },
+  // The staging test entitlement (0030; ADR-0022 item 5 amendment, 2026-10-21): the
+  // platform's environment mark (one row, the owner's seed) and the operator grant record
+  // (the owner's operator function only). No runtime role holds anything on either.
+  platform_environment: {
+    class: "platform",
+    parents: [],
+    policies: [],
+    content: "none",
+    ...aclSpec([]),
+  },
+  operator_test_entitlements: {
+    class: "operator_record",
+    parents: ["morrow_billing.billing_accounts", "morrow_identity.workspaces"],
+    policies: [],
+    content: "none",
+    ...aclSpec([]),
+  },
 });
 export const billingFunctions = Object.freeze({
   // The signup bridge: the identity owner calls it from 0021's trigger and backfill,
@@ -623,6 +640,8 @@ export const billingFunctions = Object.freeze({
     kind: "operator",
     grantees: [],
   },
+  // The staging test entitlement (0030): INVOKER, owned by the owner, granted to nobody.
+  "operator_test_entitlement_grant(text,text,text,text)": { kind: "operator", grantees: [] },
   // INVOKER helpers the policies and definers evaluate as the command role.
   "receipt_ingress()": { kind: "check", grantees: ["morrow_work_command"] },
   "receipt_entered(text)": { kind: "check", grantees: ["morrow_work_command"] },

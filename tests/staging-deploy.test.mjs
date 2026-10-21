@@ -2382,6 +2382,8 @@ test("cli: the trimmed PR-B's subcommands, and nothing for rollback, rotation dr
     "seed-platform",
     "smoke",
     "status",
+    // The staging test entitlement (owner decision (b), 2026-10-21; card E13).
+    "test-entitlement",
     "turnstile-create",
     "unkill",
   ]);

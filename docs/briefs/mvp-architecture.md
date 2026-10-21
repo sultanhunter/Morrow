@@ -31,7 +31,7 @@
 | 14 | Audit | all | `outbox_events` (0015), `KillSwitchRecord` | `operation_transitions`, `StopRecord@1` | append-only, content-free |
 | 15 | Settle | orchestrator | `CreditReservation`, `VendorCostReservation` | settle and release statements | `credit_wallets`, `run_manifests` |
 
-Staging pays through Stripe test mode, so steps 2–3 run there too; the MVP has no test entitlement seed (ADR-0022 item 5).
+Staging pays through Stripe test mode, so steps 2–3 run there too; the MVP has no test entitlement seed (ADR-0022 item 5). While the Stripe switch is off, staging uses the operator test entitlement instead (item 5 amendment, 2026-10-21; [staging-test-entitlement.md](staging-test-entitlement.md)).
 
 ## 3 Workers
 

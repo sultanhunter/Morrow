@@ -13,7 +13,8 @@
 //   through a kill before COMMIT and a lost acknowledgement, a superseded digest, and a
 //   planted SET row; zero Morrow SET rows and closed memberships at rest.
 // The chain runs through its head (M2 PR-1: 0019-0024; M2 PR-2: 0025-0027; M5 PR-1:
-// 0028-0029; none of 0025-0029 adds a login, and the entries after origin/main's head
+// 0028-0029; the staging test entitlement: 0030; none of 0025-0030 adds a login, and the
+// entries after origin/main's head
 // replay after provisioning), so provisioning covers the eleven broker logins, the vault
 // login included, and the first-deploy file the broker names, with the owner's vault KEK
 // read from its planted file. The Stripe switch (owner decision (c), 2026-10-21): the
@@ -1283,9 +1284,10 @@ const createroleReport = await localPostgresLab("P04.T01i.createrole", async ({ 
     "createrole_at_rest_census_is_creation_rows_and_reviewed_rows",
     morrowSetRows(id) === 0 && closed() && census().length === morrowRoles.length + 2,
   );
-  // M5 PR-1: the billing terms seed (seed-platform) as the work owner under D4. Staging
-  // has no published revision yet, so the lab seeds the development fixture's: inserted
-  // once, a rerun is a no-op, a drifted file is refused, and no SET row persists.
+  // M5 PR-1: the billing terms seed (seed-platform) as the work owner under D4, with the
+  // development fixture's priced revision (staging's operator-only revision 1 and the
+  // staging mark the seed also writes are lab:test-entitlement's): inserted once, a rerun
+  // is a no-op, a drifted file is refused, and no SET row persists.
   const termsRows = await stagingBillingTermsRows(repositoryRoot, "development");
   const seed = (rows) =>
     seedBillingTerms({

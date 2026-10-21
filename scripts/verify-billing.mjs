@@ -483,10 +483,13 @@ for (const d of decisions.consumed_decisions) {
 // JSON of {terms, offers}, and every published revision keeps its pinned digest: a change
 // is a new revision appended here deliberately. The beta subscription entry is USD 49 a
 // month with 300 credits (owner, 2026-10-19), test mode only before M6, and production has
-// no revision.
+// no revision. ADR-0022 item 5 amendment (owner decision (b), 2026-10-21): a development or
+// staging revision may carry one operator_test_entitlement entry, the beta plan's 300 test
+// credits with no price and no offer; a revision is either priced (at least one beta
+// subscription entry) or operator-only (staging's revision 1 while the Stripe switch is off).
 const publishedTermsDigests = Object.freeze({
   development: ["4c6ccd12dc283abcde21532208ecdabd6551865458c86ba5629b65d9c177e411"],
-  staging: [],
+  staging: ["88744622d6efbddb2136154fe11e8f4472e99519559c19d629d68e4199fed350"],
   production: [],
 });
 const termsFile = read("docs/decisions/billing-terms.json");
@@ -515,11 +518,25 @@ for (const [environment, revisions] of Object.entries(termsFile.environments ?? 
         const subscriptions = document.terms.entries.filter(
           (e) => e.route === "morrow_direct" && e.kind === "subscription_period",
         );
+        const operator = document.terms.entries.filter(
+          (e) => e.kind === "operator_test_entitlement",
+        );
         return (
           document.terms.termsRevision === index + 1 &&
           revision.digest === digest &&
           (index >= pinned.length || pinned[index] === digest) &&
-          subscriptions.length >= 1 &&
+          (subscriptions.length >= 1 ||
+            (operator.length === 1 && document.terms.entries.length === 1)) &&
+          operator.length <= 1 &&
+          (operator.length === 0 || environment !== "production") &&
+          operator.every(
+            (e) =>
+              e.route === "morrow_direct" &&
+              e.priceKey === "morrow:operator_plan:beta" &&
+              e.currency === "USD" &&
+              e.creditUnits === "300",
+          ) &&
+          document.offers.every((o) => !operator.some((e) => e.priceKey === o.priceKey)) &&
           document.terms.entries.every((e) => e.mode === "test") &&
           subscriptions.every(
             (e) =>

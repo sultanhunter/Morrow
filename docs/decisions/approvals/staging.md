@@ -27,6 +27,7 @@
 | E10 | Set the non-secret GitHub variables `STAGING_SCHEMA_HEAD`, `STAGING_LOGIN_CONFIGURATION_DIGEST` and `STAGING_DEPLOY_ENABLED`. | No cost | none needed |
 | E11 | **Suspended (ADR-0021, trimmed P04.T01i PR-B)** until the rollback refusal exists. Then: roll back a staging Worker within the packet's limits, never across a password, Turnstile or keyring rotation. Until then staging rolls forward, through a new green `main` commit, with the kill switch as the stop. | No cost | The tool refuses such a rollback (not built yet, so the effect is suspended) |
 | E12 | Run the kill switch at any time. `unkill` is allowed only while this card is active. | No cost | none needed |
+| E13 | **Added 2026-10-21 (see Amendments).** Run `npm run staging:test-entitlement` for one named staging workspace, **per action**: only after the owner approves that use in chat, and with a `docs/evidence/live/` record of the approval and the planned action committed to `main` before the run. It puts that workspace on the beta plan (300 test credits) without Stripe (ADR-0022 item 5 amendment). | No cost (database rows only) | The command needs this card, active and carrying E13, an approval reference of this card and effect, and the committed record naming that reference and the workspace; the database refuses outside a database marked staging, and a second use of an approval or a workspace |
 
 ## Preconditions for the first deploy (E1)
 
@@ -121,7 +122,7 @@ Each of these needs a per-action approval:
 - purchases and plan upgrades: GitHub Pro, an Actions budget above $0, Neon Launch, WorkOS paid features;
 - unlisted resources: R2, KV, Hyperdrive, further Workers, widgets, queues or Neon projects;
 - account-setting changes beyond E6, and any dashboard action other than E6;
-- the M4 entitlement seed;
+- the M4 entitlement seed (`TestEntitlementSeed`; E13's test entitlement is not it);
 - self-service beyond the owner's allowlist;
 - adopting any WorkOS test-login bypass;
 - every destructive deletion, which the owner runs.
@@ -152,3 +153,13 @@ Each of these needs a per-action approval:
 E1's sentence "Only the api is on workers.dev." now reads: "Only the api is on workers.dev; after M2 PR-2 has merged, `morrow-staging-connector` may be on workers.dev too, with the census admitting it only through M2's entrypoint allow table (`connector → ConnectorBroker`) and its rate-limit bindings pinned by verify-config." The broker and the orchestrator stay off workers.dev. Before the connector's hostname is enabled, `staging:kill` and its dashboard fallback must also turn off the connector's workers.dev hostname (today they cover the api only). The amendment creates no Shopify app, store or install: each app deploy, vault secret, registration and the development-store install still needs its own owner step or per-action approval (M2 brief, owner actions).
 
 Owner decision, 2026-10-21, in chat. The question was: "To test a Shopify install on staging, the connector Worker needs its own public workers.dev address. The staging approval card currently allows only the api to be public. Change the card?" The owner answered: "Approve card change (Recommended)". The option read: "Amend staging-card-1 E1 so `morrow-staging-connector` may also be on workers.dev, after M2 merges and only with M2's census rules. Nothing is installed until you create the Shopify app and development store."
+
+### 2026-10-21: E13, the staging test entitlement
+
+The card gains effect E13 (the row above): running `npm run staging:test-entitlement` for one named staging workspace, per action. Each use needs:
+- the owner's own approval in chat for that workspace. The approval reference names the card, the effect, the day of the owner's answer and its number that day, for example `staging-card-1.e13.2026-10-22.1`;
+- a live record, `docs/evidence/live/YYYY-MM-DD-neon-test-entitlement-<slug>.md`, committed to `main` before the run. It quotes the approval, names the reference and the workspace, and states the exact command; after the run it gets the outcome, the ids the command printed and the cleanup (none: the rows stay, and the entitlement ends after its 30-day period).
+
+The command runs as the work owner inside the administrator's own transaction (the ADR-0020 runner shape, the D4 SET-row protocol), like `seed-platform`. It refuses before any database effect without the active card carrying E13, an approval reference of this card and effect dated from this amendment to the day of the run, or the committed record naming that reference and the workspace; the database then refuses unless it is marked `staging`, and refuses a workspace that has a route, an account, a Stripe customer, a Stripe operation, a checkout or a receipt. Its first use needs `staging:migrate` (E3) to apply the migration, then `staging:seed-platform` (E3) to write the staging mark and staging's terms revision 1, the operator entitlement's 300 credits. It creates no provider resource, costs nothing and touches no merchant data. It is never a payment, and never runs in production.
+
+Owner decision, 2026-10-21, in chat. The question was: "Without Stripe, staging has no way to make a workspace 'paid', and only a paid workspace can link a Shopify store. How should a staging workspace get its beta plan?" The owner answered: "Staging test entitlement (Recommended)". The option read: "An operator command, approved and recorded per use, marks a named staging workspace as on the beta plan (300 test credits) without Stripe. Staging only: production still needs a real Stripe payment. Amends ADR-0022 item 5. Small new PR." The per-use approval and record are that option's "approved and recorded per use"; `docs/decisions/approvals/staging-card.json` records the amendment as `e13`.

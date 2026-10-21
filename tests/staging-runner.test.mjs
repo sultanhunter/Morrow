@@ -30,6 +30,7 @@ import {
   checkAdministrator,
   checkIdentity,
   customerResolutionInput,
+  grantTestEntitlement,
   ledgerDrift,
   morrowSetRowsQuery,
   neonConnector,
@@ -45,6 +46,8 @@ import {
   statementLoggingRefusal,
   statementStatsFacts,
   statementStatsVerificationQuery,
+  testEntitlementInput,
+  testEntitlementReport,
   wipeStatementStats,
 } from "../scripts/staging-runner.mjs";
 import {
@@ -60,6 +63,7 @@ import {
   connectAttemptTimeoutMs,
   main,
   mainPreconditions,
+  requireTestEntitlementApproval,
   stagingBillingTermsRows,
 } from "../scripts/staging.mjs";
 import { parseOwnerUrl } from "../scripts/staging-files.mjs";
@@ -2351,8 +2355,28 @@ test("billing terms seed: the published revisions, parsed and digest-checked bef
     JSON.stringify(file.environments.development[0].offers),
     file.environments.development[0].digest,
   ]);
-  // Staging has no revision until the owner's test-mode Price exists.
-  assert.deepEqual(await stagingBillingTermsRows(process.cwd(), "staging"), []);
+  // Staging's revision 1 (ADR-0022 item 5 amendment, 2026-10-21): only the operator test
+  // entitlement's entry, 300 test credits, no price and no offer; its priced revision
+  // follows the owner's test-mode Price.
+  const staging = await stagingBillingTermsRows(process.cwd(), "staging");
+  assert.deepEqual(staging, [
+    [
+      "1",
+      JSON.stringify(file.environments.staging[0].terms),
+      "[]",
+      file.environments.staging[0].digest,
+    ],
+  ]);
+  assert.deepEqual(file.environments.staging[0].terms.entries, [
+    {
+      route: "morrow_direct",
+      mode: "test",
+      priceKey: "morrow:operator_plan:beta",
+      kind: "operator_test_entitlement",
+      currency: "USD",
+      creditUnits: "300",
+    },
+  ]);
   const root = mkdtempSync(join(tmpdir(), "morrow-terms-"));
   try {
     mkdirSync(join(root, "docs/decisions"), { recursive: true });
@@ -2401,8 +2425,8 @@ test("billing terms seed: the published revisions, parsed and digest-checked bef
 test("billing terms seed: as the work owner, idempotent, refused on drift, D4 in createrole mode", async () => {
   const rows = await stagingBillingTermsRows(process.cwd(), "development");
   const administrator = Object.freeze({ name: "neondb_owner", mode: "createrole" });
-  const run = async (rules) => {
-    const db = fakeDatabase({ rules });
+  const run = async (rules, options = {}) => {
+    const db = fakeDatabase({ rules, ...options });
     const outcome = await seedBillingTerms({
       connect: db.connector().connect,
       binding: labBinding,
@@ -2415,7 +2439,12 @@ test("billing terms seed: as the work owner, idempotent, refused on drift, D4 in
     return { outcome, texts: db.statements.map((s) => s.text), statements: db.statements };
   };
   const fresh = await run([[/FROM morrow_billing\.billing_terms$/, [{ n: 0 }]]]);
-  assert.deepEqual(fresh.outcome, { termsRevisions: 1, termsInserted: 1 });
+  assert.deepEqual(fresh.outcome, {
+    termsRevisions: 1,
+    termsInserted: 1,
+    environment: "staging",
+    environmentMark: "inserted",
+  });
   const after = fresh.texts.slice(fresh.texts.indexOf("BEGIN"));
   assert.deepEqual(after.slice(0, 4), [
     "BEGIN",
@@ -2423,19 +2452,44 @@ test("billing terms seed: as the work owner, idempotent, refused on drift, D4 in
     "SET LOCAL ROLE morrow_work_owner",
     "LOCK TABLE morrow_billing.billing_terms IN SHARE ROW EXCLUSIVE MODE",
   ]);
-  const insert = fresh.statements.find((s) => s.text.startsWith("INSERT INTO morrow_billing"));
+  const insert = fresh.statements.find((s) =>
+    s.text.startsWith("INSERT INTO morrow_billing.billing_terms"),
+  );
   assert.deepEqual(insert.params, [...rows[0]]);
+  // The staging mark (0030), after the drift checks and before the first terms insert.
+  const mark = fresh.texts.findIndex((t) =>
+    t.startsWith("INSERT INTO morrow_billing.platform_environment"),
+  );
+  assert.deepEqual(fresh.statements[mark].params, ["staging"]);
+  const count = fresh.texts.indexOf("SELECT count(*)::int AS n FROM morrow_billing.billing_terms");
+  assert.ok(count > 0 && count < mark && mark < fresh.texts.indexOf(insert.text));
   assert.ok(
     after.indexOf("REVOKE morrow_work_owner FROM neondb_owner GRANTED BY neondb_owner") <
       after.indexOf("COMMIT"),
   );
   // Stored and equal: nothing written.
-  const same = await run([
-    [/FROM morrow_billing\.billing_terms$/, [{ n: 1 }]],
-    [/AS same FROM morrow_billing/, [{ same: "true" }]],
-  ]);
-  assert.deepEqual(same.outcome, { termsRevisions: 1, termsInserted: 0 });
+  const same = await run(
+    [
+      [/FROM morrow_billing\.billing_terms$/, [{ n: 1 }]],
+      [/AS same FROM morrow_billing/, [{ same: "true" }]],
+    ],
+    { platformEnvironment: "staging" },
+  );
+  assert.deepEqual(same.outcome, {
+    termsRevisions: 1,
+    termsInserted: 0,
+    environment: "staging",
+    environmentMark: "present",
+  });
   assert.ok(!same.texts.some((t) => t.startsWith("INSERT INTO morrow_billing")));
+  // A database marked otherwise is drift: nothing written, no COMMIT.
+  const marked = await run([[/FROM morrow_billing\.billing_terms$/, [{ n: 0 }]]], {
+    platformEnvironment: "development",
+  });
+  assert.equal(marked.outcome.code, "STAGING_SEED_DRIFT");
+  assert.deepEqual(marked.outcome.details, { table: "platform_environment" });
+  assert.ok(!marked.texts.includes("COMMIT"));
+  assert.ok(!marked.texts.some((t) => t.startsWith("INSERT INTO morrow_billing")));
   // A stored revision that differs, or one the file lacks: drift, no COMMIT.
   for (const rules of [
     [
@@ -2572,5 +2626,250 @@ test("cli: billing-customer-resolve needs the card, the committed evidence recor
     assert.equal(JSON.parse(proposed.err.at(-1)).code, "STAGING_CARD_INACTIVE");
   } finally {
     planted.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// The staging test entitlement (owner decision (b), 2026-10-21; ADR-0022 item 5 amendment;
+// card E13). PostgreSQL behaviour is qualified by lab:test-entitlement (pg-http).
+const entitlementInput = Object.freeze({
+  operatorId: "operator_owner",
+  workspaceId: "ws_staging_owner",
+  approvalRef: "staging-card-1.e13.2026-10-22.1",
+  evidenceRef: "docs/evidence/live/2026-10-22-neon-test-entitlement-owner.md",
+});
+const entitlementResult = Object.freeze({
+  entitlementId: "00000000-0000-4000-8000-0000000000e1",
+  organizationId: "org_staging_owner",
+  workspaceId: entitlementInput.workspaceId,
+  billingAccountId: "00000000-0000-4000-8000-0000000000a1",
+  creditUnits: "300",
+  termsRevision: "1",
+  periodStart: "2026-10-22T12:00:00.000Z",
+  periodEnd: "2026-11-21T12:00:00.000Z",
+  routeRevision: "2",
+});
+test("test-entitlement: closed input and result, the work owner under D4, committed only when granted or replayed", async () => {
+  assert.deepEqual(testEntitlementInput(entitlementInput), Object.values(entitlementInput));
+  for (const change of [
+    { operatorId: "" },
+    { workspaceId: "ws staging" },
+    { workspaceId: undefined },
+    { approvalRef: "staging-card-1.e13.2026-10-22" },
+    { approvalRef: "staging-card-1.e13.2026-10-22.0" },
+    { approvalRef: "Staging-Card-1.e13.2026-10-22.1" },
+    { approvalRef: "approved-in-chat" },
+    { evidenceRef: "docs/decisions/approvals/staging.md" },
+    { evidenceRef: "../docs/evidence/live/2026-10-22-x.md" },
+    { evidenceRef: "docs/evidence/live/2026-10-22-X.md" },
+  ])
+    assert.equal(
+      codeOf(() => testEntitlementInput({ ...entitlementInput, ...change })),
+      "STAGING_USAGE",
+      JSON.stringify(change),
+    );
+  const json = (value) => JSON.stringify(value);
+  assert.deepEqual(
+    testEntitlementReport(json(entitlementResult), entitlementInput.workspaceId),
+    entitlementResult,
+  );
+  for (const change of [
+    { workspaceId: "ws_other" },
+    { creditUnits: 300 },
+    { creditUnits: "0" },
+    { entitlementId: "operator" },
+    { periodEnd: entitlementResult.periodStart },
+    { extra: "x" },
+  ])
+    assert.equal(
+      codeOf(() =>
+        testEntitlementReport(
+          json({ ...entitlementResult, ...change }),
+          entitlementInput.workspaceId,
+        ),
+      ),
+      "STAGING_TEST_ENTITLEMENT_RESULT_INVALID",
+      JSON.stringify(change),
+    );
+  assert.equal(
+    codeOf(() => testEntitlementReport("not json", entitlementInput.workspaceId)),
+    "STAGING_TEST_ENTITLEMENT_RESULT_INVALID",
+  );
+  const administrator = Object.freeze({ name: "neondb_owner", mode: "createrole" });
+  const run = async (row) => {
+    const db = fakeDatabase({ rules: [[/operator_test_entitlement_grant/, [row]]] });
+    const outcome = await grantTestEntitlement({
+      connect: db.connector().connect,
+      binding: labBinding,
+      administrator,
+      input: entitlementInput,
+    }).then(
+      (done) => done,
+      (error) => error,
+    );
+    return { outcome, statements: db.statements, texts: db.statements.map((s) => s.text) };
+  };
+  for (const outcome of ["granted", "replayed"]) {
+    const done = await run({ outcome, result: json(entitlementResult) });
+    assert.deepEqual(done.outcome, { outcome, ...entitlementResult });
+    const after = done.texts.slice(done.texts.indexOf("BEGIN"));
+    assert.deepEqual(after.slice(0, 3), [
+      "BEGIN",
+      "GRANT morrow_work_owner TO neondb_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE",
+      "SET LOCAL ROLE morrow_work_owner",
+    ]);
+    const call = done.statements.find((s) => /operator_test_entitlement_grant/.test(s.text));
+    assert.deepEqual(call.params, Object.values(entitlementInput));
+    assert.ok(
+      after.indexOf("REVOKE morrow_work_owner FROM neondb_owner GRANTED BY neondb_owner") <
+        after.indexOf("COMMIT"),
+    );
+  }
+  // Any other outcome, or a result outside the closed shape, commits nothing.
+  for (const outcome of [
+    "approval_conflict",
+    "route_missing",
+    "route_conflict",
+    "stripe_conflict",
+    "terms_missing",
+    "not_staging",
+    "invalid",
+    "denied",
+    "surprise",
+  ]) {
+    const refused = await run({ outcome, result: null });
+    assert.equal(refused.outcome.code, "STAGING_TEST_ENTITLEMENT_REFUSED", outcome);
+    assert.deepEqual(refused.outcome.details, {
+      outcome: outcome === "surprise" ? "unknown" : outcome,
+    });
+    assert.ok(!refused.texts.includes("COMMIT"), outcome);
+  }
+  const malformed = await run({
+    outcome: "granted",
+    result: json({ ...entitlementResult, workspaceId: "ws_other" }),
+  });
+  assert.equal(malformed.outcome.code, "STAGING_TEST_ENTITLEMENT_RESULT_INVALID");
+  assert.ok(!malformed.texts.includes("COMMIT"));
+});
+
+test("test-entitlement: the card must carry E13 and the approval must name this card, E13 and a day since the amendment", () => {
+  const card = { ...approvedCard(), e13: { amendedOn: "2026-10-21" } };
+  const now = Date.parse("2026-10-22T12:00:00Z");
+  requireTestEntitlementApproval(card, "staging-card-1.e13.2026-10-22.1", now);
+  requireTestEntitlementApproval(card, "staging-card-1.e13.2026-10-21.12", now);
+  for (const e13 of [undefined, null, {}, { amendedOn: "soon" }, { amendedOn: "2026-10-01" }])
+    assert.equal(
+      codeOf(() =>
+        requireTestEntitlementApproval({ ...card, e13 }, "staging-card-1.e13.2026-10-22.1", now),
+      ),
+      "STAGING_CARD_EFFECT_MISSING",
+      JSON.stringify(e13),
+    );
+  for (const ref of [
+    "staging-card-2.e13.2026-10-22.1",
+    "staging-card-1.e7.2026-10-22.1",
+    "staging-card-1.e13.2026-10-20.1",
+    "staging-card-1.e13.2026-10-23.1",
+    "staging-card-1.e13.2026-13-40.1",
+    "nonsense",
+  ])
+    assert.equal(
+      codeOf(() => requireTestEntitlementApproval(card, ref, now)),
+      "STAGING_APPROVAL_INVALID",
+      ref,
+    );
+});
+
+test("cli: test-entitlement needs the card with E13, the committed record naming the approval and workspace, and main", async () => {
+  const planted = plantedHome({
+    "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
+  });
+  const root = mkdtempSync(join(tmpdir(), "morrow-test-entitlement-root-"));
+  const record = join(root, entitlementInput.evidenceRef);
+  mkdirSync(join(root, "docs/evidence/live"), { recursive: true });
+  const argv = [
+    "test-entitlement",
+    "--workspace",
+    entitlementInput.workspaceId,
+    "--approval",
+    entitlementInput.approvalRef,
+    "--record",
+    entitlementInput.evidenceRef,
+    "--operator",
+    entitlementInput.operatorId,
+  ];
+  const card = { ...approvedCard(), e13: { amendedOn: "2026-10-21" } };
+  const world = async (options = {}) => {
+    const fake = fakeTools(options.tools ?? {});
+    const { ctx, out, err } = await fakeContext({
+      home: planted.home,
+      root,
+      tools: fake.tools,
+      card: options.card ?? card,
+      now: Date.parse("2026-10-22T12:00:00Z"),
+    });
+    const db = fakeDatabase({
+      rules: [
+        [
+          /operator_test_entitlement_grant/,
+          [{ outcome: "granted", result: JSON.stringify(entitlementResult) }],
+        ],
+      ],
+    });
+    ctx.database = db.connector;
+    return { ctx, out, err, db, fake };
+  };
+  try {
+    for (const bad of [
+      argv.slice(0, -1),
+      [...argv, "--operator", "again"],
+      argv.map((a) => (a === entitlementInput.approvalRef ? "approved" : a)),
+      argv.map((a) => (a === "--record" ? "--evidence" : a)),
+    ]) {
+      const w = await world();
+      assert.equal(await main(bad, w.ctx), 2, bad.join(" "));
+      assert.equal(JSON.parse(w.err.at(-1)).code, "STAGING_USAGE");
+    }
+    // Before any database effect: the card, E13, the record and its contents.
+    const refusals = [
+      [
+        { card: { ...card, status: "proposed", approvedOn: null, expiresOn: null } },
+        "STAGING_CARD_INACTIVE",
+      ],
+      [{ card: approvedCard() }, "STAGING_CARD_EFFECT_MISSING"],
+      [{}, "STAGING_EVIDENCE_MISSING"],
+    ];
+    for (const [options, code] of refusals) {
+      const w = await world(options);
+      assert.equal(await main(argv, w.ctx), 1, code);
+      assert.equal(JSON.parse(w.err.at(-1)).code, code);
+      assert.deepEqual(w.db.statements, [], code);
+    }
+    writeFileSync(record, `Approval: ${entitlementInput.approvalRef}\n`);
+    const unnamed = await world();
+    assert.equal(await main(argv, unnamed.ctx), 1);
+    assert.equal(JSON.parse(unnamed.err.at(-1)).code, "STAGING_EVIDENCE_MISMATCH");
+    assert.deepEqual(unnamed.db.statements, []);
+    writeFileSync(
+      record,
+      `Approval: ${entitlementInput.approvalRef}\nWorkspace: ${entitlementInput.workspaceId}\n`,
+    );
+    const branch = await world({ tools: { git: { head: fakeSha("branch") } } });
+    assert.equal(await main(argv, branch.ctx), 1);
+    assert.equal(JSON.parse(branch.err.at(-1)).code, "STAGING_NOT_MAIN");
+    assert.deepEqual(branch.db.statements, []);
+    const ok = await world();
+    assert.equal(await main(argv, ok.ctx), 0);
+    assert.deepEqual(JSON.parse(ok.out.at(-1)), {
+      command: "test-entitlement",
+      outcome: "granted",
+      ...entitlementResult,
+      approvalRef: entitlementInput.approvalRef,
+      record: entitlementInput.evidenceRef,
+    });
+    assert.ok(ok.db.statements.some((s) => /operator_test_entitlement_grant/.test(s.text)));
+  } finally {
+    planted.cleanup();
+    rmSync(root, { recursive: true, force: true });
   }
 });

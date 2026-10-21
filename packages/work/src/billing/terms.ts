@@ -2,7 +2,10 @@ import type { CurrentBilling_BillingTerms } from "@morrow/contracts";
 import { parseBillingTerms } from "@morrow/policy/billing-state";
 import { stripeCanonicalJson, stripeSha256Hex } from "./stripe-objects.js";
 
-// Morrow's versioned terms table (R10; ADR-0022 item 11: US$49 a month with 300 credits).
+// Morrow's versioned terms table (R10; ADR-0022 item 11: US$49 a month with 300 credits;
+// item 5 as amended 2026-10-21: a development or staging revision may carry one
+// operator_test_entitlement entry, the beta plan's credits without a price, which only the
+// owner's operator path reads and which subscriptionEntry and the offers never match).
 // docs/decisions/billing-terms.json publishes each environment's revisions with their
 // display offers and pinned digests; staging:seed-platform writes them to
 // morrow_billing.billing_terms, the only source the definers and the api read.
@@ -59,7 +62,11 @@ export function subscriptionEntry(
 /**
  * Parses one revision's terms and offers: the terms through parseBillingTerms, and each
  * offer closed, priced in whole minor units, monthly and naming a morrow_direct
- * subscription entry in its own currency. At most 20 offers, one per price.
+ * subscription entry in its own currency. At most 20 offers, one per price, and at least
+ * one in a revision with a priced Morrow-direct subscription; only a revision without one
+ * has none (ADR-0022 item 5 amendment, 2026-10-21: staging's revision while the Stripe
+ * switch is off carries only the operator test entitlement's entry, which is never an
+ * offer).
  */
 export function parseTermsDocument(
   terms: unknown,
@@ -71,7 +78,11 @@ export function parseTermsDocument(
   } catch {
     return invalid();
   }
-  if (!Array.isArray(offers) || offers.length < 1 || offers.length > 20) return invalid();
+  const priced = parsed.entries.some(
+    (e) => e.route === "morrow_direct" && e.kind === "subscription_period",
+  );
+  if (!Array.isArray(offers) || offers.length > 20 || (priced && offers.length < 1))
+    return invalid();
   const list = offers.map((o): BillingOffer => {
     if (
       !plain(o) ||
