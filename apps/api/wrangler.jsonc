@@ -68,6 +68,13 @@
       "name": "morrow-staging-api",
       "workers_dev": true,
       "preview_urls": false,
+      // P04.T01i D1 (2026-10-21): targeted placement in the region of the committed Neon
+      // endpoint (staging.json neon.region_id aws-us-east-1; verify-config ties the two), so
+      // the database path's sequential round trips stay inside us-east-1 instead of crossing
+      // from the edge nearest the caller (the first deploy's SMOKE_DATABASE_PATH). The api
+      // opens the database sessions; the broker, which answers its lease RPCs, has the same
+      // placement. A performance setting: no binding, route, secret or trust boundary changes.
+      "placement": { "mode": "targeted", "region": "aws:us-east-1" },
       "observability": {
         "enabled": true,
         "head_sampling_rate": 1,
@@ -109,6 +116,8 @@
       ],
       "secrets": { "required": [] },
     },
+    // No placement in development (no hosted database) or production, which waits for its
+    // own database and region (verify-config requires the key absent outside staging).
     "production": {
       "name": "morrow-production-api",
       "vars": { "MORROW_ENVIRONMENT": "production" },

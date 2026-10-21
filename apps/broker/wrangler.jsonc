@@ -56,6 +56,11 @@
       "name": "morrow-staging-broker",
       "workers_dev": false,
       "preview_urls": false,
+      // P04.T01i D1 (2026-10-21): the api's placement, in the committed Neon endpoint's
+      // region (staging.json neon.region_id aws-us-east-1), so the role leases the api asks
+      // for on its database path are answered in the same region. A performance setting:
+      // no binding, route, secret or trust boundary changes.
+      "placement": { "mode": "targeted", "region": "aws:us-east-1" },
       "observability": {
         "enabled": true,
         "head_sampling_rate": 1,
@@ -94,6 +99,8 @@
     },
     // Production holds the vault until the production custody ADR (ADR-0007 item 9), so
     // it requires neither the vault login's password nor a KEK (brokerRequiredSecretsFor).
+    // No placement in development or production, which waits for its own database and
+    // region (verify-config requires the key absent outside staging).
     "production": {
       "name": "morrow-production-broker",
       "vars": { "MORROW_ENVIRONMENT": "production" },
