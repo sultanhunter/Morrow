@@ -10,6 +10,7 @@
 // PostgreSQL lab pass fakes for tools, the Cloudflare API and the database.
 import "./staging-token.mjs"; // FIRST: removes CLOUDFLARE_API_TOKEN and GH_TOKEN from process.env.
 import { appendFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
+import { setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -44,6 +45,7 @@ import {
   seedPlatform,
   sessionIdentity,
   checkIdentity,
+  statementStatsScratchDatabase,
 } from "./staging-runner.mjs";
 import { cloudflareCredential, githubCredential } from "./staging-token.mjs";
 import {
@@ -491,6 +493,15 @@ command("provision-roles", {
     const ownerUrl = ownerUrlFor(ctx, binding, specs);
     const roles = constants.roles;
     const connect = ctx.database({ ownerUrl, binding }).connect;
+    // The scratch database the statement-statistics wipe runs from (M-N3 as amended
+    // 2026-10-20): the same endpoint and administrator, never the binding database.
+    const scratch = {
+      database: statementStatsScratchDatabase,
+      connect: ctx.database({
+        ownerUrl,
+        binding: { ...binding, database: statementStatsScratchDatabase },
+      }).connect,
+    };
     if (options.mode === "first") {
       // One source of names: the file holds brokerRequiredSecrets exactly (the list gate 6
       // and the first deploy's file check use). The names are checked before any file is
@@ -533,6 +544,7 @@ command("provision-roles", {
           administrator: ctx.administrator,
           roles,
           passwordRoles: roles,
+          scratch,
         });
       } catch (error) {
         handle.abandon();
@@ -557,7 +569,14 @@ command("provision-roles", {
         versionId: null,
         now: ctx.now(),
       });
-      return { mode: "first", roles, file: "tmp/broker-secrets.json", controls: "verified" };
+      return {
+        mode: "first",
+        roles,
+        file: "tmp/broker-secrets.json",
+        controls: "verified",
+        passwordStorage: provisioned.passwordStorage,
+        statementStats: provisioned.statementStats,
+      };
     }
     const selected =
       options.target === "all" ? roles : roles.filter((role) => role === options.target);
@@ -573,6 +592,7 @@ command("provision-roles", {
       administrator: ctx.administrator,
       roles,
       passwordRoles: selected,
+      scratch,
     });
     const status = await brokerBulk(
       ctx,
@@ -587,7 +607,14 @@ command("provision-roles", {
     } finally {
       recordRotation(ctx.directory, names, { worker: "broker", versionId, now: ctx.now() });
     }
-    return { mode: "rotate", roles: selected, versionId, controls: "verified" };
+    return {
+      mode: "rotate",
+      roles: selected,
+      versionId,
+      controls: "verified",
+      passwordStorage: provisioned.passwordStorage,
+      statementStats: provisioned.statementStats,
+    };
   },
 });
 
@@ -1158,9 +1185,19 @@ command("neon-probe", {
   async run(ctx) {
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
+    // M-N3: the probe sends its plaintext in the binding's database (on the probe branch)
+    // and wipes the statistics from the scratch database, as provision-roles does.
+    let database = null;
+    if (config.bindingJson !== null)
+      try {
+        database = (await ctx.constants()).parseBinding(config.bindingJson).database;
+      } catch {
+        throw new StagingError("STAGING_BINDING_INVALID");
+      }
     return neonProbe(ctx, {
       staging: config.staging,
       administrator: ctx.administrator,
+      database,
       connectProbe: (url) => ctx.probeDatabase(url),
     });
   },
@@ -1383,7 +1420,19 @@ export function defaultContext() {
   return ctx;
 }
 
+// Node's happy-eyeballs connect (autoSelectFamily): each address attempt gets this long
+// before the next address is tried. Node's default (250 ms) is shorter than a connect
+// from the operator's network to Neon's us-east-1 endpoints, so every connection there
+// (TLS, the Neon driver's WebSocket, HTTPS) failed with ETIMEDOUT and the tools reported
+// STAGING_DATABASE_UNAVAILABLE; 3000 ms connected in about 575 ms (2026-10-20,
+// docs/evidence/live/2026-10-20-neon-probe-rerun.md). The connector's own deadlines
+// (25 s connect, 2 s end) still bound every attempt.
+export const connectAttemptTimeoutMs = 3000;
+
+// The CLI entry: the connect timeout is set before the context exists and before any
+// network call, so every connection this process opens uses it.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  setDefaultAutoSelectFamilyAttemptTimeout(connectAttemptTimeoutMs);
   const code = await main(process.argv.slice(2), defaultContext()).catch(() => {
     process.stderr.write(JSON.stringify({ code: "STAGING_INTERNAL_ERROR" }) + "\n");
     return 1;

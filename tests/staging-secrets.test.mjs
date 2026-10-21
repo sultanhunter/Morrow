@@ -7,7 +7,7 @@
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -395,20 +395,59 @@ function oneLine(run, stream) {
   assert.equal(other, "");
   return JSON.parse(text);
 }
-function noMarkers(run, extra = []) {
-  const secrets = [...everyMarker(), ...extra];
+// The one statement a role password may appear in (M-N3 as amended 2026-10-20, owner
+// decisions "Plaintext over TLS" and "Plaintext, then wipe stats"): its own role's ALTER
+// ROLE, as a literal, sent once. When a loaded pg_stat_statements is wiped, the
+// verification query in the scratch database receives only each password's SHA-256
+// digest, never the password.
+const passwordStatement =
+  /^ALTER ROLE (morrow_[a-z0-9_]+) WITH LOGIN CONNECTION LIMIT 10 PASSWORD '([A-Za-z0-9_-]{43})'$/;
+const verificationQuery = /pg_stat_statements_info/;
+const digest = (password) => createHash("sha256").update(password).digest("hex");
+// `passwords` maps role -> plaintext: each must be in exactly one statement, its own
+// ALTER ROLE, and nowhere else (stdout, stderr, argv, other SQL including the
+// verification, the report); its digest must be in the verification's parameter exactly
+// `verified` times (0 or 1).
+function noMarkers(run, extra = [], passwords = {}, { verified = 0 } = {}) {
+  const secrets = [...everyMarker(), ...extra, ...Object.values(passwords)];
   assert.deepEqual(contains(run.stdout, secrets), [], "stdout");
   assert.deepEqual(contains(run.stderr, secrets), [], "stderr");
   for (const call of run.dump?.calls ?? [])
     assert.deepEqual(contains(call.args.join(" "), secrets), [], call.tool + " argv");
-  for (const statement of run.dump?.statements ?? [])
-    assert.deepEqual(
-      contains(statement.text + JSON.stringify(statement.params), secrets),
-      [],
-      "sql",
-    );
+  const sent = Object.fromEntries(Object.keys(passwords).map((role) => [role, 0]));
+  const checked = Object.fromEntries(Object.keys(passwords).map((role) => [role, 0]));
+  for (const statement of run.dump?.statements ?? []) {
+    let text = statement.text + JSON.stringify(statement.params);
+    const [, role, password] = passwordStatement.exec(statement.text) ?? [];
+    if (role !== undefined && passwords[role] === password && statement.params.length === 0) {
+      sent[role]++;
+      text = statement.text.replace(password, "");
+    }
+    if (statement.database === "neondb" && verificationQuery.test(statement.text)) {
+      const listed = JSON.parse(statement.params[1]);
+      for (const [name, value] of Object.entries(passwords))
+        if (listed.includes(digest(value))) checked[name]++;
+    }
+    assert.deepEqual(contains(text, secrets), [], "sql");
+  }
+  for (const [role, count] of Object.entries(sent)) assert.equal(count, 1, role + " sent once");
+  for (const [role, count] of Object.entries(checked))
+    assert.equal(count, verified, role + " verified");
   assert.deepEqual(contains(JSON.stringify(run.dump?.reports ?? []), secrets), [], "report");
 }
+const sentPasswords = (run) =>
+  Object.fromEntries(
+    (run.dump?.statements ?? [])
+      .map((statement) => passwordStatement.exec(statement.text))
+      .filter(Boolean)
+      .map(([, role, password]) => [role, password]),
+  );
+const rolePasswords = (constants, secrets) =>
+  Object.fromEntries(
+    constants.roles
+      .filter((role) => constants.passwordSecret(role) in secrets)
+      .map((role) => [role, secrets[constants.passwordSecret(role)]]),
+  );
 
 test("AC07: failing and noisy tools, database errors and bad files never reach the output", () => {
   for (const [scenario, stream, code] of [
@@ -449,7 +488,8 @@ test("AC07: failing and noisy tools, database errors and bad files never reach t
   noMarkers(unreadable);
 });
 
-test("AC07: role passwords reach only the 0600 first-deploy file or `secret bulk` stdin", () => {
+test("AC07: role passwords reach only their ALTER ROLE, then the 0600 first-deploy file or `secret bulk` stdin", async () => {
+  const constants = await identityConstants();
   const first = runChild("provision-first");
   assert.equal(first.status, 0, first.stderr);
   assert.equal(oneLine(first, "stdout").file, "tmp/broker-secrets.json");
@@ -467,16 +507,58 @@ test("AC07: role passwords reach only the 0600 first-deploy file or `secret bulk
   assert.equal(secrets.STRIPE_RESTRICTED_KEY, "rk_test_" + markers.stripeKey);
   assert.equal(secrets.STRIPE_WEBHOOK_SECRET, "whsec_" + markers.stripeWebhook);
   assert.equal(Object.keys(secrets).length, 16);
-  noMarkers(first, passwords);
-  assert.equal(
-    first.dump.statements.filter((s) => /PASSWORD 'SCRAM-SHA-256\$4096:/.test(s.text)).length,
-    11,
-  );
+  noMarkers(first, [], rolePasswords(constants, secrets));
+  assert.deepEqual(sentPasswords(first), rolePasswords(constants, secrets));
+  assert.equal(first.dump.statements.filter((s) => / PASSWORD /.test(s.text)).length, 11);
+  assert.ok(first.dump.statements.every((s) => !s.text.includes("SCRAM-SHA-256$")));
 
   const failed = runChild("provision-first-sql-error");
   assert.equal(failed.status, 1);
   assert.equal(failed.brokerFile, null, "the reserved file is removed when provisioning fails");
-  noMarkers(failed);
+  // The refused statement carried a plaintext; the server's error (with markers) and that
+  // plaintext stay out of every output.
+  assert.equal(Object.keys(sentPasswords(failed)).length, 1);
+  noMarkers(failed, [], sentPasswords(failed));
+
+  // Neon's shape: the wipe and its verification run from the scratch database; each
+  // password's digest (never the password) is that query's bind parameter once, and the
+  // report carries only counts.
+  const neon = runChild("provision-first-neon");
+  assert.equal(neon.status, 0, neon.stderr);
+  assert.deepEqual(oneLine(neon, "stdout").statementStats, {
+    recording: true,
+    wiped: true,
+    entriesRemaining: 0,
+  });
+  const neonSecrets = JSON.parse(neon.brokerFile);
+  noMarkers(neon, [], rolePasswords(constants, neonSecrets), { verified: 1 });
+  assert.deepEqual(sentPasswords(neon), rolePasswords(constants, neonSecrets));
+  // A residue stops the rotation before `secret bulk`; a failing reset's server text
+  // (with markers) never reaches the output.
+  const residue = runChild("provision-rotate-residue");
+  assert.equal(residue.status, 1);
+  assert.deepEqual(oneLine(residue, "stderr"), {
+    command: "provision-roles",
+    code: "STAGING_STATEMENT_STATS_RESIDUE",
+    stage: "verify",
+    entriesRemaining: 3,
+    fullReset: true,
+    sameInstance: true,
+  });
+  assert.equal(residue.dump.bulkInputs.length, 0);
+  noMarkers(residue, [], sentPasswords(residue), { verified: 1 });
+  const wipeError = runChild("provision-first-wipe-error");
+  assert.equal(wipeError.status, 1);
+  assert.deepEqual(oneLine(wipeError, "stderr"), {
+    command: "provision-roles",
+    code: "STAGING_STATEMENT_STATS_RESIDUE",
+    stage: "reset",
+    entriesRemaining: null,
+    fullReset: null,
+    sameInstance: null,
+  });
+  assert.equal(wipeError.brokerFile, null);
+  noMarkers(wipeError, [], sentPasswords(wipeError));
 
   const rotate = runChild("provision-rotate");
   assert.equal(rotate.status, 0, rotate.stderr);
@@ -484,9 +566,10 @@ test("AC07: role passwords reach only the 0600 first-deploy file or `secret bulk
   assert.equal(result.roles.length, 11);
   assert.match(result.versionId, /^[0-9a-f-]{36}$/);
   assert.equal(rotate.dump.bulkInputs.length, 1);
-  const delivered = Object.values(JSON.parse(rotate.dump.bulkInputs[0].input));
-  assert.equal(delivered.length, 11);
-  noMarkers(rotate, delivered);
+  const deliveredSecrets = JSON.parse(rotate.dump.bulkInputs[0].input);
+  assert.equal(Object.keys(deliveredSecrets).length, 11);
+  noMarkers(rotate, [], rolePasswords(constants, deliveredSecrets));
+  assert.deepEqual(sentPasswords(rotate), rolePasswords(constants, deliveredSecrets));
   const bulk = rotate.dump.calls.find((c) => c.tool === "wrangler" && c.args[1] === "bulk");
   assert.deepEqual(bulk.args, [
     "secret",
@@ -505,7 +588,11 @@ test("AC07: role passwords reach only the 0600 first-deploy file or `secret bulk
     code: "STAGING_ROTATION_PARTIAL",
     status: 1,
   });
-  noMarkers(partial, Object.values(JSON.parse(partial.dump.bulkInputs[0]?.input ?? "{}")));
+  // The failing `secret bulk` recorded no input: the password is read back from its
+  // ALTER ROLE statement, the one place it was sent.
+  const partialSent = sentPasswords(partial);
+  assert.deepEqual(Object.keys(partialSent), ["morrow_api"]);
+  noMarkers(partial, [], partialSent);
 
   const put = runChild("put-secret");
   assert.equal(put.status, 0, put.stderr);
@@ -577,9 +664,38 @@ test("AC07: turnstile-create, the Neon probe, the kill and the deploy never prin
   const probe = runChild("neon-probe");
   assert.equal(probe.status, 0, probe.stderr);
   const report = oneLine(probe, "stdout");
-  assert.deepEqual(report.mN3, { verifierAccepted: false, sqlstate: "XX000" });
+  assert.equal(report.mN3.verifierAccepted, false);
+  assert.equal(report.mN3.verifierSqlstate, "XX000");
+  assert.equal(report.mN3.verifierRefusal, "neon_plaintext_only");
+  assert.equal(report.mN3.plaintextAccepted, true);
   assert.equal(report.mN1.revokeSqlstate, "XX000");
-  noMarkers(probe);
+  // The generated plaintext was sent once and is in no output.
+  const plaintexts = probe.dump.probeStatements
+    .map(
+      (s) =>
+        /^ALTER ROLE morrow_probe_[0-9a-f]{8} WITH LOGIN PASSWORD '([A-Za-z0-9_-]{43})'$/.exec(
+          s.text,
+        )?.[1],
+    )
+    .filter(Boolean);
+  assert.equal(plaintexts.length, 1);
+  noMarkers(probe, plaintexts);
+  assert.ok(!(probe.stdout + probe.stderr).includes("control plane"));
+  // Neon's shape: the wipe from neondb verified the plaintext's absence with only its
+  // digest as a bind parameter; a failing stored-form read (with markers) is recorded as
+  // "error", and the measurements survive it.
+  assert.deepEqual(report.mN3.wipe, { wiped: true, entriesRemaining: 0 });
+  assert.equal(report.mN3.storedForm, "error");
+  assert.equal(report.mN3.targetExtension, false);
+  const carrying = probe.dump.probeStatements.filter((s) =>
+    (s.text + JSON.stringify(s.params)).includes(plaintexts[0]),
+  );
+  assert.equal(carrying.length, 1);
+  assert.equal(carrying[0].database, "morrow");
+  const verification = probe.dump.probeStatements.filter((s) => verificationQuery.test(s.text));
+  assert.equal(verification.length, 1);
+  assert.equal(verification[0].database, "neondb");
+  assert.deepEqual(JSON.parse(verification[0].params[1]), [digest(plaintexts[0])]);
   // A kill with every tool failing and a failing fetch still prints one closed line.
   const kill = runChild("kill-failing");
   assert.equal(kill.status, 1);

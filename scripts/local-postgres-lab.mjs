@@ -81,14 +81,22 @@ export function containerCommand(args, input, allowFailure = false) {
   }
   return result;
 }
-export async function localPostgresLab(packet, use) {
+// The only libraries a lab may preload: pg_stat_statements, the module Neon preloads
+// (lab:staging-runner proves the M-N3 statistics wipe against it).
+const reviewedPreloadLibraries = Object.freeze(["pg_stat_statements"]);
+export async function localPostgresLab(packet, use, { sharedPreloadLibraries = [] } = {}) {
   const config = JSON.parse(readFileSync("infra/local-engine.json", "utf8"));
   if (
     !/^postgres@sha256:[a-f0-9]{64}$/.test(config.image) ||
     config.major !== 17 ||
-    config.user !== "999:999"
+    config.user !== "999:999" ||
+    !Array.isArray(sharedPreloadLibraries) ||
+    !sharedPreloadLibraries.every((name) => reviewedPreloadLibraries.includes(name))
   )
     throw Error("UNREVIEWED_ENGINE_PROFILE");
+  const preload = sharedPreloadLibraries.length
+    ? ["-c", "shared_preload_libraries=" + sharedPreloadLibraries.join(",")]
+    : [];
   // Pull before creating a container, so a slow registry cannot leave an
   // unknown running container ID after the short execution timeout.
   if (containerCommand(["image", "inspect", config.image], undefined, true).status !== 0) {
@@ -143,6 +151,7 @@ export async function localPostgresLab(packet, use) {
       "log_min_error_statement=panic",
       "-c",
       "log_error_verbosity=terse",
+      ...preload,
     ]).stdout.trim();
     if (!/^[a-f0-9]{64}$/.test(id)) throw Error("INVALID_OWNED_CONTAINER");
     const sql = (text, database = "morrow_lab") =>
