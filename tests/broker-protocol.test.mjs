@@ -250,3 +250,111 @@ test("the lease grant has closed keys and the pool's password rules", () => {
   assert.equal(brokerPasswordValid("x".repeat(16)), true);
   assert.throws(() => encodeNeonLeaseGrant("x"), /BROKER_PROTOCOL_INVALID/);
 });
+
+// M2 PR-2: the ConnectorBroker Shopify verdicts are closed JSON strings, encoded by the
+// broker and decoded by the connector with the same rules; anything else is refused.
+test("Shopify verdicts: closed shapes both ways; no secret, token or extra field crosses", async () => {
+  const {
+    brokerRequiredSecretsFor: required,
+    decodeShopifyInstallResult,
+    decodeShopifyLaunchVerdict,
+    decodeShopifyWebhookVerdict,
+    encodeShopifyInstallResult,
+    encodeShopifyLaunchVerdict,
+    encodeShopifyWebhookVerdict,
+    shopifyLimits,
+  } = await import("../packages/identity/src/broker-protocol.ts");
+  // No broker secret name is added for Shopify: app secrets and tokens are vault rows.
+  assert.equal(required("development").length, 14);
+  assert.equal(required("production").length, 12);
+  assert.ok(!required("development").some((name) => name.startsWith("SHOPIFY_")));
+  assert.deepEqual(
+    { ...shopifyLimits },
+    {
+      queryMaxBytes: 2048,
+      webhookBodyMaxBytes: 262144,
+      webhookHeadersMaxBytes: 4096,
+      budgetMaxMs: 10000,
+      timestampToleranceSeconds: 90,
+      verdictMaxBytes: 8192,
+    },
+  );
+  const launch = {
+    verdict: "verified",
+    shop: "dev-1.myshopify.com",
+    installation: "unlinked",
+    workspaceId: "ws_1",
+  };
+  assert.deepEqual(decodeShopifyLaunchVerdict(encodeShopifyLaunchVerdict(launch)), launch);
+  assert.deepEqual(decodeShopifyLaunchVerdict(encodeShopifyLaunchVerdict({ verdict: "refused" })), {
+    verdict: "refused",
+  });
+  for (const bad of [
+    { ...launch, shop: "evil.example.com" },
+    { ...launch, installation: "active" },
+    { ...launch, workspaceId: "../x" },
+  ])
+    assert.throws(() => encodeShopifyLaunchVerdict(bad), /BROKER_PROTOCOL_INVALID/);
+  for (const text of [
+    "{}",
+    JSON.stringify({
+      schemaVersion: 1,
+      verdict: "refused",
+      shop: "a.myshopify.com",
+      installation: null,
+      workspaceId: null,
+    }),
+    JSON.stringify({ schemaVersion: 1, ...launch, extra: 1 }),
+    JSON.stringify({ schemaVersion: 2, ...launch }),
+    '{"schemaVersion":1,"verdict":"verified","verdict":"refused","shop":null,"installation":null,"workspaceId":null}',
+  ])
+    assert.throws(() => decodeShopifyLaunchVerdict(text), /BROKER_PROTOCOL_INVALID/, text);
+  const token = "A".repeat(42) + "w";
+  const installed = { outcome: "installed", workspaceId: "ws_1", continuationToken: token };
+  assert.deepEqual(decodeShopifyInstallResult(encodeShopifyInstallResult(installed)), installed);
+  assert.deepEqual(
+    decodeShopifyInstallResult(
+      encodeShopifyInstallResult({
+        outcome: "reauthorised",
+        workspaceId: "ws_1",
+        continuationToken: null,
+      }),
+    ).continuationToken,
+    null,
+  );
+  for (const outcome of [
+    "refused",
+    "state_invalid",
+    "scopes_mismatch",
+    "store_not_development",
+    "exchange_uncertain",
+    "outcome_unknown",
+  ])
+    assert.equal(
+      decodeShopifyInstallResult(
+        encodeShopifyInstallResult({ outcome, workspaceId: null, continuationToken: null }),
+      ).outcome,
+      outcome,
+    );
+  for (const bad of [
+    { outcome: "refused", workspaceId: "ws_1", continuationToken: null },
+    { outcome: "installed", workspaceId: null, continuationToken: null },
+    { outcome: "installed", workspaceId: "ws_1", continuationToken: "short" },
+    { outcome: "stored", workspaceId: null, continuationToken: null },
+  ])
+    assert.throws(() => encodeShopifyInstallResult(bad), /BROKER_PROTOCOL_INVALID/);
+  const webhook = {
+    verdict: "verified",
+    topic: "customers/redact",
+    shopDomain: "dev-1.myshopify.com",
+    webhookId: "b54557e4-bdd9-4b37-8a5f-bf7d70bcd043",
+    minimisedBody: { shopId: "1", customerDigest: "a".repeat(64) },
+  };
+  assert.deepEqual(decodeShopifyWebhookVerdict(encodeShopifyWebhookVerdict(webhook)), webhook);
+  for (const bad of [
+    { ...webhook, topic: "orders/create" },
+    { ...webhook, minimisedBody: { email: "a@b.test" } },
+    { ...webhook, minimisedBody: { shopId: "1", note: "free text with spaces" } },
+  ])
+    assert.throws(() => encodeShopifyWebhookVerdict(bad), /BROKER_PROTOCOL_INVALID/);
+});

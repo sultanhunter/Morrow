@@ -16,8 +16,18 @@ import {
   type WorkspacePort,
 } from "@morrow/workspace-ui";
 import { challengedIn } from "./challenge";
-import { createSeed, fixtureOrganizationName, fixtureWorkspace, people } from "./seed";
-import { scenarios, uncomposedIn, type ScenarioName } from "./scenarios";
+import {
+  createSeed,
+  fixtureConnection,
+  fixtureCsrfToken,
+  fixtureHandoffToken,
+  fixtureInstallUrl,
+  fixtureOrganizationName,
+  fixtureStore,
+  fixtureWorkspace,
+  people,
+} from "./seed";
+import { scenarios, uncomposedIn, unlinkedStoreIn, type ScenarioName } from "./scenarios";
 
 /** Present in every fixture bundle; `verify:workspace-web` fails a dist that holds it. */
 export const fixtureCanary = "MORROW_FIXTURE_BUILD_CANARY";
@@ -94,6 +104,14 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
       return outcome;
     });
   }
+  // M2 PR-2: an unlinked sample store, with the install link offered; a link applies once
+  // per key (preview, apply and status share the handoff's key, so results are per route).
+  if (unlinkedStoreIn.includes(scenario))
+    seed.connections = {
+      installations: [fixtureConnection("unlinked")],
+      installLink: { offered: true, url: fixtureInstallUrl, reason: "offered" },
+    };
+  const linkResults = new Map<string, "applied">();
   const ws = (id: string) => id === fixtureWorkspace.id;
   const task = (id: string) => seed.tasks.find((t) => t.id === id);
   const question = (id: string) => seed.questions.find((q) => q.id === id);
@@ -300,5 +318,44 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
         }),
     },
     people: { list: () => Promise.resolve({ kind: "not_in_build" }) },
+    connections: {
+      list: (id) =>
+        reply("connections.list", () =>
+          ws(id)
+            ? ok({
+                installations: [...seed.connections.installations],
+                installLink: seed.connections.installLink,
+              })
+            : { kind: "unauthenticated" },
+        ),
+    },
+    storeLinks: {
+      preview: (id, c) =>
+        reply("storeLinks.preview", () => {
+          const unlinked = seed.connections.installations.find((i) => i.status === "unlinked");
+          if (!ws(id) || c.body.handoffToken !== fixtureHandoffToken || !unlinked)
+            return linkResults.has(c.key)
+              ? ok({ installationId: fixtureStore.installationId, csrfToken: fixtureCsrfToken })
+              : notFound;
+          return ok({ installationId: unlinked.installationId, csrfToken: fixtureCsrfToken });
+        }),
+      apply: (id, c, csrf) =>
+        reply("storeLinks.apply", () => {
+          if (!ws(id) || csrf !== fixtureCsrfToken)
+            return { kind: "denied", message: "", reference: null };
+          if (linkResults.has(c.key)) return ok({ outcome: "applied" as const }, true);
+          if (c.body.handoffToken !== fixtureHandoffToken) return notFound;
+          linkResults.set(c.key, "applied");
+          seed.connections = {
+            installations: [fixtureConnection("linked")],
+            installLink: { offered: false, url: null, reason: "linked" },
+          };
+          return ok({ outcome: "applied" as const });
+        }),
+      status: (id, c) =>
+        reply("storeLinks.status", () =>
+          ws(id) && linkResults.has(c.key) ? ok({ outcome: "applied" as const }) : notFound,
+        ),
+    },
   };
 }

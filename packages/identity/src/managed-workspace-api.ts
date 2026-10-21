@@ -4,11 +4,16 @@ import { createWorkersManagedLoginHandler } from "./managed-login-request.js";
 import { createWorkersManagedWorkspaceHandler } from "./managed-workspace-request.js";
 import type { ManagedLoginDependencies, FixedWorkosLoginPort } from "./standalone-login.js";
 import { standaloneJson } from "./standalone-request-guard.js";
+import type { ConnectionKernel } from "./shopify-link-issuer.js";
 
 export interface ManagedWorkspaceApiDependencies {
   readonly login: ManagedLoginDependencies;
   readonly workspaceConfigurationJson: string;
   readonly logoutConfigurationJson: string;
+  // M2 PR-2: the connection kernel (governance.connection.connect administer), composed by
+  // the api from @morrow/policy. Without it no Shopify handoff is issued and no install
+  // link is offered.
+  readonly connections?: ConnectionKernel;
 }
 type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
 const invalid = () => Error("MANAGED_WORKSPACE_API_CONFIGURATION_INVALID");
@@ -57,7 +62,14 @@ export function createWorkersManagedWorkspaceApi(dependencies?: ManagedWorkspace
         "login",
         "workspaceConfigurationJson",
         "logoutConfigurationJson",
+        ...(Object.hasOwn(dependencies, "connections") ? ["connections"] : []),
       ]);
+      if (d.connections !== undefined && typeof d.connections !== "function") throw invalid();
+      const trustedConnections = d.connections as ConnectionKernel | undefined;
+      const connections = trustedConnections
+        ? (facts: Parameters<ConnectionKernel>[0]) =>
+            Reflect.apply(trustedConnections, undefined, [facts]) as ReturnType<ConnectionKernel>
+        : undefined;
       const l = ownRecord(d.login, [
         "configurationJson",
         "capsuleKeyringJson",
@@ -104,7 +116,12 @@ export function createWorkersManagedWorkspaceApi(dependencies?: ManagedWorkspace
       });
       configured = Object.freeze({
         login: createWorkersManagedLoginHandler(login),
-        workspace: createWorkersManagedWorkspaceHandler({ binding, credentialBroker, now }),
+        workspace: createWorkersManagedWorkspaceHandler({
+          binding,
+          credentialBroker,
+          now,
+          ...(connections ? { connections } : {}),
+        }),
       });
     } catch {
       throw invalid();

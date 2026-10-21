@@ -12,9 +12,11 @@
 //   createrole-administrator.mjs), the hosted-shape provisioning, then the last entry
 //   through a kill before COMMIT and a lost acknowledgement, a superseded digest, and a
 //   planted SET row; zero Morrow SET rows and closed memberships at rest.
-// The chain runs through its head (M2 PR-1: 0019-0024), so provisioning covers the eleven
-// broker logins, the vault login included, and the first-deploy file the fourteen broker
-// names, with the owner's vault KEK read from its planted file (`vault-kek-v1`).
+// The chain runs through its head (M2 PR-1: 0019-0024; M2 PR-2: 0025-0027, which add no
+// login and replay after provisioning while origin/main ends at 0024), so provisioning
+// covers the eleven broker logins, the vault login included, and the first-deploy file the
+// fourteen broker names, with the owner's vault KEK read from its planted file
+// (`vault-kek-v1`).
 // Provisioning sends each generated plaintext once, in its own ALTER ROLE (P04.T01i M-N3
 // as amended 2026-10-20: Neon takes only plaintexts), after refusing a database whose
 // statistics cannot be read or hold the extension, non-SCRAM storage, statement logging

@@ -280,6 +280,13 @@ export const bridgeFunctions = Object.freeze([
   "work_lease_member_current(text,text,text,text)",
   // M2 PR-1 review (0022): the website-signup fact behind route_signup.
   "work_signup_workspace(text,text)",
+  // M2 PR-2 (0026): the vault login's identity bridges, called only by 0027's vault
+  // definers, and the shared store-installation read for the work and billing definers.
+  "work_shopify_install_prepare(text,text,text,text)",
+  "work_shopify_install_record(text,text,text,text,text,text,text,text,text,text,text,text)",
+  "work_shopify_launch(text,text)",
+  "work_shopify_state_claim(text,text)",
+  "work_store_installations(text,text)",
 ]);
 // M2 PR-1 (0020): the two schemas the work owner creates beside morrow_work. The billing
 // route is tenant-readable with one extra insert policy for the signup bridge; the vault
@@ -306,7 +313,8 @@ export const billingTables = Object.freeze({
   workspace_billing_routes: {
     class: "tenant_readable",
     parents: ["morrow_identity.workspaces"],
-    policies: ["route_signup"],
+    // M2 PR-2 (0025): route_link_read, the linking rule's one-row read.
+    policies: ["route_link_read", "route_signup"],
     content: "none",
     ...aclSpec(
       ["INSERT", "SELECT"],
@@ -336,6 +344,14 @@ export const billingFunctions = Object.freeze({
     tenantParameters: ["p_organization_id", "p_workspace_id"],
   },
   "route_guard()": { kind: "trigger", grantees: [] },
+  // M2 PR-2 (0025): the linking rule's route read (ADR-0022 item 5), called by the
+  // identity-owned linking definers with the tenant of the handoff, continuation or
+  // session they hold.
+  "link_route_current(text,text)": {
+    kind: "bridge_in",
+    grantees: ["morrow_identity_owner"],
+    tenantParameters: ["p_org", "p_ws"],
+  },
 });
 export const vaultTables = Object.freeze({
   app_secrets: {
@@ -345,12 +361,17 @@ export const vaultTables = Object.freeze({
     content: "none",
     ...aclSpec(["SELECT"]),
   },
+  // M2 PR-2 (0027): the first writer. The broker's install definer inserts a version and
+  // destroys the active one (the only update vault_guard admits erases the key material).
   credentials: {
     class: "vault_tenant",
     parents: ["morrow_identity.workspaces"],
     policies: [],
     content: "store",
-    ...aclSpec(["SELECT"]),
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["destroy_reason", "destroyed_at", "sealed_value", "status", "wrapped_key"],
+    ),
   },
 });
 // S7 (M2 PR-2a): the roles granted USAGE on each schema S7 covers, besides its owner.
@@ -363,6 +384,15 @@ export const vaultFunctions = Object.freeze({
   "app_secret_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "app_secret_put(text,text,text,text)": { kind: "operator", grantees: [] },
   "vault_guard()": { kind: "trigger", grantees: [] },
+  // M2 PR-2 (0027): the Shopify launch and callback definers of the broker's own login.
+  "shopify_callback_claim(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_install_prepare(text,text,text,text)": {
+    kind: "vault",
+    grantees: ["morrow_vault_broker"],
+  },
+  "shopify_install_store(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)":
+    { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "shopify_launch_context(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
 });
 // M2 PR-1 review (P09.T05a; spine §11): the content class of every morrow_identity table,
 // so the store-content cleanup contract (S8, tests/redaction-handlers.test.mjs) covers the
@@ -386,6 +416,10 @@ export const identityTables = Object.freeze({
   browser_session_generations: { content: "none" },
   grants: { content: "none" },
   identity_verification_profiles: { content: "none" },
+  // M2 PR-2 (0026): continuation and state digests, the app registry (the intended shop as
+  // a digest; its install link names the shop) and the installations, whose shop domain
+  // and id are shop identity.
+  install_continuations: { content: "none" },
   // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
   linking_candidates: { content: "store" },
   linking_handoffs: { content: "none" },
@@ -409,6 +443,11 @@ export const identityTables = Object.freeze({
   // the operator's reason for an enrollment switch
   self_service_revisions: { content: "workspace" },
   sessions: { content: "none" },
+  // the install link names the shop (M2 PR-2 review; retirement and shop/redact clear it)
+  shopify_apps: { content: "store" },
+  shopify_oauth_states: { content: "none" },
+  // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
+  store_installations: { content: "store" },
   workspace_link_results: { content: "none" },
   workspace_memberships: { content: "none" },
   workspace_revocation_receipts: { content: "none" },
@@ -419,14 +458,22 @@ export const identityTables = Object.freeze({
 // The three membership-free executor logins (ADR-0022 item 8) and the functions each
 // may execute, across every schema.
 export const executorLogins = Object.freeze({
-  morrow_connector_ingress: [],
+  // M2 PR-2 (0026): the connector's one definer, in the identity schema.
+  morrow_connector_ingress: ["morrow_identity.connector_oauth_state_open(text,text,text)"],
   morrow_runtime_executor: [
     "morrow_work.enter_lease(text,text)",
     "morrow_work.lease_mark_started()",
     "morrow_work.lease_release()",
     "morrow_work.pending_starts()",
   ],
-  morrow_vault_broker: ["morrow_vault.app_secret_get(text)"],
+  morrow_vault_broker: [
+    "morrow_vault.app_secret_get(text)",
+    // M2 PR-2 (0027).
+    "morrow_vault.shopify_callback_claim(text,text)",
+    "morrow_vault.shopify_install_prepare(text,text,text,text)",
+    "morrow_vault.shopify_install_store(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)",
+    "morrow_vault.shopify_launch_context(text,text)",
+  ],
 });
 export const workDomains = Object.freeze(["record_id", "revision", "digest"]);
 // Non-tenant schemas outside the manifest. The staging runner's ledger (ADR-0019 item 12)

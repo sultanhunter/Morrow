@@ -180,6 +180,66 @@ export const copy = {
     cancelled: "This question was cancelled.",
     expired: "This question expired.",
   },
+  // M2 PR-2: the store connections screens and the install-continuation link step.
+  connections: {
+    title: "Connections",
+    storesTitle: "Stores",
+    noStores: "No store is connected to this workspace yet.",
+    installTitle: "Connect your Shopify store",
+    installOffered:
+      "Install the Morrow app on your development store from its private install link. Shopify then sends you back here to finish connecting.",
+    installLink: "Open the install link",
+    installLinkNote: "Opens Shopify in a new tab.",
+    installReason: {
+      linked: "This workspace already has a connected store.",
+      not_permitted: "Only the workspace owner sees the install link.",
+      not_registered:
+        "Your store's install link isn't ready yet. Morrow sets it up for each beta store.",
+      route_not_ready: "Subscribe before connecting a store.",
+    },
+    scopes: "Access",
+    scopeLabels: {
+      read_products: "Read products",
+      write_products: "Edit products",
+    } as Readonly<Record<string, string>>,
+    updated: "Updated",
+    viewConnection: (shop: string) => `View ${shop}`,
+    // Shown on signed-in screens: the reader is already signed in (M2 PR-2 review).
+    finishFromShopify: "Reopen Morrow from your Shopify admin to finish connecting.",
+    // For a reader who cannot finish the link (only the owner links a store).
+    finishByOwner: "The workspace owner needs to finish connecting this store.",
+    linkTitle: "Finish connecting your store",
+    checking: "Checking this connection…",
+    confirm: (shop: string) => `Link ${shop} to this workspace?`,
+    confirmUnknownShop: "Link this store to this workspace?",
+    confirmBody:
+      "Morrow can then read your products and propose listing changes for your approval. Nothing is published without your approval.",
+    link: "Link store",
+    linking: "Linking…",
+    notNow: "Not now",
+    linked: "Store linked.",
+    linkDenied:
+      "Morrow couldn't link this store. Nothing was changed. Reopen Morrow from your Shopify admin to try again.",
+    linkExpired:
+      "This connection link expired or was already used. Reopen Morrow from your Shopify admin to get a new one.",
+    routeRequired: "Subscribe before connecting a store.",
+    routeRequiredBody: "Linking a store needs an active Morrow subscription. Nothing was changed.",
+    linkRefused:
+      "This request was refused. Nothing was changed. Reopen Morrow from your Shopify admin and try again.",
+    linkConflict: "This link request didn't match an earlier one. Nothing was changed.",
+    notLinkedYet: "The store isn't linked yet. You can link it now.",
+    detailTitle: "Connection",
+    back: "Back to Connections",
+    shop: "Store",
+    status: "Status",
+    statusHelp: {
+      unlinked: "Installed on Shopify, not linked to this workspace yet.",
+      linked: "Linked to this workspace.",
+      suspended: "Paused. Morrow doesn't use this store until it resumes.",
+      uninstalled: "The app was uninstalled from Shopify. Reinstall it to reconnect.",
+    } as Readonly<Record<string, string>>,
+    disconnectLater: "Disconnecting a store isn't available in this build.",
+  },
   outcome: {
     uncertain:
       "We couldn't confirm whether this was saved. Check again before doing anything else.",
@@ -237,6 +297,12 @@ export const copy = {
       cancelled: "Cancelled",
     },
     question: { open: "Open", answered: "Answered", cancelled: "Cancelled", expired: "Expired" },
+    installation: {
+      unlinked: "Not linked",
+      linked: "Connected",
+      suspended: "Paused",
+      uninstalled: "Reinstall needed",
+    },
   },
 } as const;
 

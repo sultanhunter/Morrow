@@ -4,5 +4,5 @@
     "lib": ["ES2022"],
     "types": []
   },
-  "include": ["worker/placeholder.ts", "worker-configuration.d.ts"]
+  "include": ["worker/**/*.ts", "worker-configuration.d.ts"]
 }
