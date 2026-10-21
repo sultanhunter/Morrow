@@ -701,7 +701,10 @@ END $$;
 -- API session definers: SECURITY DEFINER, owned by the command role after the transfer,
 -- EXECUTE for morrow_work_api only. No tenant, workspace or actor parameter: both come
 -- from current_tenant(). Each refuses inside a receipt context.
--- The workspace's store associations through the identity bridge (ids and states only).
+-- The workspace's store associations through M2 PR-2's identity bridge (ids and states
+-- only). An association is an installation that is or was linked (linked_at set; the
+-- P01.T04a Association, a workspace_store_links row); an installation that was never
+-- linked is not one. It is current while its status is linked.
 CREATE FUNCTION morrow_billing.workspace_associations()
 RETURNS TABLE(installation_id text,store_id text,connection_id text,status text,linked_at text)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
@@ -712,7 +715,7 @@ BEGIN
  SELECT c.organization_id,c.workspace_id INTO t FROM morrow_work.current_tenant() c;
  IF NOT FOUND THEN RETURN; END IF;
  RETURN QUERY SELECT a.installation_id,a.store_id,a.connection_id,a.status,morrow_work.utc_text(date_trunc('milliseconds',a.linked_at))
-  FROM morrow_identity.work_store_installations(t.organization_id,t.workspace_id) a;
+  FROM morrow_identity.work_store_installations(t.organization_id,t.workspace_id) a WHERE a.linked_at IS NOT NULL;
 END $$;
 
 -- Opens one Morrow checkout (P18.T01a; ADR-0022 item 12): replay by the actor's key, the
@@ -781,7 +784,7 @@ BEGIN
  SELECT x.origin,x.shopify_bound_at,x.route,x.revision::bigint AS revision INTO r FROM morrow_billing.workspace_billing_routes x
   WHERE x.organization_id=t.organization_id AND x.workspace_id=t.workspace_id FOR UPDATE;
  IF NOT FOUND OR r.route IS NOT NULL OR r.origin<>'website' OR r.shopify_bound_at IS NOT NULL OR r.revision::text<>p_route_revision
-  OR EXISTS(SELECT 1 FROM morrow_identity.work_store_installations(t.organization_id,t.workspace_id)) THEN
+  OR EXISTS(SELECT 1 FROM morrow_identity.work_store_installations(t.organization_id,t.workspace_id) a WHERE a.linked_at IS NOT NULL) THEN
   RETURN QUERY SELECT 'route_conflict'::text,NULL::text; RETURN;
  END IF;
  SELECT x.terms_revision::bigint AS terms_revision,x.terms INTO v_terms FROM morrow_billing.billing_terms x ORDER BY x.terms_revision DESC LIMIT 1;
@@ -1311,7 +1314,7 @@ BEGIN
     WHERE x.organization_id=v_org AND x.workspace_id=v_ws) y),
   'associations',COALESCE((SELECT jsonb_agg(to_jsonb(y) ORDER BY y.linked_at,y.installation_id) FROM (SELECT a.installation_id,a.store_id,
     a.connection_id,a.status,morrow_work.utc_text(date_trunc('milliseconds',a.linked_at)) AS linked_at
-    FROM morrow_identity.work_store_installations(v_org,v_ws) a) y),'[]'::jsonb),
+    FROM morrow_identity.work_store_installations(v_org,v_ws) a WHERE a.linked_at IS NOT NULL) y),'[]'::jsonb),
   'account',(SELECT to_jsonb(y) FROM (SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.id::text AS id,
     x.route,x.mode,x.currency,x.status,x.revision::text AS revision FROM morrow_billing.billing_accounts x
     WHERE x.organization_id=v_org AND x.workspace_id=v_ws AND x.route='morrow_direct') y),
@@ -1450,7 +1453,7 @@ BEGIN
    WHERE e->>'route'='morrow_direct' AND e->>'mode'=v_mode AND e->>'priceKey'=v_price AND e->>'kind'='subscription_period'
     AND e->>'currency'=v_currency;
   v_units:=CASE WHEN v_count=1 THEN (v_entry->>'creditUnits')::bigint END;
-  v_linked:=EXISTS(SELECT 1 FROM morrow_identity.work_store_installations(v_org,v_ws));
+  v_linked:=EXISTS(SELECT 1 FROM morrow_identity.work_store_installations(v_org,v_ws) a WHERE a.linked_at IS NOT NULL);
   IF v_action IN ('fix_route_and_grant','grant') THEN
    IF v_vpe_outcome<>'granted' OR v_pay->'code'<>'null'::jsonb OR v_outcome<>'applied' OR o->>'status'<>'paid' OR v_cents<=0
     OR v_op IS NULL OR v_units IS NULL OR v_units<=0 THEN

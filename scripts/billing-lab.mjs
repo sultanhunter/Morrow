@@ -10,8 +10,9 @@
 //   D  receipts recorded by the broker login and applied through the real webhook handler
 //      (receipt-only ingress): invoice.paid fixes the route and funds the wallet in one
 //      commit, de-duplication, double invoice.paid, either event order, a later period,
-//      the cancellation fold, held, unattributed, no-charge and route-mismatch outcomes,
-//      and forged plans refused.
+//      the cancellation fold, held, unattributed, no-charge and route-mismatch outcomes
+//      (an association is an M2 PR-2 installation that is or was linked; one never linked
+//      blocks nothing), and forged plans refused.
 //   E  isolation probes: the ingress refuses a session context, a forged receipt context
 //      reads nothing, cross-tenant reads are empty, other logins cannot run the definers.
 //   F  the P01.T04a decision tables, row by row, against the persisted path (the Stripe
@@ -278,6 +279,25 @@ INSERT INTO morrow_identity.workspace_memberships VALUES(${lit(p.org)},${lit(p.w
 ${grantInsert(p, billingGrant(p))}`);
       db.workOwner(routeRow(p));
       return p;
+    };
+    // A store installation through M2 PR-2's identity tables (identity-owner fixtures): the app
+    // registry row, the installation (born unlinked, as shopify_preserve_record requires)
+    // and, with `link`, the 0005 candidate and link and the installation's unlinked ->
+    // linked change. morrow_identity.work_store_installations reads exactly these rows; an
+    // association is an installation that is or was linked.
+    const installStore = (p, key, shopId, { link }) => {
+      const shop = `lab-${key.replaceAll("_", "-")}.myshopify.com`;
+      const installation = "installation_" + key;
+      const at = "date_trunc('milliseconds',clock_timestamp())";
+      db.admin(`INSERT INTO morrow_identity.shopify_apps(app_key,client_id,environment_id,intended_shop_digest,invited_organization_id,invited_workspace_id,scopes,api_version,install_url,status,revision,created_at,retired_at)
+ VALUES(${lit("lab-" + key.replaceAll("_", "-"))},md5(${lit(key)}),'development',encode(sha256(convert_to(${lit(shop)},'UTF8')),'hex'),${lit(p.org)},${lit(p.workspace)},'read_products,write_products','2026-10',${lit("https://" + shop + "/admin/oauth/install_custom_app")},'active',1,${at},NULL);
+INSERT INTO morrow_identity.store_installations(organization_id,workspace_id,id,app_key,shop_id,shop_domain,store_id,connection_id,generation,status,granted_scopes,credential_id,credential_version,development_store,link_id,revision,created_at,updated_at,reauthorised_at,linked_at)
+ SELECT ${lit(p.org)},${lit(p.workspace)},${lit(installation)},${lit("lab-" + key.replaceAll("_", "-"))},${lit(shopId)},${lit(shop)},${lit("store_" + key)},${lit("connection_" + key)},1,'unlinked',ARRAY['read_products','write_products'],${lit("credential_" + key)},1,true,NULL,1,t,t,NULL,NULL FROM (SELECT ${at} AS t) x;`);
+      if (!link) return installation;
+      db.admin(`INSERT INTO morrow_identity.linking_candidates VALUES(${lit("candidate_" + key)},'shopify','synthetic_app','synthetic_env',${lit(shopId)},${lit(shop)},${lit(installation)},1,true,1,'controlled_fixture',${lit("proof_" + key)},1,repeat('a',64),${lit(p.principal)},clock_timestamp()-interval '1 minute',clock_timestamp()+interval '1 minute',NULL);
+INSERT INTO morrow_identity.workspace_store_links VALUES(${lit("link_" + key)},${lit("candidate_" + key)},${lit(p.org)},${lit(p.workspace)},${lit(installation)},1,1,${lit(p.principal)},clock_timestamp());
+UPDATE morrow_identity.store_installations SET status='linked',link_id=${lit("link_" + key)},linked_at=greatest(${at},created_at),updated_at=greatest(${at},created_at),revision=revision+1 WHERE id=${lit(installation)};`);
+      return installation;
     };
     db.workOwner(
       [P.A, P.Y, P.A2].map(routeRow).join("\n") +
@@ -1096,11 +1116,7 @@ INSERT INTO morrow_billing.checkout_intents VALUES(${lit(P.A2.org)},${lit(P.A2.w
     const y = P.Y;
     await call(y, "POST", "/morrow/checkout", { priceKey: PRICE });
     const yIds = ids(y);
-    const installation = "installation_lab_y";
-    db.admin(
-      `INSERT INTO morrow_identity.linking_candidates VALUES('candidate_lab_y','shopify','synthetic_app','synthetic_env','1001','lab-y.myshopify.com',${lit(installation)},1,true,1,'controlled_fixture','proof_lab_y',1,repeat('a',64),${lit(y.principal)},clock_timestamp()-interval '1 minute',clock_timestamp()+interval '1 minute',NULL);
-INSERT INTO morrow_identity.workspace_store_links VALUES('link_lab_y','candidate_lab_y',${lit(y.org)},${lit(y.workspace)},${lit(installation)},1,1,${lit(y.principal)},clock_timestamp());`,
-    );
+    installStore(y, "lab_y", "1001", { link: true });
     const afterLink = await deliver(
       "invoice.paid",
       invoiceFor("invoice.paid.subscription_create", { ...yIds, invoice: "in_LabLinked00001" }),
@@ -1121,6 +1137,34 @@ INSERT INTO morrow_identity.workspace_store_links VALUES('link_lab_y','candidate
       linkedPlans.status === 403 &&
         linkedPlans.body.safeMessage === "Manage this workspace's plan where it was purchased." &&
         linkedCheckout.status === 403,
+    );
+    // D8b. An installation that was never linked is not an association: M2 PR-2's bridge
+    // returns it with status unlinked and no linked_at, and the billing records read only
+    // installations that are or were linked. The view reads in phase open, checkout opens,
+    // and the first paid invoice fixes morrow_direct and funds the wallet.
+    const u = tenant("billing_unlinked");
+    installStore(u, "lab_unlinked", "1002", { link: false });
+    const unlinkedView = await call(u, "GET", "");
+    const unlinkedCheckout = await call(u, "POST", "/morrow/checkout", { priceKey: PRICE });
+    const uIds = ids(u, { invoice: "in_LabUnlinked0001" });
+    const unlinkedPaid = await deliver(
+      "invoice.paid",
+      invoiceFor("invoice.paid.subscription_create", uIds),
+      subscriptionFor("subscription.active", uIds),
+    );
+    check(
+      "D_an_unlinked_installation_is_not_an_association",
+      count(
+        `SELECT 1 FROM morrow_identity.store_installations WHERE workspace_id=${lit(u.workspace)} AND status='unlinked' AND linked_at IS NULL`,
+      ) === 1 &&
+        unlinkedView.status === 200 &&
+        unlinkedView.body.phase === "open" &&
+        unlinkedCheckout.status === 201 &&
+        unlinkedCheckout.body.checkoutUrl.startsWith("https://checkout.stripe.com/") &&
+        unlinkedPaid.status === 200 &&
+        applicationOf(unlinkedPaid.eventId)?.outcome === "applied" &&
+        routeOf(u).route === "morrow_direct" &&
+        walletOf(u)?.available === "300",
     );
     // D9. Forged plans: receipt_apply re-derives and refuses.
     // A receipt recorded by the broker login (a zero invoice), applied with forged plans.
@@ -1317,11 +1361,7 @@ ${insert}; ROLLBACK;`,
     );
     const grantFor = (paymentKey) =>
       count(`SELECT 1 FROM morrow_billing.credit_grants WHERE payment_key=${lit(paymentKey)}`);
-    const linkStore = (p, n) =>
-      db.admin(
-        `INSERT INTO morrow_identity.linking_candidates VALUES(${lit("candidate_" + p.key)},'shopify','synthetic_app','synthetic_env',${lit(String(2000 + n))},${lit("lab-" + n + ".myshopify.com")},${lit("installation_" + p.key)},1,true,1,'controlled_fixture',${lit("proof_" + p.key)},1,repeat('a',64),${lit(p.principal)},clock_timestamp()-interval '1 minute',clock_timestamp()+interval '1 minute',NULL);
-INSERT INTO morrow_identity.workspace_store_links VALUES(${lit("link_" + p.key)},${lit("candidate_" + p.key)},${lit(p.org)},${lit(p.workspace)},${lit("installation_" + p.key)},1,1,${lit(p.principal)},clock_timestamp());`,
-      );
+    const linkStore = (p, n) => installStore(p, p.key, String(2000 + n), { link: true });
     const suspend = (p) =>
       db.workOwner(
         `UPDATE morrow_billing.billing_accounts SET status='suspended',revision=revision+1,updated_at=greatest(updated_at,date_trunc('milliseconds',clock_timestamp())) WHERE workspace_id=${lit(p.workspace)};`,

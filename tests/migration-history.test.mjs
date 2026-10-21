@@ -151,7 +151,7 @@ const published = [
   [
     29,
     "0029.billing-records.sql",
-    "73f9ef9749baeddb15d57c846db7b5e63d7bd546e20ab80605d28a8ffa5cbf03",
+    "e40ebb5ae3416758c28389760c7f0c639e1c136e06008a4e47723e9616a03bb2",
   ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each

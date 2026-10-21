@@ -238,7 +238,7 @@
     {
       "sequence": 29,
       "file": "0029.billing-records.sql",
-      "sha256": "73f9ef9749baeddb15d57c846db7b5e63d7bd546e20ab80605d28a8ffa5cbf03",
+      "sha256": "e40ebb5ae3416758c28389760c7f0c639e1c136e06008a4e47723e9616a03bb2",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M5-billing.md"
     }
