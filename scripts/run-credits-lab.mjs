@@ -19,9 +19,14 @@
 //      and every booking needs an id;
 //   C10 a wallet the settling context cannot see is a refusal that leaves the reservation
 //      open, never a settlement that strands the reserved credits.
-// Owner-seeded synthetic fixtures only (the wallet is funded as the owner; M5 PR-1 funds
-// it from verified payments). No provider, credential or merchant data. CI pg-linking.
+// The wallets are M5 PR-1's (0029): one Morrow-direct billing account and wallet per
+// workspace, so each scenario reserves from its own synthetic workspace's wallet. Each wallet
+// is born empty through wallet_guard; its funding (M5's grant-funded increase from a verified
+// payment, proved by lab:billing) is superuser maintenance with that guard disabled for the
+// one update (sim). Every run move then goes through M5's guard. Owner-seeded synthetic
+// fixtures only; no provider, credential or merchant data. CI pg-linking.
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   asApi,
   asCommandRole,
@@ -109,43 +114,85 @@ export async function runCreditsLab(db) {
       .sql(asCommandRole(p, statements, { end }))
       .split("\n")
       .slice(1);
-  const fund = (account, credits, p = P.A) =>
-    db.workOwner(
-      `INSERT INTO morrow_billing.credit_wallets VALUES(${literal(p.org)},${literal(p.workspace)},${literal(account)},${credits},0,0,1,1,1,${ms});`,
-    );
-  const wallet = (account, p = P.A) =>
-    db.rows(
-      `SELECT available::int,reserved::int,consumed::int,revision::int FROM morrow_billing.credit_wallets WHERE organization_id=${literal(p.org)} AND workspace_id=${literal(p.workspace)} AND billing_account_id=${literal(account)}`,
+  // M5 PR-1's billing terms (the wallet's terms revision) and one workspace per account.
+  const terms = JSON.parse(readFileSync("docs/decisions/billing-terms.json", "utf8")).environments
+    .development[0];
+  db.workOwner(
+    `INSERT INTO morrow_billing.billing_terms VALUES(1,${literal(JSON.stringify(terms.terms))}::jsonb,${literal(JSON.stringify(terms.offers))}::jsonb,${literal(terms.digest)},${ms});`,
+  );
+  const accounts = new Map();
+  const runs = new Map();
+  const accountOf = (account) => accounts.get(account) ?? { p: P.A, org: O, ws: W };
+  // The principal in the workspace of a run (or of the default tenant).
+  const runTenant = (run) => {
+    const ws = runs.get(run) ?? W;
+    const owner = [...accounts.values()].find((a) => a.ws === ws)?.p ?? P.A;
+    return { p: owner, org: owner.org, ws };
+  };
+  const fund = (account, credits, p = P.A) => {
+    const ws = "ws_" + account;
+    db.admin(`INSERT INTO morrow_identity.workspaces VALUES(${literal(ws)},${literal(p.org)},'Synthetic credits',true);
+INSERT INTO morrow_identity.workspace_memberships VALUES(${literal(p.org)},${literal(ws)},${literal(p.membership)},true);`);
+    db.workOwner(`INSERT INTO morrow_billing.billing_accounts(organization_id,workspace_id,id,route,mode,currency,status,revision,created_at,updated_at)
+ SELECT ${literal(p.org)},${literal(ws)},${literal(account)},'morrow_direct','test','USD','active',1,t,t FROM (SELECT ${ms} AS t) x;
+INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_account_id,available,reserved,consumed,rate_revision,terms_revision,revision,created_at,updated_at)
+ SELECT ${literal(p.org)},${literal(ws)},${literal(account)},0,0,0,1,1,1,t,t FROM (SELECT ${ms} AS t) x;`);
+    // sim: M5's grant-funded increase, as superuser maintenance with the guard disabled.
+    db.sql(`BEGIN; ALTER TABLE morrow_billing.credit_wallets DISABLE TRIGGER wallet_guard;
+UPDATE morrow_billing.credit_wallets SET available=${credits},revision=revision+1 WHERE organization_id=${literal(p.org)} AND workspace_id=${literal(ws)} AND billing_account_id=${literal(account)};
+ALTER TABLE morrow_billing.credit_wallets ENABLE TRIGGER wallet_guard; COMMIT;`);
+    accounts.set(account, { p: { ...p, workspace: ws }, org: p.org, ws });
+  };
+  const wallet = (account) => {
+    const a = accountOf(account);
+    return db.rows(
+      `SELECT available::int,reserved::int,consumed::int,revision::int FROM morrow_billing.credit_wallets WHERE organization_id=${literal(a.org)} AND workspace_id=${literal(a.ws)} AND billing_account_id=${literal(account)}`,
     )[0];
+  };
   const period = "timestamptz '2026-10-01T00:00:00Z'";
   const nextPeriod = "timestamptz '2026-11-01T00:00:00Z'";
   // C6-C8 run in later periods: C4 leaves October past its unrecovered-cost cap.
   const laterPeriod = "timestamptz '2027-01-01T00:00:00Z'";
-  const reserveCall = (account, run, model, effort, products, o = {}) =>
-    `SELECT outcome||'|'||coalesce(credits_reserved,'')||'|'||coalesce(vendor_maximum_usd,'') FROM morrow_billing.run_reserve(${literal(o.org ?? O)},${literal(o.ws ?? W)},${literal(account)},${literal(run)},${literal("credit_" + run)},${literal("vendor_" + run)},${literal("allocation_" + run)},${literal("a".repeat(64))},${o.version ?? 1},${literal(model)},${literal(effort)},${products},${o.period === undefined ? period : o.period});`;
+  const reserveCall = (account, run, model, effort, products, o = {}) => {
+    const a = accountOf(account);
+    if (!runs.has(run)) runs.set(run, o.ws ?? a.ws);
+    return `SELECT outcome||'|'||coalesce(credits_reserved,'')||'|'||coalesce(vendor_maximum_usd,'') FROM morrow_billing.run_reserve(${literal(o.org ?? a.org)},${literal(o.ws ?? a.ws)},${literal(account)},${literal(run)},${literal("credit_" + run)},${literal("vendor_" + run)},${literal("allocation_" + run)},${literal("a".repeat(64))},${o.version ?? 1},${literal(model)},${literal(effort)},${products},${o.period === undefined ? period : o.period});`;
+  };
   const reserve = (account, run, model, effort, products, o = {}) =>
-    last(cmd(o.p ?? P.A, reserveCall(account, run, model, effort, products, o), o.end ?? "COMMIT"));
-  const book = (run, amount, kind, entry = "entry_" + randomUUID(), p = P.A) =>
     last(
       cmd(
-        p,
-        `SELECT outcome||'|'||coalesce(booked_usd,'')||'|'||coalesce(unrecovered_usd,'') FROM morrow_billing.run_book_cost(${literal(O)},${literal(W)},${literal(run)},${literal(entry)},${amount}::numeric,${literal(kind)});`,
+        o.p ?? accountOf(account).p,
+        reserveCall(account, run, model, effort, products, o),
+        o.end ?? "COMMIT",
       ),
     );
-  const settle = (run, drafted, p = P.A) =>
-    last(
+  const book = (run, amount, kind, entry = "entry_" + randomUUID()) => {
+    const t = runTenant(run);
+    return last(
       cmd(
-        p,
-        `SELECT outcome||'|'||coalesce(credits_settled,'') FROM morrow_billing.run_settle(${literal(O)},${literal(W)},${literal(run)},${drafted});`,
+        t.p,
+        `SELECT outcome||'|'||coalesce(booked_usd,'')||'|'||coalesce(unrecovered_usd,'') FROM morrow_billing.run_book_cost(${literal(t.org)},${literal(t.ws)},${literal(run)},${literal(entry)},${amount}::numeric,${literal(kind)});`,
       ),
     );
-  const release = (run) =>
-    last(
+  };
+  const settle = (run, drafted) => {
+    const t = runTenant(run);
+    return last(
       cmd(
-        P.A,
-        `SELECT outcome||'|'||coalesce(credits_settled,'') FROM morrow_billing.run_release(${literal(O)},${literal(W)},${literal(run)});`,
+        t.p,
+        `SELECT outcome||'|'||coalesce(credits_settled,'') FROM morrow_billing.run_settle(${literal(t.org)},${literal(t.ws)},${literal(run)},${drafted});`,
       ),
     );
+  };
+  const release = (run) => {
+    const t = runTenant(run);
+    return last(
+      cmd(
+        t.p,
+        `SELECT outcome||'|'||coalesce(credits_settled,'') FROM morrow_billing.run_release(${literal(t.org)},${literal(t.ws)},${literal(run)});`,
+      ),
+    );
+  };
   const reservation = (run) =>
     db.rows(
       `SELECT c.status,c.credits_reserved::int,c.credits_settled::int,c.credits_per_product,c.product_count,c.catalogue_version,v.maximum_cost_usd::text,v.booked_cost_usd::text,v.unrecovered_cost_usd::text,v.status AS vendor_status FROM morrow_billing.credit_reservations c JOIN morrow_billing.vendor_cost_reservations v ON v.organization_id=c.organization_id AND v.workspace_id=c.workspace_id AND v.credit_reservation_id=c.id WHERE c.root_run_id=${literal(run)}`,
@@ -166,7 +213,7 @@ export async function runCreditsLab(db) {
       const hold = (run, app) =>
         db.runAsync(
           asCommandRole(
-            P.A,
+            accountOf(account).p,
             reserveCall(account, run, "claude_opus_5_5", "high", 1) + "\nSELECT pg_sleep(1.5);",
             {
               end: "COMMIT",
@@ -187,9 +234,13 @@ export async function runCreditsLab(db) {
         await sleep(25);
       }
       const two = db.runAsync(
-        asCommandRole(P.A, reserveCall(account, second, "claude_opus_5_5", "high", 1), {
-          end: "COMMIT",
-        }),
+        asCommandRole(
+          accountOf(account).p,
+          reserveCall(account, second, "claude_opus_5_5", "high", 1),
+          {
+            end: "COMMIT",
+          },
+        ),
         {
           applicationName: appB,
         },
@@ -253,26 +304,35 @@ export async function runCreditsLab(db) {
         w.available + w.reserved + w.consumed === 1000,
       { capped, partial, ended, w },
     );
-    // The CHECK and the guards hold even against the command role's own writes.
+    // The CHECK and the guards hold even against the command role's own writes (M5's
+    // wallet_guard: an increase needs the credit grant that funds it).
+    const main = accountOf("account_main").p;
     check(
       "C2:guards_refuse_direct_writes",
       refused(
         asCommandRole(
-          P.A,
+          main,
           `UPDATE morrow_billing.credit_reservations SET credits_settled=credits_reserved+1,status='settled',settled_at=${ms},revision=revision+1 WHERE root_run_id='run_settle_cap';`,
         ),
         "CREDIT_RESERVATION_INVALID|check constraint",
       ) &&
         refused(
           asCommandRole(
-            P.A,
+            main,
             `UPDATE morrow_billing.credit_wallets SET available=available+5,revision=revision+1 WHERE billing_account_id='account_main';`,
           ),
-          "CREDIT_WALLET_INVALID",
+          "BILLING_WALLET_INVALID",
         ) &&
         refused(
           asCommandRole(
-            P.A,
+            main,
+            `UPDATE morrow_billing.credit_wallets SET reserved=reserved+1,consumed=consumed-1,revision=revision+1 WHERE billing_account_id='account_main';`,
+          ),
+          "BILLING_WALLET_INVALID",
+        ) &&
+        refused(
+          asCommandRole(
+            main,
             `DELETE FROM morrow_billing.credit_reservations WHERE root_run_id='run_release';`,
           ),
           "permission denied",
@@ -340,7 +400,7 @@ export async function runCreditsLab(db) {
     const drafted = book(run, "0.10000000", "drafted");
     const tooMuch = book(run, "5.00000000", "failed_product");
     const total = db.rows(
-      `SELECT amount_usd::text,revision::int FROM morrow_billing.unrecovered_costs WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND period_start=${period}`,
+      `SELECT amount_usd::text,revision::int FROM morrow_billing.unrecovered_costs WHERE organization_id=${literal(O)} AND workspace_id=${literal(accountOf("account_unrecovered").ws)} AND period_start=${period}`,
     )[0];
     const entries = db.rows(
       `SELECT kind,count(*)::int AS n FROM morrow_billing.unrecovered_cost_entries WHERE root_run_id=${literal(run)} GROUP BY kind ORDER BY kind`,
@@ -365,10 +425,11 @@ export async function runCreditsLab(db) {
     // One more failure pushes past the cap: even Haiku is refused in this period.
     book(run, "0.70400000", "failed_product");
     const haiku = reserve("account_unrecovered", "run_after_haiku", "claude_haiku_5_5", "low", 1);
+    const lost = accountOf("account_unrecovered");
     const allows = last(
       cmd(
-        P.A,
-        `SELECT morrow_billing.unrecovered_allows(${literal(O)},${literal(W)},${period},1,0.00660000)::text||'|'||morrow_billing.unrecovered_allows(${literal(O)},${literal(W)},${nextPeriod},1,0.70400000)::text;`,
+        lost.p,
+        `SELECT morrow_billing.unrecovered_allows(${literal(O)},${literal(lost.ws)},${period},1,0.00660000)::text||'|'||morrow_billing.unrecovered_allows(${literal(O)},${literal(lost.ws)},${nextPeriod},1,0.70400000)::text;`,
       ),
     );
     check(
@@ -409,7 +470,7 @@ export async function runCreditsLab(db) {
       "C4:ledger_append_only",
       refused(
         asCommandRole(
-          P.A,
+          lost.p,
           `UPDATE morrow_billing.unrecovered_costs SET amount_usd=0,revision=revision+1 WHERE period_start=${period};`,
         ),
         "UNRECOVERED_COST_INVALID",
@@ -521,19 +582,25 @@ COMMIT;`);
     // cannot call a helper.
     const apiRows = db.rows("SELECT count(*)::int AS n FROM morrow_billing.credit_reservations", {
       user: "morrow_api_worker",
-      prefix: asApi(P.A, "").replace(/\nROLLBACK;$/, "\n"),
+      prefix: asApi(accountOf("account_refusals").p, "").replace(/\nROLLBACK;$/, "\n"),
       suffix: "\nROLLBACK;",
     });
     check(
       "C7:api_reads_reservations_only",
       apiRows[0]?.n >= 1 &&
         refused(
-          asApi(P.A, "SELECT count(*) FROM morrow_billing.unrecovered_costs;"),
+          asApi(
+            accountOf("account_refusals").p,
+            "SELECT count(*) FROM morrow_billing.unrecovered_costs;",
+          ),
           "permission denied",
           "morrow_api_worker",
         ) &&
         refused(
-          asApi(P.A, reserveCall("account_refusals", "run_api", "claude_haiku_5_5", "low", 1)),
+          asApi(
+            accountOf("account_refusals").p,
+            reserveCall("account_refusals", "run_api", "claude_haiku_5_5", "low", 1),
+          ),
           "permission denied",
           "morrow_api_worker",
         ),
@@ -551,12 +618,9 @@ COMMIT;`);
     fund("account_lease_y", 100, P.Y);
     reserve("account_lease_y", "run_lease_y", "claude_sonnet_5_5", "low", 2, {
       period: laterPeriod,
-      p: P.Y,
-      org: P.Y.org,
-      ws: P.Y.workspace,
     });
     const [line] = cmd(
-      P.A,
+      accountOf("account_lease").p,
       "SELECT concat_ws('|',outcome,lease_id,generation) FROM morrow_work.lease_open('run','run_lease','store_1','connection_1','installation_1');",
     );
     const [opened, leaseId] = line.split("|");
@@ -579,7 +643,7 @@ COMMIT;`);
       }),
     );
     const foreign = runtime(
-      `SELECT lab_credits.foreign_settle(${literal(P.Y.org)},${literal(P.Y.workspace)},'run_lease_y');`,
+      `SELECT lab_credits.foreign_settle(${literal(P.Y.org)},${literal(accountOf("account_lease_y").ws)},'run_lease_y');`,
     );
     check(
       "C8:lease_context_books_and_settles_its_own_run",
@@ -614,8 +678,8 @@ COMMIT;`);
     const otherRun = book("run_replay_b", "0.05000000", "failed_product", "entry_replay_1");
     const noEntry = last(
       cmd(
-        P.A,
-        `SELECT outcome FROM morrow_billing.run_book_cost(${literal(O)},${literal(W)},'run_replay',NULL,0.01000000::numeric,'drafted');`,
+        accountOf("account_replay").p,
+        `SELECT outcome FROM morrow_billing.run_book_cost(${literal(O)},${literal(accountOf("account_replay").ws)},'run_replay',NULL,0.01000000::numeric,'drafted');`,
       ),
     );
     const r = reservation("run_replay");
@@ -669,7 +733,10 @@ COMMIT;`);
         "BILLING_RECORD_IMMUTABLE",
       ) &&
         refused(
-          asCommandRole(P.A, `DELETE FROM morrow_billing.run_cost_bookings;`),
+          asCommandRole(
+            accountOf("account_replay").p,
+            `DELETE FROM morrow_billing.run_cost_bookings;`,
+          ),
           "permission denied",
         ),
     );
@@ -679,14 +746,14 @@ COMMIT;`);
   // -------------------------------------------------------------------------
   phase("hidden_wallet");
   {
-    // C10: the wallet hidden from the settling context (sim: the wallet's lease policy
-    // admits nothing, the shape of a missing policy at the M5 rebase; restored after):
-    // run_settle refuses with wallet_not_found, and the reservation and the wallet keep
-    // their state, so the credits are never stranded.
+    // C10: the wallet hidden from the settling context (sim: the wallet's lease policies
+    // admit nothing, the shape of a missing or revised policy on M5's wallet; restored
+    // after): run_settle refuses with wallet_not_found, and the reservation and the wallet
+    // keep their state, so the credits are never stranded.
     fund("account_hidden", 100);
     reserve("account_hidden", "run_hidden", "claude_sonnet_5_5", "low", 2, { period: laterPeriod });
     const [line] = cmd(
-      P.A,
+      accountOf("account_hidden").p,
       "SELECT concat_ws('|',outcome,lease_id,generation) FROM morrow_work.lease_open('run','run_hidden','store_1','connection_1','installation_1');",
     );
     const [opened, leaseId] = line.split("|");
@@ -694,7 +761,7 @@ COMMIT;`);
     const policy =
       "(organization_id::text,workspace_id::text)=(SELECT c.organization_id,c.workspace_id FROM morrow_work.current_lease() c)";
     db.sql(
-      "ALTER POLICY tenant_lease ON morrow_billing.credit_wallets USING (false) WITH CHECK (false);",
+      "ALTER POLICY tenant_lease_read ON morrow_billing.credit_wallets USING (false); ALTER POLICY tenant_lease_update ON morrow_billing.credit_wallets USING (false) WITH CHECK (false);",
     );
     let hidden;
     try {
@@ -706,7 +773,7 @@ COMMIT;`);
       );
     } finally {
       db.sql(
-        `ALTER POLICY tenant_lease ON morrow_billing.credit_wallets USING (${policy}) WITH CHECK (${policy});`,
+        `ALTER POLICY tenant_lease_read ON morrow_billing.credit_wallets USING (${policy}); ALTER POLICY tenant_lease_update ON morrow_billing.credit_wallets USING (${policy}) WITH CHECK (${policy});`,
       );
     }
     const after = wallet("account_hidden");
@@ -752,7 +819,7 @@ async function main() {
     providerRequests: 0,
     limitations: [
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, provider, payment or merchant data.",
-      "The wallet is M5 PR-1's, stubbed in this branch and funded as the owner; M5 PR-1 funds it from verified payments.",
+      "The wallets are M5 PR-1's (one billing account per synthetic workspace); funding is superuser maintenance with wallet_guard disabled for that one update (sim), where M5 PR-1 funds them from verified payments (lab:billing).",
       "The run steps are stood in for by lab-only command-owned definers (lab_credits); M3 PR-2 lands the runtime definers.",
       "Catalogue version 2 is installed by superuser maintenance (sim), the shape of a future catalogue migration.",
     ],

@@ -47,6 +47,7 @@ import {
   revocationSql,
   seedWorkFixtures,
   sleep,
+  storeInstallationSql,
   withWorkDatabase,
   workFixtureOrigin,
   workRequest,
@@ -129,14 +130,24 @@ export async function runListingsAuthorityLab(db) {
   const P = seedWorkFixtures(db);
   const O = P.A.org,
     W = P.A.workspace;
-  // The store (M2 PR-2's work_store_installations, stubbed in this branch over 0005's
-  // links: store id = connection id = the link's installation id).
+  // The store: M2 PR-2's store installation, linked (morrow_identity.work_store_installations
+  // reads it). Its store, connection and installation ids are distinct, and the credential's
+  // subject is the store installation (M2 0027).
   const S = "store_lab",
-    C = "store_lab";
+    C = "connection_lab",
+    SI = "storeinst_lab";
   const store = storeResource(O, W, S, C);
-  const link = (id, workspace = W, org = O, owner = P.A) =>
-    db.admin(`INSERT INTO morrow_identity.linking_candidates VALUES(${literal("cand_" + id)},'shopify','synthetic_app','synthetic_env',${literal("shop_" + id)},${literal("synthetic-" + id.replaceAll("_", "-") + ".myshopify.com")},${literal(id)},1,true,1,'controlled_fixture',${literal("proof_" + id)},1,${literal(sha(id))},${literal(owner.principal)},clock_timestamp()-interval '1 second',clock_timestamp()+interval '1 hour',NULL);
-INSERT INTO morrow_identity.workspace_store_links VALUES(${literal("link_" + id)},${literal("cand_" + id)},${literal(org)},${literal(workspace)},${literal(id)},1,1,${literal(owner.principal)},clock_timestamp()-interval '1 second');`);
+  const link = (id, owner = P.A) =>
+    db.admin(
+      storeInstallationSql({
+        org: O,
+        workspace: W,
+        principal: owner.principal,
+        storeId: id,
+        connectionId: id === S ? C : id.replace(/^store_/, "connection_"),
+        installationId: id === S ? SI : id.replace(/^store_/, "storeinst_"),
+      }),
+    );
   link(S);
   // Store-link grants (M2 PR-2's template) and signup template v2's model-default grant
   // (M5 PR-1), owner-seeded for A (owner) and A1 (a member who requests runs).
@@ -798,7 +809,7 @@ INSERT INTO morrow_identity.agent_principals VALUES(${literal(agent2)},'agent',$
     // envelope bytes, sim); a read lease on another connection is connection_inactive.
     const noCredential = resolve(read.id, "shopify_read", "read_r2");
     db.workOwner(
-      `INSERT INTO morrow_vault.credentials(organization_id,workspace_id,id,version,provider,kind,subject_id,status,kek_version,wrapped_key,sealed_value,created_at) VALUES(${literal(O)},${literal(W)},'credential_lab',1,'shopify','shopify_offline_token',${literal(S)},'active',1,${literal("\\x" + "ab".repeat(60))}::bytea,${literal("\\x" + "cd".repeat(40))}::bytea,${ms});`,
+      `INSERT INTO morrow_vault.credentials(organization_id,workspace_id,id,version,provider,kind,subject_id,status,kek_version,wrapped_key,sealed_value,created_at) VALUES(${literal(O)},${literal(W)},'credential_lab',1,'shopify','shopify_offline_token',${literal(SI)},'active',1,${literal("\\x" + "ab".repeat(60))}::bytea,${literal("\\x" + "cd".repeat(40))}::bytea,${ms});`,
     );
     const withCredential = db.rows(
       `SELECT * FROM morrow_vault.resolve_call(${literal(read.id)},'1','shopify_read','read_r2')`,
@@ -1385,7 +1396,7 @@ INSERT INTO morrow_work.proposals(organization_id,workspace_id,id,revision,famil
     const cases = {
       foreign_store: { storeId: "store_unlinked", connectionId: "store_unlinked" },
       foreign_connection: { connectionId: "connection_x" },
-      another_linked_store: { storeId: "store_other", connectionId: "store_other" },
+      another_linked_store: { storeId: "store_other", connectionId: "connection_other" },
       not_publish: { capabilityId: "catalog.content.propose" },
       null_task: { taskId: null },
       wrong_installation_principal: { proposer: coordinatorPrincipal },
@@ -1398,7 +1409,7 @@ INSERT INTO morrow_work.proposals(organization_id,workspace_id,id,revision,famil
         installation: null,
         proposer: P.A.principal,
       },
-      row_store_mismatch: { storeColumn: "store_other", connectionColumn: "store_other" },
+      row_store_mismatch: { storeColumn: "store_other", connectionColumn: "connection_other" },
     };
     const results = Object.fromEntries(Object.entries(cases).map(([k, v]) => [k, refuses(v)]));
     check("P2:catalog_refusals", Object.values(results).every(Boolean), results);
@@ -2109,7 +2120,7 @@ async function main() {
     limitations: [
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
       "The agents handler runs in Node over a psql connector logged in as morrow_api_worker, not in workerd over the Neon transport.",
-      "M2 PR-2's work_store_installations and the store-link grants are branch-local stubs and owner-seeded grants; M5 PR-1's billing facts reader is a fake port.",
+      "The store installation (M2 PR-2's tables, read through work_store_installations) and the store-link and model-default grants are owner-seeded; M5 PR-1's billing facts reader runs over fixture facts, since a lease step has no billing read.",
       "Shapes marked sim (a stop inserted with stop_guard disabled, a membership deactivated with its triggers disabled, grant and installation edits as the owner) stand in for states no API path reaches.",
       "Work envelopes, delegation hops and catalog proposals are owner-inserted; their writers (run admission and the agent submit definer) are M3 PR-2's.",
     ],

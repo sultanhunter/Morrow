@@ -161,6 +161,10 @@ const extraPolicies = {
   platform_api_read: ["SELECT", "{morrow_work_api}", "true", null],
   // M5 PR-1: the wallet's session UPDATE for M3 PR-1's sum-preserving moves (no INSERT).
   tenant_command_update: ["UPDATE", "{morrow_work_command}", tenantPredicate, tenantPredicate],
+  // M3 PR-1 (0033): the lease twins of the wallet's two session policies, for the run
+  // steps (no INSERT either).
+  tenant_lease_read: ["SELECT", "{morrow_work_command}", leasePredicate, null],
+  tenant_lease_update: ["UPDATE", "{morrow_work_command}", leasePredicate, leasePredicate],
   // M3 PR-1: morrow_vault.resolve_call reads, as the broker's login only, the one lease it
   // names, that lease's tenant's stops and the platform's, and that lease's installation,
   // through transaction-local settings it writes itself.

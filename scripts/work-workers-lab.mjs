@@ -14,6 +14,7 @@ import {
   fixtureGrant,
   literal,
   seedWorkFixtures,
+  storeInstallationSql,
   withWorkDatabase,
   workFixtureOrigin,
 } from "../tests/tenant-conformance/harness.mjs";
@@ -409,14 +410,24 @@ await withWorkDatabase("P06.T01a.work-workers", async (db) => {
     // SQL connection; a linked owner (owner-seeded store-link grants and the model
     // default capability) enables the Listings agent through its document, stops it, and
     // revises the model default.
-    const S = "store_workerd";
-    db.admin(`INSERT INTO morrow_identity.linking_candidates VALUES('cand_workerd','shopify','synthetic_app','synthetic_env','shop_workerd','synthetic-workerd.myshopify.com',${literal(S)},1,true,1,'controlled_fixture','proof_workerd',1,${literal(hash(S))},${literal(P.A.principal)},clock_timestamp()-interval '1 second',clock_timestamp()+interval '1 hour',NULL);
-INSERT INTO morrow_identity.workspace_store_links VALUES('link_workerd','cand_workerd',${literal(P.A.org)},${literal(P.A.workspace)},${literal(S)},1,1,${literal(P.A.principal)},clock_timestamp()-interval '1 second');`);
+    // The store: M2 PR-2's store installation, linked (work_store_installations reads it).
+    const S = "store_workerd",
+      C = "connection_workerd";
+    db.admin(
+      storeInstallationSql({
+        org: P.A.org,
+        workspace: P.A.workspace,
+        principal: P.A.principal,
+        storeId: S,
+        connectionId: C,
+        installationId: "storeinst_workerd",
+      }),
+    );
     const storeRes = {
       organizationId: P.A.org,
       workspaceId: P.A.workspace,
       storeId: S,
-      connectionId: S,
+      connectionId: C,
       kind: "store",
       id: S,
     };
