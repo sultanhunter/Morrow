@@ -49,7 +49,7 @@ Shopify App Pricing; top-ups, coupons, trials, proration and plan changes; dunni
 - [x] Concurrent checkouts → one open intent; an expired session (event, or the lazy close) → a new checkout works; double `invoice.paid` → one grant. (lab:billing B4, B5, D2 and G6.)
 - [x] Unknown Stripe outcome: readback before replay; never a new idempotency key. (tests/billing-stripe-broker.test.mjs; lab:billing C and G5.)
 - [ ] Billing and usage screens: call to action only from `billingCallToAction`; axe at the four widths. (PR-2.)
-- [ ] An end-to-end lab with recorded Stripe fixtures, then a test-mode smoke under owner approval with a `docs/evidence/live/` record. (PR-1: lab:billing G runs the real broker code against the fake Stripe origin over PostgreSQL 17 with zero real provider calls. Open: lab:billing-workers, the workerd api and broker pair, waits for M2 PR-2's vault transport at the rebase; the smoke is owner-gated after merge.)
+- [ ] An end-to-end lab with recorded Stripe fixtures, then a test-mode smoke under owner approval with a `docs/evidence/live/` record. (PR-1: lab:billing G runs the real broker code against the fake Stripe origin over PostgreSQL 17 with zero real provider calls, and lab:billing-workers (pg-work) runs the api and broker as two workerd Workers over the ApiBroker service binding, with M2 PR-2's vault transport on the broker's own login: checkout to the hosted URL and its key replay (C1-C4), a bad signature 400 with no row, a held broker 503 then the retry applied after the commit, a redelivery, a lost commit read back (W1-W5), the portal (P1), the dispatch rows (D1) and zero unexpected outbound requests (O1-O3). Open: recorded fixtures and the owner-gated smoke after merge.)
 
 ### PR-1 status (server)
 
@@ -63,7 +63,7 @@ Shopify App Pricing; top-ups, coupons, trials, proration and plan changes; dunni
 - [ ] Tier 2 AI review (separate context, same model family) with the security lens, stating whether the new api routes and broker methods widen ADR-0007 R1/R2.
 - [ ] (Post-merge, owner) Stripe test account, restricted key and webhook secret placed, Product/Price created, portal configuration saved, staging terms committed, test-mode smoke with a `docs/evidence/live/` record.
 
-Scope notes for PR-1: the signup route-row writer was already delivered by M2 PR-1; owner template v2 is v1 plus the two Governance controls (ADR-0022 item 3), and the Ask admin grant goes into a later owner template version; `credit_wallets` is created here (M3 PR-1 consumes it). The broker's vault-login transport and the store-installation bridge are branch-local stubs of M2 PR-2's fixed interfaces (`apps/broker/src/vault-database.ts`, migration `work-store-installations-stub`), replaced at the rebase.
+Scope notes for PR-1: the signup route-row writer was already delivered by M2 PR-1; owner template v2 is v1 plus the two Governance controls (ADR-0022 item 3), and the Ask admin grant goes into a later owner template version; `credit_wallets` is created here (M3 PR-1 consumes it). The broker's vault-login transport (`apps/broker/src/vault-database.ts`) and the store-installation bridge (`morrow_identity.work_store_installations`) are M2 PR-2's: at the final rebase onto it the branch-local stubs were deleted, this PR's migrations were renumbered 0028-0029 after M2's 0025-0027, and the billing records read an association as an installation that is or was linked (one never linked blocks neither checkout nor the route fix; lab:billing D8b).
 
 ## Owner actions
 
