@@ -18,11 +18,15 @@ import type { BillingBrokerPort, BillingEnvironmentName } from "./port.js";
 // applies that receipt through the receipt-only ingress definers in one transaction and
 // answers 200 only after the commit; a lost commit is read back before any answer, and
 // anything else is 503 so Stripe retries. A rejected signature is 400 with no row.
+// While the Stripe switch is off (owner decision (c), 2026-10-21) there is no broker port:
+// every request is 503 {"code":"unavailable"} before its body is read, with no broker call
+// and no database access.
 
 export interface StripeWebhookDependencies {
   readonly connector: WorkSqlConnector;
   readonly environment: BillingEnvironmentName;
-  readonly broker: BillingBrokerPort;
+  /** null: the Stripe switch is off; every request is 503 unavailable. */
+  readonly broker: BillingBrokerPort | null;
   readonly now: () => number;
 }
 type Context = Readonly<{ waitUntil(p: Promise<unknown>): void }>;
@@ -41,6 +45,8 @@ const responseHeaders = Object.freeze({
 });
 const reply = (status: number, received: boolean, extra: Record<string, string> = {}) =>
   new Response(JSON.stringify({ received }), { status, headers: { ...responseHeaders, ...extra } });
+const switchedOff = () =>
+  new Response('{"code":"unavailable"}', { status: 503, headers: responseHeaders });
 
 class BodyTooLarge extends Error {}
 async function readRaw(request: Request): Promise<Uint8Array> {
@@ -164,8 +170,7 @@ function dependencies(value: StripeWebhookDependencies): StripeWebhookDependenci
     !value.connector ||
     typeof value.connector.open !== "function" ||
     !(billingEnvironments as readonly unknown[]).includes(value.environment) ||
-    !value.broker ||
-    typeof value.broker.webhookVerify !== "function"
+    (value.broker !== null && (!value.broker || typeof value.broker.webhookVerify !== "function"))
   )
     throw Error("STRIPE_WEBHOOK_CONFIGURATION_INVALID");
   const now = value.now;
@@ -189,6 +194,9 @@ export function createStripeWebhookHandler(d?: StripeWebhookDependencies) {
         outcome: "unbound",
         response: new Response('{"code":"not_found"}', { status: 404, headers: responseHeaders }),
       };
+    // The Stripe switch is off: nothing is read, verified or written.
+    const broker = configured.broker;
+    if (broker === null) return { outcome: "stripe_off", response: switchedOff() };
     let url: URL;
     try {
       url = new URL(request.url);
@@ -224,7 +232,7 @@ export function createStripeWebhookHandler(d?: StripeWebhookDependencies) {
     try {
       let verdict;
       try {
-        verdict = await configured.broker.webhookVerify(base64Bytes(raw), signature, abort.signal);
+        verdict = await broker.webhookVerify(base64Bytes(raw), signature, abort.signal);
       } catch {
         return { outcome: "broker_held", response: reply(503, false) };
       }

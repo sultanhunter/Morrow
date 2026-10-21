@@ -406,6 +406,8 @@ function brokerEnv(environment = "development", change = {}) {
       ]),
     ),
     MORROW_VAULT_KEK_V1: randomBytes(32).toString("hex"),
+    // M5: the Stripe switch on (owner decision (c), 2026-10-21; its runtime image).
+    MORROW_STRIPE_MODE: "test",
     STRIPE_RESTRICTED_KEY: "rk_test_" + randomBytes(16).toString("hex"),
     STRIPE_WEBHOOK_SECRET: "whsec_" + randomBytes(16).toString("hex"),
     STRIPE_CONFIGURATION_JSON: JSON.stringify({
@@ -423,6 +425,7 @@ function brokerEnv(environment = "development", change = {}) {
 test("capability: rk_test_ only, whsec_, the closed configuration, never production or without the vault", async () => {
   const ready = await brokerCapabilities(brokerEnv());
   assert.notEqual(ready.stripe, null);
+  assert.equal(ready.stripeMode, "test");
   assert.equal(ready.stripe.environment, "development");
   assert.equal(ready.stripe.returnOrigin, "https://workspace.example.test");
   assert.equal(ready.stripe.configuration.billingAddressCollection, "auto");
@@ -444,7 +447,9 @@ test("capability: rk_test_ only, whsec_, the closed configuration, never product
     // Stripe holds alone: the api's leases stay.
     assert.notEqual(capabilities.database, null);
   }
-  assert.equal((await brokerCapabilities(brokerEnv("production"))).stripe, null);
+  const production = await brokerCapabilities(brokerEnv("production"));
+  assert.equal(production.stripe, null);
+  assert.equal(production.stripeMode, "off");
   assert.throws(() =>
     parseStripeConfiguration(
       JSON.stringify({
@@ -512,6 +517,80 @@ test("broker handlers: closed inputs first, then BROKER_HELD; an unreachable vau
     ["stripeWebhookVerify", "INPUT_INVALID"],
     ["stripeWebhookVerify", "INPUT_INVALID"],
     ["stripeCustomerEnsure", "CAPABILITY_UNAVAILABLE"],
-    ["stripeCustomerEnsure", "CAPABILITY_UNAVAILABLE"],
+    // Production has no Stripe switch: off, refused before anything else.
+    ["stripeCustomerEnsure", "STRIPE_UNAVAILABLE"],
   ]);
+});
+
+// M5, the Stripe switch (owner decision (c), 2026-10-21). Off (no MORROW_STRIPE_MODE, the
+// committed staging state) or any value but "test": the broker reads no Stripe secret or
+// configuration (`stripe` null, init stripeMode "off"), and each of the four Stripe methods
+// is BROKER_HELD with the fixed code STRIPE_UNAVAILABLE before its inputs are checked, with
+// no vault socket, no fetch and no Stripe request, even with every Stripe secret bound.
+test("switch off: every Stripe method is STRIPE_UNAVAILABLE before inputs, database or Stripe", async () => {
+  const { brokerStripeCheckoutCreate, brokerStripePortalCreate } = await import(
+    "../apps/broker/src/stripe-broker.ts"
+  );
+  for (const environment of ["development", "staging"])
+    for (const change of [
+      { MORROW_STRIPE_MODE: undefined },
+      { MORROW_STRIPE_MODE: "live" },
+      { MORROW_STRIPE_MODE: "TEST" },
+      { MORROW_STRIPE_MODE: "on" },
+      { MORROW_STRIPE_MODE: "" },
+    ]) {
+      const capabilities = await brokerCapabilities(brokerEnv(environment, change));
+      assert.equal(capabilities.stripeMode, "off", JSON.stringify(change));
+      assert.equal(capabilities.stripe, null);
+      // Nothing else depends on the switch.
+      assert.notEqual(capabilities.vault, null);
+      assert.notEqual(capabilities.database, null);
+    }
+  const env = brokerEnv("staging", { MORROW_STRIPE_MODE: undefined });
+  logs.length = 0;
+  const sockets = [];
+  const fetches = [];
+  const { WebSocket: nativeSocket, fetch: nativeFetch } = globalThis;
+  globalThis.WebSocket = function (url) {
+    sockets.push(String(url));
+    throw Error("unit: no network");
+  };
+  globalThis.fetch = async (request) => {
+    fetches.push(String(request?.url ?? request));
+    throw Error("unit: no network");
+  };
+  try {
+    for (const pending of [
+      brokerStripeCustomerEnsure(env, operationId, 1000),
+      brokerStripeCheckoutCreate(env, operationId, 1000),
+      brokerStripePortalCreate(env, operationId, 1000),
+      brokerStripeWebhookVerify(env, "e30=", "t=1,v1=" + "a".repeat(64), 1000),
+      // Malformed inputs are not even looked at.
+      brokerStripeCustomerEnsure(env, "not-a-uuid", 0),
+      brokerStripeWebhookVerify(env, "", "", 1000),
+    ])
+      await assert.rejects(pending, (error) => error.message === "BROKER_HELD");
+  } finally {
+    globalThis.WebSocket = nativeSocket;
+    globalThis.fetch = nativeFetch;
+  }
+  assert.deepEqual(sockets, []);
+  assert.deepEqual(fetches, []);
+  const rows = logs.map((l) => JSON.parse(l));
+  assert.deepEqual(
+    rows.filter((l) => l.event === "morrow_broker").map((l) => [l.method, l.code]),
+    [
+      ["stripeCustomerEnsure", "STRIPE_UNAVAILABLE"],
+      ["stripeCheckoutCreate", "STRIPE_UNAVAILABLE"],
+      ["stripePortalCreate", "STRIPE_UNAVAILABLE"],
+      ["stripeWebhookVerify", "STRIPE_UNAVAILABLE"],
+      ["stripeCustomerEnsure", "STRIPE_UNAVAILABLE"],
+      ["stripeWebhookVerify", "STRIPE_UNAVAILABLE"],
+    ],
+  );
+  const init = rows.filter((l) => l.event === "morrow_broker_init");
+  assert.equal(init.length, 1);
+  assert.equal(init[0].stripe, false);
+  assert.equal(init[0].stripeMode, "off");
+  assert.doesNotMatch(logs.join("\n"), /rk_test_|whsec_|bpc_/);
 });

@@ -379,8 +379,10 @@ test("P05.T01ab: hosted health needs the challenge capability; development does 
       runtime: true,
       vault: false,
       challenge: true,
-      // M5 PR-1: Stripe needs the vault (its definers run on the broker's own login).
+      // M5 PR-1: Stripe needs the vault (its definers run on the broker's own login), and
+      // the switch on; off here (no MORROW_STRIPE_MODE, owner decision (c), 2026-10-21).
       stripe: false,
+      stripeMode: "off",
     },
   ]);
 });

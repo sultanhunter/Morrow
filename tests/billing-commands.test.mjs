@@ -291,7 +291,8 @@ test("every malformed or unmapped request is refused before any connection or br
     assert.ok(!("checkoutUrl" in body), label);
   }
   assert.deepEqual(touched, { opens: 0, broker: 0 });
-  // With no broker Stripe adapters a purchase is 503 before any connection.
+  // With no broker Stripe adapters (the Stripe switch off) a purchase is 503 before any
+  // connection; the M5 test below covers the switch.
   const unbound = createBillingApiHandler({
     origin,
     connector,
@@ -461,6 +462,128 @@ test("the api dispatch table: work, billing and the exact webhook path; everythi
   );
   assert.equal(heldResponse.status, 503);
   assert.equal(touched.opens, 0);
+});
+
+// M5, the Stripe switch (owner decision (c), 2026-10-21). Off, the deployed api composes
+// the billing API and the webhook with no broker Stripe port: checkout and the portal answer
+// the fixed 503 unavailable envelope after the request guard and before any connection or
+// broker call, and the webhook answers 503 {"code":"unavailable"} before reading anything.
+// Reads (the view, the plans) still open their connection (lab:billing D1b reads a funded
+// workspace's plan and credits with the switch off, and the plans offer nothing).
+test("M5: with the Stripe switch off, checkout, the portal and the webhook fail closed with unavailable", async () => {
+  const { touched, connector } = spies();
+  const api = createBillingApiHandler({
+    origin,
+    connector,
+    environment: "staging",
+    broker: null,
+    now: () => Date.now(),
+  });
+  const priceKey = "stripe:price:price_MorrowDevBeta0049";
+  logs.length = 0;
+  for (const req of [
+    request("POST", `/workspace/${ws}/billing/morrow/checkout`, { body: { priceKey } }),
+    request("POST", `/workspace/${ws}/billing/morrow/portal`, { body: {} }),
+  ]) {
+    const response = await api.fetch(req, {}, ctx);
+    assert.equal(response.status, 503);
+    const body = await response.json();
+    assert.deepEqual(
+      {
+        code: body.code,
+        retryClass: body.retryClass,
+        safeMessage: body.safeMessage,
+        operationId: body.operationId,
+      },
+      {
+        code: "unavailable",
+        retryClass: "recheck_before_retry",
+        safeMessage: "Billing is temporarily unavailable.",
+        operationId: null,
+      },
+    );
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  }
+  assert.deepEqual(touched, { opens: 0, broker: 0 });
+  assert.deepEqual(
+    logs.map((line) => JSON.parse(line)).map(({ route, outcome }) => ({ route, outcome })),
+    [
+      { route: "POST /morrow/checkout", outcome: "stripe_off" },
+      { route: "POST /morrow/portal", outcome: "stripe_off" },
+    ],
+  );
+  // The guard and the closed bodies still come first: a malformed purchase is 400 and an
+  // unauthenticated one 401, not unavailable.
+  assert.equal(
+    (
+      await api.fetch(
+        request("POST", `/workspace/${ws}/billing/morrow/checkout`, { body: { priceKey: "x" } }),
+        {},
+        ctx,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await api.fetch(
+        request("POST", `/workspace/${ws}/billing/morrow/portal`, {
+          body: {},
+          headers: { Cookie: null },
+        }),
+        {},
+        ctx,
+      )
+    ).status,
+    401,
+  );
+  // A read still goes to the database (here the spy connector, which refuses it).
+  const view = await api.fetch(request("GET", `/workspace/${ws}/billing`), {}, ctx);
+  assert.equal(view.status, 503);
+  assert.equal((await view.json()).retryClass, "safe_read_retry");
+  assert.deepEqual(touched, { opens: 1, broker: 0 });
+  // The webhook: 503 {"code":"unavailable"} for every request, its body never read.
+  const webhook = createStripeWebhookHandler({
+    connector,
+    environment: "staging",
+    broker: null,
+    now: () => Date.now(),
+  });
+  logs.length = 0;
+  for (const req of [
+    new Request(origin + "/api/billing/stripe/webhook", {
+      method: "POST",
+      headers: { "stripe-signature": "t=1,v1=" + "a".repeat(64) },
+      body: '{"id":"evt_switch_off"}',
+    }),
+    new Request(origin + "/api/billing/stripe/webhook", { method: "GET" }),
+  ]) {
+    const response = await webhook.fetch(req, {}, ctx);
+    assert.equal(response.status, 503);
+    assert.equal(await response.text(), '{"code":"unavailable"}');
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.equal(req.bodyUsed, false);
+  }
+  assert.deepEqual(touched, { opens: 1, broker: 0 });
+  assert.deepEqual(
+    logs.map((line) => JSON.parse(line)),
+    [
+      { event: "morrow_billing_webhook", outcome: "stripe_off" },
+      { event: "morrow_billing_webhook", outcome: "stripe_off" },
+    ],
+  );
+  // Only null turns Stripe off; a missing or malformed port is a configuration error.
+  for (const broker of [undefined, {}, { webhookVerify: 1 }])
+    assert.throws(
+      () =>
+        createStripeWebhookHandler({
+          connector,
+          environment: "staging",
+          broker,
+          now: () => Date.now(),
+        }),
+      /STRIPE_WEBHOOK_CONFIGURATION_INVALID/,
+    );
 });
 
 test("the request's abort covers the database phase and both broker calls of a first checkout", () => {

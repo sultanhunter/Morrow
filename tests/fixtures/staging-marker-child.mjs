@@ -181,6 +181,13 @@ const scenarios = {
     tools: { emit },
     database: {},
   }),
+  // M5: the Stripe switch on: the two Stripe owner files join the first-deploy file.
+  "provision-first-stripe": () => ({
+    stripe: "on",
+    argv: ["provision-roles", "--first"],
+    tools: { emit },
+    database: {},
+  }),
   // Neon's measured shape (M-N3 as amended 2026-10-20): the module loaded with utility
   // tracking, so the passwords are wiped from the scratch database and verified.
   "provision-first-neon": () => ({
@@ -231,8 +238,10 @@ const scenarios = {
     argv: ["put-secret", "MORROW_VAULT_KEK_V1"],
     tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
   }),
-  // M5 PR-1: the Stripe owner files, placed on a broker that does not hold them yet.
+  // M5 PR-1, with the Stripe switch on: the Stripe owner files, placed on a broker that
+  // does not hold them yet.
   "put-secret-stripe-key": (constants) => ({
+    stripe: "on",
     argv: ["put-secret", "STRIPE_RESTRICTED_KEY"],
     tools: {
       emit,
@@ -242,7 +251,14 @@ const scenarios = {
     },
   }),
   "put-secret-stripe-webhook": (constants) => ({
+    stripe: "on",
     argv: ["put-secret", "STRIPE_WEBHOOK_SECRET"],
+    tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
+  }),
+  // M5: with the switch off (the committed state) put-secret refuses a Stripe name before
+  // reading the file or running any tool.
+  "put-secret-stripe-off": (constants) => ({
+    argv: ["put-secret", "STRIPE_RESTRICTED_KEY"],
     tools: { emit, wrangler: { secrets: { broker: constants.brokerSecrets } } },
   }),
   "put-secret-fails": (constants) => ({
@@ -322,9 +338,13 @@ const scenarios = {
   }),
 };
 
-const constants = await identityConstants();
-const spec = scenarios[scenario]?.(constants);
-if (!spec) process.exit(97);
+// M5: each scenario runs under its Stripe switch (off unless it says "on"); the switch is
+// probed with off constants, then the scenario is built with its own.
+const probe = scenarios[scenario]?.(await identityConstants());
+if (!probe) process.exit(97);
+const stripe = probe.stripe ?? "off";
+const constants = await identityConstants({ stripe });
+const spec = scenarios[scenario](constants);
 const cloud = fakeCloudflare(spec.cloudflare ?? {});
 const fake = fakeTools({ ...(spec.tools ?? {}), cloudflare: cloud });
 const site = fakeSite({
@@ -360,6 +380,7 @@ const loginConfiguration = {
 };
 const { ctx, reports } = await fakeContext({
   home,
+  stripe,
   tools: fake.tools,
   cloudflare: cloud.api,
   database: spec.database ? db.connector : undefined,

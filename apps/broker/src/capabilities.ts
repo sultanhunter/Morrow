@@ -15,6 +15,8 @@ import {
   parseBrokerDatabaseBinding,
   parseStripeConfiguration,
   parseTurnstileConfiguration,
+  stripeModeTest,
+  stripeModeVar,
   stripeRestrictedKeyPattern,
   stripeWebhookSecretPattern,
   turnstileKeyPattern,
@@ -56,7 +58,9 @@ export type BrokerFailureCode =
   | "PROVIDER_HELD"
   // M2 PR-2 review: the isolate's Shopify ingress slots on the vault login are all in use.
   | "INGRESS_BUSY"
-  | "STATE_INVALID";
+  | "STATE_INVALID"
+  // M5 (owner decision (c), 2026-10-21): the Stripe switch is off; no Stripe method runs.
+  | "STRIPE_UNAVAILABLE";
 export class BrokerHold extends Error {
   constructor(readonly code: BrokerFailureCode) {
     super("BROKER_HELD");
@@ -96,6 +100,12 @@ export interface BrokerCapabilities {
   readonly challenge: Readonly<BrokerChallenge> | null;
   /** M5 PR-1: the Stripe restricted test key, webhook secret and configuration (ApiBroker). */
   readonly stripe: Readonly<BrokerStripe> | null;
+  /**
+   * The Stripe switch as this broker sees it: "test" only with MORROW_STRIPE_MODE exactly
+   * "test" in development or staging; "off" otherwise, and then `stripe` is null and no
+   * Stripe secret or configuration is read.
+   */
+  readonly stripeMode: "off" | "test";
   // Hosted environments sign in only behind the guard (ADR-0019 item 6), so their
   // health also needs the challenge capability; development may run without it.
   readonly challengeRequired: boolean;
@@ -109,6 +119,7 @@ const nothing: Readonly<BrokerCapabilities> = Object.freeze({
   vault: null,
   challenge: null,
   stripe: null,
+  stripeMode: "off",
   challengeRequired: true,
 });
 const environments = ["development", "staging", "production"] as const;
@@ -239,18 +250,33 @@ function challenge(env: object): Readonly<BrokerChallenge> | null {
   }
 }
 
+// The Stripe switch (owner decision (c), 2026-10-21): on only with the reviewed var
+// MORROW_STRIPE_MODE exactly "test", in development or staging. Absent (the committed
+// staging state while the switch is off) or any other value is off.
+function stripeMode(env: object, environment: string): "off" | "test" {
+  return environment !== "production" && own(env, stripeModeVar) === stripeModeTest
+    ? "test"
+    : "off";
+}
+
 // M5 PR-1 (ADR-0022 items 7 and 12): the restricted test key (rk_test_ only: a secret sk_
 // key or any live key is refused), the webhook signing secret, STRIPE_CONFIGURATION_JSON
 // (the saved portal configuration and the tax and address flags, a reviewed staging
 // identifier) and the workspace origin Checkout returns to. Development and staging only,
-// and only with the vault: the Stripe definers run on the broker's own login. Anything
-// missing or malformed holds Stripe only (its methods answer BROKER_HELD; billing 503).
+// only while the switch is on, and only with the vault: the Stripe definers run on the
+// broker's own login. Anything missing or malformed holds Stripe only (its methods answer
+// BROKER_HELD; billing 503). While the switch is off nothing here is read.
 function stripe(
   env: object,
   environment: string,
   vaultCapability: Readonly<BrokerVault> | null,
 ): Readonly<BrokerStripe> | null {
-  if (environment === "production" || vaultCapability === null) return null;
+  if (
+    environment === "production" ||
+    stripeMode(env, environment) !== "test" ||
+    vaultCapability === null
+  )
+    return null;
   try {
     const restrictedKey = own(env, "STRIPE_RESTRICTED_KEY");
     const webhookSecret = own(env, "STRIPE_WEBHOOK_SECRET");
@@ -305,6 +331,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
         vault: vaultCapability,
         challenge: challenge(env),
         stripe: stripe(env, environment, vaultCapability),
+        stripeMode: stripeMode(env, environment),
         challengeRequired: environment !== "development",
       });
     }
@@ -321,6 +348,7 @@ async function initialise(env: object): Promise<Readonly<BrokerCapabilities>> {
       vault: result.vault !== null,
       challenge: result.challenge !== null,
       stripe: result.stripe !== null,
+      stripeMode: result.stripeMode,
     }),
   );
   return result;

@@ -1,10 +1,11 @@
 {
   "schema_version": 1,
   "environment_kind": "staging",
+  "switch": "off",
   "mode": "test",
   "portal_configuration_id": null,
   "automatic_tax": false,
   "billing_address_collection": "auto",
   "observed_on": null,
-  "scope": "The reviewed Stripe test-mode selectors of the staging broker's STRIPE_CONFIGURATION_JSON (M5 PR-1): the saved customer portal configuration and the tax flags. Identifiers only; never a key, a webhook secret or a live object. The owner records the portal configuration id (and observed_on) in a reviewed commit after creating it under per-action approval with a docs/evidence/live record; edge:check then admits exactly that id, only inside the broker's env.staging.vars STRIPE_CONFIGURATION_JSON."
+  "scope": "The staging Stripe switch and the reviewed Stripe test-mode selectors of the staging broker's STRIPE_CONFIGURATION_JSON (M5 PR-1). `switch` is off by owner decision (c) of 2026-10-21 (\"Merge with Stripe off\"): the staging api and broker carry no Stripe var, the broker requires no Stripe secret (14 names), and checkout, the portal and the webhook answer unavailable. One reviewed commit turns it on: `switch` \"on\" with the saved portal configuration id and observed_on, MORROW_STRIPE_MODE \"test\" in the staging api's and broker's env.staging.vars, the byte-equal STRIPE_CONFIGURATION_JSON in the broker's, and STRIPE_RESTRICTED_KEY and STRIPE_WEBHOOK_SECRET in the broker's env.staging secrets.required; edge:check refuses any mixed state. Then the owner places both secrets with staging:put-secret. Identifiers only; never a key, a webhook secret or a live object. The owner records the portal configuration id (and observed_on) after creating it under per-action approval with a docs/evidence/live record; edge:check then admits exactly that id, only inside the broker's env.staging.vars STRIPE_CONFIGURATION_JSON, and only while the switch is on."
 }

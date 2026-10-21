@@ -2,6 +2,16 @@
 
 The Morrow-direct billing server: the workspace billing routes on the api Worker's origin and the public Stripe webhook. Plan: P18.T01a, test mode only (`docs/briefs/M5-billing.md`). Rules: `billing-entitlements.md` (P01.T04a) and ADR-0022 items 2, 3, 5, 9, 11, 12 and 13, with the 2026-10-20 amendments to items 9 (receipt-only webhook ingress) and 11 (credits roll over in the beta). Code: `packages/work/src/billing/`, `apps/broker/src/stripe.ts`, migration `billing-records` (located by slug).
 
+## The Stripe switch
+
+Owner decision (c), 2026-10-21 ("Merge with Stripe off"): `switch` in `docs/decisions/stripe-staging.json` is committed `"off"`, and its runtime image is the api's and the broker's var `MORROW_STRIPE_MODE` (exactly `"test"` while on, absent while off; `docs/briefs/M5-billing.md` has the rules and how to turn it on). While it is off:
+
+- `POST /workspace/:ws/billing/morrow/checkout` and `POST /workspace/:ws/billing/morrow/portal` answer `503 unavailable` (`recheck_before_retry`, "Billing is temporarily unavailable.", no operation id) after the request guard and the closed body, and before any database access or broker call. No intent or operation is written.
+- `GET /workspace/:ws/billing/morrow/plans` lists no offer and allows neither `subscribe` nor `billingPortal`.
+- `POST /api/billing/stripe/webhook` answers `503 {"code":"unavailable"}` to every request before reading its body: no broker call and no receipt.
+- Each ApiBroker Stripe method is `BROKER_HELD` with the fixed code `STRIPE_UNAVAILABLE` before its inputs are read; the broker reads no Stripe secret or configuration.
+- `GET /workspace/:ws/billing` (plan, credits, billing period), the wallet, entitlements and the receipt definers are unchanged.
+
 ## Routes
 
 All workspace routes live under `/workspace/:ws/billing` and use the generalised workspace request guard (`packages/work/src/http-guard.ts`): exact origin, Fetch Metadata, exactly one `__Host-morrow_session` cookie, no query, and for writes the exact `Origin`, `Content-Type: application/json`, `X-Morrow-Request: 1` and an `Idempotency-Key` UUID. Bodies are at most 1 KiB of strict JSON. Every malformed request is refused before any database connection or broker call. No route sets a cookie or answers CORS; every response is `no-store`.
@@ -40,7 +50,7 @@ Every error is an `ErrorEnvelope` with a fixed safe message, the correlation id 
 | 404, 405 | `denied` | never | unmapped path, wrong method (`Allow` set) |
 | 409 | `conflict` | recheck or never | stale authority, an idempotency key reused for another body, terms changed or no terms revision, a checkout in progress, no customer, a provider refusal, a closed checkout |
 | 409 | `conflict` | never | `customer_held`: the workspace's Stripe customer setup is held for Morrow support ("Billing setup for this workspace needs attention from Morrow support."); see `setupHold` |
-| 503 | `unavailable` | recheck | database or broker unavailable, no Stripe adapters |
+| 503 | `unavailable` | recheck | database or broker unavailable, no Stripe adapters (the Stripe switch off) |
 | 503 | `uncertain` | reconcile_before_retry | the Stripe outcome is unknown: retry with the same `Idempotency-Key`, which reconciles the same operation |
 
 ## Operations and the broker

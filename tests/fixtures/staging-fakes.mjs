@@ -649,6 +649,13 @@ export const labBinding = Object.freeze({
 
 // A synthetic Turnstile site key in the broker's `^0x` format (never a real or dummy key).
 export const labSiteKey = "0x" + "labsitekey".repeat(2);
+// M5: a synthetic STRIPE_CONFIGURATION_JSON for the switch-on world (never a real id).
+export const labStripeConfigurationJson = JSON.stringify({
+  schemaVersion: 1,
+  portalConfigurationId: "bpc_" + "LabPortal".padEnd(24, "0"),
+  automaticTax: false,
+  billingAddressCollection: "auto",
+});
 // A synthetic LOGIN_CONFIGURATION_JSON text. Gate 4 needs the api's and the broker's copies
 // present and byte-equal; its content is checked by ctx.loginConfiguration, which the
 // fakes replace.
@@ -701,6 +708,10 @@ export async function fakeContext({
   // copies of the api's LOGIN_CONFIGURATION_JSON and MORROW_DATABASE_BINDING_JSON, and
   // `apiLogin` and `apiBinding` replace the api's own two (gate 4 only reads them).
   challengeVars = {},
+  // M5: the Stripe switch (owner decision (c), 2026-10-21): "off" (the committed state) or
+  // "on". The Stripe vars follow it unless challengeVars sets them: `apiStripeMode` and
+  // `brokerStripeMode` (MORROW_STRIPE_MODE) and `brokerStripe` (STRIPE_CONFIGURATION_JSON).
+  stripe = "off",
   administrator = { name: "neondb_owner", mode: "createrole" },
   now = Date.parse("2026-10-20T12:00:00Z"),
   environment = {},
@@ -712,7 +723,7 @@ export async function fakeContext({
   );
   const { stagingFileSpecs, credentialDirectory } = await import("../../scripts/staging-files.mjs");
   const { loadMigrationChain } = await import("../../scripts/migration-chain.mjs");
-  const constants = await identityConstants();
+  const constants = await identityConstants({ stripe });
   const realRoot = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
   const repoRoot = root ?? realRoot;
   const baseStaging = JSON.parse(
@@ -769,8 +780,9 @@ export async function fakeContext({
     ),
     loginConfigurationJson: pick("brokerLogin", loginConfiguration),
     bindingJson: pick("brokerBinding", bindingJson),
-    // M5 PR-1: absent by default (billing then fails closed with 503).
-    stripeJson: pick("brokerStripe", null),
+    // M5: absent while the switch is off; a valid configuration and mode while it is on.
+    stripeJson: pick("brokerStripe", stripe === "on" ? labStripeConfigurationJson : null),
+    stripeMode: pick("brokerStripeMode", stripe === "on" ? "test" : null),
   });
   const out = [];
   const err = [];
@@ -826,6 +838,7 @@ export async function fakeContext({
       loginConfigurationJson: pick("apiLogin", loginConfiguration),
       challengeJson,
       broker: brokerVars,
+      stripeMode: pick("apiStripeMode", stripe === "on" ? "test" : null),
     }),
     chain: () => loadMigrationChain({ root: repoRoot }),
     tools,

@@ -50,7 +50,12 @@ export interface BillingApiDependencies {
   readonly origin: string;
   readonly connector: WorkSqlConnector;
   readonly environment: BillingEnvironmentName;
-  /** null: the api has no broker Stripe adapters; purchases answer 503. */
+  /**
+   * null: no broker Stripe adapters, which is the deployed api while the Stripe switch is off
+   * (owner decision (c), 2026-10-21). Checkout and portal then answer 503 unavailable before
+   * any database access or broker call, and the plans offer neither action; the billing view
+   * (plan, credits, period) still reads the database.
+   */
   readonly broker: BillingBrokerPort | null;
   readonly now: () => number;
 }
@@ -286,7 +291,7 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
         if (!parsePortalBody(g.body)) return respond("invalid", "invalid");
         digest = await billingRequestDigest("portal", g.workspaceId, {});
       }
-      if (!read && !configured.broker) return respond("unavailable", "broker_unbound");
+      if (!read && !configured.broker) return respond("unavailable", "stripe_off");
       let connection: WorkSqlConnection;
       try {
         connection = await configured.connector.open({
@@ -329,9 +334,14 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
             const actions = requirePurchase(c, "GET /morrow/plans");
             // Only what POST /morrow/checkout can perform: the guard's subscribe, and
             // cmd_checkout_open's own precondition (an unfixed website route, never bound,
-            // with no association) and no customer setup held for the operator.
+            // with no association) and no customer setup held for the operator. With the
+            // Stripe switch off neither purchase can run, so neither is offered.
+            const stripeOn = configured.broker !== null;
             const subscribe =
-              actions.includes("subscribe") && checkoutAdmissible(c) && !c.read.setupHold;
+              stripeOn &&
+              actions.includes("subscribe") &&
+              checkoutAdmissible(c) &&
+              !c.read.setupHold;
             return {
               kind: "view" as const,
               body: {
@@ -339,7 +349,7 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
                 offers: subscribe ? currentOffers(c.terms, configured.environment) : [],
                 actions: {
                   subscribe,
-                  billingPortal: actions.includes("billing_portal"),
+                  billingPortal: stripeOn && actions.includes("billing_portal"),
                 },
               },
             };

@@ -1639,64 +1639,78 @@ const provisionPlant = () => ({
 const passwordStatement =
   /^ALTER ROLE (morrow_[a-z0-9_]+) WITH LOGIN CONNECTION LIMIT 10 PASSWORD '([A-Za-z0-9_-]{43})'$/;
 
-test("fake database: provisioning sends each plaintext once, in its own role's ALTER ROLE", async () => {
-  const planted = plantedHome(provisionPlant());
-  try {
-    const { ctx, out, err, constants } = await fakeContext({
-      home: planted.home,
-      tools: fakeTools().tools,
-    });
-    const db = fakeDatabase({ roles: constants.roles });
-    ctx.database = db.connector;
-    assert.equal(await main(["provision-roles", "--first"], ctx), 0, out.join());
-    const secrets = JSON.parse(
-      readFileSync(join(planted.directory, "tmp/broker-secrets.json"), "utf8"),
-    );
-    assert.equal(statSync(join(planted.directory, "tmp/broker-secrets.json")).mode & 0o777, 0o600);
-    assert.deepEqual(Object.keys(secrets).sort(), constants.brokerSecrets);
-    assert.equal(constants.brokerSecrets.length, 16);
-    // M5 PR-1: the owner's Stripe files, unchanged; never sent to the database.
-    assert.equal(secrets.STRIPE_RESTRICTED_KEY, plantedStripe["stripe-restricted-key"]);
-    assert.equal(secrets.STRIPE_WEBHOOK_SECRET, plantedStripe["stripe-webhook-secret"]);
-    // Eleven logins: the ten leased roles and the broker's own vault login (M2 PR-1).
-    assert.equal(constants.roles.length, 11);
-    assert.ok(constants.roles.includes("morrow_vault_broker"));
-    const passwords = constants.roles.map((r) => secrets[constants.passwordSecret(r)]);
-    assert.ok(passwords.every((p) => /^[A-Za-z0-9_-]{43}$/.test(p)));
-    assert.equal(new Set(passwords).size, passwords.length);
-    // The KEK is the owner's file, unchanged; the tool generates no KEK.
-    assert.equal(secrets.MORROW_VAULT_KEK_V1, plantedKek);
-    const texts = db.statements.map((s) => s.text + JSON.stringify(s.params));
-    for (const role of constants.roles) {
-      const password = secrets[constants.passwordSecret(role)];
-      const carrying = db.statements.filter((s) => (s.text + s.params.join()).includes(password));
-      assert.equal(carrying.length, 1, role);
-      const [, named, sent] = passwordStatement.exec(carrying[0].text) ?? [];
-      assert.deepEqual([named, sent, carrying[0].params], [role, password, []], role);
+// M5: the Stripe switch (owner decision (c), 2026-10-21) decides whether the first-deploy
+// file carries the two Stripe secrets: off (committed) fourteen names, on sixteen.
+for (const stripe of ["off", "on"])
+  test(`fake database: provisioning sends each plaintext once, in its own role's ALTER ROLE (Stripe ${stripe})`, async () => {
+    const planted = plantedHome(provisionPlant());
+    try {
+      const { ctx, out, err, constants } = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+        stripe,
+      });
+      const db = fakeDatabase({ roles: constants.roles });
+      ctx.database = db.connector;
+      assert.equal(await main(["provision-roles", "--first"], ctx), 0, out.join());
+      const secrets = JSON.parse(
+        readFileSync(join(planted.directory, "tmp/broker-secrets.json"), "utf8"),
+      );
+      assert.equal(
+        statSync(join(planted.directory, "tmp/broker-secrets.json")).mode & 0o777,
+        0o600,
+      );
+      assert.deepEqual(Object.keys(secrets).sort(), constants.brokerSecrets);
+      assert.equal(constants.brokerSecrets.length, stripe === "on" ? 16 : 14);
+      // M5 PR-1: the owner's Stripe files, unchanged, only while the switch is on; never sent
+      // to the database. Off, the planted files are not even read into the broker file.
+      assert.equal(
+        secrets.STRIPE_RESTRICTED_KEY,
+        stripe === "on" ? plantedStripe["stripe-restricted-key"] : undefined,
+      );
+      assert.equal(
+        secrets.STRIPE_WEBHOOK_SECRET,
+        stripe === "on" ? plantedStripe["stripe-webhook-secret"] : undefined,
+      );
+      // Eleven logins: the ten leased roles and the broker's own vault login (M2 PR-1).
+      assert.equal(constants.roles.length, 11);
+      assert.ok(constants.roles.includes("morrow_vault_broker"));
+      const passwords = constants.roles.map((r) => secrets[constants.passwordSecret(r)]);
+      assert.ok(passwords.every((p) => /^[A-Za-z0-9_-]{43}$/.test(p)));
+      assert.equal(new Set(passwords).size, passwords.length);
+      // The KEK is the owner's file, unchanged; the tool generates no KEK.
+      assert.equal(secrets.MORROW_VAULT_KEK_V1, plantedKek);
+      const texts = db.statements.map((s) => s.text + JSON.stringify(s.params));
+      for (const role of constants.roles) {
+        const password = secrets[constants.passwordSecret(role)];
+        const carrying = db.statements.filter((s) => (s.text + s.params.join()).includes(password));
+        assert.equal(carrying.length, 1, role);
+        const [, named, sent] = passwordStatement.exec(carrying[0].text) ?? [];
+        assert.deepEqual([named, sent, carrying[0].params], [role, password, []], role);
+      }
+      assert.equal(db.statements.filter((s) => / PASSWORD /.test(s.text)).length, 11);
+      assert.ok(!texts.join().includes(plantedKek));
+      assert.ok(Object.values(plantedStripe).every((v) => !texts.join().includes(v)));
+      assert.ok(!texts.join().includes("SCRAM-SHA-256$"));
+      // The statement-statistics check runs before the first password statement.
+      const check = db.statements.findIndex((s) => /extname = 'pg_stat_statements'/.test(s.text));
+      const first = db.statements.findIndex((s) => / PASSWORD /.test(s.text));
+      assert.ok(check >= 0 && check < first);
+      // No plaintext or KEK in the output; this fake's pg_authid is unreadable.
+      assert.ok([...passwords, plantedKek].every((p) => !out.join().includes(p)));
+      assert.equal(JSON.parse(out.at(-1)).passwordStorage, "unreadable");
+      // No module loaded: nothing records the statements, so no scratch session is opened.
+      assert.deepEqual(JSON.parse(out.at(-1)).statementStats, { recording: false });
+      assert.ok(db.statements.every((s) => s.database === "morrow"));
+      assert.equal(err.length, 0);
+      // A second --first refuses: the file exists, and nothing was sent.
+      const before = db.statements.length;
+      assert.equal(await main(["provision-roles", "--first"], ctx), 1);
+      assert.equal(db.statements.length, before);
+    } finally {
+      planted.cleanup();
     }
-    assert.equal(db.statements.filter((s) => / PASSWORD /.test(s.text)).length, 11);
-    assert.ok(!texts.join().includes(plantedKek));
-    assert.ok(Object.values(plantedStripe).every((v) => !texts.join().includes(v)));
-    assert.ok(!texts.join().includes("SCRAM-SHA-256$"));
-    // The statement-statistics check runs before the first password statement.
-    const check = db.statements.findIndex((s) => /extname = 'pg_stat_statements'/.test(s.text));
-    const first = db.statements.findIndex((s) => / PASSWORD /.test(s.text));
-    assert.ok(check >= 0 && check < first);
-    // No plaintext or KEK in the output; this fake's pg_authid is unreadable.
-    assert.ok([...passwords, plantedKek].every((p) => !out.join().includes(p)));
-    assert.equal(JSON.parse(out.at(-1)).passwordStorage, "unreadable");
-    // No module loaded: nothing records the statements, so no scratch session is opened.
-    assert.deepEqual(JSON.parse(out.at(-1)).statementStats, { recording: false });
-    assert.ok(db.statements.every((s) => s.database === "morrow"));
-    assert.equal(err.length, 0);
-    // A second --first refuses: the file exists, and nothing was sent.
-    const before = db.statements.length;
-    assert.equal(await main(["provision-roles", "--first"], ctx), 1);
-    assert.equal(db.statements.length, before);
-  } finally {
-    planted.cleanup();
-  }
-});
+  });
 
 // The owner's conditions (2026-10-20): before any password statement, any broker file or
 // any secret placement, the tool refuses statistics it cannot read, the extension in the
@@ -2195,12 +2209,30 @@ test("provision-roles --first: broker file names other than brokerRequiredSecret
       constants.brokerSecrets.filter(
         (name) => name !== constants.passwordSecret("morrow_vault_broker"),
       ),
-      // M5 PR-1: the Stripe names are part of the one list.
-      constants.brokerSecrets.filter((name) => name !== "STRIPE_WEBHOOK_SECRET"),
+      // M5: the Stripe names are not in the list while the switch is off.
+      [...constants.brokerSecrets, "STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"].sort(),
     ]) {
       ctx.constants = async () => Object.freeze({ ...constants, brokerSecrets });
       assert.equal(await main(["provision-roles", "--first"], ctx), 1);
       assert.equal(JSON.parse(err.at(-1)).code, "STAGING_BROKER_FILE_NAMES_INVALID");
+      assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false);
+      assert.deepEqual(db.statements, []);
+    }
+    // With the switch on the Stripe names are part of the one list.
+    const on = await fakeContext({ home: planted.home, tools: fakeTools().tools, stripe: "on" });
+    on.ctx.database = db.connector;
+    for (const [brokerSecrets, stripeSecrets] of [
+      [
+        on.constants.brokerSecrets.filter((name) => name !== "STRIPE_WEBHOOK_SECRET"),
+        on.constants.stripeSecrets,
+      ],
+      // A Stripe name the tools have no owner file for.
+      [[...constants.brokerSecrets, "STRIPE_OTHER_SECRET"].sort(), ["STRIPE_OTHER_SECRET"]],
+    ]) {
+      on.ctx.constants = async () =>
+        Object.freeze({ ...on.constants, brokerSecrets, stripeSecrets });
+      assert.equal(await main(["provision-roles", "--first"], on.ctx), 1);
+      assert.equal(JSON.parse(on.err.at(-1)).code, "STAGING_BROKER_FILE_NAMES_INVALID");
       assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false);
       assert.deepEqual(db.statements, []);
     }
@@ -2247,9 +2279,10 @@ test("provision-roles --first: the vault KEK is read from the owner's file, neve
   }
 });
 
-// M5 PR-1 (ADR-0022 items 7 and 12): both Stripe secrets come only from the owner's files.
-// A missing file, a secret sk_ key, a live key, a malformed webhook secret or a loose mode
-// stops --first before the broker file is created or any role is touched.
+// M5 PR-1 (ADR-0022 items 7 and 12), with the Stripe switch on: both Stripe secrets come
+// only from the owner's files. A missing file, a secret sk_ key, a live key, a malformed
+// webhook secret or a loose mode stops --first before the broker file is created or any
+// role is touched. With the switch off the same files are never read.
 test("provision-roles --first: the Stripe secrets are read from the owner's files", async () => {
   for (const [label, plant, modes, code] of [
     ["missing key", { "stripe-restricted-key": null }, {}, "STAGING_FILE_MISSING"],
@@ -2283,6 +2316,7 @@ test("provision-roles --first: the Stripe secrets are read from the owner's file
       const { ctx, err, constants } = await fakeContext({
         home: planted.home,
         tools: fakeTools().tools,
+        stripe: "on",
       });
       const db = fakeDatabase({ roles: constants.roles });
       ctx.database = db.connector;
@@ -2291,6 +2325,14 @@ test("provision-roles --first: the Stripe secrets are read from the owner's file
       assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false, label);
       assert.deepEqual(db.statements, [], label);
       assert.ok(!err.join().includes("K".repeat(32)), label);
+      // Off, the same bad or missing Stripe files are never read: --first succeeds.
+      const off = await fakeContext({ home: planted.home, tools: fakeTools().tools });
+      off.ctx.database = fakeDatabase({ roles: off.constants.roles }).connector;
+      assert.equal(await main(["provision-roles", "--first"], off.ctx), 0, label);
+      const written = JSON.parse(
+        readFileSync(join(planted.directory, "tmp/broker-secrets.json"), "utf8"),
+      );
+      assert.equal(Object.keys(written).length, 14, label);
     } finally {
       planted.cleanup();
     }
