@@ -60,6 +60,7 @@ import {
   censusFindings,
   closedReport,
   commands,
+  committedRecord,
   connectAttemptTimeoutMs,
   main,
   mainPreconditions,
@@ -80,6 +81,7 @@ import {
   approvedCard,
   fakeCloudflare,
   fakeContext,
+  fakeBlobId,
   fakeDatabase,
   fakeSha,
   fakeTools,
@@ -2826,7 +2828,7 @@ test("test-entitlement: the record names the approval reference and the workspac
     );
 });
 
-test("cli: test-entitlement needs the card with E13, the committed record naming the approval and workspace, and main", async () => {
+test("cli: test-entitlement needs the card with E13, the record committed at main naming the approval and workspace, and main", async () => {
   const planted = plantedHome({
     "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
   });
@@ -2844,9 +2846,15 @@ test("cli: test-entitlement needs the card with E13, the committed record naming
     "--operator",
     entitlementInput.operatorId,
   ];
+  const named = `- Approval reference: \`${entitlementInput.approvalRef}\`\n- Workspace: \`${entitlementInput.workspaceId}\`\n`;
+  const committed = (text, entry = {}) => ({ [entitlementInput.evidenceRef]: { text, ...entry } });
   const card = { ...approvedCard(), e13: { amendedOn: "2026-10-21" } };
+  // `files` is the committed tree at main (the fake git's ls-tree and cat-file).
   const world = async (options = {}) => {
-    const fake = fakeTools(options.tools ?? {});
+    const fake = fakeTools({
+      ...(options.tools ?? {}),
+      git: { files: options.files ?? {}, ...(options.tools?.git ?? {}) },
+    });
     const { ctx, out, err } = await fakeContext({
       home: planted.home,
       root,
@@ -2865,6 +2873,10 @@ test("cli: test-entitlement needs the card with E13, the committed record naming
     ctx.database = db.connector;
     return { ctx, out, err, db, fake };
   };
+  const gitReads = (w) =>
+    w.fake.calls
+      .filter((c) => c.tool === "git" && (c.args[0] === "ls-tree" || c.args[0] === "cat-file"))
+      .map((c) => c.args);
   try {
     for (const bad of [
       argv.slice(0, -1),
@@ -2876,14 +2888,21 @@ test("cli: test-entitlement needs the card with E13, the committed record naming
       assert.equal(await main(bad, w.ctx), 2, bad.join(" "));
       assert.equal(JSON.parse(w.err.at(-1)).code, "STAGING_USAGE");
     }
-    // Before any database effect: the card, E13, the record and its contents.
+    // Before any database effect: the card, E13, the record at main and its contents.
     const refusals = [
       [
-        { card: { ...card, status: "proposed", approvedOn: null, expiresOn: null } },
+        {
+          card: { ...card, status: "proposed", approvedOn: null, expiresOn: null },
+          files: committed(named),
+        },
         "STAGING_CARD_INACTIVE",
       ],
-      [{ card: approvedCard() }, "STAGING_CARD_EFFECT_MISSING"],
+      [{ card: approvedCard(), files: committed(named) }, "STAGING_CARD_EFFECT_MISSING"],
       [{}, "STAGING_EVIDENCE_MISSING"],
+      // Committed, but not as one regular file: a symbolic link, an executable, a directory.
+      [{ files: committed(named, { mode: "120000" }) }, "STAGING_EVIDENCE_MISSING"],
+      [{ files: committed(named, { mode: "100755" }) }, "STAGING_EVIDENCE_MISSING"],
+      [{ files: committed(named, { mode: "040000", type: "tree" }) }, "STAGING_EVIDENCE_MISSING"],
     ];
     for (const [options, code] of refusals) {
       const w = await world(options);
@@ -2891,6 +2910,17 @@ test("cli: test-entitlement needs the card with E13, the committed record naming
       assert.equal(JSON.parse(w.err.at(-1)).code, code);
       assert.deepEqual(w.db.statements, [], code);
     }
+    // The working tree is never read: a correct record there, uncommitted (untracked or
+    // ignored), refuses; and a committed record that does not name the run refuses although
+    // the working-tree file beside it does.
+    writeFileSync(record, named);
+    const uncommitted = await world();
+    assert.equal(await main(argv, uncommitted.ctx), 1);
+    assert.equal(JSON.parse(uncommitted.err.at(-1)).code, "STAGING_EVIDENCE_MISSING");
+    assert.deepEqual(uncommitted.db.statements, []);
+    assert.deepEqual(gitReads(uncommitted), [
+      ["ls-tree", "-z", "--full-tree", fakeSha("main"), "--", entitlementInput.evidenceRef],
+    ]);
     // The record must name both exactly on their labelled lines: a substring (the old
     // check) or a prefix of another reference refuses before any SQL.
     for (const text of [
@@ -2898,21 +2928,22 @@ test("cli: test-entitlement needs the card with E13, the committed record naming
       `Approval: ${entitlementInput.approvalRef}\nWorkspace: ${entitlementInput.workspaceId}x\n`,
       `- Approval reference: \`${entitlementInput.approvalRef}0\`\n- Workspace: \`${entitlementInput.workspaceId}\`\n`,
     ]) {
-      writeFileSync(record, text);
-      const unnamed = await world();
+      const unnamed = await world({ files: committed(text) });
       assert.equal(await main(argv, unnamed.ctx), 1, text);
       assert.equal(JSON.parse(unnamed.err.at(-1)).code, "STAGING_EVIDENCE_MISMATCH", text);
       assert.deepEqual(unnamed.db.statements, [], text);
     }
-    writeFileSync(
-      record,
-      `- Approval reference: \`${entitlementInput.approvalRef}\`\n- Workspace: \`${entitlementInput.workspaceId}\`\n`,
-    );
-    const branch = await world({ tools: { git: { head: fakeSha("branch") } } });
+    // Off main the record is not even looked up.
+    const branch = await world({
+      files: committed(named),
+      tools: { git: { head: fakeSha("branch") } },
+    });
     assert.equal(await main(argv, branch.ctx), 1);
     assert.equal(JSON.parse(branch.err.at(-1)).code, "STAGING_NOT_MAIN");
     assert.deepEqual(branch.db.statements, []);
-    const ok = await world();
+    assert.deepEqual(gitReads(branch), []);
+    rmSync(record);
+    const ok = await world({ files: committed(named) });
     assert.equal(await main(argv, ok.ctx), 0);
     assert.deepEqual(JSON.parse(ok.out.at(-1)), {
       command: "test-entitlement",
@@ -2920,10 +2951,79 @@ test("cli: test-entitlement needs the card with E13, the committed record naming
       ...entitlementResult,
       approvalRef: entitlementInput.approvalRef,
       record: entitlementInput.evidenceRef,
+      recordCommit: fakeSha("main"),
     });
+    assert.deepEqual(gitReads(ok), [
+      ["ls-tree", "-z", "--full-tree", fakeSha("main"), "--", entitlementInput.evidenceRef],
+      ["cat-file", "blob", fakeBlobId(named)],
+    ]);
     assert.ok(ok.db.statements.some((s) => /operator_test_entitlement_grant/.test(s.text)));
   } finally {
     planted.cleanup();
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("test-entitlement: committedRecord reads one regular blob at exactly that path at the verified commit", async () => {
+  const main40 = fakeSha("main");
+  const path = entitlementInput.evidenceRef;
+  const text = "- Approval reference: `x`\n";
+  const id = fakeBlobId(text);
+  const toolsFor = (listing) => {
+    const calls = [];
+    return {
+      calls,
+      ctx: {
+        tools: {
+          async git(args) {
+            calls.push(args);
+            if (args[0] === "ls-tree") return { status: 0, stdout: listing, stderr: "" };
+            if (args[0] === "cat-file") return { status: 0, stdout: text, stderr: "" };
+            return { status: 2, stdout: "", stderr: "" };
+          },
+        },
+      },
+    };
+  };
+  const codeAsync = async (fn) => {
+    try {
+      await fn();
+      return null;
+    } catch (error) {
+      return error.code ?? error.message;
+    }
+  };
+  const good = toolsFor(`100644 blob ${id}\t${path}\0`);
+  assert.equal(await committedRecord(good.ctx, main40, path), text);
+  assert.deepEqual(good.calls, [
+    ["ls-tree", "-z", "--full-tree", main40, "--", path],
+    ["cat-file", "blob", id],
+  ]);
+  for (const listing of [
+    "",
+    `100644 blob ${id}\t${path}x\0`,
+    `100644 blob ${id}\t${path}\x00100644 blob ${id}\t${path}\0`,
+    `100644 blob ${id}\t${path}`,
+    `120000 blob ${id}\t${path}\0`,
+    `160000 commit ${id}\t${path}\0`,
+    `100644 blob ${id.slice(1)}\t${path}\0`,
+  ]) {
+    const w = toolsFor(listing);
+    assert.equal(
+      await codeAsync(() => committedRecord(w.ctx, main40, path)),
+      "STAGING_EVIDENCE_MISSING",
+      JSON.stringify(listing),
+    );
+    assert.equal(w.calls.length, 1, JSON.stringify(listing));
+  }
+  for (const [commit, file, code] of [
+    ["HEAD", path, "STAGING_GIT_OUTPUT_INVALID"],
+    [main40.slice(1), path, "STAGING_GIT_OUTPUT_INVALID"],
+    [main40, "docs/evidence/live/../../STATUS.md", "STAGING_USAGE"],
+    [main40, "README.md", "STAGING_USAGE"],
+  ]) {
+    const w = toolsFor(`100644 blob ${id}\t${path}\0`);
+    assert.equal(await codeAsync(() => committedRecord(w.ctx, commit, file)), code, file);
+    assert.deepEqual(w.calls, [], file);
   }
 });

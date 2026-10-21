@@ -9,7 +9,7 @@
 // reads and local commands do not. `ctx` is the one injection seam: tests and the
 // PostgreSQL lab pass fakes for tools, the Cloudflare API and the database.
 import "./staging-token.mjs"; // FIRST: removes CLOUDFLARE_API_TOKEN and GH_TOKEN from process.env.
-import { appendFileSync, existsSync, lstatSync, readFileSync, unlinkSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
 import { setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -46,6 +46,7 @@ import {
   seedPlatform,
   sessionIdentity,
   checkIdentity,
+  liveEvidenceRef,
   statementStatsScratchDatabase,
   testEntitlementApproval,
   testEntitlementInput,
@@ -811,10 +812,12 @@ command("billing-customer-resolve", {
 // The staging test entitlement (owner decision (b), 2026-10-21; the ADR-0022 item 5
 // amendment; card E13). Each use needs the owner's own approval in chat for this workspace,
 // recorded in a docs/evidence/live record committed to main before the run: the record
-// must name the approval reference and the workspace (requireTestEntitlementRecord). Under
-// the active card that carries E13, with an approval reference of that card and effect
-// dated from the amendment to today.
-// Prints the closed result: the outcome, ids, credit units, the terms revision and the period.
+// must name the approval reference and the workspace (requireTestEntitlementRecord), and it
+// is read from the commit mainPreconditions verified (committedRecord), never from the
+// working tree. Under the active card that carries E13, with an approval reference of that
+// card and effect dated from the amendment to today.
+// Prints the closed result: the outcome, ids, credit units, the terms revision and the
+// period, with the approval reference, the record's path and the commit it was read at.
 export function requireTestEntitlementApproval(card, approvalRef, now) {
   const e13 = card?.e13;
   const day = /^\d{4}-\d{2}-\d{2}$/;
@@ -867,6 +870,29 @@ export function requireTestEntitlementRecord(text, { approvalRef, workspaceId })
   )
     throw new StagingError("STAGING_EVIDENCE_MISMATCH");
 }
+// The record as committed at `commit` (the origin/main head mainPreconditions verified),
+// never the working tree: an ignored or untracked file, or one edited after the clean-tree
+// check, cannot stand in for it. One regular blob (mode 100644) at exactly that path, read
+// by its object id; a missing path, a symbolic link, an executable file or a directory is
+// STAGING_EVIDENCE_MISSING.
+const committedEntry = /^100644 blob ([0-9a-f]{40})\t([^\0]+)\0$/;
+export async function committedRecord(ctx, commit, path) {
+  if (typeof commit !== "string" || !/^[0-9a-f]{40}$/.test(commit))
+    throw new StagingError("STAGING_GIT_OUTPUT_INVALID");
+  if (typeof path !== "string" || !liveEvidenceRef.test(path))
+    throw new StagingError("STAGING_USAGE");
+  const listing = await toolOk(ctx.tools, "git", [
+    "ls-tree",
+    "-z",
+    "--full-tree",
+    commit,
+    "--",
+    path,
+  ]);
+  const entry = committedEntry.exec(listing);
+  if (!entry || entry[2] !== path) throw new StagingError("STAGING_EVIDENCE_MISSING");
+  return toolOk(ctx.tools, "git", ["cat-file", "blob", entry[1]]);
+}
 command("test-entitlement", {
   usage:
     "test-entitlement --workspace <id> --approval <staging-card-1.e13.YYYY-MM-DD.n> --record <docs/evidence/live/....md> --operator <id>",
@@ -895,12 +921,12 @@ command("test-entitlement", {
     const config = await ctx.config();
     requireActiveCard(config.card, ctx.now());
     requireTestEntitlementApproval(config.card, input.approvalRef, ctx.now());
-    const record = join(ctx.root, input.evidenceRef);
-    if (!existsSync(record) || !lstatSync(record).isFile())
-      throw new StagingError("STAGING_EVIDENCE_MISSING");
-    requireTestEntitlementRecord(readFileSync(record, "utf8"), input);
     const binding = await stagingBinding(ctx, config);
-    await mainPreconditions(ctx, repositoryOf(config.staging));
+    const { sourceCommit } = await mainPreconditions(ctx, repositoryOf(config.staging));
+    requireTestEntitlementRecord(
+      await committedRecord(ctx, sourceCommit, input.evidenceRef),
+      input,
+    );
     const ownerUrl = ownerUrlFor(ctx, binding, await ctx.specs());
     const granted = await grantTestEntitlement({
       connect: ctx.database({ ownerUrl, binding }).connect,
@@ -908,7 +934,12 @@ command("test-entitlement", {
       administrator: ctx.administrator,
       input,
     });
-    return { ...granted, approvalRef: input.approvalRef, record: input.evidenceRef };
+    return {
+      ...granted,
+      approvalRef: input.approvalRef,
+      record: input.evidenceRef,
+      recordCommit: sourceCommit,
+    };
   },
 });
 

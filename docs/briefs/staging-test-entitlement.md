@@ -45,11 +45,13 @@ Non-goals: renewal (one 30-day period per workspace); any change to checkout, th
 - **Never a payment.** No receipt, verified payment event or `credit_grants` row is written; the operator key is not a payment, subscription or price key. The grant is recorded in its own table (kept on review; an implementation note in ADR-0022). The wallet is funded by the grant record alone, for its revision 2 and its exact units. After that, only sum-keeping moves are admitted.
 - **Refusals.** Phase open only, like checkout and a verified payment's fix (P01.T04a R2, R3): the function refuses any workspace with a route, a store association (an installation that is or was linked), an account, a Stripe customer, a Stripe operation, a checkout or a receipt. A reused approval is `approval_conflict`; the same approval for the same workspace replays and writes nothing.
 - **Linked stores.** After the grant the workspace can link a store. Until the owner's M6 ADR about testing on the live store exists, that store must be a Shopify development store, never the owner's live store (owner decision (a), quoted in ADR-0022's item 5 amendment and the E13 amendment).
+  - *Enforced in code (M2 PR-2):* the broker's install stores nothing for a store whose `shop.plan.partnerDevelopment` is false (`store_not_development`, at install and every re-authorisation); 0026's `link_workspace_store` refuses a Shopify candidate whose installation is not a development store (`installation_ineligible`); 0026's app registry admits only development and staging. The live store can be neither installed nor linked. Checked at install, re-authorisation and link time, not while linked; no end date.
+  - *Procedure:* choosing a fresh development store with test products only (the flag cannot tell one holding data copied from the live store), each registration and install under its own approval, and noticing a linked store that leaves development. This PR changes none of it.
 - **Before any database effect, the CLI needs:**
   - the active card carrying E13;
   - an approval reference of that card and effect, dated from the amendment to today;
-  - the record committed to `main`, naming exactly the reference and the workspace on its `Approval reference:` and `Workspace:` lines, once each (a substring or a prefix such as `.1` inside `.10` does not count);
-  - `main` at a green `foundation`.
+  - `main` verified (clean tree, `HEAD` at a freshly fetched `origin/main`, `foundation` green);
+  - the record committed at that commit, read as its blob (`git ls-tree` then `git cat-file blob`), never from the working tree: one regular file at exactly that path, naming exactly the reference and the workspace on its `Approval reference:` and `Workspace:` lines, once each (a substring or a prefix such as `.1` inside `.10` does not count).
 
 ## Owner steps for the first use (each per action)
 
@@ -68,7 +70,8 @@ Non-goals: renewal (one 30-day period per workspace); any change to checkout, th
   - the D4 statements;
   - commits only on `granted` or `replayed`; every other outcome, or a malformed result, commits nothing;
   - the card, E13 and approval-date rules;
-  - the CLI refuses before any SQL without the card, E13, the record, or a record naming exactly the approval and workspace, and on an unmerged HEAD;
+  - the CLI refuses before any SQL without the card, E13, the record, or a record naming exactly the approval and workspace, and on an unmerged HEAD (where it does not look the record up);
+  - the record is read at the verified commit, not the working tree: a correct uncommitted file refuses, a committed record that does not name the run refuses although the working-tree file does, and a symbolic link, an executable or a directory at the path refuses (`committedRecord`);
   - the record's two labelled lines: exact values once each; a prefix (`.1` against `.10`, either way), a longer workspace id, a bare substring, a malformed value, a missing or repeated label all refuse;
   - the CLI's closed output;
   - the seed's staging mark (inserted, present, drift).

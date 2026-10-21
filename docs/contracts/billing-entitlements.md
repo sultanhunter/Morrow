@@ -55,7 +55,7 @@ Not a seed. While the Stripe switch is off, the owner's operator command (`stagi
 - funds the wallet from that record with the credits of the current terms' one `operator_test_entitlement` entry (300, R10);
 - writes one active snapshot, valid for 30 days, whose `subscriptionId` is the same key.
 
-No receipt, `VerifiedPaymentEvent` or `CreditGrant` is written. Readers treat the result as a Morrow-direct payer (billable on staging; `mode_refused` in production under R9); the billing period is the snapshot's. The database refuses outside a database marked `staging` (`platform_environment`, written once by `staging:seed-platform`), refuses every runtime login and session, and refuses a workspace with any route, account or Stripe record. There is no renewal.
+No receipt, `VerifiedPaymentEvent` or `CreditGrant` is written. Readers treat the result as a Morrow-direct payer (billable on staging; `mode_refused` in production under R9); the billing period is the snapshot's. The database refuses outside a database marked `staging` (`platform_environment`, written once by `staging:seed-platform`), refuses every runtime login and session, and refuses a workspace that is not in phase `open` (R2, R3): any route already fixed or Shopify-bound, any store association (an M2 PR-2 store installation that is or was linked, read through `morrow_identity.work_store_installations`, which migration 0030 lets the work owner call), an account or an earlier operator grant (`route_conflict`), or any Stripe customer, operation, checkout or receipt (`stripe_conflict`). There is no renewal.
 
 ## Contracts
 
