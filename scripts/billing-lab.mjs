@@ -538,6 +538,16 @@ UPDATE morrow_identity.store_installations SET status='linked',link_id=${lit("li
         view.body.callToAction.href === `/workspace/${P.A.workspace}/billing/morrow/plans` &&
         view.body.credits === null,
     );
+    // The Stripe switch off: the same view with no call to action ("Choose a plan" would
+    // lead to plans that offer nothing).
+    const viewOff = await call(P.A, "GET", "", undefined, { api: switchedOff });
+    check(
+      "B_switch_off_billing_view_open_phase_without_a_call_to_action",
+      viewOff.status === 200 &&
+        JSON.stringify({ ...viewOff.body, callToAction: null }) ===
+          JSON.stringify({ ...view.body, callToAction: null }) &&
+        JSON.stringify(viewOff.body.callToAction) === '{"kind":"none"}',
+    );
     const plans = await call(P.A, "GET", "/morrow/plans");
     check(
       "B_plans_list_the_beta_offer",
@@ -922,7 +932,8 @@ INSERT INTO morrow_billing.checkout_intents VALUES(${lit(P.A2.org)},${lit(P.A2.w
         billable.body.callToAction.label === "Manage plan",
     );
     // D1b. The Stripe switch off: the plan, credits and period still read; no purchase is
-    // offered or performed and no webhook is read, with no write or broker call.
+    // offered ("Manage plan" is none) or performed and no webhook is read, with no write or
+    // broker call.
     {
       const calls = { ...brokerCalls };
       const operationsBefore = count("SELECT 1 FROM morrow_work.operations");
@@ -952,6 +963,9 @@ INSERT INTO morrow_billing.checkout_intents VALUES(${lit(P.A2.org)},${lit(P.A2.w
           offView.body.state === "billable" &&
           offView.body.credits.available === "300" &&
           offView.body.plan.status === "active" &&
+          JSON.stringify(offView.body.billingPeriod) ===
+            JSON.stringify(billable.body.billingPeriod) &&
+          JSON.stringify(offView.body.callToAction) === '{"kind":"none"}' &&
           offPlans.status === 200 &&
           offPlans.body.offers.length === 0 &&
           offPlans.body.actions.subscribe === false &&
