@@ -1117,6 +1117,8 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
         created.body.outcome === "created" &&
         validateDefinition("core-v1.1", "OrganizationSignupResult", created.body),
     );
+    // This lab applies 0001-0013 only, so signup records 0013's owner-bootstrap-v1 here;
+    // lab:billing A asserts M5 PR-1's owner-bootstrap-v2 signup on the whole chain.
     check(
       "ac17_records_active_policy_revision_one",
       rows("organizations", `id=${lit(O)} AND active AND policy_revision=1`) === 1 &&
@@ -1128,7 +1130,7 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
         rows("workspace_memberships", `workspace_id=${lit(W)} AND active`) === 1 &&
         rows(
           "organization_signups",
-          `principal_id=${lit(founder.principal)} AND organization_id=${lit(O)} AND workspace_id=${lit(W)} AND grant_template='owner-bootstrap-v2' AND command_id=${lit(founderKey)}`,
+          `principal_id=${lit(founder.principal)} AND organization_id=${lit(O)} AND workspace_id=${lit(W)} AND grant_template='owner-bootstrap-v1' AND command_id=${lit(founderKey)}`,
         ) === 1,
     );
     const grants = JSON.parse(
@@ -1136,14 +1138,7 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
         `SELECT coalesce(jsonb_agg(payload ORDER BY payload->>'capabilityId'),'[]')::text FROM morrow_identity.grants WHERE workspace_id=${lit(W)};`,
       ),
     );
-    // M5 PR-1 (ADR-0022 item 3): signup issues and records owner-bootstrap-v2, the eight
-    // v1 rows plus governance.billing.manage and governance.model_default.revise.
     const template = JSON.parse(
-      admin(
-        "SELECT jsonb_agg(jsonb_build_object('c',capability_id,'v',verbs,'f',fields) ORDER BY capability_id)::text FROM morrow_identity.owner_bootstrap_grants_v2();",
-      ),
-    );
-    const templateV1 = JSON.parse(
       admin(
         "SELECT jsonb_agg(jsonb_build_object('c',capability_id,'v',verbs,'f',fields) ORDER BY capability_id)::text FROM morrow_identity.owner_bootstrap_grants_v1();",
       ),
@@ -1160,13 +1155,9 @@ const observed = await localPostgresLab("P05.T01x-account", async (context) => {
       id: W,
     };
     check(
-      "ac17_grants_equal_template_v2_and_validate",
-      grants.length === 10 &&
-        template.length === 10 &&
-        templateV1.length === 8 &&
-        templateV1.every((t) => template.some((u) => isDeepStrictEqual(t, u))) &&
-        template.some((t) => t.c === "governance.billing.manage") &&
-        template.some((t) => t.c === "governance.model_default.revise") &&
+      "ac17_grants_equal_template_v1_and_validate",
+      grants.length === 8 &&
+        template.length === 8 &&
         grants.every((g, i) => {
           const t = template[i];
           return (
