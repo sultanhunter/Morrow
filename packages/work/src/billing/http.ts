@@ -4,7 +4,9 @@ import {
   billingCallToAction,
   billingEnvironments,
   environmentMode,
+  type BillingCallToAction,
   type BillingDenial,
+  type WorkspaceBillingState,
 } from "@morrow/policy/billing-state";
 import {
   WorkOutcomeUnknown,
@@ -325,7 +327,10 @@ export function createBillingApiHandler(d?: BillingApiDependencies) {
             await authorizeBillingView(a);
             const c = await readBillingContext(tx, a, configured.environment);
             const mayPurchase = await decideBilling(a, "governance.billing.manage", "view");
-            return { kind: "view" as const, body: billingView(c, mayPurchase) };
+            return {
+              kind: "view" as const,
+              body: billingView(c, mayPurchase, configured.broker !== null),
+            };
           }
           if (g.route.key === "GET /morrow/plans") {
             if (!(await decideBilling(a, "governance.billing.manage", "view")))
@@ -534,12 +539,36 @@ function checkoutAdmissible(c: Awaited<ReturnType<typeof readBillingContext>>): 
 }
 
 /**
+ * The view's call to action: billingCallToAction's (P01.T04a §9), or none. None for a
+ * viewer without `view` on governance.billing.manage, and none in place of the Morrow
+ * plans link while the Stripe switch is off (owner decision (c), 2026-10-21): with no
+ * broker Stripe port the plans offer nothing and checkout and the portal answer
+ * unavailable, so "Choose a plan" or "Manage plan" would lead nowhere. A Shopify phase's
+ * plan page is App Pricing, not Stripe, so the switch leaves it as it is. Nothing here
+ * makes a link or wording of its own.
+ */
+export function billingViewCallToAction(
+  state: WorkspaceBillingState,
+  mayPurchase: boolean,
+  stripeOn: boolean,
+): BillingCallToAction {
+  if (!mayPurchase) return Object.freeze({ kind: "none" });
+  const action = billingCallToAction(state);
+  return action.kind === "morrow_plans" && !stripeOn ? Object.freeze({ kind: "none" }) : action;
+}
+
+/**
  * The billing view: the phase and state, the plan's status and validity, the credits and
  * the billing period, any checkout in progress, a customer setup held for the operator
- * (its operation id, the reference for Morrow support), and the one call to action, which
- * comes only from billingCallToAction (P01.T04a §9). No provider id, price or URL.
+ * (its operation id, the reference for Morrow support), and the one call to action
+ * (billingViewCallToAction). No provider id, price or URL. The Stripe switch changes only
+ * the call to action: plan, credits and period read the same either way.
  */
-function billingView(c: Awaited<ReturnType<typeof readBillingContext>>, mayPurchase: boolean) {
+function billingView(
+  c: Awaited<ReturnType<typeof readBillingContext>>,
+  mayPurchase: boolean,
+  stripeOn: boolean,
+) {
   const s = c.state;
   const snapshot = c.read.snapshot;
   const wallet = c.read.wallet;
@@ -561,6 +590,6 @@ function billingView(c: Awaited<ReturnType<typeof readBillingContext>>, mayPurch
     setupHold: c.read.setupHold
       ? { operationId: c.read.setupHold.operationId, heldAt: c.read.setupHold.heldAt }
       : null,
-    callToAction: mayPurchase ? billingCallToAction(s) : { kind: "none" },
+    callToAction: billingViewCallToAction(s, mayPurchase, stripeOn),
   };
 }

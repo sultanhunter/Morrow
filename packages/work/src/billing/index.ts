@@ -71,6 +71,7 @@ export {
 export {
   billingBodyLimitBytes,
   billingRoutes,
+  billingViewCallToAction,
   createBillingApiHandler,
   type BillingApiDependencies,
   type BillingRoute,
