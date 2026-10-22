@@ -9,7 +9,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { composeApiDependencies } from "../apps/api/src/deployed-worker.ts";
+import { composeApiDependencies, runAdmissionOpen } from "../apps/api/src/deployed-worker.ts";
+import { runtimeProductReadAvailable } from "../packages/identity/src/broker-protocol.ts";
 import { mapApiEnvironment } from "../apps/api/src/environment.ts";
 import { createWorkersManagedWorkspaceApi } from "../packages/identity/src/managed-workspace-api.ts";
 import {
@@ -70,7 +71,7 @@ const nowMs = Date.parse("2026-10-21T00:00:00.000Z");
 
 // The deployed composition: a development environment the api's mapper accepts. `extra`
 // adds bindings (M5: MORROW_STRIPE_MODE); `brokerCalls` counts every broker method call.
-function composed(extra = {}, brokerCalls = [], { modeArgument = true } = {}) {
+function composed(extra = {}, brokerCalls = [], { modeArgument = true, productRead } = {}) {
   const provider = createPlatformWorkosProviderOracle({ origin });
   const base = JSON.parse(provider.configurationJson);
   const auth = JSON.parse(base.authenticationBindingJson);
@@ -144,6 +145,8 @@ function composed(extra = {}, brokerCalls = [], { modeArgument = true } = {}) {
         () => nowMs,
         mapped.environment,
         mapped.stripe,
+        mapped.model,
+        ...(productRead === undefined ? [] : [productRead]),
       )
     : composeApiDependencies(mapped.values, mapped.broker, () => nowMs, mapped.environment);
 }
@@ -380,4 +383,26 @@ test("M5: the deployed composition has Stripe adapters only while the switch is 
   const defaulted = composed({ MORROW_STRIPE_MODE: "test" }, calls, { modeArgument: false });
   assert.equal(defaulted.billing.broker, null);
   assert.equal(defaulted.webhook.broker, null);
+});
+
+// M3 PR-2 review: the api's run admission opens on the model-provider switch and M2 PR-3's
+// product read together, as the orchestrator's dispatch does, so no run, lease or credit
+// reservation exists without a Workflow to execute it.
+test("M3 PR-2: run admission opens only with the model switch and the product read", () => {
+  assert.equal(runtimeProductReadAvailable, false);
+  for (const [mode, read, open] of [
+    ["off", false, false],
+    ["off", true, false],
+    ["anthropic", false, false],
+    ["anthropic", true, true],
+  ])
+    assert.equal(runAdmissionOpen(mode, read), open, mode + ":" + read);
+  assert.equal(composed({}).runs.admission, false);
+  // The switch on while the product read is absent (this build): admission stays closed.
+  assert.equal(composed({ MORROW_MODEL_PROVIDER: "anthropic" }).runs.admission, false);
+  assert.equal(
+    composed({ MORROW_MODEL_PROVIDER: "anthropic" }, [], { productRead: true }).runs.admission,
+    true,
+  );
+  assert.equal(composed({}, [], { productRead: true }).runs.admission, false);
 });

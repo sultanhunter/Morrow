@@ -15,6 +15,7 @@ import {
   type ListingsRunPorts,
   type ProductRead,
 } from "../../../packages/work/src/runs/workflow.js";
+import { runtimeProductReadAvailable } from "../../../packages/identity/src/broker-protocol.js";
 import { mapOrchestratorEnvironment, type OrchestratorEnvironmentMapping } from "./environment.js";
 import { createRuntimePool } from "./runtime-pool.js";
 
@@ -28,8 +29,8 @@ import { createRuntimePool } from "./runtime-pool.js";
 // reviewed database binding, the RuntimeBroker and Workflow bindings (environment.ts), and
 // the product read of M2 PR-3 exists (productReadAvailable). OperationWorkflow joins in M4.
 
-/** M2 PR-3's RuntimeBroker.shopifyRead(productContent): false until that PR lands it. */
-export const productReadAvailable = false;
+/** M2 PR-3's RuntimeBroker.shopifyRead(productContent): the api's admission shares it. */
+export const productReadAvailable = runtimeProductReadAvailable;
 const productBudgetMs = 15_000;
 const stepBudgetMs = 25_000;
 

@@ -1,5 +1,6 @@
 import {
   parseBrokerDatabaseBinding,
+  runtimeProductReadAvailable,
   workosSessionNamespace,
   type ApiBrokerRpc,
 } from "../../../packages/identity/src/broker-protocol.js";
@@ -48,6 +49,9 @@ interface Selected {
 }
 
 // The single place dependencies are assembled, and the P05.T01x extension point.
+/** Run admission opens on the model-provider switch and the product read together. */
+export const runAdmissionOpen = (modelMode: ApiModelMode, productRead: boolean): boolean =>
+  modelMode === "anthropic" && productRead === true;
 export function composeApiDependencies(
   values: Readonly<ApiEnvironmentValues>,
   broker: ApiBrokerRpc,
@@ -55,6 +59,7 @@ export function composeApiDependencies(
   environment: "development" | "staging" | "production" = "development",
   stripeMode: ApiStripeMode = "off",
   modelMode: ApiModelMode = "off",
+  productReadAvailable: boolean = runtimeProductReadAvailable,
 ) {
   const port = createLazyWorkosLoginPort(values.login, now);
   const credentialBroker = createBrokerNeonCredentialBroker(broker, now);
@@ -117,11 +122,13 @@ export function composeApiDependencies(
     now,
   });
   // M3 PR-2: the runs routes on the work dependencies; admission only while the
-  // model-provider switch is on (otherwise 503 before any database access).
+  // model-provider switch is on and M2 PR-3's product read exists (the orchestrator
+  // dispatches on the same two), otherwise 503 before any database access: no run, lease
+  // or reservation exists without a Workflow to execute it.
   const runs: RunsApiDependencies = Object.freeze({
     ...work,
     environment,
-    admission: modelMode === "anthropic",
+    admission: runAdmissionOpen(modelMode, productReadAvailable),
   });
   return Object.freeze({
     dependencies,

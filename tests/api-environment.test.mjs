@@ -507,7 +507,8 @@ test("M5: MORROW_STRIPE_MODE absent is off, exactly test is on, anything else fa
 });
 
 // M3 PR-2, the model-provider switch (step 12): MORROW_MODEL_PROVIDER absent is off; exactly
-// "anthropic" is on (run admission then reaches the database); any other value keeps the api
+// "anthropic" is on (run admission then reaches the database once M2 PR-3's product read
+// exists too: tests/managed-workspace-composition.test.mjs); any other value keeps the api
 // on its deny-all instance. It names no credential: the key lives only in the broker.
 test("M3 PR-2: MORROW_MODEL_PROVIDER absent is off, exactly anthropic is on, anything else fails closed", () => {
   for (const environment of ["development", "staging"]) {

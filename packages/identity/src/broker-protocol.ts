@@ -196,6 +196,13 @@ export interface RuntimeBrokerRpc {
     budgetMs: number,
   ): Promise<string>;
 }
+/**
+ * M2 PR-3's RuntimeBroker.shopifyRead(productContent) exists: a reviewed constant, false until
+ * that PR lands it (an RPC stub answers any method name, so it is never probed). The api's run
+ * admission and the orchestrator's dispatch both require it with the model-provider switch,
+ * so no run, lease or reservation exists without a Workflow to execute it.
+ */
+export const runtimeProductReadAvailable: boolean = false;
 export const modelGatewayLimits = Object.freeze({
   callMaxBytes: 200_000,
   resultMaxBytes: 200_000,
