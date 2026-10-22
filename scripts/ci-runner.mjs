@@ -1,6 +1,6 @@
 // The self-hosted runner that runs ci.yml on the owner's Mac (ADR-0014, amendment of
 // 2026-10-22; docs/development/ci.md, "Self-hosted runner on the owner's Mac"). The owner
-// runs it; agents never run `up` or `down`.
+// runs it, or an agent with the owner's per-action go-ahead in chat.
 //   up [--instance=2]      refuse unless Docker Desktop's File sharing is narrowed and
 //                          workflows from fork pull requests stay off; pull the pinned
 //                          images; register the runner unless its registration is still
