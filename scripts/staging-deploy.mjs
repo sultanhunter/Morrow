@@ -145,12 +145,14 @@ export async function workersDevState(api, script) {
 export const dispatchNamespacesUnavailable = "unavailable_10121";
 // Broker trust model v1 (ADR-0022 item 7): which Morrow Worker may bind the broker, and
 // through which entrypoint only. M2 PR-2 adds the connector's ConnectorBroker binding;
-// the orchestrator's RuntimeBroker row joins with its first caller (M3 PR-2). Any other
+// M3 PR-2 adds the orchestrator's RuntimeBroker binding (its role lease and modelRespond),
+// committed in every environment whether or not the model switch is on. Any other
 // script, a Pages project, another entrypoint or a binding with no entrypoint (the
 // broker's default export) is BROKER_BOUND_ELSEWHERE.
 export const brokerBindingAllowTable = Object.freeze({
   api: "ApiBroker",
   connector: "ConnectorBroker",
+  orchestrator: "RuntimeBroker",
 });
 export function brokerBindingAllowed(script, workers) {
   const key = Object.keys(brokerBindingAllowTable).find((k) => workers[k] === script.name);

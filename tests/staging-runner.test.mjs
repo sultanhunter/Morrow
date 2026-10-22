@@ -1251,6 +1251,14 @@ test("census: findings for anything that is not exactly Morrow's staging", async
         bindsBroker: true,
         brokerEntrypoints: ["ConnectorBroker"],
       },
+      // M3 PR-2: the orchestrator binds the broker's RuntimeBroker entrypoint.
+      {
+        name: "morrow-staging-orchestrator",
+        workersDev: false,
+        previews: false,
+        bindsBroker: true,
+        brokerEntrypoints: ["RuntimeBroker"],
+      },
     ],
     pages: [],
     dispatchNamespaces: 0,
@@ -1258,7 +1266,8 @@ test("census: findings for anything that is not exactly Morrow's staging", async
   };
   assert.deepEqual(censusFindings(clean, staging), []);
   // The allow table is entrypoint-checked: another entrypoint, a second binding, a missing
-  // entrypoint, the orchestrator (no row yet) or the connector on workers.dev is a finding.
+  // entrypoint or the connector on workers.dev is a finding. The orchestrator's row admits
+  // RuntimeBroker alone.
   const bound = (name, brokerEntrypoints, workersDev = false) =>
     censusFindings(
       {
@@ -1274,9 +1283,26 @@ test("census: findings for anything that is not exactly Morrow's staging", async
   ]);
   assert.deepEqual(bound("morrow-staging-connector", [null]), ["BROKER_BOUND_ELSEWHERE"]);
   assert.deepEqual(bound("morrow-staging-connector", []), ["BROKER_BOUND_ELSEWHERE"]);
-  assert.deepEqual(bound("morrow-staging-orchestrator", ["RuntimeBroker"]), [
+  assert.deepEqual(bound("morrow-staging-orchestrator", ["RuntimeBroker"]), []);
+  for (const entrypoints of [
+    ["ApiBroker"],
+    ["ConnectorBroker"],
+    [null],
+    [],
+    ["RuntimeBroker", "ApiBroker"],
+    ["RuntimeBroker", "ConnectorBroker"],
+  ])
+    assert.deepEqual(
+      bound("morrow-staging-orchestrator", entrypoints),
+      ["BROKER_BOUND_ELSEWHERE"],
+      JSON.stringify(entrypoints),
+    );
+  assert.deepEqual(bound("morrow-staging-orchestrator", undefined), ["BROKER_BOUND_ELSEWHERE"]);
+  assert.deepEqual(bound("morrow-staging-api", ["RuntimeBroker"]), ["BROKER_BOUND_ELSEWHERE"]);
+  assert.deepEqual(bound("morrow-staging-connector", ["RuntimeBroker"]), [
     "BROKER_BOUND_ELSEWHERE",
   ]);
+  assert.deepEqual(bound("morrow-staging-broker", ["RuntimeBroker"]), ["BROKER_BOUND_ELSEWHERE"]);
   assert.deepEqual(bound("morrow-staging-connector", ["ConnectorBroker"], true), [
     "WORKERS_DEV_EXPOSED",
   ]);

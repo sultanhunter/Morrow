@@ -188,8 +188,9 @@ test("AC04: a green CI deploy runs the gates, then broker, orchestrator, connect
     assert.deepEqual(result.smoke.failures, []);
     assert.deepEqual(result.censusBefore.findings, []);
     assert.deepEqual(result.census.findings, []);
-    // M2 PR-2: the deployed connector binds the broker's ConnectorBroker entrypoint, which
-    // the census allow table admits, so continuous deploy keeps running after the merge.
+    // M2 PR-2: the deployed connector binds the broker's ConnectorBroker entrypoint, and
+    // M3 PR-2 the deployed orchestrator its RuntimeBroker entrypoint; the census allow
+    // table admits both, so continuous deploy keeps running after each merge.
     assert.deepEqual(
       result.census.scripts
         .filter((s) => s.bindsBroker)
@@ -198,6 +199,7 @@ test("AC04: a green CI deploy runs the gates, then broker, orchestrator, connect
       [
         ["morrow-staging-api", ["ApiBroker"]],
         ["morrow-staging-connector", ["ConnectorBroker"]],
+        ["morrow-staging-orchestrator", ["RuntimeBroker"]],
       ],
     );
     // CI never reads a variable through the API (its token cannot); it re-reads the

@@ -363,12 +363,15 @@ export function fakeCloudflare(options = {}) {
         scripts.push(script);
       }
       if (workersDev) script.enabled = true;
-      // The committed wrangler configurations: the api binds ApiBroker and, from M2 PR-2,
-      // the connector binds ConnectorBroker (the census allow table admits exactly these).
+      // The committed wrangler configurations: the api binds ApiBroker, from M2 PR-2 the
+      // connector binds ConnectorBroker and from M3 PR-2 the orchestrator binds
+      // RuntimeBroker (the census allow table admits exactly these).
       if (name === "morrow-staging-api")
         script.bindings = [{ service: "morrow-staging-broker", entrypoint: "ApiBroker" }];
       if (name === "morrow-staging-connector")
         script.bindings = [{ service: "morrow-staging-broker", entrypoint: "ConnectorBroker" }];
+      if (name === "morrow-staging-orchestrator")
+        script.bindings = [{ service: "morrow-staging-broker", entrypoint: "RuntimeBroker" }];
       deployments[name] = versionId;
     },
     workersDev: (name) => scriptNamed(name)?.enabled ?? null,
