@@ -57,7 +57,7 @@ None for local work. Testing on the owner's live store (decision (a)) needs M6's
 
 ## Pending owner questions
 
-Answered 2026-10-21: the four above, "set the flag" (which also settles setting the flag ahead of a passing smoke) and (a) to (c). Still open: (1) acknowledge that items 2–5 of P04.T01j's M-N1+ were recorded after `migrate` (`2026-10-21-neon-mn1plus-catalog.md`; all five match ADR-0020); (2) confirm that "yes to all recommended", recorded as your 2026-10-22 answer to the morning report (decisions 2, 8–12 and 14 here, ADR-0008's cap note and ADR-0022's 2026-10-22 amendments), is your own answer: the merge train's review could not trace the quote to you, and these records are reverted if it was not given; (3) M2 PR-3 question (3), the scope-change stop (`docs/briefs/M2-shopify-connect.md`, Open questions): approve it as an ADR-0022 items 13 and 15 amendment, or record the change and leave the installation in place.
+Answered 2026-10-21: the four above, "set the flag" (which also settles setting the flag ahead of a passing smoke) and (a) to (c). Answered 2026-10-22, confirmed by the owner in the main session: "yes to all recommended" (decisions 2–14). Still open: (1) acknowledge that items 2–5 of P04.T01j's M-N1+ were recorded after `migrate` (`2026-10-21-neon-mn1plus-catalog.md`; all five match ADR-0020); (2) M2 PR-3 question (3), the scope-change stop (`docs/briefs/M2-shopify-connect.md`, Open questions): approve it as an ADR-0022 items 13 and 15 amendment, or record the change and leave the installation in place.
 
 ## Pending owner actions
 
