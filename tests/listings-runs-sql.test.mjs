@@ -6,6 +6,8 @@
 //     the run's advisory lock, then the rest. The runtime definers that append an event or
 //     settle take the stream before the run; run_end takes it before any credit or cost
 //     row; the stale close never waits on a run's lock while its caller holds the stream.
+//   * FOUND is read straight after the SELECT INTO it reports on: a PERFORM between them
+//     resets it (an unknown fence or lease would read as found).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -54,4 +56,19 @@ test("one lock order: the workspace stream, then the run, then the rest", () => 
   assert.ok(
     at(stale, "pg_try_advisory_xact_lock(") < at(stale, "status IN ('queued','running')) THEN"),
   );
+});
+
+test("the model definers read FOUND before any PERFORM resets it", () => {
+  for (const name of ["morrow_vault.model_call_begin", "morrow_vault.model_call_end"]) {
+    const text = body(name);
+    // The first lookup: SELECT ... INTO, then v_found:=FOUND, then the settings PERFORM.
+    const select = text.search(
+      / INTO (lz|c) FROM morrow_work\.(work_leases|run_model_calls) x WHERE x\.id=/,
+    );
+    assert.ok(select >= 0, name);
+    const captured = at(text, "v_found:=FOUND;");
+    const reset = text.indexOf("PERFORM pg_catalog.set_config(", select);
+    assert.ok(select < captured && captured < reset, name);
+    assert.ok(at(text, "IF NOT v_found") > reset, name);
+  }
 });

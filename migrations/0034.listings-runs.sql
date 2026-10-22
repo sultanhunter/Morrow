@@ -1856,7 +1856,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_tem
 #variable_conflict use_column
 DECLARE
  lz record; rc record; r record; q record; m record; e record; vr record; rt record; c record; v_now timestamptz; v_call text; v_outcome text;
- v_index integer; v_attempt integer; v_sequence integer; v_budget integer; v_request text; v_attempts integer;
+ v_index integer; v_attempt integer; v_sequence integer; v_budget integer; v_request text; v_attempts integer; v_found boolean;
 BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_vault_broker') THEN
   RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text;
@@ -1878,8 +1878,10 @@ BEGIN
  PERFORM pg_catalog.set_config('morrow.vault_resolve_lease',p_lease_id,true);
  SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.subject_id::text AS subject_id,x.store_id::text AS store_id,
   x.kind INTO lz FROM morrow_work.work_leases x WHERE x.id=p_lease_id;
+ -- FOUND is captured before the PERFORM below resets it.
+ v_found:=FOUND;
  PERFORM pg_catalog.set_config('morrow.vault_resolve_lease','',true);
- IF NOT FOUND OR lz.kind<>'run' THEN
+ IF NOT v_found OR lz.kind<>'run' THEN
   RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text;
   RETURN;
  END IF;
@@ -1997,7 +1999,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_tem
 #variable_conflict use_column
 DECLARE
  c record; r record; e record; rt record; b record; vr record; v_now timestamptz; v_outcome text; v_counted boolean; v_usage boolean; v_cost numeric(20,8);
- v_units bigint; v_entry text; v_overflow numeric(20,8); v_booked numeric(20,8); v_remaining numeric(20,8); n integer;
+ v_units bigint; v_entry text; v_overflow numeric(20,8); v_booked numeric(20,8); v_remaining numeric(20,8); n integer; v_found boolean;
 BEGIN
  IF NOT morrow_identity.work_executor_safe('morrow_vault_broker') THEN
   RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::boolean; RETURN;
@@ -2019,8 +2021,10 @@ BEGIN
  PERFORM pg_catalog.set_config('morrow.vault_model_call',p_call_id,true);
  SELECT x.organization_id::text AS organization_id,x.workspace_id::text AS workspace_id,x.run_id::text AS run_id,x.product_index,x.attempt,x.status,
   x.outcome INTO c FROM morrow_work.run_model_calls x WHERE x.id=p_call_id;
+ -- FOUND is captured before the PERFORM below resets it: an unknown call is not_found.
+ v_found:=FOUND;
  PERFORM pg_catalog.set_config('morrow.vault_model_call','',true);
- IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::boolean; RETURN; END IF;
+ IF NOT v_found THEN RETURN QUERY SELECT 'not_found'::text,NULL::text,NULL::text,NULL::boolean; RETURN; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.run',c.organization_id,c.workspace_id,
   c.run_id)::text,0));
  PERFORM pg_catalog.set_config('morrow.vault_model_run',c.organization_id||'|'||c.workspace_id||'|'||c.run_id,true),

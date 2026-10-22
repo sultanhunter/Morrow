@@ -1332,6 +1332,19 @@ COMMIT;`,
         reclose[0] === "already_closed",
       { badEnd, closed, replay, reclose },
     );
+    // An unknown fence or lease is not_found (FOUND is read before the settings are reset),
+    // never a "closed" fence that does not exist, whether or not its outcome would count.
+    const unknownEnds = ["not_sent", "spend_limit", "input_over_cap", "uncertain"].map((outcome) =>
+      broker(
+        `SELECT outcome FROM morrow_vault.model_call_end(${literal(randomUUID())},${literal(outcome)},NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);`,
+      ),
+    );
+    const unknownLease = begin(0, 1, 1, { lease: randomUUID() });
+    check(
+      "F8:an_unknown_fence_or_lease_is_not_found",
+      unknownEnds.every((o) => o === "not_found") && unknownLease[0] === "not_found",
+      { unknownEnds, unknownLease },
+    );
     // Attempts: attempt 1 is counted, so 1 again is invalid and 3 is never valid; a new
     // attempt 2 opens. The prompt digest is bound by the run's first call.
     const repeat = begin(0, 1, 3);
