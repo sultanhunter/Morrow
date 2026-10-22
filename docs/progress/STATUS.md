@@ -5,7 +5,7 @@ Updated 2026-10-23. Rewrite this file in place (at most 80 lines). The pre-overh
 ## Active work
 
 The launch plan is now ADR-0023 (its decisions approved 2026-10-23; the record as written awaits the owner's acceptance): a lean, full-featured MVP where a shop's people and AI agents run the business together, replacing ADR-0021's listings beta. `docs/plan/mvp.md` holds the scope, agents and specialists, tracks T0–T18, gates G1–G18, dates and cut rules. Week 0 starts Monday 2026-10-26; public launch is planned for Monday 2027-03-01 (range mid-February to April 2027).
-- **ADR-0023 docs PR** (`claude/mvp-redefinition-adr`): the ADR, `mvp.md`, the CLAUDE.md constraint lines (MVP, standalone plus a minimal embedded home, billing), build-plan launch-order notes, this file and five live records. Open: PR, Tier 2 AI review (separate context, same model family), the owner's "Approve ADR-0023 as written?", hosted `foundation`, merge.
+- **ADR-0023 docs PR** (`claude/mvp-redefinition-adr`): the ADR, `mvp.md`, the CLAUDE.md constraint lines (MVP, standalone plus a minimal embedded home, billing), build-plan launch-order notes, this file and five live records. PR #45; Tier 2 AI review done; accepted as written by the owner on 2026-10-23 with the three CLAUDE.md lines ("approve ADR-0023 and the CLAUDE.md lines"); open: hosted `foundation`, merge.
 - **Project graph, phase 0** (`claude/graph-engine`, routine, built separately): the engine, derived nodes and `graph:check`. Then phase 1 (the MVP as nodes) and later the CLAUDE.md session-step-1 change.
 - **MVP tracks starting W0–W1:** T0 companion ADRs on the first weekly decision sheet; T1's remainder; T2 interfaces (contracts with fakes, merged in W1); T3 gateway; T4 agent platform (critical path); T6 collaboration backend; T7 workspace UI; T10 runtime port, fake and conformance; T16 graph; T18 specialists brief. T8 Shopify waits on G3.
 
@@ -30,7 +30,7 @@ Merged on `main` (trunk, ADR-0014; branch protection requires `foundation`): PRs
 
 ## Next actions
 
-1. Open the ADR-0023 docs PR; Tier 2 AI review; ask the owner "Approve ADR-0023 as written?" and quote the answer under its Approval; merge on a green `foundation`.
+1. Merge #45 (ADR-0023) on a green `foundation`.
 2. Finish and merge graph phase 0, then phase 1 (the MVP as nodes).
 3. W0–W1: draft the G8 questions to Shopify Partner support (the embedded home for a standalone workspace, usage charges for credits) for the owner's approval to send; draft the companion ADRs (Proactive authority, Shopify public app, Billing and price, Agent loop and model, Specialist authority, Runtime and E2B, Email, Data) for the first decision sheet; T2 contracts with fakes; the T18 specialists brief; the T10 port, fake and conformance.
 4. T1: the AC11 acceptance run and the owner's assisted staging sign-in (AC12a); the cleanup PR (dead code and checks, the heavy-faults schedule to manual dispatch only, the runner tooling; the Stripe code stays, switched off; the `mvp.md M6` comment in `packages/work/src/redaction.ts`); the gate-3 polling fix. Re-frame `docs/briefs/mvp-architecture.md` and the M2–M5 briefs for ADR-0023 (their `mvp.md` M-milestone citations map to tracks as `mvp.md` lists).
@@ -43,7 +43,7 @@ None for local work. **E2B's written answers** (G5) block the E2B adapter code (
 
 ## Pending owner actions
 
-- **ADR-0023:** "Approve ADR-0023 as written?" (Tier 3); and the wording of three stale CLAUDE.md lines, proposed in ADR-0023 Consequences (the intro's embedded home, session step 3's launch-plan pointer, the Delivery flow's PR rule). Then approval to send the G8 questions to Shopify Partner support, once drafted.
+- **G8:** approval to send the questions to Shopify Partner support, once drafted.
 - **Open questions:** (1) M2 PR-3 question (3), the scope-change stop (`docs/briefs/M2-shopify-connect.md`, Open questions): approve it as an ADR-0022 items 13 and 15 amendment, or record the change and leave the installation in place; (2) M3 question 6 (`docs/briefs/M3-listings-agent.md`): the call budgets assume a floor of 128,000 output tokens an hour; measure it with one medium and one high run per model in the approved staging smoke before the model switch is turned on?
 - **Old credential rotations:** the Cloudflare Global API Key; a new WorkOS key that revokes the old ones; delete the old Neon project `cool-butterfly-64820147`; delete the local `cloudflare-ci-token` and `cloudflare-operator-token.old-*` files; `tmutil addexclusion ~/.config/morrow`. The old E2B key is deleted (Q6). Optional: a metadata-only check that no transient secrets file is left under `~/.config/morrow/staging/tmp`.
 - **GitGuardian:** the alert on `apps/shopify-connector/worker/database.ts` line 22 is a false positive (a SQL role-check string, not a secret); mark it so in GitGuardian.

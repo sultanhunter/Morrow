@@ -1,6 +1,6 @@
 # ADR-0023 MVP redefinition: a lean, full-featured workspace where a shop's people and AI agents run the business together
 
-- Status: Decisions accepted 2026-10-23 (owner decisions in chat; see Approval). Decisions 1 to 10 were approved with their recommended options ("yes to all recommended", Q12). Decision 11 (specialists) and billing option A, which amends decision 5 and the embedded part of decision 2, were approved the same day ("yes to both, go with option A and specialists", Q14). The rest of this record is written from those answers; the owner's acceptance of the record as written is pending (Tier 3; see Approval, "Scope of the approval").
+- Status: Accepted 2026-10-23 (owner decisions in chat; see Approval). Decisions 1 to 10 were approved with their recommended options ("yes to all recommended", Q12). Decision 11 (specialists) and billing option A, which amends decision 5 and the embedded part of decision 2, were approved the same day ("yes to both, go with option A and specialists", Q14). The rest of this record is written from those answers. The owner accepted the record as written on 2026-10-23 ("approve ADR-0023 and the CLAUDE.md lines", see Approval).
 - Date: 2026-10-23 (drafted 2026-10-22; revised 2026-10-23 for the approvals, the owner's addition to decision 1, decision 11 and billing option A)
 - Supersedes:
   - ADR-0021 item 1 (the invite-only listings beta as the launch target);
@@ -193,7 +193,7 @@ Each keeps its owning tests.
 ## Consequences
 
 - **CLAUDE.md** changes three settled-constraint lines with this record: the MVP constraint, the standalone-and-embedded line, and a billing line. Session step 1 changes when the graph command merges. Its security invariants do not change.
-- **CLAUDE.md lines known to be stale.** Decision 10 (Q12) and option A (Q14) approved only the CLAUDE.md edits above, so three more lines stay as written until the owner approves new wording (with this record's pull request, or on the first weekly decision sheet). Until then, where they differ, this record and decision 10 govern:
+- **CLAUDE.md lines known to be stale.** Decision 10 (Q12) and option A (Q14) approved only the CLAUDE.md edits above, so three more lines needed new wording; the owner approved it with this record ("approve ADR-0023 and the CLAUDE.md lines", 2026-10-23):
   - the intro's "one standalone web workspace and a thin Shopify connector" leaves out the minimal embedded home (decision 2);
   - session step 3's "(ADR-0021, MVP fast track)": the launch plan is this record with `docs/plan/mvp.md`. Proposed: "(ADR-0023, which replaced ADR-0021's listings beta)";
   - the Delivery flow's "one feature-sized PR per brief or packet": decision 10 sets one brief per track and small PRs behind default-off switches, stacks at most two deep, stacked PRs merged with a merge commit. Proposed: that rule, keeping "each PR changes observable behaviour or retires a named risk", with a change behind a default-off switch counting as observable.
@@ -264,6 +264,6 @@ What these approve:
 Scope of the approval:
 - **Decided by the answers:** the direction (Q11); decisions 1 to 10 with their recommended options, the replacements of earlier approvals and the CLAUDE.md edits that decision 10 names (Q12); decision 11 with every recommended part, and billing option A with the CLAUDE.md edits it names (Q14).
 - **Written from them:** this record's wording, including the decision bullets drawn from the working papers, "What stays" and "What is dropped", the companion-record table, the planning dates and the exact CLAUDE.md wording. These restate or apply the answers; where they differ, the answers govern.
-- **Pending:** the owner's acceptance of this record as written (Tier 3; asked as "Approve ADR-0023 as written?", with the answer and its date quoted here), and the wording of the stale CLAUDE.md lines named under Consequences.
+- **Accepted as written, 2026-10-23, in chat.** Asked "Approve ADR-0023 as written?" together with the proposed wording of the three stale CLAUDE.md lines named under Consequences, the owner answered, verbatim: "approve ADR-0023 and the CLAUDE.md lines". The three lines are updated with this record: the intro names the minimal embedded home, session step 3 points to this record, and the Delivery flow states the small-PR rule.
 
 What this record does not approve: the code that depends on a companion record, which waits for that record; the first use of any provider or production effect, which keeps its per-action approval or card; and the owner's store as an install, which waits for App Review approval and the live-store ADR.

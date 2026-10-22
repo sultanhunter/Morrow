@@ -1,11 +1,11 @@
 # Morrow: working rules
 
-Morrow is a paid AI workspace where a Shopify brand's people and AI agents run the business together. It has one standalone web workspace and a thin Shopify connector. The Coordinator scopes work, specialist agents draft, people approve exact proposals, and one gateway executes, reads back and audits.
+Morrow is a paid AI workspace where a Shopify brand's people and AI agents run the business together. It has one standalone web workspace, a minimal embedded home in the Shopify admin, and a thin Shopify connector. The Coordinator scopes work, specialist agents draft, people approve exact proposals, and one gateway executes, reads back and audits.
 
 ## Read at the start of every session
 1. `docs/progress/STATUS.md`: active packet, last green commit, next action, blockers, pending owner actions.
 2. The active brief in `docs/briefs/` or packet in `docs/packets/` (when present), and the plan sections it cites.
-3. `docs/plan/mvp.md` is the **launch plan** (ADR-0021, MVP fast track). `docs/plan/build-plan.md` is the long-term plan of record and structure (ADR-0001). Decisions live in `docs/decisions/adr/`. `docs/references/*` is supporting detail; where it conflicts with the plan, the plan wins.
+3. `docs/plan/mvp.md` is the **launch plan** (ADR-0023, which replaced ADR-0021's listings beta). `docs/plan/build-plan.md` is the long-term plan of record and structure (ADR-0001). Decisions live in `docs/decisions/adr/`. `docs/references/*` is supporting detail; where it conflicts with the plan, the plan wins.
 4. `git status` and `git log -5`. Pre-R1 history (evidence, archived plans, the old Page sequences) is in tag `codex-archive-f89ad75`. Recover a file with `git show codex-archive-f89ad75:<path>`.
 
 ## Settled product constraints (owner-decided; change only by an owner-approved ADR)
@@ -61,10 +61,10 @@ Morrow is a paid AI workspace where a Shopify brand's people and AI agents run t
 - Keep the existing idiom: strict TypeScript, closed primitive inputs at trust boundaries, fixed parameterized SQL, no caller-supplied SQL, roles or options.
 
 ## Delivery flow
-- One short-lived branch (`claude/<task-id>-<slug>`) and one feature-sized PR per brief or packet.
+- One brief per track; small PRs behind switches that default to off, each on a short-lived branch (`claude/<task-id>-<slug>`). Stacks are at most two PRs deep, and a stacked PR merges with a merge commit.
 - PRs target `main`, the trunk (ADR-0014). Claude merges its own PR once the hosted `foundation` check is green on the exact head and the Tier 2 AI review has passed.
 - Never push to `main`, force-push, or delete tags or branches without owner approval.
-- Each PR changes observable behaviour or retires a named risk, and carries its tests.
+- Each PR changes observable behaviour or retires a named risk, and carries its tests. A change behind a default-off switch counts as observable.
 - Review tiers:
   - Tier 1: your own targeted tests plus the full pipeline.
   - Tier 2: one separate-context AI review per PR, with the security lens included for authority, RLS, migrations, credentials, provider adapters, approvals, budgets, billing or durable execution. Label it "AI review (separate context, same model family)", never independent.
