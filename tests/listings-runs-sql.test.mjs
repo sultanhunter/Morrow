@@ -130,3 +130,87 @@ test("M2 PR-3's run-lease product check: its own setting, a running run's in-pro
   // Only this helper writes the setting.
   assert.equal(sql.match(/'morrow\.vault_read_run',p_/g).length, 1);
 });
+
+// M2 PR-3 review (the redaction race): a run step that entered its lease before shop/redact
+// commits the system connection stop must not write store content after store_content_redact
+// ran. The three store-content writers take the stop keys shared, as lease_open and
+// model_call_begin do (the platform key, then the store's), before the run's lock, and read
+// the lease again as a new statement; connector_inbox_apply holds the store's key exclusively
+// from the stop through the redaction (lab:listings-runs R-cases race them).
+test("the store-content writers take the stop keys shared before the run's lock, then re-read the lease", () => {
+  const platform =
+    "pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.stop','platform')";
+  const store =
+    "pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.stop',\n  l.organization_id,l.workspace_id,l.store_id)";
+  for (const [name, write] of [
+    ["morrow_work.run_snapshot_put", "INSERT INTO morrow_work.product_snapshots"],
+    ["morrow_work.run_product_finish", "INSERT INTO morrow_work.run_drafts"],
+    ["morrow_work.submit_agent_proposal", "INSERT INTO morrow_work.proposal_parameters"],
+  ]) {
+    const text = body(name);
+    const first = at(text, "SELECT * INTO l FROM morrow_work.current_lease();");
+    const again = text.indexOf("SELECT * INTO l FROM morrow_work.current_lease();", first + 1);
+    assert.ok(
+      first < at(text, platform) &&
+        at(text, platform) < at(text, store) &&
+        at(text, store) < again &&
+        again < at(text, runLock) &&
+        at(text, runLock) < at(text, write),
+      name,
+    );
+    // The lease re-read is checked at once (FOUND before any PERFORM).
+    assert.ok(
+      text
+        .slice(again)
+        .startsWith(
+          "SELECT * INTO l FROM morrow_work.current_lease();\n IF NOT FOUND OR l.kind<>'run' THEN",
+        ),
+      name,
+    );
+  }
+  // The agent submit keeps the stream first (every API command's prelude, a person's stop
+  // included, takes the stream before its stop key).
+  const submit = body("morrow_work.submit_agent_proposal");
+  assert.ok(at(submit, streamLock) < at(submit, platform));
+});
+
+// shop/redact's work-schema handlers (M2 PR-3's store_content_redact, revised): the
+// parameters emptied, the store's snapshots and drafts deleted, one evidence entry each.
+test("store_content_redact deletes the store's snapshots and drafts, with per-pass evidence", () => {
+  const text = replaced("morrow_work.store_content_redact");
+  const empty = at(text, "parameters_redact_for_store(p_org,p_ws,p_store_id)");
+  const drafts = at(
+    text,
+    "DELETE FROM morrow_work.run_drafts d WHERE d.organization_id=p_org AND d.workspace_id=p_ws AND d.store_id=p_store_id;",
+  );
+  const snapshots = at(
+    text,
+    "DELETE FROM morrow_work.product_snapshots x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.store_id=p_store_id;",
+  );
+  assert.ok(empty < drafts && drafts < snapshots);
+  for (const [table, action] of [
+    ["proposal_parameters", "empty_keep_digest"],
+    ["product_snapshots", "delete_rows"],
+    ["run_drafts", "delete_rows"],
+  ])
+    assert.ok(
+      text.includes(
+        `jsonb_build_object('table','morrow_work.${table}','action','${action}','rows',`,
+      ),
+      table,
+    );
+  assert.ok(!text.includes("SECURITY DEFINER"));
+  // DELETE on exactly the two tables, for the command role, and only the connector's
+  // redaction context admits it (a restrictive policy on each).
+  assert.match(
+    sql,
+    /\nGRANT DELETE ON morrow_work\.product_snapshots,morrow_work\.run_drafts TO morrow_work_command;\n/,
+  );
+  assert.equal(sql.match(/GRANT [A-Z, ]*DELETE/g).length, 1);
+  assert.ok(
+    sql.includes(
+      "EXECUTE format('CREATE POLICY connector_content_delete_only ON morrow_work.%I AS RESTRICTIVE FOR DELETE TO morrow_work_command",
+    ),
+  );
+  assert.ok(sql.includes("FOREACH t IN ARRAY ARRAY['product_snapshots','run_drafts'] LOOP"));
+});

@@ -12,8 +12,10 @@
 // every handler runs, mvp.md M6):
 //   * shop/redact: morrow_work.connector_inbox_apply (0035) first ends the installation (the
 //     uninstall path, so a shop/redact that arrives first still destroys the token), then
-//     runs morrow_work.store_content_redact (every work-schema handler, here the proposal
-//     parameters through parameters_redact_for_store) and
+//     runs morrow_work.store_content_redact (every work-schema handler: the proposal
+//     parameters through parameters_redact_for_store, and since listings-runs (0036) the
+//     store's product snapshots and run drafts, deleted in the connector's redaction context
+//     only) and
 //     morrow_identity.work_shopify_redact_identity (the installation, its candidate and
 //     the app registry), and completes the privacy request only when nothing is
 //     outstanding, the token's destruction included;
@@ -112,11 +114,13 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       executor: "morrow_work.parameters_redact_for_store",
       executable: "M2 PR-3",
     },
-    // M3 PR-2 (listings-runs): the product text a run read and the drafts it wrote. Both are
-    // keyed by store and expire after 90 days. A run reads a product only through the
-    // connector's read path, which lands in M2 PR-3 with these handlers' executor (the
-    // orchestrator's product read stays disabled until then), so neither table holds a
-    // store's content before the handler can run.
+    // M3 PR-2 (listings-runs, 0036): the product text a run read and the drafts it wrote.
+    // Both are keyed by store and expire after 90 days. A run reads a product only through
+    // M2 PR-3's shopifyRead, and 0036 revises M2 PR-3's store_content_redact to delete both
+    // in the same change that makes the read available, so neither table holds a store's
+    // content before the handler can run. The deletion's evidence counts the rows that pass
+    // deleted; the run steps that write them take the store's stop key shared, so a write
+    // races shop/redact only by committing first (and being deleted) or being refused.
     {
       table: "morrow_work.product_snapshots",
       dataClass: "product_content_read",

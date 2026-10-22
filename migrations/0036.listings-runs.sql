@@ -828,9 +828,33 @@ CREATE POLICY broker_read_run ON morrow_work.runs FOR SELECT TO morrow_work_comm
 CREATE POLICY broker_read_run_product ON morrow_work.run_products FOR SELECT TO morrow_work_command
  USING (session_user='morrow_vault_broker'
   AND organization_id::text||'|'||workspace_id::text||'|'||run_id::text=pg_catalog.current_setting('morrow.vault_read_run',true));
+-- M2 PR-3's shop/redact (connector_inbox_apply) deletes a store's snapshots and drafts
+-- through store_content_redact (below), in the connector's redaction context: the session
+-- user is the connector's login and morrow.connector_redact names exactly org|ws|store (only
+-- connector_inbox_apply writes it, from the inbox row the broker recorded, and clears it;
+-- the connector's login holds no table privilege, so a setting it forges reaches nothing).
+-- A DELETE with a WHERE reads its rows, so each table has a FOR SELECT and a FOR DELETE
+-- policy for that context, and a RESTRICTIVE FOR DELETE policy with the same predicate: the
+-- FOR ALL tenant_command and tenant_lease policies would otherwise admit a DELETE in any
+-- session or run lease, so the command role's DELETE grant serves this path alone.
+DO $$ DECLARE t text; BEGIN
+ FOREACH t IN ARRAY ARRAY['product_snapshots','run_drafts'] LOOP
+  EXECUTE format('CREATE POLICY connector_content_read ON morrow_work.%I FOR SELECT TO morrow_work_command
+   USING (session_user=''morrow_connector_ingress''
+    AND organization_id::text||''|''||workspace_id::text||''|''||store_id::text=pg_catalog.current_setting(''morrow.connector_redact'',true))',t);
+  EXECUTE format('CREATE POLICY connector_content_delete ON morrow_work.%I FOR DELETE TO morrow_work_command
+   USING (session_user=''morrow_connector_ingress''
+    AND organization_id::text||''|''||workspace_id::text||''|''||store_id::text=pg_catalog.current_setting(''morrow.connector_redact'',true))',t);
+  EXECUTE format('CREATE POLICY connector_content_delete_only ON morrow_work.%I AS RESTRICTIVE FOR DELETE TO morrow_work_command
+   USING (session_user=''morrow_connector_ingress''
+    AND organization_id::text||''|''||workspace_id::text||''|''||store_id::text=pg_catalog.current_setting(''morrow.connector_redact'',true))',t);
+ END LOOP;
+END $$;
 
--- Privileges: table SELECT and INSERT, column-scoped UPDATE, never DELETE or TRUNCATE. The
--- api role reads the tenant-readable tables column by column; never the provider ids.
+-- Privileges: table SELECT and INSERT, column-scoped UPDATE, never TRUNCATE; DELETE only on
+-- the two store-content tables, for shop/redact's context alone (the restrictive policies
+-- above). The api role reads the tenant-readable tables column by column; never the
+-- provider ids.
 GRANT SELECT ON morrow_work.model_catalogue_rates TO morrow_work_command;
 GRANT SELECT,INSERT ON morrow_work.runs,morrow_work.run_products,morrow_work.run_manifests,morrow_work.run_model_calls,
  morrow_work.product_snapshots,morrow_work.run_drafts TO morrow_work_command;
@@ -842,6 +866,7 @@ GRANT UPDATE (revision,prompt_digest,schema_digest,attempts,input_tokens,output_
 GRANT UPDATE (status,outcome,counted,raw_stop_reason,provider_request_id,provider_model_id,counted_input_tokens,input_tokens,output_tokens,
  cache_creation_tokens,cache_read_tokens,cost_usd,overflow_usd,booking_id,closed_at) ON morrow_work.run_model_calls TO morrow_work_command;
 GRANT UPDATE (status,proposal_id,packed_at) ON morrow_work.run_drafts TO morrow_work_command;
+GRANT DELETE ON morrow_work.product_snapshots,morrow_work.run_drafts TO morrow_work_command;
 GRANT SELECT (organization_id,workspace_id,id,revision,task_id,child_task_id,store_id,connection_id,installation_id,status,ended_reason,
  catalogue_version,model_key,effort_key,credits_per_product,product_count,fields,products_drafted,products_failed,consecutive_failed,
  requester_principal_id,requester_membership_id,lease_id,workflow_version,created_at,started_at,ended_at,updated_at)
@@ -974,8 +999,9 @@ CREATE TRIGGER run_product_guard BEFORE INSERT OR UPDATE ON morrow_work.run_prod
 CREATE TRIGGER run_manifest_guard BEFORE INSERT OR UPDATE ON morrow_work.run_manifests FOR EACH ROW EXECUTE FUNCTION morrow_work.run_manifest_guard();
 CREATE TRIGGER model_call_guard BEFORE INSERT OR UPDATE ON morrow_work.run_model_calls FOR EACH ROW EXECUTE FUNCTION morrow_work.model_call_guard();
 CREATE TRIGGER run_draft_guard BEFORE INSERT OR UPDATE ON morrow_work.run_drafts FOR EACH ROW EXECUTE FUNCTION morrow_work.run_draft_guard();
--- Snapshots and drafts hold store content: no runtime DELETE (no grant), and the owner's
--- retention and shop/redact paths delete them, so neither has an append-only DELETE trigger.
+-- Snapshots and drafts hold store content: the owner's retention path and shop/redact
+-- (store_content_redact, in the connector's redaction context only) delete them, so neither
+-- has an append-only DELETE trigger.
 DO $$ DECLARE t text; BEGIN
  FOREACH t IN ARRAY ARRAY['model_catalogue_rates','product_snapshots'] LOOP
   EXECUTE format('CREATE TRIGGER append_only BEFORE UPDATE ON morrow_work.%I FOR EACH ROW EXECUTE FUNCTION morrow_work.append_only()',t);
@@ -1179,6 +1205,47 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION morrow_work.run_product_readable(text,text,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_work.run_product_readable(text,text,text,text) TO morrow_work_command;
+-- Every store-content handler of the work schema for one store (packages/work/src/
+-- redaction.ts), run under the caller's context: the proposal parameters are emptied
+-- (digest kept, parameters_redact_for_store, which refuses outside the tenant's session or
+-- the connector's redaction context for this store), and the store's product snapshots and
+-- run drafts are deleted (the connector_content_* policies admit only that redaction
+-- context; anywhere else nothing is deleted and the rows count as remaining). One entry per
+-- handler, as morrow_identity.privacy_evidence_valid admits them. For the parameters `rows`
+-- is the state (every row now redacted), so a re-run reports the same; for a deletion it is
+-- what this pass deleted, so a re-run after a pending pass (the token not yet destroyed)
+-- reports 0 deleted. `remaining` is always the rows still holding content, and shop/redact
+-- completes only when every `remaining` is 0. The run steps that write these tables take
+-- the store's stop key shared before they write, and connector_inbox_apply holds it
+-- exclusively from the system stop through this call, so a write either commits before
+-- this pass (and is deleted by it) or is refused.
+CREATE OR REPLACE FUNCTION morrow_work.store_content_redact(p_org text,p_ws text,p_store_id text)
+RETURNS jsonb
+LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+DECLARE r record; v_redacted integer; v_remaining integer; v_snapshots integer; v_snapshots_left integer; v_drafts integer;
+ v_drafts_left integer;
+BEGIN
+ SELECT * INTO r FROM morrow_work.parameters_redact_for_store(p_org,p_ws,p_store_id);
+ IF r.outcome IS DISTINCT FROM 'applied' THEN RAISE EXCEPTION 'STORE_CONTENT_REDACT_UNAVAILABLE'; END IF;
+ SELECT count(*) FILTER (WHERE q.redacted_at IS NOT NULL)::integer,count(*) FILTER (WHERE q.redacted_at IS NULL)::integer
+  INTO v_redacted,v_remaining FROM morrow_work.proposal_parameters q
+  WHERE q.organization_id=p_org AND q.workspace_id=p_ws
+   AND q.id IN (SELECT x.parameters_id FROM morrow_work.proposals x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.store_id=p_store_id);
+ DELETE FROM morrow_work.run_drafts d WHERE d.organization_id=p_org AND d.workspace_id=p_ws AND d.store_id=p_store_id;
+ GET DIAGNOSTICS v_drafts=ROW_COUNT;
+ DELETE FROM morrow_work.product_snapshots x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.store_id=p_store_id;
+ GET DIAGNOSTICS v_snapshots=ROW_COUNT;
+ SELECT count(*)::integer INTO v_drafts_left FROM morrow_work.run_drafts d
+  WHERE d.organization_id=p_org AND d.workspace_id=p_ws AND d.store_id=p_store_id;
+ SELECT count(*)::integer INTO v_snapshots_left FROM morrow_work.product_snapshots x
+  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.store_id=p_store_id;
+ RETURN jsonb_build_array(
+  jsonb_build_object('table','morrow_work.proposal_parameters','action','empty_keep_digest','rows',v_redacted,'remaining',v_remaining),
+  jsonb_build_object('table','morrow_work.product_snapshots','action','delete_rows','rows',v_snapshots,'remaining',v_snapshots_left),
+  jsonb_build_object('table','morrow_work.run_drafts','action','delete_rows','rows',v_drafts,'remaining',v_drafts_left));
+END $$;
+REVOKE ALL ON FUNCTION morrow_work.store_content_redact(text,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION morrow_work.store_content_redact(text,text,text) TO morrow_work_command;
 
 -- ---------------------------------------------------------------------------
 -- API functions: SECURITY DEFINER, owned by the command role after the transfer below,
@@ -1637,6 +1704,16 @@ BEGIN
  v_index:=p_index::integer;
  SELECT * INTO l FROM morrow_work.current_lease();
  IF NOT FOUND OR l.kind<>'run' THEN RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN; END IF;
+ -- The stop interlock, shared, in lease_open's and model_call_begin's order (the platform key,
+ -- then the store's) and before the run's lock; then the lease again as a new statement: a
+ -- stop that committed meanwhile revoked it, and one not yet committed waits for this write
+ -- (shop/redact holds the store's key from its system stop through store_content_redact, so
+ -- the write is either deleted by that pass or refused).
+ PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.stop','platform')::text,0));
+ PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.stop',
+  l.organization_id,l.workspace_id,l.store_id)::text,0));
+ SELECT * INTO l FROM morrow_work.current_lease();
+ IF NOT FOUND OR l.kind<>'run' THEN RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.run',l.organization_id,l.workspace_id,l.subject_id)::text,0));
  SELECT x.* INTO r FROM morrow_work.runs x WHERE x.organization_id=l.organization_id AND x.workspace_id=l.workspace_id AND x.id=l.subject_id
   AND x.lease_id=l.lease_id;
@@ -1681,6 +1758,16 @@ BEGIN
   RETURN QUERY SELECT 'invalid'::text,NULL::boolean,NULL::text,NULL::text; RETURN;
  END IF;
  v_index:=p_index::integer;
+ SELECT * INTO l FROM morrow_work.current_lease();
+ IF NOT FOUND OR l.kind<>'run' THEN RETURN QUERY SELECT 'denied'::text,NULL::boolean,NULL::text,NULL::text; RETURN; END IF;
+ -- The stop interlock, shared, in lease_open's and model_call_begin's order (the platform key,
+ -- then the store's) and before the run's lock; then the lease again as a new statement: a
+ -- stop that committed meanwhile revoked it, and one not yet committed waits for this write
+ -- (shop/redact holds the store's key from its system stop through store_content_redact, so
+ -- the write is either deleted by that pass or refused).
+ PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.stop','platform')::text,0));
+ PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.stop',
+  l.organization_id,l.workspace_id,l.store_id)::text,0));
  SELECT * INTO l FROM morrow_work.current_lease();
  IF NOT FOUND OR l.kind<>'run' THEN RETURN QUERY SELECT 'denied'::text,NULL::boolean,NULL::text,NULL::text; RETURN; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.run',l.organization_id,l.workspace_id,l.subject_id)::text,0));
@@ -1821,6 +1908,17 @@ BEGIN
  SELECT * INTO l FROM morrow_work.current_lease();
  IF NOT FOUND OR l.kind<>'run' THEN RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN; END IF;
  PERFORM 1 FROM morrow_work.workspace_streams w WHERE w.organization_id=l.organization_id AND w.workspace_id=l.workspace_id FOR UPDATE;
+ -- The stop interlock, shared, after the stream (as lease_open runs after an API command's
+ -- prelude; a person's stop takes the stream before its stop key) and in lease_open's order
+ -- (the platform key, then the store's), before the run's lock; then the lease again as a
+ -- new statement: a stop that committed meanwhile revoked it, and one not yet committed
+ -- waits for this write (shop/redact holds the store's key from its system stop through
+ -- store_content_redact, so the parameters are either emptied by that pass or never written).
+ PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.stop','platform')::text,0));
+ PERFORM pg_catalog.pg_advisory_xact_lock_shared(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.stop',
+  l.organization_id,l.workspace_id,l.store_id)::text,0));
+ SELECT * INTO l FROM morrow_work.current_lease();
+ IF NOT FOUND OR l.kind<>'run' THEN RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN; END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.run',l.organization_id,l.workspace_id,l.subject_id)::text,0));
  SELECT x.* INTO r FROM morrow_work.runs x WHERE x.organization_id=l.organization_id AND x.workspace_id=l.workspace_id AND x.id=l.subject_id
   AND x.lease_id=l.lease_id;

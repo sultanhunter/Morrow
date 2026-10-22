@@ -23,7 +23,11 @@ export const workRoles = Object.freeze({
 // the operator in platform audit rows; never a store's content) or "store" (a store's
 // content, identity or credential): every "store" table, in every schema the registry
 // covers (identityTables included), has exactly one cleanup handler in
-// packages/work/src/redaction.ts (S8).
+// packages/work/src/redaction.ts (S8). `commandDelete: "connector_redact"` (M3 PR-2
+// integrated with M2 PR-3) marks the one exception to "no runtime DELETE": the command role
+// holds DELETE on that store-content table for shop/redact's connector context alone, which
+// a RESTRICTIVE FOR DELETE policy (connector_content_delete_only) enforces; S3 and S4 check
+// the grant, the restrictive policy and that no other table has either.
 export const workTables = Object.freeze({
   goals: { class: "tenant_readable", parents: ["workspace_streams"], content: "workspace" },
   // M3 PR-2 (listings-runs): the run steps read tasks under their lease (tenant_lease_read),
@@ -229,17 +233,32 @@ export const workTables = Object.freeze({
     content: "none",
   },
   // The product text a run read (content-addressed, 90 days) and the drafts it wrote: store
-  // content, each with its cleanup handler (S8).
+  // content, each with its cleanup handler (S8): shop/redact deletes a store's rows through
+  // morrow_work.store_content_redact in the connector's redaction context
+  // (connector_content_read, connector_content_delete and the restrictive
+  // connector_content_delete_only).
   product_snapshots: {
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
     lease: true,
+    policies: [
+      "connector_content_delete",
+      "connector_content_delete_only",
+      "connector_content_read",
+    ],
+    commandDelete: "connector_redact",
     content: "store",
   },
   run_drafts: {
     class: "tenant_readable",
     parents: ["run_products", "proposals"],
     lease: true,
+    policies: [
+      "connector_content_delete",
+      "connector_content_delete_only",
+      "connector_content_read",
+    ],
+    commandDelete: "connector_redact",
     content: "store",
   },
 });
