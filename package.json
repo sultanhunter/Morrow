@@ -49,6 +49,7 @@
     "verify:delivery": "node scripts/delivery-checks.mjs",
     "ci": "npm run format:check && npm run typecheck && npm run verify && npm test && npm run build && npm run verify:workspace-web && npm run typecheck:edge && npm run edge:check && npm run edge:dry-run && npm run lab && npm run infra:synth && npm run infra:permissions && npm run infra:readiness",
     "ci:static": "npm run format:check && npm run typecheck && npm run verify && npm run build && npm run verify:workspace-web && npm run typecheck:edge && npm run edge:check && npm run smoke:scaffold && npm run lab && npm run infra:synth && npm run infra:permissions && npm run infra:readiness",
+    "ci:runner": "node scripts/ci-runner.mjs",
     "heavy:unit-stress": "node scripts/run-tests.mjs --repeat=5 --concurrency=8 --junit=heavy/unit",
     "infra:synth": "node --import tsx scripts/selected-infrastructure.mjs synth",
     "infra:readiness": "node --import tsx scripts/selected-infrastructure.mjs readiness",
