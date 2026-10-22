@@ -10,8 +10,9 @@
 //       with use_legacy_install_flow = true (the authorization-code grant the connector's
 //       callback completes, for a non-expiring offline token); application_url the
 //       connector's launch path and the one redirect URL its callback path; the webhooks
-//       api_version 2026-10 and no subscription until M2 PR-3 adds the inbox (so Shopify
-//       never retries a delivery into the connector's 503).
+//       api_version 2026-10 and, since M2 PR-3 added the inbox, the five topics of ADR-0022
+//       item 4 to the connector's webhook path: app/uninstalled and app/scopes_update, and
+//       the three compliance topics (no product topics).
 //   npm run shopify-app -- register --environment <development|staging> --app-key <key>
 //       --client-id <32 hex> --shop <name>.myshopify.com --organization <id>
 //       --workspace <id> --install-url <custom distribution link> --out <file>
@@ -115,8 +116,16 @@ export function shopifyAppToml(options) {
     "",
     "[webhooks]",
     `api_version = "${shopifyAppApiVersion}"`,
-    "# No subscriptions until M2 PR-3 adds the webhook inbox. Until then an uninstall is",
-    "# never delivered and the offline token stays active: keep the app installed.",
+    "",
+    "# ADR-0022 item 4: the app topics and the three compliance topics, to the connector's",
+    "# signed webhook path (M2 PR-3: the broker records each delivery before the 200).",
+    "[[webhooks.subscriptions]]",
+    'topics = [ "app/uninstalled", "app/scopes_update" ]',
+    `uri = "${base}/webhooks"`,
+    "",
+    "[[webhooks.subscriptions]]",
+    'compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]',
+    `uri = "${base}/webhooks"`,
     "",
     "[build]",
     "automatically_update_urls_on_dev = false",

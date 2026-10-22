@@ -45,12 +45,18 @@ test("manifest: contiguous rows after the published head, executeAs, digests, no
     rows.map((_, i) => first + i),
   );
   // Nothing of another milestone sits between them. Later links of the merge train append
-  // after them (the staging test entitlement's two, by slug), never between.
+  // after them, never between (by slug): the staging test entitlement's two, then M2 PR-3's
+  // two privacy migrations.
   const later = manifest.migrations.slice(rows.at(-1).sequence);
   assert.ok(later.every((m) => m.reviewRef !== brief));
   assert.deepEqual(
-    later.slice(0, 2).map((m) => m.file.replace(/^\d{4}\./, "")),
-    ["staging-entitlement-identity-bridge.sql", "staging-test-entitlement.sql"],
+    later.slice(0, 4).map((m) => m.file.replace(/^\d{4}\./, "")),
+    [
+      "staging-entitlement-identity-bridge.sql",
+      "staging-test-entitlement.sql",
+      "shopify-privacy-identity.sql",
+      "shopify-privacy-work.sql",
+    ],
   );
   for (const [i, [slug, executeAs, reviewRef]] of slugs.entries()) {
     const row = rows[i];

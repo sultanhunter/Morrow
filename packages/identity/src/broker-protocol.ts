@@ -141,6 +141,17 @@ export interface ApiBrokerRpc {
     signatureHeader: string,
     budgetMs: number,
   ): Promise<string>;
+  // M2 PR-3 (spine §4): one fixed Admin GraphQL read under a read lease (shopIdentity,
+  // collectionsPage, productsPage), named by the lease, its generation and its subject (the
+  // read's request id). The closed result JSON below; any refusal is BROKER_HELD.
+  shopifyRead(
+    leaseId: string,
+    generation: number,
+    subjectId: string,
+    queryName: string,
+    variablesJson: string,
+    budgetMs: number,
+  ): Promise<string>;
 }
 // M2 PR-1 (ADR-0022 item 7, spine §4): the connector's and the orchestrator's own
 // entrypoints. PR-1 gives each its health and its own role lease; the Shopify and model
@@ -158,11 +169,25 @@ export interface ConnectorBrokerRpc {
     stateDigest: string,
     budgetMs: number,
   ): Promise<string>;
+  // M2 PR-3: the webhook's signature check also records the delivery in the inbox, in the
+  // same vault transaction; the verdict carries only the inbox id (encodeShopifyWebhookVerdict).
   shopifyWebhookVerify(appKey: string, headersJson: string, rawBodyBase64: string): Promise<string>;
+  // M2 PR-3: destroys an ended installation's offline token, only with the end reason its
+  // row records, and records the destruction on it (encodeShopifyCredentialResult).
+  shopifyCredentialDestroy(installationId: string, reason: string): Promise<string>;
 }
 export interface RuntimeBrokerRpc {
   health(): Promise<boolean>;
   neonLease(namespaceJson: string): Promise<string>;
+  // M2 PR-3 (spine §4): productContent under a run lease, for a product of that run.
+  shopifyRead(
+    leaseId: string,
+    generation: number,
+    subjectId: string,
+    queryName: string,
+    variablesJson: string,
+    budgetMs: number,
+  ): Promise<string>;
 }
 
 // P05.T01ab: the challenge protocol shared by the api guard and the broker.
@@ -470,16 +495,18 @@ export const shopifyWebhookHeaderNames = Object.freeze([
   "x-shopify-topic",
   "x-shopify-webhook-id",
 ] as const);
+// M2 PR-3: the broker verifies the signature over the raw body, minimises the body and
+// records the delivery in the inbox (morrow_identity.shopify_webhook_inbox) in one vault
+// transaction; the connector learns only the inbox id. recorded: a new row; duplicate: the
+// row of an earlier delivery of the same webhook id, with whether it is already settled;
+// refused: not Shopify's signature, or not this app's shop (401); invalid: Shopify-signed,
+// but not a body of its topic (400).
 export type ShopifyWebhookVerdict =
-  | Readonly<{
-      verdict: "verified";
-      topic: ShopifyWebhookTopic;
-      shopDomain: string;
-      webhookId: string;
-      /** Ids and keyed digests only (spine §11); never an email, phone or order id. */
-      minimisedBody: Readonly<Record<string, string | readonly string[] | null>>;
-    }>
-  | Readonly<{ verdict: "refused" }>;
+  | Readonly<{ verdict: "recorded"; inboxId: string; settled: false }>
+  | Readonly<{ verdict: "duplicate"; inboxId: string; settled: boolean }>
+  | Readonly<{ verdict: "refused"; inboxId: null; settled: null }>
+  | Readonly<{ verdict: "invalid"; inboxId: null; settled: null }>;
+const inboxIdPattern = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 
 const verdictJson = (value: unknown, names: readonly string[]) => {
   try {
@@ -562,83 +589,333 @@ export function decodeShopifyInstallResult(text: unknown): ShopifyInstallResult 
     continuationToken: v.continuationToken as string | null,
   });
 }
-const minimisedKey = /^[a-z][A-Za-z0-9]{0,31}$/;
-const minimisedValue = /^[A-Za-z0-9_.:/-]{1,128}$/;
-function minimised(value: unknown): Readonly<Record<string, string | readonly string[] | null>> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw invalid();
-  const out: Record<string, string | readonly string[] | null> = {};
-  const entries = Object.entries(value);
-  if (entries.length > 8) throw invalid();
-  for (const [key, item] of entries) {
-    if (!minimisedKey.test(key)) throw invalid();
-    if (item === null || exact(minimisedValue, item)) out[key] = item as string | null;
-    else if (
-      Array.isArray(item) &&
-      item.length <= 32 &&
-      item.every((x: unknown) => exact(minimisedValue, x))
-    )
-      out[key] = Object.freeze([...(item as string[])]);
-    else throw invalid();
-  }
-  return Object.freeze(out);
-}
 export function encodeShopifyWebhookVerdict(v: ShopifyWebhookVerdict): string {
-  const value =
-    v.verdict === "refused"
-      ? {
-          schemaVersion: 1,
-          verdict: "refused",
-          topic: null,
-          shopDomain: null,
-          webhookId: null,
-          minimisedBody: null,
-        }
-      : {
-          schemaVersion: 1,
-          verdict: "verified",
-          topic: v.topic,
-          shopDomain: v.shopDomain,
-          webhookId: v.webhookId,
-          minimisedBody: v.minimisedBody,
-        };
-  const text = JSON.stringify(value);
+  const text = JSON.stringify({
+    schemaVersion: 1,
+    verdict: v.verdict,
+    inboxId: v.inboxId,
+    settled: v.settled,
+  });
   decodeShopifyWebhookVerdict(text);
   return text;
 }
 export function decodeShopifyWebhookVerdict(text: unknown): ShopifyWebhookVerdict {
-  const v = verdictJson(text, [
-    "schemaVersion",
-    "verdict",
-    "topic",
-    "shopDomain",
-    "webhookId",
-    "minimisedBody",
-  ]);
+  const v = verdictJson(text, ["schemaVersion", "verdict", "inboxId", "settled"]);
   if (v.schemaVersion !== 1) throw invalid();
-  if (v.verdict === "refused") {
-    if (
-      v.topic !== null ||
-      v.shopDomain !== null ||
-      v.webhookId !== null ||
-      v.minimisedBody !== null
-    )
-      throw invalid();
-    return Object.freeze({ verdict: "refused" });
+  if (v.verdict === "refused" || v.verdict === "invalid") {
+    if (v.inboxId !== null || v.settled !== null) throw invalid();
+    return Object.freeze(
+      v.verdict === "refused"
+        ? { verdict: "refused" as const, inboxId: null, settled: null }
+        : { verdict: "invalid" as const, inboxId: null, settled: null },
+    );
   }
   if (
-    v.verdict !== "verified" ||
-    !(shopifyWebhookTopics as readonly unknown[]).includes(v.topic) ||
-    !exact(shopifyShopPattern, v.shopDomain) ||
-    !exact(/^[A-Za-z0-9-]{1,128}$/, v.webhookId)
+    (v.verdict !== "recorded" && v.verdict !== "duplicate") ||
+    !exact(inboxIdPattern, v.inboxId) ||
+    typeof v.settled !== "boolean" ||
+    (v.verdict === "recorded" && v.settled !== false)
   )
     throw invalid();
-  return Object.freeze({
-    verdict: "verified",
-    topic: v.topic as ShopifyWebhookTopic,
-    shopDomain: v.shopDomain,
-    webhookId: v.webhookId,
-    minimisedBody: minimised(v.minimisedBody),
-  });
+  return Object.freeze(
+    v.verdict === "recorded"
+      ? { verdict: "recorded" as const, inboxId: v.inboxId, settled: false as const }
+      : { verdict: "duplicate" as const, inboxId: v.inboxId, settled: v.settled },
+  );
+}
+// M2 PR-3: the token's destruction. The reason must be the end the installation records
+// (uninstalled; or the suspension's reason); anything else is ineligible and changes nothing.
+export const shopifyCredentialReasons = Object.freeze([
+  "uninstalled",
+  "scopes_changed",
+  "disconnected",
+] as const);
+export type ShopifyCredentialReason = (typeof shopifyCredentialReasons)[number];
+export const shopifyCredentialOutcomes = Object.freeze([
+  "destroyed",
+  "already_destroyed",
+  "ineligible",
+  "not_found",
+] as const);
+export type ShopifyCredentialOutcome = (typeof shopifyCredentialOutcomes)[number];
+export const shopifyInstallationIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+export function encodeShopifyCredentialResult(outcome: ShopifyCredentialOutcome): string {
+  const text = JSON.stringify({ schemaVersion: 1, outcome });
+  decodeShopifyCredentialResult(text);
+  return text;
+}
+export function decodeShopifyCredentialResult(text: unknown): ShopifyCredentialOutcome {
+  const v = verdictJson(text, ["schemaVersion", "outcome"]);
+  if (
+    v.schemaVersion !== 1 ||
+    !(shopifyCredentialOutcomes as readonly unknown[]).includes(v.outcome)
+  )
+    throw invalid();
+  return v.outcome as ShopifyCredentialOutcome;
+}
+
+// ---------------------------------------------------------------------------
+// M2 PR-3: shopifyRead (spine §4; ADR-0022 items 4 and 7). One fixed Admin GraphQL document
+// per query, in the broker only; the caller names a live lease, its generation and its
+// subject, and closed variables. The api reads under a read lease (the pages and the shop
+// identity), the orchestrator under a run lease (one product's listing fields, of a product
+// of that run); the broker refuses any other pair (ApiBroker and RuntimeBroker each expose
+// their own queries, and the vault resolution checks the lease kind again). Results are the
+// closed JSON below: ids, titles, the listing fields and Shopify's page cursor only.
+export const shopifyReadQueries = Object.freeze({
+  api: Object.freeze(["shopIdentity", "collectionsPage", "productsPage"] as const),
+  runtime: Object.freeze(["productContent"] as const),
+});
+export type ShopifyReadQuery =
+  | "shopIdentity"
+  | "collectionsPage"
+  | "productsPage"
+  | "productContent";
+export const shopifyReadLimits = Object.freeze({
+  /** The whole read: the vault resolution, the Admin call and a THROTTLED wait. */
+  budgetMaxMs: 15000,
+  variablesMaxBytes: 2048,
+  resultMaxBytes: 262144,
+  pageSize: 25,
+  /**
+   * Shopify's opaque page cursor (M2 PR-3 review): a title-sorted cursor is base64 of JSON
+   * that holds the last node's title, so a 255-character title in 4-byte UTF-8 with its
+   * JSON stays within this; the variables carrying it within variablesMaxBytes.
+   */
+  cursorMaxChars: 1536,
+  searchMaxChars: 64,
+});
+export type ShopifyReadVariables =
+  | Readonly<{ query: "shopIdentity" }>
+  | Readonly<{ query: "collectionsPage"; after: string | null }>
+  | Readonly<{
+      query: "productsPage";
+      after: string | null;
+      collectionId: string | null;
+      search: string | null;
+    }>
+  | Readonly<{ query: "productContent"; productId: string }>;
+const cursorPattern = /^[A-Za-z0-9+/=_-]{1,1536}$/;
+const gidRef = (kind: "product" | "collection") => new RegExp(`^${kind}:[1-9][0-9]{0,19}$`);
+// Letters, digits and single spaces only: the broker builds Shopify's search syntax itself.
+const searchPattern = /^[\p{L}\p{N}]+(?: [\p{L}\p{N}]+){0,4}$/u;
+const nullable = (value: unknown, pattern: RegExp): value is string | null =>
+  value === null || exact(pattern, value);
+/** The closed variables of one query, or null (never a partial or extra key). */
+export function parseShopifyReadVariables(
+  queryName: unknown,
+  variablesJson: unknown,
+): ShopifyReadVariables | null {
+  try {
+    if (typeof variablesJson !== "string") return null;
+    if (brokerUtf8Bytes(variablesJson) > shopifyReadLimits.variablesMaxBytes) return null;
+    switch (queryName) {
+      case "shopIdentity":
+        loginJson(variablesJson, shopifyReadLimits.variablesMaxBytes, []);
+        return Object.freeze({ query: "shopIdentity" });
+      case "collectionsPage": {
+        const v = loginJson(variablesJson, shopifyReadLimits.variablesMaxBytes, ["after"]);
+        return nullable(v.after, cursorPattern)
+          ? Object.freeze({ query: "collectionsPage", after: v.after })
+          : null;
+      }
+      case "productsPage": {
+        const v = loginJson(variablesJson, shopifyReadLimits.variablesMaxBytes, [
+          "after",
+          "collectionId",
+          "search",
+        ]);
+        if (
+          !nullable(v.after, cursorPattern) ||
+          !nullable(v.collectionId, gidRef("collection")) ||
+          !(
+            v.search === null ||
+            (typeof v.search === "string" &&
+              [...v.search].length <= shopifyReadLimits.searchMaxChars &&
+              searchPattern.test(v.search))
+          ) ||
+          (v.collectionId !== null && v.search !== null)
+        )
+          return null;
+        return Object.freeze({
+          query: "productsPage",
+          after: v.after,
+          collectionId: v.collectionId,
+          search: v.search as string | null,
+        });
+      }
+      case "productContent": {
+        const v = loginJson(variablesJson, shopifyReadLimits.variablesMaxBytes, ["productId"]);
+        return exact(gidRef("product"), v.productId)
+          ? Object.freeze({ query: "productContent", productId: v.productId })
+          : null;
+      }
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
+}
+export interface ShopifyListingSnapshot {
+  readonly productId: string;
+  readonly title: string;
+  readonly descriptionHtml: string;
+  readonly seo: { readonly title: string | null; readonly description: string | null };
+  readonly tags: readonly string[];
+}
+export type ShopifyReadResult =
+  | Readonly<{
+      schemaVersion: 1;
+      outcome: "read";
+      shop: Readonly<{ shopId: string; development: boolean }>;
+    }>
+  | Readonly<{
+      schemaVersion: 1;
+      outcome: "read";
+      collections: readonly Readonly<{ id: string; title: string }>[];
+      nextCursor: string | null;
+    }>
+  | Readonly<{
+      schemaVersion: 1;
+      outcome: "read";
+      products: readonly Readonly<{ id: string; title: string; status: string }>[];
+      nextCursor: string | null;
+    }>
+  | Readonly<{ schemaVersion: 1; outcome: "read"; product: ShopifyListingSnapshot }>
+  | Readonly<{ schemaVersion: 1; outcome: "not_found" }>;
+const title = (value: unknown): value is string =>
+  typeof value === "string" && value.length <= 1024 && brokerWellFormed(value);
+const listingText = (value: unknown, max: number): value is string =>
+  typeof value === "string" && brokerUtf8Bytes(value) <= max && brokerWellFormed(value);
+const plain = (value: unknown, names: readonly string[]): value is Record<string, unknown> =>
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  Object.keys(value).sort().join(",") === [...names].sort().join(",");
+/**
+ * The closed result of one query (the broker encodes through it; the api and the
+ * orchestrator decode with it). Throws BROKER_PROTOCOL_INVALID on any other shape.
+ */
+export function decodeShopifyReadResult(
+  queryName: ShopifyReadQuery,
+  text: unknown,
+): ShopifyReadResult {
+  let v: unknown;
+  try {
+    if (typeof text !== "string" || brokerUtf8Bytes(text) > shopifyReadLimits.resultMaxBytes)
+      throw invalid();
+    v = JSON.parse(text);
+  } catch {
+    throw invalid();
+  }
+  const notFound =
+    plain(v, ["schemaVersion", "outcome"]) && v.schemaVersion === 1 && v.outcome === "not_found";
+  if (notFound && (queryName === "productsPage" || queryName === "productContent"))
+    return Object.freeze({ schemaVersion: 1, outcome: "not_found" });
+  const page = (key: string) =>
+    plain(v, ["schemaVersion", "outcome", key, "nextCursor"]) &&
+    v.schemaVersion === 1 &&
+    v.outcome === "read" &&
+    Array.isArray(v[key]) &&
+    (v[key] as unknown[]).length <= shopifyReadLimits.pageSize &&
+    nullable(v.nextCursor, cursorPattern);
+  switch (queryName) {
+    case "shopIdentity": {
+      if (
+        plain(v, ["schemaVersion", "outcome", "shop"]) &&
+        v.schemaVersion === 1 &&
+        v.outcome === "read" &&
+        plain(v.shop, ["shopId", "development"]) &&
+        exact(/^[1-9][0-9]{0,19}$/, v.shop.shopId) &&
+        typeof v.shop.development === "boolean"
+      )
+        return Object.freeze({
+          schemaVersion: 1,
+          outcome: "read",
+          shop: Object.freeze({ shopId: v.shop.shopId, development: v.shop.development }),
+        });
+      break;
+    }
+    case "collectionsPage": {
+      if (
+        page("collections") &&
+        (v as { collections: unknown[] }).collections.every(
+          (c) => plain(c, ["id", "title"]) && exact(gidRef("collection"), c.id) && title(c.title),
+        )
+      ) {
+        const r = v as { collections: { id: string; title: string }[]; nextCursor: string | null };
+        return Object.freeze({
+          schemaVersion: 1,
+          outcome: "read",
+          collections: Object.freeze(
+            r.collections.map((c) => Object.freeze({ id: c.id, title: c.title })),
+          ),
+          nextCursor: r.nextCursor,
+        });
+      }
+      break;
+    }
+    case "productsPage": {
+      if (
+        page("products") &&
+        (v as { products: unknown[] }).products.every(
+          (p) =>
+            plain(p, ["id", "title", "status"]) &&
+            exact(gidRef("product"), p.id) &&
+            title(p.title) &&
+            exact(/^[a-z][a-z_]{0,31}$/, p.status),
+        )
+      ) {
+        const r = v as {
+          products: { id: string; title: string; status: string }[];
+          nextCursor: string | null;
+        };
+        return Object.freeze({
+          schemaVersion: 1,
+          outcome: "read",
+          products: Object.freeze(
+            r.products.map((p) => Object.freeze({ id: p.id, title: p.title, status: p.status })),
+          ),
+          nextCursor: r.nextCursor,
+        });
+      }
+      break;
+    }
+    case "productContent": {
+      const p = plain(v, ["schemaVersion", "outcome", "product"]) ? v.product : undefined;
+      if (
+        plain(v, ["schemaVersion", "outcome", "product"]) &&
+        v.schemaVersion === 1 &&
+        v.outcome === "read" &&
+        plain(p, ["productId", "title", "descriptionHtml", "seo", "tags"]) &&
+        exact(gidRef("product"), p.productId) &&
+        listingText(p.title, 4096) &&
+        listingText(p.descriptionHtml, 196608) &&
+        plain(p.seo, ["title", "description"]) &&
+        (p.seo.title === null || listingText(p.seo.title, 4096)) &&
+        (p.seo.description === null || listingText(p.seo.description, 4096)) &&
+        Array.isArray(p.tags) &&
+        p.tags.length <= 250 &&
+        p.tags.every((t) => listingText(t, 1024))
+      ) {
+        const seo = p.seo as { title: string | null; description: string | null };
+        return Object.freeze({
+          schemaVersion: 1,
+          outcome: "read",
+          product: Object.freeze({
+            productId: p.productId,
+            title: p.title,
+            descriptionHtml: p.descriptionHtml,
+            seo: Object.freeze({ title: seo.title, description: seo.description }),
+            tags: Object.freeze([...(p.tags as string[])]),
+          }),
+        });
+      }
+      break;
+    }
+  }
+  throw invalid();
 }
 
 // M5 PR-1: the ApiBroker Stripe protocol. Closed result JSON with fixed codes; never

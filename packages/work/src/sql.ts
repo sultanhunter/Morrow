@@ -1,6 +1,7 @@
 import { agentStatements } from "./agents/sql.js";
 import { approvalStatements } from "./approvals/sql.js";
 import { billingStatements } from "./billing/sql.js";
+import { catalogStatements } from "./catalog/sql.js";
 import { spineStatements } from "./spine-sql.js";
 
 // Every statement the work API sends (ADR-0010 item 2). Source-fixed: no caller
@@ -71,5 +72,7 @@ export const workStatements = Object.freeze({
   ...billingStatements,
   // M3 PR-1: the Listings agent, Stop AI work and the model default.
   ...agentStatements,
+  // M2 PR-3: the catalogue routes' read lease.
+  ...catalogStatements,
 } as const);
 export type WorkStatementName = keyof typeof workStatements;

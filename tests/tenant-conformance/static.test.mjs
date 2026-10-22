@@ -65,6 +65,11 @@ const tenantPredicate =
 const leasePredicate =
   "(((organization_id)::text, (workspace_id)::text) = ( SELECT c.organization_id,\n    c.workspace_id\n   FROM morrow_work.current_lease() c(organization_id, workspace_id, lease_id, generation, kind, subject_id, store_id, connection_id, installation_id, initiator_principal_id, initiator_membership_id, expires_at)))";
 const orPlatform = (predicate) => "((organization_id IS NULL) OR " + predicate + ")";
+// M2 PR-3 (0037): the connector context's lease and redaction predicates.
+const connectorLease =
+  "((SESSION_USER = 'morrow_connector_ingress'::name) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || (connection_id)::text) = current_setting('morrow.connector_stop'::text, true)))";
+const connectorRedact =
+  "((SESSION_USER = 'morrow_connector_ingress'::name) AND (EXISTS ( SELECT 1\n   FROM morrow_work.proposals x\n  WHERE (((x.organization_id)::text = (proposal_parameters.organization_id)::text) AND ((x.workspace_id)::text = (proposal_parameters.workspace_id)::text) AND ((x.parameters_id)::text = (proposal_parameters.id)::text) AND ((((((x.organization_id)::text || '|'::text) || (x.workspace_id)::text) || '|'::text) || (x.store_id)::text) = current_setting('morrow.connector_redact'::text, true))))))";
 // The exactly-checked extra policies (registry `policies`): [command, roles, qual, check].
 const extraPolicies = {
   lease_self: [
@@ -186,6 +191,49 @@ const extraPolicies = {
     "{morrow_work_command}",
     "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_resolve_installation'::text, true)))",
     null,
+  ],
+  // M2 PR-3 (0037): the connector's context. Each names exactly the tenant, store and
+  // connection (or store) that connector_inbox_apply wrote into its transaction-local
+  // setting, only while the session user is the connector's login: the system connection
+  // stop (set, never lifted), its StopRecord@1, the revocation of that connection's leases
+  // (to revoked with reason stop) and shop/redact's emptying of the store's parameters.
+  connector_stop_read: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (scope = 'connection'::text) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || (target_id)::text) = current_setting('morrow.connector_stop'::text, true)))",
+    null,
+  ],
+  connector_stop_set: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (scope = 'connection'::text) AND (set_by_kind = 'system'::text) AND (lifted_at IS NULL) AND (kill_switch_record_id IS NULL) AND (reason_code = ANY (ARRAY['shopify_app_uninstalled'::text, 'shopify_scopes_changed'::text])) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || (target_id)::text) = current_setting('morrow.connector_stop'::text, true)))",
+  ],
+  connector_stop_record: [
+    "INSERT",
+    "{morrow_work_command}",
+    null,
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND (action = 'set'::text) AND (actor_kind = 'system'::text) AND (operator_id IS NULL) AND (scope = 'connection'::text) AND (reason_code = ANY (ARRAY['shopify_app_uninstalled'::text, 'shopify_scopes_changed'::text])) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || (target_id)::text) = current_setting('morrow.connector_stop'::text, true)))",
+  ],
+  connector_lease_read: ["SELECT", "{morrow_work_command}", connectorLease, null],
+  connector_lease_revoke: [
+    "UPDATE",
+    "{morrow_work_command}",
+    connectorLease,
+    "((status = 'revoked'::text) AND (revoked_reason = 'stop'::text) AND (SESSION_USER = 'morrow_connector_ingress'::name) AND ((((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) || '|'::text) || (connection_id)::text) = current_setting('morrow.connector_stop'::text, true)))",
+  ],
+  connector_redact_proposal: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_connector_ingress'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (store_id)::text) = current_setting('morrow.connector_redact'::text, true)))",
+    null,
+  ],
+  connector_redact_read: ["SELECT", "{morrow_work_command}", connectorRedact, null],
+  connector_redact: [
+    "UPDATE",
+    "{morrow_work_command}",
+    connectorRedact,
+    "((redacted_at IS NOT NULL) AND (canonical = '{}'::text) AND " + connectorRedact.slice(1),
   ],
 };
 // One table's policies against the template of its class and its registry extras.
@@ -397,8 +445,17 @@ test("S4: the api role reads readable tables column by column; no runtime DELETE
 // signup-bridge definers. Every definer is owned by the command role; operator functions
 // are INVOKER and owned by the owner, like triggers and checks.
 // M5 PR-1 adds the broker's own billing definers ("broker") and the receipt-only ingress
-// ("ingress").
-const definerKinds = ["api", "resolver", "runtime", "vault", "bridge_in", "broker", "ingress"];
+// ("ingress"); M2 PR-3 the connector login's definers ("connector").
+const definerKinds = [
+  "api",
+  "resolver",
+  "runtime",
+  "vault",
+  "bridge_in",
+  "broker",
+  "ingress",
+  "connector",
+];
 
 test("S5: definers, owners, search paths, grants, parameters, roles and memberships", () => {
   const functions = rows(
@@ -417,7 +474,7 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
     assert.equal(f.prosecdef, definer, f.signature);
     if (definer || spec.kind === "helper") assert.equal(f.owner, workRoles.command, f.signature);
     else assert.equal(f.owner, workRoles.owner, f.signature);
-    if (spec.kind === "api" || spec.kind === "runtime")
+    if (spec.kind === "api" || spec.kind === "runtime" || spec.kind === "connector")
       for (const name of f.arguments
         .split(", ")
         .filter(Boolean)

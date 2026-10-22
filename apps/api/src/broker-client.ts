@@ -8,12 +8,14 @@ import {
   decodeStripeCustomerResult,
   decodeStripePortalResult,
   decodeStripeWebhookResult,
+  shopifyReadLimits,
   stripeLimits,
   stripeOperationIdValid,
   type ApiBrokerRpc,
   type ChallengeVerdict,
 } from "../../../packages/identity/src/broker-protocol.js";
 import type { BillingBrokerPort } from "../../../packages/work/src/billing/port.js";
+import type { CatalogReader } from "../../../packages/work/src/catalog/http.js";
 import type { LoginControl } from "../../../packages/identity/src/standalone-login-protocol.js";
 import type { WorkosSessionPageReader } from "../../../packages/identity/src/workos-session-status.js";
 
@@ -256,6 +258,47 @@ export function createBrokerStripe(broker: ApiBrokerRpc): BillingBrokerPort {
           allowance,
         ),
       );
+    },
+  });
+}
+
+// M2 PR-3: the catalogue routes' one ApiBroker.shopifyRead, under the read lease the route's
+// transaction opened: the lease, its generation and subject, the query and its closed
+// variables cross RPC, raced against the caller's signal and the budget plus a small RPC
+// allowance, never retried. The result is returned as text for the route's closed decoder.
+export function createBrokerShopifyReader(broker: ApiBrokerRpc): CatalogReader {
+  return Object.freeze({
+    async read(
+      lease: Parameters<CatalogReader["read"]>[0],
+      queryName: Parameters<CatalogReader["read"]>[1],
+      variablesJson: string,
+      signal: AbortSignal,
+      budgetMs: number,
+    ) {
+      if (
+        !Number.isSafeInteger(budgetMs) ||
+        budgetMs < 1 ||
+        budgetMs > shopifyReadLimits.budgetMaxMs ||
+        typeof variablesJson !== "string" ||
+        brokerUtf8Bytes(variablesJson) > shopifyReadLimits.variablesMaxBytes
+      )
+        throw held();
+      const text: unknown = await raceBrokerCall(
+        () =>
+          broker.shopifyRead(
+            lease.leaseId,
+            lease.generation,
+            lease.subjectId,
+            queryName,
+            variablesJson,
+            budgetMs,
+          ),
+        signal,
+        budgetMs + 250,
+      );
+      if (typeof text !== "string" || brokerUtf8Bytes(text) > shopifyReadLimits.resultMaxBytes)
+        throw held();
+      return text;
     },
   });
 }

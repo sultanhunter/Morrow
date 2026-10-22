@@ -8,11 +8,15 @@
 // verdict or a log. Ingress (the PR-2 review's layers 2 and 3): unsigned-shaped requests
 // open no vault transaction; with the app's secret held by the isolate, a forged launch,
 // callback or webhook opens none either; and at most shopifyIngressLimits transactions
-// (unverified, total) run at once, the install store never counted.
+// (unverified, total) run at once, the install store never counted. M2 PR-3: a verified
+// webhook is recorded in the inbox in the transaction that verified it (only its id is in
+// the verdict); a body of another topic, or naming another shop, is invalid; and the
+// token's destruction names an installation and the end reason its row records.
 import assert from "node:assert/strict";
-import { createHash, createHmac, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import test from "node:test";
 import {
+  decodeShopifyCredentialResult,
   decodeShopifyInstallResult,
   decodeShopifyLaunchVerdict,
   decodeShopifyWebhookVerdict,
@@ -90,6 +94,10 @@ async function fakeVault(options = {}) {
     continuations: [],
     registered: options.registered ?? true,
     transactions: 0,
+    // M2 PR-3: the inbox (by webhook id) and every record statement's values.
+    inbox: new Map(),
+    recorded: [],
+    destroyOutcome: "destroyed",
   };
   const handlers = {
     [vaultStatements.appSecretGet]: ([key]) =>
@@ -127,6 +135,23 @@ async function fakeVault(options = {}) {
             }
           : { outcome: "not_found", client_id: null, workspace_id: null, installation: null },
       ];
+    },
+    [vaultStatements.shopifyWebhookRecord]: ([key, domain, topic, webhookId, apiVersion, body]) => {
+      db.events.push("record");
+      db.recorded.push({ key, domain, topic, webhookId, apiVersion, body: JSON.parse(body) });
+      if (key !== appKey || domain !== shop || !db.registered)
+        return [{ outcome: "not_found", inbox_id: null, settled: null }];
+      if (options.recordInvalid) return [{ outcome: "invalid", inbox_id: null, settled: null }];
+      const existing = db.inbox.get(webhookId);
+      if (existing)
+        return [{ outcome: "duplicate", inbox_id: existing.id, settled: String(existing.settled) }];
+      const id = randomUUID();
+      db.inbox.set(webhookId, { id, settled: false });
+      return [{ outcome: "recorded", inbox_id: id, settled: "false" }];
+    },
+    [vaultStatements.shopifyCredentialDestroy]: ([installation, reason]) => {
+      db.events.push("destroy:" + installation + ":" + reason);
+      return [{ outcome: db.destroyOutcome }];
     },
     [vaultStatements.shopifyCallbackClaim]: ([key, digest]) => {
       db.events.push("claim");
@@ -786,18 +811,18 @@ test("install input: wrong types hold; budgets outside 1..10000 hold; production
   );
 });
 
-test("webhooks: raw-body HMAC before any parse; topic allowlist; minimised body", async () => {
+test("webhooks: raw-body HMAC before any parse; topic allowlist; recorded with its minimised body", async () => {
   const h = await harness();
   const body = JSON.stringify({
     shop_id: 987,
     shop_domain: shop,
-    customer: { id: 5, email: "a@b.test" },
-    orders_to_redact: [1],
+    customer: { id: 5, email: "a@b.test", phone: "555-0100" },
+    orders_to_redact: [1, 2],
   });
-  const headers = (overrides = {}) =>
+  const headers = (overrides = {}, text = body) =>
     JSON.stringify({
       "x-shopify-api-version": "2026-10",
-      "x-shopify-hmac-sha256": createHmac("sha256", secret).update(body).digest("base64"),
+      "x-shopify-hmac-sha256": createHmac("sha256", secret).update(text).digest("base64"),
       "x-shopify-shop-domain": shop,
       "x-shopify-topic": "customers/redact",
       "x-shopify-webhook-id": "b54557e4-bdd9-4b37-8a5f-bf7d70bcd043",
@@ -807,9 +832,39 @@ test("webhooks: raw-body HMAC before any parse; topic allowlist; minimised body"
   const verdict = decodeShopifyWebhookVerdict(
     await h.broker.webhookVerify(h.env, appKey, headers(), raw),
   );
-  assert.equal(verdict.verdict, "verified");
-  assert.equal(verdict.topic, "customers/redact");
-  assert.deepEqual(Object.keys(verdict.minimisedBody).sort(), ["customerDigest", "shopId"]);
+  assert.equal(verdict.verdict, "recorded");
+  assert.match(verdict.inboxId, /^[a-f0-9-]{36}$/);
+  assert.equal(verdict.settled, false);
+  // One record statement, in the verifying transaction, with the minimised body only: the
+  // shop id and a keyed digest of the customer id (never the email, phone or order ids).
+  assert.equal(h.db.transactions, 1);
+  assert.deepEqual(h.db.events, ["record"]);
+  const recorded = h.db.recorded[0];
+  assert.deepEqual(
+    [recorded.key, recorded.domain, recorded.topic, recorded.webhookId, recorded.apiVersion],
+    [appKey, shop, "customers/redact", "b54557e4-bdd9-4b37-8a5f-bf7d70bcd043", "2026-10"],
+  );
+  assert.deepEqual(recorded.body, {
+    shopId: "987",
+    customerDigest: createHmac("sha256", secret)
+      .update("morrow.shopify.customer.v1|5")
+      .digest("hex"),
+  });
+  assert.doesNotMatch(JSON.stringify(h.db.recorded), /a@b\.test|555-0100|"orders/);
+  // A redelivery is the same row, reported with whether it is settled.
+  const again = decodeShopifyWebhookVerdict(
+    await h.broker.webhookVerify(h.env, appKey, headers(), raw),
+  );
+  assert.deepEqual(again, { verdict: "duplicate", inboxId: verdict.inboxId, settled: false });
+  h.db.inbox.get("b54557e4-bdd9-4b37-8a5f-bf7d70bcd043").settled = true;
+  assert.equal(
+    decodeShopifyWebhookVerdict(await h.broker.webhookVerify(h.env, appKey, headers(), raw))
+      .settled,
+    true,
+  );
+  // Refused (401): another signature, a changed body, an unsubscribed topic, a missing
+  // header, a body that is not base64, and a shop the registry does not hold for the app.
+  const records = h.db.recorded.length;
   for (const [h2, b2] of [
     [
       headers({ "x-shopify-hmac-sha256": createHmac("sha256", "x").update(body).digest("base64") }),
@@ -817,7 +872,6 @@ test("webhooks: raw-body HMAC before any parse; topic allowlist; minimised body"
     ],
     [headers(), Buffer.from(body + " ").toString("base64")],
     [headers({ "x-shopify-topic": "orders/create" }), raw],
-    [headers({ "x-shopify-shop-domain": "other.myshopify.com" }), raw],
     [JSON.stringify({ "x-shopify-topic": "shop/redact" }), raw],
     [headers(), "!!!"],
   ])
@@ -825,6 +879,117 @@ test("webhooks: raw-body HMAC before any parse; topic allowlist; minimised body"
       decodeShopifyWebhookVerdict(await h.broker.webhookVerify(h.env, appKey, h2, b2)).verdict,
       "refused",
     );
+  assert.equal(h.db.recorded.length, records);
+  // Invalid (400): Shopify-signed, but not a body of its topic. The topic header is not
+  // signed, so a customers/redact body sent as shop/redact (or app/uninstalled) is refused,
+  // as is a compliance body naming another shop than the header's; nothing is recorded.
+  for (const [topic, text, shopHeader] of [
+    ["shop/redact", body, shop],
+    ["app/uninstalled", body, shop],
+    ["customers/data_request", body, shop],
+    ["customers/redact", JSON.stringify({ shop_id: 987, shop_domain: shop }), shop],
+    ["shop/redact", JSON.stringify({ shop_id: 987, shop_domain: "other.myshopify.com" }), shop],
+    ["app/uninstalled", JSON.stringify({ id: 987, myshopify_domain: "other.myshopify.com" }), shop],
+    ["app/scopes_update", JSON.stringify({ previous: ["read_products"] }), shop],
+    ["shop/redact", "[1,2]", shop],
+  ])
+    assert.equal(
+      decodeShopifyWebhookVerdict(
+        await h.broker.webhookVerify(
+          h.env,
+          appKey,
+          headers(
+            {
+              "x-shopify-topic": topic,
+              "x-shopify-shop-domain": shopHeader,
+              "x-shopify-webhook-id": randomUUID(),
+            },
+            text,
+          ),
+          Buffer.from(text).toString("base64"),
+        ),
+      ).verdict,
+      "invalid",
+      topic + " " + text,
+    );
+  assert.equal(h.db.recorded.length, records);
+  // Each topic's own body is recorded with its minimised shape.
+  for (const [topic, text, expected] of [
+    [
+      "app/uninstalled",
+      JSON.stringify({ id: 987, name: "Dev", myshopify_domain: shop, email: "o@x.test" }),
+      { shopId: "987" },
+    ],
+    [
+      "app/scopes_update",
+      JSON.stringify({
+        id: 1,
+        previous: ["write_products"],
+        current: ["read_products"],
+        updated_at: "2026-10-22T00:00:00Z",
+      }),
+      { previous: ["write_products"], current: ["read_products"] },
+    ],
+    [
+      "customers/data_request",
+      JSON.stringify({
+        shop_id: 987,
+        shop_domain: shop,
+        orders_requested: [7],
+        customer: { id: 5, email: "a@b.test" },
+        data_request: { id: 77 },
+      }),
+      null,
+    ],
+    ["shop/redact", JSON.stringify({ shop_id: 987, shop_domain: shop }), { shopId: "987" }],
+  ]) {
+    const v = decodeShopifyWebhookVerdict(
+      await h.broker.webhookVerify(
+        h.env,
+        appKey,
+        headers({ "x-shopify-topic": topic, "x-shopify-webhook-id": randomUUID() }, text),
+        Buffer.from(text).toString("base64"),
+      ),
+    );
+    assert.equal(v.verdict, "recorded", topic);
+    const last = h.db.recorded.at(-1).body;
+    if (expected) assert.deepEqual(last, expected, topic);
+    else {
+      assert.deepEqual(Object.keys(last).sort(), ["customerDigest", "dataRequestId", "shopId"]);
+      assert.equal(last.dataRequestId, "77");
+    }
+  }
+  assert.doesNotMatch(JSON.stringify(h.db.recorded), /a@b\.test|o@x\.test|"Dev"/);
+  // An app the registry does not hold for this shop is refused, and the database's own
+  // refusal of a body is invalid.
+  h.db.registered = false;
+  const refusedText = JSON.stringify({ shop_id: 987, shop_domain: shop });
+  assert.equal(
+    decodeShopifyWebhookVerdict(
+      await h.broker.webhookVerify(
+        h.env,
+        appKey,
+        headers(
+          { "x-shopify-topic": "shop/redact", "x-shopify-webhook-id": randomUUID() },
+          refusedText,
+        ),
+        Buffer.from(refusedText).toString("base64"),
+      ),
+    ).verdict,
+    "refused",
+  );
+  const strict = await harness({ recordInvalid: true });
+  assert.equal(
+    decodeShopifyWebhookVerdict(
+      await strict.broker.webhookVerify(
+        strict.env,
+        appKey,
+        headers({ "x-shopify-topic": "shop/redact" }, refusedText),
+        Buffer.from(refusedText).toString("base64"),
+      ),
+    ).verdict,
+    "invalid",
+  );
   // A signature header that is not base64 of 32 bytes opens no vault transaction.
   h.db.transactions = 0;
   for (const value of ["x".repeat(44), "a".repeat(64), "=" + "A".repeat(43)])
@@ -840,6 +1005,75 @@ test("webhooks: raw-body HMAC before any parse; topic allowlist; minimised body"
       "refused",
     );
   assert.equal(h.db.transactions, 0);
+});
+
+test("webhooks: a lost COMMIT acknowledgement of the record is OUTCOME_UNKNOWN, never a verdict", async () => {
+  const h = await harness({ loseCommit: 0 });
+  const text = JSON.stringify({ shop_id: 987, shop_domain: shop });
+  const headers = JSON.stringify({
+    "x-shopify-api-version": "2026-10",
+    "x-shopify-hmac-sha256": createHmac("sha256", secret).update(text).digest("base64"),
+    "x-shopify-shop-domain": shop,
+    "x-shopify-topic": "shop/redact",
+    "x-shopify-webhook-id": "b54557e4-bdd9-4b37-8a5f-bf7d70bcd043",
+  });
+  await assert.rejects(
+    () => h.broker.webhookVerify(h.env, appKey, headers, Buffer.from(text).toString("base64")),
+    (error) => error.code === "OUTCOME_UNKNOWN",
+  );
+  // The redelivery finds the row the lost COMMIT wrote.
+  assert.equal(
+    decodeShopifyWebhookVerdict(
+      await h.broker.webhookVerify(h.env, appKey, headers, Buffer.from(text).toString("base64")),
+    ).verdict,
+    "duplicate",
+  );
+});
+
+test("credential destruction: ids and a known reason only, one vault statement, closed result", async () => {
+  const h = await harness();
+  const installation = "11111111-1111-4111-8111-111111111111";
+  assert.equal(
+    decodeShopifyCredentialResult(
+      await h.broker.credentialDestroy(h.env, installation, "uninstalled"),
+    ),
+    "destroyed",
+  );
+  assert.deepEqual(h.db.events, ["destroy:" + installation + ":uninstalled"]);
+  for (const outcome of ["already_destroyed", "ineligible", "not_found"]) {
+    h.db.destroyOutcome = outcome;
+    assert.equal(
+      decodeShopifyCredentialResult(
+        await h.broker.credentialDestroy(h.env, installation, "scopes_changed"),
+      ),
+      outcome,
+    );
+  }
+  h.db.destroyOutcome = "denied";
+  await assert.rejects(() => h.broker.credentialDestroy(h.env, installation, "uninstalled"));
+  for (const [id, reason] of [
+    [installation, "reauthorised"],
+    [installation, "UNINSTALLED"],
+    ["bad id!", "uninstalled"],
+    [7, "uninstalled"],
+    [installation, null],
+  ])
+    await assert.rejects(
+      () => h.broker.credentialDestroy(h.env, id, reason),
+      (error) => error.code === "INPUT_INVALID",
+    );
+  const lost = await harness({ loseCommit: 0 });
+  await assert.rejects(
+    () => lost.broker.credentialDestroy(lost.env, installation, "uninstalled"),
+    (error) => error.code === "OUTCOME_UNKNOWN",
+  );
+  await assert.rejects(() =>
+    h.broker.credentialDestroy(
+      { ...env(), MORROW_ENVIRONMENT: "production" },
+      installation,
+      "uninstalled",
+    ),
+  );
 });
 
 // ---------------------------------------------------------------------------

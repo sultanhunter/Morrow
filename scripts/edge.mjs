@@ -447,8 +447,9 @@ const allowedBindings = Object.freeze({
   broker: ["vars", "secrets"],
   orchestrator: ["workflows", "queues", "secrets"],
   // M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint and, since the
-  // PR-2 review, its two per-address ingress limits (edgeConnectorRateLimits).
-  connector: ["vars", "services", "secrets", "ratelimits"],
+  // PR-2 review, its two per-address ingress limits (edgeConnectorRateLimits). M2 PR-3: its
+  // one cron trigger (edgeConnectorCrons).
+  connector: ["vars", "services", "secrets", "ratelimits", "triggers"],
 });
 // The reviewed packages/ files the connector bundle may include (M2 PR-2): the shared
 // broker protocol and the role preflight text, with the JSON helpers they import, and the
@@ -524,6 +525,14 @@ export function edgeConnectorRateLimits(environment) {
     simple: { limit, period: 60 },
   }));
 }
+
+// M2 PR-3 (review finding B8): the connector's one cron trigger, exact in every
+// environment: every five minutes it re-drives, by id only, the webhook inbox rows still
+// received two minutes after they arrived and the tokens of ended installations whose
+// destruction is not yet recorded. It is a schedule on the existing Worker, not a new
+// resource: the inbox row is the queue (no Queue binding), and no other Worker has a
+// trigger.
+export const edgeConnectorCrons = Object.freeze(["*/5 * * * *"]);
 
 // P04.T01i D1 and D6 (AC01, AC02): only the staging api is on workers.dev; every staging
 // Worker keeps Workers Logs (invocation logs and traces off); development and production
@@ -1060,6 +1069,8 @@ export async function verifyEdgeConfig({
         !same(config.ratelimits, edgeConnectorRateLimits(environment))
       )
         problem("EDGE_CONNECTOR_RATELIMITS", where);
+      if (worker.key === "connector" && !same(config.triggers, { crons: [...edgeConnectorCrons] }))
+        problem("EDGE_CONNECTOR_TRIGGERS", where);
       if (worker.key === "api") {
         if (
           !same(config.services, [
@@ -1180,7 +1191,8 @@ const normalisedInputs = (meta, worker, root) =>
 // minified bytes. It was 256 KiB until 2026-10-22, when M2 PR-3 plus M3 PR-2 measured
 // 264,479 bytes (the Neon driver is 56%); 384 KiB still keeps the broker small and
 // auditable, and the hand-written Shopify checks (ADR-0008) and the plain HTTPS Claude
-// adapter remain the choice. Owner-approved on 2026-10-22; 512 KiB would be this one line.
+// adapter remain the choice. Confirmed by the owner on 2026-10-22 ("yes to all
+// recommended"); 512 KiB would be this one line.
 export const edgeBundleLimits = Object.freeze({
   apiGzipBytes: 3 * 1024 * 1024,
   apiWarnGzipBytes: 1024 * 1024,

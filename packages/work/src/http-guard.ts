@@ -37,7 +37,21 @@ export type GuardedWorkRequest = GuardedWorkspaceRequest<WorkRoute>;
 export interface WorkspaceGuardOptions {
   /** The largest body accepted, in bytes (at most the work limit). */
   readonly bodyLimitBytes: number;
+  /**
+   * The longest query value accepted, in characters after decoding (default 512, at most
+   * 2048). M2 PR-3 review: the catalogue routes take Shopify page cursors up to 1,536.
+   */
+  readonly queryValueMaxChars?: number;
+  /** The longest request URL accepted (default 2048, at most 8192), for those cursors. */
+  readonly urlMaxChars?: number;
 }
+/** The guard's defaults and ceilings for query values and the request URL. */
+export const workspaceGuardLimits = Object.freeze({
+  queryValueChars: 512,
+  queryValueMaxChars: 2048,
+  urlChars: 2048,
+  urlMaxChars: 8192,
+});
 export class WorkGuardError extends Error {
   constructor(
     readonly status: 400 | 401 | 403 | 404 | 405,
@@ -167,9 +181,21 @@ export async function guardWorkspaceRequest<R extends WorkspaceRouteSpec>(
 ): Promise<GuardedWorkspaceRequest<R>> {
   const pattern = workspacePathPattern(prefix);
   const limit = options.bodyLimitBytes;
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > workBodyLimits.bytes)
+  const valueLimit = options.queryValueMaxChars ?? workspaceGuardLimits.queryValueChars;
+  const urlLimit = options.urlMaxChars ?? workspaceGuardLimits.urlChars;
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > workBodyLimits.bytes ||
+    !Number.isSafeInteger(valueLimit) ||
+    valueLimit < 1 ||
+    valueLimit > workspaceGuardLimits.queryValueMaxChars ||
+    !Number.isSafeInteger(urlLimit) ||
+    urlLimit < workspaceGuardLimits.urlChars ||
+    urlLimit > workspaceGuardLimits.urlMaxChars
+  )
     throw Error("WORKSPACE_ROUTE_LIMIT_INVALID");
-  if (request.url.length > 2048) return deny(400);
+  if (request.url.length > urlLimit) return deny(400);
   const url = new URL(request.url);
   if (url.origin !== origin || url.username || url.password) return deny(403);
   const path = pattern.exec(url.pathname);
@@ -202,7 +228,7 @@ export async function guardWorkspaceRequest<R extends WorkspaceRouteSpec>(
   // Query: only a GET's own parameters, each at most once.
   const query = new Map<string, string>();
   for (const [key, value] of url.searchParams) {
-    if (!route.query.includes(key) || query.has(key) || value.length > 512) return deny(400);
+    if (!route.query.includes(key) || query.has(key) || value.length > valueLimit) return deny(400);
     query.set(key, value);
   }
   if (!write) {
