@@ -47,7 +47,9 @@
 //      the api's reads, the outbox or a durable step result;
 //   R  M2 PR-3's read resolution (shopify_read_resolve, as the broker's login) under a real run
 //      lease: the run's own product in progress resolves, a product not in progress in the run,
-//      another run's id, a read lease, a released lease and a stop are refused;
+//      another run's id, a read lease, a released lease and a stop are refused; runs whose
+//      product read is the broker's own shopifyRead against the synthetic Shopify draft and
+//      propose, and a failed read retries the product step instead of failing the product;
 //   X  shop/redact (connector_inbox_apply, as the connector's login) deletes a store's
 //      snapshots and drafts and leaves other stores' content; racing it, a snapshot put, a
 //      draft finish and an agent submit that entered their lease first wait on the store's
@@ -66,10 +68,12 @@ import { createRunsApiHandler } from "../packages/work/src/runs/http.ts";
 import { snapshotCanonical } from "../packages/work/src/runs/drafting.ts";
 import {
   listingsRun,
+  productReadOf,
   proposeDrafts,
   RunStepRetry,
   runModelBudgetMs,
 } from "../packages/work/src/runs/workflow.ts";
+import { shopifyReadLimits } from "../packages/identity/src/broker-protocol.ts";
 import { storeContentHandlers } from "../packages/work/src/redaction.ts";
 import { createRuntimeAttempt, runLeaseStep } from "../packages/work/src/runtime/leases.ts";
 import { brokerCapabilities } from "../apps/broker/src/capabilities.ts";
@@ -77,6 +81,7 @@ import { createClaudeAdapter } from "../apps/broker/src/claude-adapter.ts";
 import { createModelGateway, listingPromptDigest } from "../apps/broker/src/model-gateway.ts";
 import { runVaultTransactionWithDriver } from "../apps/broker/src/vault-database.ts";
 import { sealVaultRecord, vaultBytesHex } from "../apps/broker/src/vault.ts";
+import { createShopifyReader } from "../apps/broker/src/shopify-read.ts";
 import { listingDraftSchemaDigest } from "../packages/policy/src/generated/listing-draft-schema.ts";
 import {
   capabilityFields,
@@ -91,6 +96,7 @@ import {
   workRequest,
 } from "../tests/tenant-conformance/harness.mjs";
 import { createAnthropicOracle, fakeAnthropicKey } from "./fixtures/anthropic-oracle.mjs";
+import { createShopifyOracle } from "./fixtures/shopify-oracle.mjs";
 import { writeArtifact } from "./artifacts.mjs";
 
 const sha = (value) => createHash("sha256").update(value, "utf8").digest("hex");
@@ -1860,6 +1866,7 @@ COMMIT;`,
   // as M2 PR-2's install would store it; the read resolution returns it, and shop/redact
   // completes once the broker destroys it.
   const storeCredential = async (installationId) => {
+    const token = "shpat_" + randomBytes(16).toString("hex");
     const sealed = await sealVaultRecord(
       capabilities.vault.keyring,
       {
@@ -1871,11 +1878,12 @@ COMMIT;`,
         provider: "shopify",
         version: 1,
       },
-      new TextEncoder().encode("shpat_" + randomBytes(16).toString("hex")),
+      new TextEncoder().encode(token),
     );
     db.workOwner(
       `INSERT INTO morrow_vault.credentials(organization_id,workspace_id,id,version,provider,kind,subject_id,status,kek_version,wrapped_key,sealed_value,created_at) VALUES(${literal(O)},${literal(W)},${literal("credential_" + installationId)},1,'shopify','shopify_offline_token',${literal(installationId)},'active',1,${literal("\\x" + vaultBytesHex(sealed.wrappedKey))}::bytea,${literal("\\x" + vaultBytesHex(sealed.sealedValue))}::bytea,date_trunc('milliseconds',clock_timestamp()));`,
     );
+    return token;
   };
   const enableListings = async (storeId) => {
     const path = `/stores/${storeId}/agents/listings`;
@@ -1939,7 +1947,7 @@ COMMIT;`,
     // login) under a real run lease, with run_product_readable as listings-runs revises it:
     // a product of the lease's own running run, while that product is in progress.
     const resumed = await enableListings(S);
-    await storeCredential("storeinst_runs");
+    const token = await storeCredential("storeinst_runs");
     const resolveAs = (ref, subject, productId, user = "morrow_vault_broker") => {
       const r = db.tryRun(
         `SELECT outcome||'|'||COALESCE(installation_id,'') FROM morrow_vault.shopify_read_resolve(${literal(ref.leaseId)},${literal(String(ref.generation))},${literal(subject)},'productContent',${literal(productId)});`,
@@ -2006,6 +2014,110 @@ COMMIT;`,
         resolveAs(endedRef, ended, product(84)) === "ended|",
       { endedFinish },
     );
+    // R5-R6: the Workflow's product read through the broker's own shopifyRead (the reader
+    // RuntimeBroker serves, on the vault login's transport, against the synthetic Shopify with
+    // the store's sealed token), mapped as the orchestrator maps it: a thrown read is
+    // unavailable, a reply is decoded by productReadOf. The read names the run id, which the
+    // resolution requires as the lease's subject.
+    const shopOracle = createShopifyOracle({
+      secret: "lab-runs-secret",
+      clientId: createHash("md5").update(S).digest("hex"),
+      shop: "lab-store-runs.myshopify.com",
+      shopId: String(BigInt("0x" + sha(S).slice(0, 12)) + 1n),
+    });
+    shopOracle.state.tokens.push(token);
+    let shopifyFailures = 0;
+    const reader = createShopifyReader({
+      transaction: (vault, budgetMs, body) =>
+        runVaultTransactionWithDriver(
+          vaultDriver,
+          vault,
+          Math.min(10000, budgetMs * 3),
+          body,
+          Date.now,
+          class {
+            close() {}
+          },
+        ),
+      fetch: (url, init) => {
+        if (shopifyFailures > 0) {
+          shopifyFailures--;
+          return Promise.resolve(new Response('{"errors":"Internal"}', { status: 500 }));
+        }
+        return shopOracle.fetch(url, init);
+      },
+      now: () => Date.now(),
+    });
+    const readsOf = new Map();
+    const shopifyPorts = {
+      ...ports,
+      async readProduct(readRef, readRunId, productId) {
+        readsOf.set(readRunId, (readsOf.get(readRunId) ?? 0) + 1);
+        let text;
+        try {
+          text = await reader.read(
+            brokerEnv,
+            "runtime",
+            readRef.leaseId,
+            readRef.generation,
+            readRunId,
+            "productContent",
+            JSON.stringify({ productId }),
+            shopifyReadLimits.budgetMaxMs,
+          );
+        } catch {
+          return { outcome: "unavailable" };
+        }
+        return productReadOf(text);
+      },
+    };
+    const shopifyRun = async (runIdOf) =>
+      within(
+        listingsRun(shopifyPorts, durable(), leaseOf(runIdOf), runIdOf),
+        600000,
+        "shopify read run " + runIdOf,
+      );
+    const contentCalls = () =>
+      shopOracle.state.calls.filter((c) => JSON.stringify(c).includes("ProductContent")).length;
+    const realRun = (await admit(P.A, T, admitBody(["product:101", "product:102"]))).body.runId;
+    const realResult = await shopifyRun(realRun);
+    const oracleProduct = shopOracle.state.catalog.products.find((p) => p.id === "101");
+    const expectedSnapshot = snapshotCanonical({
+      productId: "product:101",
+      title: oracleProduct.title,
+      descriptionHtml: oracleProduct.descriptionHtml,
+      seo: { title: null, description: null },
+      tags: oracleProduct.tags,
+    });
+    check(
+      "R5:a_run_reads_its_products_through_the_brokers_shopify_read_and_proposes",
+      realResult.kind === "ended" &&
+        realResult.status === "succeeded" &&
+        runRow(realRun).drafted === 2 &&
+        readsOf.get(realRun) === 2 &&
+        contentCalls() === 2 &&
+        count(
+          `SELECT count(*) FROM morrow_work.product_snapshots WHERE store_id=${literal(S)} AND digest=${literal(sha(expectedSnapshot))}`,
+        ) === 1,
+      { realResult, row: runRow(realRun), reads: readsOf.get(realRun), calls: contentCalls() },
+    );
+    // A read that fails (here Shopify's 500, READ_REFUSED in the broker) retries the product
+    // step: the product is drafted on the next try and never counts as a failed product.
+    const retryRun = (await admit(P.A, T, admitBody(["product:103"]))).body.runId;
+    shopifyFailures = 1;
+    const retryResult = await shopifyRun(retryRun);
+    check(
+      "R6:a_failed_read_retries_the_product_step_and_never_fails_the_product",
+      retryResult.kind === "ended" &&
+        retryResult.status === "succeeded" &&
+        readsOf.get(retryRun) === 2 &&
+        shopifyFailures === 0 &&
+        runRow(retryRun).failed === 0 &&
+        runRow(retryRun).consecutive === 0 &&
+        JSON.stringify(productsOf(retryRun).map((p) => [p.status, p.attempts, p.failure_code])) ===
+          JSON.stringify([["drafted", 1, null]]),
+      { retryResult, row: runRow(retryRun), products: productsOf(retryRun) },
+    );
     // A stop the lease outlived (sim: a connection stop inserted with the triggers off, so
     // its revocation never ran) is stopped; "Stop AI work" itself revokes the run's lease in
     // its own transaction, so the read is then ended.
@@ -2022,7 +2134,7 @@ COMMIT;`);
       control: { reason: "Pause the drafts", sourceProposalRef: null },
     });
     check(
-      "R5:a_stop_refuses_the_read_stopped_or_with_its_revoked_lease_ended",
+      "R7:a_stop_refuses_the_read_stopped_or_with_its_revoked_lease_ended",
       stoppedRead === "stopped|" &&
         again === "resolved|storeinst_runs" &&
         stop.status === 200 &&
@@ -2359,7 +2471,7 @@ async function main() {
     limitations: [
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
       "The runs handler, the Workflow logic and the broker's gateway run in Node over psql connectors (morrow_api_worker, morrow_runtime_executor, morrow_vault_broker), not in workerd over the Neon transport; the Messages API is an in-process stand-in.",
-      "The Workflow's product read is a lab stand-in for M2 PR-3's shopifyRead productContent (the R cases call its vault resolution directly as the broker's login); the workerd leg with the Shopify and Anthropic oracles is open.",
+      "Most runs' product read is a lab stand-in for M2 PR-3's shopifyRead productContent; R5-R6 use the broker's own reader in Node (not over the RuntimeBroker RPC) against the synthetic Shopify oracle, and the R cases call the vault resolution directly as the broker's login. The workerd leg with the Shopify and Anthropic oracles is open.",
       "The shop/redact deliveries are recorded through the broker's own definer (morrow_vault.shopify_webhook_record) without the signature check, which lab:shopify-privacy covers; the sim connection stop of R5 is inserted with the triggers off.",
       "M5's billing records (route, account, entitlement, period, wallet) are owner-seeded with the triggers off (sim); lab:billing proves the receipt path that writes them.",
       "Durable steps are an in-process stand-in for Cloudflare Workflows' step.do (a RunStepRetry is retried; results cross a JSON boundary).",
