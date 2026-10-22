@@ -28,6 +28,7 @@ const composePath = join(repositoryRoot, ciRunner.composeFile);
 const runnersPath = `repos/${ciRunner.repository}/actions/runners`;
 const variablePath = `repos/${ciRunner.repository}/actions/variables/${ciRunner.variable}`;
 const hostedLabels = ["self-hosted", "Linux", "ARM64", "morrow-mac"];
+const repositoryPath = `repos/${ciRunner.repository}`;
 const forkPath = `repos/${ciRunner.repository}/actions/permissions/fork-pr-workflows-private-repos`;
 const home = "/Users/owner";
 const narrowShares = JSON.stringify({ FilesharingDirectories: [home + "/Projects/other"] });
@@ -46,6 +47,7 @@ function world({
   shares = narrowShares,
   forkWorkflows = false,
   dockerDown = false,
+  visibility = "private",
 } = {}) {
   const state = {
     variable,
@@ -86,6 +88,8 @@ function world({
           }),
         );
       }
+      if (first === "api" && args[1] === repositoryPath)
+        return ok(JSON.stringify({ private: visibility === "private", visibility }));
       if (first === "api" && args[1] === forkPath)
         return ok(
           JSON.stringify({
@@ -284,6 +288,7 @@ test("up registers once, keeps the token off argv and output, and sets the varia
   assert.ok(set > index(state, (call) => call.args[5] === "up"));
   assert.equal(state.variable, variableValue);
   assert.deepEqual(lines, [
+    "repository: private",
     "docker: Docker Desktop, linux/aarch64",
     "docker file sharing: narrowed (no home, /Volumes, temporary or checkout folder)",
     "fork pull requests: run no workflows in this repository",
@@ -371,7 +376,7 @@ test("up refuses any Docker other than Docker Desktop on arm64 before asking Git
   }
 });
 
-test("up refuses broad Docker Desktop file sharing and fork pull request workflows before any token or pull", async () => {
+test("up refuses a public repository, broad Docker Desktop file sharing and fork pull request workflows before any token or pull", async () => {
   const cases = [
     [JSON.stringify({ AutoStart: false }), "CI_RUNNER_HOST_SHARE_TOO_BROAD"],
     [
@@ -388,6 +393,14 @@ test("up refuses broad Docker Desktop file sharing and fork pull request workflo
     );
     assert.ok(!setup.state.calls.some((call) => call.args[1] === forkPath));
   }
+  const open = world({ visibility: "public" });
+  await assert.rejects((await run(["up"], open)).promise, { code: "CI_RUNNER_REPOSITORY_PUBLIC" });
+  assert.ok(
+    !open.state.calls.some(
+      (call) => call.tool !== "gh" || call.args[2] === "POST" || call.args[1] === forkPath,
+    ),
+  );
+  assert.equal(open.state.variable, null);
   const fork = world({ forkWorkflows: true });
   await assert.rejects((await run(["up"], fork)).promise, {
     code: "CI_RUNNER_FORK_PR_WORKFLOWS_ON",
