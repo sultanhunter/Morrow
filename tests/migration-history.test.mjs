@@ -171,6 +171,17 @@ const published = [
     "5ebd3f69f30bfcd5f6f54453f791c703c5982892609e67ce50810f3544f19f6d",
   ],
   [33, "0033.run-credits.sql", "56426f72fe2057051df3de71dfb219959a297080b72335d3ed0dd0eae62342ff"],
+  // The staging test entitlement (0034 by the identity owner, 0035 by the work owner).
+  [
+    34,
+    "0034.staging-entitlement-identity-bridge.sql",
+    "91aeb0a200ad85ad39ed9e5e9602b955478651ff2fe141cf004c528cd5fc7851",
+  ],
+  [
+    35,
+    "0035.staging-test-entitlement.sql",
+    "fc658ae305e177a94eb400435d33a9242483487cf3da6cb19576ecad41d38ce9",
+  ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each
 // published row keeps exactly these pinned files, and a later role goes in a new file on its
@@ -244,7 +255,7 @@ const publishedPrerequisites = new Map([
 // definers (M2 PR-2), the billing records (M5 PR-1), and the listings authority, agent
 // proposals and run credits (M3 PR-1), which the work owner creates.
 const publishedExecuteAs = (sequence) =>
-  [15, 18, 20, 23, 25, 27, 29, 31, 32, 33].includes(sequence)
+  [15, 18, 20, 23, 25, 27, 29, 31, 32, 33, 35].includes(sequence)
     ? "morrow_work_owner"
     : "morrow_identity_owner";
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");

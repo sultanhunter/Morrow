@@ -16,7 +16,7 @@
     "docs/contracts/schemas/v1/billing.schema.json": "180780ee19533cff39bf7d7dbc59d1abf906904e5733077c1fef85e3fa9ffdf5",
     "docs/contracts/schemas/v1.1/core.schema.json": "1e9ad00755423b8f5fb4deed150ed973b576efde0f01871be874b7865f26ba17",
     "docs/contracts/schemas/v1.1/capabilities.schema.json": "d886a42fe0707e81786ebd1c638658f22c64787e273f24405a7f651974aebdc5",
-    "docs/contracts/schemas/v1.1/billing.schema.json": "763f73b99def0b5d8b2083f0084c9504e823fa81a3e772db8b3c5a45f94d9490"
+    "docs/contracts/schemas/v1.1/billing.schema.json": "0d3fa0baed844d062be4333790ba96015ee785ab5ec8515c81841fbf20e0438c"
   },
   "event_registry": {
     "path": "docs/contracts/event-registry.json",

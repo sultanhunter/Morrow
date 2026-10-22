@@ -295,7 +295,7 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(P.A.principal)
   // The state of one M2 store installation as M2 PR-3's uninstall and suspension paths
   // write it (sim: the lab moves an installation back and forth between states, which no
   // path does, so the edit runs with shopify_record_guard disabled; M2 PR-3's end columns
-  // are set as its paths set them, so 0034's store_installations_end CHECK holds).
+  // are set as its paths set them, so 0036's store_installations_end CHECK holds).
   // `unlinked` clears the link reference; `linked` restores the installation's own link and
   // link time. Returns the state that work_store_installations reports.
   const linkedRows = new Map();

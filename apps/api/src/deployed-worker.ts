@@ -32,6 +32,7 @@ import {
   type ApiModelMode,
   type ApiStripeMode,
 } from "./environment.js";
+import { createSessionLimit, type SessionLimit } from "./session-limit.js";
 import { createWorkspaceApiWorker } from "./worker.js";
 import { createLazyWorkosLoginPort, type ApiKeyringReadiness } from "./workos-port.js";
 
@@ -45,6 +46,8 @@ interface Selected {
   readonly api: WorkspaceApi;
   // P05.T01ab: present whenever the environment mapped; it runs before the router.
   readonly guard?: AbuseGuard;
+  // The session routes' per-address limit: present with the guard, after it, before the router.
+  readonly session?: SessionLimit;
   readonly readiness?: () => Promise<ApiKeyringReadiness>;
   readonly brokerHealth?: () => Promise<boolean>;
   keyringLogged: boolean;
@@ -185,6 +188,7 @@ function select(env: unknown): Selected {
           composed.runs,
         ),
         guard: createAbuseGuard(mapped.guard, createBrokerChallengeVerifier(mapped.broker)),
+        session: createSessionLimit(mapped.guard.limiters?.session ?? null),
         readiness: composed.readiness,
         brokerHealth: composed.brokerHealth,
         keyringLogged: false,
@@ -247,12 +251,15 @@ export default {
       pathname = "";
     }
     if (pathname === "/healthz") return healthz(request, selected);
-    const guard = selected.guard;
+    const { guard, session } = selected;
     // An unbound api has no guard: every route answers its deny-all response.
-    if (!guard) return selected.api.fetch(request, env, ctx);
+    if (!guard || !session) return selected.api.fetch(request, env, ctx);
     if (managedApiRoute(pathname) === "challenge")
       return Promise.resolve(guard.configurationResponse(request));
-    // The guard runs before the router and any SQL; the response is returned unchanged.
-    return guard.handle(request, (forwarded) => selected.api.fetch(forwarded, env, ctx));
+    // The sign-in guard, then the session limit (disjoint route sets), run before the router
+    // and any broker lease or SQL; the router's response is returned unchanged.
+    return guard.handle(request, (guarded) =>
+      session.handle(guarded, (admitted) => selected.api.fetch(admitted, env, ctx)),
+    );
   },
 };

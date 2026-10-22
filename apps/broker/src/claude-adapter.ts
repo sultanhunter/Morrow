@@ -10,9 +10,9 @@ import type {
 // per call, no retries, no streaming, no fallback. The official SDK does not fit the broker's
 // 256 KiB bundle cap (P04.T02a-AC02; measured for M3 PR-2: 457,561 bytes with the full SDK,
 // 315,143 with only its Messages resource, against 233,808 before this PR), so this follows
-// the ADR-0008 item 1 "hand-written checks" precedent; owner question 1 of the M3 brief
-// records it as an amendment of item 10's "with the official SDK" (the request fields and the
-// outcome table are item 10's, unchanged).
+// the ADR-0008 item 1 "hand-written checks" precedent. The owner approved it on 2026-10-22
+// (decision 3, recorded in the M3 brief) as an amendment of item 10's "with the official SDK"
+// (the request fields and the outcome table are item 10's, unchanged).
 // Sent: model, max_tokens (the effort's catalogue cap), system, one user message, thinking
 // {type: adaptive} and output_config {effort, format: json_schema ListingDraft_v1}; the
 // headers x-api-key, anthropic-version and content-type. Never sent: fallbacks,

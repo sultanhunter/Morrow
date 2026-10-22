@@ -13,7 +13,7 @@ import type {
   StoreLinkResultView,
 } from "@morrow/workspace-ui";
 import { isId, type Reply } from "./client";
-import { failureOutcome, record } from "./identity-decoders";
+import { failureOutcome, record, retryAfter } from "./identity-decoders";
 
 const unavailable = (offline = false) => ({ kind: "unavailable", offline }) as const;
 const uncertain = { kind: "uncertain" } as const;
@@ -120,14 +120,20 @@ export function decodeConnections(reply: Reply, workspaceId: string): Outcome<Co
 }
 
 // The guard's refusals before anything ran (P05.T03b): a 400 or 405 is a request this
-// adapter should never send; a 403 is a refused origin, header or CSRF value.
-function guardOutcome(status: number, body: unknown): Outcome<never> | null {
+// adapter should never send; a 403 is a refused origin, header or CSRF value. The api's
+// per-address session limit answers before the guard, 429 {"schemaVersion":1,"outcome":
+// "rate_limited"} with Retry-After (apps/api/src/session-limit.ts): nothing ran either, so
+// it is a hold, never an unknown outcome (pending.ts keeps a once-uncertain key uncertain).
+function guardOutcome(reply: Extract<Reply, { readonly kind: "response" }>): Outcome<never> | null {
+  const { status, body } = reply;
   if (status === 401) return unauthenticated;
   if ((status === 400 || status === 405) && coded(body, "request_denied"))
     return { kind: "invalid", field: null };
   if (status === 403 && coded(body, "request_denied")) return denied;
   // linking_not_found, or the guard's own 404: nothing ran either way.
   if (status === 404) return notFound;
+  if (status === 429 && outcomeBody(body, "rate_limited"))
+    return { kind: "rate_limited", retryAfterSeconds: retryAfter(reply.headers) };
   return null;
 }
 
@@ -155,7 +161,7 @@ export function decodeStoreLinkPreview(reply: Reply): Outcome<StoreLinkPreviewVi
       };
     return uncertain;
   }
-  const guarded = guardOutcome(status, body);
+  const guarded = guardOutcome(reply);
   if (guarded) return guarded;
   if (status === 409 && coded(body, "billing_route_required"))
     return { kind: "conflict", recheck: false, message: "" };
@@ -180,7 +186,7 @@ export function decodeStoreLinkResult(reply: Reply): Outcome<StoreLinkResultView
   }
   if ((status === 200 || status === 403) && outcomeBody(body, "denied"))
     return { kind: "ok", value: { outcome: "denied" }, replayed: false };
-  const guarded = guardOutcome(status, body);
+  const guarded = guardOutcome(reply);
   if (guarded) return guarded;
   if (status === 409 && outcomeBody(body, "conflict"))
     return { kind: "conflict", recheck: false, message: "" };

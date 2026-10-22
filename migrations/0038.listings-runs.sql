@@ -1,9 +1,10 @@
 BEGIN;
 -- M3 PR-2 listings runs (ADR-0022 items 2, 3, 9-11, 15 and 16; mvp-architecture §2 steps 7-9,
 -- §5, §7, §9 and §11; P13.T01a-T03a, P05.T04b, P11.T04a and P11.T05a minimum). Executes AS
--- morrow_work_owner, after M3 PR-1's run credits (0033) and M2 PR-3's Shopify reads and
--- privacy (0034-0035), whose two revisable helpers it revises (pinned below as 0035 wrote
--- them). On the ADR-0010 tenant pattern: composite
+-- morrow_work_owner, after M3 PR-1's run credits (0033), the staging test entitlement
+-- (0034-0035, which revises none of the CHECKs or functions this file revises) and M2
+-- PR-3's Shopify reads and privacy (0036-0037), whose two revisable helpers it revises
+-- (pinned below as 0037 wrote them). On the ADR-0010 tenant pattern: composite
 -- tenant keys, ENABLE and FORCE RLS, definers owned by morrow_work_command, INVOKER triggers
 -- and checks owned by the owner. No external effect: nothing here sends a request.
 --   * Platform: model_catalogue_rates, the per-token rates and provider model id of every
@@ -26,7 +27,7 @@ BEGIN;
 --     and run_product_unrecovered); the lease twins the runtime definers need on the work
 --     stream, the outbox, tasks, the approval records and the billing rows; the broker's
 --     settings-keyed policies for its two model definers and for M2 PR-3's product read.
---   * M2 PR-3's two revisable helpers (0035), revised now that runs exist:
+--   * M2 PR-3's two revisable helpers (0037), revised now that runs exist:
 --     run_product_readable (a run lease reads a product of its own running run, in
 --     progress) and store_content_redact (shop/redact also deletes the store's snapshots and
 --     drafts).
@@ -91,8 +92,8 @@ DO $$ BEGIN
   IS DISTINCT FROM 'f43f5e5735c63eb994358362938d9e59'
  OR (SELECT md5(pg_catalog.pg_get_constraintdef(c.oid)) FROM pg_catalog.pg_constraint c WHERE c.conrelid='morrow_billing.unrecovered_cost_entries'::regclass AND c.conname='unrecovered_cost_entries_kind_check')
   IS DISTINCT FROM '668e746c6b0b8ed7e21156f4600666bd'
- -- M2 PR-3 (0035): the read resolution that calls run_product_readable, and the two
- -- revisable owner helpers this file replaces, exactly as 0035 wrote them (shared protocol:
+ -- M2 PR-3 (0037): the read resolution that calls run_product_readable, and the two
+ -- revisable owner helpers this file replaces, exactly as 0037 wrote them (shared protocol:
  -- a later revision is never overwritten blind).
  OR to_regprocedure('morrow_vault.shopify_read_resolve(text,text,text,text,text)') IS NULL
  OR to_regprocedure('morrow_work.store_content_redact(text,text,text)') IS NULL
@@ -1193,10 +1194,10 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
--- M2 PR-3's revisable owner helpers (0035), same signatures, revised now that the runs and
+-- M2 PR-3's revisable owner helpers (0037), same signatures, revised now that the runs and
 -- their store content exist. CREATE OR REPLACE keeps their owner (the work owner) and their
 -- ACL (EXECUTE for the command role only), restated below; the prerequisites pin the text
--- 0035 wrote, so a later revision is never replaced blind.
+-- 0037 wrote, so a later revision is never replaced blind.
 -- Whether a run lease may read one product (spine §4; M2 PR-3 review finding B2): only a
 -- product of that run, while the run is running and the product is in progress (begun by
 -- run_product_begin, not yet finished). shopify_read_resolve calls it with the tenant and the

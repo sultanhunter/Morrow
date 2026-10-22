@@ -65,12 +65,13 @@ Errors are v1 `ErrorEnvelope`s with a fixed `safeMessage`; a not-found body is b
 | Wrong method (with `Allow`) | 405 | denied / never |
 | Revision, state or guard conflict; authority changed during the command, the actor's or the assignee's or respondent's grants included | 409 | conflict / recheck_before_retry |
 | Key reused with another request; ineligible assignee or respondent; published limit | 409 | conflict / never |
+| Over the api's per-address session limit, answered before this API runs (`Retry-After: 60`, `retryAfterSeconds` 60) | 429 | rate_limited / recheck_before_retry (GET: safe_read_retry) |
 | Database unavailable before the command was sent | 503 | unavailable / recheck_before_retry (reads: safe_read_retry) |
 | Command or COMMIT sent, reply lost | 503 | uncertain / reconcile_before_retry |
 
 ## Agents routes (M3 PR-1)
 
-An internal JSON contract beside the work API, under `/workspace/:ws` (not `/work`), on the same api Worker, dependencies and guard rules (`packages/work/src/agents/http.ts`; ADR-0022 items 3, 15 and 16, with the item 3 amendment of 2026-10-20). `PUT` follows the `POST` rules: exact `Origin`, Fetch Metadata, `X-Morrow-Request: 1`, `Content-Type: application/json` and an `Idempotency-Key`. Bodies are closed and never carry a tenant, store connection, installation or actor value: the store comes from the path and is resolved against its current association. Every command runs the human kernel on the exact resource first, then its definer, which rechecks authority under lock. An unbound api answers 401 with no network or database access.
+An internal JSON contract beside the work API, under `/workspace/:ws` (not `/work`), on the same api Worker, dependencies and guard rules (`packages/work/src/agents/http.ts`; ADR-0022 items 3, 15 and 16, with the item 3 amendment of 2026-10-20). `PUT` follows the `POST` rules: exact `Origin`, Fetch Metadata, `X-Morrow-Request: 1`, `Content-Type: application/json` and an `Idempotency-Key`. Bodies are closed and never carry a tenant, store connection, installation or actor value: the store comes from the path and is resolved against its current association. Every command runs the human kernel on the exact resource first, then its definer, which rechecks authority under lock. An unbound api answers 401 with no network or database access. Errors are the work API's envelopes (above), the session limit's 429 included.
 
 | Route under `/workspace/:ws` | Body | Success |
 | --- | --- | --- |

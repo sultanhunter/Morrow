@@ -1,7 +1,7 @@
 BEGIN;
 -- M2 PR-3: the work and vault side of uninstall, the compliance topics and Shopify reads
 -- (ADR-0022 items 4, 7, 9, 13-15; mvp-architecture §4, §5, §10 and §11; P09.T04a,
--- P09.T05a). Executes AS morrow_work_owner, after 0034. It adds:
+-- P09.T05a). Executes AS morrow_work_owner, after 0036. It adds:
 --   * the connector login's context: USAGE on morrow_work and policies that admit, only
 --     while the session user is morrow_connector_ingress and only for the tenant, store and
 --     connection that its own definer wrote into a transaction-local setting before it
@@ -375,7 +375,7 @@ BEGIN
  RETURN QUERY SELECT COALESCE(r.outcome,'invalid'),r.inbox_id,r.settled;
 END $$;
 -- Destroys a store installation's offline token (ADR-0022 item 13), only when its row
--- records the end the caller names (0034 work_shopify_credential_end), and records the
+-- records the end the caller names (0036 work_shopify_credential_end), and records the
 -- destruction on the installation in this same transaction, so a token is never left
 -- live for an ended installation without the re-drive seeing it. Every active version
 -- whose subject is the installation is erased (the subject the envelope binds), whatever

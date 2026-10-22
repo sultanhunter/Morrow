@@ -10,10 +10,10 @@
 // `uninstall_or_disconnect` handler. Since M2 PR-3 every handler names its executor (the
 // conformance check refuses a null one: invariant 16, no non-development store links before
 // every handler runs, mvp.md M6):
-//   * shop/redact: morrow_work.connector_inbox_apply (0035) first ends the installation (the
+//   * shop/redact: morrow_work.connector_inbox_apply (0037) first ends the installation (the
 //     uninstall path, so a shop/redact that arrives first still destroys the token), then
 //     runs morrow_work.store_content_redact (every work-schema handler: the proposal
-//     parameters through parameters_redact_for_store, and since listings-runs (0036) the
+//     parameters through parameters_redact_for_store, and since listings-runs (0038) the
 //     store's product snapshots and run drafts, deleted in the connector's redaction context
 //     only) and
 //     morrow_identity.work_shopify_redact_identity (the installation, its candidate and
@@ -105,7 +105,7 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       storeKey: "proposals.store_id through proposals.parameters_id",
       // The revisable owner helper of the M3 PR-1 agent-proposals migration: it empties the
       // canonical text and sets redacted_at, keeping the digest; decision_bind and the
-      // approval_claims trigger refuse a redacted proposal. M2 PR-3 (0035) revises it to run
+      // approval_claims trigger refuse a redacted proposal. M2 PR-3 (0037) revises it to run
       // under the tenant's own session context or the connector's redaction context for
       // exactly that store (morrow.connector_redact, which only connector_inbox_apply writes),
       // with the connector_redact policies; anything else is still context_unavailable,
@@ -114,9 +114,9 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       executor: "morrow_work.parameters_redact_for_store",
       executable: "M2 PR-3",
     },
-    // M3 PR-2 (listings-runs, 0036): the product text a run read and the drafts it wrote.
+    // M3 PR-2 (listings-runs, 0038): the product text a run read and the drafts it wrote.
     // Both are keyed by store and expire after 90 days. A run reads a product only through
-    // M2 PR-3's shopifyRead, and 0036 revises M2 PR-3's store_content_redact to delete both
+    // M2 PR-3's shopifyRead, and 0038 revises M2 PR-3's store_content_redact to delete both
     // in the same change that makes the read available, so neither table holds a store's
     // content before the handler can run. The deletion's evidence counts the rows that pass
     // deleted; the run steps that write them take the store's stop key shared, so a write

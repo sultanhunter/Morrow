@@ -21,7 +21,11 @@
 // api's billing and webhook paths. The Stripe switch (owner decision (c), 2026-10-21): with
 // no MORROW_STRIPE_MODE every Stripe method is STRIPE_UNAVAILABLE before its inputs, even
 // with every Stripe secret bound, and a bound api answers the webhook 503 unavailable
-// without calling the broker.
+// without calling the broker. The session routes' limit
+// (apps/api/src/session-limit.ts, SESSION_LIMITER 120 per 60 s) runs over the same bundle:
+// requests without a canonical session cookie go uncounted to the handler's own refusal,
+// the 121st counted request is 429, logout and rotate keep their own buckets while the
+// read and work bucket is empty, and none of it reaches the database.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1969,6 +1973,189 @@ await instance(
       "P05T01ab-AC05:no_address_in_any_log_line",
       ["198.51.100", "203.0.113", "2001:db8", "not-an-address"].every(
         (address) => !logged.includes(address),
+      ),
+    );
+  },
+);
+
+// ---- The session routes' per-address limit (session-limit.ts) over the real bundles ----
+// The committed development SESSION_LIMITER: 120 per 60 s on each of the keys `session`,
+// `session_logout` and `session_rotate`. A counted request carries one canonical session
+// cookie; without X-Morrow-Request, GET /workspaces refuses it (403) before any lease, and
+// without Origin and X-Morrow-Request so do logout and rotate, so the bursts reach neither the
+// broker's lease nor the database. Everything that needs the buckets must fall in one limiter
+// window (Miniflare: 60 s on the epoch); if it straddles two, it runs once more from another
+// address in a fresh window.
+await instance(
+  "SESSION_limiter",
+  { api: { bindings: guardedApiBindings() } },
+  async ({ fetchApi, events, observed }) => {
+    const from = (address) => ({ "CF-Connecting-IP": address });
+    const sessionCookie = () => "__Host-morrow_session=" + randomBytes(32).toString("base64url");
+    const proof = {
+      Origin: origin,
+      "Content-Type": "application/json",
+      "X-Morrow-Request": "1",
+    };
+    const denied = (r) => r.status === 403 && r.body === '{"code":"request_denied"}';
+    const unauthenticated = (r) =>
+      r.status === 401 && json(r.body)?.code === "authentication_required";
+    // Logout and rotate without the browser proof: each handler's own 403, before any lease.
+    const lifecycleDenied = ([logout, rotate]) =>
+      logout.status === 403 &&
+      logout.body === '{"schemaVersion":1,"outcome":"logout_unavailable"}' &&
+      rotate.status === 403 &&
+      rotate.body === '{"schemaVersion":1,"outcome":"rotation_unavailable"}';
+    const unproven = (address, path) =>
+      fetchApi(path, {
+        method: "POST",
+        headers: { ...from(address), "Content-Type": "application/json", Cookie: sessionCookie() },
+        body: '{"schemaVersion":1}',
+      });
+    const burst = async (address) => {
+      const window = Math.floor(Date.now() / 60000);
+      // Ten uncounted first: no cookie, a short one, two session cookies.
+      const uncounted = [];
+      for (let i = 0; i < 10; i++)
+        uncounted.push(
+          await fetchApi("/workspaces", {
+            headers: {
+              ...from(address),
+              "X-Morrow-Request": "1",
+              ...(i % 3 === 0
+                ? {}
+                : {
+                    Cookie:
+                      i % 3 === 1
+                        ? "__Host-morrow_session=" + randomBytes(31).toString("base64url")
+                        : sessionCookie() + "; " + sessionCookie(),
+                  }),
+            },
+          }),
+        );
+      const counted = [];
+      for (let i = 0; i < 121; i++)
+        counted.push(
+          await fetchApi("/workspaces", {
+            headers: { ...from(address), Cookie: sessionCookie() },
+          }),
+        );
+      // The `session` bucket is now empty; logout and rotate count under their own keys.
+      const lifecycle = [];
+      for (let i = 0; i < 121; i++)
+        lifecycle.push([
+          await unproven(address, "/auth/logout"),
+          await unproven(address, "/auth/rotate"),
+        ]);
+      // Over the limit on every session route, a full request included: no lease, no SQL.
+      const limited = [
+        await fetchApi("/workspaces", {
+          headers: { ...from(address), Cookie: sessionCookie(), "X-Morrow-Request": "1" },
+        }),
+        await fetchApi("/workspace/workspace_a/bootstrap", {
+          headers: { ...from(address), Cookie: sessionCookie() },
+        }),
+        await fetchApi("/workspace/workspace_a/work/goals", {
+          headers: { ...from(address), Cookie: sessionCookie() },
+        }),
+        await fetchApi("/auth/logout", {
+          method: "POST",
+          headers: { ...from(address), ...proof, Cookie: sessionCookie() },
+          body: '{"schemaVersion":1}',
+        }),
+        await fetchApi("/auth/rotate", {
+          method: "POST",
+          headers: { ...from(address), ...proof, Cookie: sessionCookie() },
+          body: '{"schemaVersion":1}',
+        }),
+      ];
+      return {
+        uncounted,
+        counted,
+        lifecycle,
+        limited,
+        sameWindow: Math.floor(Date.now() / 60000) === window,
+      };
+    };
+    await freshWindow(40000);
+    let address = "198.51.100.30";
+    let run = await burst(address);
+    if (!run.sameWindow) {
+      await freshWindow(40000);
+      address = "198.51.100.31";
+      run = await burst(address);
+    }
+    check("SESSION:burst_within_one_window", run.sameWindow);
+    check("SESSION:no_canonical_cookie_refused_uncounted", run.uncounted.every(unauthenticated));
+    check(
+      "SESSION:121st_counted_request_429_after_120",
+      run.counted.slice(0, 120).every(denied) && noStore429(run.counted[120]),
+    );
+    // The PR review (2026-10-22): a flood on the read and work routes holds neither
+    // sign-out nor rotation; each has its own 120 and its own 429.
+    check(
+      "SESSION:logout_and_rotate_admitted_while_session_bucket_empty",
+      lifecycleDenied(run.lifecycle[0]),
+    );
+    check(
+      "SESSION:logout_and_rotate_121st_429_after_120",
+      run.lifecycle.slice(0, 120).every(lifecycleDenied) && run.lifecycle[120].every(noStore429),
+    );
+    const limited = run.limited;
+    // The work path answers in the work API's own ErrorEnvelope (code rate_limited).
+    const workEnvelope = json(limited[2].body);
+    check(
+      "SESSION:every_session_route_429",
+      limited.filter((_, i) => i !== 2).every(noStore429) &&
+        limited[2].status === 429 &&
+        workEnvelope?.code === "rate_limited" &&
+        workEnvelope?.retryClass === "safe_read_retry" &&
+        workEnvelope?.retryAfterSeconds === 60 &&
+        limited[2].headers.get("retry-after") === "60" &&
+        limited[2].headers.get("cache-control") === "no-store",
+    );
+    // Still uncounted and answered by the handler while the bucket is empty.
+    const cookieless = await fetchApi("/workspace/workspace_a/bootstrap", {
+      headers: from(address),
+    });
+    check("SESSION:cookieless_still_the_handler_401", unauthenticated(cookieless));
+    check("SESSION:limited_and_uncounted_reach_no_database", observed.neon === 0);
+    const other = await fetchApi("/workspaces", {
+      headers: { ...from("198.51.100.32"), Cookie: sessionCookie() },
+    });
+    check("SESSION:other_address_unaffected", denied(other));
+    // A counted, admitted request does reach the database path (refused by the lab): the
+    // zero above is not vacuous.
+    const admitted = await fetchApi("/workspaces", {
+      headers: { ...from("198.51.100.33"), Cookie: sessionCookie(), "X-Morrow-Request": "1" },
+    });
+    check(
+      "SESSION:admitted_request_reaches_the_database_path",
+      admitted.status === 503 && observed.neon > 0,
+    );
+    // Fail closed: an invalid address is 503 with the route's body and one line; a
+    // request without a cookie needs no address and logs nothing.
+    const before = guardEvents(events).length;
+    const invalid = await fetchApi("/workspaces", {
+      headers: { ...from("not-an-address"), Cookie: sessionCookie(), "X-Morrow-Request": "1" },
+    });
+    const quiet = await fetchApi("/workspaces", {
+      headers: { ...from("not-an-address"), "X-Morrow-Request": "1" },
+    });
+    check(
+      "SESSION:invalid_address_503",
+      invalid.status === 503 && invalid.body === '{"code":"unavailable"}',
+    );
+    check("SESSION:cookieless_invalid_address_uncounted", unauthenticated(quiet));
+    check(
+      "SESSION:only_the_fail_closed_cause_logged",
+      before === 0 && JSON.stringify(guardEvents(events)) === '["ADDRESS_INVALID"]',
+    );
+    const logged = JSON.stringify(observed.logs);
+    check(
+      "SESSION:no_address_or_cookie_in_any_log_line",
+      ["198.51.100", "not-an-address", "__Host-morrow_session"].every(
+        (value) => !logged.includes(value),
       ),
     );
   },

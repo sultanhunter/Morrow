@@ -316,7 +316,17 @@ test("terms: the published revisions parse, keep their digests and price the bet
     { ...row, terms: "{" },
   ])
     assert.throws(() => termsFromRow(bad), /BILLING_TERMS_INVALID/);
-  // Staging has no revision until the owner's test-mode Price; production none until M6.
-  assert.deepEqual(file.environments.staging, []);
+  // Staging's revision 1 is the operator test entitlement's alone (ADR-0022 item 5
+  // amendment, 2026-10-21; tests/billing-operator-entitlement.test.mjs): no priced entry,
+  // so no offer and no checkout until the owner's test-mode Price. Production none until M6.
+  const [staging] = file.environments.staging;
+  const stagingDocument = parseTermsDocument(staging.terms, staging.offers);
+  assert.equal(await termsDocumentDigest(staging.terms, staging.offers), staging.digest);
+  assert.deepEqual(stagingDocument.offers, []);
+  assert.deepEqual(
+    stagingDocument.terms.entries.map((e) => e.kind),
+    ["operator_test_entitlement"],
+  );
+  assert.equal(file.environments.staging.length, 1);
   assert.deepEqual(file.environments.production, []);
 });

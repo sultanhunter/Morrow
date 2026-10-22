@@ -218,6 +218,12 @@ test("identity bodies: login, logout and bootstrap", () => {
     kind: "uncertain",
   });
   assert.deepEqual(decodeLogout({ kind: "lost" }), { kind: "uncertain" });
+  // The api's session limit answers before the handler: the logout never ran.
+  assert.deepEqual(decodeLogout(reply(429, identity("rate_limited"), { "retry-after": "60" })), {
+    kind: "unavailable",
+    offline: false,
+  });
+  assert.deepEqual(decodeLogout(reply(429, { code: "rate_limited" })), { kind: "uncertain" });
   const boot = {
     schemaVersion: 1,
     workspace: { id: "w-1", displayName: "Linen" },

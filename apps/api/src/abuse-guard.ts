@@ -37,6 +37,9 @@ export interface AbuseGuardLimiters {
   readonly loginStart: RateLimiter;
   readonly loginCallback: RateLimiter;
   readonly signup: RateLimiter;
+  // The session routes' limiter, mapped with the sign-in limiters (environment.ts step 10)
+  // and used only by session-limit.ts; this guard never counts against it.
+  readonly session: RateLimiter;
 }
 export interface LoginChallengeConfiguration {
   readonly schemaVersion: 1;
@@ -64,6 +67,7 @@ export const abuseGuardLimiterBindings = Object.freeze([
   ["LOGIN_START_LIMITER", "loginStart"],
   ["LOGIN_CALLBACK_LIMITER", "loginCallback"],
   ["SIGNUP_LIMITER", "signup"],
+  ["SESSION_LIMITER", "session"],
 ] as const);
 // The budget of the one challengeVerify call (1 to challengeLimits.budgetMaxMs).
 export const challengeBudgetMs = 3000;
@@ -135,12 +139,18 @@ const baseHeaders = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
 } as const;
-function reply(status: number, body: string, head = false, extra: Record<string, string> = {}) {
+export function edgeReply(
+  status: number,
+  body: string,
+  head = false,
+  extra: Record<string, string> = {},
+) {
   return new Response(head ? null : body, {
     status,
     headers: { "content-type": "application/json; charset=utf-8", ...baseHeaders, ...extra },
   });
 }
+const reply = edgeReply;
 // The callback handler's own failure: 303 to the result page, no body.
 const failedCallback = () =>
   new Response(null, { status: 303, headers: { location: "/auth/result", ...baseHeaders } });
@@ -153,8 +163,20 @@ function topLevelNavigation(request: Request): boolean {
   return (mode === null || mode === "navigate") && (dest === null || dest === "document");
 }
 const outcome = (value: string) => JSON.stringify({ schemaVersion: 1, outcome: value });
-const logGuard = (code: EdgeGuardCode) =>
+// The one over-the-limit reply of every per-address limit in this Worker (SignInGuardOutcome).
+export const edgeRateLimited = () =>
+  reply(429, outcome("rate_limited"), false, { "retry-after": "60" });
+// The one fixed-code line of a fail-closed edge refusal; it never carries a value.
+export const logEdgeGuard = (code: EdgeGuardCode) =>
   console.log(JSON.stringify({ event: "morrow_edge_guard", code }));
+const logGuard = logEdgeGuard;
+// The fail-closed code of a limit outcome other than "allowed" or "limited".
+export const edgeLimitFailure = (limit: "address_missing" | "address_invalid" | "failed") =>
+  limit === "address_missing"
+    ? "ADDRESS_MISSING"
+    : limit === "address_invalid"
+      ? "ADDRESS_INVALID"
+      : "LIMITER_FAILED";
 
 // Deletes only X-Morrow-Challenge; method, URL, the other headers, the unread body
 // stream and the signal stay the request's own.
@@ -214,16 +236,9 @@ export function createAbuseGuard(
         route.key,
         request.headers.get("cf-connecting-ip"),
       );
-      if (limit === "limited")
-        return reply(429, outcome("rate_limited"), false, { "retry-after": "60" });
+      if (limit === "limited") return edgeRateLimited();
       if (limit !== "allowed") {
-        logGuard(
-          limit === "address_missing"
-            ? "ADDRESS_MISSING"
-            : limit === "address_invalid"
-              ? "ADDRESS_INVALID"
-              : "LIMITER_FAILED",
-        );
+        logGuard(edgeLimitFailure(limit));
         return reply(503, route.unavailable);
       }
     }

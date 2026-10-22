@@ -30,7 +30,7 @@ export type Outcome<T> =
   | { readonly kind: "conflict"; readonly recheck: boolean; readonly message: string } // 409
   // 400; `message` is the server's safe message where the route names one (a run refusal).
   | { readonly kind: "invalid"; readonly field: string | null; readonly message?: string }
-  | { readonly kind: "rate_limited"; readonly retryAfterSeconds: number } // 429 (signup only)
+  | { readonly kind: "rate_limited"; readonly retryAfterSeconds: number } // 429: nothing ran
   | { readonly kind: "unavailable"; readonly offline: boolean } // reads; commands never yet uncertain
   | { readonly kind: "uncertain" } // §4.9: only a decoded terminal reply ends it
   | { readonly kind: "not_in_build" };

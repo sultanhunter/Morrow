@@ -92,7 +92,7 @@ function replaced(name) {
   return sql.slice(start, end);
 }
 
-// M2 PR-3 (0035) left run_product_readable refusing every run-lease product read (no run
+// M2 PR-3 (0037) left run_product_readable refusing every run-lease product read (no run
 // table existed); this migration revises it in place (same signature, the ACL restated).
 test("M2 PR-3's run-lease product check: its own setting, a running run's in-progress product", () => {
   const text = replaced("morrow_work.run_product_readable");

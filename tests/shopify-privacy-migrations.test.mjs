@@ -38,15 +38,22 @@ const body = (text, signature) => {
   return text.slice(start, text.indexOf("END $$;", start));
 };
 
-test("manifest: two contiguous rows after M3 PR-1, their owners and digests", () => {
+test("manifest: two contiguous rows after M3 PR-1 and the test entitlement, owners and digests", () => {
   const rows = ["shopify-privacy-identity", "shopify-privacy-work"].map(rowOf);
   assert.equal(rows[1].sequence, rows[0].sequence + 1);
-  // M3 PR-2's listings-runs is the one migration after the pair (it revises 0035's helpers).
+  // M3 PR-2's listings-runs is the one migration after the pair (it revises 0037's helpers).
   assert.deepEqual(
     manifest.migrations.slice(rows[1].sequence).map((m) => m.file.replace(/^\d{4}\./, "")),
     ["listings-runs.sql"],
   );
-  assert.ok(manifest.migrations[rows[0].sequence - 2].file.endsWith(".run-credits.sql"));
+  // The merge train (2026-10-22) put the staging test entitlement's two rows between M3
+  // PR-1's run-credits and these (by slug, never by number).
+  assert.deepEqual(
+    manifest.migrations
+      .slice(rows[0].sequence - 4, rows[0].sequence - 1)
+      .map((m) => m.file.replace(/^\d{4}\./, "")),
+    ["run-credits.sql", "staging-entitlement-identity-bridge.sql", "staging-test-entitlement.sql"],
+  );
   assert.deepEqual(
     rows.map((r) => [r.executeAs, r.reviewRef, r.prerequisites]),
     [
@@ -199,7 +206,7 @@ test("constants SQL shares with TypeScript", () => {
 });
 
 test("fail closed: a run lease reads no product until M3 PR-2's runs exist; customers keep no digest", () => {
-  // 0035's text; listings-runs revises it once the runs exist (tests/listings-runs-sql.test.mjs).
+  // 0037's text; listings-runs revises it once the runs exist (tests/listings-runs-sql.test.mjs).
   assert.match(
     work,
     /CREATE FUNCTION morrow_work\.run_product_readable\(p_org text,p_ws text,p_run_id text,p_product_id text\) RETURNS boolean\nLANGUAGE sql STABLE SET search_path=pg_catalog,morrow_work,pg_temp AS \$\$\n SELECT false\n\$\$;/,

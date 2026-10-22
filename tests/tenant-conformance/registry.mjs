@@ -68,7 +68,7 @@ export const workTables = Object.freeze({
   proposal_parameters: {
     class: "tenant_readable",
     parents: ["workspace_streams"],
-    // M2 PR-3 (0035): shop/redact empties a store's parameters in the connector's own
+    // M2 PR-3 (0037): shop/redact empties a store's parameters in the connector's own
     // redaction context (read, and the one change to redacted).
     policies: ["connector_redact", "connector_redact_read"],
     lease: true,
@@ -77,7 +77,7 @@ export const workTables = Object.freeze({
   proposals: {
     class: "tenant_readable",
     parents: ["proposal_parameters", "review_policies"],
-    // M2 PR-3 (0035): the connector's redaction context reads its store's proposals.
+    // M2 PR-3 (0037): the connector's redaction context reads its store's proposals.
     policies: ["connector_redact_proposal"],
     lease: true,
     content: "workspace",
@@ -98,7 +98,7 @@ export const workTables = Object.freeze({
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
     // M3 PR-1: lease_broker_resolve (the broker's resolve_call reads the one lease it names).
-    // M2 PR-3 (0035): connector_lease_read and connector_lease_revoke (a system connection
+    // M2 PR-3 (0037): connector_lease_read and connector_lease_revoke (a system connection
     // stop set by the connector's applier revokes that connection's leases).
     policies: [
       "connector_lease_read",
@@ -117,14 +117,14 @@ export const workTables = Object.freeze({
     class: "tenant_or_platform",
     parents: ["morrow_identity.workspaces"],
     // M3 PR-1: stop_broker_resolve (resolve_call reads its lease's tenant and platform stops).
-    // M2 PR-3 (0035): the connector's system connection stop (read, and set; never lifted).
+    // M2 PR-3 (0037): the connector's system connection stop (read, and set; never lifted).
     policies: ["connector_stop_read", "connector_stop_set", "stop_broker_resolve"],
     content: "workspace",
   },
   stop_records: {
     class: "tenant_or_platform",
     parents: ["stop_controls"],
-    // M2 PR-3 (0035): the system stop's StopRecord@1 (set only).
+    // M2 PR-3 (0037): the system stop's StopRecord@1 (set only).
     policies: ["connector_stop_record"],
     content: "none",
   },
@@ -182,7 +182,7 @@ export const workTables = Object.freeze({
     parents: ["morrow_identity.workspaces"],
     content: "none",
   },
-  // M3 PR-2 listings runs (migration 0036 listings-runs). The catalogue's per-token rates and
+  // M3 PR-2 listings runs (migration 0038 listings-runs). The catalogue's per-token rates and
   // provider model ids (platform; the command role reads them, the api never).
   model_catalogue_rates: {
     class: "platform",
@@ -471,7 +471,7 @@ export const workFunctions = Object.freeze({
     kind: "owner_helper",
     grantees: ["morrow_work_command"],
   },
-  // M2 PR-3 (0035): every store-content handler of the work schema, and the run-lease
+  // M2 PR-3 (0037): every store-content handler of the work schema, and the run-lease
   // product check (refuses until M3 PR-2's runs exist).
   "store_content_redact(text,text,text)": {
     kind: "owner_helper",
@@ -481,7 +481,7 @@ export const workFunctions = Object.freeze({
     kind: "owner_helper",
     grantees: ["morrow_work_command"],
   },
-  // M2 PR-3 (0035): the connector login's definers (work_executor_safe): the inbox applier
+  // M2 PR-3 (0037): the connector login's definers (work_executor_safe): the inbox applier
   // (ids only; the tenant from the broker-recorded row) and the two ids-only re-drives.
   "connector_inbox_apply(text)": { kind: "connector", grantees: ["morrow_connector_ingress"] },
   "connector_inbox_pending()": {
@@ -496,14 +496,14 @@ export const workFunctions = Object.freeze({
     crossTenant: true,
     columns: ["installation_id", "reason"],
   },
-  // M2 PR-3 review (0035): the cron's privacy deadline check (counts only).
+  // M2 PR-3 review (0037): the cron's privacy deadline check (counts only).
   "connector_privacy_overdue()": {
     kind: "connector",
     grantees: ["morrow_connector_ingress"],
     crossTenant: true,
     columns: ["target_missed", "due_missed"],
   },
-  // M2 PR-3 (0035): the catalogue routes' read lease (session only).
+  // M2 PR-3 (0037): the catalogue routes' read lease (session only).
   "catalog_read_lease(text,text)": { kind: "api", grantees: ["morrow_work_api"] },
   // The agent commands and their read definer.
   "begin_agent_command(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
@@ -603,7 +603,9 @@ export const bridgeFunctions = Object.freeze([
   "work_signup_workspace(text,text)",
   // M2 PR-2 (0026): the vault login's identity bridges, called only by 0027's vault
   // definers, and the shared store-installation read for the work and billing definers
-  // (M5 PR-1's workspace_associations and checkout precondition call it).
+  // (M5 PR-1's workspace_associations and checkout precondition call it; 0034 also lets
+  // the work owner execute it, for the operator test entitlement's precondition:
+  // workOwnerBridges below).
   "work_shopify_install_prepare(text,text,text,text)",
   "work_shopify_install_record(text,text,text,text,text,text,text,text,text,text,text,text)",
   "work_shopify_launch(text,text)",
@@ -615,8 +617,8 @@ export const bridgeFunctions = Object.freeze([
   "work_owner_disable_grant_issue(text,text,jsonb)",
   "work_agent_grant_set_current(text,text,text,text,jsonb,jsonb)",
   "work_delegation_actor_facts(text,text,jsonb)",
-  // M2 PR-3 (0034): the webhook record, the inbox applier's reads and writes, the
-  // credential end and the read target, called only by 0035's vault and connector definers.
+  // M2 PR-3 (0036): the webhook record, the inbox applier's reads and writes, the
+  // credential end and the read target, called only by 0037's vault and connector definers.
   "work_shopify_webhook_record(text,text,text,text,text,text)",
   "work_shopify_inbox_take(text)",
   "work_shopify_inbox_settle(text,text,text,jsonb)",
@@ -629,6 +631,10 @@ export const bridgeFunctions = Object.freeze([
   "work_shopify_credentials_pending()",
   "work_shopify_read_target(text,text,text,text)",
 ]);
+// Identity bridges the work owner executes besides the three ADR-0020 membership helpers
+// (0014): the staging test entitlement's operator function (0035) runs as the owner and
+// reads the store associations through this one (0034). No other work role gains it.
+export const workOwnerBridges = Object.freeze(["work_store_installations(text,text)"]);
 // M2 PR-1 (0020): the two schemas the work owner creates beside morrow_work. The billing
 // route is tenant-readable with one extra insert policy for the signup bridge; the vault
 // is readable only while the session user is the broker's login (vault_broker).
@@ -1022,6 +1028,23 @@ export const billingTables = Object.freeze({
     content: "none",
     ...aclSpec(["INSERT", "SELECT"]),
   },
+  // The staging test entitlement (0035; ADR-0022 item 5 amendment, 2026-10-21): the
+  // platform's environment mark (one row, the owner's seed) and the operator grant record
+  // (the owner's operator function only). No runtime role holds anything on either.
+  platform_environment: {
+    class: "platform",
+    parents: [],
+    policies: [],
+    content: "none",
+    ...aclSpec([]),
+  },
+  operator_test_entitlements: {
+    class: "operator_record",
+    parents: ["morrow_billing.billing_accounts", "morrow_identity.workspaces"],
+    policies: [],
+    content: "none",
+    ...aclSpec([]),
+  },
 });
 export const billingFunctions = Object.freeze({
   // The signup bridge: the identity owner calls it from 0021's trigger and backfill,
@@ -1064,6 +1087,8 @@ export const billingFunctions = Object.freeze({
     kind: "operator",
     grantees: [],
   },
+  // The staging test entitlement (0035): INVOKER, owned by the owner, granted to nobody.
+  "operator_test_entitlement_grant(text,text,text,text)": { kind: "operator", grantees: [] },
   // INVOKER helpers the policies and definers evaluate as the command role.
   "receipt_ingress()": { kind: "check", grantees: ["morrow_work_command"] },
   "receipt_entered(text)": { kind: "check", grantees: ["morrow_work_command"] },
@@ -1154,7 +1179,7 @@ export const vaultFunctions = Object.freeze({
   "shopify_install_store(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)":
     { kind: "vault", grantees: ["morrow_vault_broker"] },
   "shopify_launch_context(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
-  // M2 PR-3 (0035): the webhook record, the credential destruction and the read resolution.
+  // M2 PR-3 (0037): the webhook record, the credential destruction and the read resolution.
   "shopify_credential_destroy(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "shopify_read_resolve(text,text,text,text,text)": {
     kind: "vault",
@@ -1205,7 +1230,7 @@ export const identityTables = Object.freeze({
   install_continuations: { content: "none" },
   // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
   linking_candidates: { content: "store" },
-  // M2 PR-3 (0034): content-free completion evidence of the compliance topics (365 days).
+  // M2 PR-3 (0036): content-free completion evidence of the compliance topics (365 days).
   privacy_requests: { content: "none" },
   linking_handoffs: { content: "none" },
   linking_reviews: { content: "none" },
@@ -1231,7 +1256,7 @@ export const identityTables = Object.freeze({
   // the install link names the shop (M2 PR-2 review; retirement and shop/redact clear it)
   shopify_apps: { content: "store" },
   shopify_oauth_states: { content: "none" },
-  // M2 PR-3 (0034): the minimised webhook bodies (ids, scope names and a keyed customer
+  // M2 PR-3 (0036): the minimised webhook bodies (ids, scope names and a keyed customer
   // digest only, spine §11; 7 days).
   shopify_webhook_inbox: { content: "none" },
   // shop_domain and shop_id (spine §11: shop/redact pseudonymises the domain)
@@ -1249,7 +1274,7 @@ export const executorLogins = Object.freeze({
   // M2 PR-2 (0026): the connector's one definer, in the identity schema.
   morrow_connector_ingress: [
     "morrow_identity.connector_oauth_state_open(text,text,text)",
-    // M2 PR-3 (0035): the inbox applier, the two ids-only re-drives and the privacy
+    // M2 PR-3 (0037): the inbox applier, the two ids-only re-drives and the privacy
     // deadline check.
     "morrow_work.connector_credentials_pending()",
     "morrow_work.connector_inbox_apply(text)",
@@ -1286,7 +1311,7 @@ export const executorLogins = Object.freeze({
     "morrow_vault.shopify_install_prepare(text,text,text,text)",
     "morrow_vault.shopify_install_store(text,text,text,text,text,text,text,text,text,text,text,text,text,text,text)",
     "morrow_vault.shopify_launch_context(text,text)",
-    // M2 PR-3 (0035).
+    // M2 PR-3 (0037).
     "morrow_vault.shopify_credential_destroy(text,text)",
     "morrow_vault.shopify_read_resolve(text,text,text,text,text)",
     "morrow_vault.shopify_webhook_record(text,text,text,text,text,text)",

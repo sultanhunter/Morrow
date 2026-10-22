@@ -285,6 +285,11 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
     [{ api: (c) => c.env.production.ratelimits.pop() }, "EDGE_API_RATELIMITS"],
     [{ api: (c) => delete c.env.staging.ratelimits }, "EDGE_API_RATELIMITS"],
     [{ api: (c) => (c.ratelimits[1].simple.period = 10) }, "EDGE_API_RATELIMITS"],
+    // The session routes' limiter: exact too, never another environment's or the connector's.
+    [{ api: (c) => (c.env.staging.ratelimits[3].namespace_id = "7006") }, "EDGE_API_RATELIMITS"],
+    [{ api: (c) => (c.env.staging.ratelimits[3].namespace_id = "7104") }, "EDGE_API_RATELIMITS"],
+    [{ api: (c) => (c.env.production.ratelimits[3].simple.limit = 1200) }, "EDGE_API_RATELIMITS"],
+    [{ api: (c) => (c.ratelimits = c.ratelimits.slice(0, 3)) }, "EDGE_API_RATELIMITS"],
     [
       { broker: (c) => (c.ratelimits = structuredClone(edgeRateLimits("development"))) },
       "EDGE_UNEXPECTED_BINDING_RATELIMITS",
@@ -645,7 +650,7 @@ test("M2 PR-2 review: the connector's ingress limiter bindings, exact per enviro
   assert.equal(new Set(namespaces).size, namespaces.length);
 });
 
-test("P05.T01ab: the api's limiter bindings are the packet's D1 values", () => {
+test("P05.T01ab: the api's limiter bindings are the packet's D1 values and the session limit", () => {
   const expected = (base) => [
     { name: "LOGIN_START_LIMITER", namespace_id: String(base), simple: { limit: 10, period: 60 } },
     {
@@ -654,6 +659,12 @@ test("P05.T01ab: the api's limiter bindings are the packet's D1 values", () => {
       simple: { limit: 20, period: 60 },
     },
     { name: "SIGNUP_LIMITER", namespace_id: String(base + 2), simple: { limit: 5, period: 60 } },
+    // The session routes' limiter (apps/api/src/session-limit.ts): after the connector's block.
+    {
+      name: "SESSION_LIMITER",
+      namespace_id: String(base + 5),
+      simple: { limit: 120, period: 60 },
+    },
   ];
   assert.deepEqual(edgeRateLimits("development"), expected(7001));
   assert.deepEqual(edgeRateLimits("staging"), expected(7101));

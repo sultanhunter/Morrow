@@ -29,7 +29,7 @@ test("every registered table is classified, and every store table has exactly on
   assert.ok(Object.isFrozen(storeContentHandlers) && storeContentHandlers.every(Object.isFrozen));
   // M2 PR-3: every handler is executable. The token by the broker's destruction (recorded
   // on the installation in the same vault transaction), the shop identity by the identity
-  // redaction, the proposal parameters by M3 PR-1's helper, which 0035 revises to run in the
+  // redaction, the proposal parameters by M3 PR-1's helper, which 0037 revises to run in the
   // connector's redaction context (shop/redact has no session).
   assert.deepEqual(
     storeContentHandlers.map((h) => h.executor),
