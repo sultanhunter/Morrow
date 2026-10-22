@@ -8,8 +8,11 @@
 // with the owner script's own statement (scripts/shopify-app.mjs). Journey: launch,
 // authorize redirect and state cookie, callback (vault row, installation, continuation),
 // re-authorisation on relaunch, the fragment redirect, connections read, preview (the
-// issuer), apply, status, store-link grants, launch of a linked store (no OAuth), and the
-// webhook 401/503 contract. Synthetic data only; runs in the CI pg-work group.
+// issuer), apply, status, store-link grants, launch of a linked store (no OAuth), and (M2
+// PR-3) the webhook inbox: a bad signature is 401; a verified app/uninstalled is 200 once
+// recorded, then applied in waitUntil (the installation ends, the connection stops, the
+// token is destroyed); a redelivery is a duplicate; the cron's redrive finds nothing left.
+// Synthetic data only; runs in the CI pg-work group.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { build } from "esbuild";
@@ -44,6 +47,8 @@ const migrations = [
   ".shopify-link-route-read.sql",
   ".shopify-install-identity.sql",
   ".shopify-vault-install.sql",
+  ".shopify-privacy-identity.sql",
+  ".shopify-privacy-work.sql",
 ].map((slug) => manifest.migrations.find((m) => m.file.endsWith(slug))?.file);
 if (migrations.some((f) => !f)) throw Error("SHOPIFY_CONNECT_WORKERS_MIGRATIONS_REQUIRED");
 const sourceDigests = Object.fromEntries(
@@ -54,6 +59,7 @@ const sourceDigests = Object.fromEntries(
     "scripts/shopify-app.mjs",
     "apps/shopify-connector/worker/connector.ts",
     "apps/shopify-connector/worker/database.ts",
+    "apps/shopify-connector/worker/webhooks.ts",
     "apps/shopify-connector/worker/oauth-state.ts",
     "apps/broker/src/shopify-install.ts",
     "apps/broker/src/shopify.ts",
@@ -583,23 +589,71 @@ await withWorkDatabase(
           !relaunch.text.includes("#handoff"),
       );
 
-      // ---- W: webhooks before the M2 PR-3 inbox.
-      const uninstall = oracle.webhook("app/uninstalled", { id: 4242424242, domain: shop });
-      const forgedHook = oracle.webhook("app/uninstalled", { id: 1 }, { secret: "wrong" });
+      // ---- W: the M2 PR-3 webhook inbox, in workerd.
+      const uninstall = oracle.webhook("app/uninstalled", {
+        id: 4242424242,
+        name: "Lab",
+        myshopify_domain: shop,
+      });
+      const forgedHook = oracle.webhook("app/uninstalled", { id: 4242424242 }, { secret: "wrong" });
       const webhook = (hook) =>
         send(`${connectorOrigin}/shopify/a/${appKey}/webhooks`, {
           method: "POST",
           headers: { "content-type": "application/json", ...hook.headers },
           body: hook.body,
         });
+      const inbox = () =>
+        owner(
+          "SELECT status,outcome,body,effects FROM morrow_identity.shopify_webhook_inbox ORDER BY received_at",
+        );
       const refused = await webhook(forgedHook);
-      const verified = await webhook(uninstall);
       check(
-        "W1:a_bad_hmac_is_401_and_a_verified_delivery_503_with_no_state_change",
+        "W1:a_bad_hmac_is_401_and_records_nothing",
         refused.status === 401 &&
-          verified.status === 503 &&
-          verified.body?.code === "webhook_inbox_unavailable" &&
+          inbox().length === 0 &&
           owner("SELECT status FROM morrow_identity.store_installations")[0].status === "linked",
+      );
+      const verified = await webhook(uninstall);
+      const ended = owner(
+        "SELECT status,store_id::text AS store,connection_id::text AS connection,credential_destroyed_at IS NOT NULL AS destroyed FROM morrow_identity.store_installations",
+      )[0];
+      const stops = db.rows(
+        "SELECT scope,store_id::text AS store,target_id::text AS target,reason_code,set_by_kind FROM morrow_work.stop_controls",
+        { role: "morrow_work_owner" },
+      );
+      check(
+        "W2:a_verified_uninstall_is_200_once_recorded_then_applied_in_wait_until",
+        verified.status === 200 &&
+          verified.text === JSON.stringify({ schemaVersion: 1, received: true }) &&
+          inbox().length === 1 &&
+          inbox()[0].status === "applied" &&
+          inbox()[0].outcome === "uninstalled" &&
+          JSON.stringify(inbox()[0].body) === JSON.stringify({ shopId: "4242424242" }) &&
+          ended.status === "uninstalled" &&
+          ended.destroyed === true &&
+          JSON.stringify(vaultRows()) ===
+            '[{"version":1,"status":"destroyed","erased":true},{"version":2,"status":"destroyed","erased":true}]' &&
+          stops.length === 1 &&
+          stops[0].scope === "connection" &&
+          stops[0].store === ended.store &&
+          stops[0].target === ended.connection &&
+          stops[0].reason_code === "shopify_app_uninstalled" &&
+          stops[0].set_by_kind === "system",
+        { status: verified.status, inbox: inbox(), ended, stops, vault: vaultRows() },
+      );
+      const redelivered = await webhook(uninstall);
+      const describedRedrive = await mf.dispatchFetch("http://lab.invalid/__lab/request", {
+        method: "POST",
+        body: JSON.stringify({ method: "POST", url: "lab:redrive", headers: {}, body: null }),
+      });
+      const redrive = JSON.parse((await describedRedrive.json()).body);
+      check(
+        "W3:a_redelivery_is_a_duplicate_and_the_cron_finds_nothing_left",
+        redelivered.status === 200 &&
+          inbox().length === 1 &&
+          JSON.stringify(redrive) ===
+            JSON.stringify({ inbox: 0, applied: 0, credentials: 0, destroyed: 0, unavailable: 0 }),
+        { redelivered: redelivered.status, redrive },
       );
 
       // ---- O: logins, outbound and logs.
