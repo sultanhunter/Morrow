@@ -1,0 +1,23 @@
+# 2026-10-22 E2B: account review and a US$20 usage limit on `Morrow-staging`
+
+- **Approval.**
+  - The owner wrote in chat on 2026-10-22: "okay go with e2b" (ADR-0023, Approval, Q3).
+  - Then: "workspace unblocked", and "The e2b is logged in a attached browser. You can set it up according to yourself."
+  - This covers one account-setting change and read-only inspection. It covers no provider resource creation.
+- **Exact action.** In the owner's signed-in E2B console in the attached browser, at about 13:40Z.
+  - **Read only, Morrow workspace:** a payment method is on file (card details not recorded); usage this month US$0.00 and remaining credit US$0.00; one member, the owner (role owner).
+  - **Read only, project `Morrow-staging`** (US-WEST-1): 0 sandboxes, 0 API keys; only E2B's public templates, no owned template.
+  - **Read only, project `Sultanibne's Project`** (the owner's personal workspace, trial credit): 0 sandboxes; 1 API key labelled "Morrow-qualification-…", added 2026-10-14, last used about a week earlier; 1 owned template, `morrow-owned-c423fb7d-…` (`pdht65h2trfuizuvmotc`), from the archived P04.T01h lab.
+  - **Changed, project `Morrow-staging` → Limits:** usage limit set to US$20 (E2B: "All API requests are blocked after reaching this limit in the current billing period", with alerts at 50%, 80%, 90% and 100% to the owner's account email; E2B answered "Limit set successfully"), and a usage alert at US$5 ("Alert set successfully").
+- **Not done, deliberately.**
+  - No API key created. A new key's value never passes through Claude; the owner creates it when the adapter is ready and places it with `wrangler secret put`.
+  - No sandbox, template or build. Allocation stays denied by `infra/labs/e2b-activation.json` until an owner-approved ADR and a write receipt exist.
+  - The old key was not deleted by Claude: deleting keys is owner-only.
+  - The retained template was not deleted.
+- **Owner action, 2026-10-22, about 14:00Z.** The owner deleted the key "Morrow-qualification-…" from the personal project ("delted the e2b key", ADR-0023, Approval, Q6). This is the owner's report; Claude did not re-check it.
+- **Cap and observed cost.** US$0. The usage limit is US$20 a billing period, with an alert at US$5.
+- **Cleanup.** None needed.
+- **Unknown outcomes.** None.
+- **Open.**
+  - E2B question: does a reached usage limit also block kill and delete requests? If it does, cleanup at the limit depends on each sandbox's own timeout. The runtime companion record of ADR-0023 must account for E2B's answer (sent 2026-10-23, `2026-10-23-e2b-support-questions.md`).
+  - The owner decides whether to keep the retained template. Template storage is unbilled, per E2B support on 2026-10-15.

@@ -1,6 +1,7 @@
 # ADR-0021 MVP fast track: launch one listings slice on a production-grade foundation
 
 - Status: Accepted 2026-10-19 (owner decision in chat; see Approval)
+- Superseded by ADR-0023 (2026-10-23): items 1, 4 (except its last sentence) and 6, and the listings beta of `docs/plan/mvp.md`. Items 2, 3 and 5 stay in force.
 - Date: 2026-10-19
 - Supersedes: the settled constraint "Broad production foundation for small and large Shopify brands. No MVP scope reduction of the launch destination." (CLAUDE.md, plan R1).
 - Refines: ADR-0001 (`docs/plan/mvp.md` is the launch plan; `build-plan.md` stays the plan of record and long-term structure), ADR-0002 (process: packets, ADR triggers, review tiers), ADR-0003 (two-track and the hardening budget), ADR-0015 (billing route at launch).
