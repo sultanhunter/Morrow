@@ -129,7 +129,10 @@ export class ListingsRunWorkflow extends WorkflowEntrypoint<unknown, unknown> {
             name,
             {
               retries: { limit: 4, delay: "15 seconds", backoff: "exponential" },
-              timeout: "10 minutes",
+              // A product step makes up to two model calls, each sized for its effort's whole
+              // reply (runModelBudgetMs), so a step may outlast the 10-minute default; no
+              // step outlives the run's 30-minute lease.
+              timeout: "30 minutes",
             },
             async () => {
               try {

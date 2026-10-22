@@ -14,12 +14,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
 import {
   brokerNeonRoleNames,
   brokerPasswordSecret,
   brokerRequiredSecretsFor,
+  modelCallBudgetMs,
   modelGatewayLimits,
+  modelSendTiming,
+  modelSendWindowMs,
 } from "../packages/identity/src/broker-protocol.ts";
+import { generatedModelCatalogue } from "../packages/policy/src/generated/model-catalogue.ts";
 import {
   claudeApiVersion,
   claudeCountBody,
@@ -584,13 +589,15 @@ function gateway({ fenceOver, provider, clock } = {}) {
   });
   return { f, p, g };
 }
+// The fence's run is Sonnet at medium effort (max_tokens 12,000): its whole call's budget.
+const callBudget = modelCallBudgetMs(12_000);
 const respond = (g, env, over = {}) =>
   g.modelRespond(
     env,
     over.leaseId ?? leaseId,
     over.generation ?? 1,
     over.callJson ?? JSON.stringify(call()),
-    over.budgetMs ?? 90_000,
+    over.budgetMs ?? callBudget,
   );
 
 test("gateway: the switch is checked first; off holds every call with no access at all", async () => {
@@ -637,7 +644,7 @@ test("gateway: closed inputs refuse before the fence", async () => {
     { generation: 1.5 },
     { generation: "1" },
     { budgetMs: 999 },
-    { budgetMs: 120_001 },
+    { budgetMs: modelGatewayLimits.budgetMaxMs + 1 },
     { callJson: JSON.stringify(call({ model: "claude-opus-5-5" })) },
     { callJson: JSON.stringify(call({ catalogueVersion: 2 })) },
     { callJson: JSON.stringify(call({ provider: "anthropic" })) },
@@ -673,8 +680,21 @@ test("gateway: fence, count, one send, close; ModelResult@1 carries no provider 
     assert.ok(!text.includes(secret), secret);
   // The fence first, with the lease, the attempt keys, the budget and both digests.
   assert.deepEqual(f.state.begins, [
-    [leaseId, "1", "0", "1", "1", "90000", await listingPromptDigest(), listingDraftSchemaDigest],
+    [
+      leaseId,
+      "1",
+      "0",
+      "1",
+      "1",
+      String(callBudget),
+      await listingPromptDigest(),
+      listingDraftSchemaDigest,
+    ],
   ]);
+  // The count leaves the send its window, and the send gets the whole window: a reply of the
+  // effort's full max_tokens at the floor output rate is never cut off by the budget.
+  assert.ok(p.calls.count[0].budgetMs <= modelSendTiming.countMaxMs);
+  assert.ok(p.calls.respond[0].budgetMs >= modelSendWindowMs(12_000));
   // The resolved call: the run's selection from SQL and the catalogue, never the caller's.
   const sent = p.calls.respond[0].resolvedCall;
   assert.deepEqual(
@@ -910,12 +930,48 @@ test("gateway: the provider port is the only provider surface (a stub second ada
     f.state.ends.map((e) => e[1]),
     ["not_sent"],
   );
+  // A budget that cannot hold the run's effort's whole call is held before any provider
+  // access (90 s cannot hold a medium reply of 12,000 tokens at the floor rate), the fence
+  // closed as not_sent.
+  for (const budgetMs of [90_000, callBudget - 1]) {
+    const short = gateway();
+    assert.equal(await held(respond(short.g, env, { budgetMs })), "INPUT_INVALID");
+    assert.equal(short.p.calls.count.length + short.p.calls.respond.length, 0);
+    assert.deepEqual(
+      short.f.state.ends.map((e) => e[1]),
+      ["not_sent"],
+    );
+  }
   // The deadline: too little budget left before the count or the send is not_sent.
   let t = 0;
   const late = gateway({ clock: () => (t += 45_000) });
   const r = JSON.parse(await respond(late.g, env));
   assert.equal(r.outcome, "not_sent");
   assert.equal(late.p.calls.respond.length, 0);
+});
+
+test("every published effort's whole call fits the protocol, the fence and a product step", () => {
+  // Migration listings-runs (renumbered at the final rebase) bounds the fence's budget alike.
+  const file = readdirSync("migrations").find((f) => f.endsWith(".listings-runs.sql"));
+  const sql = readFileSync("migrations/" + file, "utf8");
+  assert.ok(sql.includes("budget_ms BETWEEN 1000 AND " + modelGatewayLimits.budgetMaxMs));
+  assert.ok(sql.includes("v_budget NOT BETWEEN 1000 AND " + modelGatewayLimits.budgetMaxMs));
+  const floorPerMs = modelSendTiming.floorOutputTokensPerHour / 3_600_000;
+  for (const version of generatedModelCatalogue.versions)
+    for (const effort of version.efforts) {
+      const max = effort.maxOutputTokens;
+      const budget = modelCallBudgetMs(max);
+      // The send's window covers the whole reply at the floor rate, after the first token.
+      assert.ok(
+        modelSendWindowMs(max) - modelSendTiming.firstTokenAllowanceMs >= max / floorPerMs,
+        effort.key,
+      );
+      assert.ok(budget <= modelGatewayLimits.budgetMaxMs, effort.key);
+      // Two attempts and the throttle waits fit the 30-minute run lease.
+      assert.ok(2 * budget + 60_000 < 30 * 60_000, effort.key);
+    }
+  // The review finding: the former fixed 90 s cannot hold a medium or high reply.
+  assert.ok(modelCallBudgetMs(12_000) > 90_000 && modelCallBudgetMs(16_000) > 90_000);
 });
 
 test("the prompt digest binds the fixed system prompt and the user template", async () => {

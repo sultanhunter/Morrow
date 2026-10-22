@@ -6,7 +6,13 @@
 // broker's gateway, over PostgreSQL 17.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { listingsRun, RunStepRetry, runTimings } from "../packages/work/src/runs/workflow.ts";
+import {
+  listingsRun,
+  productMarginMs,
+  RunStepRetry,
+  runModelBudgetMs,
+} from "../packages/work/src/runs/workflow.ts";
+import { modelCallBudgetMs, modelGatewayLimits } from "../packages/identity/src/broker-protocol.ts";
 
 const ref = { leaseId: "00000000-0000-4000-8000-000000000001", generation: 1 };
 function steps() {
@@ -51,8 +57,12 @@ const startRow = (over = {}) => ({
   fields: ["descriptionHtml", "title"],
   leaseExpiresAtMs: 1_000_000 + 30 * 60_000,
   status: "running",
+  catalogueVersion: 1,
+  model: "claude_sonnet_5_5",
+  effort: "low",
   ...over,
 });
+const lowBudget = runModelBudgetMs(1, "claude_sonnet_5_5", "low");
 
 test("a refused lease interrupts the run at its first step; an ended run ends", async () => {
   for (const refusal of ["stopped", "ended", "member_inactive"]) {
@@ -105,7 +115,7 @@ test("past its time budget a run skips its products, still proposes, and finishe
   const s = steps();
   const finished = [];
   const run = {
-    start: async () => startRow({ leaseExpiresAtMs: 1_000_000 + runTimings.productMarginMs - 1 }),
+    start: async () => startRow({ leaseExpiresAtMs: 1_000_000 + productMarginMs(lowBudget) - 1 }),
     draftsPending: async () => [],
     finish: async (reason) => {
       finished.push(reason);
@@ -139,4 +149,54 @@ test("a finish that finds an open call waits and asks again", async () => {
   );
   assert.deepEqual(result, { kind: "ended", status: "failed" });
   assert.equal(calls, 3);
+});
+
+test("each run's model budget is its effort's whole call; the product margin follows it", async () => {
+  // Low, medium and high at catalogue version 1: max_tokens 5,000, 12,000 and 16,000.
+  for (const [effort, max] of [
+    ["low", 5_000],
+    ["medium", 12_000],
+    ["high", 16_000],
+  ]) {
+    assert.equal(runModelBudgetMs(1, "claude_opus_5_5", effort), modelCallBudgetMs(max));
+    assert.ok(productMarginMs(runModelBudgetMs(1, "claude_opus_5_5", effort)) < 30 * 60_000);
+  }
+  // An entry this build's catalogue lacks gets the longest budget; the broker holds it.
+  assert.equal(runModelBudgetMs(1, "claude_unknown", "low"), modelGatewayLimits.budgetMaxMs);
+  // The started step's durable result carries the run's budget (a number), and the product
+  // margin follows it: lease time enough for a low-effort product is too little for a high one.
+  const results = [];
+  const finished = [];
+  const run = {
+    start: async () =>
+      startRow({
+        productCount: 1,
+        model: "claude_opus_5_5",
+        effort: "high",
+        leaseExpiresAtMs: 1_000_000 + productMarginMs(lowBudget) + 1,
+      }),
+    draftsPending: async () => [],
+    finish: async (reason) => {
+      finished.push(reason);
+      return { outcome: "ended", status: "failed", creditsSettled: null };
+    },
+  };
+  const result = await listingsRun(
+    ports(async (_r, body) => ({ entered: true, lease: {}, value: await body({ run }) })),
+    {
+      async do(name, body) {
+        const value = JSON.parse(JSON.stringify(await body()));
+        results.push([name, value]);
+        return value;
+      },
+    },
+    ref,
+  );
+  assert.deepEqual(result, { kind: "ended", status: "failed" });
+  assert.equal(results[0][1].modelBudgetMs, modelCallBudgetMs(16_000));
+  assert.deepEqual(results[1], [
+    "product-0",
+    { kind: "product", index: 0, status: "done", stop: "time_budget" },
+  ]);
+  assert.deepEqual(finished, ["time_budget"]);
 });

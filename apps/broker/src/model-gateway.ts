@@ -1,4 +1,9 @@
-import { modelGatewayLimits } from "../../../packages/identity/src/broker-protocol.js";
+import {
+  modelCallBudgetMs,
+  modelGatewayLimits,
+  modelSendTiming,
+  modelSendWindowMs,
+} from "../../../packages/identity/src/broker-protocol.js";
 import { generatedModelCatalogue } from "../../../packages/policy/src/generated/model-catalogue.js";
 import {
   listingDraftModelSchema,
@@ -32,9 +37,13 @@ import { vaultStatements, type VaultQuery } from "./vault.js";
 //      bound snapshot (digest), its request is the parent task's objective (digest), its
 //      fields are the run's; the entry's provider and model are the generated catalogue's
 //      and SQL's alike, with an adapter and a credential.
+//      The caller's budget must hold the entry's whole call (modelCallBudgetMs: the effort's
+//      max_tokens at the floor output rate); a shorter one is held before any provider access.
 //   5. The count (the identical body); over the input cap less a tenth (headroom: the count
 //      is an estimate) the product fails as input_over_cap, nothing sent.
-//   6. One send through the provider's adapter (no retries, no fallback), then the close
+//   6. One send through the provider's adapter (no retries, no fallback), never with less
+//      than the effort's send window left (a slow fence or count leaves a not_sent to resend
+//      under a fresh budget), then the close
 //      (model_call_end) with the outcome, usage and provider ids; SQL books the cost at the
 //      run's catalogue rates, or the worst case when uncertain, as overflow when the
 //      reservation cannot hold it. If the close cannot commit, the result is uncertain (the
@@ -376,17 +385,20 @@ export function createModelGateway(seams: Readonly<ModelGatewaySeams>) {
     const promptDigest = await listingPromptDigest();
     // 3. The fence.
     const begun = decodeBegin(
-      await seams.transaction(vault, Math.min(10_000, Math.max(1_000, left())), (query) =>
-        query(vaultStatements.modelCallBegin, [
-          leaseId,
-          String(generation),
-          String(call.productIndex),
-          String(call.attempt),
-          String(call.sequence),
-          String(budgetMs),
-          promptDigest,
-          listingDraftSchemaDigest,
-        ]),
+      await seams.transaction(
+        vault,
+        Math.min(modelSendTiming.fenceMaxMs, Math.max(1_000, left())),
+        (query) =>
+          query(vaultStatements.modelCallBegin, [
+            leaseId,
+            String(generation),
+            String(call.productIndex),
+            String(call.attempt),
+            String(call.sequence),
+            String(budgetMs),
+            promptDigest,
+            listingDraftSchemaDigest,
+          ]),
       ),
     );
     if (typeof begun === "string") throw hold("STATE_INVALID");
@@ -465,6 +477,12 @@ export function createModelGateway(seams: Readonly<ModelGatewaySeams>) {
       await close("not_sent", null, null);
       throw hold("INPUT_INVALID");
     }
+    // The budget holds the entry's whole call, so a long reply is never cut off by it.
+    const sendWindow = modelSendWindowMs(entry.maxTokens);
+    if (budgetMs < modelCallBudgetMs(entry.maxTokens)) {
+      await close("not_sent", null, null);
+      throw hold("INPUT_INVALID");
+    }
     const resolved: ResolvedModelCall = Object.freeze({
       providerModelId: entry.providerModelId,
       effort: begun.effort,
@@ -473,15 +491,16 @@ export function createModelGateway(seams: Readonly<ModelGatewaySeams>) {
       user: listingUserTurn(call),
       outputSchema: listingDraftModelSchema as unknown as Record<string, unknown>,
     });
-    // 5. The count.
-    if (left() < 2_000) {
+    // 5. The count, leaving the send its window.
+    const closeMargin = modelSendTiming.closeMarginMs;
+    if (left() < closeMargin + 1_000 + sendWindow) {
       await close("not_sent", null, null);
       return modelResult("not_sent", null, null, begun.callId, 1_000);
     }
     const counted = await provider.countInput(
       resolved,
       model.apiKey,
-      Math.max(1_000, Math.min(15_000, left() - 1_000)),
+      Math.max(1_000, Math.min(modelSendTiming.countMaxMs, left() - closeMargin - sendWindow)),
     );
     if (counted.outcome !== "counted") {
       const outcome = counted.outcome === "throttled" ? "not_sent" : counted.outcome;
@@ -499,12 +518,12 @@ export function createModelGateway(seams: Readonly<ModelGatewaySeams>) {
       const recorded = (await close("input_over_cap", null, counted.inputTokens)) ?? "uncertain";
       return modelResult(recorded, null, null, begun.callId, null);
     }
-    // 6. One send, then the close.
-    if (left() < 2_000) {
+    // 6. One send, then the close: never with less than the send window left.
+    if (left() - closeMargin < sendWindow) {
       await close("not_sent", null, counted.inputTokens);
       return modelResult("not_sent", null, null, begun.callId, 1_000);
     }
-    const reply = await provider.respond(resolved, model.apiKey, left() - 1_000);
+    const reply = await provider.respond(resolved, model.apiKey, left() - closeMargin);
     let outcome: string = reply.outcome === "throttled" ? "not_sent" : reply.outcome;
     let output: unknown = null;
     if (outcome === "completed") {

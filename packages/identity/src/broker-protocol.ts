@@ -200,8 +200,43 @@ export const modelGatewayLimits = Object.freeze({
   callMaxBytes: 200_000,
   resultMaxBytes: 200_000,
   budgetMinMs: 1_000,
-  budgetMaxMs: 120_000,
+  // The official TypeScript SDK's default timeout for a non-streaming request of up to about
+  // 21,000 max_tokens; migration listings-runs bounds the fence's budget_ms the same way.
+  budgetMaxMs: 600_000,
 });
+// Sizing one non-streaming Messages send (ADR-0022 item 10 sends no stream): the send is
+// given the time to produce its effort's whole max_tokens at the floor output rate, plus a
+// first-token allowance, so a long reply is never cut off by a budget that could not fit it
+// (an aborted send is uncertain and booked at its worst case). The floor is 128,000 output
+// tokens an hour (about 35.6 a second), the rate the official SDK assumes when it decides a
+// non-streaming request fits its 10-minute default. It is an assumption until the staging
+// smoke measures each model and effort (M3 brief, owner question 6). A call's budget adds
+// the fence transaction's and the free count's ceilings and the close's second.
+export const modelSendTiming = Object.freeze({
+  floorOutputTokensPerHour: 128_000,
+  firstTokenAllowanceMs: 30_000,
+  fenceMaxMs: 10_000,
+  countMaxMs: 15_000,
+  closeMarginMs: 1_000,
+});
+/** The send's own window for an effort's max_tokens (the floor rate plus the allowance). */
+export function modelSendWindowMs(maxOutputTokens: number): number {
+  if (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > 128_000)
+    throw invalid();
+  return (
+    modelSendTiming.firstTokenAllowanceMs +
+    Math.ceil((maxOutputTokens * 3_600_000) / modelSendTiming.floorOutputTokensPerHour)
+  );
+}
+/** One modelRespond's budget for an effort's max_tokens: fence, count, send and close. */
+export function modelCallBudgetMs(maxOutputTokens: number): number {
+  return (
+    modelSendTiming.fenceMaxMs +
+    modelSendTiming.countMaxMs +
+    modelSendWindowMs(maxOutputTokens) +
+    modelSendTiming.closeMarginMs
+  );
+}
 
 // P05.T01ab: the challenge protocol shared by the api guard and the broker.
 export type ChallengeVerdict = "passed" | "failed";

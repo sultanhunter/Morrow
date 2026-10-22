@@ -273,7 +273,7 @@
     {
       "sequence": 34,
       "file": "0034.listings-runs.sql",
-      "sha256": "eef07471f48d92329ebddbdb7421774c128cf91196674d6af1cdf0321a2b3359",
+      "sha256": "7edcb0d71092fa30191f00ad62e5edc510e4a6fdbfd9ffe0fb67c085ff6ddcfb",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M3-listings-agent.md"
     }

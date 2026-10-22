@@ -2,7 +2,9 @@ import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import type { CapabilityId } from "@morrow/contracts";
 import { createAgentAuthorityService } from "@morrow/policy/agent-authority";
 
+import { findCatalogueEntry } from "@morrow/policy/model-catalogue";
 import { storeResource } from "@morrow/policy/store-resource";
+import { modelCallBudgetMs, modelGatewayLimits } from "../../../identity/src/broker-protocol.js";
 import { createBillingFactsReader } from "../billing/facts.js";
 import { createLeaseDelegationReader } from "../agents/delegation-reader.js";
 import type { LeaseRef, LeaseStep, LeaseStepResult } from "../runtime/leases.js";
@@ -85,16 +87,36 @@ export class RunStepRetry extends Error {
     this.name = "RunStepRetry";
   }
 }
+// One modelRespond's budget is sized per run from its effort's max_tokens
+// (modelCallBudgetMs: the fence, the count and a send long enough for the whole reply at
+// the floor output rate); a product step needs two such calls and a few throttle waits, so a
+// product step does not start with less lease time left than productMarginMs(budget). A fence
+// a dead broker left open blocks for its budget plus a minute (migration listings-runs).
 export const runTimings = Object.freeze({
-  /** The broker's budget for one modelRespond (count, send and the throttle waits). */
-  modelBudgetMs: 90_000,
-  /** A product step does not start with less lease time left than this. */
-  productMarginMs: 4 * 60_000,
   /** At most this many resends of one attempt after a provider throttle. */
   sequences: 8,
   /** The longest wait the step itself makes before a resend. */
   maxWaitMs: 30_000,
+  /** The throttle waits a product step's margin allows for. */
+  throttleAllowanceMs: 60_000,
+  /** How long an open fence outlives its budget before it is booked as uncertain. */
+  fenceGraceMs: 60_000,
 });
+/**
+ * The modelRespond budget of a run's selection. An entry this build's catalogue lacks gets
+ * the protocol's longest budget; the broker checks every budget against the entry it
+ * resolves itself and holds the call when it has no such entry (the run ends broker_held).
+ */
+export function runModelBudgetMs(catalogueVersion: number, model: string, effort: string): number {
+  const entry = findCatalogueEntry(catalogueVersion, model, effort);
+  return entry ? modelCallBudgetMs(entry.maxOutputTokens) : modelGatewayLimits.budgetMaxMs;
+}
+/** A product step's worst case: two attempts at the call budget and the throttle waits. */
+export const productMarginMs = (modelBudgetMs: number) =>
+  2 * modelBudgetMs + runTimings.throttleAllowanceMs;
+/** Waits of `everyMs` that outlast a fence left open for its budget plus the grace. */
+const openFenceWaits = (modelBudgetMs: number, everyMs: number) =>
+  Math.ceil((modelBudgetMs + runTimings.fenceGraceMs) / everyMs) + 1;
 const retry = (code: string) => new RunStepRetry(code);
 const failureOf: Readonly<Record<string, ProductFailureCode>> = Object.freeze({
   incomplete: "incomplete",
@@ -165,6 +187,8 @@ async function decide(
 interface RunFacts {
   readonly envelopeId: string;
   readonly fields: readonly ListingField[];
+  /** One modelRespond's budget for the run's selection (runModelBudgetMs). */
+  readonly modelBudgetMs: number;
 }
 function parseResult(text: unknown): Record<string, unknown> {
   if (typeof text !== "string" || text.length > 200_000) throw retry("model_result");
@@ -221,7 +245,9 @@ export async function draftProduct(
     result: Parameters<LeaseStep["run"]["productFinish"]>[1],
     runStop: RunEndReason | null,
   ): Promise<RunStepResult> => {
-    for (let wait = 0; wait < 3; wait++) {
+    // A call of this product a dead broker left open blocks the finish for its budget plus
+    // the grace; then the fence is booked as uncertain and the finish goes through.
+    for (let wait = 0; wait < openFenceWaits(facts.modelBudgetMs, 5_000); wait++) {
       const done = await under(ports, ref, (step) => step.run.productFinish(index, result));
       if (!done.entered) return Object.freeze({ kind: "interrupted", refusal: done.refusal });
       const f = done.value;
@@ -280,7 +306,7 @@ export async function draftProduct(
           ref.leaseId,
           ref.generation,
           JSON.stringify(call),
-          runTimings.modelBudgetMs,
+          facts.modelBudgetMs,
         );
       } catch {
         // BROKER_HELD: the gateway refused before any request (the switch is off, the lease
@@ -411,12 +437,14 @@ export async function listingsRun(
       return Object.freeze({ kind: "interrupted", refusal: "denied" }) as RunStepResult;
     if (r.value.outcome === "ended")
       return Object.freeze({ kind: "ended", status: r.value.status }) as RunStepResult;
+    const modelBudgetMs = runModelBudgetMs(r.value.catalogueVersion, r.value.model, r.value.effort);
     return Object.freeze({
       kind: "started",
       productCount: r.value.productCount,
       leaseExpiresAtMs: r.value.leaseExpiresAtMs,
       envelopeId: r.value.envelopeId,
       fields: r.value.fields,
+      modelBudgetMs,
     }) as unknown as RunStepResult;
   });
   if (started.kind !== "started") return started;
@@ -425,12 +453,17 @@ export async function listingsRun(
     leaseExpiresAtMs: number;
     envelopeId: string;
     fields: ListingField[];
+    modelBudgetMs: number;
   };
-  const facts: RunFacts = Object.freeze({ envelopeId: s.envelopeId, fields: s.fields });
+  const facts: RunFacts = Object.freeze({
+    envelopeId: s.envelopeId,
+    fields: s.fields,
+    modelBudgetMs: s.modelBudgetMs,
+  });
   let stop: RunEndReason | null = null;
   for (let index = 0; index < s.productCount && stop === null; index++) {
     const r = await steps.do("product-" + index, async () => {
-      if (ports.now() > s.leaseExpiresAtMs - runTimings.productMarginMs)
+      if (ports.now() > s.leaseExpiresAtMs - productMarginMs(facts.modelBudgetMs))
         return Object.freeze({
           kind: "product",
           index,
@@ -449,7 +482,7 @@ export async function listingsRun(
   if (proposed.kind === "interrupted") return proposed;
   if (proposed.kind === "proposed" && stop === null) stop = proposed.stop;
   return steps.do("finish", async () => {
-    for (let wait = 0; wait < 30; wait++) {
+    for (let wait = 0; wait < openFenceWaits(facts.modelBudgetMs, 10_000); wait++) {
       const r = await under(ports, ref, (step) => step.run.finish(stop));
       if (!r.entered)
         return Object.freeze({ kind: "interrupted", refusal: r.refusal }) as RunStepResult;

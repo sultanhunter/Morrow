@@ -10,7 +10,7 @@ import type { FixedSqlQuery } from "../../../identity/src/fixed-sql-transaction.
 
 export const runStepSql = Object.freeze({
   start:
-    "SELECT outcome,run_id,task_id,child_task_id,envelope_id,installation_id,agent_principal_id,store_id,connection_id,product_count,fields,lease_expires_at_ms,status FROM morrow_work.run_start()",
+    "SELECT outcome,run_id,task_id,child_task_id,envelope_id,installation_id,agent_principal_id,store_id,connection_id,product_count,fields,lease_expires_at_ms,status,catalogue_version,model_key,effort_key FROM morrow_work.run_start()",
   billingFacts: "SELECT morrow_work.run_billing_facts() AS facts",
   productBegin:
     "SELECT outcome,reason,product_id,attempts,snapshot_digest,fields,objective FROM morrow_work.run_product_begin($1)",
@@ -78,6 +78,10 @@ export interface RunStart {
   readonly fields: readonly string[];
   readonly leaseExpiresAtMs: number;
   readonly status: string;
+  /** The run's catalogue version and selection keys (codes): the Workflow's budget sizing. */
+  readonly catalogueVersion: number;
+  readonly model: string;
+  readonly effort: string;
 }
 export type ProductBegin =
   | {
@@ -174,6 +178,7 @@ const held = () => Error("RUNTIME_RUN_HELD");
 const recordId = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const uuid = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const digest = /^[a-f0-9]{64}$/;
+const selectionKey = /^[a-z][a-z0-9_]{0,39}$/;
 const exact = (pattern: RegExp, value: unknown): value is string =>
   typeof value === "string" && pattern.exec(value)?.[0] === value;
 function one(rows: readonly Record<string, unknown>[], names: readonly string[]) {
@@ -257,6 +262,9 @@ export function createRunSteps(query: FixedSqlQuery): RunSteps {
         "fields",
         "lease_expires_at_ms",
         "status",
+        "catalogue_version",
+        "model_key",
+        "effort_key",
       ]);
       if (r.outcome === "denied") return "denied" as const;
       if (
@@ -271,7 +279,9 @@ export function createRunSteps(query: FixedSqlQuery): RunSteps {
           r.store_id,
           r.connection_id,
         ].every((v) => exact(recordId, v)) ||
-        typeof r.status !== "string"
+        typeof r.status !== "string" ||
+        !exact(selectionKey, r.model_key) ||
+        !exact(selectionKey, r.effort_key)
       )
         throw held();
       return Object.freeze({
@@ -288,6 +298,9 @@ export function createRunSteps(query: FixedSqlQuery): RunSteps {
         fields: Object.freeze(jsonArray(r.fields)),
         leaseExpiresAtMs: integer(r.lease_expires_at_ms, Number.MAX_SAFE_INTEGER),
         status: r.status,
+        catalogueVersion: integer(r.catalogue_version, 999),
+        model: r.model_key as string,
+        effort: r.effort_key as string,
       });
     },
     async billingFacts() {

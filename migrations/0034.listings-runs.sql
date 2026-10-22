@@ -380,7 +380,7 @@ CREATE TABLE morrow_work.run_model_calls (
  cost_usd numeric(20,8) CHECK (cost_usd>=0),
  overflow_usd numeric(20,8) CHECK (overflow_usd>=0),
  booking_id morrow_work.record_id,
- budget_ms integer NOT NULL CHECK (budget_ms BETWEEN 1000 AND 120000),
+ budget_ms integer NOT NULL CHECK (budget_ms BETWEEN 1000 AND 600000),
  started_at timestamptz NOT NULL CHECK (started_at=date_trunc('milliseconds',started_at) AND started_at>=timestamptz '2000-01-01T00:00:00Z' AND started_at<timestamptz '9000-01-01T00:00:00Z'),
  closed_at timestamptz CHECK (closed_at=date_trunc('milliseconds',closed_at) AND isfinite(closed_at)),
  PRIMARY KEY (organization_id,workspace_id,id),
@@ -1302,11 +1302,13 @@ END $$;
 -- The entered lease's run, locked: shared by the runtime definers below.
 -- Starts the entered lease's run: queued -> running (runtime, current_lease_and_grants), the
 -- lease marked started, the event appended. A running run is returned as it stands, a
--- terminal one names its status (the Workflow ends). Returns the route's ids and the lease's
--- expiry for the Workflow's time budget. Outcomes: started, running, ended, denied.
+-- terminal one names its status (the Workflow ends). Returns the route's ids, the lease's
+-- expiry for the Workflow's time budget and the run's catalogue version and selection keys
+-- (the Workflow sizes each modelRespond budget from the effort's max_tokens; the call itself
+-- never names them). Outcomes: started, running, ended, denied.
 CREATE FUNCTION morrow_work.run_start()
 RETURNS TABLE(outcome text,run_id text,task_id text,child_task_id text,envelope_id text,installation_id text,agent_principal_id text,store_id text,
- connection_id text,product_count text,fields text,lease_expires_at_ms text,status text)
+ connection_id text,product_count text,fields text,lease_expires_at_ms text,status text,catalogue_version text,model_key text,effort_key text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 #variable_conflict use_column
 DECLARE l record; r record; v_now timestamptz; v_outcome text;
@@ -1314,7 +1316,7 @@ BEGIN
  SELECT * INTO l FROM morrow_work.current_lease();
  IF NOT FOUND OR l.kind<>'run' THEN
   RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,
-   NULL::text;
+   NULL::text,NULL::text,NULL::text,NULL::text;
   RETURN;
  END IF;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.run',l.organization_id,l.workspace_id,l.subject_id)::text,0));
@@ -1322,7 +1324,7 @@ BEGIN
   AND x.lease_id=l.lease_id;
  IF NOT FOUND THEN
   RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,
-   NULL::text;
+   NULL::text,NULL::text,NULL::text,NULL::text;
   RETURN;
  END IF;
  v_now:=morrow_work.db_now();
@@ -1339,7 +1341,7 @@ BEGIN
  END IF;
  RETURN QUERY SELECT v_outcome,r.id::text,r.task_id::text,r.child_task_id::text,r.envelope_id::text,r.installation_id::text,
   r.agent_principal_id::text,r.store_id::text,r.connection_id::text,r.product_count::text,to_jsonb(r.fields)::text,(extract(epoch FROM l.expires_at)*1000)::bigint::text,
-  CASE WHEN v_outcome='started' THEN 'running' ELSE r.status END;
+  CASE WHEN v_outcome='started' THEN 'running' ELSE r.status END,r.catalogue_version::text,r.model_key,r.effort_key;
 END $$;
 -- The billing rows of the entered lease's workspace, in the exact row shapes of the api's
 -- billing statements, so M5's createBillingFactsReader maps them unchanged into the agent
@@ -1848,7 +1850,7 @@ BEGIN
   RETURN;
  END IF;
  v_index:=p_product_index::integer; v_attempt:=p_attempt::integer; v_sequence:=p_sequence::integer; v_budget:=p_budget_ms::integer;
- IF v_index>24 OR v_budget NOT BETWEEN 1000 AND 120000 THEN
+ IF v_index>24 OR v_budget NOT BETWEEN 1000 AND 600000 THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text,NULL::text;
   RETURN;
  END IF;
