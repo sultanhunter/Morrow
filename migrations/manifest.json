@@ -269,6 +269,20 @@
       "sha256": "56426f72fe2057051df3de71dfb219959a297080b72335d3ed0dd0eae62342ff",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 34,
+      "file": "0034.shopify-privacy-identity.sql",
+      "sha256": "786fb031550bb0d4153e3dcfe611dfcfb41768c24111b6a3d8f89210aaf6258b",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 35,
+      "file": "0035.shopify-privacy-work.sql",
+      "sha256": "f003b8b028ab1c12b75ccb2f63332785e8b34b7e78582a672ae1f60c7fd0911d",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M2-shopify-connect.md"
     }
   ]
 }

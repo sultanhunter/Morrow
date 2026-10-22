@@ -44,8 +44,14 @@ test("manifest: contiguous rows after the published head, executeAs, digests, no
     rows.map((r) => r.sequence),
     rows.map((_, i) => first + i),
   );
-  // Nothing of another milestone sits between them, and they end the chain in this branch.
-  assert.equal(rows.at(-1).sequence, manifest.migrations.length);
+  // Nothing of another milestone sits between them; only M2 PR-3's two privacy migrations,
+  // built on this branch, follow them.
+  assert.deepEqual(
+    manifest.migrations
+      .filter((m) => m.sequence > rows.at(-1).sequence)
+      .map((m) => m.file.replace(/^\d{4}\./, "")),
+    ["shopify-privacy-identity.sql", "shopify-privacy-work.sql"],
+  );
   for (const [i, [slug, executeAs, reviewRef]] of slugs.entries()) {
     const row = rows[i];
     assert.equal(row.file, String(row.sequence).padStart(4, "0") + "." + slug + ".sql");

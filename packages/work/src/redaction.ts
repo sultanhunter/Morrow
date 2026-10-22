@@ -6,10 +6,21 @@
 // exactly one handler here (S8 and tests/redaction-handlers.test.mjs).
 //
 // `shop/redact` (M2 PR-3) runs every `shop_redact` handler for the store; the uninstall
-// webhook and the human disconnect run every `uninstall_or_disconnect` handler. A handler
-// whose executor is null is declared but not yet executable: its table holds no store
-// content until the PR named in `executable` (invariant 16: no non-development store links
-// before every handler runs, mvp.md M6).
+// webhook (and, once its command lands, the human disconnect) run every
+// `uninstall_or_disconnect` handler. Since M2 PR-3 every handler names its executor (the
+// conformance check refuses a null one: invariant 16, no non-development store links before
+// every handler runs, mvp.md M6):
+//   * shop/redact: morrow_work.connector_inbox_apply (0035) first ends the installation (the
+//     uninstall path, so a shop/redact that arrives first still destroys the token), then
+//     runs morrow_work.store_content_redact (every work-schema handler, here the proposal
+//     parameters through parameters_redact_for_store) and
+//     morrow_identity.work_shopify_redact_identity (the installation, its candidate and
+//     the app registry), and completes the privacy request only when nothing is
+//     outstanding, the token's destruction included;
+//   * app/uninstalled (and a scope change): the broker's shopifyCredentialDestroy
+//     (morrow_vault.shopify_credential_destroy), which records the destruction on the
+//     installation in the transaction that erases the key material; the connector's cron
+//     re-drives every installation whose destruction is not yet recorded.
 
 export type StoreContentTrigger = "shop_redact" | "uninstall_or_disconnect";
 export type StoreContentAction =
@@ -32,9 +43,9 @@ export interface StoreContentHandler {
   readonly action: StoreContentAction;
   /** How the handler finds one store's rows. */
   readonly storeKey: string;
-  /** The definer or broker method that runs it; null until it lands. */
+  /** The definer that runs it (never null since M2 PR-3: the conformance check refuses one). */
   readonly executor: string | null;
-  /** The PR that makes the handler executable, before the table holds store content. */
+  /** The PR that made the handler executable, before the table held store content. */
   readonly executable: "M2 PR-3";
 }
 
@@ -46,7 +57,7 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       trigger: "uninstall_or_disconnect",
       action: "destroy_credential",
       storeKey: "subject_id: the store installation the token belongs to",
-      executor: null,
+      executor: "morrow_vault.shopify_credential_destroy",
       executable: "M2 PR-3",
     },
     {
@@ -55,7 +66,7 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       trigger: "shop_redact",
       action: "pseudonymise",
       storeKey: "installation_id: the store installation the candidate proved (shop_id kept)",
-      executor: null,
+      executor: "morrow_identity.work_shopify_redact_identity",
       executable: "M2 PR-3",
     },
     // M2 PR-2 review (0026): the app registry's install link names the shop (a
@@ -67,7 +78,7 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       trigger: "shop_redact",
       action: "clear_install_link",
       storeKey: "intended_shop_digest: sha256 of the store's *.myshopify.com domain",
-      executor: null,
+      executor: "morrow_identity.work_shopify_redact_identity",
       executable: "M2 PR-3",
     },
     // M2 PR-2 (0026): StoreInstallation@1 rows hold the shop domain and id (spine §11).
@@ -77,7 +88,7 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       trigger: "shop_redact",
       action: "pseudonymise",
       storeKey: "id: the store installation itself (shop_id kept)",
-      executor: null,
+      executor: "morrow_identity.work_shopify_redact_identity",
       executable: "M2 PR-3",
     },
     {
@@ -88,13 +99,12 @@ export const storeContentHandlers: readonly StoreContentHandler[] = Object.freez
       storeKey: "proposals.store_id through proposals.parameters_id",
       // The revisable owner helper of the M3 PR-1 agent-proposals migration: it empties the
       // canonical text and sets redacted_at, keeping the digest; decision_bind and the
-      // approval_claims trigger refuse a redacted proposal. It runs only under the tenant's
-      // own session context (the tables' tenant_command policy) and otherwise refuses with
-      // context_unavailable, never an empty success. The shop/redact definer has no session,
-      // so the handler becomes executable in M2 PR-3, which lands that caller, the policy
-      // that lets its verified context see the tenant's rows (revising this helper), and a
-      // lab case that redacts from the connector login. No agent proposal holds a real
-      // store's content before then (no non-development store links before M6).
+      // approval_claims trigger refuse a redacted proposal. M2 PR-3 (0035) revises it to run
+      // under the tenant's own session context or the connector's redaction context for
+      // exactly that store (morrow.connector_redact, which only connector_inbox_apply writes),
+      // with the connector_redact policies; anything else is still context_unavailable,
+      // never an empty success. shop/redact reaches it through store_content_redact
+      // (lab:shopify-privacy).
       executor: "morrow_work.parameters_redact_for_store",
       executable: "M2 PR-3",
     },

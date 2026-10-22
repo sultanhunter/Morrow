@@ -54,6 +54,9 @@ export function contentProblems(handlers = storeContentHandlers, tables = defaul
       problems.push("HANDLER_INVALID:" + table);
       continue;
     }
+    // M2 PR-3 makes every handler executable: a declared handler without its executor
+    // (a store table whose content nothing would delete) fails.
+    if (handler.executor === null) problems.push("HANDLER_NOT_EXECUTABLE:" + table);
     if (handled.has(table)) problems.push("HANDLER_DUPLICATE:" + table);
     handled.set(table, handler);
     if (!registered.has(table)) problems.push("HANDLER_UNREGISTERED_TABLE:" + table);

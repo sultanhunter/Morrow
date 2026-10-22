@@ -24,13 +24,28 @@ test("every registered table is classified, and every store table has exactly on
     ],
   );
   assert.ok(Object.isFrozen(storeContentHandlers) && storeContentHandlers.every(Object.isFrozen));
-  // M3 PR-1 lands the proposal_parameters executor: the revisable owner helper that
-  // empties a store's parameters and keeps each digest. It needs the tenant's session
-  // context, which shop/redact has not, so the handler is executable once M2 PR-3 lands
-  // its caller and policy (M3 PR-1 review).
+  // M2 PR-3: every handler is executable. The token by the broker's destruction (recorded
+  // on the installation in the same vault transaction), the shop identity by the identity
+  // redaction, the proposal parameters by M3 PR-1's helper, which 0035 revises to run in the
+  // connector's redaction context (shop/redact has no session).
   assert.deepEqual(
     storeContentHandlers.map((h) => h.executor),
-    [null, null, null, null, "morrow_work.parameters_redact_for_store"],
+    [
+      "morrow_vault.shopify_credential_destroy",
+      "morrow_identity.work_shopify_redact_identity",
+      "morrow_identity.work_shopify_redact_identity",
+      "morrow_identity.work_shopify_redact_identity",
+      "morrow_work.parameters_redact_for_store",
+    ],
+  );
+  // A handler declared without its executor fails the check (M2 PR-3).
+  assert.deepEqual(
+    contentProblems(
+      storeContentHandlers.map((h) =>
+        h.table === "morrow_identity.shopify_apps" ? { ...h, executor: null } : h,
+      ),
+    ),
+    ["HANDLER_NOT_EXECUTABLE:morrow_identity.shopify_apps"],
   );
 });
 
@@ -38,8 +53,9 @@ test("every registered table is classified, and every store table has exactly on
 // tables later (spine §6 and §11), is classified table by table like the others.
 test("every morrow_identity table is classified; the shop identity is store content", () => {
   const identity = registeredTables().filter(([name]) => name.startsWith("morrow_identity."));
-  // 43 through M5 PR-1, plus M3 PR-1's agent_principals (ids only).
-  assert.equal(identity.length, 44);
+  // 43 through M5 PR-1, plus M3 PR-1's agent_principals (ids only) and M2 PR-3's inbox and
+  // privacy requests.
+  assert.equal(identity.length, 46);
   assert.equal(identityTables.agent_principals.content, "none");
   assert.deepEqual(
     identity.filter(([, spec]) => spec.content === "store").map(([name]) => name),
@@ -50,8 +66,15 @@ test("every morrow_identity table is classified; the shop identity is store cont
     ],
   );
   // M2 PR-2: the other two new identity tables hold digests and ids; the app registry's
-  // install link names the shop (the PR-2 review), so it is store content.
-  for (const name of ["install_continuations", "shopify_oauth_states"])
+  // install link names the shop (the PR-2 review), so it is store content. M2 PR-3: the
+  // inbox holds the minimised bodies (ids, scope names, a keyed customer digest; 7 days)
+  // and the privacy requests content-free evidence.
+  for (const name of [
+    "install_continuations",
+    "shopify_oauth_states",
+    "shopify_webhook_inbox",
+    "privacy_requests",
+  ])
     assert.equal(identityTables[name].content, "none", name);
   // The linking records that only point at a candidate hold no shop content of their own.
   for (const name of ["linking_reviews", "linking_handoffs", "workspace_store_links"])
