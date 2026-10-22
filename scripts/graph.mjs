@@ -55,10 +55,12 @@ const fileOfId = (id) => id.replaceAll("/", "--");
 // The local calendar day: the owner's "today", not UTC's.
 const isoToday = (now = new Date()) =>
   `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-const validDate = (value) =>
-  typeof value === "string" &&
-  /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-  new Date(`${value}T00:00:00Z`).toISOString().startsWith(value);
+// A real calendar day: 2026-13-01 and 2026-02-30 are refused, never thrown on.
+const validDate = (value) => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const time = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(time) && new Date(time).toISOString().startsWith(value);
+};
 const dayNumber = (value) => Date.parse(`${value}T00:00:00Z`) / 86_400_000;
 const canonical = (value) =>
   JSON.stringify(value, (key, v) =>
@@ -97,13 +99,21 @@ export function typeOfId(id) {
   return types.length === 1 ? types[0][0] : null;
 }
 
-// Task ids a line names: lettered ids and ranges (plan-check's rules), parent ids, and
-// parent ranges such as P06.T01-T02.
-export function planIdsIn(text) {
-  const ids = new Set(letteredIds(text));
-  for (const m of text.matchAll(/P\d{2}\.T\d{2}(?![a-z\d])/g)) ids.add(m[0]);
-  for (const [, pkg, a, b] of text.matchAll(/(P\d{2})\.T(\d{2})-T(\d{2})(?![a-z\d])/g))
+// Parent ranges such as P06.T01-T02 or P11.T01–T03 (hyphen or en dash), expanded.
+export function parentRangeIds(text) {
+  const ids = new Set();
+  for (const [, pkg, a, b] of text.matchAll(
+    /(?<![\w./-])(P\d{2})\.T(\d{2})[-–]T(\d{2})(?![a-z\d])/g,
+  ))
     for (let n = Number(a); n <= Number(b); n += 1) ids.add(`${pkg}.T${pad2(n)}`);
+  return ids;
+}
+
+// Task ids a line names: lettered ids and ranges (plan-check's rules), parent ids, and
+// parent ranges.
+export function planIdsIn(text) {
+  const ids = new Set([...letteredIds(text), ...parentRangeIds(text)]);
+  for (const m of text.matchAll(/P\d{2}\.T\d{2}(?![a-z\d])/g)) ids.add(m[0]);
   return [...ids].sort();
 }
 
@@ -212,6 +222,14 @@ function fieldProblem(rule, value) {
   }
 }
 
+// A relative path inside the repository: no leading slash, no "." or ".." segment.
+const REPOSITORY_PATH = /^(?:(?!\.\.?\/)[A-Za-z0-9_.@-]+\/)*(?!\.\.?$)[A-Za-z0-9_.@-]+$/;
+const docPathOk = (doc) =>
+  REPOSITORY_PATH.test(doc.startsWith(ARCHIVE_PREFIX) ? doc.slice(ARCHIVE_PREFIX.length) : doc);
+// The usable entries of a header's `docs` list; validateHeader reports the others.
+const docsOf = (data) =>
+  Array.isArray(data?.docs) ? data.docs.filter((d) => typeof d === "string" && docPathOk(d)) : [];
+
 // Checks a header against its type's closed fields. "hand" headers carry a title, a
 // status and the type's required fields; "inplace" headers add to a node built elsewhere.
 export function validateHeader(data, path, mode, report) {
@@ -247,6 +265,10 @@ export function validateHeader(data, path, mode, report) {
     }
   if ("docs" in data && fieldProblem({ kind: "list" }, data.docs))
     report("GRAPH_FIELD", path, "docs is a list of paths");
+  else
+    for (const doc of data.docs ?? [])
+      if (!docPathOk(doc))
+        report("GRAPH_FIELD", path, `docs: ${JSON.stringify(doc)} is not a repository path`);
   if ("links" in data) {
     if (!isPlainObject(data.links)) report("GRAPH_FIELD", path, "links is a map of edge lists");
     else
@@ -283,8 +305,16 @@ const GOVERNED = [
   "docs/acceptance/",
   "docs/graph/",
 ];
+// Email addresses in a text, except those under the reserved test domains (RFC 2606 and
+// RFC 6761), which tests and fixtures use.
+const RESERVED_EMAIL_DOMAIN = /\.(?:invalid|test|example|localhost)$/i;
+const emailsIn = (text) =>
+  [...text.matchAll(new RegExp(schema.EMAIL.source, "g"))]
+    .map((m) => m[0])
+    .filter((address) => !RESERVED_EMAIL_DOMAIN.test(address));
+// The graph's script, schema and folders; `scripts/graphql…` and `scripts/graphics…` are not.
 const GRAPH_REFERENCE =
-  /(?:^|[/'"`])(?:scripts\/graph(?:-schema)?(?:\.mjs)?|docs\/graph\/|\.artifacts\/graph\/|graph-schema\.mjs)/;
+  /(?:^|[/'"`])(?:scripts\/graph(?:-schema)?(?:\.mjs)?(?![\w-])|docs\/graph\/|\.artifacts\/graph\/|graph-schema\.mjs(?![\w-]))/;
 
 function git(root, args) {
   const result = spawnSync("git", ["-C", root, ...args], {
@@ -388,6 +418,15 @@ export function readSources(root = repositoryRoot) {
     root,
     files,
     paths,
+    // Whether a file outside docs/ exists, for `docs:` entries such as a script or a
+    // package manifest. Header validation has already refused absolute and ".." paths.
+    exists: (path) => {
+      try {
+        return statSync(join(root, path)).isFile();
+      } catch {
+        return false;
+      }
+    },
     plan: files.get("docs/plan/build-plan.md") ?? "",
     tasks: json("docs/progress/tasks.json", { tasks: [], acceptance_ids: [] }),
     dependencies: json("docs/decisions/dependencies.json", []),
@@ -456,6 +495,18 @@ function blockquoteParagraphs(body) {
   }
   flush();
   return paragraphs;
+}
+
+// An acceptance row's status from its cells after the id: "open" for a cell that starts
+// "Open." or "Not done;", "deferred" for one that starts "*Deferred past launch*", otherwise
+// null (no claim either way). A cell such as "Open the inbox" is prose, not a status.
+export function acceptanceStatus(cells) {
+  for (const cell of cells) {
+    const text = cell.replace(/^[\s*_]+/, "");
+    if (/^(?:open|not done)(?=[*_]*\s*(?:[.;:,(]|$))/i.test(text)) return "open";
+    if (/^deferred\b/i.test(text)) return "deferred";
+  }
+  return null;
 }
 
 const DOC_PATH = /(?<![\w/.:-])((?:docs\/[A-Za-z0-9_./-]+?|CLAUDE|AGENTS|README)\.md)(?![\w/])/g;
@@ -568,23 +619,37 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
   for (const m of plan.matchAll(/^## (\d{1,2}) (\S.*)$/gm))
     addNode({ id: `P${pad2(m[1])}`, title: m[2].trim() }, planPath);
   const titles = new Map();
-  for (const m of plan.matchAll(/^[ \t]*\d+\. \*\*(P\d{2}\.T\d{2}) ([^*]+?)\.?\*\*/gm))
+  // "1. **P07.T01 — Versioned artifact contract.**": the title follows an optional dash.
+  for (const m of plan.matchAll(
+    /^[ \t]*\d+\. \*\*(P\d{2}\.T\d{2})\s+(?:[—–-]\s*)?([^*]+?)\.?\*\*/gm,
+  ))
     if (!titles.has(m[1])) titles.set(m[1], m[2].trim());
   for (const id of unique(inventory.tasks)) {
     if (!addNode({ id, title: titles.get(id) ?? null }, planPath)) continue;
     if (nodes.has(id.slice(0, 3))) derive(id, "part_of", id.slice(0, 3), "plan");
   }
+  // A lettered span holds ids and a title ("**P05.T01ab Hosted sign-in abuse
+  // protection.**"), or only ids ("**P11.T04a + P05.T04b** credit reservations, …"): then
+  // the title is the text after the span, to its first sentence end.
   for (const line of plan.split("\n")) {
-    const span = /^\s*(?:[-*+]|\d+\.)\s+\*\*(.+?)\*\*/.exec(line)?.[1];
-    if (!span) continue;
-    const title =
-      span
-        .replace(
-          /^(?:\s*(?:\+|,|and)?\s*P\d{2}\.T\d{2}[a-z]*(?:\s*[-–]\s*(?:T\d{2})?[a-z]+)?)+/,
-          "",
-        )
-        .replace(/^[\s:.,]+|[\s:.,]+$/g, "") || span;
-    for (const id of letteredIds(span)) if (!titles.has(id)) titles.set(id, title);
+    const m = /^\s*(?:[-*+]|\d+\.)\s+\*\*(.+?)\*\*(.*)$/.exec(line);
+    if (!m) continue;
+    const [, span, rest] = m;
+    const idsOnly = /^(?:[\s+,:.;—–-]|\b(?:and|then|or)\b)*$/i.test(
+      span.replace(/P\d{2}\.T\d{2}[a-z]*(?:\s*[-–]\s*(?:T\d{2})?[a-z]+)?/g, " "),
+    );
+    const title = squash(
+      idsOnly
+        ? (/^[\s:.;—–-]*(.*?)(?:[.;](?=\s|$)|$)/.exec(rest)?.[1] ?? "")
+        : span
+            .replace(
+              /^(?:\s*(?:\+|,|and)?\s*P\d{2}\.T\d{2}[a-z]*(?:\s*[-–]\s*(?:T\d{2})?[a-z]+)?)+/,
+              "",
+            )
+            .replace(/^[\s:.,—–-]+|[\s:.,]+$/g, ""),
+    );
+    for (const id of letteredIds(span))
+      if (!titles.has(id)) titles.set(id, short(title, 120) || null);
   }
   for (const id of [...definedLetteredIds(plan)].sort()) {
     if (!addNode({ id, title: titles.get(id) ?? null }, planPath)) continue;
@@ -680,15 +745,12 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
     const body = bodyOf(path);
     const bullets = headerBullets(body.split(/^## /m)[0]);
     const statusText = squash(bullets.get("Status") ?? "");
-    const status = /^superseded/i.test(statusText)
-      ? "superseded"
-      : /^accepted/i.test(statusText)
-        ? "accepted"
-        : /^(?:proposed|draft)/i.test(statusText)
-          ? "proposed"
-          : /^rejected/i.test(statusText)
-            ? "rejected"
-            : null;
+    // The first status word decides, after any qualifier: "Superseded by ADR-0015 (…).
+    // Accepted 2026-10-17." is superseded; "Decisions accepted 2026-10-23" is accepted.
+    const keyword = /\b(superseded|accepted|proposed|draft|rejected)\b/i
+      .exec(statusText)?.[1]
+      .toLowerCase();
+    const status = keyword === "draft" ? "proposed" : (keyword ?? null);
     const title = (firstHeading(body) ?? m[1]).replace(/^ADR-\d{4}\s+/, "");
     const date = /\d{4}-\d{2}-\d{2}/.exec(bullets.get("Date") ?? "")?.[0];
     const node = addNode(
@@ -715,7 +777,7 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
   const evidenceCards = [];
   for (const path of paths) {
     const m = /^docs\/evidence\/live\/([^/]+)\.md$/.exec(path);
-    if (!m) continue;
+    if (!m || m[1] === "README") continue;
     if (typeOfId(m[1]) !== "evidence") {
       report("GRAPH_ID_SHAPE", path, `${m[1]} is not an evidence id (yyyy-mm-dd-slug)`);
       continue;
@@ -759,8 +821,11 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
       evidenceCards.push([m[1], card, path]);
   }
 
-  // Acceptance files: the package's tables; a row that names a live record is verified by it.
+  // Acceptance files: the package's tables. A row's status cell ("Open.", "Not done;",
+  // "*Deferred past launch*") gives its status; a row that is neither open nor deferred is
+  // verified by the live records it names, and an open or deferred row only cites them.
   const verifications = [];
+  const rowStatuses = [];
   for (const path of paths) {
     const m = /^docs\/acceptance\/(P\d{2})\.md$/.exec(path);
     if (!m) continue;
@@ -777,15 +842,21 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
         continue;
       }
       if (!line.startsWith("|")) continue;
-      const first = line.split("|")[1]?.trim() ?? "";
+      const [first = "", ...cells] = line
+        .replace(/\|\s*$/, "")
+        .split("|")
+        .slice(1)
+        .map((c) => c.trim());
       const full = /^(P\d{2}\.T\d{2}[a-z]*-AC\d{2}[a-z]?|P\d{2}\.A\d{2})(?![\w])/.exec(first)?.[1];
       const shortId = task && /^AC(\d{2}[a-z]?)(?![\w])/.exec(first)?.[1];
       const acceptance = full ?? (shortId ? `${task}-AC${shortId}` : null);
       if (!acceptance) continue;
+      const status = acceptanceStatus(cells);
+      if (status) rowStatuses.push([acceptance, status]);
       for (const stem of unique(
         [...line.matchAll(/docs\/evidence\/live\/([A-Za-z0-9_.-]+)\.md/g)].map((x) => x[1]),
       ))
-        verifications.push([stem, acceptance, path]);
+        verifications.push([stem, acceptance, path, status]);
     }
   }
 
@@ -815,10 +886,14 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
   for (const [stem, card, path] of evidenceCards)
     if (nodes.get(card)?.type === "card") derive(stem, "authorized_by", card, "evidence");
     else legacy(path, `the Approval bullet names ${card}, which has no record`);
-  for (const [stem, acceptance, path] of verifications)
-    if (nodes.get(stem)?.type === "evidence" && nodes.get(acceptance)?.type === "acceptance")
-      derive(stem, "verifies", acceptance, "acceptance table");
-    else legacy(path, `${acceptance} cites ${stem}, and one of them does not resolve`);
+  for (const [acceptance, status] of rowStatuses)
+    if (nodes.get(acceptance)?.type === "acceptance" && nodes.get(acceptance).status === null)
+      nodes.get(acceptance).status = status;
+  for (const [stem, acceptance, path, status] of verifications)
+    if (nodes.get(stem)?.type !== "evidence" || nodes.get(acceptance)?.type !== "acceptance")
+      legacy(path, `${acceptance} cites ${stem}, and one of them does not resolve`);
+    else if (status) derive(acceptance, "mentions", stem, "acceptance table");
+    else derive(stem, "verifies", acceptance, "acceptance table");
 
   // Registries.
   const registry = (rows, path, type, make) => {
@@ -911,7 +986,7 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
         status: data.status ?? null,
         label: data.label ?? null,
         doc: path,
-        docs: data.docs ?? [],
+        docs: docsOf(data),
         header: true,
         headerPath: path,
         body: header.body,
@@ -931,8 +1006,9 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
           if (typeof to === "string") typed.push({ from: node.id, edge, to, origin: path });
     return node;
   };
+  // A README in docs/graph/ or any subfolder is a reference doc, not a node file.
   for (const path of paths) {
-    if (!path.startsWith("docs/graph/") || path === "docs/graph/README.md") continue;
+    if (!path.startsWith("docs/graph/") || posix.basename(path) === "README.md") continue;
     const header = headers.get(path);
     if (!header) {
       report("GRAPH_PARSE", path, "a node file starts with a --- header");
@@ -989,7 +1065,7 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
     });
     for (const key of Object.keys(NODE_TYPES[node.type].fields))
       if (key in data) node.fields[key] = data[key];
-    node.docs.push(...(data.docs ?? []));
+    node.docs.push(...docsOf(data));
     for (const [edge, targets] of Object.entries(isPlainObject(data.links) ? data.links : {}))
       if (edge in EDGES && Array.isArray(targets))
         for (const to of targets)
@@ -998,7 +1074,7 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
   for (const node of nodes.values())
     for (const doc of node.docs)
       if (doc.startsWith(ARCHIVE_PREFIX)) continue;
-      else if (!src.paths.has(doc))
+      else if (!src.paths.has(doc) && !src.exists?.(doc))
         report(
           "GRAPH_UNCLAIMED_DOC",
           node.headerPath ?? node.origin,
@@ -1027,12 +1103,16 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
         derive(evidence, "authorized_by", decision.id, "quote");
   }
 
-  // Typed links from headers: each resolves and connects the types its edge allows.
+  // Typed links from headers: each resolves and connects the types its edge allows. A PR
+  // link without history is kept aside (unresolvedPr), so the rules can tell it apart.
   const lenientPr = new Set();
+  const unresolvedPr = [];
   for (const e of typed) {
     const problem = edgeProblem(nodes, e.from, e.edge, e.to, history.available);
-    if (problem?.[0] === "PR_WITHOUT_HISTORY") lenientPr.add(e.to);
-    else if (problem) report(problem[0], e.origin, `${e.from}: ${problem[1]}`);
+    if (problem?.[0] === "PR_WITHOUT_HISTORY") {
+      lenientPr.add(e.to);
+      unresolvedPr.push(e);
+    } else if (problem) report(problem[0], e.origin, `${e.from}: ${problem[1]}`);
     else edges.push({ ...e, derived: false });
   }
 
@@ -1053,6 +1133,7 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
     const ids = new Set();
     for (const m of text.matchAll(schema.MENTION)) ids.add(m[0]);
     for (const id of letteredIds(text)) ids.add(id);
+    for (const id of parentRangeIds(text)) ids.add(id);
     const prose = text.replace(/`[^`\n]*`/g, "");
     const wiki = new Set([...prose.matchAll(schema.WIKI_LINK)].map((m) => m[1]));
     for (const id of [...ids, ...wiki]) {
@@ -1073,8 +1154,11 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
     }
   }
   for (const [id, subject] of prSubjects)
-    for (const m of subject.matchAll(schema.MENTION))
-      if (nodes.has(m[0]) && !edges.some((e) => e.from === id && e.to === m[0])) mention(id, m[0]);
+    for (const to of [
+      ...[...subject.matchAll(schema.MENTION)].map((m) => m[0]),
+      ...parentRangeIds(subject),
+    ])
+      if (nodes.has(to) && !edges.some((e) => e.from === id && e.to === to)) mention(id, to);
   if (lenientPr.size)
     report(
       "GRAPH_WARN_NO_HISTORY",
@@ -1082,7 +1166,17 @@ export function buildGraph(src, { today = isoToday(), strict = false } = {}) {
       `not resolved without history: ${[...lenientPr].sort().join(", ")}`,
     );
 
-  const graph = indexGraph({ nodes, edges, issues, docOwner, headers, src, today, history });
+  const graph = indexGraph({
+    nodes,
+    edges,
+    issues,
+    docOwner,
+    headers,
+    src,
+    today,
+    history,
+    unresolvedPr,
+  });
   applyRules(graph, report);
   return graph;
 }
@@ -1132,11 +1226,19 @@ export function supersededBasis(graph) {
   return findings;
 }
 
+// Parent tasks that no active feature or track includes or defers, directly or through
+// their package. A dropped feature or track covers nothing.
 export function uncoveredTasks(graph) {
   const covered = new Set();
-  for (const e of graph.edges)
-    if (e.edge === "includes" && ["feature", "track"].includes(graph.nodes.get(e.from)?.type))
+  for (const e of graph.edges) {
+    const from = graph.nodes.get(e.from);
+    if (
+      ["includes", "defers"].includes(e.edge) &&
+      ["feature", "track"].includes(from?.type) &&
+      !schema.INACTIVE_STATUSES.includes(from.status)
+    )
       covered.add(e.to);
+  }
   return [...graph.nodes.values()].filter(
     (n) =>
       n.type === "task" &&
@@ -1265,7 +1367,17 @@ function applyRules(graph, report) {
       const merged = typedOut(graph, node.id, "deleted_by").some(
         (e) => nodes.get(e.to)?.type === "pr" && nodes.get(e.to).status === "merged",
       );
-      if (!merged)
+      // Without history a PR cannot be read back: a deleted_by PR link is then a warning.
+      const unchecked = (graph.unresolvedPr ?? [])
+        .filter((e) => e.from === node.id && e.edge === "deleted_by")
+        .map((e) => e.to);
+      if (!merged && unchecked.length)
+        report(
+          "GRAPH_WARN_NO_HISTORY",
+          where,
+          `${node.id} is live; deleted_by ${unchecked.join(", ")} is not checked without history`,
+        );
+      else if (!merged)
         report("GRAPH_DATA_CLASS", where, `${node.id} is live without deleted_by a merged PR`);
     }
     if (node.type === "agent") {
@@ -1339,8 +1451,9 @@ function applyRules(graph, report) {
       if (node.id === "IK-task-specialist" && field(node, "routable") !== "no")
         report("GRAPH_INSTALLATION_KIND", where, `${node.id} must have routable: no`);
     }
-    // Headers: tenant records, owner quotes, evidence and ADR approvals.
-    if (node.header) {
+    // Headers: tenant records, owner quotes, evidence and ADR approvals. A hand-written
+    // file under docs/graph/ is scanned whole, body included, with the secrets below.
+    if (node.header && !node.headerPath?.startsWith("docs/graph/")) {
       const values = [node.id, node.title, ...Object.values(node.fields).flat(), ...node.docs];
       const header = graph.headers.get(node.headerPath)?.data;
       for (const targets of Object.values(isPlainObject(header?.links) ? header.links : {}))
@@ -1350,6 +1463,8 @@ function applyRules(graph, report) {
           report("GRAPH_TENANT_RECORD", where, `${node.id}: a value looks like a tenant record id`);
           break;
         }
+    }
+    if (node.header) {
       if (node.type === "decision" && field(node, "by") === "owner") {
         const missing = ["date", "channel"].filter((k) => !field(node, k));
         if (!/^>\s*\S/m.test(node.body ?? "")) missing.push("a blockquote with the verbatim words");
@@ -1385,13 +1500,21 @@ function applyRules(graph, report) {
         path,
         "new MVP work uses the graph and a brief; a packet declares kind: security",
       );
-  // Secrets and email addresses: the hand-written graph and every header.
+  // Secrets: the hand-written graph and every header. Email addresses: the whole text of
+  // every governed doc (the graph, ADRs, packets, briefs, evidence, acceptance) and every
+  // header. Tenant record ids: the whole text of the hand-written graph (other headers are
+  // checked above).
   for (const [path, text] of src.files) {
-    const scope = path.startsWith("docs/graph/") ? text : graph.headers.get(path)?.raw;
-    if (!scope) continue;
-    for (const kind of inspectSecrets(scope))
-      report("GRAPH_SECRET", path, `matches the ${kind} pattern`);
-    if (schema.EMAIL.test(scope)) report("GRAPH_EMAIL", path, "holds an email address");
+    const handWritten = path.startsWith("docs/graph/");
+    const header = graph.headers.get(path)?.raw;
+    const scope = handWritten ? text : header;
+    if (scope)
+      for (const kind of inspectSecrets(scope))
+        report("GRAPH_SECRET", path, `matches the ${kind} pattern`);
+    if (emailsIn(GOVERNED.some((dir) => path.startsWith(dir)) ? text : (header ?? "")).length)
+      report("GRAPH_EMAIL", path, "holds an email address");
+    if (handWritten && schema.TENANT_RECORD.some((p) => p.test(text)))
+      report("GRAPH_TENANT_RECORD", path, "a value looks like a tenant record id");
   }
   // Generated blocks.
   const readme = src.files.get("docs/graph/README.md");
@@ -2175,10 +2298,11 @@ export function show(graph, id, { depth = 1, json = false, all = false } = {}) {
     );
   const title = (x) => short(graph.nodes.get(x)?.title ?? "", 70);
   const lines = [`${node.id}  ${node.type}  ${node.title ?? ""}`];
+  // A track's, gate's or milestone's label is also one of its fields; it is shown once.
   const facts = [
     ["status", node.status],
     ["label", node.label],
-    ...Object.entries(node.fields),
+    ...Object.entries(node.fields).filter(([k]) => k !== "label"),
   ].filter(([, v]) => v !== null && v !== undefined);
   for (const [k, v] of facts) lines.push(`  ${k}: ${Array.isArray(v) ? v.join(", ") : v}`);
   if (node.doc) lines.push(`  doc: ${node.doc}${node.header ? "" : " (no header yet)"}`);
@@ -2201,11 +2325,19 @@ export function show(graph, id, { depth = 1, json = false, all = false } = {}) {
   if (children.length) {
     lines.push(`parts (${children.length}):`);
     for (const e of children) {
-      const proof = (graph.in.get(e.from) ?? []).filter(
-        (x) => x.edge === "verifies" || x.edge === "implements",
-      );
+      const part = graph.nodes.get(e.from);
+      // An open or deferred acceptance row only cites its records; it is never "verified".
+      const facts = [
+        ...(part?.type === "acceptance" && part.status ? [part.status] : []),
+        ...(graph.in.get(e.from) ?? [])
+          .filter((x) => x.edge === "verifies" || x.edge === "implements")
+          .map((x) => `${x.edge === "verifies" ? "verified" : "implemented"} by ${x.from}`),
+        ...(graph.out.get(e.from) ?? [])
+          .filter((x) => x.edge === "mentions" && graph.nodes.get(x.to)?.type === "evidence")
+          .map((x) => `cites ${x.to}`),
+      ];
       lines.push(
-        `  ${e.from.padEnd(18)}${short(graph.nodes.get(e.from)?.title ?? "", 50).padEnd(52)}${proof.map((x) => `${x.edge === "verifies" ? "verified" : "implemented"} by ${x.from}`).join("; ")}`.trimEnd(),
+        `  ${e.from.padEnd(18)}${short(part?.title ?? "", 50).padEnd(52)}${facts.join("; ")}`.trimEnd(),
       );
     }
   }
@@ -2452,6 +2584,10 @@ function setCommand(graph, [id, ...pairs]) {
   const changes = pairs.map((pair) => {
     const m = /^([a-z_]+)=(.+)$/s.exec(pair);
     if (!m) throw usage(`${JSON.stringify(pair)} is not <field>=<value>`);
+    // An id or type change would move the node and strand its backlinks; links and docs
+    // are lists that link, unlink and the node file hold.
+    if (["id", "type", "links", "docs"].includes(m[1]))
+      throw usage(`set does not change ${m[1]}${m[1] === "links" ? " (use link or unlink)" : ""}`);
     return [m[1], m[2]];
   });
   const node = graph.nodes.get(id);
@@ -2464,7 +2600,9 @@ function setCommand(graph, [id, ...pairs]) {
       throw new GraphUsageError("GRAPH_STATUS", `${changes[0][1]} is not a task status`);
     const path = join(root, "docs/progress/tasks.json");
     const tasks = JSON.parse(readFileSync(path, "utf8"));
-    tasks.tasks.find((t) => t.id === id).status = changes[0][1];
+    const task = Array.isArray(tasks?.tasks) ? tasks.tasks.find((t) => t?.id === id) : undefined;
+    if (!task) throw new GraphUsageError("GRAPH_TASK_STATUS_DRIFT", `${id} is not in tasks.json`);
+    task.status = changes[0][1];
     writeFileSync(path, JSON.stringify(tasks, null, 2) + "\n");
     return `${id} status ${changes[0][1]} (docs/progress/tasks.json)`;
   }

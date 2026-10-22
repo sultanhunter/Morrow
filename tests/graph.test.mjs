@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  acceptanceStatus,
   buildGraph,
   graphJson,
   mermaid,
@@ -27,8 +28,10 @@ import {
   splitHeader,
   statusDrift,
   typeOfId,
+  uncoveredTasks,
 } from "../scripts/graph.mjs";
 import * as schema from "../scripts/graph-schema.mjs";
+import { adrNumbers } from "../scripts/plan-check.mjs";
 
 const TODAY = "2026-10-23";
 const QUOTE =
@@ -44,8 +47,10 @@ function baseFiles() {
 ### Package 01 implementation tasks
 
 1. **P01.T01 Catalogue.** Build the catalogue.
-2. **P01.T02 State.** Shared state.
+2. **P01.T02 — State.** Shared state.
    - **P01.T02a Contract child.** The first slice.
+   - **P01.T02d** Text after the span. More text.
+   - **P01.T02e + P01.T02f** Shared work; more.
 
 - **P01.A01** Given a catalogue, when it is checked, then it passes.
 
@@ -120,7 +125,7 @@ Connect, under ADR-0001.
 | Case | Evidence |
 | --- | --- |
 | AC01 contract shape | \`docs/evidence/live/2026-10-21-probe.md\` |
-| AC02 fixtures | unit tests |
+| AC02 fixtures | Open. Planned with \`docs/evidence/live/2026-10-21-probe.md\` |
 `,
     "docs/decisions/approvals/staging-card.json": JSON.stringify({
       schemaVersion: 1,
@@ -171,7 +176,7 @@ Connect, under ADR-0001.
     ),
     "docs/graph/risks/RISK-drift.md": node(
       "id: RISK-drift\ntype: risk\ntitle: Docs drift\nstatus: open\nlinks:\n  raised_by: [OD-2026-10-22-1]\n  about: [ADR-0001, docs/progress/STATUS.md]\n  mitigated_by: [Q-scope]",
-      "\nThe status page lags (P01.T02a–T02a).\n",
+      "\nThe status page lags (P01.T02a–T02a), across P01.T01-T02.\n",
     ),
     "docs/graph/features/F-gateway.md": node(
       'id: F-gateway\ntype: feature\ntitle: Gateway\nstatus: planned\nmust: "yes"\nlinks:\n  part_of: [V-morrow]\n  includes: [P01.T02]\n  depends_on: [Q-scope]',
@@ -247,8 +252,16 @@ const HISTORY = {
   ],
 };
 
-// The in-memory twin of readSources.
-function makeSrc(files, { history = HISTORY, code = new Map(), root = "/nonexistent" } = {}) {
+// The in-memory twin of readSources. `existing` lists files outside docs/ that exist.
+function makeSrc(
+  files,
+  {
+    history = HISTORY,
+    code = new Map(),
+    root = "/nonexistent",
+    existing = ["apps/api/package.json"],
+  } = {},
+) {
   const md = new Map(
     Object.entries(files)
       .filter(([path]) => path.endsWith(".md"))
@@ -259,6 +272,7 @@ function makeSrc(files, { history = HISTORY, code = new Map(), root = "/nonexist
     root,
     files: md,
     paths: new Set(Object.keys(files)),
+    exists: (path) => existing.includes(path),
     plan: md.get("docs/plan/build-plan.md") ?? "",
     tasks: json("docs/progress/tasks.json", { tasks: [], acceptance_ids: [] }),
     dependencies: json("docs/decisions/dependencies.json", []),
@@ -527,6 +541,10 @@ test("the plan: packages, tasks, lettered children, plan acceptance and golden-p
   assert.equal(n("P01.T01").title, "Catalogue");
   assert.equal(n("P01.T01").status, "Verified");
   assert.equal(n("P01.T02a").title, "Contract child");
+  assert.equal(n("P01.T02").title, "State", "the dash before a parent title is not the title");
+  assert.equal(n("P01.T02d").title, "Text after the span", "a span of ids only");
+  assert.equal(n("P01.T02e").title, "Shared work", "ids joined by +");
+  assert.equal(n("P01.T02f").title, "Shared work");
   assert.ok(edgeIn(graph, "P01.T02a", "part_of", "P01.T02"));
   assert.ok(edgeIn(graph, "P01.A01", "part_of", "P01"));
   assert.equal(n("GP2").label, "M2");
@@ -541,6 +559,9 @@ test("the plan: packages, tasks, lettered children, plan acceptance and golden-p
     "P11.T03a",
     "P14.T01a",
   ]);
+  // A parent range takes a hyphen or an en dash.
+  for (const range of ["P11.T01-T03", "P11.T01–T03", "see P11.T01–T03."])
+    assert.deepEqual(planIdsIn(range), ["P11.T01", "P11.T02", "P11.T03"], range);
   const collision = graph.issues.find((i) => i.code === "GRAPH_WARN_LABEL_COLLISION");
   assert.match(
     collision.message,
@@ -574,6 +595,35 @@ test("packets, briefs, ADR headers, evidence, acceptance tables, cards and regis
     edgeIn(graph, "2026-10-21-probe", "verifies", "P01.T02a-AC01"),
     "short AC id under its task heading",
   );
+  // An Open row only cites the record it names: the acceptance is open, never verified.
+  assert.equal(n("P01.T02a-AC02").status, "open");
+  assert.equal(n("P01.T02a-AC01").status, null);
+  assert.ok(!edgeIn(graph, "2026-10-21-probe", "verifies", "P01.T02a-AC02"));
+  assert.ok(edgeIn(graph, "P01.T02a-AC02", "mentions", "2026-10-21-probe"));
+  assert.equal(acceptanceStatus(["Open. Planned with `docs/x.md`"]), "open");
+  assert.equal(acceptanceStatus(["**Open:** after PR-C"]), "open");
+  assert.equal(acceptanceStatus(["Not done; moved to packet PR-3."]), "open");
+  assert.equal(
+    acceptanceStatus(["`tests/x.test.mjs`", "*Deferred past launch* (ADR-0021)."]),
+    "deferred",
+  );
+  for (const cells of [
+    ["Open the inbox from the link"],
+    ["Opened by PR-2"],
+    ["`tests/x.test.mjs`"],
+    [],
+  ])
+    assert.equal(acceptanceStatus(cells), null, JSON.stringify(cells));
+  const deferred = baseFiles();
+  edit(
+    deferred,
+    "docs/acceptance/P01.md",
+    "| AC01 contract shape | ",
+    "| AC01 contract shape | *Deferred past launch*; ",
+  );
+  const later = graphOf(deferred);
+  assert.equal(later.nodes.get("P01.T02a-AC01").status, "deferred");
+  assert.ok(!edgeIn(later, "2026-10-21-probe", "verifies", "P01.T02a-AC01"));
   assert.equal(n("2026-10-21-probe").fields.unknown_outcome, "none");
   assert.equal(n("2026-10-22-retry").fields.unknown_outcome, "closed");
   assert.equal(n("2026-10-22-open").fields.unknown_outcome, "open");
@@ -619,6 +669,34 @@ test("merged PRs: the subject's label implements, later ids are mentions, files 
     shallow.issues.some((i) => i.code === "GRAPH_WARN_NO_HISTORY" && i.message.includes("PR-7")),
   );
   assert.deepEqual(codes(graphOf(files), "error"), ["GRAPH_LINK_DANGLING"]);
+  // A live data class whose deleted_by PR cannot be read back without history is a
+  // warning that names the PR, never GRAPH_DATA_CLASS.
+  edit(files, "docs/graph/data/DC-customer-mail.md", "status: planned", "status: live");
+  const shallowLive = graphOf(files, {
+    history: { available: false, reason: "shallow clone", commits: [] },
+  });
+  assert.deepEqual(codes(shallowLive, "error"), []);
+  assert.ok(
+    shallowLive.issues.some(
+      (i) =>
+        i.code === "GRAPH_WARN_NO_HISTORY" &&
+        i.where === "docs/graph/data/DC-customer-mail.md" &&
+        /DC-customer-mail is live; deleted_by PR-7 is not checked without history/.test(i.message),
+    ),
+  );
+  // Without any PR link, a live data class is still an error, with or without history.
+  const noPr = baseFiles();
+  edit(noPr, "docs/graph/data/DC-customer-mail.md", "status: planned", "status: live");
+  for (const history of [HISTORY, { available: false, reason: "shallow clone", commits: [] }])
+    assert.deepEqual(codes(graphOf(noPr, { history }), "error"), ["GRAPH_DATA_CLASS"]);
+  // With history, a merged PR satisfies it.
+  edit(
+    noPr,
+    "docs/graph/data/DC-customer-mail.md",
+    "deleted_by: [TRK-privacy]",
+    "deleted_by: [TRK-privacy, PR-2]",
+  );
+  assert.deepEqual(codes(graphOf(noPr), "error"), []);
 });
 
 test("mentions: unambiguous ids, ranges, [[wiki]] links and paths; fences and generated blocks are not links", () => {
@@ -629,6 +707,17 @@ test("mentions: unambiguous ids, ranges, [[wiki]] links and paths; fences and ge
   );
   assert.ok(edgeIn(graph, "M2", "mentions", "ADR-0001"));
   assert.ok(edgeIn(graph, "RISK-drift", "mentions", "P01.T02a"), "a lettered range");
+  assert.ok(
+    edgeIn(graph, "RISK-drift", "mentions", "P01.T01") &&
+      edgeIn(graph, "RISK-drift", "mentions", "P01.T02"),
+    "a parent range in prose",
+  );
+  const dashed = baseFiles();
+  dashed["docs/graph/risks/RISK-drift.md"] = dashed["docs/graph/risks/RISK-drift.md"].replace(
+    "across P01.T01-T02.",
+    "across P01.T01–T02.",
+  );
+  assert.ok(edgeIn(graphOf(dashed), "RISK-drift", "mentions", "P01.T02"), "an en-dash range");
   assert.ok(edgeIn(graph, "V-morrow", "mentions", "S01"), "[[S01]]");
   assert.ok(
     edgeIn(graph, "V-morrow", "mentions", "docs/decisions/adr/README.md"),
@@ -727,11 +816,204 @@ test("queries: open, ready, gates, critical, slip, data, skills, ceiling, uncove
   const shown = show(graph, "P01.T02a");
   assert.match(shown, /implements +PR-2/);
   assert.match(shown, /P01\.T02a-AC01 +Contract shape +verified by 2026-10-21-probe/);
+  assert.match(shown, /P01\.T02a-AC02 +Fixtures +open; cites 2026-10-21-probe$/m);
+  assert.doesNotMatch(shown, /P01\.T02a-AC02[^\n]*verified/);
+  assert.match(show(graph, "TRK-privacy"), /^ {2}label: T14$/m);
+  assert.equal(show(graph, "TRK-privacy").match(/^ {2}label:/gm).length, 1, "the label once");
   assert.match(mermaid(graph, "OD-2026-10-22-1"), /^flowchart LR\n[\s\S]*-->\|supersedes\|/);
   const drift = statusDrift(graph).join("\n");
   assert.match(drift, /says `main` is at `1111111`; the latest merged PR is PR-2 at `bbbbbbb`/);
   assert.match(drift, /never names merged PR-1\./);
   assert.match(drift, /lists PR-2 under "In progress", but it is merged/);
+});
+
+test("query uncovered: a dropped feature or track covers nothing; defers covers by name", () => {
+  const files = baseFiles();
+  const uncovered = (graph) => uncoveredTasks(graph).map((n) => n.id);
+  assert.deepEqual(uncovered(graphOf(files)), []);
+  edit(files, "docs/graph/features/F-gateway.md", "status: planned", "status: dropped");
+  let graph = graphOf(files);
+  assert.deepEqual(codes(graph, "error"), []);
+  assert.deepEqual(uncovered(graph), ["P01.T02"]);
+  assert.match(query(graph, "uncovered", [], new Map()), /P01\.T02/);
+  edit(
+    files,
+    "docs/graph/tracks/TRK-privacy.md",
+    "includes: [P01.T01]",
+    "includes: [P01.T01]\n  defers: [P01.T02]",
+  );
+  graph = graphOf(files);
+  assert.deepEqual(codes(graph, "error"), []);
+  assert.ok(edgeIn(graph, "TRK-privacy", "defers", "P01.T02"));
+  assert.deepEqual(uncovered(graph), []);
+  assert.match(
+    query(graph, "uncovered", [], new Map()),
+    /Every plan task is included or deferred by name/,
+  );
+  // A package named by an active track covers its tasks.
+  edit(files, "docs/graph/tracks/TRK-privacy.md", "defers: [P01.T02]", "defers: [P01]");
+  assert.deepEqual(uncovered(graphOf(files)), []);
+  edit(files, "docs/graph/tracks/TRK-privacy.md", "status: proposed", "status: dropped");
+  assert.deepEqual(uncovered(graphOf(files)), ["P01.T01", "P01.T02"]);
+});
+
+test("warnings at their boundaries: stale work, expiring cards, overdue gates, uncovered tasks", () => {
+  const at = (today, files = baseFiles()) => buildGraph(makeSrc(files), { today });
+  const warned = (graph, code, where) =>
+    graph.issues.some((i) => i.code === code && i.where === where && i.severity === "warning");
+  for (const code of [
+    "GRAPH_WARN_STALE_ACTIVE",
+    "GRAPH_WARN_CARD_EXPIRING",
+    "GRAPH_WARN_GATE_OVERDUE",
+    "GRAPH_WARN_PLAN_UNCOVERED",
+  ])
+    assert.ok(!at(TODAY).issues.some((i) => i.code === code), `the fixture has no ${code}`);
+  // P01.T02 is In progress; PR-2 implements its child P01.T02a on 2026-10-21.
+  assert.ok(!warned(at("2026-10-28"), "GRAPH_WARN_STALE_ACTIVE", "P01.T02"), "7 days");
+  assert.ok(warned(at("2026-10-29"), "GRAPH_WARN_STALE_ACTIVE", "P01.T02"), "8 days");
+  assert.match(
+    at("2026-10-29").issues.find((i) => i.code === "GRAPH_WARN_STALE_ACTIVE").message,
+    /^P01\.T02 is In progress with no PR or evidence since 2026-10-22$/,
+  );
+  // staging-card-1 is approved and expires 2026-11-18.
+  assert.ok(!warned(at("2026-11-03"), "GRAPH_WARN_CARD_EXPIRING", "staging-card-1"), "15 days");
+  assert.ok(warned(at("2026-11-04"), "GRAPH_WARN_CARD_EXPIRING", "staging-card-1"), "14 days");
+  const revoked = baseFiles();
+  edit(revoked, "docs/decisions/approvals/staging-card.json", '"approved"', '"revoked"');
+  assert.ok(!warned(at("2026-11-04", revoked), "GRAPH_WARN_CARD_EXPIRING", "staging-card-1"));
+  // A gate due W0 (the week from WEEK_ZERO, Monday 2026-10-26) is overdue from 2026-11-02.
+  assert.equal(schema.WEEK_ZERO, "2026-10-26");
+  const gate = baseFiles();
+  edit(gate, "docs/graph/gates/GATE-launch.md", "due_week: W18", "due_week: W0");
+  assert.ok(!warned(at("2026-11-01", gate), "GRAPH_WARN_GATE_OVERDUE", "GATE-launch"));
+  assert.ok(warned(at("2026-11-02", gate), "GRAPH_WARN_GATE_OVERDUE", "GATE-launch"));
+  edit(gate, "docs/graph/gates/GATE-launch.md", "status: open", "status: passed");
+  assert.ok(!warned(at("2026-11-02", gate), "GRAPH_WARN_GATE_OVERDUE", "GATE-launch"));
+  // A plan task no feature or track includes.
+  const plan = baseFiles();
+  edit(plan, "docs/graph/tracks/TRK-privacy.md", "\nlinks:\n  includes: [P01.T01]", "");
+  const graph = at(TODAY, plan);
+  assert.deepEqual(codes(graph, "error"), []);
+  assert.ok(warned(graph, "GRAPH_WARN_PLAN_UNCOVERED", "P01.T01"));
+  assert.ok(!warned(graph, "GRAPH_WARN_PLAN_UNCOVERED", "P01.T02"));
+});
+
+test("docs entries: repository paths only; a file outside docs/ that exists is claimed", () => {
+  const withDocs = (value) => {
+    const files = baseFiles();
+    edit(files, "docs/graph/risks/RISK-drift.md", "status: open", `status: open\n${value}`);
+    return files;
+  };
+  let graph = graphOf(withDocs("docs: [apps/api/package.json]"), { strict: true });
+  assert.deepEqual(codes(graph, "error"), []);
+  assert.deepEqual(graph.nodes.get("RISK-drift").docs, ["apps/api/package.json"]);
+  graph = graphOf(withDocs("docs: [apps/api/missing.json]"), { strict: true });
+  assert.deepEqual(codes(graph, "error"), ["GRAPH_UNCLAIMED_DOC"]);
+  for (const value of [
+    "docs: [../outside.md]",
+    "docs: [/etc/hosts]",
+    "docs: [docs/../CLAUDE.md]",
+    "docs: [docs/a b.md]",
+    "docs: some/path.md",
+    "docs:\n  a: b",
+  ]) {
+    graph = graphOf(withDocs(value), { strict: true });
+    assert.deepEqual(codes(graph, "error"), ["GRAPH_FIELD"], value);
+    assert.deepEqual(graph.nodes.get("RISK-drift").docs, [], value);
+  }
+  // On disk, readSources answers for files outside docs/.
+  const dir = mkdtempSync(join(tmpdir(), "morrow-graph-docs-"));
+  try {
+    writeTree(dir, { "apps/api/package.json": "{}\n", "docs/x.md": "# X\n" });
+    const src = readSources(dir);
+    assert.equal(src.exists("apps/api/package.json"), true);
+    assert.equal(src.exists("apps/api"), false, "a directory is not a doc");
+    assert.equal(src.exists("apps/api/missing.json"), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("README files in docs/evidence/live/ and in docs/graph/ folders are reference docs", () => {
+  const files = baseFiles();
+  files["docs/evidence/live/README.md"] = "# Live records\n\nOne file per live effect.\n";
+  files["docs/graph/decisions/README.md"] = "# Owner decisions\n\nOne file per decision.\n";
+  files["docs/graph/vision/V-morrow.md"] +=
+    "\nThe indexes: `docs/evidence/live/README.md` and `docs/graph/decisions/README.md`.\n";
+  for (const strict of [false, true])
+    assert.deepEqual(codes(graphOf(files, { strict }), "error"), [], `strict ${strict}`);
+  const graph = graphOf(files);
+  for (const path of ["docs/evidence/live/README.md", "docs/graph/decisions/README.md"])
+    assert.equal(graph.nodes.get(path)?.type, "reference", path);
+});
+
+test("GRAPH_IMPORTED_BY_CODE: the graph's own script and folders only", () => {
+  const unrelated = new Map([
+    [
+      "apps/api/src/codegen.ts",
+      'import "../scripts/graphql-codegen.mjs";\nconst a = "scripts/graphics.ts";\nconst b = "../../scripts/graphql/";\nconst c = "my-graph-schema.mjs.bak";\n',
+    ],
+  ]);
+  assert.deepEqual(codes(graphOf(baseFiles(), { code: unrelated }), "error"), []);
+  for (const reference of [
+    '"../../scripts/graph.mjs"',
+    '"../scripts/graph"',
+    "'scripts/graph-schema.mjs'",
+    "`../docs/graph/agents`",
+    '".artifacts/graph/graph.json"',
+    '"graph-schema.mjs"',
+  ]) {
+    const code = new Map([["packages/work/src/view.ts", `export const p = ${reference};\n`]]);
+    assert.deepEqual(
+      codes(graphOf(baseFiles(), { code }), "error"),
+      ["GRAPH_IMPORTED_BY_CODE"],
+      reference,
+    );
+  }
+});
+
+test("dates: an impossible calendar day is a field or usage error, never a crash", () => {
+  const files = baseFiles();
+  edit(files, "docs/graph/decisions/OD-2026-10-22-1.md", "date: 2026-10-22", "date: 2026-13-01");
+  const errors = codes(graphOf(files), "error");
+  assert.ok(errors.length > 0 && errors.every((c) => c === "GRAPH_FIELD"), errors.join());
+  const card = baseFiles();
+  edit(card, "docs/decisions/approvals/staging-card.json", "2026-11-18", "2026-11-32");
+  const graph = graphOf(card);
+  assert.equal(graph.nodes.get("staging-card-1").fields.expires_on, undefined);
+  for (const today of ["2026-13-01", "2026-00-10", "2026-10-32", "2026-02-30", "26-10-23"]) {
+    let err = "";
+    const code = run(["check", "--today", today], { out: () => {}, err: (t) => (err += t) });
+    assert.equal(code, 2, today);
+    assert.match(err, /^GRAPH_USAGE: --today is YYYY-MM-DD/, today);
+  }
+});
+
+test("the hand-written graph is scanned whole for tenant records; governed docs for addresses", () => {
+  for (const body of [
+    "\nSeen on acme.myshopify.com.\n",
+    "\nThe product gid://shopify/Product/123.\n",
+    "\nWorkspace 123e4567-e89b-42d3-a456-426614174000.\n",
+  ]) {
+    const files = baseFiles();
+    files["docs/graph/risks/RISK-drift.md"] += body;
+    assert.deepEqual(codes(graphOf(files), "error"), ["GRAPH_TENANT_RECORD"], body);
+  }
+  // Email addresses: the body of every governed doc, not only the graph and headers.
+  const mail = (address) => {
+    const files = baseFiles();
+    files["docs/evidence/live/2026-10-21-probe.md"] += `\nSigned in as ${address}.\n`;
+    files["docs/decisions/adr/ADR-0002-next.md"] += "\nThe `ApprovalRecord@2.scopeDigest` field.\n";
+    return codes(graphOf(files), "error");
+  };
+  assert.deepEqual(mail(`someone${"@"}mail.example.com`), ["GRAPH_EMAIL"]);
+  for (const address of ["probe@example.invalid", "x@lab.test", "a@b.example", "c@localhost"])
+    assert.deepEqual(mail(address), [], address);
+  // Outside the governed folders only a header counts.
+  const reference = baseFiles();
+  reference["docs/references/notes.md"] = `# Notes\n\nWrite to someone${"@"}mail.example.com.\n`;
+  reference["docs/graph/vision/V-morrow.md"] += "\nSee `docs/references/notes.md`.\n";
+  assert.deepEqual(codes(graphOf(reference), "error"), []);
 });
 
 test("graph.json and graph.html: inline data, the pinned script, nothing that closes the script", () => {
@@ -902,6 +1184,29 @@ test("the command line on a temporary checkout: check, add, link, set, status, r
     assert.equal(cli("set", "RISK-new", "status=mitigated"), 0, err);
     assert.equal(cli("set", "RISK-new", "status=gone"), 2);
     assert.match(err, /^GRAPH_STATUS/);
+    // set never moves a node or edits its lists: the file stays as it was.
+    const riskPath = join(dir, "docs/graph/risks/RISK-new.md");
+    const riskBefore = readFileSync(riskPath, "utf8");
+    for (const pair of ["id=RISK-other", "type=question", "links=ADR-0001", "docs=docs/x.md"]) {
+      assert.equal(cli("set", "RISK-new", "title=Renamed", pair), 2, pair);
+      assert.match(err, /^GRAPH_USAGE: set does not change /, pair);
+    }
+    assert.match(err, /docs$/m);
+    assert.equal(cli("set", "RISK-new", "links=ADR-0001"), 2);
+    assert.match(err, /use link or unlink/);
+    assert.equal(readFileSync(riskPath, "utf8"), riskBefore);
+    assert.ok(!existsSync(join(dir, "docs/graph/risks/RISK-other.md")));
+    assert.equal(cli("set", "P01.T02a", "id=P01.T02b"), 2);
+    // A parent task the plan defines but tasks.json lacks: a fixed code, not a crash.
+    const tasksPath = join(dir, "docs/progress/tasks.json");
+    const tasksBefore = readFileSync(tasksPath, "utf8");
+    const tasks = JSON.parse(tasksBefore);
+    tasks.tasks = tasks.tasks.filter((t) => t.id !== "P01.T02");
+    writeFileSync(tasksPath, JSON.stringify(tasks));
+    assert.equal(cli("set", "P01.T02", "status=Verified"), 2);
+    assert.match(err, /^GRAPH_TASK_STATUS_DRIFT: P01\.T02 is not in tasks\.json/);
+    assert.equal(readFileSync(tasksPath, "utf8"), JSON.stringify(tasks));
+    writeFileSync(tasksPath, tasksBefore);
 
     assert.equal(cli("status", "--write"), 2);
     assert.match(err, /^GRAPH_STATUS_MARKERS/);
@@ -963,10 +1268,13 @@ test("this repository: graph:check has no errors, and the derived inventory is c
     count((n) => n.type === "acceptance" && /^P\d{2}\.A\d{2}$/.test(n.id)),
     73,
   );
+  // Every ADR file on disk is a node; the count grows with each new record.
   assert.equal(
     count((n) => n.type === "adr" && /^ADR-\d{4}$/.test(n.id)),
-    22,
+    adrNumbers("docs/decisions/adr").size,
   );
+  for (const node of graph.nodes.values())
+    if (node.type === "adr" && /^ADR-\d{4}$/.test(node.id)) assert.ok(node.status, node.id);
   assert.equal(
     count((n) => n.type === "milestone" && /^GP\d$/.test(n.id)),
     5,
@@ -978,10 +1286,31 @@ test("this repository: graph:check has no errors, and the derived inventory is c
     "OD-2026-10-22-2",
     "OD-2026-10-23-1",
     "OD-2026-10-23-2",
+    "OD-2026-10-23-3",
     "Q-mvp-scope-adr",
     "RISK-launch-target-drift",
+    "TRK-project-graph",
   ])
     assert.ok(graph.nodes.get(id)?.header, id);
+  // Owner quotes are verbatim: each one that ADR-0023's Approval section holds approves it.
+  for (const decision of ["OD-2026-10-22-2", "OD-2026-10-23-1", "OD-2026-10-23-3"])
+    assert.ok(edgeIn(graph, "ADR-0023", "approved_by", decision), decision);
+  // Derived task titles are titles: no leading dash, never just the ids of the span.
+  for (const node of graph.nodes.values())
+    if (node.type === "task") {
+      assert.doesNotMatch(node.title ?? "", /^[—–-]/, node.id);
+      assert.doesNotMatch(
+        node.title ?? "",
+        /^(?:(?:then|and)\s+)?P\d{2}\.T\d{2}[a-z]*(?:\s*[+,]\s*P\d{2}\.T\d{2}[a-z]*)*$/,
+        node.id,
+      );
+    }
+  // An Open or Deferred acceptance row cites its records; nothing verifies it.
+  const acceptance = [...graph.nodes.values()].filter((n) => n.type === "acceptance");
+  assert.ok(acceptance.some((n) => n.status === "open"));
+  for (const node of acceptance)
+    if (["open", "deferred"].includes(node.status))
+      assert.ok(!(graph.in.get(node.id) ?? []).some((e) => e.edge === "verifies"), node.id);
 });
 
 test("this repository: P04.T01i shows its PRs, acceptance ids and the M-O1 evidence", () => {
@@ -991,6 +1320,8 @@ test("this repository: P04.T01i shows its PRs, acceptance ids and the M-O1 evide
     shown,
     /P04\.T01i-AC13 +Redaction +verified by 2026-10-21-cloudflare-m-o1-log-probe/,
   );
+  for (const line of shown.split("\n").filter((l) => /^ {2}P04\.T01i-AC/.test(l)))
+    assert.doesNotMatch(line, / (?:open|deferred)(?:;|$).*verified by/, line);
   assert.ok(
     edgeIn(graph, "2026-10-21-cloudflare-m-o1-log-probe", "authorized_by", "staging-card-1"),
   );
@@ -1010,11 +1341,11 @@ test("this repository: query open lists the MVP ADR question and ADR-0021's supe
 
 test("this repository: the ADR index renders in the form the README rows take", () => {
   const rows = renderAdrIndex(repo()).split("\n");
-  assert.equal(rows.length, 22);
+  assert.equal(rows.length, adrNumbers("docs/decisions/adr").size);
   for (const row of rows)
     assert.match(
       row,
-      /^\| \[(\d{4})\]\(ADR-\1-[a-z0-9-]+\.md\) \| [^|]+ \| (Accepted|Superseded)[^|]* \|$/,
+      /^\| \[(\d{4})\]\(ADR-\1-[a-z0-9-]+\.md\) \| [^|]+ \| [^|]*\b(?:accepted|superseded|proposed|draft|rejected)\b[^|]* \|$/i,
     );
   const readme = readFileSync("docs/decisions/adr/README.md", "utf8");
   for (const row of rows) assert.ok(readme.includes(row.split(" | ")[0]), row);

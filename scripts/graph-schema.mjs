@@ -333,6 +333,13 @@ export const EDGES = Object.freeze({
       ["task", "package"],
     ],
   ],
+  // Plan work a feature or track names and leaves until after launch (query uncovered).
+  defers: [
+    [
+      ["feature", "track"],
+      ["task", "package"],
+    ],
+  ],
   delivers: [
     [
       ["track", "milestone"],
@@ -428,7 +435,10 @@ export const TENANT_RECORD = Object.freeze([
   /\bgid:\/\/shopify\//i,
   /\b[a-z0-9][a-z0-9-]*\.myshopify\.com\b/i,
 ]);
-export const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/;
+// The domain's first label holds a letter, so a versioned contract field such as
+// `ApprovalRecord@2.scopeDigest` is not an address.
+export const EMAIL =
+  /[A-Za-z0-9._%+-]+@(?=[A-Za-z0-9-]*[A-Za-z])[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/;
 
 // Packets and acceptance files that exist at phase 0. Any other one must declare
 // `kind: security` (GRAPH_NEW_PACKET): new MVP work uses the graph and one-page briefs.
@@ -473,20 +483,23 @@ export const ERRORS = Object.freeze({
   GRAPH_STATUS: "Status values come from the type's list",
   GRAPH_TASK_STATUS_DRIFT: "Parent task statuses equal tasks.json, and both list the same tasks",
   GRAPH_GATE_FIELDS: "An open gate has owner_kind and due_week",
-  GRAPH_DATA_CLASS: "A live data class has a deleted_by link to a merged PR",
+  GRAPH_DATA_CLASS:
+    "A live data class has a deleted_by link to a merged PR (without history, a PR link is a warning)",
   GRAPH_SKILL_ELIGIBLE:
     "A skill a task_specialist composes is specialist_eligible and holds no customer data class",
   GRAPH_AGENT_KIND:
     "delegates_to starts at a builtin agent; a task_specialist delegates nothing and never_holds workspace.task.delegate; bundles starts at an installable agent",
   GRAPH_INSTALLATION_KIND:
     "triggers need a mandate; routable needs triggers or a mandate; IK-task-specialist is not routable",
-  GRAPH_TENANT_RECORD: "No node id or field looks like a tenant record id",
+  GRAPH_TENANT_RECORD:
+    "No node id or field, and nothing in a hand-written graph file, looks like a tenant record id",
   GRAPH_DECISION_QUOTE: "An owner decision has a date, a channel and a blockquote",
   GRAPH_EVIDENCE_AUTH: "Evidence with a header has authorized_by and an unknown_outcome value",
   GRAPH_ADR_APPROVAL: "An accepted ADR with a header has approved_by",
   GRAPH_NEW_PACKET: "A new packet or acceptance file declares kind: security",
   GRAPH_SECRET: "No known secret pattern in the hand-written graph or any frontmatter",
-  GRAPH_EMAIL: "No email address in the hand-written graph or any frontmatter",
+  GRAPH_EMAIL:
+    "No email address in a governed doc or any frontmatter (reserved test domains such as .invalid are allowed)",
   GRAPH_STALE_GENERATED: "Generated blocks (graph README schema, ADR index) are fresh",
   GRAPH_STATUS_LINES: "STATUS.md is at most 80 lines",
   GRAPH_IMPORTED_BY_CODE: "Nothing in apps/ or packages/ imports the graph",
@@ -501,5 +514,6 @@ export const WARNINGS = Object.freeze({
   GRAPH_WARN_LABEL_COLLISION: "Two milestones share a label (M2 to M5: beta and golden path)",
   GRAPH_WARN_LEGACY_MENTION:
     "A doc without a header mentions an id that does not resolve (an error once it has one)",
-  GRAPH_WARN_NO_HISTORY: "Git history is shallow or missing, so PR nodes are skipped",
+  GRAPH_WARN_NO_HISTORY:
+    "Git history is shallow or missing, so PR nodes are skipped and PR links are not checked",
 });

@@ -11,7 +11,8 @@ The project's knowledge and progress as one linked, checked graph, in place of M
   - packets: their task, auxiliary files and acceptance ids;
   - briefs `M<n>-*.md`: the beta milestones and the tasks their "Plan IDs" line includes;
   - ADR header bullets: status, Supersedes, Amends and Refines;
-  - live evidence: the card its Approval bullet names, its unknown-outcome bullet, and the acceptance rows in `docs/acceptance/*.md` that cite it (`verifies`);
+  - live evidence: the card its Approval bullet names and its unknown-outcome bullet;
+  - acceptance tables in `docs/acceptance/*.md`: a row whose status cell starts "Open" or "Not done" is `open`, one that starts "Deferred" is `deferred`, and either only `mentions` the live records it cites; any other row is `verified` by them (`verifies`);
   - `docs/decisions/approvals/*.json`, `dependencies.json`, `sources.json`, `capabilities.json`;
   - `apps/*` and `packages/*` (components);
   - git history: merged pull requests from `(#n)` subjects, the tasks and milestones they name (`implements`) and the components they change (`touches`).
@@ -72,12 +73,12 @@ All offline. `npm run graph -- <command>`:
 | Command | Does |
 | --- | --- |
 | `check [--strict] [--verbose]` | The CI check; `npm run graph:check` runs it inside `npm run verify`. `--strict` treats the phase-0 warnings as errors |
-| `show <ID> [--depth 2] [--json] [--all]` | Fields, edges out, backlinks in, the parts of a task with what verifies them, mentions |
+| `show <ID> [--depth 2] [--json] [--all]` | Fields, edges out, backlinks in, the parts of a task with their status and what verifies or implements them, mentions |
 | `query ready` | Work whose dependencies are done and which waits on no open question or gate |
 | `query open` | Open questions and actions, open gates, unknown outcomes, cards expiring within 14 days, open risks, ADRs resting on a superseded decision |
 | `query gates [--week W3]`, `query critical`, `query slip`, `query data` | Open gates by week and owner; the longest chain to the launch gate; agents and features in slip order; data classes and their deletion path |
 | `query skills <agent id>`, `query ceiling <installation kind or agent id>` | An agent's bundled or composable skills; a kind's documented ceiling (the code's allowlist stays the authority) |
-| `query uncovered` | Plan tasks that no feature or track includes or defers by name |
+| `query uncovered` | Plan tasks that no feature or track includes (`includes`) or leaves until after launch (`defers`) by name, directly or through their package; a dropped feature or track covers nothing |
 | `query blockers <ID>`, `impact <ID>`, `why <ID>`, `path <A> <B>` | What is in the way; what depends on it and who cites it; what governs it; how two nodes connect |
 | `query stale [--days 7]`, `query todo` | Active nodes with no recent PR or evidence; governed docs still without a header |
 | `render [--check]` | Writes `graph.json` and a self-contained `graph.html` under the artifacts directory (`.artifacts/graph/`, git-ignored), and refreshes the generated blocks. `--check` fails if a block is stale |
@@ -86,13 +87,13 @@ All offline. `npm run graph -- <command>`:
 | `add decision --date D --title T --quote-file F` | Picks the next `OD-D-n` and writes the file; the quote file avoids shell quoting |
 | `add <type> <ID> --title T [--status S] [--<field> V]` | Writes a hand-written node. Refuses a wrong id shape or an existing id |
 | `link <FROM> <edge> <TO>`, `unlink …` | Edits FROM's header after checking the edge |
-| `set <ID> <field>=<value>` | A parent task's status goes to `tasks.json`, a lettered task's to its packet header, anything else to its node file |
+| `set <ID> <field>=<value>` | A parent task's status goes to `tasks.json`, a lettered task's to its packet header, anything else to its node file. It never changes `id`, `type`, `links` (use `link`) or `docs` |
 
 `graph.html` has type and status filters, search, a two-hop focus view and a side panel with fields, backlinks and a link to the doc on GitHub. It loads the pinned Cytoscape.js script from cdnjs and falls back to a list when offline. It is never committed and never published from CI: on request Claude can share it as a private page; GitHub Pages would be a public publication and needs the owner's approval.
 
 ## The check
 
-`graph:check` runs in `npm run verify`, so it runs in CI's `checks` job on every pull request, Markdown-only ones included. Each rule has a fixed code, and `tests/graph.test.mjs` plants one mistake per error code and expects exactly that code back. The `checks` job fetches full history (`fetch-depth: 0`) so merged PR nodes can be built; without history the check skips them with a warning, never an error.
+`graph:check` runs in `npm run verify`, so it runs in CI's `checks` job on every pull request, Markdown-only ones included. Each rule has a fixed code, and `tests/graph.test.mjs` plants one mistake per error code and expects exactly that code back. The `checks` job fetches full history (`fetch-depth: 0`) so merged PR nodes can be built; without history the check skips them with a warning, never an error, and a link to a PR (a live data class's `deleted_by` among them) is a warning until history can resolve it.
 
 In phase 0 three rules are warnings, because the docs they need have no headers yet: `GRAPH_ORPHAN`, `GRAPH_UNCLAIMED_DOC` and `GRAPH_NEW_PACKET`. The rules that read hand-written fields (`GRAPH_ADR_APPROVAL`, `GRAPH_EVIDENCE_AUTH`, `GRAPH_TENANT_RECORD`, `GRAPH_DECISION_QUOTE`) apply to every node with a header; an unresolved id in a doc without a header is the warning `GRAPH_WARN_LEGACY_MENTION` and becomes `GRAPH_LINK_DANGLING` once the doc has one.
 
@@ -147,6 +148,7 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 | --- | --- |
 | `part_of` | task → package, task; acceptance → task, package; feature → vision; component → component |
 | `includes` | feature, track, milestone → task, package |
+| `defers` | feature, track → task, package |
 | `delivers` | track, milestone → feature, agent, skill, installation_kind |
 | `needs` | agent, skill, feature → capability, component, feature |
 | `holds` | agent, skill, feature → data_class |
@@ -195,17 +197,17 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 | `GRAPH_STATUS` | Status values come from the type's list | error |
 | `GRAPH_TASK_STATUS_DRIFT` | Parent task statuses equal tasks.json, and both list the same tasks | error |
 | `GRAPH_GATE_FIELDS` | An open gate has owner_kind and due_week | error |
-| `GRAPH_DATA_CLASS` | A live data class has a deleted_by link to a merged PR | error |
+| `GRAPH_DATA_CLASS` | A live data class has a deleted_by link to a merged PR (without history, a PR link is a warning) | error |
 | `GRAPH_SKILL_ELIGIBLE` | A skill a task_specialist composes is specialist_eligible and holds no customer data class | error |
 | `GRAPH_AGENT_KIND` | delegates_to starts at a builtin agent; a task_specialist delegates nothing and never_holds workspace.task.delegate; bundles starts at an installable agent | error |
 | `GRAPH_INSTALLATION_KIND` | triggers need a mandate; routable needs triggers or a mandate; IK-task-specialist is not routable | error |
-| `GRAPH_TENANT_RECORD` | No node id or field looks like a tenant record id | error |
+| `GRAPH_TENANT_RECORD` | No node id or field, and nothing in a hand-written graph file, looks like a tenant record id | error |
 | `GRAPH_DECISION_QUOTE` | An owner decision has a date, a channel and a blockquote | error |
 | `GRAPH_EVIDENCE_AUTH` | Evidence with a header has authorized_by and an unknown_outcome value | error |
 | `GRAPH_ADR_APPROVAL` | An accepted ADR with a header has approved_by | error |
 | `GRAPH_NEW_PACKET` | A new packet or acceptance file declares kind: security | warning |
 | `GRAPH_SECRET` | No known secret pattern in the hand-written graph or any frontmatter | error |
-| `GRAPH_EMAIL` | No email address in the hand-written graph or any frontmatter | error |
+| `GRAPH_EMAIL` | No email address in a governed doc or any frontmatter (reserved test domains such as .invalid are allowed) | error |
 | `GRAPH_STALE_GENERATED` | Generated blocks (graph README schema, ADR index) are fresh | error |
 | `GRAPH_STATUS_LINES` | STATUS.md is at most 80 lines | error |
 | `GRAPH_IMPORTED_BY_CODE` | Nothing in apps/ or packages/ imports the graph | error |
@@ -216,5 +218,5 @@ In phase 0 three rules are warnings, because the docs they need have no headers 
 | `GRAPH_WARN_PLAN_UNCOVERED` | A plan task that no feature or track includes or defers by name | warning |
 | `GRAPH_WARN_LABEL_COLLISION` | Two milestones share a label (M2 to M5: beta and golden path) | warning |
 | `GRAPH_WARN_LEGACY_MENTION` | A doc without a header mentions an id that does not resolve (an error once it has one) | warning |
-| `GRAPH_WARN_NO_HISTORY` | Git history is shallow or missing, so PR nodes are skipped | warning |
+| `GRAPH_WARN_NO_HISTORY` | Git history is shallow or missing, so PR nodes are skipped and PR links are not checked | warning |
 <!-- graph:schema:end -->
