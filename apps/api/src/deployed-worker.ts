@@ -19,8 +19,10 @@ import {
   createBrokerHealth,
   createBrokerNeonCredentialBroker,
   createBrokerSessionPageReader,
+  createBrokerShopifyReader,
   createBrokerStripe,
 } from "./broker-client.js";
+import type { CatalogApiDependencies } from "../../../packages/work/src/catalog/http.js";
 import {
   mapApiEnvironment,
   type ApiEnvironmentCode,
@@ -113,11 +115,18 @@ export function composeApiDependencies(
     broker: stripe,
     now,
   });
+  // M2 PR-3: the catalogue routes on the same origin and work login, with the broker's
+  // shopifyRead behind the ApiBroker binding.
+  const catalog: CatalogApiDependencies = Object.freeze({
+    ...work,
+    reader: createBrokerShopifyReader(broker),
+  });
   return Object.freeze({
     dependencies,
     work,
     billing,
     webhook,
+    catalog,
     readiness: () => port.readiness(values.keyring),
     brokerHealth: createBrokerHealth(broker, now),
   });
@@ -152,6 +161,7 @@ function select(env: unknown): Selected {
           composed.work,
           composed.billing,
           composed.webhook,
+          composed.catalog,
         ),
         guard: createAbuseGuard(mapped.guard, createBrokerChallengeVerifier(mapped.broker)),
         readiness: composed.readiness,
