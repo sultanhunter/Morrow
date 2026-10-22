@@ -82,3 +82,7 @@ Reason: in the locked `@shopify/shopify-api` 15.0.0, `shopifyApi()` will not ini
 Items 2–6 are unchanged. The title and the Consequences bullets that name `@shopify/shopify-api` as the deployed runtime describe item 1 before this amendment.
 
 Owner decision, 2026-10-20, in chat. The question was: "Your earlier decision (ADR-0008 item 1) says deployed code uses the official @shopify/shopify-api library. The library needs the app secret wherever it runs, the secret must stay in the broker, and the broker's bundle is capped at 256 KiB. What should we do?" The owner answered: "Hand-written checks (Recommended)". The option read: "The broker does Shopify's signature checks, the install code exchange and one fixed product query itself. That's small and easy to audit, and the connector holds no secret. Amends ADR-0008 item 1."
+
+### 2026-10-22 note: broker bundle bound (owner confirmation pending)
+
+The 2026-10-20 amendment cites a 256 KiB broker bundle cap. The cap (P04.T02a-AC02, `edgeBundleLimits.brokerBytes` in `scripts/edge.mjs`) is now 384 KiB (393,216 bytes) minified: M2 PR-3 plus M3 PR-2 measured 264,479 bytes, 56% of it the Neon driver. The bound still keeps the broker small and auditable. Item 1 as amended is unchanged: the hand-written Shopify checks and the plain HTTPS Claude adapter remain the choice.

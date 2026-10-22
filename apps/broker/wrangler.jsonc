@@ -16,8 +16,10 @@
 // ADR-0022 item 7 admits, each with the PR that uses it.
 // M2 PR-2: the bundle includes the Neon driver (the vault login's own transport,
 // src/vault-database.ts; about 150 KB, already minified) and is minified as a whole, so
-// it stays under the 256 KiB cap of scripts/edge.mjs with room for M5's Stripe code. The
-// broker never logs a stack or a name, so minifying changes no reviewed output; export
+// it stays under the 384 KiB cap of scripts/edge.mjs (`edgeBundleLimits.brokerBytes`)
+// with room for M4 and M5's Stripe code. The cap was 256 KiB until 2026-10-22, when M2
+// PR-3 plus M3 PR-2 measured 264,479 bytes (owner confirmation pending). The broker
+// never logs a stack or a name, so minifying changes no reviewed output; export
 // (entrypoint) names are kept.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
