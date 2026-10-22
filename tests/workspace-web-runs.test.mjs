@@ -323,6 +323,7 @@ test("decoders accept the server's own bodies exactly and refuse anything wider"
     "entitlement",
     "broker_held",
     "read_unavailable",
+    "proposal_refused",
     "nothing_drafted",
     "stopped",
     "lease_ended",

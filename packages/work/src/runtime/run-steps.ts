@@ -37,7 +37,8 @@ export type RunEndReason =
   | "delegation_denied"
   | "entitlement"
   | "broker_held"
-  | "read_unavailable";
+  | "read_unavailable"
+  | "proposal_refused";
 export const runEndReasons: readonly RunEndReason[] = Object.freeze([
   "breaker",
   "unrecovered_cost_cap",
@@ -50,6 +51,7 @@ export const runEndReasons: readonly RunEndReason[] = Object.freeze([
   "entitlement",
   "broker_held",
   "read_unavailable",
+  "proposal_refused",
 ]);
 export type ProductFailureCode =
   | "validation"

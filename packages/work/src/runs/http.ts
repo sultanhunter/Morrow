@@ -98,6 +98,12 @@ const refusals: Readonly<Record<RunRefusal, readonly [number, string, string, st
       "never",
       "The Listings agent is not enabled for this store.",
     ],
+    approvals_limit: [
+      409,
+      "conflict",
+      "never",
+      "Too many changes are waiting for review. Approve or reject some, then try again.",
+    ],
   });
 function refusalResponse(reason: RunRefusal, correlationId: string): Response {
   const [status, code, retryClass, safeMessage] = refusals[reason];

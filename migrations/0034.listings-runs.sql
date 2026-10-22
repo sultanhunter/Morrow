@@ -246,7 +246,7 @@ CREATE TABLE morrow_work.runs (
  status_guard text NOT NULL CHECK (status_guard ~ '^[a-z_]{1,64}$'),
  ended_reason text CHECK (ended_reason IN ('breaker','unrecovered_cost_cap','spend_limit','provider_error','cost_overflow',
   'reservation_exhausted','time_budget','delegation_denied','entitlement','nothing_drafted','stopped','lease_ended','broker_held',
-  'read_unavailable')),
+  'read_unavailable','proposal_refused')),
  catalogue_version integer NOT NULL,
  model_key text NOT NULL,
  effort_key text NOT NULL,
@@ -1095,8 +1095,11 @@ END $$;
 -- products and its manifest; the run.admitted event; the command. Outcomes: applied,
 -- invalid, ineligible, stale_authority, command_conflict, not_found, state_conflict, stopped,
 -- denied (the store's installation is not active or the ceiling refuses), entitlement,
--- no_billing_period, insufficient_credits, daily_cap, unrecovered_cost_cap, run_product_limit,
--- catalogue_inactive, duplicate. Every non-applied outcome is returned for rollback.
+-- no_billing_period, approvals_limit (the workspace's live pending approvals under its current
+-- review policy plus one proposal per product would pass the 1,000 cap the agent submit
+-- enforces, so the run's drafts could never be proposed), insufficient_credits, daily_cap,
+-- unrecovered_cost_cap, run_product_limit, catalogue_inactive, duplicate. Every non-applied
+-- outcome is returned for rollback.
 CREATE FUNCTION morrow_work.cmd_run_admit(p_command_id text,p_request_digest text,p_correlation_id text,p_task_id text,p_store_id text,
  p_run_id text,p_child_task_id text,p_envelope_id text,p_hop_id text,p_catalogue_version text,p_model text,p_effort text,p_holds_revise text,
  p_products text,p_fields text,p_route_canonical text,p_route_digest text,p_coordinator_principal_id text,p_grant_id text,p_workflow_version text)
@@ -1185,6 +1188,13 @@ BEGIN
  SELECT x.period_start,x.period_end INTO per FROM morrow_billing.verified_payment_events x WHERE x.organization_id=p.organization_id
   AND x.workspace_id=p.workspace_id AND x.outcome='granted' AND x.kind='subscription_period' ORDER BY x.period_end DESC,x.recorded_at DESC LIMIT 1;
  IF NOT FOUND OR per.period_end<=v_now OR per.period_start>v_now THEN RETURN QUERY SELECT 'no_billing_period'::text,NULL::text; RETURN; END IF;
+ -- The pending approvals cap (submit_agent_proposal's 1,000 live under the current policy),
+ -- before any spend: one proposal per product at most must still fit.
+ IF (SELECT count(*) FROM morrow_work.approvals x WHERE x.organization_id=p.organization_id AND x.workspace_id=p.workspace_id
+   AND x.status='pending' AND x.expires_at>v_now AND x.review_policy_revision=(SELECT max(y.revision) FROM morrow_work.review_policies y
+    WHERE y.organization_id=p.organization_id AND y.workspace_id=p.workspace_id AND y.id='review-policy'))+jsonb_array_length(v_products)>1000 THEN
+  RETURN QUERY SELECT 'approvals_limit'::text,NULL::text; RETURN;
+ END IF;
  -- The workspace's stale runs close first, so their credits are back before this reserves.
  PERFORM morrow_work.runs_close_stale(p.organization_id,p.workspace_id,NULL);
  -- Ids derived from the run (single payer, SQL-built allocation).
@@ -1790,7 +1800,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_work,pg_temp
 DECLARE l record; r record; c record; e record; v_status text; v_reason text;
 BEGIN
  IF p_reason IS NOT NULL AND p_reason NOT IN ('breaker','unrecovered_cost_cap','spend_limit','provider_error','cost_overflow','reservation_exhausted',
-   'time_budget','delegation_denied','entitlement','broker_held','read_unavailable') THEN
+   'time_budget','delegation_denied','entitlement','broker_held','read_unavailable','proposal_refused') THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text; RETURN;
  END IF;
  SELECT * INTO l FROM morrow_work.current_lease();

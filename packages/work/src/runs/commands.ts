@@ -60,7 +60,8 @@ export type RunRefusal =
   | "selection_invalid"
   | "selection_above_ceiling"
   | "stopped"
-  | "installation_inactive";
+  | "installation_inactive"
+  | "approvals_limit";
 export class RunReject extends Error {
   constructor(readonly reason: RunRefusal) {
     super("RUN_REJECTED");
@@ -195,6 +196,7 @@ const runOutcomes: Readonly<Record<string, RunRefusal>> = Object.freeze({
   unrecovered_cost_cap: "unrecovered_cost_cap",
   run_product_limit: "run_product_limit",
   catalogue_inactive: "selection_invalid",
+  approvals_limit: "approvals_limit",
 });
 async function submit(
   tx: WorkTx,

@@ -34,6 +34,9 @@
 //   D  one lock order (the workspace stream, then the run, then the rest): a run finishing or
 //      starting while a session holds the stream as an admission or a stop does waits on
 //      the stream first, and neither deadlocks;
+//   P  the pending approvals cap: admission refuses a run whose proposals could not fit, and
+//      a proposal refused at the cap ends the run promptly (proposal_refused), never a
+//      retried step;
 //   S  "Stop AI work" mid-run: the next step is refused, the run reads as interrupted, and
 //      the stale close returns its credits and accrues its cost; admission is refused; a
 //      call in flight at the stop is still recorded and booked (its close needs no lease);
@@ -1269,6 +1272,69 @@ COMMIT;`,
         d2Started,
         d2Ended,
       },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  phase("approvals_cap");
+  {
+    // P1-P2: the workspace's 1,000 live pending approvals (the agent submit's cap). The
+    // pending count is raised with clones of a live pending approval (sim), then removed.
+    const pending = () =>
+      count(
+        `SELECT count(*) FROM morrow_work.approvals WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND status='pending' AND expires_at>clock_timestamp()`,
+      );
+    const source = one(
+      `SELECT id::text AS id FROM morrow_work.approvals WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND status='pending' AND expires_at>clock_timestamp() ORDER BY created_at LIMIT 1`,
+    );
+    let clones = 0;
+    const raiseTo = (target) => {
+      const add = target - pending();
+      replica(
+        `INSERT INTO morrow_work.approvals SELECT a.organization_id,a.workspace_id,'sim_approval_'||g,a.revision,'sim_proposal_'||g,a.proposal_digest,'sim_proposal_'||g,a.status,a.required_approvals,a.self_approval,a.pending_expiry_seconds,a.approved_validity_seconds,a.cool_down_seconds,a.quiet_period_seconds,a.eligible_reviewer_principal_ids,a.counted_reviewer_principal_ids,a.scope_digest,a.review_policy_revision,a.policy_revision,a.effective_at,a.expires_at,a.invalidation_reason,a.created_at,a.updated_at FROM morrow_work.approvals a,generate_series(${clones + 1},${clones + add}) g WHERE a.id=${literal(source.id)};`,
+      );
+      clones += add;
+    };
+    // P1: admission refuses a run whose proposals could not fit, before any spend.
+    raiseTo(999);
+    const before = footprint();
+    const full = await admit(P.A, T, admitBody([product(111), product(112)]));
+    check(
+      "P1:admission_refuses_a_run_whose_proposals_could_not_fit",
+      full.status === 409 &&
+        full.body.safeMessage ===
+          "Too many changes are waiting for review. Approve or reject some, then try again." &&
+        footprint() === before,
+      full.body,
+    );
+    // P2: a run admitted at 999 finds the cap reached when it proposes (another proposal
+    // landed meanwhile): the propose step is not retried until the Workflow fails; the run
+    // ends promptly as proposal_refused, its drafted cost accrued, its credits returned.
+    const fits = await admit(P.A, T, admitBody([product(113)]));
+    const runId = fits.body.runId;
+    raiseTo(1000);
+    const proposalsBefore = count("SELECT count(*) FROM morrow_work.proposals");
+    const result = await execute(runId);
+    const proposeResults = stepResults.filter(
+      (r) => r.name === "propose" && r.value?.stop === "proposal_refused",
+    );
+    check(
+      "P2:a_refused_proposal_ends_the_run_promptly",
+      fits.status === 201 &&
+        result.kind === "ended" &&
+        result.status === "failed" &&
+        runRow(runId).ended_reason === "proposal_refused" &&
+        productsOf(runId)[0]?.status === "drafted" &&
+        count("SELECT count(*) FROM morrow_work.proposals") === proposalsBefore &&
+        proposeResults.length >= 1 &&
+        credit(runId)?.status === "released" &&
+        count(
+          `SELECT count(*) FROM morrow_billing.unrecovered_cost_entries WHERE root_run_id=${literal(runId)} AND kind='failed_product'`,
+        ) === 1,
+      { fits: fits.body, result, run: runRow(runId), credit: credit(runId) },
+    );
+    replica(
+      `DELETE FROM morrow_work.approvals WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND id::text LIKE 'sim\\_approval\\_%';`,
     );
   }
 

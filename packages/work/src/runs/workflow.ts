@@ -355,13 +355,50 @@ export async function draftProduct(
   return finish({ outcome: "failed", code: last }, null);
 }
 
-/** The propose step: every pending draft packed and submitted in one transaction. */
+/**
+ * The propose step: every pending draft packed and submitted in one transaction. A refusal
+ * rolls the whole step back, so nothing is half-proposed. Only stale_authority (the review
+ * policy moved under the step) is retried; a refusal retrying cannot fix (limit_reached:
+ * the 1,000 pending approvals cap; invalid; not_found; denied) ends the run promptly as
+ * proposal_refused instead of retrying until the Workflow fails.
+ */
 export async function proposeDrafts(
   ports: ListingsRunPorts,
   ref: LeaseRef,
   facts: RunFacts,
 ): Promise<RunStepResult> {
-  const done = await under(ports, ref, async (step) => {
+  let refused: string | null = null;
+  const refusedResult = () =>
+    Object.freeze({
+      kind: "proposed",
+      proposals: 0,
+      stop: "proposal_refused",
+    }) as RunStepResult;
+  let done: Awaited<ReturnType<typeof proposeUnder>>;
+  try {
+    done = await proposeUnder(ports, ref, facts, (outcome) => {
+      refused = outcome;
+    });
+  } catch (error) {
+    // The thrown refusal rolled the transaction back; the run ends instead of retrying.
+    if (refused !== null) return refusedResult();
+    throw error;
+  }
+  if (refused !== null) return refusedResult();
+  if (!done.entered) return Object.freeze({ kind: "interrupted", refusal: done.refusal });
+  return Object.freeze({
+    kind: "proposed",
+    proposals: done.value.proposals,
+    stop: done.value.stop,
+  });
+}
+function proposeUnder(
+  ports: ListingsRunPorts,
+  ref: LeaseRef,
+  facts: RunFacts,
+  refuse: (outcome: string) => void,
+) {
+  return under(ports, ref, async (step) => {
     const drafts = await step.run.draftsPending();
     if (drafts.length === 0) return { proposals: 0, stop: null as RunEndReason | null };
     const fields = [...new Set(drafts.flatMap((d) => d.fields))].sort();
@@ -407,16 +444,14 @@ export async function proposeDrafts(
         scopeCanonical: p.scopeCanonical,
         draftIds: p.draftIds,
       });
-      // Any refusal rolls the whole step back (the thrown retry): nothing is half-proposed.
-      if (outcome !== "applied") throw retry("submit_" + outcome);
+      // Any refusal rolls the whole step back (the thrown error): nothing is half-proposed.
+      if (outcome === "stale_authority") throw retry("submit_" + outcome);
+      if (outcome !== "applied") {
+        refuse(outcome);
+        throw retry("submit_refused");
+      }
     }
     return { proposals: packed.length, stop: null as RunEndReason | null };
-  });
-  if (!done.entered) return Object.freeze({ kind: "interrupted", refusal: done.refusal });
-  return Object.freeze({
-    kind: "proposed",
-    proposals: done.value.proposals,
-    stop: done.value.stop,
   });
 }
 

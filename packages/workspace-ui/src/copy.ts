@@ -450,6 +450,7 @@ export const copy = {
       entitlement: "Stopped: the workspace's plan isn't active",
       broker_held: "Stopped: AI drafting became unavailable",
       read_unavailable: "Stopped: the store couldn't be read",
+      proposal_refused: "Stopped: the drafts couldn't be sent for review",
       nothing_drafted: "No product could be drafted",
       stopped: "Stopped by Stop AI work",
       lease_ended: "Closed after it ran out of time",
