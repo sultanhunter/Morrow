@@ -652,6 +652,80 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION morrow_billing.run_product_unrecovered(text,text,text,integer) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION morrow_billing.run_product_unrecovered(text,text,text,integer) TO morrow_work_command;
+-- run_reserve (0033), revised: the workspace's daily cost also counts that day's overflow
+-- bookings (cost booked beyond a reservation, which neither its maximum nor its booked total
+-- holds), so the US$25 daily cap stays a bound on real vendor spend. Every other rule is
+-- 0033's; its ACL and owner are kept (CREATE OR REPLACE).
+CREATE OR REPLACE FUNCTION morrow_billing.run_reserve(p_org text,p_ws text,p_billing_account_id text,p_run_id text,p_reservation_id text,
+ p_vendor_reservation_id text,p_allocation_id text,p_allocation_digest text,p_catalogue_version integer,p_model text,p_effort text,
+ p_product_count integer,p_period_start timestamptz)
+RETURNS TABLE(outcome text,credits_reserved text,vendor_maximum_usd text)
+LANGUAGE plpgsql SET search_path=pg_catalog,morrow_billing,pg_temp AS $$
+#variable_conflict use_column
+DECLARE e record; v record; w record; v_now timestamptz; v_credits bigint; v_vendor numeric(20,8); v_day date; v_today numeric; n integer;
+BEGIN
+ IF p_org IS NULL OR p_org !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_ws IS NULL OR p_ws !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_billing_account_id IS NULL OR p_billing_account_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_run_id IS NULL OR p_run_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_reservation_id IS NULL OR p_reservation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_vendor_reservation_id IS NULL OR p_vendor_reservation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_allocation_id IS NULL OR p_allocation_id !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_allocation_digest IS NULL OR p_allocation_digest !~ '^[a-f0-9]{64}$'
+  OR p_catalogue_version IS NULL OR p_model IS NULL OR p_effort IS NULL OR p_product_count IS NULL THEN
+  RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ IF p_period_start IS NULL OR NOT isfinite(p_period_start) THEN RETURN QUERY SELECT 'no_billing_period'::text,NULL::text,NULL::text; RETURN; END IF;
+ SELECT x.credits_per_product,x.worst_case_per_product_usd,x.run_product_limit INTO e FROM morrow_work.model_catalogue_entries x
+  JOIN morrow_work.model_catalogue_versions y ON y.version=x.version AND y.status='active'
+  WHERE x.version=p_catalogue_version AND x.model_key=p_model AND x.effort_key=p_effort;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'catalogue_inactive'::text,NULL::text,NULL::text; RETURN; END IF;
+ IF p_product_count<1 OR p_product_count>e.run_product_limit THEN RETURN QUERY SELECT 'run_product_limit'::text,NULL::text,NULL::text; RETURN; END IF;
+ SELECT y.workspace_daily_cost_cap_usd INTO v FROM morrow_work.model_catalogue_versions y WHERE y.version=p_catalogue_version;
+ -- The workspace's daily interlock, then the wallet row: concurrent reservations of one
+ -- workspace serialize, so a balance or a cap is never spent twice.
+ PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.billing.run_reserve',p_org,p_ws)::text,0));
+ SELECT x.available,x.reserved,x.consumed,x.revision::bigint AS revision,x.updated_at INTO w FROM morrow_billing.credit_wallets x
+  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.billing_account_id=p_billing_account_id FOR UPDATE;
+ IF NOT FOUND THEN RETURN QUERY SELECT 'wallet_not_found'::text,NULL::text,NULL::text; RETURN; END IF;
+ IF EXISTS(SELECT 1 FROM morrow_billing.credit_reservations x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.root_run_id=p_run_id) THEN
+  RETURN QUERY SELECT 'duplicate'::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ v_credits:=p_product_count::bigint*e.credits_per_product;
+ v_vendor:=p_product_count*e.worst_case_per_product_usd;
+ IF w.available<v_credits THEN RETURN QUERY SELECT 'insufficient_credits'::text,NULL::text,NULL::text; RETURN; END IF;
+ v_now:=date_trunc('milliseconds',clock_timestamp());
+ v_day:=(v_now AT TIME ZONE 'UTC')::date;
+ SELECT COALESCE(sum(CASE WHEN x.status='reserved' THEN x.maximum_cost_usd ELSE x.booked_cost_usd END),0) INTO v_today
+  FROM morrow_billing.vendor_cost_reservations x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.created_day=v_day;
+ -- Overflow (cost no reservation could hold) is real spend too: that day's reservations'
+ -- overflow bookings count against the daily cap.
+ v_today:=v_today+COALESCE((SELECT sum(b.amount_usd) FROM morrow_billing.run_cost_bookings b JOIN morrow_billing.vendor_cost_reservations x
+  ON x.organization_id=b.organization_id AND x.workspace_id=b.workspace_id AND x.id=b.vendor_reservation_id
+  WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.created_day=v_day AND b.kind='overflow'),0);
+ IF v_today+v_vendor>v.workspace_daily_cost_cap_usd THEN RETURN QUERY SELECT 'daily_cap'::text,NULL::text,NULL::text; RETURN; END IF;
+ IF NOT morrow_billing.unrecovered_allows(p_org,p_ws,date_trunc('milliseconds',p_period_start),p_catalogue_version,e.worst_case_per_product_usd) THEN
+  RETURN QUERY SELECT 'unrecovered_cost_cap'::text,NULL::text,NULL::text; RETURN;
+ END IF;
+ BEGIN
+  UPDATE morrow_billing.credit_wallets x SET available=x.available-v_credits,reserved=x.reserved+v_credits,revision=x.revision+1,
+   updated_at=greatest(v_now,x.updated_at)
+   WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.billing_account_id=p_billing_account_id;
+  GET DIAGNOSTICS n=ROW_COUNT;
+  IF n<>1 THEN RAISE EXCEPTION 'CREDIT_WALLET_INVALID'; END IF;
+  INSERT INTO morrow_billing.credit_reservations(organization_id,workspace_id,id,revision,billing_account_id,root_run_id,allocation_id,
+   allocation_digest,catalogue_version,model_key,effort_key,credits_per_product,product_count,credits_reserved,credits_settled,status,created_at,settled_at)
+  VALUES (p_org,p_ws,p_reservation_id,1,p_billing_account_id,p_run_id,p_allocation_id,p_allocation_digest,p_catalogue_version,p_model,p_effort,
+   e.credits_per_product,p_product_count,v_credits,NULL,'reserved',v_now,NULL);
+  INSERT INTO morrow_billing.vendor_cost_reservations(organization_id,workspace_id,id,revision,root_run_id,credit_reservation_id,vendor_id,
+   catalogue_version,model_key,effort_key,maximum_cost_usd,booked_cost_usd,unrecovered_cost_usd,period_start,created_day,status,created_at,updated_at)
+  VALUES (p_org,p_ws,p_vendor_reservation_id,1,p_run_id,p_reservation_id,'anthropic',p_catalogue_version,p_model,p_effort,v_vendor,0,0,
+   date_trunc('milliseconds',p_period_start),v_day,'reserved',v_now,v_now);
+ EXCEPTION WHEN unique_violation THEN RETURN QUERY SELECT 'duplicate'::text,NULL::text,NULL::text; RETURN;
+  WHEN check_violation OR foreign_key_violation OR not_null_violation OR raise_exception THEN
+   RETURN QUERY SELECT 'invalid'::text,NULL::text,NULL::text; RETURN;
+ END;
+ RETURN QUERY SELECT 'reserved'::text,v_credits::text,to_char(v_vendor,'FM999999999990.00000000');
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Row security. Every new table: ENABLE + FORCE and the maintenance-only owner policy.

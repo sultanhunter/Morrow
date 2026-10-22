@@ -34,6 +34,7 @@
 //   D  one lock order (the workspace stream, then the run, then the rest): a run finishing or
 //      starting while a session holds the stream as an admission or a stop does waits on
 //      the stream first, and neither deadlocks;
+//   C  the daily cap counts today's overflow bookings (real spend beyond a reservation);
 //   P  the pending approvals cap: admission refuses a run whose proposals could not fit, and
 //      a proposal refused at the cap ends the run promptly (proposal_refused), never a
 //      retried step;
@@ -1335,6 +1336,43 @@ COMMIT;`,
     );
     replica(
       `DELETE FROM morrow_work.approvals WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND id::text LIKE 'sim\\_approval\\_%';`,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  phase("daily_cap");
+  {
+    // C1: overflow is real spend: today's overflow bookings count against the workspace's
+    // US$25 daily cap. One overflow booking (sim) brings today's reservations and overflow
+    // exactly to the cap, so the next run's worst case would pass it: refused, nothing
+    // written. Without the overflow the same run would fit. The booking is then removed.
+    const today = `(clock_timestamp() AT TIME ZONE 'UTC')::date`;
+    const spent = Number(
+      one(
+        `SELECT COALESCE(sum(CASE WHEN status='reserved' THEN maximum_cost_usd ELSE booked_cost_usd END),0)::text AS spent FROM morrow_billing.vendor_cost_reservations WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND created_day=${today}`,
+      ).spent,
+    );
+    const reservation = one(
+      `SELECT id::text AS id,root_run_id::text AS run FROM morrow_billing.vendor_cost_reservations WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND created_day=${today} ORDER BY created_at DESC LIMIT 1`,
+    );
+    const overflow = (25 - spent).toFixed(8);
+    replica(
+      `INSERT INTO morrow_billing.run_cost_bookings(organization_id,workspace_id,id,root_run_id,vendor_reservation_id,kind,amount_usd,booked_usd,unrecovered_usd,recorded_at) VALUES(${literal(O)},${literal(W)},'sim_overflow_daily',${literal(reservation.run)},${literal(reservation.id)},'overflow',${overflow},0,0,${ms});`,
+    );
+    const before = footprint();
+    const capped = await admit(P.A, T, admitBody([product(121)]));
+    const after = footprint();
+    replica(
+      `DELETE FROM morrow_billing.run_cost_bookings WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND id='sim_overflow_daily';`,
+    );
+    check(
+      "C1:overflow_counts_against_the_daily_cap",
+      spent + Number(worst.product) <= 25 &&
+        Number(overflow) > 0 &&
+        capped.status === 409 &&
+        capped.body.safeMessage === "Today's AI spending limit for this workspace is reached." &&
+        after === before,
+      { spent, overflow, capped: capped.body },
     );
   }
 

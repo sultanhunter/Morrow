@@ -72,3 +72,13 @@ test("the model definers read FOUND before any PERFORM resets it", () => {
     assert.ok(at(text, "IF NOT v_found") > reset, name);
   }
 });
+
+test("the daily cap counts that day's overflow bookings (run_reserve revised)", () => {
+  const reserve = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION morrow_billing.run_reserve("));
+  const text = reserve.slice(0, reserve.indexOf("END $$;"));
+  assert.ok(text.length > 0);
+  const daily = at(text, "INTO v_today");
+  const overflow = at(text, "b.kind='overflow'");
+  const capped = at(text, "workspace_daily_cost_cap_usd THEN");
+  assert.ok(daily < overflow && overflow < capped);
+});
