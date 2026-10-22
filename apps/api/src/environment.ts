@@ -14,7 +14,8 @@ import {
 } from "./abuse-guard.js";
 
 // Synchronous Worker env -> ManagedWorkspaceApiDependencies inputs (P04.T02a D6),
-// plus the P05.T01ab abuse-guard bindings (step 10) and the M5 Stripe switch (step 11).
+// plus the P05.T01ab abuse-guard bindings and the session routes' limiter (step 10) and the
+// M5 Stripe switch (step 11).
 // It never throws; the first failing check decides the code, and any failure
 // keeps the api on the existing deny-all instance. Production never maps here
 // (ADR-0007 item 9).
@@ -209,7 +210,7 @@ export function mapApiEnvironment(env: unknown): ApiEnvironmentMapping {
   } catch {
     return fail("API_ENV_BROKER_BINDING_INVALID");
   }
-  // 10. The abuse guard (P05.T01ab, ADR-0019 items 6-8).
+  // 10. The abuse guard (P05.T01ab, ADR-0019 items 6-8) and the session routes' limiter.
   const guard = mapAbuseGuard(record, environment);
   if (!guard) return fail("API_ENV_ABUSE_GUARD_MISSING");
   // 11. The Stripe switch (M5): absent is off; present, it must be exactly "test".
@@ -228,10 +229,11 @@ export function mapApiEnvironment(env: unknown): ApiEnvironmentMapping {
 
 // Step 10 as a pure function of the record and the environment, so its rule is tested
 // for every environment: production too, which fails earlier, at step 7, while
-// ADR-0007 item 9 stands. LOGIN_CHALLENGE_JSON and the three limiter bindings are
-// required in staging and production. In development each part is optional (the
-// committed development config binds only the limiters), but a present part must be
-// valid, and the limiters come all three or none. null is API_ENV_ABUSE_GUARD_MISSING.
+// ADR-0007 item 9 stands. LOGIN_CHALLENGE_JSON and the four limiter bindings (the three
+// sign-in limiters and SESSION_LIMITER, session-limit.ts) are required in staging and
+// production. In development each part is optional (the committed development config
+// binds only the limiters), but a present part must be valid, and the limiters come all
+// four or none. null is API_ENV_ABUSE_GUARD_MISSING.
 export function mapAbuseGuard(
   record: object,
   environment: ApiEnvironmentName,

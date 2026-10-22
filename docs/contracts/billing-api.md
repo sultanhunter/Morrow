@@ -51,6 +51,7 @@ Every error is an `ErrorEnvelope` with a fixed safe message, the correlation id 
 | 404, 405 | `denied` | never | unmapped path, wrong method (`Allow` set) |
 | 409 | `conflict` | recheck or never | stale authority, an idempotency key reused for another body, terms changed or no terms revision, a checkout in progress, no customer, a provider refusal, a closed checkout |
 | 409 | `conflict` | never | `customer_held`: the workspace's Stripe customer setup is held for Morrow support ("Billing setup for this workspace needs attention from Morrow support."); see `setupHold` |
+| 429 | `rate_limited` | recheck (GET: safe_read_retry) | over the api's per-address session limit, answered before this API runs (`Retry-After: 60`, `retryAfterSeconds` 60; `apps/api/src/session-limit.ts`) |
 | 503 | `unavailable` | recheck | database or broker unavailable, no Stripe adapters (the Stripe switch off) |
 | 503 | `uncertain` | reconcile_before_retry | the Stripe outcome is unknown: retry with the same `Idempotency-Key`, which reconciles the same operation |
 

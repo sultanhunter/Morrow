@@ -183,6 +183,12 @@ function envelope(
   if (!validateDefinition("core", "ErrorEnvelope", body)) throw Error("BILLING_ERROR_INVALID");
   return json(status, body, allow ? { Allow: allow } : {});
 }
+// The api Worker's per-address session limit (apps/api/src/session-limit.ts) answers a
+// billing path whose address or limiter failed before this handler runs, in this API's own
+// 503: the read class on GET, as the handler classifies a request before its guard runs.
+export function billingUnavailableResponse(read: boolean, correlationId: string): Response {
+  return envelope(fixed[read ? "unavailable_read" : "unavailable"], correlationId);
+}
 /** A billing denial (§9): its fixed envelope; denied 403, conflicts 409, unavailable 503. */
 function billingDenialResponse(denial: BillingDenial, correlationId: string): Response {
   const e = denial.envelope;
