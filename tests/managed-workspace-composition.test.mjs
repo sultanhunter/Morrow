@@ -557,9 +557,10 @@ test("M2 PR-3: the deployed Worker binds the catalogue route (it reaches the dat
 
 // M3 PR-2 review: the api's run admission opens on the model-provider switch and M2 PR-3's
 // product read together, as the orchestrator's dispatch does, so no run, lease or credit
-// reservation exists without a Workflow to execute it.
+// reservation exists without a Workflow to execute it. The read exists since M2 PR-3 and M3
+// PR-2 were integrated, so the switch (committed off) is the only gate.
 test("M3 PR-2: run admission opens only with the model switch and the product read", () => {
-  assert.equal(runtimeProductReadAvailable, false);
+  assert.equal(runtimeProductReadAvailable, true);
   for (const [mode, read, open] of [
     ["off", false, false],
     ["off", true, false],
@@ -567,9 +568,14 @@ test("M3 PR-2: run admission opens only with the model switch and the product re
     ["anthropic", true, true],
   ])
     assert.equal(runAdmissionOpen(mode, read), open, mode + ":" + read);
+  // The committed state (the switch off) keeps admission closed; the switch on opens it.
   assert.equal(composed({}).runs.admission, false);
-  // The switch on while the product read is absent (this build): admission stays closed.
-  assert.equal(composed({ MORROW_MODEL_PROVIDER: "anthropic" }).runs.admission, false);
+  assert.equal(composed({ MORROW_MODEL_PROVIDER: "anthropic" }).runs.admission, true);
+  // A build without the product read keeps it closed even with the switch on.
+  assert.equal(
+    composed({ MORROW_MODEL_PROVIDER: "anthropic" }, [], { productRead: false }).runs.admission,
+    false,
+  );
   assert.equal(
     composed({ MORROW_MODEL_PROVIDER: "anthropic" }, [], { productRead: true }).runs.admission,
     true,

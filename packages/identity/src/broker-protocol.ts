@@ -222,12 +222,14 @@ export interface RuntimeBrokerRpc {
   ): Promise<string>;
 }
 /**
- * M2 PR-3's RuntimeBroker.shopifyRead(productContent) exists: a reviewed constant, false until
- * that PR lands it (an RPC stub answers any method name, so it is never probed). The api's run
- * admission and the orchestrator's dispatch both require it with the model-provider switch,
- * so no run, lease or reservation exists without a Workflow to execute it.
+ * M2 PR-3's RuntimeBroker.shopifyRead(productContent) exists: a reviewed constant (an RPC stub
+ * answers any method name, so it is never probed), true since M2 PR-3 and M3 PR-2 were
+ * integrated. The api's run admission and the orchestrator's dispatch both require it with
+ * the model-provider switch, so the switch (committed off, docs/decisions/
+ * model-provider-staging.json) is now the only gate: no run, lease or reservation exists
+ * while it is off.
  */
-export const runtimeProductReadAvailable: boolean = false;
+export const runtimeProductReadAvailable: boolean = true;
 export const modelGatewayLimits = Object.freeze({
   callMaxBytes: 200_000,
   resultMaxBytes: 200_000,

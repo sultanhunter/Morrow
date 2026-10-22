@@ -268,6 +268,21 @@ const extraPolicies = {
     "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_model_task'::text, true)))",
     null,
   ],
+  // M2 PR-3's read resolution, revised in listings-runs (0036): run_product_readable reads,
+  // as the broker's login only, the one run its own setting names and that run's products
+  // (FOR SELECT only; never a manifest or a call, never a write).
+  broker_read_run: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_read_run'::text, true)))",
+    null,
+  ],
+  broker_read_run_product: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (run_id)::text) = current_setting('morrow.vault_read_run'::text, true)))",
+    null,
+  ],
 };
 // One table's policies against the template of its class and its registry extras.
 function checkPolicies(schema, table, spec) {

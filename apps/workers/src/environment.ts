@@ -14,9 +14,12 @@ import {
 // on (MORROW_MODEL_PROVIDER exactly "anthropic", development or staging), with the reviewed
 // database binding of this environment (MORROW_DATABASE_BINDING_JSON, byte-equal to the api's
 // and the broker's, through the P04.T01i PR-D path), the RuntimeBroker service binding with
-// modelRespond and the LISTINGS_RUN Workflow binding. The product read is M2 PR-3's
-// RuntimeBroker.shopifyRead; an RPC stub answers every method name, so its presence is a
-// reviewed constant (orchestrator.ts productReadAvailable), not a probe of the binding.
+// modelRespond and shopifyRead, and the LISTINGS_RUN Workflow binding. The binding is typed as
+// RuntimeBrokerRpc alone, so the product read is M2 PR-3's six-argument
+// shopifyRead(leaseId, generation, subjectId, queryName, variablesJson, budgetMs). An RPC stub
+// answers every method name, so the method check documents the binding's shape and the
+// read's presence is a reviewed constant (orchestrator.ts productReadAvailable, true since
+// M2 PR-3), not a probe.
 // Production never maps (its database binding waits for ADR-0007 item 9).
 
 export type OrchestratorEnvironmentCode =

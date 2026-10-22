@@ -3,7 +3,11 @@ import type { CapabilityId } from "@morrow/contracts";
 import { createAgentAuthorityService } from "@morrow/policy/agent-authority";
 
 import { storeResource } from "@morrow/policy/store-resource";
-import { modelCallBudgetMs, modelGatewayLimits } from "../../../identity/src/broker-protocol.js";
+import {
+  decodeShopifyReadResult,
+  modelCallBudgetMs,
+  modelGatewayLimits,
+} from "../../../identity/src/broker-protocol.js";
 import { generatedModelCatalogue } from "../../../policy/src/generated/model-catalogue.js";
 import { createBillingFactsReader } from "../billing/facts.js";
 import { createLeaseDelegationReader } from "../agents/delegation-reader.js";
@@ -12,8 +16,11 @@ import type { ProductFailureCode, RunEndReason } from "../runtime/run-steps.js";
 import { sha256Text } from "../approvals/digests.js";
 import {
   checkDraft,
+  readSnapshot,
   runFieldsValid,
+  snapshotBytes,
   snapshotCanonical,
+  snapshotMaxBytes,
   type ListingField,
   type ListingSnapshot,
 } from "./drafting.js";
@@ -26,11 +33,15 @@ import { packListingProposals } from "./producer.js";
 // the tenant's own tables. Every step reenters the run lease, so a stop, a removed member or
 // an ended lease stops the run at its next step; decideDelegation reruns at every step
 // (invariant 5), with the entitlement fact from M5's reader over run_billing_facts.
-//   start    run_start (queued -> running, lease started).
+//   start    run_start (queued -> running, lease started), under the lease whose subject is
+//            the Workflow's instance id (the run id; anything else interrupts the run).
 //   product  one per product: decideDelegation (execute on catalog.content.propose, view on
 //            catalog.products.read); run_product_begin (the breaker, the unrecovered-cost cap
-//            and the reservation); the product read (M2 PR-3's shopifyRead productContent)
-//            and its content-addressed snapshot; at most two attempts through the broker's
+//            and the reservation); the product read (M2 PR-3's shopifyRead productContent,
+//            named by the run id: a read that throws is a step retry, never a failed
+//            product; not_found and a reply outside the protocol fail it read_failed; a
+//            product over 64 KiB fails too_large before any schema check) and its
+//            content-addressed snapshot; at most two attempts through the broker's
 //            modelRespond (a resend after a throttle reuses the attempt); the code checks of
 //            drafting.ts; run_product_finish. Outcomes follow ADR-0022 item 10: spend_limit
 //            and provider_error end the run, incomplete, refusal, invalid output and
@@ -40,9 +51,65 @@ import { packListingProposals } from "./producer.js";
 //            also runs after a run-ending outcome, so drafted products are still proposed.
 //   finish   run_finish: settles at the products proposed, ends the run, releases the lease.
 
+/**
+ * One product read. unavailable: the read threw (BROKER_HELD: READ_BUSY, a throttle that did
+ * not fit the budget, OUTCOME_UNKNOWN, a lost RPC, a stop or an ended lease), which a retry
+ * may clear, so the product step retries (RunStepRetry) and a real stop is caught at the next
+ * lease entry; it never counts toward the failed-product breaker. invalid: the reply was not
+ * the protocol's closed result.
+ */
 export type ProductRead =
   | { readonly outcome: "read"; readonly product: ListingSnapshot }
-  | { readonly outcome: "not_found" | "unavailable" };
+  | { readonly outcome: "not_found" | "unavailable" | "invalid" };
+/**
+ * One shopifyRead(productContent) reply as the product step takes it, decoded with the
+ * protocol's own closed decoder (M2 PR-3): a product's listing fields, not_found, or invalid
+ * for anything else. The orchestrator maps a thrown read to unavailable itself.
+ */
+export function productReadOf(text: unknown): ProductRead {
+  try {
+    const result = decodeShopifyReadResult("productContent", text);
+    if (result.outcome === "not_found") return Object.freeze({ outcome: "not_found" });
+    if ("product" in result) return Object.freeze({ outcome: "read", product: result.product });
+  } catch {
+    // The reply was not the protocol's closed result.
+  }
+  return Object.freeze({ outcome: "invalid" });
+}
+/** What the product step takes from one read: the snapshot and its canonical text, or a failure. */
+export type ReadSnapshot =
+  | {
+      readonly kind: "snapshot";
+      readonly snapshot: ListingSnapshot;
+      readonly canonical: string;
+    }
+  | { readonly kind: "failed"; readonly code: "read_failed" | "product_mismatch" | "too_large" };
+/**
+ * The product step's handling of one read. A read that threw (unavailable) is transient for
+ * the step: a RunStepRetry, never a failed product, so it never counts toward the breaker;
+ * a stop or an ended lease is caught at the retried step's lease entry. not_found and a reply
+ * outside the protocol fail read_failed; another product, product_mismatch. The size is
+ * checked before the schema (the read admits text ListingSnapshot@1 does not), so a product
+ * over 64 KiB fails too_large, never read_failed; exact duplicate tags are dropped first.
+ */
+export function snapshotOfRead(read: ProductRead, productId: string): ReadSnapshot {
+  const failed = (code: "read_failed" | "product_mismatch" | "too_large") =>
+    Object.freeze({ kind: "failed" as const, code });
+  if (read.outcome === "unavailable") throw retry("product_read");
+  if (read.outcome !== "read") return failed("read_failed");
+  if (read.product.productId !== productId) return failed("product_mismatch");
+  const snapshot = readSnapshot(read.product);
+  if (snapshotBytes(snapshot) > snapshotMaxBytes) return failed("too_large");
+  try {
+    return Object.freeze({
+      kind: "snapshot" as const,
+      snapshot,
+      canonical: snapshotCanonical(snapshot),
+    });
+  } catch {
+    return failed("read_failed");
+  }
+}
 export interface ListingsRunPorts {
   /** One transaction under the run lease (runLeaseStep over the runtime executor's pool). */
   lease<T>(
@@ -282,19 +349,11 @@ export async function draftProduct(
     throw retry("call_open");
   };
   // 2. The product as read and its snapshot (re-read after a retried step: a bound snapshot
-  //    with counted attempts must be exactly what the calls used).
-  const read = await ports.readProduct(ref, facts.runId, b.productId);
-  if (read.outcome !== "read") return finish({ outcome: "failed", code: "read_failed" }, null);
-  if (read.product.productId !== b.productId)
-    return finish({ outcome: "failed", code: "product_mismatch" }, null);
-  let canonical: string;
-  try {
-    canonical = snapshotCanonical(read.product);
-  } catch {
-    return finish({ outcome: "failed", code: "read_failed" }, null);
-  }
-  if (new TextEncoder().encode(canonical).length > 65_536)
-    return finish({ outcome: "failed", code: "too_large" }, null);
+  //    with counted attempts must be exactly what the calls used). A read that threw is
+  //    transient for this step: retried, never a failed product.
+  const got = snapshotOfRead(await ports.readProduct(ref, facts.runId, b.productId), b.productId);
+  if (got.kind === "failed") return finish({ outcome: "failed", code: got.code }, null);
+  const { snapshot, canonical } = got;
   if (b.snapshotDigest === null || b.attempts === 0 || b.snapshotDigest !== sha256Text(canonical)) {
     if (b.attempts > 0 && b.snapshotDigest !== null && b.snapshotDigest !== sha256Text(canonical))
       return finish({ outcome: "failed", code: "read_failed" }, null);
@@ -318,7 +377,7 @@ export async function draftProduct(
         sequence,
         request: b.objective,
         fields: [...b.fields],
-        product: read.product,
+        product: snapshot,
       };
       let text: string;
       try {
@@ -352,7 +411,7 @@ export async function draftProduct(
         const checked = checkDraft(
           result.output,
           b.productId,
-          read.product,
+          snapshot,
           b.fields as ListingField[],
         );
         if (checked.ok)
@@ -487,11 +546,17 @@ export async function listingsRun(
   runId: string,
 ): Promise<RunStepResult> {
   const started = await steps.do("start", async () => {
-    const r = await under(ports, ref, (step) => step.run.start());
+    // The lease the payload names must be this run's: the instance id is the run id, and the
+    // product read names it as the lease's subject (M2 PR-3's resolution refuses any other).
+    const r = await under(ports, ref, async (step) =>
+      step.lease.kind === "run" && step.lease.subjectId === runId
+        ? step.run.start()
+        : ("subject_mismatch" as const),
+    );
     if (!r.entered)
       return Object.freeze({ kind: "interrupted", refusal: r.refusal }) as RunStepResult;
-    if (r.value === "denied")
-      return Object.freeze({ kind: "interrupted", refusal: "denied" }) as RunStepResult;
+    if (r.value === "denied" || r.value === "subject_mismatch")
+      return Object.freeze({ kind: "interrupted", refusal: r.value }) as RunStepResult;
     if (r.value.outcome === "ended")
       return Object.freeze({ kind: "ended", status: r.value.status }) as RunStepResult;
     const modelBudgetMs = runModelBudgetMs(r.value.catalogueVersion, r.value.model, r.value.effort);

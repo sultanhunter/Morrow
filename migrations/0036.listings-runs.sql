@@ -23,7 +23,11 @@ BEGIN;
 --     cost that no longer fits the reservation, the vendor guard admitting a later accrual,
 --     and run_product_unrecovered); the lease twins the runtime definers need on the work
 --     stream, the outbox, tasks, the approval records and the billing rows; the broker's
---     settings-keyed policies for its two model definers.
+--     settings-keyed policies for its two model definers and for M2 PR-3's product read.
+--   * M2 PR-3's two revisable helpers (0035), revised now that runs exist:
+--     run_product_readable (a run lease reads a product of its own running run, in
+--     progress) and store_content_redact (shop/redact also deletes the store's snapshots and
+--     drafts).
 --   * Definers: the api's begin_run_command, cmd_run_admit, cmd_runs_reconcile and
 --     run_interrupted; the
 --     runtime's run_start, run_billing_facts, run_product_begin, run_snapshot_put,
@@ -767,9 +771,11 @@ DO $$ DECLARE t text; BEGIN
  END LOOP;
  -- The broker's two model definers (morrow_vault, below) read exactly the run and tenant they
  -- name through transaction-local settings they write themselves before reading and clear
- -- after, only while the session user is the broker's login (the resolve_call idiom of 0031):
- -- no other definer the broker may execute reads these tables, so a setting it forges reaches
- -- nothing.
+ -- after, only while the session user is the broker's login (the resolve_call idiom of 0031).
+ -- The one other path the broker reaches these tables by, M2 PR-3's read resolution through
+ -- run_product_readable, has its own setting and FOR SELECT policies below; each of the three
+ -- writes its setting before reading, names its run in every query and clears it after, so a
+ -- setting the broker's login forges reaches nothing.
  EXECUTE 'CREATE POLICY broker_model_run ON morrow_work.runs TO morrow_work_command
    USING (session_user=''morrow_vault_broker'' AND organization_id::text||''|''||workspace_id::text||''|''||id::text=pg_catalog.current_setting(''morrow.vault_model_run'',true))
    WITH CHECK (session_user=''morrow_vault_broker'' AND organization_id::text||''|''||workspace_id::text||''|''||id::text=pg_catalog.current_setting(''morrow.vault_model_run'',true))';
@@ -809,6 +815,19 @@ END $$;
 CREATE POLICY task_broker_model ON morrow_work.tasks FOR SELECT TO morrow_work_command
  USING (session_user='morrow_vault_broker'
   AND organization_id::text||'|'||workspace_id::text||'|'||id::text=pg_catalog.current_setting('morrow.vault_model_task',true));
+-- M2 PR-3's read resolution (morrow_vault.shopify_read_resolve) asks run_product_readable
+-- (below) whether a run lease may read one product. It runs as the command role with the
+-- broker's login as the session user, after resolve_call cleared its own settings, so FORCE
+-- RLS shows it no run unless a policy admits one: these admit, for reading only, exactly the
+-- run its own transaction-local setting names (morrow.vault_read_run, org|ws|run), which
+-- only run_product_readable writes and clears. Not the model definers' setting: the read path
+-- sees one run's status and its products' status, never a manifest or a call.
+CREATE POLICY broker_read_run ON morrow_work.runs FOR SELECT TO morrow_work_command
+ USING (session_user='morrow_vault_broker'
+  AND organization_id::text||'|'||workspace_id::text||'|'||id::text=pg_catalog.current_setting('morrow.vault_read_run',true));
+CREATE POLICY broker_read_run_product ON morrow_work.run_products FOR SELECT TO morrow_work_command
+ USING (session_user='morrow_vault_broker'
+  AND organization_id::text||'|'||workspace_id::text||'|'||run_id::text=pg_catalog.current_setting('morrow.vault_read_run',true));
 
 -- Privileges: table SELECT and INSERT, column-scoped UPDATE, never DELETE or TRUNCATE. The
 -- api role reads the tenant-readable tables column by column; never the provider ids.
@@ -1129,6 +1148,37 @@ BEGIN
  END LOOP;
  RETURN v_closed;
 END $$;
+
+-- ---------------------------------------------------------------------------
+-- M2 PR-3's revisable owner helpers (0035), same signatures, revised now that the runs and
+-- their store content exist. CREATE OR REPLACE keeps their owner (the work owner) and their
+-- ACL (EXECUTE for the command role only), restated below; the prerequisites pin the text
+-- 0035 wrote, so a later revision is never replaced blind.
+-- Whether a run lease may read one product (spine §4; M2 PR-3 review finding B2): only a
+-- product of that run, while the run is running and the product is in progress (begun by
+-- run_product_begin, not yet finished). shopify_read_resolve calls it with the tenant and the
+-- run id resolve_call resolved from the lease. It writes morrow.vault_read_run before it
+-- reads (the broker_read_run and broker_read_run_product policies, the broker's login only)
+-- and clears it after; under any other session user it reads nothing, so it is false.
+CREATE OR REPLACE FUNCTION morrow_work.run_product_readable(p_org text,p_ws text,p_run_id text,p_product_id text) RETURNS boolean
+LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
+DECLARE v_readable boolean;
+BEGIN
+ IF p_org IS NULL OR p_org !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' OR p_ws IS NULL OR p_ws !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+  OR p_run_id IS NULL OR p_run_id !~ '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$'
+  OR p_product_id IS NULL OR p_product_id !~ '^product:[1-9][0-9]{0,19}$' THEN
+  RETURN false;
+ END IF;
+ PERFORM pg_catalog.set_config('morrow.vault_read_run',p_org||'|'||p_ws||'|'||p_run_id,true);
+ SELECT EXISTS(SELECT 1 FROM morrow_work.runs r JOIN morrow_work.run_products q ON q.organization_id=r.organization_id
+   AND q.workspace_id=r.workspace_id AND q.run_id=r.id
+  WHERE r.organization_id=p_org AND r.workspace_id=p_ws AND r.id=p_run_id AND r.status='running'
+   AND q.product_id=p_product_id AND q.status='in_progress') INTO v_readable;
+ PERFORM pg_catalog.set_config('morrow.vault_read_run','',true);
+ RETURN v_readable;
+END $$;
+REVOKE ALL ON FUNCTION morrow_work.run_product_readable(text,text,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION morrow_work.run_product_readable(text,text,text,text) TO morrow_work_command;
 
 -- ---------------------------------------------------------------------------
 -- API functions: SECURITY DEFINER, owned by the command role after the transfer below,

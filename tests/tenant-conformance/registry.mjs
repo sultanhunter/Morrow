@@ -189,7 +189,9 @@ export const workTables = Object.freeze({
   // One run, its products, manifest and model calls: ids, digests, codes, counts and times.
   // The session context admits and closes stale runs (tenant_command), the run steps work
   // under the run lease (tenant_lease), and the broker's model definers reach exactly the
-  // run they name (broker_model_run, broker_model_run_child, broker_model_call).
+  // run they name (broker_model_run, broker_model_run_child, broker_model_call). M2 PR-3's
+  // read resolution reads one run and its products' status through run_product_readable
+  // (broker_read_run, broker_read_run_product: FOR SELECT, its own setting).
   runs: {
     class: "tenant_readable",
     parents: [
@@ -202,14 +204,14 @@ export const workTables = Object.freeze({
       "morrow_billing.billing_accounts",
     ],
     lease: true,
-    policies: ["broker_model_run"],
+    policies: ["broker_model_run", "broker_read_run"],
     content: "none",
   },
   run_products: {
     class: "tenant_readable",
     parents: ["runs"],
     lease: true,
-    policies: ["broker_model_run_child"],
+    policies: ["broker_model_run_child", "broker_read_run_product"],
     content: "none",
   },
   run_manifests: {

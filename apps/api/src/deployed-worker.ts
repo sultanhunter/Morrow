@@ -131,8 +131,9 @@ export function composeApiDependencies(
   });
   // M3 PR-2: the runs routes on the work dependencies; admission only while the
   // model-provider switch is on and M2 PR-3's product read exists (the orchestrator
-  // dispatches on the same two), otherwise 503 before any database access: no run, lease
-  // or reservation exists without a Workflow to execute it.
+  // dispatches on the same two; the read exists since their integration, so the switch,
+  // committed off, is the only gate), otherwise 503 before any database access: no run,
+  // lease or reservation exists without a Workflow to execute it.
   const runs: RunsApiDependencies = Object.freeze({
     ...work,
     environment,

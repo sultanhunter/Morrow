@@ -8,14 +8,17 @@ import {
   type LeaseRef,
   type LeaseStep,
 } from "../../../packages/work/src/runtime/leases.js";
-import type { ListingSnapshot } from "../../../packages/work/src/runs/drafting.js";
 import {
   listingsRun,
+  productReadOf,
   RunStepRetry,
   type ListingsRunPorts,
   type ProductRead,
 } from "../../../packages/work/src/runs/workflow.js";
-import { runtimeProductReadAvailable } from "../../../packages/identity/src/broker-protocol.js";
+import {
+  runtimeProductReadAvailable,
+  shopifyReadLimits,
+} from "../../../packages/identity/src/broker-protocol.js";
 import { mapOrchestratorEnvironment, type OrchestratorEnvironmentMapping } from "./environment.js";
 import { createRuntimePool } from "./runtime-pool.js";
 
@@ -26,12 +29,13 @@ import { createRuntimePool } from "./runtime-pool.js";
 // dispatch Queue consumer still never acks (no producer exists: run admission's start is the
 // cron, and an api producer is a follow-up). Dispatch is disabled, and every Workflow throws
 // dispatch_disabled before any step, unless the reviewed model-provider switch is on with the
-// reviewed database binding, the RuntimeBroker and Workflow bindings (environment.ts), and
-// the product read of M2 PR-3 exists (productReadAvailable). OperationWorkflow joins in M4.
+// reviewed database binding and the RuntimeBroker and Workflow bindings (environment.ts).
+// M2 PR-3's product read exists since the integration of M2 PR-3 and M3 PR-2
+// (productReadAvailable, a reviewed constant), so the model-provider switch, committed off,
+// is the only gate. OperationWorkflow joins in M4.
 
 /** M2 PR-3's RuntimeBroker.shopifyRead(productContent): the api's admission shares it. */
 export const productReadAvailable = runtimeProductReadAvailable;
-const productBudgetMs = 15_000;
 const stepBudgetMs = 25_000;
 
 interface Selected {
@@ -83,9 +87,13 @@ function select(env: unknown): Selected {
   return selected;
 }
 
-// The product read (spine §4): M2 PR-3's broker method, minimised JSON of one product's
-// listing fields. The orchestrator accepts exactly {schemaVersion 1, outcome read, product}
-// or {schemaVersion 1, outcome not_found}; anything else is unavailable.
+// The product read (spine §4): M2 PR-3's RuntimeBroker.shopifyRead(productContent) under the
+// run lease, named by the run id as the lease's subject (the vault resolution refuses any
+// other subject, and any product not of that run). The reply is decoded with the protocol's
+// own closed decoder (productReadOf): a product's listing fields, or not_found; anything else
+// is invalid (the product fails read_failed). A thrown read (BROKER_HELD) is unavailable: the
+// step retries it (workflow.ts), and a stop or an ended lease is caught at the next lease
+// entry.
 async function readProduct(
   mapping: OrchestratorEnvironmentMapping,
   ref: LeaseRef,
@@ -93,29 +101,20 @@ async function readProduct(
   productId: string,
 ): Promise<ProductRead> {
   if (!mapping.ok) return { outcome: "unavailable" };
+  let text: string;
   try {
-    const text = await mapping.broker.shopifyRead(
+    text = await mapping.broker.shopifyRead(
       ref.leaseId,
       ref.generation,
       runId,
       "productContent",
       JSON.stringify({ productId }),
-      productBudgetMs,
+      shopifyReadLimits.budgetMaxMs,
     );
-    const value = JSON.parse(text) as Record<string, unknown>;
-    if (value?.schemaVersion === 1 && value.outcome === "not_found")
-      return { outcome: "not_found" };
-    if (
-      value?.schemaVersion === 1 &&
-      value.outcome === "read" &&
-      value.product &&
-      typeof value.product === "object"
-    )
-      return { outcome: "read", product: value.product as ListingSnapshot };
-    return { outcome: "unavailable" };
   } catch {
     return { outcome: "unavailable" };
   }
+  return productReadOf(text);
 }
 
 export class ListingsRunWorkflow extends WorkflowEntrypoint<unknown, unknown> {

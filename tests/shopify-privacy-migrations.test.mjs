@@ -199,6 +199,7 @@ test("constants SQL shares with TypeScript", () => {
 });
 
 test("fail closed: a run lease reads no product until M3 PR-2's runs exist; customers keep no digest", () => {
+  // 0035's text; listings-runs revises it once the runs exist (tests/listings-runs-sql.test.mjs).
   assert.match(
     work,
     /CREATE FUNCTION morrow_work\.run_product_readable\(p_org text,p_ws text,p_run_id text,p_product_id text\) RETURNS boolean\nLANGUAGE sql STABLE SET search_path=pg_catalog,morrow_work,pg_temp AS \$\$\n SELECT false\n\$\$;/,

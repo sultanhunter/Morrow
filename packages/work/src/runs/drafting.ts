@@ -84,17 +84,44 @@ export function runFieldsValid(fields: unknown): fields is readonly ListingField
   return fields.includes("seo.title") === fields.includes("seo.description");
 }
 
-/** The canonical snapshot text of one product as read (its digest is the expected source revision). */
-export function snapshotCanonical(snapshot: ListingSnapshot): string {
-  if (!validateCurrentDefinition("ListingSnapshot", snapshot))
-    throw Error("LISTING_SNAPSHOT_INVALID");
-  return canonicalJson({
+/** The largest canonical snapshot a run stores (product_snapshots holds at most 64 KiB). */
+export const snapshotMaxBytes = 65_536;
+const snapshotText = (snapshot: ListingSnapshot) =>
+  canonicalJson({
     productId: snapshot.productId,
     title: snapshot.title,
     descriptionHtml: snapshot.descriptionHtml,
     seo: { title: snapshot.seo.title, description: snapshot.seo.description },
     tags: [...snapshot.tags],
   });
+/**
+ * A product as M2 PR-3's read returned it, with exact duplicate tags dropped (the first kept):
+ * the read's closed result does not require unique tags, ListingSnapshot@1 does, and Shopify
+ * keeps a product's tags unique, so a duplicate carries nothing.
+ */
+export function readSnapshot(product: ListingSnapshot): ListingSnapshot {
+  return Object.freeze({
+    productId: product.productId,
+    title: product.title,
+    descriptionHtml: product.descriptionHtml,
+    seo: Object.freeze({ title: product.seo.title, description: product.seo.description }),
+    tags: Object.freeze([...new Set(product.tags)]),
+  });
+}
+/**
+ * The canonical byte size of a product as read, before any schema check: the read admits
+ * longer text than ListingSnapshot@1 (a 196,608-byte description), so a product over
+ * snapshotMaxBytes is too_large, never read_failed. Within the bound no string can exceed the
+ * schema's 65,536 characters.
+ */
+export function snapshotBytes(snapshot: ListingSnapshot): number {
+  return bytes(snapshotText(snapshot));
+}
+/** The canonical snapshot text of one product as read (its digest is the expected source revision). */
+export function snapshotCanonical(snapshot: ListingSnapshot): string {
+  if (!validateCurrentDefinition("ListingSnapshot", snapshot))
+    throw Error("LISTING_SNAPSHOT_INVALID");
+  return snapshotText(snapshot);
 }
 
 const fold = (tag: string) => tag.trim().toLocaleLowerCase("en-US");

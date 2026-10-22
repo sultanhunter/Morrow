@@ -7,9 +7,9 @@ import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 // P04.T02a AC21 (its meaning revised by M3 PR-2, the ID kept): dispatch stays disabled in the
-// orchestrator Worker until the reviewed model-provider switch is on with every binding and
-// M2 PR-3's product read exists; ListingsRunWorkflow then replaces MorrowWorkWorkflow. The
-// connector
+// orchestrator Worker until the reviewed model-provider switch is on with every binding (M2
+// PR-3's product read exists since the two were integrated, so the switch, committed off, is
+// the only gate); ListingsRunWorkflow replaces MorrowWorkWorkflow. The connector
 // (M2 PR-2's worker/index.ts) is fail-closed without its reviewed identifiers. `cloudflare:*` modules are stubbed.
 const stubs = {
   "cloudflare:workers":
@@ -77,7 +77,7 @@ test("AC21: queue() retries the whole batch once and never acks", async (t) => {
   assert.equal(response.status, 404);
 });
 
-test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step", async (t) => {
+test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step unless the switch is on", async (t) => {
   const module = await load(t, "apps/workers/src/orchestrator.ts");
   let steps = 0;
   const step = new Proxy(
@@ -90,7 +90,7 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step", 
     },
   );
   assert.equal(module.MorrowWorkWorkflow, undefined);
-  assert.equal(module.productReadAvailable, false);
+  assert.equal(module.productReadAvailable, true);
   const binding = JSON.stringify({
     schemaVersion: 1,
     environment: "staging",
@@ -101,20 +101,22 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step", 
   });
   const broker = { fetch() {}, neonLease() {}, modelRespond() {}, shopifyRead() {} };
   const workflowBinding = { create: () => Promise.resolve() };
-  // The committed environment (MORROW_ENVIRONMENT only), the switch on without its other
-  // bindings, and every binding present: M2 PR-3's product read is still missing, so each
-  // is disabled before any step, with a payload or without one.
+  const full = {
+    MORROW_ENVIRONMENT: "staging",
+    MORROW_MODEL_PROVIDER: "anthropic",
+    MORROW_DATABASE_BINDING_JSON: binding,
+    BROKER: broker,
+    LISTINGS_RUN: workflowBinding,
+  };
+  // The committed environment (MORROW_ENVIRONMENT only), every binding but the switch, the
+  // switch on without its other bindings, and production: each is disabled before any step,
+  // with a payload or without one.
+  const { MORROW_MODEL_PROVIDER: _switch, ...switchOff } = full;
   for (const env of [
     { MORROW_ENVIRONMENT: "staging" },
+    switchOff,
     { MORROW_ENVIRONMENT: "staging", MORROW_MODEL_PROVIDER: "anthropic" },
-    {
-      MORROW_ENVIRONMENT: "staging",
-      MORROW_MODEL_PROVIDER: "anthropic",
-      MORROW_DATABASE_BINDING_JSON: binding,
-      BROKER: broker,
-      LISTINGS_RUN: workflowBinding,
-    },
-    { MORROW_ENVIRONMENT: "production", MORROW_MODEL_PROVIDER: "anthropic" },
+    { ...full, MORROW_ENVIRONMENT: "production" },
   ]) {
     const workflow = new module.ListingsRunWorkflow({}, env);
     for (const payload of [{}, { leaseId: "00000000-0000-4000-8000-000000000001", generation: 1 }])
@@ -124,6 +126,19 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step", 
           error.constructor.name === "NonRetryableError" && error.message === "dispatch_disabled",
       );
   }
+  assert.equal(steps, 0);
+  // Every binding with the switch on: dispatch is enabled (the switch is the only gate), and
+  // a payload that is not a lease reference is refused before any step. workerd never
+  // populates process.env (nodejs_compat_do_not_populate_process_env); Node does.
+  const saved = process.env;
+  process.env = {};
+  t.after(() => (process.env = saved));
+  const enabled = new module.ListingsRunWorkflow({}, { ...full });
+  await assert.rejects(
+    enabled.run({ payload: {}, timestamp: new Date(), instanceId: "i" }, step),
+    (error) =>
+      error.constructor.name === "NonRetryableError" && error.message === "payload_invalid",
+  );
   assert.equal(steps, 0);
 });
 

@@ -9,13 +9,18 @@ import assert from "node:assert/strict";
 import {
   listingsRun,
   productMarginMs,
+  productReadOf,
   RunStepRetry,
   runModelBudgetMs,
+  snapshotOfRead,
 } from "../packages/work/src/runs/workflow.ts";
+import { snapshotCanonical } from "../packages/work/src/runs/drafting.ts";
 import { modelCallBudgetMs, modelGatewayLimits } from "../packages/identity/src/broker-protocol.ts";
 
 const ref = { leaseId: "00000000-0000-4000-8000-000000000001", generation: 1 };
 const runId = "00000000-0000-4000-8000-0000000000aa";
+// The entered run lease (its subject is the run id, the Workflow's instance id).
+const runLease = { kind: "run", subjectId: runId };
 function steps() {
   const names = [];
   return {
@@ -83,6 +88,7 @@ test("a refused lease interrupts the run at its first step; an ended run ends", 
       entered: true,
       lease: {},
       value: await body({
+        lease: runLease,
         run: { start: async () => startRow({ outcome: "ended", status: "succeeded" }) },
       }),
     })),
@@ -95,7 +101,7 @@ test("a refused lease interrupts the run at its first step; an ended run ends", 
     ports(async (_r, body) => ({
       entered: true,
       lease: {},
-      value: await body({ run: { start: async () => "denied" } }),
+      value: await body({ lease: runLease, run: { start: async () => "denied" } }),
     })),
     steps().steps,
     ref,
@@ -128,7 +134,11 @@ test("past its time budget a run skips its products, still proposes, and finishe
     },
   };
   const result = await listingsRun(
-    ports(async (_r, body) => ({ entered: true, lease: {}, value: await body({ run }) })),
+    ports(async (_r, body) => ({
+      entered: true,
+      lease: {},
+      value: await body({ lease: runLease, run }),
+    })),
     s.steps,
     ref,
     runId,
@@ -149,7 +159,11 @@ test("a finish that finds an open call waits and asks again", async () => {
         : { outcome: "ended", status: "failed", creditsSettled: null },
   };
   const result = await listingsRun(
-    ports(async (_r, body) => ({ entered: true, lease: {}, value: await body({ run }) })),
+    ports(async (_r, body) => ({
+      entered: true,
+      lease: {},
+      value: await body({ lease: runLease, run }),
+    })),
     steps().steps,
     ref,
     runId,
@@ -189,7 +203,11 @@ test("each run's model budget is its effort's whole call; the product margin fol
     },
   };
   const result = await listingsRun(
-    ports(async (_r, body) => ({ entered: true, lease: {}, value: await body({ run }) })),
+    ports(async (_r, body) => ({
+      entered: true,
+      lease: {},
+      value: await body({ lease: runLease, run }),
+    })),
     {
       async do(name, body) {
         const value = JSON.parse(JSON.stringify(await body()));
@@ -229,4 +247,102 @@ test("the product step accepts every objective the task accepted: lengths are co
   assert.equal((await begin("\u{1F600}".repeat(8192))).outcome, "begun");
   await assert.rejects(begin("\u{1F600}".repeat(8193)), /RUNTIME_RUN_HELD/);
   await assert.rejects(begin(""), /RUNTIME_RUN_HELD/);
+});
+
+// M2 PR-3 integration: the run id is the Workflow's instance id and the run lease's subject;
+// the product read names it, so a payload naming another run's lease interrupts the run.
+test("the start step interrupts a run whose lease names another subject", async () => {
+  for (const lease of [
+    { kind: "run", subjectId: "00000000-0000-4000-8000-0000000000bb" },
+    { kind: "read", subjectId: runId },
+  ]) {
+    let started = 0;
+    const s = steps();
+    const result = await listingsRun(
+      ports(async (_r, body) => ({
+        entered: true,
+        lease,
+        value: await body({ lease, run: { start: async () => (started++, startRow()) } }),
+      })),
+      s.steps,
+      ref,
+      runId,
+    );
+    assert.deepEqual(result, { kind: "interrupted", refusal: "subject_mismatch" });
+    assert.equal(started, 0);
+    assert.deepEqual(s.names, ["start"]);
+  }
+});
+
+const product = (over = {}) => ({
+  productId: "product:7",
+  title: "Linen shirt",
+  descriptionHtml: "<p>Soft linen.</p>",
+  seo: { title: null, description: null },
+  tags: ["summer"],
+  ...over,
+});
+test("the product read is decoded by the protocol's closed decoder", () => {
+  const read = { schemaVersion: 1, outcome: "read", product: product() };
+  assert.deepEqual(productReadOf(JSON.stringify(read)), { outcome: "read", product: product() });
+  assert.deepEqual(productReadOf('{"schemaVersion":1,"outcome":"not_found"}'), {
+    outcome: "not_found",
+  });
+  // Anything outside the closed result is invalid: an extra key, another query's result,
+  // a malformed product id, not JSON, not a string.
+  for (const text of [
+    JSON.stringify({ ...read, extra: 1 }),
+    JSON.stringify({ schemaVersion: 1, outcome: "read", products: [], nextCursor: null }),
+    JSON.stringify({ ...read, product: product({ productId: "7" }) }),
+    "{",
+    null,
+  ])
+    assert.deepEqual(productReadOf(text), { outcome: "invalid" });
+});
+
+test("a thrown read is a step retry; not_found and invalid fail the product read_failed", () => {
+  assert.throws(
+    () => snapshotOfRead({ outcome: "unavailable" }, "product:7"),
+    (error) => error instanceof RunStepRetry && error.code === "product_read",
+  );
+  for (const outcome of ["not_found", "invalid"])
+    assert.deepEqual(snapshotOfRead({ outcome }, "product:7"), {
+      kind: "failed",
+      code: "read_failed",
+    });
+  assert.deepEqual(snapshotOfRead({ outcome: "read", product: product() }, "product:8"), {
+    kind: "failed",
+    code: "product_mismatch",
+  });
+  const ok = snapshotOfRead({ outcome: "read", product: product() }, "product:7");
+  assert.equal(ok.kind, "snapshot");
+  assert.equal(ok.canonical, snapshotCanonical(product()));
+});
+
+test("an oversize product fails too_large before any schema check; duplicate tags are dropped", () => {
+  // M2 PR-3's read admits a 196,608-byte description and 4,096-byte titles; ListingSnapshot@1
+  // caps strings at 65,536 characters, so the size decides first.
+  for (const over of [
+    { descriptionHtml: "d".repeat(196_608) },
+    { descriptionHtml: "d".repeat(65_536) },
+    { tags: Array.from({ length: 250 }, (_, i) => "t".repeat(1_000) + i) },
+  ])
+    assert.deepEqual(snapshotOfRead({ outcome: "read", product: product(over) }, "product:7"), {
+      kind: "failed",
+      code: "too_large",
+    });
+  // Just under the bound is a snapshot.
+  const base = snapshotCanonical(product({ descriptionHtml: "" }));
+  const fits = product({ descriptionHtml: "d".repeat(65_536 - Buffer.byteLength(base)) });
+  const at = snapshotOfRead({ outcome: "read", product: fits }, "product:7");
+  assert.equal(at.kind, "snapshot");
+  assert.equal(Buffer.byteLength(at.canonical), 65_536);
+  // The read does not require unique tags; ListingSnapshot@1 does. Exact duplicates are
+  // dropped (the first kept) instead of failing the product.
+  const tagged = snapshotOfRead(
+    { outcome: "read", product: product({ tags: ["summer", "linen", "summer"] }) },
+    "product:7",
+  );
+  assert.equal(tagged.kind, "snapshot");
+  assert.deepEqual(tagged.snapshot.tags, ["summer", "linen"]);
 });
