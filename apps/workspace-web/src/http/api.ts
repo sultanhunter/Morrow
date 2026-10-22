@@ -29,6 +29,7 @@ import {
 import {
   decodeAnswer,
   decodeAnswered,
+  decodeErrorEnvelope,
   decodeGoal,
   decodeGoalCreated,
   decodeOne,
@@ -438,6 +439,18 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
     decode: (body: unknown, status: number) => T | null,
   ): Promise<Outcome<T>> =>
     request ? workOutcome(await send(request), "command", decode) : refused;
+  // Run admission: a 400 refusal (the selection) keeps the server's safe message.
+  const admitCommand = async <T>(
+    request: HttpRequest | null,
+    decode: (body: unknown, status: number) => T | null,
+  ): Promise<Outcome<T>> => {
+    if (!request) return refused;
+    const reply = await send(request);
+    const outcome = workOutcome(reply, "command", decode);
+    if (outcome.kind !== "invalid" || reply.kind !== "response") return outcome;
+    const envelope = decodeErrorEnvelope(reply.body);
+    return envelope ? { kind: "invalid", field: null, message: envelope.safeMessage } : outcome;
+  };
   // Single-record reads also check the record is the one the path names.
   const same = <T extends { readonly id: string }>(id: string, value: T | null) =>
     value !== null && value.id === id ? value : null;
@@ -637,7 +650,7 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
             fields: readonly string[];
             selection: { readonly model: string; readonly effort: string } | null;
           }>,
-        ) => command(requests.admitRun(ws, taskId, c), decodeRunAdmitted),
+        ) => admitCommand(requests.admitRun(ws, taskId, c), decodeRunAdmitted),
       ),
       listOfTask: gated("runs.listOfTask", (ws: string, taskId: string) =>
         read(requests.runsOfTask(ws, taskId), (b) => decodeRunsOfTask(b, taskId)),

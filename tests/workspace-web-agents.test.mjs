@@ -165,6 +165,24 @@ test("decoders accept the server's own bodies exactly", async () => {
   assert.equal(decoded.entries.length, 9);
   assert.deepEqual(decoded.workspaceDefault, { model: "claude_sonnet_5_5", effort: "low" });
   assert.equal(decoded.canRevise, false);
+  // M3 PR-2: GET /models says whether run admission is open (closed unless the api's runs
+  // handler admits), so Ask writes nothing while it is not.
+  assert.equal(decoded.draftingAvailable, false);
+  const open = await runAgentRead(
+    { run: async (name) => (name === "enterContext" ? [contextRow] : []) },
+    {
+      route: { method: "GET", pattern: "", query: [] },
+      workspaceId: W,
+      params: {},
+      query: new Map(),
+      sessionDigest: "d".repeat(64),
+      commandId: null,
+      body: null,
+    },
+    "models.list",
+    true,
+  );
+  assert.equal(decodeModels({ schemaVersion: 1, ...open.body })?.draftingAvailable, true);
   const status = await serverRead("listings.status", {
     enterContext: [contextRow],
     storeAssociation: [{ store_id: S, connection_id: "c", database_now: "x" }],
@@ -245,6 +263,8 @@ test("decoders accept the server's own bodies exactly", async () => {
     { ...modelsBody, workspaceDefault: { model: "claude_opus_9", effort: "low" } },
     { ...modelsBody, ceiling: 0 },
     { ...modelsBody, price: "0.01" },
+    { ...modelsBody, draftingAvailable: "yes" },
+    Object.fromEntries(Object.entries(modelsBody).filter(([k]) => k !== "draftingAvailable")),
   ])
     assert.equal(decodeModels(bad), null);
   for (const bad of [

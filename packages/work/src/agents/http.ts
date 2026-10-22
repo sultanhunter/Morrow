@@ -102,8 +102,13 @@ function dependencies(value: WorkApiDependencies): WorkApiDependencies {
 }
 const reads: readonly string[] = ["listings.status", "models.list"];
 
-export function createAgentsApiHandler(d?: WorkApiDependencies) {
+/**
+ * The agents routes. `draftingAvailable` is the runs handler's admission flag (the api
+ * composes both from the same switch), reported by GET /models.
+ */
+export function createAgentsApiHandler(d?: WorkApiDependencies, draftingAvailable = false) {
   const configured = d === undefined ? undefined : dependencies(d);
+  if (typeof draftingAvailable !== "boolean") throw Error("AGENTS_API_CONFIGURATION_INVALID");
   async function handle(request: Request, ctx: Context, correlationId: string) {
     const log = { route: "unmatched", outcome: "unbound" };
     if (!configured) return { log, response: workErrorResponse("unauthenticated", correlationId) };
@@ -156,7 +161,7 @@ export function createAgentsApiHandler(d?: WorkApiDependencies) {
         const result = await withWorkTransaction(connection, options, (tx) =>
           prepared
             ? runAgentCommand(tx, g, prepared, correlationId)
-            : runAgentRead(tx, g, g.route.op as AgentRead),
+            : runAgentRead(tx, g, g.route.op as AgentRead, draftingAvailable),
         );
         log.outcome = result.outcome;
         return { log, response: json(result.status, { schemaVersion: 1, ...result.body }) };

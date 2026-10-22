@@ -152,6 +152,8 @@ export interface ModelCatalogueView {
   /** null until the default is first changed. */
   readonly revision: number | null;
   readonly canRevise: boolean;
+  /** Run admission is open in this deployment (M3 PR-2); while false, Ask writes nothing. */
+  readonly draftingAvailable: boolean;
 }
 // M3 PR-2: Listings runs (GET /work/tasks/:taskId/runs, GET /work/runs/:runId). Ids,
 // statuses, counts and credits only: never a draft's text, a product as read, a provider

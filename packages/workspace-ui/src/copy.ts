@@ -384,8 +384,16 @@ export const copy = {
     stepTask: "Creating the task",
     stepRun: "Starting the run",
     started: "Drafting started. Opening the task…",
+    unavailable:
+      "AI drafting isn't available in this workspace yet. Nothing is saved from this page until it is.",
+    taskSaved:
+      "Your request is saved as a task. Change the choices and start drafting again, or open the task.",
+    openTask: "Open the task",
     refusals: {
-      unavailable: "AI drafting isn't available yet. Nothing was reserved.",
+      unavailable:
+        "AI drafting isn't available right now. Your request was saved as a task and nothing was reserved.",
+      invalid:
+        "Drafting couldn't start with these choices. Your request was saved as a task and nothing was reserved.",
     },
   },
   runs: {

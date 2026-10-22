@@ -183,6 +183,7 @@ export function decodeModels(body: unknown): ModelCatalogueView | null {
       "ceiling",
       "revision",
       "canRevise",
+      "draftingAvailable",
     ]) ||
     body.schemaVersion !== 1 ||
     !integer(body.catalogueVersion, 1, 999) ||
@@ -191,7 +192,8 @@ export function decodeModels(body: unknown): ModelCatalogueView | null {
     body.entries.length > 64 ||
     !integer(body.ceiling, 1, 99) ||
     !(body.revision === null || integer(body.revision, 1, Number.MAX_SAFE_INTEGER)) ||
-    typeof body.canRevise !== "boolean"
+    typeof body.canRevise !== "boolean" ||
+    typeof body.draftingAvailable !== "boolean"
   )
     return null;
   const d = body.workspaceDefault;
@@ -230,6 +232,7 @@ export function decodeModels(body: unknown): ModelCatalogueView | null {
     ceiling: body.ceiling as number,
     revision: body.revision as number | null,
     canRevise: body.canRevise,
+    draftingAvailable: body.draftingAvailable,
   };
 }
 

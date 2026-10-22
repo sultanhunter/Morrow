@@ -588,6 +588,7 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
                 ceiling: modelDefault.ceiling,
                 revision: modelDefault.revision,
                 canRevise: modelDefault.canRevise,
+                draftingAvailable: true,
               })
             : notFound,
         ),

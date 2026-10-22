@@ -23,7 +23,18 @@ import { fixtureStore, fixtureWorkspace } from "../apps/workspace-web/src/fixtur
 import { createPending } from "../apps/workspace-web/src/pending.ts";
 import { portMethods } from "../packages/workspace-ui/src/port.ts";
 import { copy } from "../packages/workspace-ui/src/copy.ts";
-import { parseProducts } from "../packages/workspace-ui/src/screens/ask.tsx";
+import {
+  askGate,
+  parseProducts,
+  runnableStoreIds,
+} from "../packages/workspace-ui/src/screens/ask.tsx";
+import { CommandFeedback } from "../packages/workspace-ui/src/screens/entry.tsx";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+// tsx compiles the screens' JSX with the classic runtime here: React must be in scope.
+globalThis.React = React;
+const createElement = React.createElement;
 import { runRunCommand, runRunRead } from "../packages/work/src/runs/commands.ts";
 import { workPermissions } from "../packages/contracts/src/work-permissions.ts";
 import { listingFieldPaths, storeResource } from "../packages/policy/src/store-resource.ts";
@@ -505,7 +516,14 @@ test("the HTTP port: admission, reads and the outcome mapping", async () => {
     envelope(503, "unavailable", "recheck_before_retry", "AI drafting is not available yet."),
   );
   const off = await port.runs.admit(ws, task, { key: key(), body: admitBody() });
-  assert.ok(["unavailable", "uncertain"].includes(off.kind), off.kind);
+  assert.equal(off.kind, "unavailable");
+  // A 400 run refusal (the selection) keeps the server's safe message for the screen.
+  replies.push(envelope(400, "missing_input", "never", "That model or effort is not available."));
+  assert.deepEqual(await port.runs.admit(ws, task, { key: key(), body: admitBody() }), {
+    kind: "invalid",
+    field: null,
+    message: "That model or effort is not available.",
+  });
   // A refused request sends nothing and is terminal.
   const before = recorded.calls.length;
   assert.deepEqual(
@@ -519,6 +537,74 @@ test("the HTTP port: admission, reads and the outcome mapping", async () => {
     (await port.runs.admit(ws, task, { key: key(), body: admitBody() })).kind,
     "uncertain",
   );
+});
+
+test("Ask writes nothing unless a run could be admitted, and says what was saved", () => {
+  const agent = (storeId, over = {}, installation = {}) => ({
+    storeId,
+    linked: true,
+    blocked: false,
+    installation: {
+      installationId: "installation_" + storeId,
+      status: "active",
+      revision: 2,
+      stopped: false,
+      updatedAt: "2026-10-22T11:00:00.000Z",
+      ...installation,
+    },
+    actions: { enable: false, resume: false, stop: true },
+    ...over,
+  });
+  // Only a linked store whose Listings agent is active, unstopped and unblocked can run.
+  assert.deepEqual(
+    [
+      ...runnableStoreIds([
+        agent("s_active"),
+        agent("s_disabled", {}, { status: "disabled" }),
+        agent("s_stopped", {}, { stopped: true }),
+        agent("s_blocked", { blocked: true }),
+        agent("s_unlinked", { linked: false }),
+        agent("s_none", { installation: null }),
+      ]),
+    ],
+    ["s_active"],
+  );
+  // The form (whose submit sends the goal, the task and the admission) shows only when a
+  // run could be admitted: never while drafting is unavailable or no store can run.
+  assert.equal(askGate(false, 3, false), "unavailable");
+  assert.equal(askGate(true, 0, false), "no_stores");
+  assert.equal(askGate(true, 1, false), "form");
+  // Once the task is saved the form stays, to report the admission's outcome.
+  assert.equal(askGate(false, 0, true), "form");
+  // After the task was saved, an unavailable or refused admission never reads as
+  // "Nothing was changed".
+  const html = (outcome, messages) =>
+    renderToStaticMarkup(
+      createElement(CommandFeedback, {
+        phase: { phase: "settled", outcome },
+        onCheckAgain() {},
+        onRetry() {},
+        messages,
+      }),
+    );
+  const unavailable = html(
+    { kind: "unavailable", offline: false },
+    { unavailable: copy.ask.refusals.unavailable, invalid: copy.ask.refusals.invalid },
+  );
+  assert.ok(unavailable.includes("Your request was saved as a task"), unavailable);
+  assert.ok(!unavailable.includes("Nothing was changed"), unavailable);
+  const refused = html(
+    { kind: "invalid", field: null, message: "That model or effort is not available." },
+    { invalid: copy.ask.refusals.invalid },
+  );
+  assert.ok(refused.includes("That model or effort is not available."), refused);
+  assert.ok(
+    html({ kind: "invalid", field: null }, { invalid: copy.ask.refusals.invalid }).includes(
+      "Your request was saved as a task",
+    ),
+  );
+  // Elsewhere the default copy is unchanged.
+  assert.ok(html({ kind: "invalid", field: null }, {}).includes("Nothing was changed"));
 });
 
 test("Ask: product numbers or product ids, one per line, no repeats", () => {

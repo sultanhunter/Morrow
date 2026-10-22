@@ -75,7 +75,8 @@ export function createWorkspaceApiWorker(
     work: createWorkApiHandler(work),
     billing: createBillingApiHandler(billing),
     stripe_webhook: createStripeWebhookHandler(webhook),
-    agents: createAgentsApiHandler(work),
+    // GET /models reports whether run admission is open (the runs handler's own flag).
+    agents: createAgentsApiHandler(work, runs?.admission === true),
   });
   return Object.freeze({
     fetch(request: Request, env: unknown, ctx: Context): Promise<Response> {

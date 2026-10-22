@@ -5,11 +5,21 @@
 // product and the run's product limit shown). Starting is three commands in order, each with
 // its own key and the usual uncertain handling: the goal, the task (the request is its
 // objective) and the run's admission on that task; then the task opens on its Runs tab.
+// Nothing is written unless a run could be admitted: while GET /models says drafting is not
+// available the form is not shown, and only stores whose Listings agent is active (and not
+// stopped or blocked) are offered. A refusal after the task was saved says so.
 // The body names only a store id, product ids, field paths and opaque catalogue keys.
 import { buildWorkspacePath, workspaceRoutes } from "@morrow/contracts/routes";
 import { useId, useMemo, useRef, useState } from "react";
 import { copy } from "../copy";
-import type { Id, ModelEntryView, RunAdmittedView, WorkspaceView } from "../model";
+import type {
+  Id,
+  ListingsAgentView,
+  ModelEntryView,
+  RunAdmittedView,
+  WorkspaceView,
+} from "../model";
+import type { Outcome } from "../port";
 import { useCommand, useDirty, useRead, useServices } from "../services";
 import { Button, TextArea } from "../components/controls";
 import { outcomeState } from "../components/feedback";
@@ -46,6 +56,35 @@ export function parseProducts(text: string): readonly string[] | null {
   return out;
 }
 
+/**
+ * The stores a run can be admitted on: linked, and whose Listings agent is active, not
+ * stopped and not blocked by a platform or connection stop (each store's status read).
+ */
+export function runnableStoreIds(agents: readonly ListingsAgentView[]): ReadonlySet<Id> {
+  return new Set(
+    agents
+      .filter(
+        (a) =>
+          a.linked && !a.blocked && a.installation?.status === "active" && !a.installation.stopped,
+      )
+      .map((a) => a.storeId),
+  );
+}
+/**
+ * What Ask shows once its reads are in: the form only when a run could be admitted, so no
+ * goal or task is written while drafting is unavailable or no store can run. A form whose
+ * task is already saved stays, to report the admission's outcome.
+ */
+export function askGate(
+  draftingAvailable: boolean,
+  runnableStores: number,
+  taskSaved: boolean,
+): "form" | "unavailable" | "no_stores" {
+  if (taskSaved) return "form";
+  if (!draftingAvailable) return "unavailable";
+  return runnableStores === 0 ? "no_stores" : "form";
+}
+
 type RunBody = {
   storeId: Id;
   products: readonly string[];
@@ -67,10 +106,27 @@ export function AskScreen({ workspace }: { readonly workspace: WorkspaceView }) 
   const [chosen, setChosen] = useState<readonly string[]>(["descriptionHtml", "title"]);
   const [selection, setSelection] = useState("default");
   const [started, setStarted] = useState(false);
-  const stores =
+  const linked =
     connections.kind === "ok"
       ? connections.value.installations.filter((i) => i.status === "linked" && i.storeId !== null)
       : [];
+  // Each linked store's Listings agent: only an active, unstopped, unblocked one can run.
+  const [agents, reloadAgents] = useRead(
+    connections.kind === "ok" ? `${ws}|ask-agents|${linked.map((s) => s.storeId).join(",")}` : null,
+    async (): Promise<Outcome<readonly ListingsAgentView[]>> => {
+      const outcomes = await Promise.all(
+        linked.map((s) => services.port.agents.listingsStatus(ws, s.storeId ?? "")),
+      );
+      const views: ListingsAgentView[] = [];
+      for (const o of outcomes) {
+        if (o.kind === "ok") views.push(o.value);
+        else if (o.kind !== "not_found" && o.kind !== "denied") return o;
+      }
+      return { kind: "ok", value: views, replayed: false };
+    },
+  );
+  const runnable = runnableStoreIds(agents.kind === "ok" ? agents.value : []);
+  const stores = linked.filter((s) => s.storeId !== null && runnable.has(s.storeId));
   const products = parseProducts(productsText);
   const fields = useMemo(
     () =>
@@ -167,7 +223,14 @@ export function AskScreen({ workspace }: { readonly workspace: WorkspaceView }) 
         outcomeState(connections, reloadConnections)
       ) : models.kind !== "ok" ? (
         outcomeState(models, reloadModels)
-      ) : stores.length === 0 ? (
+      ) : !models.value.draftingAvailable && taskId === null ? (
+        // askGate's "unavailable": no store status is needed to know nothing can run.
+        <div role="status" className="notice notice-warning">
+          <p>{copy.ask.unavailable}</p>
+        </div>
+      ) : agents.kind !== "ok" ? (
+        outcomeState(agents, reloadAgents)
+      ) : askGate(models.value.draftingAvailable, stores.length, taskId !== null) !== "form" ? (
         <p className="muted">{copy.ask.noStores}</p>
       ) : (
         <form
@@ -271,7 +334,19 @@ export function AskScreen({ workspace }: { readonly workspace: WorkspaceView }) 
             onCheckAgain={run.checkAgain}
             onRetry={run.retry}
             success={copy.ask.started}
+            messages={{
+              unavailable: copy.ask.refusals.unavailable,
+              invalid: copy.ask.refusals.invalid,
+            }}
           />
+          {taskId !== null && run.phase.phase === "settled" && run.phase.outcome.kind !== "ok" ? (
+            <div role="status" className="notice">
+              <p>{copy.ask.taskSaved}</p>
+              <Button type="button" onClick={() => openTask(taskId)}>
+                {copy.ask.openTask}
+              </Button>
+            </div>
+          ) : null}
         </form>
       )}
     </div>
