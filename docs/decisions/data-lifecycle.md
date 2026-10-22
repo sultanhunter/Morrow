@@ -68,6 +68,21 @@ Billing records (M5 PR-1, ADR-0022 item 13, migration `billing-records`). Financ
 | `morrow_billing.platform_environment` | Platform configuration (migration `staging-test-entitlement`): one row naming the database's environment, written once by `staging:seed-platform` | None: no personal data |
 | `morrow_billing.operator_test_entitlements` | Content-free operator audit (the staging test entitlement, ADR-0022 item 5 amendment), staging only: ids, the approval reference, the operator id, the path of the docs/evidence/live record, credit units, the terms revision, the period and a digest; no free text. Kept with its billing account | Deleted with the workspace by P09.T05; never present in production |
 
+Listings authority, stops and credits (M3 PR-1; ADR-0022 items 3, 11, 13, 15 and 16; migrations listings-identity-bridge, listings-authority, agent-proposals and run-credits). Apart from a person's stop reason and the parameters of a proposal, no row holds merchant or user content.
+
+| Table | Class and retention | Erasure hook |
+| --- | --- | --- |
+| `morrow_identity.agent_principals` | Content-free: the workspace's Coordinator and one principal per installation. Installation lifetime (the Coordinator: workspace lifetime) | Deleted with the workspace by P09.T05 |
+| `morrow_identity.grants` (agent rows) | Installation lifetime; revoked, never deleted, while the installation exists (agent grants carry no membership) | Deleted with the workspace by P09.T05 |
+| `morrow_work.agent_releases`, `model_catalogue_versions`, `model_catalogue_entries` | Platform records: release manifests and catalogue values, no tenant data. Kept for the life of the platform (a run names its catalogue version) | None needed |
+| `morrow_work.agent_installations` | Content-free: ids, digests, scope and grant references. Installation lifetime | Deleted with the workspace by P09.T05 |
+| `morrow_work.agent_enable_documents` | Content-free audit of each confirm screen (the installation document, its digest, the actor, the session digest and the nonce digest; never the nonce), 365 days | P09.T05 prunes after 365 days; no delete path exists |
+| `morrow_work.work_envelopes`, `morrow_work.delegation_hops` | Content-free audit of each run's mandate and dispatch, 365 days | P09.T05 prunes after 365 days; no delete path exists |
+| `morrow_work.kill_switch_records` | Workspace content (the person's reason for "Stop AI work"), with the record's digest and ids; 365 days | P09.T05 prunes after 365 days; no delete path exists |
+| `morrow_work.workspace_model_defaults` | Content-free: one row per workspace | Deleted with the workspace by P09.T05 |
+| `morrow_work.proposal_parameters` (`redacted_at`) | Parameters keep their digest; a store's shop/redact empties the text in place (`parameters_redact_for_store`), after which the proposal can never be decided or claimed. The helper runs only under the tenant's own session context and otherwise refuses (`context_unavailable`); M2 PR-3 lands the shop/redact caller with the policy its context needs, so the handler is executable from M2 PR-3 | `parameters_redact_for_store` |
+| `morrow_billing.credit_reservations`, `vendor_cost_reservations`, `run_cost_bookings`, `unrecovered_costs`, `unrecovered_cost_entries` | Financial records: credits and US$ amounts, ids and catalogue keys, no content. Kept for the financial period; their retention basis is settled with M5 PR-1's billing records before live money (M6) | None in the MVP; no delete path exists |
+
 No real user may enroll until the P09.T05 deletion path covers principal, mapping and enrollment (ADR-0003 hard ordering (b)); self-service stays disabled except on development and staging profiles with an allowlisted WorkOS sign-up (ADR-0009 items 10 and 11).
 
 Daily recovery snapshots/exports are separately retained thirty-five days in production/seven in staging; they do not provide thirty-five-day point-in-time recovery. Qualify changed storage, matching artifact revision manifests and erasure/revocation replay.

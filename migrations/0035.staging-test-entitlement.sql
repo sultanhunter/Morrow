@@ -1,7 +1,7 @@
 BEGIN;
 -- The staging test entitlement (owner decision (b), 2026-10-21; ADR-0022 item 5 amendment;
 -- staging-card-1 E13; docs/briefs/staging-test-entitlement.md). Executes AS
--- morrow_work_owner, after 0030 (its identity bridge). While the Stripe switch is off, an
+-- morrow_work_owner, after 0034 (its identity bridge). While the Stripe switch is off, an
 -- operator command, approved by the owner and recorded per use, puts one named staging
 -- workspace on the beta plan without Stripe: its route is fixed to morrow_direct (test)
 -- exactly as a verified payment fixes it, with its billing account, its first entitlement
@@ -31,7 +31,7 @@ BEGIN;
 --     admits only a session that has SET ROLE morrow_work_owner. It refuses every work
 --     session, lease or receipt context and every Morrow login as session user. Like
 --     every route fix (P01.T04a R2, R3) it refuses a workspace with a store association,
---     read through M2 PR-2's morrow_identity.work_store_installations, which 0030 lets the
+--     read through M2 PR-2's morrow_identity.work_store_installations, which 0034 lets the
 --     work owner execute.
 -- No runtime login, session or definer gains a privilege; checkout, the receipt ingress and
 -- the broker's definers are unchanged.

@@ -1,6 +1,6 @@
 {
   "contract_version": "morrow.contracts.v1.1",
-  "policy": "Every v1.1 definition that reuses a v1 name (core or billing), and every v1.1 capability body that overrides a v1 body, is listed here. Each one is a replacement, and writers emit only the current shape. Each is incompatible with the v1 shape in both directions, except the declared supersets, whose reasons say 'superset of v1': AllocationShare@2 is a superset of v1 AllocationShare, never stored on its own, only inside CostAllocation@2, whose schemaVersion 2 keeps v1 and v1.1 allocations apart; and core ResourceRef, Scope and Grant (ADR-0022 item 2) are supersets of v1, so every stored v1 grant, scope and resource stays valid, a v1 reader refuses the one addition (kind store) and so fails closed, and kernels match resources exactly, so the addition widens no existing authority. Checked by inspectDeclaredReplacements in scripts/boundary-checks.mjs; the supersets by tests/contract-versioning.test.mjs.",
+  "policy": "Every v1.1 definition that reuses a v1 name (core or billing), and every v1.1 capability body that overrides a v1 body, is listed here. Each one is a replacement, and writers emit only the current shape. Each is incompatible with the v1 shape in both directions, except the declared supersets, whose reasons say 'superset of v1': AllocationShare@2 is a superset of v1 AllocationShare, never stored on its own, only inside CostAllocation@2, whose schemaVersion 2 keeps v1 and v1.1 allocations apart; core ResourceRef, Scope and Grant (ADR-0022 item 2) are supersets of v1, so every stored v1 grant, scope and resource stays valid, a v1 reader refuses the one addition (kind store) and so fails closed, and kernels match resources exactly, so the addition widens no existing authority; and core AgentInstallation (ADR-0022 items 2 and 3, M3 PR-1) is a superset of v1 whose scope is the v1.1 Scope, so a store-bound installation can name its store resource and a v1 reader refuses it. Checked by inspectDeclaredReplacements in scripts/boundary-checks.mjs; the supersets by tests/contract-versioning.test.mjs.",
   "changes": [
     {
       "kind": "capability_body",
@@ -119,6 +119,13 @@
       "name": "Grant",
       "replaces": "core:Grant",
       "reason": "Grant v1.1: its scope is the v1.1 Scope, so the store-link template (ADR-0022 item 3) can be stored and re-read; nothing else changes. A superset of v1: every stored v1 grant is valid, and kernels read grants only through validateCurrentDefinition.",
+      "adr": "ADR-0022"
+    },
+    {
+      "kind": "definition",
+      "name": "AgentInstallation",
+      "replaces": "core:AgentInstallation",
+      "reason": "AgentInstallation v1.1: its scope is the v1.1 Scope, so the Listings installation (ADR-0022 item 3) can be scoped to exactly its store resource and the agent kernel can read it; nothing else changes. A superset of v1: every v1 AgentInstallation is valid, a v1 reader refuses a store-scoped installation and so fails closed, and validateCurrentDefinition applies the store rule to every resource its scope names.",
       "adr": "ADR-0022"
     }
   ]

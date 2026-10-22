@@ -162,6 +162,31 @@ const extraPolicies = {
   platform_api_read: ["SELECT", "{morrow_work_api}", "true", null],
   // M5 PR-1: the wallet's session UPDATE for M3 PR-1's sum-preserving moves (no INSERT).
   tenant_command_update: ["UPDATE", "{morrow_work_command}", tenantPredicate, tenantPredicate],
+  // M3 PR-1 (0033): the lease twins of the wallet's two session policies, for the run
+  // steps (no INSERT either).
+  tenant_lease_read: ["SELECT", "{morrow_work_command}", leasePredicate, null],
+  tenant_lease_update: ["UPDATE", "{morrow_work_command}", leasePredicate, leasePredicate],
+  // M3 PR-1: morrow_vault.resolve_call reads, as the broker's login only, the one lease it
+  // names, that lease's tenant's stops and the platform's, and that lease's installation,
+  // through transaction-local settings it writes itself.
+  lease_broker_resolve: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((id)::text = current_setting('morrow.vault_resolve_lease'::text, true)))",
+    null,
+  ],
+  stop_broker_resolve: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((organization_id IS NULL) OR ((((organization_id)::text || '|'::text) || (workspace_id)::text) = current_setting('morrow.vault_resolve_tenant'::text, true))))",
+    null,
+  ],
+  installation_broker_resolve: [
+    "SELECT",
+    "{morrow_work_command}",
+    "((SESSION_USER = 'morrow_vault_broker'::name) AND ((((((organization_id)::text || '|'::text) || (workspace_id)::text) || '|'::text) || (id)::text) = current_setting('morrow.vault_resolve_installation'::text, true)))",
+    null,
+  ],
 };
 // One table's policies against the template of its class and its registry extras.
 function checkPolicies(schema, table, spec) {
@@ -440,7 +465,7 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
         `SELECT has_function_privilege('${role}','morrow_identity.${signature}','EXECUTE') AS x, p.prosecdef, p.proowner::regrole::text AS owner FROM pg_proc p WHERE p.oid='morrow_identity.${signature}'::regprocedure`,
       );
       // The command role executes every bridge; the work owner only its registered ones
-      // (workOwnerBridges: 0030, the operator test entitlement's association read).
+      // (workOwnerBridges: 0034, the operator test entitlement's association read).
       assert.equal(
         p.x,
         role === workRoles.command ||
@@ -510,8 +535,8 @@ test("S5: definers, owners, search paths, grants, parameters, roles and membersh
       )
       .sort(),
   );
-  // Besides them, the work owner executes exactly its registered identity bridges (0030:
-  // the store-association read of the operator test entitlement, 0031).
+  // Besides them, the work owner executes exactly its registered identity bridges (0034:
+  // the store-association read of the operator test entitlement, 0035).
   for (const f of identityFunctions) {
     const name = f.signature.replace("morrow_identity.", "");
     const bridge = bridgeFunctions.includes(name);

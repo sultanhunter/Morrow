@@ -1,8 +1,8 @@
 BEGIN;
 -- The staging test entitlement's identity bridge (owner decision (b), 2026-10-21; ADR-0022
 -- item 5 amendment; docs/briefs/staging-test-entitlement.md). Executes AS
--- morrow_identity_owner, after 0029 and before 0031, which calls it. The operator grant
--- (0031, morrow_billing.operator_test_entitlement_grant) fixes a workspace's route, so it
+-- morrow_identity_owner, after 0033 and before 0035, which calls it. The operator grant
+-- (0035, morrow_billing.operator_test_entitlement_grant) fixes a workspace's route, so it
 -- applies the phase-open rule every route fix applies (P01.T04a R2, R3; checkout's
 -- route_conflict and the receipt application's fix): no store association, an
 -- installation that is or was linked. That fact comes only from M2 PR-2's shared read,

@@ -1,7 +1,7 @@
 # Staging test entitlement
 
 - Status: brief, 2026-10-22. Owner decision (b) of 2026-10-21 ("Staging test entitlement (Recommended)"; quoted in [M5-billing.md](M5-billing.md)). Material choices: the ADR-0022 item 5 amendment (2026-10-21) and the staging-card-1 E13 amendment, both in this PR.
-- Plan IDs: P18.T01a (the Morrow-direct route), with its persistence items 3–5 of `docs/contracts/billing-entitlements.md`. Branch `claude/staging-test-entitlement`, from `claude/m5-billing` (it writes M5's billing tables); one PR, opened after PR #37 (M5 PR-1) merges. Migrations `0030` and `0031` here; renumbered at merge after M3's 0030–0033 if M3 merges first.
+- Plan IDs: P18.T01a (the Morrow-direct route), with its persistence items 3–5 of `docs/contracts/billing-entitlements.md`. Branch `claude/staging-test-entitlement`, from `claude/m5-billing` (it writes M5's billing tables); one PR, opened after PR #37 (M5 PR-1) merges. Migrations `0034` and `0035` here: first written as 0030 and 0031, renumbered after M3 PR-1's 0030–0033 when the merge train stacked this branch on `claude/m3-listings-agent` (2026-10-22).
 
 ## Goal
 
@@ -9,8 +9,8 @@ While the Stripe switch is off, the owner can put one named staging workspace on
 
 ## Scope
 
-- **Migration `0030.staging-entitlement-identity-bridge.sql`** (as `morrow_identity_owner`): grants `morrow_work_owner` EXECUTE on M2 PR-2's store-installation read, `morrow_identity.work_store_installations` (ids and states only, never a shop domain; until now executable by the command role alone), so the operator function can apply the phase-open rule. Nothing else changes; no runtime login, role or definer gains anything.
-- **Migration `0031.staging-test-entitlement.sql`** (as `morrow_work_owner`):
+- **Migration `0034.staging-entitlement-identity-bridge.sql`** (as `morrow_identity_owner`): grants `morrow_work_owner` EXECUTE on M2 PR-2's store-installation read, `morrow_identity.work_store_installations` (ids and states only, never a shop domain; until now executable by the command role alone), so the operator function can apply the phase-open rule. Nothing else changes; no runtime login, role or definer gains anything.
+- **Migration `0035.staging-test-entitlement.sql`** (as `morrow_work_owner`):
   - `morrow_billing.platform_environment`: the database's one environment mark, written once and never changed.
   - `morrow_billing.operator_test_entitlements`: the operator grant record. It holds the approval reference, the operator, the live record's path, the credits and terms revision, the 30-day period and a digest. It is append-only, owner-only and one per workspace and per approval.
   - Forward changes to 0020 and 0029 so those tables can hold it:
@@ -28,7 +28,7 @@ Non-goals: renewal (one 30-day period per workspace); any change to checkout, th
 
 ## Interfaces touched
 
-`migrations/0030*`, `migrations/0031*` and the manifest; `docs/contracts/schemas/v1.1/billing.schema.json`, the regenerated bundle and the release baseline; `packages/work/src/billing/{terms,sql,facts}.ts`; `scripts/{staging,staging-runner,verify-billing}.mjs`; `docs/decisions/{billing-terms.json,data-lifecycle.md}`; `docs/decisions/approvals/{staging.md,staging-card.json}`; ADR-0022; the tenant-conformance registry.
+`migrations/0034*`, `migrations/0035*` and the manifest; `docs/contracts/schemas/v1.1/billing.schema.json`, the regenerated bundle and the release baseline; `packages/work/src/billing/{terms,sql,facts}.ts`; `scripts/{staging,staging-runner,verify-billing}.mjs`; `docs/decisions/{billing-terms.json,data-lifecycle.md}`; `docs/decisions/approvals/{staging.md,staging-card.json}`; ADR-0022; the tenant-conformance registry.
 
 ## Security notes
 
@@ -36,7 +36,7 @@ Non-goals: renewal (one 30-day period per workspace); any change to checkout, th
   - a current user other than the owner;
   - a Morrow login as session user;
   - any work session, lease or receipt context.
-- **INVOKER, not SECURITY DEFINER.** The repository's operator idiom (0020, 0026, 0029) is INVOKER and granted to nobody, so the role check inside the function stays meaningful. A definer would act as the owner for any future EXECUTE grantee. (Kept on review; ADR-0022's amendment states it as an implementation note.) It reads the store associations through `morrow_identity.work_store_installations` as the owner, which 0030 allows: the owner inherits nothing from the command role, and a definer owned by the command role cannot be granted to the owner (the ownership transfer rewrites a grant to the old owner into the new owner's own). The owner is reached only by the administrator under D4 and already reads every billing row.
+- **INVOKER, not SECURITY DEFINER.** The repository's operator idiom (0020, 0026, 0029) is INVOKER and granted to nobody, so the role check inside the function stays meaningful. A definer would act as the owner for any future EXECUTE grantee. (Kept on review; ADR-0022's amendment states it as an implementation note.) It reads the store associations through `morrow_identity.work_store_installations` as the owner, which 0034 allows: the owner inherits nothing from the command role, and a definer owned by the command role cannot be granted to the owner (the ownership transfer rewrites a grant to the old owner into the new owner's own). The owner is reached only by the administrator under D4 and already reads every billing row.
 - **Staging only.** The function refuses unless the mark says `staging`. Further safeguards:
   - `terms_guard` refuses an operator entry unless the mark is `development` or `staging`;
   - production terms carry none (`verify:billing`);
@@ -56,7 +56,7 @@ Non-goals: renewal (one 30-day period per workspace); any change to checkout, th
 ## Owner steps for the first use (each per action)
 
 1. Merge (after PR #37).
-2. `staging:migrate` (E3), applying 0030 and 0031.
+2. `staging:migrate` (E3), applying 0034 and 0035.
 3. `staging:seed-platform` (E3), which writes the staging mark and terms revision 1.
 4. The owner's approval in chat for the named workspace.
 5. Commit the live record `docs/evidence/live/YYYY-MM-DD-neon-test-entitlement-<slug>.md` to `main`, with the lines `` - Approval reference: `staging-card-1.e13.YYYY-MM-DD.n` `` and `` - Workspace: `<workspace id>` ``.

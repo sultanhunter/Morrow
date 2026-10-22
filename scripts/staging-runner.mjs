@@ -1145,7 +1145,7 @@ export async function seedPlatform({ connect, binding, administrator, rows, self
 // own guard (0029 terms_guard) also refuses a gap or any change.
 // ADR-0022 item 5 amendment (owner decision (b), 2026-10-21): the same transaction marks
 // the database's platform environment, once, as staging (morrow_billing.platform_environment,
-// migration 0031; never changed). This tool is staging's alone, so the mark it writes is
+// migration 0035; never changed). This tool is staging's alone, so the mark it writes is
 // always staging; a database marked otherwise is drift. The mark is written after the terms
 // drift checks and before any terms insert: an operator_test_entitlement entry needs it.
 export const platformEnvironment = "staging";
@@ -1327,7 +1327,7 @@ export async function resolveHeldCustomerOperation({ connect, binding, administr
 // ADR-0022 item 5 amendment; card E13). While the Stripe switch is off, the operator puts
 // one named staging workspace on the beta plan: under the owner's per-use approval in chat
 // and a committed docs/evidence/live record, the operator runs
-// morrow_billing.operator_test_entitlement_grant (migration 0031) as morrow_work_owner under
+// morrow_billing.operator_test_entitlement_grant (migration 0035) as morrow_work_owner under
 // the D4 SET-row protocol. It fixes the route to morrow_direct (test) as a verified payment
 // would and funds the wallet from the terms' operator entry, recorded as an operator grant,
 // never a payment. Only granted or replayed commits, after the closed result is read;
@@ -1436,6 +1436,80 @@ export async function grantTestEntitlement({ connect, binding, administrator, in
     }
     await assertNoSetRows(connection);
     return Object.freeze({ outcome, ...report });
+  } finally {
+    await connection.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The platform stop (M3 PR-1; ADR-0022 item 15; P11.T05a): the owner's script sets or
+// lifts the one platform stop through 0020's operator functions, as morrow_work_owner
+// inside the administrator's own transaction (the seed-platform shape: a SET-only grant
+// for the transaction, revoked before COMMIT). Setting it revokes every active run and
+// operation lease (stop_guard) and records StopRecord@1; lifting revokes nothing back.
+// Both are idempotent (already_stopped, not_stopped), so a run whose COMMIT reply was lost
+// is checked by running it again, never assumed done. Fixed statements; the operator id
+// and the reason travel only as parameters, and the reason is never echoed.
+export const platformStopStatements = Object.freeze({
+  set: "SELECT outcome, stop_id::text AS stop_id FROM morrow_work.platform_stop_set($1::text, $2::text)",
+  lift: "SELECT outcome, stop_id::text AS stop_id FROM morrow_work.platform_stop_lift($1::text, $2::text)",
+});
+const platformStopOutcomes = Object.freeze({
+  set: Object.freeze(["applied", "already_stopped"]),
+  lift: Object.freeze(["applied", "not_stopped"]),
+});
+const stopId = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+/** The closed input of a platform stop: set|lift, an Id-shaped operator, a person's reason. */
+export function checkPlatformStopInput(input) {
+  const { action, operatorId, reason } = input ?? {};
+  if (
+    !Object.hasOwn(platformStopStatements, action) ||
+    typeof operatorId !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(operatorId) ||
+    typeof reason !== "string" ||
+    reason.length < 1 ||
+    reason.length > 1024 ||
+    !/\S/.test(reason) ||
+    /[\u0000-\u0008\u000b-\u001f\u007f]/.test(reason)
+  )
+    throw new StagingError("STAGING_USAGE");
+  return Object.freeze({ action, operatorId, reason });
+}
+export async function platformStop({ connect, binding, administrator, ...input }) {
+  checkAdministrator(administrator);
+  const { action, operatorId, reason } = checkPlatformStopInput(input);
+  const connection = await connectChecked(connect, binding, administrator);
+  const admin = administrator.name;
+  try {
+    let row;
+    try {
+      await connection.exec("BEGIN");
+      if (administrator.mode === "createrole")
+        await connection.exec(
+          `GRANT morrow_work_owner TO ${admin} WITH ADMIN FALSE, INHERIT FALSE, SET TRUE`,
+        );
+      await connection.exec("SET LOCAL ROLE morrow_work_owner");
+      const rows = await connection.query(platformStopStatements[action], [operatorId, reason]);
+      row = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+      const outcome = typeof row?.outcome === "string" ? row.outcome : null;
+      if (outcome === null || !platformStopOutcomes[action].includes(outcome))
+        throw new StagingError("STAGING_PLATFORM_STOP_REFUSED", {
+          outcome: outcome !== null && /^[a-z_]{1,32}$/.test(outcome) ? outcome : "other",
+        });
+      const quiet = outcome === "not_stopped";
+      if (
+        quiet ? row.stop_id !== null : typeof row.stop_id !== "string" || !stopId.test(row.stop_id)
+      )
+        throw new StagingError("STAGING_PLATFORM_STOP_REFUSED", { outcome: "other" });
+      await connection.exec("RESET ROLE");
+      if (administrator.mode === "createrole")
+        await connection.exec(`REVOKE morrow_work_owner FROM ${admin} GRANTED BY ${admin}`);
+      await connection.exec("COMMIT");
+    } catch (error) {
+      throw sqlFailure("STAGING_PLATFORM_STOP_FAILED", error);
+    }
+    await assertNoSetRows(connection);
+    return Object.freeze({ action, outcome: row.outcome, stopId: row.stop_id });
   } finally {
     await connection.close();
   }

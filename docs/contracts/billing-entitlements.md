@@ -49,13 +49,13 @@ An **association** is an installation's `workspace_store_links` row (migration 0
 
 ## Staging operator test entitlement (ADR-0022 item 5 amendment, 2026-10-21)
 
-Not a seed. While the Stripe switch is off, the owner's operator command (`staging:test-entitlement`, staging-card-1 E13, approved and recorded per use) puts one named staging workspace on the beta plan without Stripe. In one transaction (`morrow_billing.operator_test_entitlement_grant`, migration 0031) it:
+Not a seed. While the Stripe switch is off, the owner's operator command (`staging:test-entitlement`, staging-card-1 E13, approved and recorded per use) puts one named staging workspace on the beta plan without Stripe. In one transaction (`morrow_billing.operator_test_entitlement_grant`, migration 0035) it:
 - fixes the route to `morrow_direct` in test mode with the same columns and guards a verified payment's fix uses, naming `morrow:operator_entitlement:<id>` (an `OperatorEntitlementKey`) in place of a payment key;
 - creates the storeless account and an operator grant record (`operator_test_entitlements`);
 - funds the wallet from that record with the credits of the current terms' one `operator_test_entitlement` entry (300, R10);
 - writes one active snapshot, valid for 30 days, whose `subscriptionId` is the same key.
 
-No receipt, `VerifiedPaymentEvent` or `CreditGrant` is written. Readers treat the result as a Morrow-direct payer (billable on staging; `mode_refused` in production under R9); the billing period is the snapshot's. The database refuses outside a database marked `staging` (`platform_environment`, written once by `staging:seed-platform`), refuses every runtime login and session, and refuses a workspace that is not in phase `open` (R2, R3): any route already fixed or Shopify-bound, any store association (an M2 PR-2 store installation that is or was linked, read through `morrow_identity.work_store_installations`, which migration 0030 lets the work owner call), an account or an earlier operator grant (`route_conflict`), or any Stripe customer, operation, checkout or receipt (`stripe_conflict`). There is no renewal.
+No receipt, `VerifiedPaymentEvent` or `CreditGrant` is written. Readers treat the result as a Morrow-direct payer (billable on staging; `mode_refused` in production under R9); the billing period is the snapshot's. The database refuses outside a database marked `staging` (`platform_environment`, written once by `staging:seed-platform`), refuses every runtime login and session, and refuses a workspace that is not in phase `open` (R2, R3): any route already fixed or Shopify-bound, any store association (an M2 PR-2 store installation that is or was linked, read through `morrow_identity.work_store_installations`, which migration 0034 lets the work owner call), an account or an earlier operator grant (`route_conflict`), or any Stripe customer, operation, checkout or receipt (`stripe_conflict`). There is no renewal.
 
 ## Contracts
 

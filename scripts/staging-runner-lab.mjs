@@ -13,15 +13,15 @@
 //   through a kill before COMMIT and a lost acknowledgement, a superseded digest, and a
 //   planted SET row; zero Morrow SET rows and closed memberships at rest.
 // The chain runs through its head (M2 PR-1: 0019-0024; M2 PR-2: 0025-0027; M5 PR-1:
-// 0028-0029; the staging test entitlement: 0030-0031; none of 0025-0031 adds a login, and the
-// entries after origin/main's head
-// replay after provisioning), so provisioning covers the eleven broker logins, the vault
-// login included, and the first-deploy file the broker names, with the owner's vault KEK
-// read from its planted file. The Stripe switch (owner decision (c), 2026-10-21): the
-// superuser run turns it on, so the file holds sixteen names with M5 PR-1's two Stripe
-// secrets read from their planted files; the createrole run keeps it off (the committed
-// state), so the file holds fourteen and the planted Stripe files are never read. In
-// createrole mode the lab also runs M5 PR-1's billing terms seed (idempotent, drift).
+// 0028-0029; M3 PR-1: 0030-0033; the staging test entitlement: 0034-0035; none of 0025-0035
+// adds a login, and the entries after origin/main's head replay after provisioning), so
+// provisioning covers the eleven broker logins, the vault login included, and the
+// first-deploy file the broker names, with the owner's vault KEK read from its planted
+// file. The Stripe switch (owner decision (c), 2026-10-21): the superuser run turns it on,
+// so the file holds sixteen names with M5 PR-1's two Stripe secrets read from their planted
+// files; the createrole run keeps it off (the committed state), so the file holds fourteen
+// and the planted Stripe files are never read. In createrole mode the lab also runs M5
+// PR-1's billing terms seed (idempotent, drift).
 // Provisioning sends each generated plaintext once, in its own ALTER ROLE (P04.T01i M-N3
 // as amended 2026-10-20: Neon takes only plaintexts), after refusing a database whose
 // statistics cannot be read or hold the extension, non-SCRAM storage, statement logging

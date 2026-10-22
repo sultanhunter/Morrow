@@ -500,7 +500,7 @@ export function fakeDatabase(options = {}) {
       ? options.instance[database]
       : "1792526146.012127/10.0.0.1/5432";
   const provisioned = new Set(options.provisioned ? roles : []);
-  // Migration 0031's platform mark (seed-platform): absent until the seed inserts it,
+  // Migration 0035's platform mark (seed-platform): absent until the seed inserts it,
   // unless a test plants one (`platformEnvironment`); never changed once present.
   let platformEnvironment = options.platformEnvironment ?? null;
   const rules = [

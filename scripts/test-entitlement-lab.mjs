@@ -1,5 +1,5 @@
 // lab:test-entitlement (pg-http): the staging test entitlement (owner decision (b),
-// 2026-10-21; the ADR-0022 item 5 amendment; card E13; migrations 0030-0031) on an isolated,
+// 2026-10-21; the ADR-0022 item 5 amendment; card E13; migrations 0034-0035) on an isolated,
 // network-none PostgreSQL 17 engine with the whole manifest, applied by a Neon-shaped
 // non-superuser CREATEROLE administrator (ADR-0020, the hosted shape). The runner's own
 // code (scripts/staging-runner.mjs) seeds the staging mark and staging's published terms
@@ -287,7 +287,7 @@ INSERT INTO morrow_billing.stripe_event_receipts(organization_id,workspace_id,id
     // its grant below.
     installStore(F, "te_f_linked", "3001", { link: true });
     installStore(A, "te_a_unlinked", "3002", { link: false });
-    // The work owner reads the associations through M2 PR-2's bridge (0030's grant); the
+    // The work owner reads the associations through M2 PR-2's bridge (0034's grant); the
     // runtime logins and the api role still cannot.
     const associations = (p) => {
       const r = db.tryRun(

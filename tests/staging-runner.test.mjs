@@ -2459,7 +2459,7 @@ test("billing terms seed: as the work owner, idempotent, refused on drift, D4 in
     s.text.startsWith("INSERT INTO morrow_billing.billing_terms"),
   );
   assert.deepEqual(insert.params, [...rows[0]]);
-  // The staging mark (0031), after the drift checks and before the first terms insert.
+  // The staging mark (0035), after the drift checks and before the first terms insert.
   const mark = fresh.texts.findIndex((t) =>
     t.startsWith("INSERT INTO morrow_billing.platform_environment"),
   );

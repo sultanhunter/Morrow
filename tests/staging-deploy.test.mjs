@@ -2373,6 +2373,8 @@ test("cli: the trimmed PR-B's subcommands, and nothing for rollback, rotation dr
     "kill",
     "migrate",
     "neon-probe",
+    // M3 PR-1: the owner-run platform stop (tests/platform-stop.test.mjs).
+    "platform-stop",
     "preflight",
     "provision-roles",
     "put-secret",

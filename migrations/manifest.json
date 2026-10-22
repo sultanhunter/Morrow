@@ -244,15 +244,43 @@
     },
     {
       "sequence": 30,
-      "file": "0030.staging-entitlement-identity-bridge.sql",
-      "sha256": "3400f1c680f6fc552ca969d6e4382c85818536684ea7073e18f8676fdfcdf747",
+      "file": "0030.listings-identity-bridge.sql",
+      "sha256": "e1b5f091bd6baf6cc676e4ba7b73bf0b22a0a1ac523d17ab4cd869556aa55791",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 31,
+      "file": "0031.listings-authority.sql",
+      "sha256": "e5e5aed05c222d56029fd6d22c7b6734fbe66c670caf72b19c3a681eb8df16c3",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 32,
+      "file": "0032.agent-proposals.sql",
+      "sha256": "5ebd3f69f30bfcd5f6f54453f791c703c5982892609e67ce50810f3544f19f6d",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 33,
+      "file": "0033.run-credits.sql",
+      "sha256": "56426f72fe2057051df3de71dfb219959a297080b72335d3ed0dd0eae62342ff",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M3-listings-agent.md"
+    },
+    {
+      "sequence": 34,
+      "file": "0034.staging-entitlement-identity-bridge.sql",
+      "sha256": "91aeb0a200ad85ad39ed9e5e9602b955478651ff2fe141cf004c528cd5fc7851",
       "executeAs": "morrow_identity_owner",
       "reviewRef": "docs/briefs/staging-test-entitlement.md"
     },
     {
-      "sequence": 31,
-      "file": "0031.staging-test-entitlement.sql",
-      "sha256": "15108c018180ccb980ba7b3d5969391dd822eb0ade664a7af0dda86d8fd4c046",
+      "sequence": 35,
+      "file": "0035.staging-test-entitlement.sql",
+      "sha256": "fc658ae305e177a94eb400435d33a9242483487cf3da6cb19576ecad41d38ce9",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/staging-test-entitlement.md"
     }

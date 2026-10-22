@@ -59,6 +59,8 @@ export interface Client {
     challenge?: string | null,
     csrf?: string | null,
   ): Promise<Reply>;
+  /** M3 PR-1: PUT under the POST rules (the model default); always keyed. */
+  put(path: string, body: string, idempotencyKey: string): Promise<Reply>;
 }
 
 const relativePath = (path: string) =>
@@ -150,6 +152,26 @@ export function createClient(options: ClientOptions = {}): Client {
           cache: "no-store",
           redirect: "error",
           headers,
+          body,
+        },
+        commandTimeoutMs,
+      );
+    },
+    put(path, body, idempotencyKey) {
+      if (!isCommandKey(idempotencyKey))
+        return Promise.resolve({ kind: "not_sent", offline: false });
+      return exchange(
+        path,
+        {
+          method: "PUT",
+          credentials: "same-origin",
+          cache: "no-store",
+          redirect: "error",
+          headers: {
+            "X-Morrow-Request": "1",
+            "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKey,
+          },
           body,
         },
         commandTimeoutMs,

@@ -21,6 +21,7 @@ import { useRead, useServices } from "../services";
 import { Button, RouteLink } from "../components/controls";
 import { RecordText, StatusTag, Time } from "../components/display";
 import { OutcomeNotice, StateView, StatusRegion, outcomeState } from "../components/feedback";
+import { ListingsAgentCard } from "./agents";
 
 // The registered install link: https on Shopify's admin or a myshopify host only. The
 // decoder checks the same shape; this is the last check before an href is rendered.
@@ -461,6 +462,11 @@ export function ConnectionScreen({
           <StateView kind="not_in_build" compact message={copy.connections.disconnectLater} />
         </article>
       )}
+      {/* M3 PR-1: the Listings agent of this connection's store (Enable, resume and Stop AI
+          work); the server decides what the person may do. */}
+      {installation !== null && installation.storeId !== null ? (
+        <ListingsAgentCard workspace={workspace} storeId={installation.storeId} />
+      ) : null}
     </div>
   );
 }

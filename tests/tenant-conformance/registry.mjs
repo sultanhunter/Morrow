@@ -64,7 +64,8 @@ export const workTables = Object.freeze({
   work_leases: {
     class: "tenant_internal",
     parents: ["morrow_identity.workspaces"],
-    policies: ["lease_member_revoke", "lease_pending", "lease_self"],
+    // M3 PR-1: lease_broker_resolve (the broker's resolve_call reads the one lease it names).
+    policies: ["lease_broker_resolve", "lease_member_revoke", "lease_pending", "lease_self"],
     content: "none",
   },
   // The entry proof of enter_lease (0020): one row per backend, no tenant keys, reached
@@ -73,6 +74,8 @@ export const workTables = Object.freeze({
   stop_controls: {
     class: "tenant_or_platform",
     parents: ["morrow_identity.workspaces"],
+    // M3 PR-1: stop_broker_resolve (resolve_call reads its lease's tenant and platform stops).
+    policies: ["stop_broker_resolve"],
     content: "workspace",
   },
   stop_records: { class: "tenant_or_platform", parents: ["stop_controls"], content: "none" },
@@ -89,6 +92,45 @@ export const workTables = Object.freeze({
     parents: ["operations"],
     lease: true,
     policies: ["broker_stripe_transition"],
+    content: "none",
+  },
+  // M3 PR-1 listings authority (migration 0031).
+  agent_releases: { class: "platform", parents: [], content: "none" },
+  model_catalogue_versions: { class: "platform", parents: [], content: "none" },
+  model_catalogue_entries: { class: "platform", parents: [], content: "none" },
+  agent_installations: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces", "morrow_identity.agent_principals"],
+    lease: true,
+    policies: ["installation_broker_resolve"],
+    content: "none",
+  },
+  agent_enable_documents: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    content: "none",
+  },
+  work_envelopes: {
+    class: "tenant_internal",
+    parents: ["tasks", "agent_installations"],
+    lease: true,
+    content: "none",
+  },
+  delegation_hops: {
+    class: "tenant_internal",
+    parents: ["tasks", "work_envelopes", "agent_installations", "morrow_identity.agent_principals"],
+    lease: true,
+    content: "none",
+  },
+  // The owner's reason for "Stop AI work" is text a person writes.
+  kill_switch_records: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces"],
+    content: "workspace",
+  },
+  workspace_model_defaults: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces"],
     content: "none",
   },
 });
@@ -265,6 +307,66 @@ export const workFunctions = Object.freeze({
   },
   "proposal_document_matches(text,text,text,text,text,bigint,text,text,integer[],text,text,text,boolean,text,integer,numeric,text,text,text,text,text[],text,bigint,text,text,text,timestamp with time zone,timestamp with time zone)":
     { kind: "check", grantees: ["morrow_work_command"] },
+  // M3 PR-1 (migrations 0031 and 0032). Pure functions of the CHECKs.
+  "listing_fields()": { kind: "check", grantees: ["morrow_work_command"] },
+  "store_resource(text,text,text,text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "listings_scope(text,text,text,text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "installation_scope(text,text,text,text,text)": {
+    kind: "check",
+    grantees: ["morrow_work_command"],
+  },
+  "listings_grant_set(text,text,text,text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "valid_grant_refs(jsonb,text,text,text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "enable_document_matches(text,text,text,text,text,text,text,text,text,bigint,text,text,text,timestamp with time zone,timestamp with time zone)":
+    { kind: "check", grantees: ["morrow_work_command"] },
+  "kill_switch_record_matches(text,text,text,text,text,text,text,text,text,text,text,text,text,text,timestamp with time zone)":
+    { kind: "check", grantees: ["morrow_work_command"] },
+  "release_manifest_valid(text)": { kind: "check", grantees: ["morrow_work_command"] },
+  "catalog_proposal_document_matches(text,text,text,text,text,bigint,text,text,integer[],text,text,text,boolean,text,integer,numeric,text,text,text,text,text[],text,bigint,text,text,text,timestamp with time zone,timestamp with time zone,text,text)":
+    { kind: "check", grantees: ["morrow_work_command"] },
+  "agent_installation_guard()": { kind: "trigger", grantees: [] },
+  "enable_document_guard()": { kind: "trigger", grantees: [] },
+  "revocable_guard()": { kind: "trigger", grantees: [] },
+  "model_default_guard()": { kind: "trigger", grantees: [] },
+  "catalog_proposal_bind()": { kind: "trigger", grantees: [] },
+  "parameters_guard()": { kind: "trigger", grantees: [] },
+  "claim_parameters_bind()": { kind: "trigger", grantees: [] },
+  // Revisable owner helpers: INVOKER, owned by the owner (a later owner migration may
+  // replace them), EXECUTE for the command role only. Store-dependent SQL lives here.
+  "listings_store_current(text,text,text)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "parameters_redact_for_store(text,text,text)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  // The agent commands and their read definer.
+  "begin_agent_command(text,text,text)": { kind: "api", grantees: ["morrow_work_api"] },
+  "store_association(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "agent_enable_document(text)": { kind: "api", grantees: ["morrow_work_api"], read: true },
+  "cmd_listings_enable_document(text,text,text,text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "installation.document",
+  },
+  "cmd_listings_enable(text,text,text,text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "installation.enable",
+  },
+  "cmd_stop_ai_work(text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "installation.stop",
+  },
+  "cmd_model_default_revise(text,text,text,text,text,text,text,text)": {
+    kind: "api",
+    grantees: ["morrow_work_api"],
+    command: "model_default.revise",
+  },
+  // The agent kernel's facts under a run lease (ids and grant payloads; the kernel decides).
+  "delegation_facts(text,text,text)": { kind: "runtime", grantees: ["morrow_runtime_executor"] },
 });
 // The identity bridges (0014, 0017): definers owned by the identity owner, EXECUTE
 // for the command role only.
@@ -285,7 +387,7 @@ export const bridgeFunctions = Object.freeze([
   "work_signup_workspace(text,text)",
   // M2 PR-2 (0026): the vault login's identity bridges, called only by 0027's vault
   // definers, and the shared store-installation read for the work and billing definers
-  // (M5 PR-1's workspace_associations and checkout precondition call it; 0030 also lets
+  // (M5 PR-1's workspace_associations and checkout precondition call it; 0034 also lets
   // the work owner execute it, for the operator test entitlement's precondition:
   // workOwnerBridges below).
   "work_shopify_install_prepare(text,text,text,text)",
@@ -293,10 +395,16 @@ export const bridgeFunctions = Object.freeze([
   "work_shopify_launch(text,text)",
   "work_shopify_state_claim(text,text)",
   "work_store_installations(text,text)",
+  // M3 PR-1 (0030): agent principals, agent grants and the kernel's facts.
+  "work_agent_principal_ensure(text,text,text,text,text)",
+  "work_agent_grants_issue(text,text,jsonb)",
+  "work_owner_disable_grant_issue(text,text,jsonb)",
+  "work_agent_grant_set_current(text,text,text,text,jsonb,jsonb)",
+  "work_delegation_actor_facts(text,text,jsonb)",
 ]);
 // Identity bridges the work owner executes besides the three ADR-0020 membership helpers
-// (0014): the staging test entitlement's operator function (0031) runs as the owner and
-// reads the store associations through this one (0030). No other work role gains it.
+// (0014): the staging test entitlement's operator function (0035) runs as the owner and
+// reads the store associations through this one (0034). No other work role gains it.
 export const workOwnerBridges = Object.freeze(["work_store_installations(text,text)"]);
 // M2 PR-1 (0020): the two schemas the work owner creates beside morrow_work. The billing
 // route is tenant-readable with one extra insert policy for the signup bridge; the vault
@@ -562,11 +670,19 @@ export const billingTables = Object.freeze({
     ),
   },
   // The wallet's session UPDATE (tenant_command_update) is for M3 PR-1's moves, which
-  // wallet_guard keeps sum-preserving; there is no session INSERT.
+  // wallet_guard keeps sum-preserving; there is no session INSERT. M3 PR-1 (0033) adds the
+  // lease twins of the same two policies, tenant_lease_read (FOR SELECT) and
+  // tenant_lease_update (FOR UPDATE): run steps settle under a run lease, and no lease
+  // context inserts a wallet either.
   credit_wallets: {
     class: "tenant_readable",
     parents: ["morrow_billing.billing_accounts"],
-    policies: ["receipt_apply", "tenant_command_update"],
+    policies: [
+      "receipt_apply",
+      "tenant_command_update",
+      "tenant_lease_read",
+      "tenant_lease_update",
+    ],
     commandRead: true,
     content: "none",
     ...aclSpec(
@@ -587,7 +703,100 @@ export const billingTables = Object.freeze({
       ],
     ),
   },
-  // The staging test entitlement (0031; ADR-0022 item 5 amendment, 2026-10-21): the
+  // M3 PR-1 run credits (0033): tenant_command, and tenant_lease for M3 PR-2's run steps.
+  credit_reservations: {
+    class: "tenant_readable",
+    parents: ["morrow_identity.workspaces", "morrow_billing.credit_wallets"],
+    lease: true,
+    policies: [],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["credits_settled", "revision", "settled_at", "status"],
+      [
+        "allocation_digest",
+        "allocation_id",
+        "billing_account_id",
+        "catalogue_version",
+        "created_at",
+        "credits_per_product",
+        "credits_reserved",
+        "credits_settled",
+        "effort_key",
+        "id",
+        "model_key",
+        "organization_id",
+        "product_count",
+        "revision",
+        "root_run_id",
+        "settled_at",
+        "status",
+        "workspace_id",
+      ],
+    ),
+  },
+  vendor_cost_reservations: {
+    class: "tenant_readable",
+    parents: ["morrow_billing.credit_reservations"],
+    lease: true,
+    policies: [],
+    content: "none",
+    ...aclSpec(
+      ["INSERT", "SELECT"],
+      ["booked_cost_usd", "revision", "status", "unrecovered_cost_usd", "updated_at"],
+      [
+        "booked_cost_usd",
+        "catalogue_version",
+        "created_at",
+        "created_day",
+        "credit_reservation_id",
+        "effort_key",
+        "id",
+        "maximum_cost_usd",
+        "model_key",
+        "organization_id",
+        "period_start",
+        "revision",
+        "root_run_id",
+        "status",
+        "unrecovered_cost_usd",
+        "updated_at",
+        "vendor_id",
+        "workspace_id",
+      ],
+    ),
+  },
+  // One append-only row per vendor-cost booking, keyed by its entry id (replay, M3 PR-1
+  // review).
+  run_cost_bookings: {
+    class: "tenant_internal",
+    parents: ["morrow_billing.vendor_cost_reservations"],
+    lease: true,
+    policies: [],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"]),
+  },
+  unrecovered_costs: {
+    class: "tenant_internal",
+    parents: ["morrow_identity.workspaces"],
+    lease: true,
+    policies: [],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"], ["amount_usd", "revision", "updated_at"]),
+  },
+  unrecovered_cost_entries: {
+    class: "tenant_internal",
+    parents: [
+      "morrow_billing.unrecovered_costs",
+      "morrow_billing.vendor_cost_reservations",
+      "morrow_billing.run_cost_bookings",
+    ],
+    lease: true,
+    policies: [],
+    content: "none",
+    ...aclSpec(["INSERT", "SELECT"]),
+  },
+  // The staging test entitlement (0035; ADR-0022 item 5 amendment, 2026-10-21): the
   // platform's environment mark (one row, the owner's seed) and the operator grant record
   // (the owner's operator function only). No runtime role holds anything on either.
   platform_environment: {
@@ -646,7 +855,7 @@ export const billingFunctions = Object.freeze({
     kind: "operator",
     grantees: [],
   },
-  // The staging test entitlement (0031): INVOKER, owned by the owner, granted to nobody.
+  // The staging test entitlement (0035): INVOKER, owned by the owner, granted to nobody.
   "operator_test_entitlement_grant(text,text,text,text)": { kind: "operator", grantees: [] },
   // INVOKER helpers the policies and definers evaluate as the command role.
   "receipt_ingress()": { kind: "check", grantees: ["morrow_work_command"] },
@@ -662,6 +871,24 @@ export const billingFunctions = Object.freeze({
   "grant_guard()": { kind: "trigger", grantees: [] },
   "application_guard()": { kind: "trigger", grantees: [] },
   "route_fix_guard()": { kind: "trigger", grantees: [] },
+  // M3 PR-1 run credits (0033): triggers, and the revisable owner helpers
+  // that M3 PR-2's admission and run definers call.
+  "credit_reservation_guard()": { kind: "trigger", grantees: [] },
+  "vendor_reservation_guard()": { kind: "trigger", grantees: [] },
+  "unrecovered_guard()": { kind: "trigger", grantees: [] },
+  "billing_append_only()": { kind: "trigger", grantees: [] },
+  "unrecovered_allows(text,text,timestamp with time zone,integer,numeric)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "run_reserve(text,text,text,text,text,text,text,text,integer,text,text,integer,timestamp with time zone)":
+    { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "run_book_cost(text,text,text,text,numeric,text)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
+  "run_settle(text,text,text,integer)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
+  "run_release(text,text,text)": { kind: "owner_helper", grantees: ["morrow_work_command"] },
 });
 export const vaultTables = Object.freeze({
   app_secrets: {
@@ -700,6 +927,12 @@ export const vaultFunctions = Object.freeze({
   "app_secret_get(text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "app_secret_put(text,text,text,text)": { kind: "operator", grantees: [] },
   "vault_guard()": { kind: "trigger", grantees: [] },
+  // M3 PR-1 (0031): the broker's resolver and its revisable credential helper.
+  "resolve_call(text,text,text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
+  "credential_for_connection(text,text,text)": {
+    kind: "owner_helper",
+    grantees: ["morrow_work_command"],
+  },
   // M2 PR-2 (0027): the Shopify launch and callback definers of the broker's own login.
   "shopify_callback_claim(text,text)": { kind: "vault", grantees: ["morrow_vault_broker"] },
   "shopify_install_prepare(text,text,text,text)": {
@@ -721,6 +954,8 @@ export const vaultFunctions = Object.freeze({
 export const identityTables = Object.freeze({
   account_enrollments: { content: "none" },
   account_session_commands: { content: "none" },
+  // M3 PR-1 (0030): the Coordinator and installation agent principals.
+  agent_principals: { content: "none" },
   authentication_bindings: { content: "none" },
   authentication_challenges: { content: "none" },
   authentication_exchange_admissions: { content: "none" },
@@ -777,6 +1012,7 @@ export const executorLogins = Object.freeze({
   // M2 PR-2 (0026): the connector's one definer, in the identity schema.
   morrow_connector_ingress: ["morrow_identity.connector_oauth_state_open(text,text,text)"],
   morrow_runtime_executor: [
+    "morrow_work.delegation_facts(text,text,text)",
     "morrow_work.enter_lease(text,text)",
     "morrow_work.lease_mark_started()",
     "morrow_work.lease_release()",
@@ -788,6 +1024,8 @@ export const executorLogins = Object.freeze({
     "morrow_billing.stripe_op_settle(text,text,text,text)",
     "morrow_billing.stripe_receipt_record(text,text,text,text,text,text,text,text,text)",
     "morrow_vault.app_secret_get(text)",
+    // M3 PR-1 (0031).
+    "morrow_vault.resolve_call(text,text,text,text)",
     // M2 PR-2 (0027).
     "morrow_vault.shopify_callback_claim(text,text)",
     "morrow_vault.shopify_install_prepare(text,text,text,text)",

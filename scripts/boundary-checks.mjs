@@ -381,13 +381,14 @@ export const replacedBillingDefinitionNames = (changes) =>
 // Generated files define every exact selector and type, replaced ones included.
 const generatedContracts = /^packages\/contracts\/src\/generated\//;
 // EventEnvelope@2, the StreamFrame carrying it, AskAdminReadRecord, and the v1.1
-// ResourceRef, Scope and Grant have code rules beyond their schemas (the event
-// registry, the payloadRef binding, the admin-read reader and uniqueness rules, and
-// the store rule: a store resource's id is its storeId, ADR-0022 item 2), applied
+// ResourceRef, Scope, Grant and AgentInstallation have code rules beyond their schemas
+// (the event registry, the payloadRef binding, the admin-read reader and uniqueness
+// rules, and the store rule: a store resource's id is its storeId, ADR-0022 item 2), applied
 // only by `validateCurrentDefinition` in packages/contracts/src/validation.ts.
 // Product code under apps/ and packages/ never validates them by their exact v1.1
 // selector: a `"core-v1.1:<name>"` literal or `validateDefinition("core-v1.1", <name>)`.
 export const refinedDefinitionNames = Object.freeze([
+  "AgentInstallation",
   "AskAdminReadRecord",
   "EventEnvelope",
   "Grant",
@@ -495,6 +496,8 @@ export const entitlementWriterAllowlist = Object.freeze({
     "createHumanPolicyService",
     "createWorkspacePermissionBoundary",
   ]),
+  // M3 PR-1: the agent kernel's facts reader sets it only from entitlementFor over billing facts.
+  "packages/work/src/agents/delegation-reader.ts": Object.freeze(["createLeaseDelegationReader"]),
 });
 const entitlementField = "entitlementAllowed";
 export function inspectEntitlementWriters(file, code) {

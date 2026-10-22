@@ -12,6 +12,10 @@ import {
   type StripeWebhookDependencies,
 } from "../../../packages/work/src/billing/webhook.js";
 import { createWorkApiHandler, type WorkApiDependencies } from "../../../packages/work/src/http.js";
+import {
+  agentsPathPattern,
+  createAgentsApiHandler,
+} from "../../../packages/work/src/agents/http.js";
 
 type Context = Readonly<{ waitUntil(pending: Promise<unknown>): void }>;
 type Handler = Readonly<{
@@ -29,7 +33,7 @@ type Handler = Readonly<{
 //                                                agents (M3 PR-1)
 //   /workspace/:ws/stores/:storeId/catalog/      reserved for M2 PR-3
 const workspaceId = "[A-Za-z0-9][A-Za-z0-9._:-]{0,127}";
-type RowKey = "work" | "billing" | "stripe_webhook";
+type RowKey = "work" | "billing" | "stripe_webhook" | "agents";
 export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => boolean])[] =
   Object.freeze([
     ["work", (path: string) => new RegExp(`^/workspace/${workspaceId}/work(?:/|$)`).test(path)],
@@ -38,6 +42,8 @@ export const apiDispatchRows: readonly (readonly [RowKey, (path: string) => bool
       (path: string) => new RegExp(`^/workspace/${workspaceId}/billing(?:/|$)`).test(path),
     ],
     ["stripe_webhook", (path: string) => path === stripeWebhookPath],
+    // M3 PR-1: the agents routes, on the work dependencies (packages/work/src/agents/http.ts).
+    ["agents", (path: string) => agentsPathPattern.test(path)],
   ] as const);
 export function apiDispatch(path: string): RowKey | "workspace" {
   for (const [key, matches] of apiDispatchRows) if (matches(path)) return key;
@@ -45,8 +51,8 @@ export function apiDispatch(path: string): RowKey | "workspace" {
 }
 
 // The configured local fixture imports this exact entry constructor. The ordinary artifact
-// intentionally has no account/secret/environment binding: without dependencies every work
-// and billing route is 401 and the webhook 404, with no network or database.
+// intentionally has no account/secret/environment binding: without dependencies every work,
+// billing and agents route is 401 and the webhook 404, with no network or database.
 export function createWorkspaceApiWorker(
   dependencies?: ManagedWorkspaceApiDependencies,
   work?: WorkApiDependencies,
@@ -58,6 +64,7 @@ export function createWorkspaceApiWorker(
     work: createWorkApiHandler(work),
     billing: createBillingApiHandler(billing),
     stripe_webhook: createStripeWebhookHandler(webhook),
+    agents: createAgentsApiHandler(work),
   });
   return Object.freeze({
     fetch(request: Request, env: unknown, ctx: Context): Promise<Response> {

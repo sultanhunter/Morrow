@@ -100,10 +100,10 @@ test("statements: fixed text, no role change, the ADR-0020 D5 preflight and the 
       /SET (LOCAL )?ROLE|set_config|\bINSERT\b|\bUPDATE\b|\bDELETE\b/,
       name,
     );
-    if (/^(enterLease|pendingStarts|markStarted|release)$/.test(name))
+    if (/^(enterLease|pendingStarts|markStarted|release|delegationFacts)$/.test(name))
       assert.match(
         text,
-        /^SELECT .*\bmorrow_work\.(enter_lease|pending_starts|lease_mark_started|lease_release)\(/,
+        /^SELECT .*\bmorrow_work\.(enter_lease|pending_starts|lease_mark_started|lease_release|delegation_facts)\(/,
         name,
       );
   }
@@ -168,7 +168,12 @@ test("a lease step: enter first, then the body; mark started and release are fix
     assert.equal(step.lease.leaseId, lease.leaseId);
     assert.equal(await step.markStarted(), "started");
     assert.equal(await step.release(), "released");
-    assert.deepEqual(Object.keys(step).sort(), ["lease", "markStarted", "release"]);
+    assert.deepEqual(Object.keys(step).sort(), [
+      "delegationFacts",
+      "lease",
+      "markStarted",
+      "release",
+    ]);
     return "done";
   });
   assert.equal(result.ok, true);
@@ -202,6 +207,73 @@ test("a lease step: enter first, then the body; mark started and release are fix
   );
   assert.deepEqual(fake.sent[6][1], [lease.leaseId, "1"]);
   assert.deepEqual([fake.connects, fake.releases], [1, 1]);
+});
+
+// M3 PR-1: the agent kernel's facts are read under the entered run lease, by fixed text with
+// closed arguments; the row's JSON texts are returned as they are (the agent fact reader
+// decodes them), and any other shape holds the step.
+test("delegation facts: fixed call, closed arguments, exact row or null", async () => {
+  assert.equal(
+    runtimeExecutorSql.delegationFacts,
+    "SELECT lease,envelope,hops,installations,actors,store_current FROM morrow_work.delegation_facts($1,$2,$3)",
+  );
+  const row = {
+    lease: '{"kind":"run"}',
+    envelope: "{}",
+    hops: "[]",
+    installations: "[]",
+    actors: "[]",
+    store_current: "true",
+  };
+  const run = async (reply, args = ["envelope_1", "installation_1", "catalog.products.read"]) => {
+    const fake = fakePool((text) =>
+      text === runtimeExecutorSql.enterLease
+        ? [entered()]
+        : text === runtimeExecutorSql.delegationFacts
+          ? reply
+          : [],
+    );
+    const result = await runLeaseStep(fake.pool, attempt(), ref(), (step) =>
+      step.delegationFacts(...args),
+    );
+    return { result, fake };
+  };
+  const ok = await run([row]);
+  assert.deepEqual(ok.result.value.value, {
+    lease: row.lease,
+    envelope: "{}",
+    hops: "[]",
+    installations: "[]",
+    actors: "[]",
+    storeCurrent: true,
+  });
+  const sent = ok.fake.sent.find(([text]) => text === runtimeExecutorSql.delegationFacts);
+  assert.deepEqual(sent[1], ["envelope_1", "installation_1", "catalog.products.read"]);
+  assert.equal(
+    (await run([{ ...row, store_current: "false" }])).result.value.value.storeCurrent,
+    false,
+  );
+  assert.equal((await run([])).result.value.value, null);
+  for (const reply of [
+    [row, row],
+    [{ ...row, store_current: "t" }],
+    [{ ...row, hops: null }],
+    [{ ...row, extra: "1" }],
+  ])
+    assert.deepEqual((await run(reply)).result, { ok: false }, JSON.stringify(reply));
+  for (const args of [
+    ["bad id", "installation_1", "catalog.products.read"],
+    ["envelope_1", "", "catalog.products.read"],
+    ["envelope_1", "installation_1", "Catalog.Read"],
+    ["envelope_1", "installation_1", "catalog"],
+  ]) {
+    const bad = await run([row], args);
+    assert.deepEqual(bad.result, { ok: false }, JSON.stringify(args));
+    assert.equal(
+      bad.fake.sent.some(([text]) => text === runtimeExecutorSql.delegationFacts),
+      false,
+    );
+  }
 });
 
 test("every refusal runs no body; a malformed lease reference never connects", async () => {
