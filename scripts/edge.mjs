@@ -1015,6 +1015,23 @@ const normalisedInputs = (meta, worker, root) =>
   Object.keys(meta.inputs).map((input) =>
     relative(root, resolve(root, worker.dir, input)).replaceAll("\\", "/"),
   );
+// Bundle size bounds (AC02), also written to sizes.json. The broker bound is on the
+// minified bytes. It was 256 KiB until 2026-10-22, when M2 PR-3 plus M3 PR-2 measured
+// 264,479 bytes (the Neon driver is 56%); 384 KiB still keeps the broker small and
+// auditable, and the hand-written Shopify checks (ADR-0008) and the plain HTTPS Claude
+// adapter remain the choice. Owner confirmation pending; 512 KiB would be this one line.
+export const edgeBundleLimits = Object.freeze({
+  apiGzipBytes: 3 * 1024 * 1024,
+  apiWarnGzipBytes: 1024 * 1024,
+  brokerBytes: 384 * 1024,
+});
+export function bundleSizeFailure(row) {
+  if (row.worker === "api" && row.gzipBytes > edgeBundleLimits.apiGzipBytes)
+    return "EDGE_API_BUNDLE_TOO_LARGE";
+  if (row.worker === "broker" && row.bytes > edgeBundleLimits.brokerBytes)
+    return "EDGE_BROKER_BUNDLE_TOO_LARGE";
+  return null;
+}
 // Bundle exclusions (AC05).
 export function bundleExclusions(worker, inputs, bundleText) {
   const failures = [];
@@ -1110,11 +1127,9 @@ export function edgeDryRun({
         gzipBytes: gzipSync(bundle).length,
         inputs: inputs.length,
       };
-      if (worker.key === "api" && row.gzipBytes > 3 * 1024 * 1024)
-        failures.push("EDGE_API_BUNDLE_TOO_LARGE:" + where);
-      if (worker.key === "broker" && row.bytes > 256 * 1024)
-        failures.push("EDGE_BROKER_BUNDLE_TOO_LARGE:" + where);
-      if (worker.key === "api" && row.gzipBytes > 1024 * 1024)
+      const tooLarge = bundleSizeFailure(row);
+      if (tooLarge) failures.push(tooLarge + ":" + where);
+      if (worker.key === "api" && row.gzipBytes > edgeBundleLimits.apiWarnGzipBytes)
         row.warning = "api_bundle_over_1_MiB_gzipped";
       rows.push(row);
     }
@@ -1123,11 +1138,7 @@ export function edgeDryRun({
       generated_at: new Date().toISOString(),
       scope:
         "wrangler 4.116.0 `deploy --dry-run` bundles (esbuild 0.28.1); no account, credential or network. Local sizes only; hosted limits are measured in P04.T01i.",
-      limits: {
-        apiGzipBytes: 3 * 1024 * 1024,
-        apiWarnGzipBytes: 1024 * 1024,
-        brokerBytes: 256 * 1024,
-      },
+      limits: edgeBundleLimits,
       bundles: rows,
       failures: failures.map((failure) => failure.split("\n")[0]),
     });

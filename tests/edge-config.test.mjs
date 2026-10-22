@@ -14,6 +14,8 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import {
   bundleExclusions,
+  bundleSizeFailure,
+  edgeBundleLimits,
   edgeChildEnvironment,
   edgeConnectorRateLimits,
   edgeEnvironments,
@@ -517,6 +519,25 @@ test("AC05 (rules): bundle exclusions name the forbidden inputs", () => {
     ),
     ["other_worker_source", "runtime_validators", "shopify_library", "package_source"],
   );
+});
+
+test("AC02 (rules): bundle size bounds; the broker is at most 384 KiB minified", () => {
+  // 2026-10-22: 256 KiB until M2 PR-3 plus M3 PR-2 measured 264,479 bytes.
+  assert.deepEqual(edgeBundleLimits, {
+    apiGzipBytes: 3_145_728,
+    apiWarnGzipBytes: 1_048_576,
+    brokerBytes: 393_216,
+  });
+  assert.ok(Object.isFrozen(edgeBundleLimits));
+  const row = (worker, bytes, gzipBytes) => ({ worker, bytes, gzipBytes });
+  assert.equal(bundleSizeFailure(row("broker", 264_479, 90_000)), null);
+  assert.equal(bundleSizeFailure(row("broker", 393_216, 130_000)), null);
+  assert.equal(bundleSizeFailure(row("broker", 393_217, 130_000)), "EDGE_BROKER_BUNDLE_TOO_LARGE");
+  // The broker bound is on raw bytes, the api bound on gzipped bytes; other Workers have none.
+  assert.equal(bundleSizeFailure(row("api", 9_000_000, 3_145_728)), null);
+  assert.equal(bundleSizeFailure(row("api", 9_000_000, 3_145_729)), "EDGE_API_BUNDLE_TOO_LARGE");
+  assert.equal(bundleSizeFailure(row("connector", 9_000_000, 9_000_000)), null);
+  assert.equal(bundleSizeFailure(row("orchestrator", 9_000_000, 9_000_000)), null);
 });
 
 test("M2 PR-2 review: the connector's ingress limiter bindings, exact per environment", () => {
