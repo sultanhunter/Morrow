@@ -113,11 +113,13 @@ check(
     })),
   ) === JSON.stringify(edgeRateLimits("development")),
 );
-// M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint (trust model v1);
-// the orchestrator binds nothing until its first caller (M3 PR-2).
+// M2 PR-2: the connector binds the broker's ConnectorBroker entrypoint (trust model v1).
+// M3 PR-2: the orchestrator, its first caller, binds exactly the same environment's
+// RuntimeBroker entrypoint (its role lease and modelRespond) and nothing else.
 check(
-  "orchestrator_has_no_service_bindings",
-  Object.keys(options.orchestrator.serviceBindings ?? {}).length === 0,
+  "M3PR2:orchestrator_binds_only_the_runtime_broker_entrypoint",
+  JSON.stringify(options.orchestrator.serviceBindings) ===
+    JSON.stringify({ BROKER: { name: names.broker, entrypoint: "RuntimeBroker" } }),
 );
 check(
   "M2PR2:connector_binds_the_same_environment_connector_broker_entrypoint",
