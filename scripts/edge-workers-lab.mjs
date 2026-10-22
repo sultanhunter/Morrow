@@ -16,6 +16,12 @@
 // ConnectorBroker only, and an unreachable vault login fails closed. The PR-2 review adds
 // the connector's committed per-address ingress limits: no address fails closed and the
 // limit's next request is 429 with no broker call.
+// M5 PR-1 adds the four ApiBroker Stripe methods (held without the capability; with it,
+// an unreachable vault login holds every write before any Stripe request) and the unbound
+// api's billing and webhook paths. The Stripe switch (owner decision (c), 2026-10-21): with
+// no MORROW_STRIPE_MODE every Stripe method is STRIPE_UNAVAILABLE before its inputs, even
+// with every Stripe secret bound, and a bound api answers the webhook 503 unavailable
+// without calling the broker.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -537,6 +543,21 @@ await instance("AC06_unbound_api_spa_and_denials", {}, async ({ fetchApi, observ
   check(
     "AC06:reserved_unknown_worker_404",
     api.status === 404 && api.body === '{"code":"not_found"}',
+  );
+  // M5 PR-1: the unbound api answers billing 401 and the Stripe webhook 404, with no
+  // network, database or broker call (checked below with the rest of AC06).
+  const billing = await fetchApi("/workspace/workspace_a/billing");
+  const webhook = await fetchApi("/api/billing/stripe/webhook", {
+    method: "POST",
+    headers: { "stripe-signature": "t=1,v1=" + "a".repeat(64) },
+    body: "{}",
+  });
+  check(
+    "M5:unbound_billing_401_and_webhook_404",
+    billing.status === 401 &&
+      json(billing.body)?.code === "denied" &&
+      webhook.status === 404 &&
+      webhook.body === '{"code":"not_found"}',
   );
   const loginResponse = await fetchApi("/auth/login", { method: "POST" });
   check(
@@ -1073,6 +1094,174 @@ await instance(
         init.connector === true &&
         init.runtime === true &&
         init.database === true,
+    );
+  },
+);
+
+// M5 PR-1 (ADR-0022 items 7 and 12): the four ApiBroker Stripe methods over the real RPC
+// binding. Switched off (no MORROW_STRIPE_MODE, the committed state; owner decision (c),
+// 2026-10-21) every method is STRIPE_UNAVAILABLE before its inputs are read, with every
+// Stripe secret bound, and nothing leaves the broker. Switched on without the Stripe
+// secrets the capability is held (init stripe:false) and every method answers
+// BROKER_HELD; malformed arguments are refused first. With them the capability
+// initialises, and each write first opens its operation on the vault login (M2 PR-2's
+// transport): the lab answers that database 503, so every call is held before any network
+// and no Stripe request leaves the broker.
+const stripeOperation = "00000000-0000-4000-8000-0000000000a5";
+const stripeCalls = [
+  ["stripeCustomerEnsure", [stripeOperation, 1000]],
+  ["stripeCheckoutCreate", [stripeOperation, 1000]],
+  ["stripePortalCreate", [stripeOperation, 1000]],
+  ["stripeWebhookVerify", ["e30=", "t=1,v1=" + "a".repeat(64), 1000]],
+  ["stripeCustomerEnsure", ["not-an-operation", 1000]],
+  ["stripeCheckoutCreate", [stripeOperation, 10001]],
+  ["stripeWebhookVerify", ["", "t=1", 1000]],
+];
+const stripeKey = "rk_test_" + randomBytes(16).toString("hex");
+const stripeWebhookSecret = "whsec_" + randomBytes(16).toString("hex");
+privateMarkers.push(stripeKey, stripeWebhookSecret);
+const stripeBindings = {
+  STRIPE_RESTRICTED_KEY: stripeKey,
+  STRIPE_WEBHOOK_SECRET: stripeWebhookSecret,
+  STRIPE_CONFIGURATION_JSON: JSON.stringify({
+    schemaVersion: 1,
+    portalConfigurationId: "bpc_" + "Lab".padEnd(24, "0"),
+    automaticTax: false,
+    billingAddressCollection: "auto",
+  }),
+};
+const stripeCodes = (events) =>
+  JSON.stringify(
+    events("morrow_broker")
+      .filter((row) => row.method.startsWith("stripe"))
+      .map((row) => row.code),
+  );
+await instance(
+  "M5_stripe_methods_switched_off",
+  { broker: { bindings: brokerBindings(stripeBindings) } },
+  async ({ probe, events, observed }) => {
+    const replies = [];
+    for (const [op, args] of stripeCalls) replies.push((await probe({ op, args }))[0]);
+    check(
+      "M5:switched_off_every_stripe_method_held",
+      replies.every((r) => r.ok === false && r.message === "BROKER_HELD" && remoteOnly(r.keys)),
+    );
+    const init = events("morrow_broker_init")[0];
+    check(
+      "M5:switched_off_init_reads_no_stripe",
+      init?.stripe === false && init.stripeMode === "off" && init.vault === true,
+    );
+    check(
+      "M5:switched_off_refusals_are_stripe_unavailable_before_inputs",
+      stripeCodes(events) === JSON.stringify(Array(stripeCalls.length).fill("STRIPE_UNAVAILABLE")),
+    );
+    check(
+      "M5:switched_off_no_vault_or_stripe_request",
+      observed.brokerNeon === 0 && observed.unexpected === 0,
+    );
+  },
+);
+await instance(
+  "M5_stripe_methods_without_the_capability",
+  { broker: { bindings: brokerBindings({ MORROW_STRIPE_MODE: "test" }) } },
+  async ({ probe, events, observed }) => {
+    const replies = [];
+    for (const [op, args] of stripeCalls) replies.push((await probe({ op, args }))[0]);
+    check(
+      "M5:stripe_methods_held_without_the_capability",
+      replies.every((r) => r.ok === false && r.message === "BROKER_HELD" && remoteOnly(r.keys)),
+    );
+    check(
+      "M5:init_reports_stripe_held",
+      events("morrow_broker_init")[0]?.stripe === false &&
+        events("morrow_broker_init")[0]?.stripeMode === "test",
+    );
+    check(
+      "M5:refusals_are_fixed_codes",
+      stripeCodes(events) ===
+        JSON.stringify([
+          "CAPABILITY_UNAVAILABLE",
+          "CAPABILITY_UNAVAILABLE",
+          "CAPABILITY_UNAVAILABLE",
+          "CAPABILITY_UNAVAILABLE",
+          "INPUT_INVALID",
+          "BUDGET_INVALID",
+          "INPUT_INVALID",
+        ]),
+    );
+    check("M5:no_outbound_without_the_capability", observed.unexpected === 0);
+  },
+);
+await instance(
+  "M5_stripe_capability_with_an_unreachable_vault",
+  { broker: { bindings: brokerBindings({ MORROW_STRIPE_MODE: "test", ...stripeBindings }) } },
+  async ({ probe, events, observed }) => {
+    const replies = [];
+    for (const [op, args] of stripeCalls.slice(0, 3)) replies.push((await probe({ op, args }))[0]);
+    check("M5:init_reports_stripe_ready", events("morrow_broker_init")[0]?.stripe === true);
+    check(
+      "M5:an_unreachable_vault_holds_every_write_before_any_stripe_request",
+      replies.every((r) => r.ok === false && r.message === "BROKER_HELD") &&
+        observed.brokerNeon >= replies.length &&
+        observed.unexpected === 0,
+    );
+  },
+);
+// The bound api (the deployed composition, deployed-worker.ts) with a broker that logs
+// every Stripe call: switched off the webhook is 503 {"code":"unavailable"} and no Stripe
+// method runs; switched on (MORROW_STRIPE_MODE "test") the same request reaches
+// stripeWebhookVerify (held here, so 503 for Stripe's retry).
+const stripeCountingBroker = `import { WorkerEntrypoint } from "cloudflare:workers";
+const stripe = (method) => { console.log(JSON.stringify({ event: "counting_broker_stripe", method })); throw new Error("BROKER_HELD"); };
+export class ApiBroker extends WorkerEntrypoint {
+  health() { return true; }
+  async neonLease() { throw new Error("BROKER_HELD"); }
+  async workosSessionPage() { throw new Error("BROKER_HELD"); }
+  async challengeVerify() { throw new Error("BROKER_HELD"); }
+  async stripeCustomerEnsure() { return stripe("stripeCustomerEnsure"); }
+  async stripeCheckoutCreate() { return stripe("stripeCheckoutCreate"); }
+  async stripePortalCreate() { return stripe("stripePortalCreate"); }
+  async stripeWebhookVerify() { return stripe("stripeWebhookVerify"); }
+}
+export default { fetch() { return new Response(null, { status: 404 }); } };`;
+const deliverWebhook = (fetchApi) =>
+  fetchApi("/api/billing/stripe/webhook", {
+    method: "POST",
+    headers: { "stripe-signature": "t=1,v1=" + "a".repeat(64) },
+    body: "{}",
+  });
+await instance(
+  "M5_bound_api_with_stripe_switched_off",
+  { api: { bindings: apiBindings() }, broker: { script: stripeCountingBroker } },
+  async ({ fetchApi, events, observed }) => {
+    const webhook = await deliverWebhook(fetchApi);
+    check(
+      "M5:switched_off_webhook_unavailable_without_a_broker_call",
+      webhook.status === 503 &&
+        webhook.body === '{"code":"unavailable"}' &&
+        events("counting_broker_stripe").length === 0 &&
+        observed.unexpected === 0,
+    );
+    check(
+      "M5:switched_off_webhook_logs_stripe_off",
+      events("morrow_billing_webhook").some((row) => row.outcome === "stripe_off"),
+    );
+  },
+);
+await instance(
+  "M5_bound_api_with_stripe_switched_on",
+  {
+    api: { bindings: apiBindings({ MORROW_STRIPE_MODE: "test" }) },
+    broker: { script: stripeCountingBroker },
+  },
+  async ({ fetchApi, events }) => {
+    const webhook = await deliverWebhook(fetchApi);
+    check(
+      "M5:switched_on_webhook_reaches_the_broker",
+      webhook.status === 503 &&
+        json(webhook.body)?.received === false &&
+        JSON.stringify(events("counting_broker_stripe").map((row) => row.method)) ===
+          JSON.stringify(["stripeWebhookVerify"]),
     );
   },
 );

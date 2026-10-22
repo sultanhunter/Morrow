@@ -1,0 +1,55 @@
+{
+  "_synthetic": "SYNTHETIC: hand-built from the Stripe API reference for version 2025-03-31.basil (M5 PR-1); replace with objects recorded in the owner-approved test-mode smoke.",
+  "id": "sub_1SynthSubscr0001",
+  "object": "subscription",
+  "billing_cycle_anchor": 1760000000,
+  "cancel_at": null,
+  "cancel_at_period_end": false,
+  "canceled_at": null,
+  "collection_method": "charge_automatically",
+  "created": 1760000000,
+  "currency": "usd",
+  "customer": "cus_1SynthCustomer01",
+  "livemode": false,
+  "items": {
+    "object": "list",
+    "data": [
+      {
+        "id": "si_1SynthItem000001",
+        "object": "subscription_item",
+        "created": 1760000000,
+        "current_period_end": 1762678400,
+        "current_period_start": 1760000000,
+        "metadata": {},
+        "price": {
+          "id": "price_MorrowDevBeta0049",
+          "object": "price",
+          "active": true,
+          "currency": "usd",
+          "livemode": false,
+          "product": "prod_1SynthBeta00001",
+          "recurring": {
+            "interval": "month",
+            "interval_count": 1,
+            "usage_type": "licensed"
+          },
+          "tax_behavior": "exclusive",
+          "type": "recurring",
+          "unit_amount": 4900
+        },
+        "quantity": 1,
+        "subscription": "sub_1SynthSubscr0001"
+      }
+    ],
+    "has_more": false,
+    "total_count": 1,
+    "url": "/v1/subscription_items?subscription=sub_1SynthSubscr0001"
+  },
+  "metadata": {
+    "morrow_operation_id": "00000000-0000-4000-8000-0000000000c1",
+    "morrow_workspace_id": "ws_billing",
+    "morrow_organization_id": "org_billing"
+  },
+  "start_date": 1760000000,
+  "status": "active"
+}

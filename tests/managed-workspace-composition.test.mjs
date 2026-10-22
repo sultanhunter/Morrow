@@ -68,8 +68,9 @@ const connectGrant = {
 };
 const nowMs = Date.parse("2026-10-21T00:00:00.000Z");
 
-// The deployed composition: a development environment the api's mapper accepts.
-function composed() {
+// The deployed composition: a development environment the api's mapper accepts. `extra`
+// adds bindings (M5: MORROW_STRIPE_MODE); `brokerCalls` counts every broker method call.
+function composed(extra = {}, brokerCalls = [], { modeArgument = true } = {}) {
   const provider = createPlatformWorkosProviderOracle({ origin });
   const base = JSON.parse(provider.configurationJson);
   const auth = JSON.parse(base.authenticationBindingJson);
@@ -88,7 +89,22 @@ function composed() {
         },
         workosSessionPage() {},
         challengeVerify() {},
+        ...Object.fromEntries(
+          [
+            "stripeCustomerEnsure",
+            "stripeCheckoutCreate",
+            "stripePortalCreate",
+            "stripeWebhookVerify",
+          ].map((name) => [
+            name,
+            async () => {
+              brokerCalls.push(name);
+              throw Error("BROKER_HELD");
+            },
+          ]),
+        ),
       }),
+      ...extra,
       LOGIN_CONFIGURATION_JSON: JSON.stringify({ ...base, retentionTier: "development" }),
       WORKSPACE_CONFIGURATION_JSON: config,
       LOGOUT_CONFIGURATION_JSON: JSON.stringify({
@@ -121,7 +137,15 @@ function composed() {
     process.env = saved;
   }
   assert.equal(mapped.ok, true, mapped.code);
-  return composeApiDependencies(mapped.values, mapped.broker, () => nowMs);
+  return modeArgument
+    ? composeApiDependencies(
+        mapped.values,
+        mapped.broker,
+        () => nowMs,
+        mapped.environment,
+        mapped.stripe,
+      )
+    : composeApiDependencies(mapped.values, mapped.broker, () => nowMs, mapped.environment);
 }
 
 // A scripted linking pool: the role row, then fixed answers by statement; every statement
@@ -311,4 +335,49 @@ test("a preview runs the Shopify issuer before the lookup; without a kernel noth
   assert.equal((await read.json()).installLink.reason, "not_permitted");
   assert.ok(!without.sent.includes(sql.issue));
   assert.deepEqual(statements(without), [sql.lookup, sql.authority, sql.connections]);
+});
+
+// M5, the Stripe switch (owner decision (c), 2026-10-21): off (no MORROW_STRIPE_MODE, the
+// committed state) composes the billing API and the webhook with no broker Stripe port, so
+// the deployed Worker answers the webhook 503 {"code":"unavailable"} and never calls a
+// Stripe method; "test" composes the ApiBroker's four Stripe methods. The default is off.
+test("M5: the deployed composition has Stripe adapters only while the switch is on", async () => {
+  const calls = [];
+  const off = composed({}, calls);
+  assert.equal(off.billing.broker, null);
+  assert.equal(off.webhook.broker, null);
+  assert.equal(off.billing.environment, "development");
+  const on = composed({ MORROW_STRIPE_MODE: "test" }, calls);
+  for (const port of [on.billing.broker, on.webhook.broker])
+    assert.deepEqual(Object.keys(port).sort(), [
+      "checkoutCreate",
+      "customerEnsure",
+      "portalCreate",
+      "webhookVerify",
+    ]);
+  const { createWorkspaceApiWorker } = await import("../apps/api/src/worker.ts");
+  const ctx = { waitUntil() {} };
+  const deliver = (deps) =>
+    createWorkspaceApiWorker(deps.dependencies, deps.work, deps.billing, deps.webhook).fetch(
+      new Request(origin + "/api/billing/stripe/webhook", {
+        method: "POST",
+        headers: { "stripe-signature": "t=1,v1=" + "a".repeat(64) },
+        body: "{}",
+      }),
+      {},
+      ctx,
+    );
+  const offReply = await deliver(off);
+  assert.equal(offReply.status, 503);
+  assert.equal(await offReply.text(), '{"code":"unavailable"}');
+  assert.deepEqual(calls, []);
+  // On, the same request reaches the broker's verify method (held here: 503 for a retry).
+  const onReply = await deliver(on);
+  assert.equal(onReply.status, 503);
+  assert.deepEqual(await onReply.json(), { received: false });
+  assert.deepEqual(calls, ["stripeWebhookVerify"]);
+  // A composition without the mode argument has no adapters either (the default is off).
+  const defaulted = composed({ MORROW_STRIPE_MODE: "test" }, calls, { modeArgument: false });
+  assert.equal(defaulted.billing.broker, null);
+  assert.equal(defaulted.webhook.broker, null);
 });

@@ -1,4 +1,8 @@
-import type { ApiBrokerRpc } from "../../../packages/identity/src/broker-protocol.js";
+import {
+  stripeModeTest,
+  stripeModeVar,
+  type ApiBrokerRpc,
+} from "../../../packages/identity/src/broker-protocol.js";
 import { captureManagedWorkspaceBinding } from "../../../packages/identity/src/managed-workspace-binding.js";
 import { loginJson } from "../../../packages/identity/src/standalone-login-protocol.js";
 import {
@@ -10,7 +14,7 @@ import {
 } from "./abuse-guard.js";
 
 // Synchronous Worker env -> ManagedWorkspaceApiDependencies inputs (P04.T02a D6),
-// plus the P05.T01ab abuse-guard bindings (step 10).
+// plus the P05.T01ab abuse-guard bindings (step 10) and the M5 Stripe switch (step 11).
 // It never throws; the first failing check decides the code, and any failure
 // keeps the api on the existing deny-all instance. Production never maps here
 // (ADR-0007 item 9).
@@ -41,8 +45,13 @@ export type ApiEnvironmentMapping =
       values: Readonly<ApiEnvironmentValues>;
       broker: ApiBrokerRpc;
       guard: Readonly<AbuseGuardConfiguration>;
+      // M5 (owner decision (c), 2026-10-21): "test" only with MORROW_STRIPE_MODE exactly
+      // "test"; "off" when it is absent. While off, the billing purchase routes and the
+      // Stripe webhook answer unavailable with no broker call.
+      stripe: ApiStripeMode;
     }>
   | Readonly<{ ok: false; code: ApiEnvironmentCode }>;
+export type ApiStripeMode = "off" | "test";
 
 // Binding name, value key and the identity byte limit it must not exceed.
 export const apiEnvironmentValueBindings = Object.freeze([
@@ -53,9 +62,11 @@ export const apiEnvironmentValueBindings = Object.freeze([
   ["LOGIN_CAPSULE_KEYRING", "keyring", 4096],
 ] as const);
 const environments: readonly string[] = ["development", "staging", "production"];
-// MORROW_VAULT_: the vault KEKs (ADR-0022 item 7) are broker-only.
+// MORROW_VAULT_: the vault KEKs (ADR-0022 item 7) are broker-only. STRIPE_ (M5 PR-1): the
+// restricted key, the webhook secret and even the Stripe configuration bind only to the
+// broker.
 const providerPrefix =
-  /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG)/i;
+  /^(WORKOS_|MORROW_DB_PASSWORD_|MORROW_VAULT_|SHOPIFY_|ANTHROPIC_|OPENAI_|E2B_|NEON_|PG|STRIPE_)/i;
 const credentialWord = /KEY|SECRET|PASSWORD|TOKEN/i;
 const encoder = new TextEncoder();
 const fail = (code: ApiEnvironmentCode): ApiEnvironmentMapping =>
@@ -201,7 +212,18 @@ export function mapApiEnvironment(env: unknown): ApiEnvironmentMapping {
   // 10. The abuse guard (P05.T01ab, ADR-0019 items 6-8).
   const guard = mapAbuseGuard(record, environment);
   if (!guard) return fail("API_ENV_ABUSE_GUARD_MISSING");
-  return Object.freeze({ ok: true, environment, values: mapped, broker, guard });
+  // 11. The Stripe switch (M5): absent is off; present, it must be exactly "test".
+  let stripe: ApiStripeMode = "off";
+  try {
+    const mode = dataProperty(record, stripeModeVar);
+    if (mode.present) {
+      if (mode.value !== stripeModeTest) return fail("API_ENV_VALUE_INVALID");
+      stripe = "test";
+    }
+  } catch {
+    return fail("API_ENV_VALUE_INVALID");
+  }
+  return Object.freeze({ ok: true, environment, values: mapped, broker, guard, stripe });
 }
 
 // Step 10 as a pure function of the record and the environment, so its rule is tested

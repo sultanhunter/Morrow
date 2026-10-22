@@ -193,6 +193,37 @@ for (const [name, path, code, expected] of [
     "import {composeApiDependencies} from '../../api/src/deployed-worker';",
     "BROKER_APP_IMPORT",
   ],
+  // M5 PR-1: Stripe only in the broker, and never through an SDK.
+  [
+    "stripe_origin_from_api",
+    "apps/api/src/worker.ts",
+    "const origin = 'https://api.stripe.com/v1/customers';",
+    "STRIPE_OUTSIDE_BROKER",
+  ],
+  [
+    "stripe_origin_template_from_work",
+    "packages/work/src/billing/http.ts",
+    "const url = `https://API.stripe.com/v1/${path}`;",
+    "STRIPE_OUTSIDE_BROKER",
+  ],
+  [
+    "stripe_sdk_from_work",
+    "packages/work/src/billing/commands.ts",
+    "import Stripe from 'stripe';",
+    "STRIPE_OUTSIDE_BROKER",
+  ],
+  [
+    "stripe_js_from_ui",
+    "packages/workspace-ui/src/x.ts",
+    "import {loadStripe} from '@stripe/stripe-js';",
+    "STRIPE_OUTSIDE_BROKER",
+  ],
+  [
+    "stripe_sdk_in_broker",
+    "apps/broker/src/stripe.ts",
+    "import Stripe from 'stripe';",
+    "STRIPE_SDK_DENIED",
+  ],
   // P14.T01a §4.11 (a) and §5: fixture isolation and UI sinks.
   [
     "fixture_from_app",

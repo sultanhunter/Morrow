@@ -59,6 +59,21 @@ try {
     "Unconfigured API cannot retire a session or mutate cookies",
     logout.status === 404 && logout.headers.getSetCookie().length === 0,
   );
+  // M5 PR-1: the unconfigured api reads no billing record and accepts no Stripe webhook.
+  const billing = await fetch("http://127.0.0.1:4191/workspace/ws_smoke/billing/morrow/plans");
+  check(
+    "Unconfigured API cannot read billing or open a purchase",
+    billing.status === 401 && billing.headers.getSetCookie().length === 0,
+  );
+  const stripeWebhook = await fetch("http://127.0.0.1:4191/api/billing/stripe/webhook", {
+    method: "POST",
+    headers: { "Stripe-Signature": "t=1,v1=" + "a".repeat(64), "Content-Type": "application/json" },
+    body: "{}",
+  });
+  check(
+    "Unconfigured API accepts no Stripe webhook",
+    stripeWebhook.status === 404 && (await stripeWebhook.json()).code === "not_found",
+  );
   start(
     "connector",
     ["node_modules/@react-router/serve/bin.js", "apps/shopify-connector/build/server/index.js"],

@@ -227,6 +227,20 @@
       "sha256": "c056d8f7f0dba9f6769b13f4c1d19733413f5a7b79e5f745f855b60c18cd5147",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M2-shopify-connect.md"
+    },
+    {
+      "sequence": 28,
+      "file": "0028.billing-identity-bridge.sql",
+      "sha256": "dee383f50ac1279fa1fe671d2469b86f65d5e4888b2a965548a34c506e5b7cc2",
+      "executeAs": "morrow_identity_owner",
+      "reviewRef": "docs/briefs/M5-billing.md"
+    },
+    {
+      "sequence": 29,
+      "file": "0029.billing-records.sql",
+      "sha256": "e40ebb5ae3416758c28389760c7f0c639e1c136e06008a4e47723e9616a03bb2",
+      "executeAs": "morrow_work_owner",
+      "reviewRef": "docs/briefs/M5-billing.md"
     }
   ]
 }

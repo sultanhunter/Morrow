@@ -1,0 +1,83 @@
+{
+  "_synthetic": "SYNTHETIC: hand-built from the Stripe API reference for version 2025-03-31.basil (M5 PR-1); replace with objects recorded in the owner-approved test-mode smoke.",
+  "id": "in_1SynthCreate0001",
+  "object": "invoice",
+  "account_country": "US",
+  "amount_due": 4900,
+  "amount_overpaid": 0,
+  "amount_paid": 4900,
+  "amount_remaining": 0,
+  "attempt_count": 1,
+  "attempted": true,
+  "auto_advance": false,
+  "billing_reason": "subscription_create",
+  "collection_method": "charge_automatically",
+  "created": 1760000000,
+  "currency": "usd",
+  "customer": "cus_1SynthCustomer01",
+  "livemode": false,
+  "metadata": {},
+  "number": null,
+  "parent": {
+    "type": "subscription_details",
+    "quote_details": null,
+    "subscription_details": {
+      "metadata": {
+        "morrow_operation_id": "00000000-0000-4000-8000-0000000000c1",
+        "morrow_workspace_id": "ws_billing",
+        "morrow_organization_id": "org_billing"
+      },
+      "subscription": "sub_1SynthSubscr0001"
+    }
+  },
+  "lines": {
+    "object": "list",
+    "data": [
+      {
+        "id": "il_1SynthLine0000001",
+        "object": "line_item",
+        "amount": 4900,
+        "currency": "usd",
+        "description": "1 x Morrow beta (at $49.00 / month)",
+        "discountable": true,
+        "livemode": false,
+        "metadata": {},
+        "parent": {
+          "type": "subscription_item_details",
+          "invoice_item_details": null,
+          "subscription_item_details": {
+            "invoice_item": null,
+            "proration": false,
+            "proration_details": {
+              "credited_items": null
+            },
+            "subscription": "sub_1SynthSubscr0001",
+            "subscription_item": "si_1SynthItem000001"
+          }
+        },
+        "period": {
+          "start": 1760000000,
+          "end": 1762678400
+        },
+        "pricing": {
+          "type": "price_details",
+          "price_details": {
+            "price": "price_MorrowDevBeta0049",
+            "product": "prod_1SynthBeta00001"
+          },
+          "unit_amount_decimal": "4900"
+        },
+        "quantity": 1,
+        "taxes": []
+      }
+    ],
+    "has_more": false,
+    "total_count": 1,
+    "url": "/v1/invoices/in_1SynthCreate0001/lines"
+  },
+  "period_end": 1760000000,
+  "period_start": 1760000000,
+  "status": "paid",
+  "subtotal": 4900,
+  "total": 4900
+}

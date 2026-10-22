@@ -23,9 +23,14 @@ import {
   edgePlacementWorkers,
   edgeRateLimits,
   edgeRefusals,
+  edgeStripeModeVar,
+  edgeStripeNamesRequired,
+  edgeStripeSecretNames,
+  edgeStripeVarNames,
   edgeVarNames,
   edgeWorkers,
   resolvedEdgeConfig,
+  reviewedStripeRecord,
   runWrangler,
   verifyEdgeConfig,
   wranglerInvocation,
@@ -82,14 +87,24 @@ test("AC01/AC04: the committed configuration resolves cleanly for 4 Workers x 3 
     // (P06.T01a adds morrow_api_worker); M2 PR-1 adds the connector's and the
     // orchestrator's role passwords, the vault login's password and the vault KEK (ADR-0022
     // items 7-8). The vault is held in production until the ADR-0007 item 9 custody ADR,
-    // so production binds neither vault secret.
+    // so production binds neither vault secret. M5 PR-1's Stripe names join staging only
+    // while the Stripe switch is on; it is off (owner decision (c), 2026-10-21), so no
+    // Worker binds any Stripe name.
     assert.equal(
       verdict.resolved["broker:" + environment].bindings.length,
       { development: 15, staging: 18, production: 13 }[environment],
       environment,
     );
     assert.ok(verdict.resolved["broker:" + environment].bindings.includes("TURNSTILE_SECRET_KEY"));
+    for (const worker of edgeWorkers)
+      assert.ok(
+        !verdict.resolved[worker.key + ":" + environment].bindings.some((name) =>
+          /STRIPE/.test(name),
+        ),
+        worker.key + ":" + environment,
+      );
   }
+  assert.equal(verdict.stripeSwitch, "off");
   assert.deepEqual(verdict.reservedWorkerPaths, [...reservedWorkerPaths]);
   assert.deepEqual((await verify(tree())).problems, []);
 });
@@ -145,6 +160,30 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
       "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
     ],
     [{ api: (c) => (c.vars.ANTHROPIC_BASE_URL = "x") }, "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER"],
+    // M5 PR-1: every STRIPE_ name is broker-only, the configuration included.
+    [
+      { api: (c) => c.env.staging.secrets.required.push("STRIPE_RESTRICTED_KEY") },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    [
+      { connector: (c) => (c.vars.STRIPE_CONFIGURATION_JSON = "{}") },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    [
+      { orchestrator: (c) => (c.secrets.required = ["STRIPE_WEBHOOK_SECRET"]) },
+      "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+    ],
+    // Production holds Stripe until the production custody ADR; development never carries
+    // it; and with the switch off (committed) staging carries none either.
+    [
+      { broker: (c) => c.env.production.secrets.required.push("STRIPE_RESTRICTED_KEY") },
+      "EDGE_BROKER_SECRETS",
+    ],
+    [{ broker: (c) => c.secrets.required.push("STRIPE_WEBHOOK_SECRET") }, "EDGE_BROKER_SECRETS"],
+    [
+      { broker: (c) => c.env.staging.secrets.required.push("STRIPE_RESTRICTED_KEY") },
+      "EDGE_STRIPE_SWITCH_MIXED",
+    ],
     // M2 PR-1: the vault KEK is broker-only (ADR-0022 item 7).
     [
       { connector: (c) => c.env.staging.secrets.required.push("MORROW_VAULT_KEK_V1") },
@@ -200,6 +239,25 @@ test("AC04: cross-environment broker, extra secret or credential name outside th
       { broker: (c) => (c.vars.LOGIN_CLIENT = "client_" + "A".repeat(26)) },
       "EDGE_COMMITTED_IDENTIFIER_WORKOS_CLIENT",
     ],
+    // M5 PR-1: Stripe markers are never committed, even on the broker.
+    [
+      { broker: (c) => (c.vars.NOTE = "rk_" + "test_" + "A".repeat(24)) },
+      "EDGE_COMMITTED_IDENTIFIER_STRIPE_RESTRICTED_KEY",
+    ],
+    [
+      { broker: (c) => (c.vars.NOTE = "whsec_" + "A".repeat(24)) },
+      "EDGE_COMMITTED_IDENTIFIER_STRIPE_WEBHOOK_SECRET",
+    ],
+    [
+      { broker: (c) => (c.env.staging.vars.NOTE = "bpc_" + "A".repeat(24)) },
+      "EDGE_COMMITTED_IDENTIFIER_STRIPE_PORTAL_CONFIGURATION",
+    ],
+    // The reviewed portal configuration var is the staging broker's only, and only while
+    // the switch is on; so is the switch's mode var (the api's and the broker's).
+    [{ broker: (c) => (c.vars.STRIPE_CONFIGURATION_JSON = "{}") }, "EDGE_VARS"],
+    [{ broker: (c) => (c.env.production.vars.STRIPE_CONFIGURATION_JSON = "{}") }, "EDGE_VARS"],
+    [{ api: (c) => (c.env.staging.vars.MORROW_STRIPE_MODE = "test") }, "EDGE_STRIPE_SWITCH_MIXED"],
+    [{ connector: (c) => (c.vars.MORROW_STRIPE_MODE = "test") }, "EDGE_STRIPE_SWITCH_MIXED"],
     [
       { api: (c) => (c.routes = [{ pattern: "example.test/*", zone_name: "example.test" }]) },
       "EDGE_ROUTES",
@@ -568,6 +626,7 @@ test("P05.T01ab: the api's limiter bindings are the packet's D1 values", () => {
 // reviewed staging values. Every case starts from the committed configuration.
 const committedStaging = JSON.parse(readFileSync("infra/environments/staging.json", "utf8"));
 const committedWorkos = JSON.parse(readFileSync("docs/decisions/workos-staging.json", "utf8"));
+const committedStripe = JSON.parse(readFileSync("docs/decisions/stripe-staging.json", "utf8"));
 const stagingOrigin = committedStaging.cloudflare.origin;
 const reviewedClient = committedWorkos.client_id;
 // Rewrites one JSON var: `patch` replaces members, keeping the others in place.
@@ -591,9 +650,16 @@ const records = (patch = {}) => {
   patch.staging?.(staging);
   const workos = structuredClone(committedWorkos);
   patch.workos?.(workos);
+  const stripe = structuredClone(committedStripe);
+  patch.stripe?.(stripe);
   writeFileSync(join(path, "staging.json"), JSON.stringify(staging));
   writeFileSync(join(path, "workos-staging.json"), JSON.stringify(workos));
-  return { stagingPath: join(path, "staging.json"), workosPath: join(path, "workos-staging.json") };
+  writeFileSync(join(path, "stripe-staging.json"), JSON.stringify(stripe));
+  return {
+    stagingPath: join(path, "staging.json"),
+    workosPath: join(path, "workos-staging.json"),
+    stripePath: join(path, "stripe-staging.json"),
+  };
 };
 
 test("P04.T01i AC01/AC02: the committed staging blocks are D1's and pass every value rule", async () => {
@@ -1055,6 +1121,316 @@ test("P04.T01i AC01 (P04.T02a AC24 narrowed): staging vars name only the reviewe
   ]);
 });
 
+// ---------------------------------------------------------------------------
+// M5 PR-1: the staging broker's STRIPE_CONFIGURATION_JSON arrives on the reviewed
+// identifier path, and with the Stripe switch (owner decision (c), 2026-10-21) only while
+// docs/decisions/stripe-staging.json `switch` is "on". The record pins the portal
+// configuration id and the tax flags; the var must be byte-equal to the text that record
+// admits, and that id is admitted inside that one var only (never another var, block,
+// Worker or comment). On, the staging api and broker also carry MORROW_STRIPE_MODE "test"
+// and the broker the two Stripe secrets; off, none of it; anything between is mixed.
+const reviewedPortal = "bpc_" + "1Rv" + "S".repeat(21);
+const withPortal = (stripe) => {
+  stripe.portal_configuration_id = reviewedPortal;
+  stripe.observed_on = "2026-10-21";
+};
+const switchedOn = (stripe) => {
+  withPortal(stripe);
+  stripe.switch = "on";
+};
+const stripeVar = (patch = {}) =>
+  JSON.stringify({
+    schemaVersion: 1,
+    portalConfigurationId: reviewedPortal,
+    automaticTax: false,
+    billingAddressCollection: "auto",
+    ...patch,
+  });
+const withStripeVar = (value) => ({
+  broker: (c) => (c.env.staging.vars.STRIPE_CONFIGURATION_JSON = value),
+});
+// The whole "on" state of the committed wrangler files, as one reviewed commit makes it.
+const turnedOn = ({ api, broker } = {}) => ({
+  api: (c) => {
+    c.env.staging.vars.MORROW_STRIPE_MODE = "test";
+    api?.(c);
+  },
+  broker: (c) => {
+    c.env.staging.vars.MORROW_STRIPE_MODE = "test";
+    c.env.staging.vars.STRIPE_CONFIGURATION_JSON = stripeVar();
+    c.env.staging.secrets.required.push("STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET");
+    broker?.(c);
+  },
+});
+
+test("M5: the committed Stripe record is test mode, switched off, with no portal configuration", () => {
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(committedStripe).filter(([key]) => !["scope"].includes(key))),
+    {
+      schema_version: 1,
+      environment_kind: "staging",
+      switch: "off",
+      mode: "test",
+      portal_configuration_id: null,
+      automatic_tax: false,
+      billing_address_collection: "auto",
+      observed_on: null,
+    },
+  );
+  // The names the switch governs: the staging api's mode var; the staging broker's mode
+  // var, configuration and two secrets. Nowhere else.
+  assert.equal(edgeStripeModeVar, "MORROW_STRIPE_MODE");
+  assert.deepEqual(edgeStripeSecretNames, ["STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"]);
+  assert.deepEqual(edgeStripeVarNames("api", "staging"), ["MORROW_STRIPE_MODE"]);
+  assert.deepEqual(edgeStripeVarNames("broker", "staging"), [
+    "MORROW_STRIPE_MODE",
+    "STRIPE_CONFIGURATION_JSON",
+  ]);
+  assert.deepEqual(edgeStripeNamesRequired("broker", "staging", "on"), [
+    "MORROW_STRIPE_MODE",
+    "STRIPE_CONFIGURATION_JSON",
+    "STRIPE_RESTRICTED_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+  ]);
+  assert.deepEqual(edgeStripeNamesRequired("api", "staging", "on"), ["MORROW_STRIPE_MODE"]);
+  for (const worker of ["api", "broker", "connector", "orchestrator"])
+    assert.deepEqual(edgeStripeNamesRequired(worker, "staging", "off"), [], worker);
+  for (const [worker, environment] of [
+    ["broker", "development"],
+    ["broker", "production"],
+    ["api", "development"],
+    ["api", "production"],
+    ["connector", "staging"],
+    ["orchestrator", "staging"],
+  ]) {
+    assert.deepEqual(edgeStripeVarNames(worker, environment), [], worker + ":" + environment);
+    assert.deepEqual(edgeStripeNamesRequired(worker, environment, "on"), []);
+    assert.deepEqual(edgeVarNames(worker, environment, "on"), edgeVarNames(worker, environment));
+  }
+  assert.deepEqual(edgeVarNames("broker", "staging", "on"), [
+    ...edgeVarNames("broker", "staging"),
+    "MORROW_STRIPE_MODE",
+    "STRIPE_CONFIGURATION_JSON",
+  ]);
+  // The record admits nothing while off, also with a recorded portal configuration.
+  const record = structuredClone(committedStripe);
+  assert.deepEqual({ ...reviewedStripeRecord(record) }, { switch: "off", configurationJson: null });
+  withPortal(record);
+  assert.deepEqual({ ...reviewedStripeRecord(record) }, { switch: "off", configurationJson: null });
+  // On: exactly the record's id and flags, in the parser's member order.
+  record.switch = "on";
+  assert.deepEqual(
+    { ...reviewedStripeRecord(record) },
+    { switch: "on", configurationJson: stripeVar() },
+  );
+  for (const edit of [
+    (r) => (r.mode = "live"),
+    (r) => (r.switch = "test"),
+    (r) => (r.switch = true),
+    (r) => delete r.switch,
+    // On means fully configured: the saved portal configuration is required.
+    (r) => {
+      r.portal_configuration_id = null;
+      r.observed_on = null;
+    },
+    (r) => (r.portal_configuration_id = "bpc_short"),
+    (r) => (r.portal_configuration_id = "bps_" + "S".repeat(24)),
+    (r) => (r.observed_on = null),
+    (r) => (r.automatic_tax = "false"),
+    (r) => (r.billing_address_collection = "never"),
+    (r) => (r.extra = true),
+  ]) {
+    const bad = structuredClone(record);
+    edit(bad);
+    assert.throws(() => reviewedStripeRecord(bad), /EDGE_STAGING_STRIPE_RECORD/);
+  }
+});
+
+test("M5: switched off, any Stripe var or secret is a mixed state", async () => {
+  // The committed state passes, with or without a recorded portal configuration.
+  assert.deepEqual((await verify(tree())).problems, []);
+  assert.deepEqual((await verify(tree(), undefined, records({ stripe: withPortal }))).problems, []);
+  for (const [index, [mutate, expected]] of [
+    // The whole "on" set of the wrangler files without the record's switch.
+    [turnedOn(), ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_VARS", "EDGE_BROKER_SECRETS"]],
+    // Each part on its own.
+    [
+      { broker: (c) => (c.env.staging.vars.MORROW_STRIPE_MODE = "test") },
+      ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    [
+      withStripeVar(stripeVar()),
+      ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_VARS", "EDGE_STAGING_STRIPE_CONFIGURATION"],
+    ],
+    [
+      {
+        broker: (c) =>
+          c.env.staging.secrets.required.push("STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"),
+      },
+      ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_BROKER_SECRETS"],
+    ],
+    [
+      { api: (c) => (c.env.staging.vars.MORROW_STRIPE_MODE = "test") },
+      ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+  ].entries()) {
+    const found = codes(await verify(tree(mutate), undefined, records({ stripe: withPortal })));
+    for (const code of expected)
+      assert.ok(found.includes(code), index + ": " + code + " not in " + found.join(","));
+  }
+});
+
+test("M5: switched on, the full Stripe set is required and the reviewed configuration admitted", async () => {
+  const on = records({ stripe: switchedOn });
+  // One reviewed commit: the record's switch, both modes, the configuration and both
+  // secrets.
+  const verdict = await verify(tree(turnedOn()), undefined, on);
+  assert.deepEqual(verdict.problems, []);
+  assert.equal(verdict.stripeSwitch, "on");
+  assert.equal(verdict.resolved["broker:staging"].bindings.length, 22);
+  assert.ok(verdict.resolved["api:staging"].bindings.includes("MORROW_STRIPE_MODE"));
+  // Development and production stay off with the switch on.
+  for (const environment of ["development", "production"])
+    assert.ok(
+      !verdict.resolved["broker:" + environment].bindings.some((name) => /STRIPE/.test(name)),
+    );
+  // The switch on with the wrangler files still off.
+  assert.ok(codes(await verify(tree(), undefined, on)).includes("EDGE_STRIPE_SWITCH_MIXED"));
+  const cases = [
+    // Each part missing.
+    [
+      turnedOn({ api: (c) => delete c.env.staging.vars.MORROW_STRIPE_MODE }),
+      ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    [
+      turnedOn({ broker: (c) => delete c.env.staging.vars.MORROW_STRIPE_MODE }),
+      ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    [
+      turnedOn({ broker: (c) => delete c.env.staging.vars.STRIPE_CONFIGURATION_JSON }),
+      ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    [
+      turnedOn({ broker: (c) => c.env.staging.secrets.required.pop() }),
+      ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_BROKER_SECRETS"],
+    ],
+    // The mode is exactly "test".
+    [turnedOn({ api: (c) => (c.env.staging.vars.MORROW_STRIPE_MODE = "live") }), ["EDGE_VARS"]],
+    [turnedOn({ broker: (c) => (c.env.staging.vars.MORROW_STRIPE_MODE = "on") }), ["EDGE_VARS"]],
+    // Never in development or production, never on another Worker.
+    [
+      turnedOn({ broker: (c) => (c.vars.MORROW_STRIPE_MODE = "test") }),
+      ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    [
+      turnedOn({ broker: (c) => c.env.production.secrets.required.push("STRIPE_WEBHOOK_SECRET") }),
+      ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_BROKER_SECRETS"],
+    ],
+    [
+      { ...turnedOn(), connector: (c) => (c.env.staging.vars.MORROW_STRIPE_MODE = "test") },
+      ["EDGE_STRIPE_SWITCH_MIXED", "EDGE_VARS"],
+    ],
+    // Malformed: the broker's own parser refuses it.
+    [
+      turnedOn({ broker: (c) => (c.env.staging.vars.STRIPE_CONFIGURATION_JSON = "{}") }),
+      ["EDGE_STAGING_STRIPE_CONFIGURATION"],
+    ],
+    [
+      turnedOn({ broker: (c) => (c.env.staging.vars.STRIPE_CONFIGURATION_JSON = "not json") }),
+      ["EDGE_STAGING_STRIPE_CONFIGURATION"],
+    ],
+    // Another well-formed portal configuration than the reviewed one.
+    [
+      turnedOn({
+        broker: (c) =>
+          (c.env.staging.vars.STRIPE_CONFIGURATION_JSON = stripeVar({
+            portalConfigurationId: "bpc_" + "Other".repeat(5),
+          })),
+      }),
+      [
+        "EDGE_STAGING_STRIPE_CONFIGURATION",
+        "EDGE_STAGING_VALUE_STRIPE_PORTAL_CONFIGURATION",
+        "EDGE_COMMITTED_IDENTIFIER_STRIPE_PORTAL_CONFIGURATION",
+      ],
+    ],
+    // The tax flags are pinned too.
+    [
+      turnedOn({
+        broker: (c) =>
+          (c.env.staging.vars.STRIPE_CONFIGURATION_JSON = stripeVar({ automaticTax: true })),
+      }),
+      ["EDGE_STAGING_STRIPE_CONFIGURATION"],
+    ],
+    [
+      turnedOn({
+        broker: (c) =>
+          (c.env.staging.vars.STRIPE_CONFIGURATION_JSON = stripeVar({
+            billingAddressCollection: "required",
+          })),
+      }),
+      ["EDGE_STAGING_STRIPE_CONFIGURATION"],
+    ],
+    // Same members, other bytes (spacing): pinned to the exact text.
+    [
+      turnedOn({
+        broker: (c) =>
+          (c.env.staging.vars.STRIPE_CONFIGURATION_JSON = JSON.stringify(
+            JSON.parse(stripeVar()),
+            null,
+            1,
+          )),
+      }),
+      ["EDGE_STAGING_STRIPE_CONFIGURATION"],
+    ],
+    // The reviewed id outside its var: another broker staging var, or the api's.
+    [
+      turnedOn({
+        broker: (c) =>
+          patchVar(c.env.staging.vars, "TURNSTILE_CONFIGURATION_JSON", { note: reviewedPortal }),
+      }),
+      ["EDGE_STAGING_VALUE_STRIPE_PORTAL_CONFIGURATION"],
+    ],
+    [
+      turnedOn({ api: (c) => (c.env.staging.vars.STRIPE_CONFIGURATION_JSON = stripeVar()) }),
+      [
+        "EDGE_VARS",
+        "EDGE_CREDENTIAL_BINDING_OUTSIDE_BROKER",
+        "EDGE_STRIPE_SWITCH_MIXED",
+        "EDGE_STAGING_VALUE_STRIPE_PORTAL_CONFIGURATION",
+        "EDGE_COMMITTED_IDENTIFIER_STRIPE_PORTAL_CONFIGURATION",
+      ],
+    ],
+    // Development or production: no Stripe var there.
+    [
+      turnedOn({ broker: (c) => (c.env.production.vars.STRIPE_CONFIGURATION_JSON = stripeVar()) }),
+      ["EDGE_VARS", "EDGE_COMMITTED_IDENTIFIER_STRIPE_PORTAL_CONFIGURATION"],
+    ],
+  ];
+  for (const [index, [mutate, expected]] of cases.entries()) {
+    const found = codes(await verify(tree(mutate), undefined, on));
+    for (const code of expected)
+      assert.ok(found.includes(code), index + ": " + code + " not in " + found.join(","));
+  }
+  // A record that is not the reviewed shape fails on its own, and counts as off.
+  const live = codes(
+    await verify(tree(turnedOn()), undefined, records({ stripe: (r) => (r.mode = "live") })),
+  );
+  assert.ok(live.includes("EDGE_STAGING_STRIPE_RECORD"));
+  assert.ok(live.includes("EDGE_STRIPE_SWITCH_MIXED"));
+  // A second copy of the reviewed id in the file (a comment) is a remainder.
+  const root = tree(turnedOn());
+  const path = join(root, "apps/broker/wrangler.jsonc");
+  writeFileSync(path, readFileSync(path, "utf8") + "\n// " + reviewedPortal + "\n");
+  assert.deepEqual((await verify(root, undefined, on)).problems, [
+    "EDGE_COMMITTED_IDENTIFIER_STRIPE_PORTAL_CONFIGURATION:broker",
+  ]);
+  // An unreadable record is its own problem, and counts as off.
+  const missing = records({ stripe: switchedOn });
+  rmSync(missing.stripePath);
+  const unreadable = (await verify(tree(turnedOn()), undefined, missing)).problems;
+  assert.ok(unreadable.includes("EDGE_STAGING_RECORD_UNREADABLE:stripe-staging.json"));
+  assert.ok(unreadable.includes("EDGE_STRIPE_SWITCH_MIXED:broker:staging"));
+});
 // ---------------------------------------------------------------------------
 // P04.T01i D1 (placement, 2026-10-21): the staging api and broker run in the region of the
 // committed Neon endpoint; no other Worker or environment has placement.

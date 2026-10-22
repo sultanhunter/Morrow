@@ -431,6 +431,103 @@
         "status"
       ],
       "additionalProperties": false
+    },
+    "governance.billing.manage.input": {
+      "description": "M5 PR-1 (ADR-0022 items 2 and 12): the server-built input of a Morrow-direct purchase action. subscribe names exactly one price key; billing_portal names none.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/BillingManageAction"
+        },
+        "priceKey": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableStripePriceKey"
+        }
+      },
+      "required": [
+        "action",
+        "priceKey"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "const": "subscribe"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "priceKey": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "priceKey": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "governance.billing.manage.output": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        }
+      },
+      "required": [
+        "operationId"
+      ],
+      "additionalProperties": false
+    },
+    "governance.model_default.revise.input": {
+      "description": "M5 PR-1 (ADR-0022 items 3 and 16): the workspace default model selection and member ceiling. model and effort are opaque catalogue keys; expectedRevision is null for the first revision.",
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelOptionKey"
+        },
+        "effort": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/ModelOptionKey"
+        },
+        "maxCreditsPerProduct": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/CreditsPerProductCeiling"
+        },
+        "expectedRevision": {
+          "$ref": "urn:morrow:contracts:core:v1.1#/$defs/NullableRevision"
+        }
+      },
+      "required": [
+        "model",
+        "effort",
+        "maxCreditsPerProduct",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "governance.model_default.revise.output": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "additionalProperties": false
     }
   }
 }

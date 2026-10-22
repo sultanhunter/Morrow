@@ -26,8 +26,10 @@ import {
   topLevelStatements,
 } from "../scripts/migration-chain.mjs";
 import {
+  billingTermsSeedRows,
   checkAdministrator,
   checkIdentity,
+  customerResolutionInput,
   ledgerDrift,
   morrowSetRowsQuery,
   neonConnector,
@@ -35,9 +37,11 @@ import {
   passwordLiteral,
   platformSeedRows,
   provisioningSql,
+  resolveHeldCustomerOperation,
   runMigrations,
   provisionRoles,
   scramVerifier,
+  seedBillingTerms,
   statementLoggingRefusal,
   statementStatsFacts,
   statementStatsVerificationQuery,
@@ -56,6 +60,7 @@ import {
   connectAttemptTimeoutMs,
   main,
   mainPreconditions,
+  stagingBillingTermsRows,
 } from "../scripts/staging.mjs";
 import { parseOwnerUrl } from "../scripts/staging-files.mjs";
 import {
@@ -1616,72 +1621,96 @@ test("staging.json: the D1 shape; every identifier is set and well-formed (PR-D 
 
 // M2 PR-1: the owner's vault KEK file (`npm run vault -- kek`), 64 lowercase hex characters.
 const plantedKek = "c0ffee".repeat(10) + "abcd";
+// M5 PR-1: the owner's Stripe restricted test key and webhook signing secret files.
+const plantedStripe = Object.freeze({
+  "stripe-restricted-key": "rk_test_" + "K".repeat(32),
+  "stripe-webhook-secret": "whsec_" + "H".repeat(32),
+});
 
 const provisionPlant = () => ({
   "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
   "workos-api-key": "sk_test_" + "W".repeat(24),
   "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
   "vault-kek-v1": plantedKek,
+  ...plantedStripe,
 });
 // The one place a role password appears outside the broker's file or stdin: its own
 // role's ALTER ROLE statement, sent once (M-N3 as amended 2026-10-20).
 const passwordStatement =
   /^ALTER ROLE (morrow_[a-z0-9_]+) WITH LOGIN CONNECTION LIMIT 10 PASSWORD '([A-Za-z0-9_-]{43})'$/;
 
-test("fake database: provisioning sends each plaintext once, in its own role's ALTER ROLE", async () => {
-  const planted = plantedHome(provisionPlant());
-  try {
-    const { ctx, out, err, constants } = await fakeContext({
-      home: planted.home,
-      tools: fakeTools().tools,
-    });
-    const db = fakeDatabase({ roles: constants.roles });
-    ctx.database = db.connector;
-    assert.equal(await main(["provision-roles", "--first"], ctx), 0, out.join());
-    const secrets = JSON.parse(
-      readFileSync(join(planted.directory, "tmp/broker-secrets.json"), "utf8"),
-    );
-    assert.equal(statSync(join(planted.directory, "tmp/broker-secrets.json")).mode & 0o777, 0o600);
-    assert.deepEqual(Object.keys(secrets).sort(), constants.brokerSecrets);
-    assert.equal(constants.brokerSecrets.length, 14);
-    // Eleven logins: the ten leased roles and the broker's own vault login (M2 PR-1).
-    assert.equal(constants.roles.length, 11);
-    assert.ok(constants.roles.includes("morrow_vault_broker"));
-    const passwords = constants.roles.map((r) => secrets[constants.passwordSecret(r)]);
-    assert.ok(passwords.every((p) => /^[A-Za-z0-9_-]{43}$/.test(p)));
-    assert.equal(new Set(passwords).size, passwords.length);
-    // The KEK is the owner's file, unchanged; the tool generates no KEK.
-    assert.equal(secrets.MORROW_VAULT_KEK_V1, plantedKek);
-    const texts = db.statements.map((s) => s.text + JSON.stringify(s.params));
-    for (const role of constants.roles) {
-      const password = secrets[constants.passwordSecret(role)];
-      const carrying = db.statements.filter((s) => (s.text + s.params.join()).includes(password));
-      assert.equal(carrying.length, 1, role);
-      const [, named, sent] = passwordStatement.exec(carrying[0].text) ?? [];
-      assert.deepEqual([named, sent, carrying[0].params], [role, password, []], role);
+// M5: the Stripe switch (owner decision (c), 2026-10-21) decides whether the first-deploy
+// file carries the two Stripe secrets: off (committed) fourteen names, on sixteen.
+for (const stripe of ["off", "on"])
+  test(`fake database: provisioning sends each plaintext once, in its own role's ALTER ROLE (Stripe ${stripe})`, async () => {
+    const planted = plantedHome(provisionPlant());
+    try {
+      const { ctx, out, err, constants } = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+        stripe,
+      });
+      const db = fakeDatabase({ roles: constants.roles });
+      ctx.database = db.connector;
+      assert.equal(await main(["provision-roles", "--first"], ctx), 0, out.join());
+      const secrets = JSON.parse(
+        readFileSync(join(planted.directory, "tmp/broker-secrets.json"), "utf8"),
+      );
+      assert.equal(
+        statSync(join(planted.directory, "tmp/broker-secrets.json")).mode & 0o777,
+        0o600,
+      );
+      assert.deepEqual(Object.keys(secrets).sort(), constants.brokerSecrets);
+      assert.equal(constants.brokerSecrets.length, stripe === "on" ? 16 : 14);
+      // M5 PR-1: the owner's Stripe files, unchanged, only while the switch is on; never sent
+      // to the database. Off, the planted files are not even read into the broker file.
+      assert.equal(
+        secrets.STRIPE_RESTRICTED_KEY,
+        stripe === "on" ? plantedStripe["stripe-restricted-key"] : undefined,
+      );
+      assert.equal(
+        secrets.STRIPE_WEBHOOK_SECRET,
+        stripe === "on" ? plantedStripe["stripe-webhook-secret"] : undefined,
+      );
+      // Eleven logins: the ten leased roles and the broker's own vault login (M2 PR-1).
+      assert.equal(constants.roles.length, 11);
+      assert.ok(constants.roles.includes("morrow_vault_broker"));
+      const passwords = constants.roles.map((r) => secrets[constants.passwordSecret(r)]);
+      assert.ok(passwords.every((p) => /^[A-Za-z0-9_-]{43}$/.test(p)));
+      assert.equal(new Set(passwords).size, passwords.length);
+      // The KEK is the owner's file, unchanged; the tool generates no KEK.
+      assert.equal(secrets.MORROW_VAULT_KEK_V1, plantedKek);
+      const texts = db.statements.map((s) => s.text + JSON.stringify(s.params));
+      for (const role of constants.roles) {
+        const password = secrets[constants.passwordSecret(role)];
+        const carrying = db.statements.filter((s) => (s.text + s.params.join()).includes(password));
+        assert.equal(carrying.length, 1, role);
+        const [, named, sent] = passwordStatement.exec(carrying[0].text) ?? [];
+        assert.deepEqual([named, sent, carrying[0].params], [role, password, []], role);
+      }
+      assert.equal(db.statements.filter((s) => / PASSWORD /.test(s.text)).length, 11);
+      assert.ok(!texts.join().includes(plantedKek));
+      assert.ok(Object.values(plantedStripe).every((v) => !texts.join().includes(v)));
+      assert.ok(!texts.join().includes("SCRAM-SHA-256$"));
+      // The statement-statistics check runs before the first password statement.
+      const check = db.statements.findIndex((s) => /extname = 'pg_stat_statements'/.test(s.text));
+      const first = db.statements.findIndex((s) => / PASSWORD /.test(s.text));
+      assert.ok(check >= 0 && check < first);
+      // No plaintext or KEK in the output; this fake's pg_authid is unreadable.
+      assert.ok([...passwords, plantedKek].every((p) => !out.join().includes(p)));
+      assert.equal(JSON.parse(out.at(-1)).passwordStorage, "unreadable");
+      // No module loaded: nothing records the statements, so no scratch session is opened.
+      assert.deepEqual(JSON.parse(out.at(-1)).statementStats, { recording: false });
+      assert.ok(db.statements.every((s) => s.database === "morrow"));
+      assert.equal(err.length, 0);
+      // A second --first refuses: the file exists, and nothing was sent.
+      const before = db.statements.length;
+      assert.equal(await main(["provision-roles", "--first"], ctx), 1);
+      assert.equal(db.statements.length, before);
+    } finally {
+      planted.cleanup();
     }
-    assert.equal(db.statements.filter((s) => / PASSWORD /.test(s.text)).length, 11);
-    assert.ok(!texts.join().includes(plantedKek));
-    assert.ok(!texts.join().includes("SCRAM-SHA-256$"));
-    // The statement-statistics check runs before the first password statement.
-    const check = db.statements.findIndex((s) => /extname = 'pg_stat_statements'/.test(s.text));
-    const first = db.statements.findIndex((s) => / PASSWORD /.test(s.text));
-    assert.ok(check >= 0 && check < first);
-    // No plaintext or KEK in the output; this fake's pg_authid is unreadable.
-    assert.ok([...passwords, plantedKek].every((p) => !out.join().includes(p)));
-    assert.equal(JSON.parse(out.at(-1)).passwordStorage, "unreadable");
-    // No module loaded: nothing records the statements, so no scratch session is opened.
-    assert.deepEqual(JSON.parse(out.at(-1)).statementStats, { recording: false });
-    assert.ok(db.statements.every((s) => s.database === "morrow"));
-    assert.equal(err.length, 0);
-    // A second --first refuses: the file exists, and nothing was sent.
-    const before = db.statements.length;
-    assert.equal(await main(["provision-roles", "--first"], ctx), 1);
-    assert.equal(db.statements.length, before);
-  } finally {
-    planted.cleanup();
-  }
-});
+  });
 
 // The owner's conditions (2026-10-20): before any password statement, any broker file or
 // any secret placement, the tool refuses statistics it cannot read, the extension in the
@@ -2164,6 +2193,7 @@ test("provision-roles --first: broker file names other than brokerRequiredSecret
     "workos-api-key": "sk_test_" + "W".repeat(24),
     "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
     "vault-kek-v1": plantedKek,
+    ...plantedStripe,
   });
   try {
     const base = await fakeContext({ home: planted.home, tools: fakeTools().tools });
@@ -2179,10 +2209,30 @@ test("provision-roles --first: broker file names other than brokerRequiredSecret
       constants.brokerSecrets.filter(
         (name) => name !== constants.passwordSecret("morrow_vault_broker"),
       ),
+      // M5: the Stripe names are not in the list while the switch is off.
+      [...constants.brokerSecrets, "STRIPE_RESTRICTED_KEY", "STRIPE_WEBHOOK_SECRET"].sort(),
     ]) {
       ctx.constants = async () => Object.freeze({ ...constants, brokerSecrets });
       assert.equal(await main(["provision-roles", "--first"], ctx), 1);
       assert.equal(JSON.parse(err.at(-1)).code, "STAGING_BROKER_FILE_NAMES_INVALID");
+      assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false);
+      assert.deepEqual(db.statements, []);
+    }
+    // With the switch on the Stripe names are part of the one list.
+    const on = await fakeContext({ home: planted.home, tools: fakeTools().tools, stripe: "on" });
+    on.ctx.database = db.connector;
+    for (const [brokerSecrets, stripeSecrets] of [
+      [
+        on.constants.brokerSecrets.filter((name) => name !== "STRIPE_WEBHOOK_SECRET"),
+        on.constants.stripeSecrets,
+      ],
+      // A Stripe name the tools have no owner file for.
+      [[...constants.brokerSecrets, "STRIPE_OTHER_SECRET"].sort(), ["STRIPE_OTHER_SECRET"]],
+    ]) {
+      on.ctx.constants = async () =>
+        Object.freeze({ ...on.constants, brokerSecrets, stripeSecrets });
+      assert.equal(await main(["provision-roles", "--first"], on.ctx), 1);
+      assert.equal(JSON.parse(on.err.at(-1)).code, "STAGING_BROKER_FILE_NAMES_INVALID");
       assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false);
       assert.deepEqual(db.statements, []);
     }
@@ -2206,6 +2256,7 @@ test("provision-roles --first: the vault KEK is read from the owner's file, neve
         "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
         "workos-api-key": "sk_test_" + "W".repeat(24),
         "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
+        ...plantedStripe,
         ...plant,
       },
       { modes },
@@ -2225,5 +2276,301 @@ test("provision-roles --first: the vault KEK is read from the owner's file, neve
     } finally {
       planted.cleanup();
     }
+  }
+});
+
+// M5 PR-1 (ADR-0022 items 7 and 12), with the Stripe switch on: both Stripe secrets come
+// only from the owner's files. A missing file, a secret sk_ key, a live key, a malformed
+// webhook secret or a loose mode stops --first before the broker file is created or any
+// role is touched. With the switch off the same files are never read.
+test("provision-roles --first: the Stripe secrets are read from the owner's files", async () => {
+  for (const [label, plant, modes, code] of [
+    ["missing key", { "stripe-restricted-key": null }, {}, "STAGING_FILE_MISSING"],
+    ["missing webhook", { "stripe-webhook-secret": null }, {}, "STAGING_FILE_MISSING"],
+    [
+      "secret key",
+      { "stripe-restricted-key": "sk_test_" + "K".repeat(32) },
+      {},
+      "STAGING_FILE_FORMAT",
+    ],
+    [
+      "live key",
+      { "stripe-restricted-key": "rk_live_" + "K".repeat(32) },
+      {},
+      "STAGING_FILE_FORMAT",
+    ],
+    ["webhook", { "stripe-webhook-secret": "H".repeat(32) }, {}, "STAGING_FILE_FORMAT"],
+    ["mode", {}, { "stripe-restricted-key": 0o644 }, "STAGING_FILE_MODE"],
+  ]) {
+    const files = {
+      "neon-owner-url": `postgresql://neondb_owner:${"o".repeat(24)}@${labBinding.hostname}/morrow?sslmode=require`,
+      "workos-api-key": "sk_test_" + "W".repeat(24),
+      "turnstile-secret": "0x4AAAAAAA" + "t".repeat(26),
+      "vault-kek-v1": plantedKek,
+      ...plantedStripe,
+      ...plant,
+    };
+    for (const [name, value] of Object.entries(files)) if (value === null) delete files[name];
+    const planted = plantedHome(files, { modes });
+    try {
+      const { ctx, err, constants } = await fakeContext({
+        home: planted.home,
+        tools: fakeTools().tools,
+        stripe: "on",
+      });
+      const db = fakeDatabase({ roles: constants.roles });
+      ctx.database = db.connector;
+      assert.equal(await main(["provision-roles", "--first"], ctx), 1, label);
+      assert.equal(JSON.parse(err.at(-1)).code, code, label);
+      assert.equal(existsSync(join(planted.directory, "tmp/broker-secrets.json")), false, label);
+      assert.deepEqual(db.statements, [], label);
+      assert.ok(!err.join().includes("K".repeat(32)), label);
+      // Off, the same bad or missing Stripe files are never read: --first succeeds.
+      const off = await fakeContext({ home: planted.home, tools: fakeTools().tools });
+      off.ctx.database = fakeDatabase({ roles: off.constants.roles }).connector;
+      assert.equal(await main(["provision-roles", "--first"], off.ctx), 0, label);
+      const written = JSON.parse(
+        readFileSync(join(planted.directory, "tmp/broker-secrets.json"), "utf8"),
+      );
+      assert.equal(Object.keys(written).length, 14, label);
+    } finally {
+      planted.cleanup();
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// M5 PR-1: the billing terms seed of `seed-platform` (docs/decisions/billing-terms.json).
+test("billing terms seed: the published revisions, parsed and digest-checked before any effect", async () => {
+  const development = await stagingBillingTermsRows(process.cwd(), "development");
+  const file = JSON.parse(read("docs/decisions/billing-terms.json"));
+  assert.equal(development.length, file.environments.development.length);
+  assert.deepEqual(development[0], [
+    "1",
+    JSON.stringify(file.environments.development[0].terms),
+    JSON.stringify(file.environments.development[0].offers),
+    file.environments.development[0].digest,
+  ]);
+  // Staging has no revision until the owner's test-mode Price exists.
+  assert.deepEqual(await stagingBillingTermsRows(process.cwd(), "staging"), []);
+  const root = mkdtempSync(join(tmpdir(), "morrow-terms-"));
+  try {
+    mkdirSync(join(root, "docs/decisions"), { recursive: true });
+    const write = (document) =>
+      writeFileSync(join(root, "docs/decisions/billing-terms.json"), JSON.stringify(document));
+    for (const change of [
+      (d) => (d.environments.staging = [structuredClone(d.environments.development[0])]),
+      (d) => (d.environments.staging = "none"),
+      (d) => {
+        const r = structuredClone(d.environments.development[0]);
+        r.terms.entries[0].creditUnits = "400";
+        d.environments.staging = [r];
+      },
+      (d) => {
+        const r = structuredClone(d.environments.development[0]);
+        r.offers[0].interval = "year";
+        d.environments.staging = [r];
+      },
+    ]) {
+      const document = structuredClone(file);
+      change(document);
+      write(document);
+      const outcome = await stagingBillingTermsRows(root, "staging").then(
+        (rows) => rows,
+        (error) => error.code,
+      );
+      // The first change is a valid copy (same digest): only the others are refused.
+      if (Array.isArray(outcome)) assert.equal(outcome.length, 1);
+      else assert.equal(outcome, "STAGING_TERMS_INVALID");
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  for (const bad of [
+    "x",
+    [{ terms: { termsRevision: 2 }, offers: [], digest: "a".repeat(64) }],
+    [{ terms: { termsRevision: 1 }, offers: [], digest: "A".repeat(64) }],
+    [{ terms: { termsRevision: 1 }, offers: [], digest: "a".repeat(64), extra: 1 }],
+  ])
+    assert.equal(
+      codeOf(() => billingTermsSeedRows(bad)),
+      "STAGING_TERMS_INVALID",
+    );
+});
+
+test("billing terms seed: as the work owner, idempotent, refused on drift, D4 in createrole mode", async () => {
+  const rows = await stagingBillingTermsRows(process.cwd(), "development");
+  const administrator = Object.freeze({ name: "neondb_owner", mode: "createrole" });
+  const run = async (rules) => {
+    const db = fakeDatabase({ rules });
+    const outcome = await seedBillingTerms({
+      connect: db.connector().connect,
+      binding: labBinding,
+      administrator,
+      rows,
+    }).then(
+      (written) => written,
+      (error) => error,
+    );
+    return { outcome, texts: db.statements.map((s) => s.text), statements: db.statements };
+  };
+  const fresh = await run([[/FROM morrow_billing\.billing_terms$/, [{ n: 0 }]]]);
+  assert.deepEqual(fresh.outcome, { termsRevisions: 1, termsInserted: 1 });
+  const after = fresh.texts.slice(fresh.texts.indexOf("BEGIN"));
+  assert.deepEqual(after.slice(0, 4), [
+    "BEGIN",
+    "GRANT morrow_work_owner TO neondb_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE",
+    "SET LOCAL ROLE morrow_work_owner",
+    "LOCK TABLE morrow_billing.billing_terms IN SHARE ROW EXCLUSIVE MODE",
+  ]);
+  const insert = fresh.statements.find((s) => s.text.startsWith("INSERT INTO morrow_billing"));
+  assert.deepEqual(insert.params, [...rows[0]]);
+  assert.ok(
+    after.indexOf("REVOKE morrow_work_owner FROM neondb_owner GRANTED BY neondb_owner") <
+      after.indexOf("COMMIT"),
+  );
+  // Stored and equal: nothing written.
+  const same = await run([
+    [/FROM morrow_billing\.billing_terms$/, [{ n: 1 }]],
+    [/AS same FROM morrow_billing/, [{ same: "true" }]],
+  ]);
+  assert.deepEqual(same.outcome, { termsRevisions: 1, termsInserted: 0 });
+  assert.ok(!same.texts.some((t) => t.startsWith("INSERT INTO morrow_billing")));
+  // A stored revision that differs, or one the file lacks: drift, no COMMIT.
+  for (const rules of [
+    [
+      [/FROM morrow_billing\.billing_terms$/, [{ n: 1 }]],
+      [/AS same FROM morrow_billing/, [{ same: "false" }]],
+    ],
+    [[/FROM morrow_billing\.billing_terms$/, [{ n: 2 }]]],
+  ]) {
+    const drift = await run(rules);
+    assert.equal(drift.outcome.code, "STAGING_SEED_DRIFT");
+    assert.deepEqual(drift.outcome.details, { table: "billing_terms" });
+    assert.ok(!drift.texts.includes("COMMIT"));
+    assert.ok(!drift.texts.some((t) => t.startsWith("INSERT INTO morrow_billing")));
+  }
+  await assert.rejects(
+    seedBillingTerms({
+      connect: fakeDatabase().connector().connect,
+      binding: labBinding,
+      administrator,
+      rows: [["2", "{}", "[]", "a".repeat(64)]],
+    }),
+    { code: "STAGING_TERMS_INVALID" },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// M5 PR-1 (review): the operator path for a customer operation the broker held.
+const heldInput = Object.freeze({
+  operatorId: "operator_owner",
+  operationId: "00000000-0000-4000-8000-0000000000c1",
+  resolution: "abandon",
+  evidenceCode: "customers_deleted",
+  evidenceRef: "docs/evidence/live/2026-10-21-stripe-customer-resolve.md",
+});
+test("billing-customer-resolve: closed input, the work owner under D4, committed only on success", async () => {
+  assert.deepEqual(customerResolutionInput(heldInput), Object.values(heldInput));
+  assert.deepEqual(
+    customerResolutionInput({ ...heldInput, resolution: "retry", evidenceCode: "stripe_corrected" })
+      .length,
+    5,
+  );
+  for (const change of [
+    { operatorId: "" },
+    { operationId: "cus_NotAnOperation" },
+    { resolution: "promote" },
+    // The evidence code belongs to its resolution.
+    { resolution: "retry", evidenceCode: "customers_deleted" },
+    { evidenceCode: "stripe_corrected" },
+    { evidenceRef: "docs/decisions/approvals/staging.md" },
+    { evidenceRef: "../docs/evidence/live/2026-10-21-x.md" },
+  ])
+    assert.equal(
+      codeOf(() => customerResolutionInput({ ...heldInput, ...change })),
+      "STAGING_USAGE",
+      JSON.stringify(change),
+    );
+  const administrator = Object.freeze({ name: "neondb_owner", mode: "createrole" });
+  const run = async (row) => {
+    const db = fakeDatabase({ rules: [[/operator_customer_operation_resolve/, [row]]] });
+    const outcome = await resolveHeldCustomerOperation({
+      connect: db.connector().connect,
+      binding: labBinding,
+      administrator,
+      input: heldInput,
+    }).then(
+      (done) => done,
+      (error) => error,
+    );
+    return { outcome, statements: db.statements, texts: db.statements.map((s) => s.text) };
+  };
+  const done = await run({ outcome: "abandoned", operation_status: "failed" });
+  assert.deepEqual(done.outcome, { outcome: "abandoned", operationStatus: "failed" });
+  const after = done.texts.slice(done.texts.indexOf("BEGIN"));
+  assert.deepEqual(after.slice(0, 3), [
+    "BEGIN",
+    "GRANT morrow_work_owner TO neondb_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE",
+    "SET LOCAL ROLE morrow_work_owner",
+  ]);
+  const call = done.statements.find((s) => /operator_customer_operation_resolve/.test(s.text));
+  assert.deepEqual(call.params, Object.values(heldInput));
+  assert.ok(
+    after.indexOf("REVOKE morrow_work_owner FROM neondb_owner GRANTED BY neondb_owner") <
+      after.indexOf("COMMIT"),
+  );
+  // Any other outcome commits nothing and reports the fixed outcome.
+  for (const outcome of ["not_held", "not_found", "invalid", "denied", "surprise"]) {
+    const refused = await run({ outcome, operation_status: null });
+    assert.equal(refused.outcome.code, "STAGING_RESOLVE_REFUSED", outcome);
+    assert.deepEqual(refused.outcome.details, {
+      outcome: outcome === "surprise" ? "unknown" : outcome,
+    });
+    assert.ok(!refused.texts.includes("COMMIT"), outcome);
+  }
+});
+
+test("cli: billing-customer-resolve needs the card, the committed evidence record and main", async () => {
+  const planted = plantedHome();
+  try {
+    const { ctx, err } = await fakeContext({ home: planted.home, tools: fakeTools().tools });
+    const argv = [
+      "billing-customer-resolve",
+      "--operation",
+      heldInput.operationId,
+      "--resolution",
+      "abandon",
+      "--evidence-code",
+      "customers_deleted",
+      "--evidence",
+      heldInput.evidenceRef,
+      "--operator",
+      heldInput.operatorId,
+    ];
+    for (const bad of [
+      argv.slice(0, -1),
+      [...argv, "--operator", "again"],
+      argv.map((a) => (a === "abandon" ? "promote" : a)),
+      argv.map((a) => (a === "customers_deleted" ? "stripe_corrected" : a)),
+    ]) {
+      assert.equal(await main(bad, ctx), 2, bad.join(" "));
+      assert.equal(JSON.parse(err.at(-1)).code, "STAGING_USAGE");
+    }
+    // The evidence record must be committed before any database effect.
+    const db = fakeDatabase();
+    ctx.database = db.connector;
+    assert.equal(await main(argv, ctx), 1);
+    assert.equal(JSON.parse(err.at(-1)).code, "STAGING_EVIDENCE_MISSING");
+    assert.deepEqual(db.statements, []);
+    const proposed = await fakeContext({
+      home: planted.home,
+      tools: fakeTools().tools,
+      card: { ...approvedCard(), status: "proposed", approvedOn: null, expiresOn: null },
+    });
+    assert.equal(await main(argv, proposed.ctx), 1);
+    assert.equal(JSON.parse(proposed.err.at(-1)).code, "STAGING_CARD_INACTIVE");
+  } finally {
+    planted.cleanup();
   }
 });

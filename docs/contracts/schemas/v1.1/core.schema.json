@@ -5674,6 +5674,48 @@
         "installLink"
       ],
       "additionalProperties": false
+    },
+    "BillingManageAction": {
+      "description": "The Morrow-direct purchase action of governance.billing.manage (M5 PR-1; ADR-0022 items 2 and 12): subscribe opens a Stripe Checkout session for one priced plan, billing_portal a customer portal session. The server derives it from the purchase route; it is never a request field.",
+      "type": "string",
+      "enum": [
+        "subscribe",
+        "billing_portal"
+      ]
+    },
+    "NullableStripePriceKey": {
+      "description": "A Stripe price key (stripe:price:price_<id>, the billing v1.1 StripePriceKey pattern) or null (a capability body field type; R11 needs a named type).",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^stripe:price:price_[A-Za-z0-9]{8,100}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ModelOptionKey": {
+      "description": "An opaque model-catalogue key, a model or an effort (ADR-0022 items 2 and 16): the server checks it against the active catalogue version, so adding a model, an effort or a version changes no contract.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+    },
+    "CreditsPerProductCeiling": {
+      "description": "The workspace member ceiling of credits per product (ADR-0022 item 16): 1 to 99.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 99
+    },
+    "NullableRevision": {
+      "description": "A Revision or null (a capability body field type; R11 needs a named type).",
+      "anyOf": [
+        {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Revision"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   }
 }

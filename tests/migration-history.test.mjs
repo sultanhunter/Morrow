@@ -142,6 +142,17 @@ const published = [
     "0027.shopify-vault-install.sql",
     "c056d8f7f0dba9f6769b13f4c1d19733413f5a7b79e5f745f855b60c18cd5147",
   ],
+  // M5 PR-1: billing (0028 by the identity owner, 0029 by the work owner).
+  [
+    28,
+    "0028.billing-identity-bridge.sql",
+    "dee383f50ac1279fa1fe671d2469b86f65d5e4888b2a965548a34c506e5b7cc2",
+  ],
+  [
+    29,
+    "0029.billing-records.sql",
+    "e40ebb5ae3416758c28389760c7f0c639e1c136e06008a4e47723e9616a03bb2",
+  ],
 ].map(([sequence, file, sha256]) => ({ sequence, file, sha256 }));
 // From now on administrator prerequisites are frozen like migrations (P03.T04e §3.1): each
 // published row keeps exactly these pinned files, and a later role goes in a new file on its
@@ -211,10 +222,10 @@ const publishedPrerequisites = new Map([
 ]);
 // The role each published migration was applied under: the identity owner, except the
 // work-state tables (P06.T01a), the approval records (P06.T01b), the spine foundation and
-// its member-lease revocation (M2 PR-1), and the Shopify link route read and vault install
-// definers (M2 PR-2), which the work owner creates.
+// its member-lease revocation (M2 PR-1), the Shopify link route read and vault install
+// definers (M2 PR-2), and the billing records (M5 PR-1), which the work owner creates.
 const publishedExecuteAs = (sequence) =>
-  [15, 18, 20, 23, 25, 27].includes(sequence) ? "morrow_work_owner" : "morrow_identity_owner";
+  [15, 18, 20, 23, 25, 27, 29].includes(sequence) ? "morrow_work_owner" : "morrow_identity_owner";
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 

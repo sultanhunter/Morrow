@@ -129,7 +129,8 @@ const entryCalls = Object.freeze({
 // M2 PR-1: the real entry point of each spine executor that has one, with fixed inputs
 // that match no row. Past its guard each returns not_found; a denied guard returns denied.
 // M2 PR-2 adds the connector's OAuth-state definer and the vault login's launch and claim
-// definers (keyed by function, run as their executor: spineEntryExecutor).
+// definers (keyed by function, run as their executor: spineEntryExecutor); M5 PR-1 the vault
+// login's Stripe operation fence (0029).
 const spineEntryCalls = Object.freeze({
   morrow_runtime_executor:
     "SELECT outcome FROM morrow_work.enter_lease('00000000-0000-4000-8000-000000000001','1');",
@@ -140,10 +141,13 @@ const spineEntryCalls = Object.freeze({
     "SELECT outcome FROM morrow_vault.shopify_launch_context('lab-app','lab.myshopify.com');",
   shopify_callback_claim:
     "SELECT outcome FROM morrow_vault.shopify_callback_claim('lab-app',repeat('a',64));",
+  stripe_op_begin:
+    "SELECT outcome FROM morrow_billing.stripe_op_begin('00000000-0000-4000-8000-000000000001');",
 });
 const spineEntryExecutor = Object.freeze({
   shopify_launch_context: "morrow_vault_broker",
   shopify_callback_claim: "morrow_vault_broker",
+  stripe_op_begin: "morrow_vault_broker",
 });
 // An entry point keyed by its function name runs as this executor; every other key is the
 // executor itself.

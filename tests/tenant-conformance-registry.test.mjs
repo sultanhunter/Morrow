@@ -32,8 +32,9 @@ const sortedUnique = (list, pattern) =>
   list.every((x, i) => i === 0 || list[i - 1] < x);
 
 // The problems of one S7 table spec, as strings (empty when well formed). The seven
-// specKeys are required; `lease` is the one optional key and, when present, is `true`
-// (S7's checkPolicies then expects tenant_lease, as for workTables).
+// specKeys are required; `lease` and `commandRead` are optional and, when present, `true`
+// (S7's checkPolicies then expects tenant_lease, as for workTables, or tenant_command FOR
+// SELECT only).
 function s7SpecProblems(schema, table, spec) {
   const problems = [];
   const at = `${schema}.${table}`;
@@ -41,16 +42,30 @@ function s7SpecProblems(schema, table, spec) {
     !spec ||
     typeof spec !== "object" ||
     Object.keys(spec)
-      .filter((key) => key !== "lease")
+      .filter((key) => key !== "lease" && key !== "commandRead")
       .sort()
       .join() !== specKeys.join()
   )
     return [at + ":keys"];
   if (Object.hasOwn(spec, "lease") && spec.lease !== true) problems.push(at + ":lease");
+  if (
+    Object.hasOwn(spec, "commandRead") &&
+    (spec.commandRead !== true || !["tenant_readable", "tenant_internal"].includes(spec.class))
+  )
+    problems.push(at + ":commandRead");
   const classes =
     schema === "morrow_vault"
       ? ["vault_platform", "vault_tenant"]
-      : ["tenant_readable", "tenant_internal", "platform", "tenant_or_platform"];
+      : [
+          "tenant_readable",
+          "tenant_internal",
+          "platform",
+          "tenant_or_platform",
+          // M5 PR-1: the terms table, the ingress receipts and the operator's records.
+          "platform_readable",
+          "ingress",
+          "operator_record",
+        ];
   if (!classes.includes(spec.class)) problems.push(at + ":class");
   if (!["none", "workspace", "store"].includes(spec.content)) problems.push(at + ":content");
   if (!Array.isArray(spec.parents) || !spec.parents.every((p) => typeof p === "string"))
@@ -66,7 +81,9 @@ function s7SpecProblems(schema, table, spec) {
   )
     problems.push(at + ":commandColumnUpdates");
   // The api role reads tenant-readable rows only, column by column; never the vault.
-  const readable = spec.class === "tenant_readable" || spec.class === "tenant_or_platform";
+  const readable = ["tenant_readable", "tenant_or_platform", "platform_readable"].includes(
+    spec.class,
+  );
   if (!sortedUnique(spec.apiColumns, column) || (!readable && spec.apiColumns.length > 0))
     problems.push(at + ":apiColumns");
   return problems;
@@ -100,6 +117,8 @@ test("S7 registry: every billing and vault table carries a well-formed per-table
     ["apiColumns", { apiColumns: ["route", "mode"] }],
     ["apiColumns", { apiColumns: ["Route"] }],
     ["class", { class: "vault_tenant" }],
+    ["commandRead", { commandRead: false }],
+    ["commandRead", { class: "platform", commandRead: true }],
   ])
     assert.ok(
       s7SpecProblems("morrow_billing", "x", { ...good, ...change }).some((p) =>
@@ -164,8 +183,17 @@ test("S7 registry: the reviewed 0020 column grants", () => {
     "updated_at",
     "workspace_id",
   ]);
-  // One line per table, so a PR that widens one table changes only its line.
-  assert.deepEqual(billingTables.workspace_billing_routes.commandColumnUpdates, []);
+  // One line per table, so a PR that widens one table changes only its line. M5 PR-1
+  // (0029): the receipt application fixes the route (route_fix_guard, route_guard), so the
+  // command role gains UPDATE on exactly the fix columns; never origin or shopify_bound_at.
+  assert.deepEqual(billingTables.workspace_billing_routes.commandColumnUpdates, [
+    "fixing_payment_key",
+    "mode",
+    "revision",
+    "route",
+    "route_fixed_at",
+    "updated_at",
+  ]);
   assert.deepEqual(vaultTables.app_secrets.commandColumnUpdates, []);
   // M2 PR-2 (0027) widens credentials: destroying the active version sets its status and
   // erases its key material (vault_guard), so the command role may UPDATE exactly these.
