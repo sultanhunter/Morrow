@@ -211,9 +211,11 @@ export const workTables = Object.freeze({
     policies: ["broker_model_run", "broker_read_run"],
     content: "none",
   },
+  // A run product names the proposal that packed its draft (content-free), so a run settles
+  // from these rows even after shop/redact deleted its drafts.
   run_products: {
     class: "tenant_readable",
-    parents: ["runs"],
+    parents: ["runs", "proposals"],
     lease: true,
     policies: ["broker_model_run_child", "broker_read_run_product"],
     content: "none",

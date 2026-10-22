@@ -10,7 +10,9 @@ BEGIN;
 --     published catalogue entry (drift-tested against the generated catalogue), so SQL books
 --     an attempt's cost from its token counts itself.
 --   * runs (aligned with Run@1; status on the `run` rows of state-transitions.json, seeded
---     here), run_products (one row per requested product, content-free), run_manifests
+--     here), run_products (one row per requested product, content-free: its draft and the
+--     proposal that packed it, which the run's settlement counts, so shop/redact deleting the
+--     drafts never changes what a run settles), run_manifests
 --     (aligned with RunManifest@1: the selection, its catalogue digest, the provider model,
 --     the prompt and schema digests and the running usage totals; content-free),
 --     run_model_calls (the attempt fence and the traceRef target; content-free; provider
@@ -311,7 +313,9 @@ CREATE TABLE morrow_work.runs (
 CREATE INDEX runs_task ON morrow_work.runs (organization_id,workspace_id,task_id,created_at,id);
 CREATE INDEX runs_open ON morrow_work.runs (organization_id,workspace_id,created_at) WHERE status IN ('queued','running');
 -- One requested product of a run, in the route's order (content-free): its status, the
--- attempts the broker counted, the snapshot it was drafted from, its draft and why it failed.
+-- attempts the broker counted, the snapshot it was drafted from, its draft, the proposal that
+-- packed the draft (set once, by the agent submit) and why it failed. run_end and run_finish
+-- settle from these rows, never from run_drafts (store content, which shop/redact deletes).
 CREATE TABLE morrow_work.run_products (
  organization_id morrow_work.record_id NOT NULL,
  workspace_id morrow_work.record_id NOT NULL,
@@ -323,14 +327,16 @@ CREATE TABLE morrow_work.run_products (
  attempts integer NOT NULL CHECK (attempts BETWEEN 0 AND 2),
  snapshot_digest morrow_work.digest,
  draft_id morrow_work.record_id,
+ proposal_id morrow_work.record_id,
  failure_code text CHECK (failure_code IN ('validation','product_mismatch','incomplete','refusal','invalid_output','uncertain',
   'input_over_cap','read_failed','too_large','provider_error','spend_limit','reservation_exhausted','interrupted')),
  updated_at timestamptz NOT NULL CHECK (updated_at=date_trunc('milliseconds',updated_at) AND isfinite(updated_at)),
  PRIMARY KEY (organization_id,workspace_id,run_id,product_index),
  UNIQUE (organization_id,workspace_id,run_id,product_id),
  FOREIGN KEY (organization_id,workspace_id,run_id) REFERENCES morrow_work.runs(organization_id,workspace_id,id),
+ FOREIGN KEY (organization_id,workspace_id,proposal_id) REFERENCES morrow_work.proposals(organization_id,workspace_id,id),
  CONSTRAINT run_products_status CHECK ((status='failed')=(failure_code IS NOT NULL) AND (status='drafted')=(draft_id IS NOT NULL)
-  AND (status<>'drafted' OR snapshot_digest IS NOT NULL))
+  AND (status<>'drafted' OR snapshot_digest IS NOT NULL) AND (proposal_id IS NULL OR status='drafted'))
 );
 -- RunManifest@1-aligned record of one run: the selection, its pinned catalogue digest and
 -- multiplier, the provider and provider model the broker sends to, the release, route and
@@ -860,7 +866,7 @@ GRANT SELECT,INSERT ON morrow_work.runs,morrow_work.run_products,morrow_work.run
  morrow_work.product_snapshots,morrow_work.run_drafts TO morrow_work_command;
 GRANT UPDATE (revision,status,status_actor,status_guard,ended_reason,products_drafted,products_failed,consecutive_failed,started_at,ended_at,updated_at)
  ON morrow_work.runs TO morrow_work_command;
-GRANT UPDATE (revision,status,attempts,snapshot_digest,draft_id,failure_code,updated_at) ON morrow_work.run_products TO morrow_work_command;
+GRANT UPDATE (revision,status,attempts,snapshot_digest,draft_id,proposal_id,failure_code,updated_at) ON morrow_work.run_products TO morrow_work_command;
 GRANT UPDATE (revision,prompt_digest,schema_digest,attempts,input_tokens,output_tokens,cache_tokens,booked_cost_usd,updated_at)
  ON morrow_work.run_manifests TO morrow_work_command;
 GRANT UPDATE (status,outcome,counted,raw_stop_reason,provider_request_id,provider_model_id,counted_input_tokens,input_tokens,output_tokens,
@@ -914,20 +920,29 @@ END $$;
 -- Run products: born pending with no attempt; afterwards revision+1 and forward only:
 -- pending -> in_progress -> drafted or failed, pending or in_progress -> skipped or failed
 -- when the run ends; attempts grow by at most one per change; the snapshot is set while in
--- progress and replaced only before any attempt; the draft and the failure code once.
+-- progress and replaced only before any attempt; the draft and the failure code once. The one
+-- change of a drafted product is its draft's packing: the proposal set once, nothing else.
 CREATE FUNCTION morrow_work.run_product_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
-DECLARE v_mutable text[]:=ARRAY['revision','status','attempts','snapshot_digest','draft_id','failure_code','updated_at'];
+DECLARE v_mutable text[]:=ARRAY['revision','status','attempts','snapshot_digest','draft_id','proposal_id','failure_code','updated_at'];
 BEGIN
  IF TG_OP='INSERT' THEN
-  IF NEW.revision<>1 OR NEW.status<>'pending' OR NEW.attempts<>0 OR NEW.snapshot_digest IS NOT NULL OR NEW.draft_id IS NOT NULL THEN
+  IF NEW.revision<>1 OR NEW.status<>'pending' OR NEW.attempts<>0 OR NEW.snapshot_digest IS NOT NULL OR NEW.draft_id IS NOT NULL
+   OR NEW.proposal_id IS NOT NULL THEN
+   RAISE EXCEPTION 'WORK_RUN_PRODUCT_INVALID';
+  END IF;
+  RETURN NEW;
+ END IF;
+ IF TG_OP='UPDATE' AND OLD.status='drafted' THEN
+  IF NEW.revision IS DISTINCT FROM OLD.revision+1 OR NEW.updated_at<OLD.updated_at OR OLD.proposal_id IS NOT NULL OR NEW.proposal_id IS NULL
+   OR (to_jsonb(NEW)-ARRAY['revision','proposal_id','updated_at']) IS DISTINCT FROM (to_jsonb(OLD)-ARRAY['revision','proposal_id','updated_at']) THEN
    RAISE EXCEPTION 'WORK_RUN_PRODUCT_INVALID';
   END IF;
   RETURN NEW;
  END IF;
  IF TG_OP<>'UPDATE' OR NEW.revision IS DISTINCT FROM OLD.revision+1 OR NEW.updated_at<OLD.updated_at
   OR (to_jsonb(NEW)-v_mutable) IS DISTINCT FROM (to_jsonb(OLD)-v_mutable)
-  OR OLD.status IN ('drafted','failed','skipped')
+  OR OLD.status IN ('failed','skipped') OR NEW.proposal_id IS NOT NULL
   OR NOT ((OLD.status,NEW.status) IN (('pending','pending'),('pending','in_progress'),('pending','skipped'),('pending','failed'),
    ('in_progress','in_progress'),('in_progress','drafted'),('in_progress','failed'),('in_progress','skipped')))
   OR NEW.attempts<OLD.attempts OR NEW.attempts>OLD.attempts+1
@@ -1076,7 +1091,9 @@ END $$;
 -- interrupted and its attempts accrue as unrecovered; drafts never packed into a proposal
 -- earned no credit, so their product's attempts accrue too; the credits settle at the
 -- products whose drafts were proposed (never above the reservation; nothing proposed
--- releases them); the status moves along the named edge; the envelope and hop are revoked;
+-- releases them). Both read the content-free run_products (drafted, with or without the
+-- proposal that packed it), never run_drafts, which shop/redact deletes while a run it
+-- stopped is still open; the status moves along the named edge; the envelope and hop are revoked;
 -- the run's event is appended. The caller holds the run's lock and has closed every open
 -- call. The lock order everywhere is the workspace stream, then the run, then the rest
 -- (each API command's prelude takes the stream first): the stream is taken here before
@@ -1109,13 +1126,13 @@ BEGIN
     WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.run_id=p_run_id AND x.product_index=p.product_index;
   END IF;
  END LOOP;
- FOR p IN SELECT d.product_index FROM morrow_work.run_drafts d WHERE d.organization_id=p_org AND d.workspace_id=p_ws AND d.run_id=p_run_id
-   AND d.status='pending' ORDER BY d.product_index LOOP
+ FOR p IN SELECT q.product_index FROM morrow_work.run_products q WHERE q.organization_id=p_org AND q.workspace_id=p_ws AND q.run_id=p_run_id
+   AND q.status='drafted' AND q.proposal_id IS NULL ORDER BY q.product_index LOOP
   SELECT * INTO s FROM morrow_billing.run_product_unrecovered(p_org,p_ws,p_run_id,p.product_index);
   IF s.outcome IS DISTINCT FROM 'accrued' THEN RAISE EXCEPTION 'WORK_RUN_UNRECOVERED_FAILED'; END IF;
  END LOOP;
- SELECT count(*) INTO v_packed FROM morrow_work.run_drafts d WHERE d.organization_id=p_org AND d.workspace_id=p_ws AND d.run_id=p_run_id
-  AND d.status='packed';
+ SELECT count(*) INTO v_packed FROM morrow_work.run_products q WHERE q.organization_id=p_org AND q.workspace_id=p_ws AND q.run_id=p_run_id
+  AND q.status='drafted' AND q.proposal_id IS NOT NULL;
  SELECT * INTO s FROM morrow_billing.run_settle(p_org,p_ws,p_run_id,v_packed);
  IF s.outcome IS NULL OR s.outcome NOT IN ('settled','released') THEN RAISE EXCEPTION 'WORK_RUN_SETTLE_FAILED'; END IF;
  UPDATE morrow_work.runs x SET status=p_status,status_actor=p_actor,status_guard=p_guard,ended_reason=p_reason,
@@ -1862,8 +1879,9 @@ END $$;
 -- items; contextTaint untrusted_external; the workspace's current review policy (revision 1
 -- seeded from the defaults when none exists) and its 1,000 pending approvals cap; the
 -- document check of 0032 and its catalog_proposal_bind trigger. Writes the parameters, the
--- proposal, its pending approval, the drafts packed, and one proposal.submitted event whose
--- actor is the run's requester. Outcomes: applied, invalid, denied, stale_authority,
+-- proposal, its pending approval, the drafts packed (and the proposal on their products,
+-- which the settlement counts), and one proposal.submitted event whose actor is the run's
+-- requester. Outcomes: applied, invalid, denied, stale_authority,
 -- limit_reached, not_found.
 CREATE FUNCTION morrow_work.submit_agent_proposal(p_approval_id text,p_policy_canonical text,p_policy_digest text,p_parameters_canonical text,
  p_parameters_digest text,p_proposal_canonical text,p_proposal_digest text,p_scope_canonical text,p_draft_ids text)
@@ -2011,6 +2029,11 @@ BEGIN
    WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.run_id=r.id AND x.id=ANY(v_ids) AND x.status='pending';
   GET DIAGNOSTICS n=ROW_COUNT;
   IF n<>cardinality(v_ids) THEN RAISE EXCEPTION 'WORK_RUN_DRAFT_INVALID'; END IF;
+  UPDATE morrow_work.run_products x SET proposal_id=v_id,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)
+   WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.run_id=r.id AND x.draft_id=ANY(v_ids)
+    AND x.status='drafted' AND x.proposal_id IS NULL;
+  GET DIAGNOSTICS n=ROW_COUNT;
+  IF n<>cardinality(v_ids) THEN RAISE EXCEPTION 'WORK_RUN_DRAFT_INVALID'; END IF;
  EXCEPTION WHEN check_violation OR raise_exception OR unique_violation OR foreign_key_violation OR not_null_violation THEN
   RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN;
  END;
@@ -2022,7 +2045,8 @@ BEGIN
 END $$;
 -- Ends the entered lease's run (mvp-architecture §2 step 15): with no reason, after every
 -- product ended and every draft was proposed, it succeeds when at least one product was
--- proposed (otherwise it fails as nothing_drafted); with a reason it fails. An open call
+-- proposed (otherwise it fails as nothing_drafted); with a reason it fails. Both read the
+-- content-free run_products, as run_end does. An open call
 -- still within its broker budget refuses (call_open: the step retries); one past it is booked
 -- as uncertain first. Then run_end (settle, status, revocations, event) and the lease is
 -- released. A run already ended returns its status. Outcomes: ended (status and credits
@@ -2056,10 +2080,10 @@ BEGIN
  IF p_reason IS NULL THEN
   IF EXISTS(SELECT 1 FROM morrow_work.run_products x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.run_id=r.id
     AND x.status IN ('pending','in_progress')) THEN RETURN QUERY SELECT 'products_pending'::text,NULL::text,NULL::text; RETURN; END IF;
-  IF EXISTS(SELECT 1 FROM morrow_work.run_drafts x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.run_id=r.id
-    AND x.status='pending') THEN RETURN QUERY SELECT 'drafts_pending'::text,NULL::text,NULL::text; RETURN; END IF;
-  IF EXISTS(SELECT 1 FROM morrow_work.run_drafts x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.run_id=r.id
-    AND x.status='packed') THEN v_status:='succeeded'; v_reason:=NULL;
+  IF EXISTS(SELECT 1 FROM morrow_work.run_products x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.run_id=r.id
+    AND x.status='drafted' AND x.proposal_id IS NULL) THEN RETURN QUERY SELECT 'drafts_pending'::text,NULL::text,NULL::text; RETURN; END IF;
+  IF EXISTS(SELECT 1 FROM morrow_work.run_products x WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.run_id=r.id
+    AND x.status='drafted' AND x.proposal_id IS NOT NULL) THEN v_status:='succeeded'; v_reason:=NULL;
   ELSE v_status:='failed'; v_reason:='nothing_drafted';
   END IF;
  ELSE v_status:='failed'; v_reason:=p_reason;

@@ -1,25 +1,18 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
-import { NonRetryableError } from "cloudflare:workflows";
 import {
   createRuntimeAttempt,
   listPendingStarts,
-  parseLeaseRef,
   runLeaseStep,
   type LeaseRef,
   type LeaseStep,
 } from "../../../packages/work/src/runtime/leases.js";
 import {
-  listingsRun,
-  productReadOf,
-  RunStepRetry,
+  createProductReader,
   type ListingsRunPorts,
-  type ProductRead,
 } from "../../../packages/work/src/runs/workflow.js";
-import {
-  runtimeProductReadAvailable,
-  shopifyReadLimits,
-} from "../../../packages/identity/src/broker-protocol.js";
+import { runtimeProductReadAvailable } from "../../../packages/identity/src/broker-protocol.js";
 import { mapOrchestratorEnvironment, type OrchestratorEnvironmentMapping } from "./environment.js";
+import { runListingsWorkflow } from "./listings-run.js";
 import { createRuntimePool } from "./runtime-pool.js";
 
 // morrow-<env>-orchestrator (P04.T02a D8; M3 PR-2, mvp-architecture §2 steps 8, 9 and 15 and
@@ -34,8 +27,10 @@ import { createRuntimePool } from "./runtime-pool.js";
 // (productReadAvailable, a reviewed constant), so the model-provider switch, committed off,
 // is the only gate. OperationWorkflow joins in M4.
 
-/** M2 PR-3's RuntimeBroker.shopifyRead(productContent): the api's admission shares it. */
-export const productReadAvailable = runtimeProductReadAvailable;
+// M2 PR-3's RuntimeBroker.shopifyRead(productContent): the api's admission shares it. Not
+// exported: workerd refuses to start a module whose named export is neither a function nor
+// an object (tests/orchestrator.test.mjs, lab:edge-workers).
+const productReadAvailable = runtimeProductReadAvailable;
 const stepBudgetMs = 25_000;
 
 interface Selected {
@@ -65,8 +60,9 @@ function select(env: unknown): Selected {
         },
         modelRespond: (leaseId: string, generation: number, callJson: string, budgetMs: number) =>
           mapping.broker.modelRespond(leaseId, generation, callJson, budgetMs),
-        readProduct: (ref: LeaseRef, runId: string, productId: string) =>
-          readProduct(mapping, ref, runId, productId),
+        // The product read (spine §4): M2 PR-3's RuntimeBroker.shopifyRead(productContent)
+        // under the run lease, named by the run id (createProductReader, workflow.ts).
+        readProduct: createProductReader(mapping.broker),
         environment: mapping.environment,
         now: () => Date.now(),
         sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
@@ -87,72 +83,9 @@ function select(env: unknown): Selected {
   return selected;
 }
 
-// The product read (spine §4): M2 PR-3's RuntimeBroker.shopifyRead(productContent) under the
-// run lease, named by the run id as the lease's subject (the vault resolution refuses any
-// other subject, and any product not of that run). The reply is decoded with the protocol's
-// own closed decoder (productReadOf): a product's listing fields, or not_found; anything else
-// is invalid (the product fails read_failed). A thrown read (BROKER_HELD) is unavailable: the
-// step retries it (workflow.ts), and a stop or an ended lease is caught at the next lease
-// entry.
-async function readProduct(
-  mapping: OrchestratorEnvironmentMapping,
-  ref: LeaseRef,
-  runId: string,
-  productId: string,
-): Promise<ProductRead> {
-  if (!mapping.ok) return { outcome: "unavailable" };
-  let text: string;
-  try {
-    text = await mapping.broker.shopifyRead(
-      ref.leaseId,
-      ref.generation,
-      runId,
-      "productContent",
-      JSON.stringify({ productId }),
-      shopifyReadLimits.budgetMaxMs,
-    );
-  } catch {
-    return { outcome: "unavailable" };
-  }
-  return productReadOf(text);
-}
-
 export class ListingsRunWorkflow extends WorkflowEntrypoint<unknown, unknown> {
   async run(event: Readonly<WorkflowEvent<unknown>>, step: WorkflowStep): Promise<string> {
-    const selected = select(this.env);
-    if (!selected.ports) throw new NonRetryableError("dispatch_disabled");
-    const ref = parseLeaseRef(event.payload);
-    if (!ref) throw new NonRetryableError("payload_invalid");
-    const ports = selected.ports;
-    const result = await listingsRun(
-      ports,
-      {
-        do: <T>(name: string, body: () => Promise<T>) =>
-          step.do(
-            name,
-            {
-              retries: { limit: 4, delay: "15 seconds", backoff: "exponential" },
-              // A product step makes up to two model calls, each sized for its effort's whole
-              // reply (runModelBudgetMs), so a step may outlast the 10-minute default; no
-              // step outlives the run's 30-minute lease.
-              timeout: "30 minutes",
-            },
-            async () => {
-              try {
-                return (await body()) as never;
-              } catch (error) {
-                // A RunStepRetry is retried by the Workflow; anything else is a fault that
-                // retrying would repeat.
-                if (error instanceof RunStepRetry) throw error;
-                throw new NonRetryableError("step_fault");
-              }
-            },
-          ) as Promise<T>,
-      },
-      ref,
-      event.instanceId,
-    );
-    return result.kind;
+    return runListingsWorkflow(select(this.env).ports, event, step);
   }
 }
 

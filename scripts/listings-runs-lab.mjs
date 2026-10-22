@@ -46,15 +46,20 @@
 //   L  no provider id, model id, stop reason, request text, product or draft content reaches
 //      the api's reads, the outbox or a durable step result;
 //   R  M2 PR-3's read resolution (shopify_read_resolve, as the broker's login) under a real run
-//      lease: the run's own product in progress resolves, a product not in progress in the run,
-//      another run's id, a read lease, a released lease and a stop are refused; runs whose
-//      product read is the broker's own shopifyRead against the synthetic Shopify draft and
-//      propose, and a failed read retries the product step instead of failing the product;
+//      lease: the run's own product in progress resolves, a product not yet begun or already
+//      finished, another run's id, a read lease, a released lease and a stop are refused;
+//      runs whose product read is the orchestrator's createProductReader over the broker's
+//      own shopifyRead against the synthetic Shopify draft and propose; a read that fails once
+//      is tried again within the step; a product whose every read is refused (a Shopify 500,
+//      a description over the read's limit) fails read_failed while the rest are proposed, and
+//      a store that cannot be read ends the run read_unavailable with its drafts proposed;
 //   X  shop/redact (connector_inbox_apply, as the connector's login) deletes a store's
 //      snapshots and drafts and leaves other stores' content; racing it, a snapshot put, a
 //      draft finish and an agent submit that entered their lease first wait on the store's
-//      stop key and write nothing, and a write that commits first is deleted by the pass; the
-//      request completes once the token is destroyed, with per-pass deletion counts.
+//      stop key and write nothing, a write that commits first is deleted by the pass, and an
+//      agent submit that commits first has its parameters emptied by the pass; the request
+//      completes once the token is destroyed, with per-pass deletion counts; a run it stopped
+//      still settles its proposed products and accrues its pending draft's cost.
 // Owner-seeded synthetic fixtures only; no provider, credential or merchant data. Shapes
 // marked sim stand in for states no API path reaches yet. CI pg-work group.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -67,13 +72,12 @@ import { createWorkApiHandler } from "../packages/work/src/http.ts";
 import { createRunsApiHandler } from "../packages/work/src/runs/http.ts";
 import { snapshotCanonical } from "../packages/work/src/runs/drafting.ts";
 import {
+  createProductReader,
   listingsRun,
-  productReadOf,
   proposeDrafts,
   RunStepRetry,
   runModelBudgetMs,
 } from "../packages/work/src/runs/workflow.ts";
-import { shopifyReadLimits } from "../packages/identity/src/broker-protocol.ts";
 import { storeContentHandlers } from "../packages/work/src/redaction.ts";
 import { createRuntimeAttempt, runLeaseStep } from "../packages/work/src/runtime/leases.ts";
 import { brokerCapabilities } from "../apps/broker/src/capabilities.ts";
@@ -558,8 +562,10 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
     ids: () => randomUUID(),
   };
   // A Workflow's durable steps: a RunStepRetry is retried (as the orchestrator's step.do with
-  // four retries), results cross a JSON boundary, and every result is kept for the L checks.
+  // four retries), results cross a JSON boundary, and every result is kept for the L checks;
+  // every retry is counted (a read that never clears must not spend them).
   const stepResults = [];
+  const stepRetries = [];
   const durable = (hooks = {}) => ({
     async do(name, body) {
       for (let n = 1; ; n++) {
@@ -570,6 +576,7 @@ INSERT INTO morrow_billing.credit_wallets(organization_id,workspace_id,billing_a
           return value;
         } catch (error) {
           if (!(error instanceof RunStepRetry) || n >= 5) throw error;
+          stepRetries.push(name + ":" + error.code);
         }
       }
     },
@@ -1974,15 +1981,34 @@ COMMIT;`,
       { resumed: resumed.status, queued, resolved: resolveAs(ref, runId, ids[0]) },
     );
     // Another run's id names no product of this lease; a product of this run not yet begun,
-    // and a product of no run, are refused.
+    // and a product of no run, are refused. So is a product the run already finished while
+    // its lease is live (review: only a product in progress reads): product 0 fails
+    // read_failed, and product 1 begins (R7 reads it).
     const other = (await admit(P.A, T, admitBody([product(83)]))).body.runId;
+    const pendingRead = resolveAs(ref, runId, ids[1]);
+    const finished0 = await ports.lease(ref, (step) =>
+      step.run.productFinish(0, { outcome: "failed", code: "read_failed" }),
+    );
+    const finishedRead = resolveAs(ref, runId, ids[0]);
+    const begun1 = await ports.lease(ref, (step) => step.run.productBegin(1));
     check(
       "R2:a_product_not_in_progress_in_the_run_is_refused",
-      resolveAs(ref, runId, ids[1]) === "product_not_in_run|" &&
+      pendingRead === "product_not_in_run|" &&
         resolveAs(ref, runId, "product:999") === "product_not_in_run|" &&
         resolveAs(ref, runId, product(83)) === "product_not_in_run|" &&
-        resolveAs(ref, other, ids[0]) === "subject_mismatch|",
-      { pending: resolveAs(ref, runId, ids[1]), foreign: resolveAs(ref, other, ids[0]) },
+        resolveAs(ref, other, ids[0]) === "subject_mismatch|" &&
+        finished0.value?.outcome === "recorded" &&
+        finishedRead === "product_not_in_run|" &&
+        begun1.value?.outcome === "begun" &&
+        resolveAs(ref, runId, ids[1]) === "resolved|storeinst_runs",
+      {
+        pendingRead,
+        foreign: resolveAs(ref, other, ids[0]),
+        finished0,
+        finishedRead,
+        begun1: begun1.value?.outcome,
+        inProgress: resolveAs(ref, runId, ids[1]),
+      },
     );
     // A read lease (the catalogue routes') never reads product content.
     const readLease = db.rows(
@@ -2014,11 +2040,12 @@ COMMIT;`,
         resolveAs(endedRef, ended, product(84)) === "ended|",
       { endedFinish },
     );
-    // R5-R6: the Workflow's product read through the broker's own shopifyRead (the reader
-    // RuntimeBroker serves, on the vault login's transport, against the synthetic Shopify with
-    // the store's sealed token), mapped as the orchestrator maps it: a thrown read is
-    // unavailable, a reply is decoded by productReadOf. The read names the run id, which the
-    // resolution requires as the lease's subject.
+    // R5-R6 and R8-R10: the Workflow's product read is the orchestrator's own
+    // createProductReader over a RuntimeBroker-shaped object whose shopifyRead is the broker's
+    // reader (the reader RuntimeBroker serves, on the vault login's transport, against the
+    // synthetic Shopify with the store's sealed token): a thrown read is unavailable, a reply
+    // is decoded by productReadOf. The read names the run id, which the resolution requires
+    // as the lease's subject (the reads are counted by the subject the broker receives).
     const shopOracle = createShopifyOracle({
       secret: "lab-runs-secret",
       clientId: createHash("md5").update(S).digest("hex"),
@@ -2027,6 +2054,15 @@ COMMIT;`,
     });
     shopOracle.state.tokens.push(token);
     let shopifyFailures = 0;
+    // Products whose every read Shopify answers 500 (READ_REFUSED in the broker), by GID.
+    const failingProducts = new Set();
+    const gidOf = (init) => {
+      try {
+        return JSON.parse(String(init?.body ?? "null"))?.variables?.id ?? null;
+      } catch {
+        return null;
+      }
+    };
     const reader = createShopifyReader({
       transaction: (vault, budgetMs, body) =>
         runVaultTransactionWithDriver(
@@ -2040,6 +2076,8 @@ COMMIT;`,
           },
         ),
       fetch: (url, init) => {
+        if (failingProducts.has(gidOf(init)))
+          return Promise.resolve(new Response('{"errors":"Internal"}', { status: 500 }));
         if (shopifyFailures > 0) {
           shopifyFailures--;
           return Promise.resolve(new Response('{"errors":"Internal"}', { status: 500 }));
@@ -2049,28 +2087,22 @@ COMMIT;`,
       now: () => Date.now(),
     });
     const readsOf = new Map();
-    const shopifyPorts = {
-      ...ports,
-      async readProduct(readRef, readRunId, productId) {
-        readsOf.set(readRunId, (readsOf.get(readRunId) ?? 0) + 1);
-        let text;
-        try {
-          text = await reader.read(
-            brokerEnv,
-            "runtime",
-            readRef.leaseId,
-            readRef.generation,
-            readRunId,
-            "productContent",
-            JSON.stringify({ productId }),
-            shopifyReadLimits.budgetMaxMs,
-          );
-        } catch {
-          return { outcome: "unavailable" };
-        }
-        return productReadOf(text);
+    const runtimeBroker = {
+      shopifyRead(leaseId, generation, subjectId, queryName, variablesJson, budgetMs) {
+        readsOf.set(subjectId, (readsOf.get(subjectId) ?? 0) + 1);
+        return reader.read(
+          brokerEnv,
+          "runtime",
+          leaseId,
+          generation,
+          subjectId,
+          queryName,
+          variablesJson,
+          budgetMs,
+        );
       },
     };
+    const shopifyPorts = { ...ports, readProduct: createProductReader(runtimeBroker) };
     const shopifyRun = async (runIdOf) =>
       within(
         listingsRun(shopifyPorts, durable(), leaseOf(runIdOf), runIdOf),
@@ -2101,14 +2133,17 @@ COMMIT;`,
         ) === 1,
       { realResult, row: runRow(realRun), reads: readsOf.get(realRun), calls: contentCalls() },
     );
-    // A read that fails (here Shopify's 500, READ_REFUSED in the broker) retries the product
-    // step: the product is drafted on the next try and never counts as a failed product.
+    // A read that fails once (here Shopify's 500, READ_REFUSED in the broker) is tried again
+    // within the product step: the product is drafted and never counts as a failed product,
+    // and no durable step retries.
     const retryRun = (await admit(P.A, T, admitBody(["product:103"]))).body.runId;
     shopifyFailures = 1;
+    const retriesBefore = stepRetries.length;
     const retryResult = await shopifyRun(retryRun);
     check(
-      "R6:a_failed_read_retries_the_product_step_and_never_fails_the_product",
+      "R6:a_read_that_fails_once_is_tried_again_within_the_step_and_never_fails_the_product",
       retryResult.kind === "ended" &&
+        stepRetries.length === retriesBefore &&
         retryResult.status === "succeeded" &&
         readsOf.get(retryRun) === 2 &&
         shopifyFailures === 0 &&
@@ -2118,18 +2153,117 @@ COMMIT;`,
           JSON.stringify([["drafted", 1, null]]),
       { retryResult, row: runRow(retryRun), products: productsOf(retryRun) },
     );
-    // A stop the lease outlived (sim: a connection stop inserted with the triggers off, so
+    // R8-R10 (review: a read refused on every try used to spend the durable step's retries
+    // and fail the Workflow, with no propose and no finish). R8: Shopify answers 500 for every
+    // read of one product: it fails read_failed after the step's three reads, the run's other
+    // products draft, and the run proposes them and finishes; no durable step retries.
+    const packedOf = (id) =>
+      one(
+        `SELECT count(*)::int AS drafts,count(DISTINCT proposal_id)::int AS proposals FROM morrow_work.run_drafts WHERE run_id=${literal(id)} AND status='packed'`,
+      );
+    const shape = (id) =>
+      JSON.stringify(productsOf(id).map((p) => [p.status, p.attempts, p.failure_code]));
+    const refusedRun = (
+      await admit(P.A, T, admitBody(["product:104", "product:105", "product:106"]))
+    ).body.runId;
+    failingProducts.add("gid://shopify/Product/105");
+    const refusedRetries = stepRetries.length;
+    const refusedResult = await shopifyRun(refusedRun);
+    failingProducts.clear();
+    check(
+      "R8:a_product_whose_every_read_is_refused_fails_read_failed_and_the_run_proposes_the_rest",
+      refusedResult.kind === "ended" &&
+        refusedResult.status === "succeeded" &&
+        readsOf.get(refusedRun) === 5 &&
+        stepRetries.length === refusedRetries &&
+        shape(refusedRun) ===
+          JSON.stringify([
+            ["drafted", 1, null],
+            ["failed", 0, "read_failed"],
+            ["drafted", 1, null],
+          ]) &&
+        JSON.stringify(packedOf(refusedRun)) === JSON.stringify({ drafts: 2, proposals: 1 }) &&
+        credit(refusedRun).settled === 2 * worst.credits,
+      {
+        refusedResult,
+        reads: readsOf.get(refusedRun),
+        retries: stepRetries.slice(refusedRetries),
+        products: productsOf(refusedRun),
+        packed: packedOf(refusedRun),
+        credit: credit(refusedRun),
+      },
+    );
+    // R9: a description over the read's 196,608-byte limit: the broker refuses the reply on
+    // every try (READ_REFUSED), so the product fails read_failed (it never reaches the 64 KiB
+    // too_large check) and the run's other product drafts and is proposed.
+    const big = shopOracle.state.catalog.products.find((p) => p.id === "108");
+    big.descriptionHtml = "<p>" + "d".repeat(200_000) + "</p>";
+    const bigRun = (await admit(P.A, T, admitBody(["product:107", "product:108"]))).body.runId;
+    const bigResult = await shopifyRun(bigRun);
+    check(
+      "R9:a_description_over_the_reads_limit_fails_read_failed_and_the_run_proposes_the_rest",
+      bigResult.kind === "ended" &&
+        bigResult.status === "succeeded" &&
+        readsOf.get(bigRun) === 4 &&
+        shape(bigRun) ===
+          JSON.stringify([
+            ["drafted", 1, null],
+            ["failed", 0, "read_failed"],
+          ]) &&
+        JSON.stringify(packedOf(bigRun)) === JSON.stringify({ drafts: 1, proposals: 1 }),
+      { bigResult, reads: readsOf.get(bigRun), products: productsOf(bigRun) },
+    );
+    // R10: one product drafted, then every read refused: three products fail read_failed, the
+    // breaker they alone tripped ends the run read_unavailable ("the store couldn't be read"),
+    // the fifth product never begins, and the drafted product is still proposed and settled.
+    const unreadableRun = (
+      await admit(
+        P.A,
+        T,
+        admitBody(["product:109", "product:110", "product:111", "product:112", "product:113"]),
+      )
+    ).body.runId;
+    for (const id of ["110", "111", "112", "113"])
+      failingProducts.add("gid://shopify/Product/" + id);
+    const unreadableResult = await shopifyRun(unreadableRun);
+    failingProducts.clear();
+    check(
+      "R10:a_store_that_cannot_be_read_ends_the_run_read_unavailable_with_its_drafts_proposed",
+      unreadableResult.kind === "ended" &&
+        unreadableResult.status === "failed" &&
+        runRow(unreadableRun).status === "failed" &&
+        runRow(unreadableRun).ended_reason === "read_unavailable" &&
+        readsOf.get(unreadableRun) === 1 + 3 * 3 &&
+        shape(unreadableRun) ===
+          JSON.stringify([
+            ["drafted", 1, null],
+            ["failed", 0, "read_failed"],
+            ["failed", 0, "read_failed"],
+            ["failed", 0, "read_failed"],
+            ["skipped", 0, null],
+          ]) &&
+        JSON.stringify(packedOf(unreadableRun)) === JSON.stringify({ drafts: 1, proposals: 1 }) &&
+        credit(unreadableRun).settled === worst.credits,
+      {
+        unreadableResult,
+        row: runRow(unreadableRun),
+        reads: readsOf.get(unreadableRun),
+        products: productsOf(unreadableRun),
+        credit: credit(unreadableRun),
+      },
+    );
+    // R7: a stop the lease outlived (sim: a connection stop inserted with the triggers off, so
     // its revocation never ran) is stopped; "Stop AI work" itself revokes the run's lease in
-    // its own transaction, so the read is then ended.
+    // its own transaction, so the read is then ended (R1's run, its product 1 in progress).
     const simStop = randomUUID();
     db.sql(`BEGIN; SET LOCAL session_replication_role=replica; SET LOCAL ROLE morrow_work_owner;
 INSERT INTO morrow_work.stop_controls(organization_id,workspace_id,id,scope,store_id,target_id,set_by_kind,set_by_principal_id,set_by_membership_id,set_by_operator_id,reason_code,reason,created_at) VALUES(${literal(O)},${literal(W)},${literal(simStop)},'connection',${literal(S)},${literal(C)},'system',NULL,NULL,NULL,'shopify_app_uninstalled','sim',date_trunc('milliseconds',clock_timestamp()));
 COMMIT;`);
-    const stoppedRead = resolveAs(ref, runId, ids[0]);
+    const stoppedRead = resolveAs(ref, runId, ids[1]);
     db.sql(`BEGIN; SET LOCAL session_replication_role=replica; SET LOCAL ROLE morrow_work_owner;
 DELETE FROM morrow_work.stop_controls WHERE id=${literal(simStop)};
 COMMIT;`);
-    const again = resolveAs(ref, runId, ids[0]);
+    const again = resolveAs(ref, runId, ids[1]);
     const stop = await agentsCall(P.A, "POST", listings + "/stop", {
       control: { reason: "Pause the drafts", sourceProposalRef: null },
     });
@@ -2138,22 +2272,29 @@ COMMIT;`);
       stoppedRead === "stopped|" &&
         again === "resolved|storeinst_runs" &&
         stop.status === 200 &&
-        resolveAs(ref, runId, ids[0]) === "ended|",
-      { stoppedRead, again, stop: stop.status, after: resolveAs(ref, runId, ids[0]) },
+        resolveAs(ref, runId, ids[1]) === "ended|",
+      { stoppedRead, again, stop: stop.status, after: resolveAs(ref, runId, ids[1]) },
     );
   }
 
   // ---------------------------------------------------------------------------
   phase("redaction");
   {
-    // X1-X6: shop/redact (M2 PR-3's connector_inbox_apply, as the connector's login) deletes a
+    // X1-X9: shop/redact (M2 PR-3's connector_inbox_apply, as the connector's login) deletes a
     // store's snapshots and drafts (store_content_redact as listings-runs revises it), and it
     // races the run steps that write store content. Each store-content writer takes the
     // store's stop key shared before its run's lock and reads its lease again; shop/redact
-    // holds that key exclusively from its system stop through the redaction. Four more linked
+    // holds that key exclusively from its system stop through the redaction. Six more linked
     // stores, each with the Listings agent, so each shop/redact ends only its own store; S
     // keeps its content throughout (the two-store case).
-    const stores = ["store_runs2", "store_runs3", "store_runs4", "store_runs5"].map((storeId) => {
+    const stores = [
+      "store_runs2",
+      "store_runs3",
+      "store_runs4",
+      "store_runs5",
+      "store_runs6",
+      "store_runs7",
+    ].map((storeId) => {
       const installationId = storeId.replace(/^store_/, "storeinst_");
       const app = ("lab-" + storeId.replaceAll("_", "-")).slice(0, 63);
       return {
@@ -2166,9 +2307,11 @@ COMMIT;`);
         shopId: String(BigInt("0x" + sha(storeId).slice(0, 12)) + 1n),
       };
     });
-    const [X2, X3, X4, X5] = stores;
+    // SF: the agent submit committed first (X7); SC: the completing pass and the stopped
+    // run's close (X8-X9).
+    const [X2, X3, X4, X5, SF, SC] = stores;
     db.admin(
-      [X3, X4, X5]
+      [X3, X4, X5, SF, SC]
         .map((x) =>
           storeInstallationSql({
             org: O,
@@ -2247,7 +2390,7 @@ COMMIT;`);
     const s2Result = await execute(s2Run);
     const s2Content = contentOf(S2);
     check(
-      "X1:four_more_stores_with_the_listings_agent_and_one_drafted_run",
+      "X1:six_more_stores_with_the_listings_agent_and_one_drafted_run",
       enabled.every((status) => status === 200) &&
         resumed.status === 200 &&
         s2Result.kind === "ended" &&
@@ -2344,22 +2487,41 @@ COMMIT;`,
       { finishRun: finishRun.steps, call: finishRun.call, finish, content: contentOf(X4.storeId) },
     );
     const submitRun = await prepared(X5.storeId, 95, "drafted");
-    const envelope = one(
-      `SELECT envelope_id::text AS envelope FROM morrow_work.runs WHERE id=${literal(submitRun.runId)}`,
-    ).envelope;
+    const factsOf = (runId) => ({
+      runId,
+      envelopeId: one(
+        `SELECT envelope_id::text AS envelope FROM morrow_work.runs WHERE id=${literal(runId)}`,
+      ).envelope,
+      fields: ["descriptionHtml", "title"],
+      modelBudgetMs: runModelBudgetMs(1, "claude_sonnet_5_5", "low"),
+    });
+    // The agent submit's own outcome (review: proposeDrafts refuses every non-applied outcome
+    // alike, so only `denied` shows the lease re-read after the stop key refused it; without
+    // the interlock the submit finds its draft deleted, not_found).
+    let submitOutcome = null;
+    const recordingPorts = {
+      ...ports,
+      lease: (leaseRef, body) =>
+        ports.lease(leaseRef, (step) =>
+          body({
+            ...step,
+            run: {
+              ...step.run,
+              submitProposal: async (input) =>
+                (submitOutcome = await step.run.submitProposal(input)),
+            },
+          }),
+        ),
+    };
     const submit = await redactFirst(X5, "runs_redact_x4", () =>
-      proposeDrafts(ports, submitRun.ref, {
-        runId: submitRun.runId,
-        envelopeId: envelope,
-        fields: ["descriptionHtml", "title"],
-        modelBudgetMs: runModelBudgetMs(1, "claude_sonnet_5_5", "low"),
-      }),
+      proposeDrafts(recordingPorts, submitRun.ref, factsOf(submitRun.runId)),
     );
     check(
       "X4:an_agent_submit_racing_shop_redact_waits_and_proposes_nothing",
       submitRun.finished?.value?.outcome === "recorded" &&
         submit.holding &&
         submit.ok &&
+        submitOutcome === "denied" &&
         submit.written?.kind === "proposed" &&
         submit.written.proposals === 0 &&
         submit.written.stop === "proposal_refused" &&
@@ -2368,7 +2530,7 @@ COMMIT;`,
         ) === 0 &&
         JSON.stringify(contentOf(X5.storeId)) ===
           JSON.stringify({ snapshots: 0, drafts: 0, parameters: 0 }),
-      { finished: submitRun.finished, submit, content: contentOf(X5.storeId) },
+      { finished: submitRun.finished, submit, submitOutcome, content: contentOf(X5.storeId) },
     );
     // X5: the write first. A snapshot put on S2 holds the store's stop key shared until the
     // connector's shop/redact waits behind it; the write commits, and the pass then deletes
@@ -2438,6 +2600,208 @@ COMMIT;`,
         JSON.stringify(request.evidence.outstanding) === "[]",
       { destroyed, completed: completed.stdout, request },
     );
+    // X7: the agent submit first (review: X4's order cannot show the interlock). A drafted
+    // run on SF submits its proposal inside its lease and, before that transaction commits,
+    // the connector's shop/redact starts and waits behind it (on the store's stop key the
+    // submit holds shared). Once the submit commits, the pass empties the proposal's
+    // parameters; without the interlock it would run first, find no parameters, report none
+    // remaining, and the committed parameters would keep their content.
+    const firstRun = await prepared(SF.storeId, 97, "drafted");
+    const inboxSF = recordShopRedact(SF);
+    let redactSF = null;
+    let waitedSF = null;
+    const submittedFirst = await proposeDrafts(
+      {
+        ...ports,
+        lease: (leaseRef, body) =>
+          ports.lease(leaseRef, async (step) => {
+            const value = await body(step);
+            redactSF = db.runAsync(apply(inboxSF), {
+              user: "morrow_connector_ingress",
+              applicationName: "runs_redact_x7",
+            });
+            waitedSF = await db.waitForLockWait("application_name='runs_redact_x7'", 4000);
+            return value;
+          }),
+      },
+      firstRun.ref,
+      factsOf(firstRun.runId),
+    );
+    const afterSF = await redactSF;
+    check(
+      "X7:an_agent_submit_committed_first_has_its_parameters_emptied_by_the_pass",
+      firstRun.finished?.value?.outcome === "recorded" &&
+        submittedFirst.kind === "proposed" &&
+        submittedFirst.proposals === 1 &&
+        submittedFirst.stop === null &&
+        waitedSF === true &&
+        afterSF.ok &&
+        afterSF.stdout.includes("applied:pending") &&
+        count(
+          `SELECT count(*) FROM morrow_work.proposals WHERE organization_id=${literal(O)} AND workspace_id=${literal(W)} AND store_id=${literal(SF.storeId)}`,
+        ) === 1 &&
+        JSON.stringify(contentOf(SF.storeId)) ===
+          JSON.stringify({ snapshots: 0, drafts: 0, parameters: 0 }),
+      {
+        submittedFirst,
+        waitedSF,
+        afterSF: afterSF?.stdout + (afterSF?.stderr ?? "").slice(0, 400),
+        content: contentOf(SF.storeId),
+      },
+    );
+    // X8-X9: the pass that completes the request is also the pass that deletes content
+    // (review: no completed evidence had reported a deleted row). SC's run has one product
+    // proposed, one draft pending and a third product read (a snapshot, no draft) when
+    // app/uninstalled stops it, so each handler's count differs; its token is destroyed,
+    // then one shop/redact pass deletes everything and completes. The stopped run, closed
+    // afterwards by the reconcile, still settles its proposed product's credits and accrues
+    // its pending draft's attempt cost as unrecovered: it settles from run_products, never
+    // from the drafts the pass deleted.
+    await storeCredential(SC.installationId);
+    const closeRunId = (
+      await admit(
+        P.A,
+        T,
+        admitBody([product(98), product(99), product(100)], { storeId: SC.storeId }),
+      )
+    ).body.runId;
+    const closeRef = leaseOf(closeRunId);
+    const draftAt = async (index, n) => {
+      const canonical = snapshotCanonical(catalog.get("product:" + n));
+      const put = await ports.lease(closeRef, async (step) => {
+        const begun = await step.run.productBegin(index);
+        return [begun.outcome, (await step.run.snapshotPut(index, canonical)).outcome];
+      });
+      const open = last(
+        db.sql(
+          `SELECT outcome||'|'||coalesce(call_id,'') FROM morrow_vault.model_call_begin(${literal(closeRef.leaseId)},${literal(String(closeRef.generation))},${literal(String(index))},'1','1','90000',${literal(await listingPromptDigest())},${literal(listingDraftSchemaDigest)});`,
+          { user: "morrow_vault_broker" },
+        ),
+      ).split("|");
+      const closed = last(
+        db.sql(
+          `SELECT outcome FROM morrow_vault.model_call_end(${literal(open[1])},'completed','end_turn',${literal("req_close" + index)},'claude-sonnet-5-5','900','900','300','0','0');`,
+          { user: "morrow_vault_broker" },
+        ),
+      );
+      const finished = await ports.lease(closeRef, (step) =>
+        step.run.productFinish(index, {
+          outcome: "drafted",
+          setCanonical: draftSet(n),
+          fields: ["title"],
+          flags: noFlags,
+        }),
+      );
+      return [...(put.value ?? []), open[0], closed, finished.value?.outcome].join(",");
+    };
+    const closeStarted = await ports.lease(closeRef, (step) => step.run.start());
+    const drafted0 = await draftAt(0, 98);
+    const proposed0 = await proposeDrafts(ports, closeRef, factsOf(closeRunId));
+    const drafted1 = await draftAt(1, 99);
+    const read2 = await ports.lease(closeRef, async (step) =>
+      [
+        (await step.run.productBegin(2)).outcome,
+        (await step.run.snapshotPut(2, snapshotCanonical(catalog.get("product:100")))).outcome,
+      ].join(","),
+    );
+    const heldBefore = contentOf(SC.storeId);
+    const uninstall = last(
+      db.sql(
+        `SELECT outcome||'|'||COALESCE(inbox_id,'') FROM morrow_vault.shopify_webhook_record(${literal(SC.app)},${literal(SC.shop)},'app/uninstalled',${literal("uninstall-" + randomUUID())},'2026-10',${literal(JSON.stringify({ shopId: SC.shopId }))});`,
+        { user: "morrow_vault_broker" },
+      ),
+    ).split("|");
+    const uninstalled = db.tryRun(apply(uninstall[1]), { user: "morrow_connector_ingress" });
+    const destroyedSC = last(
+      db.sql(
+        `SELECT morrow_vault.shopify_credential_destroy(${literal(SC.installationId)},'uninstalled');`,
+        { user: "morrow_vault_broker" },
+      ),
+    );
+    const inboxSC = recordShopRedact(SC);
+    const completedSC = db.tryRun(apply(inboxSC), { user: "morrow_connector_ingress" });
+    const requestSC = db.rows(
+      `SELECT status,evidence FROM morrow_identity.privacy_requests WHERE inbox_id=${literal(inboxSC)}`,
+      { role: "morrow_identity_owner" },
+    )[0];
+    const rowsSC = (table) =>
+      (requestSC?.evidence?.handlers ?? []).find((h) => h.table === table)?.rows;
+    check(
+      "X8:the_completing_pass_reports_the_rows_it_deleted",
+      closeStarted.value?.outcome === "started" &&
+        drafted0 === "begun,stored,begun,closed,recorded" &&
+        proposed0.kind === "proposed" &&
+        proposed0.proposals === 1 &&
+        drafted1 === "begun,stored,begun,closed,recorded" &&
+        read2.value === "begun,stored" &&
+        JSON.stringify(heldBefore) === JSON.stringify({ snapshots: 3, drafts: 2, parameters: 1 }) &&
+        uninstall[0] === "recorded" &&
+        uninstalled.ok &&
+        uninstalled.stdout.includes("applied:applied") &&
+        destroyedSC === "destroyed" &&
+        completedSC.ok &&
+        completedSC.stdout.includes("applied:applied") &&
+        requestSC?.status === "completed" &&
+        rowsSC("morrow_work.product_snapshots") === heldBefore.snapshots &&
+        rowsSC("morrow_work.run_drafts") === heldBefore.drafts &&
+        rowsSC("morrow_work.proposal_parameters") === heldBefore.parameters &&
+        JSON.stringify(requestSC.evidence.outstanding) === "[]" &&
+        JSON.stringify(contentOf(SC.storeId)) ===
+          JSON.stringify({ snapshots: 0, drafts: 0, parameters: 0 }),
+      {
+        closeStarted: closeStarted.value?.outcome,
+        drafted0,
+        proposed0,
+        drafted1,
+        read2: read2.value,
+        heldBefore,
+        uninstall,
+        uninstalled: uninstalled.stdout + uninstalled.stderr.slice(0, 400),
+        destroyedSC,
+        completed: completedSC.stdout + completedSC.stderr.slice(0, 400),
+        request: requestSC,
+      },
+    );
+    const reconcileSC = await call(runsOn, P.A, "POST", "/runs-reconcile", {});
+    const closedRow = runRow(closeRunId);
+    const lost = db.rows(
+      `SELECT id::text AS id,kind,amount_usd::text AS amount FROM morrow_billing.unrecovered_cost_entries WHERE root_run_id=${literal(closeRunId)} ORDER BY id`,
+    );
+    const vendorLost = one(
+      `SELECT unrecovered_cost_usd::text AS amount FROM morrow_billing.vendor_cost_reservations WHERE root_run_id=${literal(closeRunId)}`,
+    );
+    check(
+      "X9:a_run_stopped_before_shop_redact_settles_its_proposed_products_after_the_pass",
+      reconcileSC.status === 200 &&
+        reconcileSC.body.closed >= 1 &&
+        closedRow.status === "cancelled" &&
+        closedRow.status_guard === "submitted_effects_reconciled" &&
+        closedRow.ended_reason === "stopped" &&
+        credit(closeRunId)?.status === "settled" &&
+        credit(closeRunId)?.settled === worst.credits &&
+        JSON.stringify(lost) ===
+          JSON.stringify([
+            { id: closeRunId + ":1:1", kind: "failed_product", amount: completedCost },
+          ]) &&
+        Number(vendorLost?.amount) === Number(completedCost) &&
+        JSON.stringify(productsOf(closeRunId).map((p) => [p.status, p.failure_code])) ===
+          JSON.stringify([
+            ["drafted", null],
+            ["drafted", null],
+            ["failed", "interrupted"],
+          ]) &&
+        count(
+          `SELECT count(*) FROM morrow_work.run_products WHERE run_id=${literal(closeRunId)} AND proposal_id IS NOT NULL`,
+        ) === 1,
+      {
+        reconcile: reconcileSC.body,
+        row: closedRow,
+        credit: credit(closeRunId),
+        lost,
+        vendorLost,
+        products: productsOf(closeRunId),
+      },
+    );
   }
   return { checks, failures, retries };
 }
@@ -2471,7 +2835,7 @@ async function main() {
     limitations: [
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
       "The runs handler, the Workflow logic and the broker's gateway run in Node over psql connectors (morrow_api_worker, morrow_runtime_executor, morrow_vault_broker), not in workerd over the Neon transport; the Messages API is an in-process stand-in.",
-      "Most runs' product read is a lab stand-in for M2 PR-3's shopifyRead productContent; R5-R6 use the broker's own reader in Node (not over the RuntimeBroker RPC) against the synthetic Shopify oracle, and the R cases call the vault resolution directly as the broker's login. The workerd leg with the Shopify and Anthropic oracles is open.",
+      "Most runs' product read is a lab stand-in for M2 PR-3's shopifyRead productContent; R5-R6 and R8-R10 use the orchestrator's createProductReader over the broker's own reader in Node (a RuntimeBroker-shaped object, not the RPC) against the synthetic Shopify oracle, and the R cases call the vault resolution directly as the broker's login. The workerd leg with the Shopify and Anthropic oracles is open.",
       "The shop/redact deliveries are recorded through the broker's own definer (morrow_vault.shopify_webhook_record) without the signature check, which lab:shopify-privacy covers; the sim connection stop of R5 is inserted with the triggers off.",
       "M5's billing records (route, account, entitlement, period, wallet) are owner-seeded with the triggers off (sim); lab:billing proves the receipt path that writes them.",
       "Durable steps are an in-process stand-in for Cloudflare Workflows' step.do (a RunStepRetry is retried; results cross a JSON boundary).",

@@ -7,6 +7,8 @@ import {
   decodeShopifyReadResult,
   modelCallBudgetMs,
   modelGatewayLimits,
+  shopifyReadLimits,
+  type RuntimeBrokerRpc,
 } from "../../../identity/src/broker-protocol.js";
 import { generatedModelCatalogue } from "../../../policy/src/generated/model-catalogue.js";
 import { createBillingFactsReader } from "../billing/facts.js";
@@ -38,9 +40,12 @@ import { packListingProposals } from "./producer.js";
 //   product  one per product: decideDelegation (execute on catalog.content.propose, view on
 //            catalog.products.read); run_product_begin (the breaker, the unrecovered-cost cap
 //            and the reservation); the product read (M2 PR-3's shopifyRead productContent,
-//            named by the run id: a read that throws is a step retry, never a failed
-//            product; not_found and a reply outside the protocol fail it read_failed; a
-//            product over 64 KiB fails too_large before any schema check) and its
+//            named by the run id: a read that throws is tried again within the step, the
+//            lease entered before each retry, at most runTimings.readWaitsMs.length + 1
+//            reads; one still unavailable, not_found or a reply outside the protocol fails
+//            the product read_failed, which the breaker counts, and a breaker tripped by
+//            unreadable products alone ends the run read_unavailable; a product over
+//            64 KiB fails too_large before any schema check) and its
 //            content-addressed snapshot; at most two attempts through the broker's
 //            modelRespond (a resend after a throttle reuses the attempt); the code checks of
 //            drafting.ts; run_product_finish. Outcomes follow ADR-0022 item 10: spend_limit
@@ -52,11 +57,12 @@ import { packListingProposals } from "./producer.js";
 //   finish   run_finish: settles at the products proposed, ends the run, releases the lease.
 
 /**
- * One product read. unavailable: the read threw (BROKER_HELD: READ_BUSY, a throttle that did
- * not fit the budget, OUTCOME_UNKNOWN, a lost RPC, a stop or an ended lease), which a retry
- * may clear, so the product step retries (RunStepRetry) and a real stop is caught at the next
- * lease entry; it never counts toward the failed-product breaker. invalid: the reply was not
- * the protocol's closed result.
+ * One product read. unavailable: the read threw (BROKER_HELD, which carries no code: READ_BUSY,
+ * a throttle that did not fit the budget, OUTCOME_UNKNOWN, a lost RPC, a stop or an ended
+ * lease, but also READ_REFUSED for a Shopify refusal or a reply over the read's limits, which
+ * repeats on every try), so the product step tries it again a bounded number of times and
+ * then fails the product read_failed (draftProduct). invalid: the reply was not the
+ * protocol's closed result.
  */
 export type ProductRead =
   | { readonly outcome: "read"; readonly product: ListingSnapshot }
@@ -64,7 +70,7 @@ export type ProductRead =
 /**
  * One shopifyRead(productContent) reply as the product step takes it, decoded with the
  * protocol's own closed decoder (M2 PR-3): a product's listing fields, not_found, or invalid
- * for anything else. The orchestrator maps a thrown read to unavailable itself.
+ * for anything else. createProductReader maps a thrown read to unavailable itself.
  */
 export function productReadOf(text: unknown): ProductRead {
   try {
@@ -76,6 +82,34 @@ export function productReadOf(text: unknown): ProductRead {
   }
   return Object.freeze({ outcome: "invalid" });
 }
+/**
+ * The orchestrator's product read (spine §4), free of Cloudflare so its tests and the
+ * PostgreSQL lab run it: M2 PR-3's RuntimeBroker.shopifyRead(leaseId, generation, subjectId,
+ * queryName, variablesJson, budgetMs) for productContent under the run lease, named by the run
+ * id as the lease's subject (the vault resolution refuses any other subject, and any product
+ * not in progress in that run), within the read's whole budget. A thrown read (BROKER_HELD) is
+ * unavailable; a reply is decoded by productReadOf.
+ */
+export function createProductReader(
+  broker: Pick<RuntimeBrokerRpc, "shopifyRead">,
+): ListingsRunPorts["readProduct"] {
+  return async (ref, runId, productId) => {
+    let text: string;
+    try {
+      text = await broker.shopifyRead(
+        ref.leaseId,
+        ref.generation,
+        runId,
+        "productContent",
+        JSON.stringify({ productId }),
+        shopifyReadLimits.budgetMaxMs,
+      );
+    } catch {
+      return Object.freeze({ outcome: "unavailable" as const });
+    }
+    return productReadOf(text);
+  };
+}
 /** What the product step takes from one read: the snapshot and its canonical text, or a failure. */
 export type ReadSnapshot =
   | {
@@ -85,17 +119,15 @@ export type ReadSnapshot =
     }
   | { readonly kind: "failed"; readonly code: "read_failed" | "product_mismatch" | "too_large" };
 /**
- * The product step's handling of one read. A read that threw (unavailable) is transient for
- * the step: a RunStepRetry, never a failed product, so it never counts toward the breaker;
- * a stop or an ended lease is caught at the retried step's lease entry. not_found and a reply
- * outside the protocol fail read_failed; another product, product_mismatch. The size is
- * checked before the schema (the read admits text ListingSnapshot@1 does not), so a product
- * over 64 KiB fails too_large, never read_failed; exact duplicate tags are dropped first.
+ * The product step's handling of its last read (draftProduct tries an unavailable read again
+ * first). A read still unavailable, not_found and a reply outside the protocol fail
+ * read_failed; another product, product_mismatch. The size is checked before the schema (the
+ * read admits text ListingSnapshot@1 does not), so a product over 64 KiB fails too_large,
+ * never read_failed; exact duplicate tags are dropped first.
  */
 export function snapshotOfRead(read: ProductRead, productId: string): ReadSnapshot {
   const failed = (code: "read_failed" | "product_mismatch" | "too_large") =>
     Object.freeze({ kind: "failed" as const, code });
-  if (read.outcome === "unavailable") throw retry("product_read");
   if (read.outcome !== "read") return failed("read_failed");
   if (read.product.productId !== productId) return failed("product_mismatch");
   const snapshot = readSnapshot(read.product);
@@ -146,6 +178,8 @@ export type RunStepResult =
       readonly index: number;
       readonly status: "drafted" | "failed" | "done";
       readonly stop: RunEndReason | null;
+      /** Present only when the product failed because its read stayed unavailable. */
+      readonly unreadable?: true;
     }
   | { readonly kind: "proposed"; readonly proposals: number; readonly stop: RunEndReason | null }
   | { readonly kind: "ended"; readonly status: string }
@@ -159,9 +193,10 @@ export class RunStepRetry extends Error {
 }
 // One modelRespond's budget is sized per run from its effort's max_tokens
 // (modelCallBudgetMs: the fence, the count and a send long enough for the whole reply at
-// the floor output rate); a product step needs two such calls and a few throttle waits, so a
-// product step does not start with less lease time left than productMarginMs(budget). A fence
-// a dead broker left open blocks for its budget plus a minute (migration listings-runs).
+// the floor output rate); a product step needs its reads, two such calls and a few throttle
+// waits, so a product step does not start with less lease time left than
+// productMarginMs(budget). A fence a dead broker left open blocks for its budget plus a minute
+// (migration listings-runs).
 export const runTimings = Object.freeze({
   /** At most this many resends of one attempt after a provider throttle. */
   sequences: 8,
@@ -171,7 +206,23 @@ export const runTimings = Object.freeze({
   throttleAllowanceMs: 60_000,
   /** How long an open fence outlives its budget before it is booked as uncertain. */
   fenceGraceMs: 60_000,
+  /**
+   * The waits before each retry of an unavailable product read, within the product step: at
+   * most readWaitsMs.length + 1 reads, each within shopifyReadLimits.budgetMaxMs. The durable
+   * step's own retries are never spent on a read, so a read that never clears fails its
+   * product instead of failing the Workflow.
+   */
+  readWaitsMs: Object.freeze([2_000, 5_000]),
 });
+/**
+ * The failed-product breaker (run_product_begin and run_product_finish: the catalogue's
+ * maxConsecutiveFailedProducts, 3 in every published version).
+ */
+export const breakerProducts = 3;
+/** A product step's reads at their worst: every try at the read's budget, and the waits. */
+const readAllowanceMs =
+  (runTimings.readWaitsMs.length + 1) * shopifyReadLimits.budgetMaxMs +
+  runTimings.readWaitsMs.reduce((sum, wait) => sum + wait, 0);
 /**
  * The modelRespond budget of a run's selection. An entry this build's catalogue lacks gets
  * the protocol's longest budget; the broker checks every budget against the entry it
@@ -196,9 +247,9 @@ export function runModelBudgetMs(catalogueVersion: number, model: string, effort
     ? modelCallBudgetMs(e.maxOutputTokens)
     : modelGatewayLimits.budgetMaxMs;
 }
-/** A product step's worst case: two attempts at the call budget and the throttle waits. */
+/** A product step's worst case: its reads, two attempts at the call budget, the throttle waits. */
 export const productMarginMs = (modelBudgetMs: number) =>
-  2 * modelBudgetMs + runTimings.throttleAllowanceMs;
+  readAllowanceMs + 2 * modelBudgetMs + runTimings.throttleAllowanceMs;
 /** Waits of `everyMs` that outlast a fence left open for its budget plus the grace. */
 const openFenceWaits = (modelBudgetMs: number, everyMs: number) =>
   Math.ceil((modelBudgetMs + runTimings.fenceGraceMs) / everyMs) + 1;
@@ -289,6 +340,30 @@ function parseResult(text: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+/**
+ * The product step's read: a read that threw (unavailable) is tried again after each of
+ * runTimings.readWaitsMs, the run lease entered first, so a stop or an ended lease interrupts
+ * the run instead of reading on. Returns the last read (still unavailable when every try
+ * threw) or the lease's refusal; a failed lease transaction is a RunStepRetry.
+ */
+export async function readProductWithRetries(
+  ports: ListingsRunPorts,
+  ref: LeaseRef,
+  runId: string,
+  productId: string,
+): Promise<ProductRead | { readonly outcome: "interrupted"; readonly refusal: string }> {
+  let read = await ports.readProduct(ref, runId, productId);
+  for (const waitMs of runTimings.readWaitsMs) {
+    if (read.outcome !== "unavailable") break;
+    await ports.sleep(waitMs);
+    const live = await under(ports, ref, async () => true);
+    if (!live.entered)
+      return Object.freeze({ outcome: "interrupted" as const, refusal: live.refusal });
+    read = await ports.readProduct(ref, runId, productId);
+  }
+  return read;
+}
+
 /** One product: the step body (ids and codes out). */
 export async function draftProduct(
   ports: ListingsRunPorts,
@@ -349,9 +424,20 @@ export async function draftProduct(
     throw retry("call_open");
   };
   // 2. The product as read and its snapshot (re-read after a retried step: a bound snapshot
-  //    with counted attempts must be exactly what the calls used). A read that threw is
-  //    transient for this step: retried, never a failed product.
-  const got = snapshotOfRead(await ports.readProduct(ref, facts.runId, b.productId), b.productId);
+  //    with counted attempts must be exactly what the calls used). A read that threw
+  //    (unavailable) is tried again within this step after each of runTimings.readWaitsMs,
+  //    the lease entered first, so a stop or an ended lease interrupts the run. One still
+  //    unavailable fails the product read_failed through the lease (the breaker counts it),
+  //    so the run goes on to propose and finish; the durable step's retries are kept for
+  //    its transactions, and a refusal that repeats on every read never fails the Workflow.
+  const read = await readProductWithRetries(ports, ref, facts.runId, b.productId);
+  if (read.outcome === "interrupted")
+    return Object.freeze({ kind: "interrupted", refusal: read.refusal });
+  if (read.outcome === "unavailable") {
+    const failed = await finish({ outcome: "failed", code: "read_failed" }, null);
+    return failed.kind === "product" ? Object.freeze({ ...failed, unreadable: true }) : failed;
+  }
+  const got = snapshotOfRead(read, b.productId);
   if (got.kind === "failed") return finish({ outcome: "failed", code: got.code }, null);
   const { snapshot, canonical } = got;
   if (b.snapshotDigest === null || b.attempts === 0 || b.snapshotDigest !== sha256Text(canonical)) {
@@ -584,6 +670,10 @@ export async function listingsRun(
     modelBudgetMs: s.modelBudgetMs,
   });
   let stop: RunEndReason | null = null;
+  // Products in a row whose read stayed unavailable (from the durable results, so a replay
+  // counts the same): a breaker they alone tripped ends the run read_unavailable ("the store
+  // couldn't be read"), not breaker.
+  let unreadable = 0;
   for (let index = 0; index < s.productCount && stop === null; index++) {
     const r = await steps.do("product-" + index, async () => {
       if (ports.now() > s.leaseExpiresAtMs - productMarginMs(facts.modelBudgetMs))
@@ -596,7 +686,10 @@ export async function listingsRun(
       return draftProduct(ports, ref, facts, index);
     });
     if (r.kind === "interrupted") return r;
-    if (r.kind === "product") stop = r.stop;
+    if (r.kind === "product") {
+      unreadable = r.unreadable === true ? unreadable + 1 : 0;
+      stop = r.stop === "breaker" && unreadable >= breakerProducts ? "read_unavailable" : r.stop;
+    }
   }
   // Drafts already validated are proposed even when the run stops early (one credit per
   // product drafted, ADR-0022 item 11): the propose step reruns decideDelegation, so a run

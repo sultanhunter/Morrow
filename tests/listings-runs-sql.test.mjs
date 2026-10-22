@@ -10,7 +10,7 @@
 //     resets it (an unknown fence or lease would read as found).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 const manifest = JSON.parse(readFileSync("migrations/manifest.json", "utf8"));
 const file = manifest.migrations.find((m) => m.file.endsWith(".listings-runs.sql")).file;
@@ -127,8 +127,41 @@ test("M2 PR-3's run-lease product check: its own setting, a running run's in-pro
       ),
       policy,
     );
-  // Only this helper writes the setting.
-  assert.equal(sql.match(/'morrow\.vault_read_run',p_/g).length, 1);
+  // Only this helper writes the setting (review: counting writes whose value starts with p_
+  // missed any other value). Every mention of the setting, however written, is one of four:
+  // the helper's set and clear, inside its body, and the two policies' current_setting reads.
+  const helper = [
+    sql.indexOf("CREATE OR REPLACE FUNCTION morrow_work.run_product_readable("),
+    sql.indexOf(
+      "END $$;",
+      sql.indexOf("CREATE OR REPLACE FUNCTION morrow_work.run_product_readable("),
+    ),
+  ];
+  const mentions = [...sql.matchAll(/morrow\.vault_read_run/g)].map((m) => m.index);
+  const writer = "set_config('";
+  const reader = "pg_catalog.current_setting('";
+  const writes = mentions.filter((i) => sql.slice(i - writer.length, i) === writer);
+  const reads = mentions.filter((i) => sql.slice(i - reader.length, i) === reader);
+  assert.equal(mentions.length, 4);
+  assert.equal(writes.length, 2);
+  assert.ok(writes.every((i) => i > helper[0] && i < helper[1]));
+  assert.equal(reads.length, 2);
+  for (const i of reads) {
+    const policy = sql.lastIndexOf("CREATE POLICY ", i);
+    assert.ok(
+      /^CREATE POLICY broker_read_run(_product)? ON /.test(sql.slice(policy)) &&
+        !sql.slice(policy, i).includes(";"),
+      String(i),
+    );
+  }
+  // No other migration names the setting at all.
+  for (const other of readdirSync("migrations").filter((f) => f.endsWith(".sql") && f !== file))
+    assert.ok(
+      !readFileSync("migrations/" + other, "utf8")
+        .replace(/--.*$/gm, "")
+        .includes("vault_read_run"),
+      other,
+    );
 });
 
 // M2 PR-3 review (the redaction race): a run step that entered its lease before shop/redact
@@ -213,4 +246,50 @@ test("store_content_redact deletes the store's snapshots and drafts, with per-pa
     ),
   );
   assert.ok(sql.includes("FOREACH t IN ARRAY ARRAY['product_snapshots','run_drafts'] LOOP"));
+});
+
+// Review (AI review, separate context, same model family): shop/redact deletes a store's
+// run_drafts while a run it stopped is still open, so the run's later close must settle from
+// content-free rows. run_end and run_finish read run_products (drafted, with or without the
+// proposal that packed it), which the agent submit marks with the drafts it packs; lab
+// listings-runs X8-X9 prove it on PostgreSQL 17.
+test("the settlement reads the content-free run_products, never the drafts shop/redact deletes", () => {
+  for (const name of ["morrow_work.run_end", "morrow_work.run_finish"])
+    assert.ok(!body(name).includes("morrow_work.run_drafts"), name);
+  const end = body("morrow_work.run_end");
+  const pending = at(
+    end,
+    "AND q.status='drafted' AND q.proposal_id IS NULL ORDER BY q.product_index LOOP",
+  );
+  const packed = at(end, "AND q.status='drafted' AND q.proposal_id IS NOT NULL;");
+  // The pending drafts' products accrue, then the packed ones are counted for the settlement.
+  const accrued = end.indexOf("run_product_unrecovered(", pending);
+  assert.ok(pending < accrued && accrued < packed && packed < at(end, "run_settle("));
+  const finish = body("morrow_work.run_finish");
+  assert.ok(
+    at(
+      finish,
+      "x.status='drafted' AND x.proposal_id IS NULL) THEN RETURN QUERY SELECT 'drafts_pending'",
+    ) < at(finish, "x.status='drafted' AND x.proposal_id IS NOT NULL) THEN v_status:='succeeded'"),
+  );
+  // The agent submit marks exactly the products of the drafts it packs, in the same block.
+  const submit = body("morrow_work.submit_agent_proposal");
+  const drafts = at(submit, "UPDATE morrow_work.run_drafts x SET status='packed',proposal_id=v_id");
+  const products = at(submit, "UPDATE morrow_work.run_products x SET proposal_id=v_id");
+  assert.ok(
+    drafts < products && products < submit.indexOf(" EXCEPTION WHEN check_violation", drafts),
+  );
+  assert.ok(
+    submit
+      .slice(products)
+      .startsWith(
+        "UPDATE morrow_work.run_products x SET proposal_id=v_id,revision=x.revision+1,updated_at=greatest(v_now,x.updated_at)\n   WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.run_id=r.id AND x.draft_id=ANY(v_ids)\n    AND x.status='drafted' AND x.proposal_id IS NULL;\n  GET DIAGNOSTICS n=ROW_COUNT;\n  IF n<>cardinality(v_ids) THEN RAISE EXCEPTION 'WORK_RUN_DRAFT_INVALID'; END IF;",
+      ),
+  );
+  // The column is set once, for a drafted product only, and the command role may update it.
+  assert.ok(sql.includes("AND (proposal_id IS NULL OR status='drafted'))"));
+  assert.match(
+    sql,
+    /GRANT UPDATE \(revision,status,attempts,snapshot_digest,draft_id,proposal_id,failure_code,updated_at\) ON morrow_work\.run_products TO morrow_work_command;/,
+  );
 });

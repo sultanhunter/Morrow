@@ -90,7 +90,20 @@ test("AC21: run() throws NonRetryableError(dispatch_disabled) before any step un
     },
   );
   assert.equal(module.MorrowWorkWorkflow, undefined);
-  assert.equal(module.productReadAvailable, true);
+  // workerd starts a module only when every named export is a function or an object (a
+  // boolean export fails the Worker at startup: "Incorrect type for map entry"); the
+  // orchestrator exports its two entrypoints and nothing else. The product read's reviewed
+  // constant stays the protocol's (true since M2 PR-3 and M3 PR-2 were integrated).
+  assert.deepEqual(Object.keys(module).sort(), ["ListingsRunWorkflow", "default"]);
+  assert.ok(
+    Object.values(module).every(
+      (value) => typeof value === "function" || (typeof value === "object" && value !== null),
+    ),
+  );
+  const { runtimeProductReadAvailable } = await import(
+    "../packages/identity/src/broker-protocol.ts"
+  );
+  assert.equal(runtimeProductReadAvailable, true);
   const binding = JSON.stringify({
     schemaVersion: 1,
     environment: "staging",
@@ -256,4 +269,105 @@ test("the unconfigured connector returns 503 except GET /healthz, which is not r
     env,
   );
   assert.equal(post.status, 405);
+});
+
+// Review (AI review, separate context, same model family): ListingsRunWorkflow.run's body
+// (listings-run.ts) on fake ports and a fake step: the run id it hands listingsRun is the
+// Workflow's instance id (a run lease naming another subject interrupts at the start step),
+// every step carries the reviewed options, a RunStepRetry stays retryable and any other
+// error is a NonRetryableError(step_fault).
+test("the Workflow's body passes its instance id as the run id, with the reviewed step options", async (t) => {
+  const module = await load(t, "apps/workers/src/listings-run.ts");
+  const runId = "00000000-0000-4000-8000-0000000000aa";
+  const payload = { leaseId: "00000000-0000-4000-8000-000000000001", generation: 1 };
+  const lease = { kind: "run", subjectId: runId };
+  const started = [];
+  const fakePorts = (leaseResult) => ({
+    lease:
+      leaseResult ??
+      (async (_ref, body) => ({
+        entered: true,
+        lease,
+        value: await body({
+          lease,
+          run: {
+            start: async () => (
+              started.push(1),
+              {
+                outcome: "ended",
+                status: "succeeded",
+              }
+            ),
+          },
+        }),
+      })),
+    modelRespond: async () => {
+      throw Error("not expected");
+    },
+    readProduct: async () => {
+      throw Error("not expected");
+    },
+    environment: "staging",
+    now: () => Date.now(),
+    sleep: async () => {},
+    ids: () => "id",
+  });
+  const configs = [];
+  const step = {
+    async do(name, config, body) {
+      configs.push([name, config]);
+      return body();
+    },
+  };
+  const event = (instanceId, p = payload) => ({ payload: p, instanceId, timestamp: new Date() });
+  assert.equal(await module.runListingsWorkflow(fakePorts(), event(runId), step), "ended");
+  assert.equal(started.length, 1);
+  assert.deepEqual(configs, [
+    [
+      "start",
+      { retries: { limit: 4, delay: "15 seconds", backoff: "exponential" }, timeout: "30 minutes" },
+    ],
+  ]);
+  // Another instance id than the lease's subject: interrupted before run_start.
+  assert.equal(
+    await module.runListingsWorkflow(
+      fakePorts(),
+      event("00000000-0000-4000-8000-0000000000bb"),
+      step,
+    ),
+    "interrupted",
+  );
+  assert.equal(started.length, 1);
+  // A failed lease transaction is a RunStepRetry, retried by the Workflow; any other error is
+  // a fault that retrying would repeat.
+  await assert.rejects(
+    module.runListingsWorkflow(
+      fakePorts(async () => "failed"),
+      event(runId),
+      step,
+    ),
+    (error) => error.name === "RunStepRetry" && error.code === "transaction",
+  );
+  await assert.rejects(
+    module.runListingsWorkflow(
+      fakePorts(async () => {
+        throw Error("RUNTIME_SQL_UNAVAILABLE");
+      }),
+      event(runId),
+      step,
+    ),
+    (error) => error.constructor.name === "NonRetryableError" && error.message === "step_fault",
+  );
+  // Without ports dispatch is disabled; a payload that is not a lease reference is refused,
+  // each before any step.
+  const before = configs.length;
+  await assert.rejects(
+    module.runListingsWorkflow(null, event(runId), step),
+    (error) => error.message === "dispatch_disabled",
+  );
+  await assert.rejects(
+    module.runListingsWorkflow(fakePorts(), event(runId, {}), step),
+    (error) => error.message === "payload_invalid",
+  );
+  assert.equal(configs.length, before);
 });

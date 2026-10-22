@@ -1975,6 +1975,30 @@ await instance(
 );
 
 check("orchestrator_bundle_built", bundle(orchestratorWorker).includes("dispatch_disabled"));
+// M3 PR-2 review: workerd starts a module only when every named export is a function or an
+// object (a boolean export fails the Worker at startup), so the orchestrator's real bundle
+// must start and answer its JSON 404 (its committed environment: dispatch disabled).
+await (async () => {
+  let started = false;
+  const mf = new Miniflare({
+    name: names.orchestrator,
+    modules: true,
+    script: bundle(orchestratorWorker),
+    compatibilityDate: options.orchestrator.compatibilityDate,
+    compatibilityFlags: options.orchestrator.compatibilityFlags,
+    bindings: { MORROW_ENVIRONMENT: "development" },
+    log: new Log(LogLevel.NONE),
+  });
+  try {
+    const response = await mf.dispatchFetch("https://orchestrator.internal/run");
+    started = response.status === 404 && (await response.text()) === '{"code":"not_found"}';
+  } catch {
+    started = false;
+  } finally {
+    await mf.dispose();
+  }
+  check("M3PR2:orchestrator_bundle_starts_in_workerd", started);
+})();
 rmSync(scratch, { recursive: true, force: true });
 
 const status =
