@@ -2,9 +2,9 @@ import { validateCurrentDefinition } from "@morrow/contracts/validation";
 import type { CapabilityId } from "@morrow/contracts";
 import { createAgentAuthorityService } from "@morrow/policy/agent-authority";
 
-import { findCatalogueEntry } from "@morrow/policy/model-catalogue";
 import { storeResource } from "@morrow/policy/store-resource";
 import { modelCallBudgetMs, modelGatewayLimits } from "../../../identity/src/broker-protocol.js";
+import { generatedModelCatalogue } from "../../../policy/src/generated/model-catalogue.js";
 import { createBillingFactsReader } from "../billing/facts.js";
 import { createLeaseDelegationReader } from "../agents/delegation-reader.js";
 import type { LeaseRef, LeaseStep, LeaseStepResult } from "../runtime/leases.js";
@@ -108,8 +108,23 @@ export const runTimings = Object.freeze({
  * resolves itself and holds the call when it has no such entry (the run ends broker_held).
  */
 export function runModelBudgetMs(catalogueVersion: number, model: string, effort: string): number {
-  const entry = findCatalogueEntry(catalogueVersion, model, effort);
-  return entry ? modelCallBudgetMs(entry.maxOutputTokens) : modelGatewayLimits.budgetMaxMs;
+  // The generated catalogue's data (no rules module): a published version, a model that
+  // lists the effort, and the effort's max_tokens.
+  const versions: readonly {
+    readonly version: number;
+    readonly status: string;
+    readonly efforts: readonly { readonly key: string; readonly maxOutputTokens: number }[];
+    readonly models: readonly {
+      readonly key: string;
+      readonly creditsPerProduct: Readonly<Record<string, number>>;
+    }[];
+  }[] = generatedModelCatalogue.versions;
+  const v = versions.find((x) => x.version === catalogueVersion && x.status !== "proposed");
+  const m = v?.models.find((x) => x.key === model);
+  const e = v?.efforts.find((x) => x.key === effort);
+  return v && m && e && Object.hasOwn(m.creditsPerProduct, effort)
+    ? modelCallBudgetMs(e.maxOutputTokens)
+    : modelGatewayLimits.budgetMaxMs;
 }
 /** A product step's worst case: two attempts at the call budget and the throttle waits. */
 export const productMarginMs = (modelBudgetMs: number) =>

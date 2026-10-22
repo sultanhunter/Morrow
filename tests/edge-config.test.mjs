@@ -1700,9 +1700,12 @@ test("M3 PR-2 (AC05): the orchestrator bundles only its reviewed packages/ allow
     "packages/work/src/runs/workflow.ts",
     "packages/work/src/runtime/leases.ts",
     "packages/policy/src/agent-authority.ts",
+    // Each run's call budget comes from the catalogue's data, not its rules module.
+    "packages/policy/src/generated/model-catalogue.ts",
   ])
     assert.ok(orchestratorPackageAllowlist.includes(path), path);
   for (const path of [
+    "packages/policy/src/model-catalogue.ts",
     "packages/work/src/runs/http.ts",
     "packages/work/src/runs/commands.ts",
     "packages/work/src/agents/commands.ts",

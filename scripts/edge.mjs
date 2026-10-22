@@ -480,6 +480,9 @@ export const orchestratorPackageAllowlist = Object.freeze([
   "packages/identity/src/workos-session-status-json.ts",
   "packages/policy/src/agent-authority.ts",
   "packages/policy/src/billing-state.ts",
+  // M3 PR-2 review: the catalogue's data only (each run's call budget from its effort's
+  // max_tokens); the broker ships the same file.
+  "packages/policy/src/generated/model-catalogue.ts",
   "packages/policy/src/index.ts",
   "packages/policy/src/json-boundary.ts",
   "packages/policy/src/paid-work.ts",
