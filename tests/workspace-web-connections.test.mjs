@@ -30,7 +30,8 @@ import {
 } from "../apps/workspace-web/src/fixtures/seed.ts";
 import { createStandaloneRequestGuard } from "../packages/identity/src/standalone-request-guard.ts";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
-import { json, recordingTransport, fakeWindow } from "./fixtures/workspace-web.mjs";
+import { createPending } from "../apps/workspace-web/src/pending.ts";
+import { json, recordingTransport, fakeWindow, MemoryStorage } from "./fixtures/workspace-web.mjs";
 
 const token = Buffer.alloc(32, 7).toString("base64url");
 const otherToken = Buffer.alloc(32, 9).toString("base64url");
@@ -251,6 +252,61 @@ test("HTTP port: preview, apply and status reuse the handoff's key; only apply s
     assert.equal(composed[method], true, method);
 });
 
+// The api's per-address session limit (apps/api/src/session-limit.ts) answers before the
+// store-link guard: a hold for Retry-After, and an apply already unknown stays unknown.
+test("HTTP port: the session limit's 429 on a store link is a hold, never a new unknown", async () => {
+  const limited = () =>
+    json(429, { schemaVersion: 1, outcome: "rate_limited" }, { "retry-after": "60" });
+  const replies = [
+    limited(), // preview
+    json(503, { schemaVersion: 1, outcome: "outcome_unknown" }), // apply
+    limited(), // status
+    json(200, {
+      schemaVersion: 1,
+      outcome: "applied",
+      linkId: "link_1",
+      ownershipRevision: 2,
+      policyRevision: 3,
+      auditId: "audit_1",
+    }), // status again
+  ];
+  const recorded = recordingTransport(({ index }) => replies[index]);
+  const port = createHttpPort({
+    client: createClient({ transport: recorded.transport, online: () => true }),
+    composed,
+    loginBodyVersion: 2,
+    navigationSignal: () => undefined,
+  });
+  const pending = createPending({ storage: new MemoryStorage() });
+  const c = { key: newCommandKey(), body: { handoffToken: token } };
+  const run = (send) => pending.run(c, null, send);
+  const csrf = Buffer.alloc(32, 3).toString("base64url");
+  assert.deepEqual(await run(() => port.storeLinks.preview("ws-1", c)), {
+    kind: "rate_limited",
+    retryAfterSeconds: 60,
+  });
+  assert.equal(pending.blocking(), false, "nothing ran, so nothing is unknown");
+  assert.deepEqual(await run(() => port.storeLinks.apply("ws-1", c, csrf)), {
+    kind: "uncertain",
+  });
+  assert.deepEqual(
+    await run(() => port.storeLinks.status("ws-1", c)),
+    { kind: "uncertain" },
+    "a 429 after an unknown apply stays unknown",
+  );
+  assert.deepEqual(await run(() => port.storeLinks.status("ws-1", c)), {
+    kind: "ok",
+    value: { outcome: "applied" },
+    replayed: false,
+  });
+  assert.equal(pending.blocking(), false);
+  assert.equal(
+    new Set(recorded.calls.map(({ init }) => new Headers(init.headers).get("idempotency-key")))
+      .size,
+    1,
+  );
+});
+
 test("the SPA's requests pass the api's real store-link guard; the preview's CSRF value opens apply", async () => {
   const origin = "https://workspace.example.test";
   const session = Buffer.alloc(32, 27).toString("base64url");
@@ -414,6 +470,7 @@ test("decoders: the store-link preview, apply and status rows", () => {
     },
     csrfToken: csrf,
   };
+  const limited = { schemaVersion: 1, outcome: "rate_limited" };
   const rows = [
     [decodeStoreLinkPreview(response(200, previewBody)), "ok"],
     [decodeStoreLinkPreview(response(200, { ...previewBody, csrfToken: "short" })), "uncertain"],
@@ -425,6 +482,13 @@ test("decoders: the store-link preview, apply and status rows", () => {
     [decodeStoreLinkPreview(response(503, { code: "unavailable" })), "unavailable"],
     [decodeStoreLinkPreview({ kind: "lost" }), "uncertain"],
     [decodeStoreLinkPreview({ kind: "not_sent", offline: true }), "unavailable"],
+    // The api's session limit answered before the guard: nothing ran, a hold.
+    [decodeStoreLinkPreview(response(429, limited)), "rate_limited"],
+    [decodeStoreLinkPreview(response(429, { code: "rate_limited" })), "uncertain"],
+    [
+      decodeStoreLinkPreview(response(429, { schemaVersion: 2, outcome: "rate_limited" })),
+      "uncertain",
+    ],
     [
       decodeStoreLinkResult(
         response(200, {
@@ -463,6 +527,9 @@ test("decoders: the store-link preview, apply and status rows", () => {
     [decodeStoreLinkResult(response(403, { code: "request_denied" })), "denied"],
     [decodeStoreLinkResult(response(500, {})), "uncertain"],
     [decodeStoreLinkResult({ kind: "timeout" }), "uncertain"],
+    [decodeStoreLinkResult(response(429, limited)), "rate_limited"],
+    [decodeStoreLinkResult(response(429, { code: "rate_limited" })), "uncertain"],
+    [decodeStoreLinkResult(response(429, {})), "uncertain"],
   ];
   assert.deepEqual(
     rows.map(([outcome]) =>

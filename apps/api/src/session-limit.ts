@@ -22,22 +22,40 @@ import { workPath } from "./worker.js";
 // cookie rule is stricter still), so an uncounted request never reaches the database. A
 // third-party page cannot make a visitor's browser attach the SameSite=Lax cookie to a
 // subresource, fetch or cross-site POST, so it cannot spend the visitor's (or their NAT's)
-// budget. Step 1 is one count per address: over the limit is 429 rate_limited with
-// Retry-After: 60, in the route family's own shape (the sign-in routes' SignInGuardOutcome,
-// or the work API's ErrorEnvelope on a work path); a missing or invalid address or a failed
-// limiter is the route's existing 503 and one fixed-code `morrow_edge_guard` line. A 429
-// logs nothing. A passed request is forwarded unchanged, its body unread. The address is
-// hashed for the key and never stored, logged or used for authority.
+// budget. Step 1 is one count per address under the route's own key: over the limit is 429
+// rate_limited with Retry-After: 60, in the route family's own shape (the sign-in routes'
+// SignInGuardOutcome, or the work API's ErrorEnvelope on a work path); a missing or invalid
+// address or a failed limiter is the route's existing 503 and one fixed-code
+// `morrow_edge_guard` line. A 429 logs nothing. A passed request is forwarded unchanged, its
+// body unread. The address is hashed for the key and never stored, logged or used for
+// authority.
+//
+// The keys (the PR review, 2026-10-22): the workspace handler's paths count under
+// `session`, logout under `session_logout` and rotate under `session_rotate`, each 120 per
+// 60 s in the one SESSION_LIMITER namespace. Read and work traffic from an address (a busy
+// NAT, or a flood of random canonical cookies) then cannot hold that address's sign-out or
+// the session keeper's rotation. A peer on the same address that floods logout or rotate
+// itself still can while it keeps sending; the SPA then shows sign-out as not done
+// (unavailable), never as done. docs/contracts/identity-authority.md records the trade-off.
 
-export const sessionLimitedRoutes: readonly ManagedApiRoute[] = Object.freeze([
+type SessionRoute = "workspace" | "logout" | "rotate";
+export const sessionLimitKeys: Readonly<Record<SessionRoute, string>> = Object.freeze({
+  workspace: "session",
+  logout: "session_logout",
+  rotate: "session_rotate",
+});
+export const sessionLimitedRoutes: readonly SessionRoute[] = Object.freeze([
   "workspace",
   "logout",
   "rotate",
 ]);
+const sessionRoute = (route: ManagedApiRoute): route is SessionRoute =>
+  (sessionLimitedRoutes as readonly ManagedApiRoute[]).includes(route);
 
 const retryAfterSeconds = 60;
 // Over the limit: the work API's own ErrorEnvelope on a work path (the read class on GET),
-// and elsewhere the sign-in routes' 429, which the SPA's identity decoders already read.
+// and elsewhere the sign-in routes' 429, which the SPA's identity and store-link decoders
+// read as nothing done.
 function limited(pathname: string, method: string): Response {
   if (workPath.test(pathname))
     return workRateLimitedResponse(method === "GET", crypto.randomUUID(), retryAfterSeconds);
@@ -47,7 +65,7 @@ function limited(pathname: string, method: string): Response {
 // ErrorEnvelope (its read class, safe_read_retry, on GET and recheck_before_retry otherwise,
 // as the work handler classifies a request before its guard runs), and the workspace
 // handler's {"code":"unavailable"}. None sets a cookie.
-function unavailable(route: ManagedApiRoute, pathname: string, method: string): Response {
+function unavailable(route: SessionRoute, pathname: string, method: string): Response {
   if (route === "logout")
     return edgeReply(503, '{"schemaVersion":1,"outcome":"logout_unavailable"}');
   if (route === "rotate")
@@ -74,11 +92,15 @@ export function createSessionLimit(limiter: RateLimiter | null) {
       return next(request);
     }
     const route = managedApiRoute(pathname);
-    if (!sessionLimitedRoutes.includes(route)) return next(request);
+    if (!sessionRoute(route)) return next(request);
     // Step 0: no canonical session cookie, no count; the handler's own refusal follows.
     if (sessionCookieSecret(request.headers.get("cookie")) === null) return next(request);
-    // Step 1: the per-address limit.
-    const limit = await limitAddress(limiter, "session", request.headers.get("cf-connecting-ip"));
+    // Step 1: the per-address limit, under the route's own key.
+    const limit = await limitAddress(
+      limiter,
+      sessionLimitKeys[route],
+      request.headers.get("cf-connecting-ip"),
+    );
     if (limit === "limited") return limited(pathname, request.method);
     if (limit !== "allowed") {
       logEdgeGuard(edgeLimitFailure(limit));

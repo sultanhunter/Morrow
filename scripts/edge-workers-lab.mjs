@@ -18,7 +18,8 @@
 // limit's next request is 429 with no broker call. The session routes' limit
 // (apps/api/src/session-limit.ts, SESSION_LIMITER 120 per 60 s) runs over the same bundle:
 // requests without a canonical session cookie go uncounted to the handler's own refusal,
-// the 121st counted request is 429 on every session route, and neither reaches the database.
+// the 121st counted request is 429, logout and rotate keep their own buckets while the
+// read and work bucket is empty, and none of it reaches the database.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1750,11 +1751,13 @@ await instance(
 );
 
 // ---- The session routes' per-address limit (session-limit.ts) over the real bundles ----
-// The committed development SESSION_LIMITER: 120 per 60 s. A counted request carries one
-// canonical session cookie; without X-Morrow-Request, GET /workspaces refuses it (403) before
-// any lease, so the burst reaches neither the broker's lease nor the database. The burst must
-// fall in one limiter window (Miniflare: 60 s on the epoch); if it straddles two, it runs
-// once more from another address in a fresh window.
+// The committed development SESSION_LIMITER: 120 per 60 s on each of the keys `session`,
+// `session_logout` and `session_rotate`. A counted request carries one canonical session
+// cookie; without X-Morrow-Request, GET /workspaces refuses it (403) before any lease, and
+// without Origin and X-Morrow-Request so do logout and rotate, so the bursts reach neither the
+// broker's lease nor the database. Everything that needs the buckets must fall in one limiter
+// window (Miniflare: 60 s on the epoch); if it straddles two, it runs once more from another
+// address in a fresh window.
 await instance(
   "SESSION_limiter",
   { api: { bindings: guardedApiBindings() } },
@@ -1769,6 +1772,18 @@ await instance(
     const denied = (r) => r.status === 403 && r.body === '{"code":"request_denied"}';
     const unauthenticated = (r) =>
       r.status === 401 && json(r.body)?.code === "authentication_required";
+    // Logout and rotate without the browser proof: each handler's own 403, before any lease.
+    const lifecycleDenied = ([logout, rotate]) =>
+      logout.status === 403 &&
+      logout.body === '{"schemaVersion":1,"outcome":"logout_unavailable"}' &&
+      rotate.status === 403 &&
+      rotate.body === '{"schemaVersion":1,"outcome":"rotation_unavailable"}';
+    const unproven = (address, path) =>
+      fetchApi(path, {
+        method: "POST",
+        headers: { ...from(address), "Content-Type": "application/json", Cookie: sessionCookie() },
+        body: '{"schemaVersion":1}',
+      });
     const burst = async (address) => {
       const window = Math.floor(Date.now() / 60000);
       // Ten uncounted first: no cookie, a short one, two session cookies.
@@ -1797,9 +1812,40 @@ await instance(
             headers: { ...from(address), Cookie: sessionCookie() },
           }),
         );
+      // The `session` bucket is now empty; logout and rotate count under their own keys.
+      const lifecycle = [];
+      for (let i = 0; i < 121; i++)
+        lifecycle.push([
+          await unproven(address, "/auth/logout"),
+          await unproven(address, "/auth/rotate"),
+        ]);
+      // Over the limit on every session route, a full request included: no lease, no SQL.
+      const limited = [
+        await fetchApi("/workspaces", {
+          headers: { ...from(address), Cookie: sessionCookie(), "X-Morrow-Request": "1" },
+        }),
+        await fetchApi("/workspace/workspace_a/bootstrap", {
+          headers: { ...from(address), Cookie: sessionCookie() },
+        }),
+        await fetchApi("/workspace/workspace_a/work/goals", {
+          headers: { ...from(address), Cookie: sessionCookie() },
+        }),
+        await fetchApi("/auth/logout", {
+          method: "POST",
+          headers: { ...from(address), ...proof, Cookie: sessionCookie() },
+          body: '{"schemaVersion":1}',
+        }),
+        await fetchApi("/auth/rotate", {
+          method: "POST",
+          headers: { ...from(address), ...proof, Cookie: sessionCookie() },
+          body: '{"schemaVersion":1}',
+        }),
+      ];
       return {
         uncounted,
         counted,
+        lifecycle,
+        limited,
         sameWindow: Math.floor(Date.now() / 60000) === window,
       };
     };
@@ -1817,28 +1863,17 @@ await instance(
       "SESSION:121st_counted_request_429_after_120",
       run.counted.slice(0, 120).every(denied) && noStore429(run.counted[120]),
     );
-    // Over the limit on every session route, a full request included: no lease, no SQL.
-    const limited = [
-      await fetchApi("/workspaces", {
-        headers: { ...from(address), Cookie: sessionCookie(), "X-Morrow-Request": "1" },
-      }),
-      await fetchApi("/workspace/workspace_a/bootstrap", {
-        headers: { ...from(address), Cookie: sessionCookie() },
-      }),
-      await fetchApi("/workspace/workspace_a/work/goals", {
-        headers: { ...from(address), Cookie: sessionCookie() },
-      }),
-      await fetchApi("/auth/logout", {
-        method: "POST",
-        headers: { ...from(address), ...proof, Cookie: sessionCookie() },
-        body: '{"schemaVersion":1}',
-      }),
-      await fetchApi("/auth/rotate", {
-        method: "POST",
-        headers: { ...from(address), ...proof, Cookie: sessionCookie() },
-        body: '{"schemaVersion":1}',
-      }),
-    ];
+    // The PR review (2026-10-22): a flood on the read and work routes holds neither
+    // sign-out nor rotation; each has its own 120 and its own 429.
+    check(
+      "SESSION:logout_and_rotate_admitted_while_session_bucket_empty",
+      lifecycleDenied(run.lifecycle[0]),
+    );
+    check(
+      "SESSION:logout_and_rotate_121st_429_after_120",
+      run.lifecycle.slice(0, 120).every(lifecycleDenied) && run.lifecycle[120].every(noStore429),
+    );
+    const limited = run.limited;
     // The work path answers in the work API's own ErrorEnvelope (code rate_limited).
     const workEnvelope = json(limited[2].body);
     check(

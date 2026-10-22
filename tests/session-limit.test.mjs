@@ -2,8 +2,16 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import test from "node:test";
 import deployed from "../apps/api/src/deployed-worker.ts";
-import { createSessionLimit, sessionLimitedRoutes } from "../apps/api/src/session-limit.ts";
+import {
+  createSessionLimit,
+  sessionLimitedRoutes,
+  sessionLimitKeys,
+} from "../apps/api/src/session-limit.ts";
 import { workPath } from "../apps/api/src/worker.ts";
+import {
+  decodeStoreLinkPreview,
+  decodeStoreLinkResult,
+} from "../apps/workspace-web/src/http/connection-decoders.ts";
 import { decodeLogout } from "../apps/workspace-web/src/http/identity-decoders.ts";
 import { workOutcome } from "../apps/workspace-web/src/http/work-decoders.ts";
 import { validateCurrentDefinition } from "../packages/contracts/src/validation.ts";
@@ -80,6 +88,7 @@ const routeCases = [
   ["/workspace/workspace_a/connections", "GET", true],
   ["/workspace/workspace_a/store-links/preview", "POST", true],
   ["/workspace/workspace_a/store-links", "POST", true],
+  ["/workspace/workspace_a/store-links/status", "POST", true],
   ["/workspace/workspace_a/work/goals", "GET", true],
   ["/workspace/workspace_a/work/goals", "POST", true],
   ["/workspace/workspace_a/work/goals", "PUT", true],
@@ -187,13 +196,70 @@ test("a counted request: one key of session plus 32 hex, then the very same requ
   assert.equal(sent.bodyUsed, false);
   for (const address of ["2001:db8:1234:5600::1", "2001:db8:1234:56ff::2", "203.0.113.9"])
     await send(request("/workspaces", { address }));
+  // Logout and rotate count under their own keys, over the same address digest.
+  for (const path of ["/auth/logout", "/auth/rotate"])
+    await send(request(path, { method: "POST", body: "{}" }));
   const digest = (text) => createHash("sha256").update(text).digest("hex").slice(0, 32);
-  assert.deepEqual(seen[0], { key: "session:" + digest("ipv4:198.51.100.7") });
+  const v4 = digest("ipv4:198.51.100.7");
+  assert.deepEqual(seen[0], { key: "session:" + v4 });
   assert.equal(seen[1].key, seen[2].key, "one IPv6 /56 is one bucket");
   assert.notEqual(seen[1].key, seen[3].key);
-  assert.ok(seen.every((options) => /^session:[0-9a-f]{32}$/.test(options.key)));
+  assert.deepEqual(seen.slice(4), [
+    { key: "session_logout:" + v4 },
+    { key: "session_rotate:" + v4 },
+  ]);
+  assert.deepEqual(sessionLimitKeys, {
+    workspace: "session",
+    logout: "session_logout",
+    rotate: "session_rotate",
+  });
+  assert.ok(Object.isFrozen(sessionLimitKeys));
+  assert.ok(seen.every((options) => /^session(_logout|_rotate)?:[0-9a-f]{32}$/.test(options.key)));
   assert.ok(!JSON.stringify(seen).includes("2001") && !JSON.stringify(seen).includes("203.0"));
-  assert.equal(calls.filter((call) => call[0] === "limit").length, 4);
+  assert.equal(calls.filter((call) => call[0] === "limit").length, 6);
+});
+
+// The PR review (2026-10-22): one shared key let any peer on the address hold sign-out
+// with about 2 requests a second of GET /workspaces carrying random canonical cookies.
+test("each family has its own bucket: an empty session bucket holds neither logout nor rotate", async () => {
+  const empty = (prefix) => (options) => ({ success: !options.key.startsWith(prefix + ":") });
+  const post = (path) => request(path, { method: "POST", body: "{}" });
+  const sent = [
+    ["/workspaces", () => request("/workspaces")],
+    ["/workspace/workspace_a/work/goals", () => post("/workspace/workspace_a/work/goals")],
+    ["/workspace/workspace_a/store-links", () => post("/workspace/workspace_a/store-links")],
+    ["/auth/logout", () => post("/auth/logout")],
+    ["/auth/rotate", () => post("/auth/rotate")],
+  ];
+  const statuses = async (prefix) => {
+    const { send } = harness(empty(prefix));
+    const out = {};
+    for (const [path, make] of sent) out[path] = (await send(make())).status;
+    return out;
+  };
+  // The read and work routes' bucket is empty: logout and rotate still reach their handlers.
+  assert.deepEqual(await statuses("session"), {
+    "/workspaces": 429,
+    "/workspace/workspace_a/work/goals": 429,
+    "/workspace/workspace_a/store-links": 429,
+    "/auth/logout": 299,
+    "/auth/rotate": 299,
+  });
+  // Logout's own bucket empty: only logout is held.
+  assert.deepEqual(await statuses("session_logout"), {
+    "/workspaces": 299,
+    "/workspace/workspace_a/work/goals": 299,
+    "/workspace/workspace_a/store-links": 299,
+    "/auth/logout": 429,
+    "/auth/rotate": 299,
+  });
+  assert.deepEqual(await statuses("session_rotate"), {
+    "/workspaces": 299,
+    "/workspace/workspace_a/work/goals": 299,
+    "/workspace/workspace_a/store-links": 299,
+    "/auth/logout": 299,
+    "/auth/rotate": 429,
+  });
 });
 
 // The work API's 429: its own ErrorEnvelope, code rate_limited, the read class on GET.
@@ -255,6 +321,21 @@ test("over the limit: 429 rate_limited with Retry-After: 60, no router and no lo
     kind: "unavailable",
     offline: false,
   });
+  // The store-link routes: a hold for Retry-After, never an unknown link outcome.
+  for (const [path, decode] of [
+    ["/workspace/workspace_a/store-links/preview", decodeStoreLinkPreview],
+    ["/workspace/workspace_a/store-links", decodeStoreLinkResult],
+    ["/workspace/workspace_a/store-links/status", decodeStoreLinkResult],
+  ]) {
+    const { send } = harness("deny");
+    const response = await send(request(path, { method: "POST", body: "{}" }));
+    assert.equal(response.headers.get("retry-after"), "60");
+    assert.deepEqual(
+      decode({ ...reply(await response.json()), headers: response.headers }),
+      { kind: "rate_limited", retryAfterSeconds: 60 },
+      path,
+    );
+  }
 });
 
 test("fail closed: no address, a bad address or a failed limiter is the route's 503 and one line", async () => {
@@ -357,7 +438,7 @@ function deployedEnv(sessionLimiter) {
     Object.freeze({
       async limit(options) {
         events.push(["limit", name, options.key.split(":")[0]]);
-        return answer();
+        return answer(options);
       },
     });
   const env = {
@@ -493,6 +574,32 @@ test("deployed: a counted request is limited before the broker lease; 429 and 50
   }
   assert.equal(sessionCalls(limited.events), 4);
   assert.equal(leases(limited.events), 0);
+  // The read and work bucket empty (a peer's flood): sign-out and rotation are counted
+  // under their own keys and still reach their handlers' lease.
+  const flooded = deployedEnv((options) => ({ success: !options.key.startsWith("session:") }));
+  const held = await flooded.fetch("/workspaces", {
+    headers: { ...accountHeaders, Cookie: session() },
+  });
+  assert.deepEqual(held, { status: 429, body: rateLimited });
+  assert.equal(leases(flooded.events), 0);
+  for (const [path, key] of [
+    ["/auth/logout", "session_logout"],
+    ["/auth/rotate", "session_rotate"],
+  ]) {
+    const before = flooded.events.length;
+    const reply = await flooded.fetch(path, {
+      method: "POST",
+      headers: { ...proofHeaders, Cookie: session() },
+      body: '{"schemaVersion":1}',
+    });
+    assert.notEqual(reply.status, 429, path);
+    const after = flooded.events.slice(before);
+    assert.deepEqual(after[0], ["limit", "session", key], path);
+    assert.ok(
+      after.some((event) => event[0] === "neonLease"),
+      path + ": reached its handler",
+    );
+  }
   // A failed limiter: the route's 503 and one line, no lease.
   logs.length = 0;
   const failed = deployedEnv(() => {
