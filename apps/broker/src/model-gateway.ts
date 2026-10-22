@@ -79,8 +79,19 @@ const keysExactly = (v: Record<string, unknown>, keys: readonly string[]) =>
   Object.keys(v).length === keys.length && keys.every((k) => Object.hasOwn(v, k));
 const int = (v: unknown, min: number, max: number) =>
   typeof v === "number" && Number.isSafeInteger(v) && v >= min && v <= max;
+// A string of min..max code points, as the contract validator's maxLength and SQL char_length
+// count them (a surrogate pair is one), never UTF-16 code units. Lengths at most max units
+// are within it and above twice max are not, so only the band between is counted.
+function codePointsWithin(v: string, min: number, max: number): boolean {
+  if (v.length < min) return false;
+  if (v.length <= max && min <= 1) return true;
+  if (v.length > 2 * max) return false;
+  let n = 0;
+  for (const _ of v) if (++n > max) return false;
+  return n >= min;
+}
 const str = (v: unknown, max: number, min = 0) =>
-  typeof v === "string" && v.length >= min && v.length <= max;
+  typeof v === "string" && codePointsWithin(v, min, max);
 
 /** ModelCall@1, checked by hand (the contract's closed shape and bounds). */
 export function parseModelCall(text: unknown): ModelCall | null {

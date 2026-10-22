@@ -426,6 +426,11 @@ test("ModelCall@1: the broker's hand-written check accepts exactly what the vali
     call({ sequence: 0 }),
     call({ request: "" }),
     call({ request: "r".repeat(8193) }),
+    // Lengths are code points, as the validator and SQL char_length count them: 8,100 code
+    // points in 8,200 UTF-16 units is accepted; 8,193 astral characters are not.
+    call({ request: "r".repeat(8000) + "\u{1F600}".repeat(100) }),
+    call({ request: "\u{1F600}".repeat(8192) }),
+    call({ request: "\u{1F600}".repeat(8193) }),
     call({ fields: [] }),
     call({ fields: ["title", "title"] }),
     call({ fields: ["price"] }),
@@ -449,6 +454,7 @@ test("ModelCall@1: the broker's hand-written check accepts exactly what the vali
       JSON.stringify(value).slice(0, 120),
     );
   }
+  assert.ok(parseModelCall(JSON.stringify(call({ request: "\u{1F600}".repeat(8192) }))));
   assert.equal(parseModelCall("{"), null);
   assert.equal(parseModelCall(null), null);
   assert.equal(parseModelCall("x".repeat(modelGatewayLimits.callMaxBytes + 1)), null);
@@ -464,6 +470,16 @@ test("the draft shape: ListingDraft_v1 in, ListingDraft@1 out, so ModelResult@1 
   });
   assert.deepEqual(out, { productId: "product:7", title: "New", tags: ["x"] });
   assert.ok(validateCurrentDefinition("ListingDraft", out));
+  // A title of 255 astral characters is 255 code points: accepted as the contract counts it.
+  const astral = {
+    productId: "product:7",
+    title: "\u{1F600}".repeat(255),
+    descriptionHtml: null,
+    seo: null,
+    tags: null,
+  };
+  assert.ok(validateCurrentDefinition("ListingDraft", draftShape(astral)));
+  assert.equal(draftShape({ ...astral, title: "\u{1F600}".repeat(256) }), null);
   for (const bad of [
     { productId: "product:7", title: "New" },
     { productId: "product:7", title: "", descriptionHtml: null, seo: null, tags: null },

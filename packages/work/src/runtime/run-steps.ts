@@ -344,7 +344,9 @@ export function createRunSteps(query: FixedSqlQuery): RunSteps {
           (r.snapshot_digest !== null && !exact(digest, r.snapshot_digest)) ||
           typeof r.objective !== "string" ||
           r.objective.length < 1 ||
-          r.objective.length > 8192
+          // 8,192 code points, as SQL char_length and the contract count (a surrogate pair is
+          // one), so an objective the task accepted always reaches the broker.
+          [...r.objective].length > 8192
         )
           throw held();
         return Object.freeze({

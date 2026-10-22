@@ -200,3 +200,25 @@ test("each run's model budget is its effort's whole call; the product margin fol
   ]);
   assert.deepEqual(finished, ["time_budget"]);
 });
+
+test("the product step accepts every objective the task accepted: lengths are code points", async () => {
+  const { createRunSteps } = await import("../packages/work/src/runtime/run-steps.ts");
+  const begin = (objective) =>
+    createRunSteps(async () => [
+      {
+        outcome: "begun",
+        reason: null,
+        product_id: "product:7",
+        attempts: "0",
+        snapshot_digest: null,
+        fields: '["title"]',
+        objective,
+      },
+    ]).productBegin(0);
+  // 8,000 characters and 100 emoji: 8,100 code points (SQL char_length), 8,200 UTF-16 units.
+  const astral = "r".repeat(8000) + "\u{1F600}".repeat(100);
+  assert.equal((await begin(astral)).objective, astral);
+  assert.equal((await begin("\u{1F600}".repeat(8192))).outcome, "begun");
+  await assert.rejects(begin("\u{1F600}".repeat(8193)), /RUNTIME_RUN_HELD/);
+  await assert.rejects(begin(""), /RUNTIME_RUN_HELD/);
+});
