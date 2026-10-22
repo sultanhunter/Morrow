@@ -280,7 +280,7 @@
     {
       "sequence": 35,
       "file": "0035.shopify-privacy-work.sql",
-      "sha256": "f003b8b028ab1c12b75ccb2f63332785e8b34b7e78582a672ae1f60c7fd0911d",
+      "sha256": "ab5cb785c74d62264f5767661b47acc5f8cdf9e82ef27d2582855c593e540f28",
       "executeAs": "morrow_work_owner",
       "reviewRef": "docs/briefs/M2-shopify-connect.md"
     }

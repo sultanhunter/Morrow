@@ -361,8 +361,10 @@ END $$;
 -- Destroys a store installation's offline token (ADR-0022 item 13), only when its row
 -- records the end the caller names (0034 work_shopify_credential_end), and records the
 -- destruction on the installation in this same transaction, so a token is never left
--- live for an ended installation without the re-drive seeing it. Idempotent. Outcomes:
--- destroyed, already_destroyed, ineligible, not_found, invalid, denied.
+-- live for an ended installation without the re-drive seeing it. Every active version
+-- whose subject is the installation is erased (the subject the envelope binds), whatever
+-- its credential id. Idempotent. Outcomes: destroyed, already_destroyed, ineligible,
+-- not_found, invalid, denied.
 CREATE FUNCTION morrow_vault.shopify_credential_destroy(p_installation_id text,p_reason text)
 RETURNS text
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,morrow_vault,pg_temp AS $$
@@ -373,7 +375,7 @@ BEGIN
  IF r.outcome IS DISTINCT FROM 'recorded' THEN RETURN COALESCE(r.outcome,'invalid'); END IF;
  UPDATE morrow_vault.credentials c SET status='destroyed',wrapped_key=NULL,sealed_value=NULL,destroyed_at=greatest(v_at,c.created_at),
   destroy_reason=p_reason
-  WHERE c.organization_id=r.organization_id AND c.workspace_id=r.workspace_id AND c.id=r.credential_id AND c.status='active';
+  WHERE c.organization_id=r.organization_id AND c.workspace_id=r.workspace_id AND c.subject_id=p_installation_id AND c.status='active';
  GET DIAGNOSTICS n=ROW_COUNT;
  RETURN CASE WHEN n>0 THEN 'destroyed' ELSE 'already_destroyed' END;
 END $$;

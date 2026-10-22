@@ -292,11 +292,12 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(P.A.principal)
     run.outcome === "applied" &&
     run.before.endsWith("|0") &&
     run.after === run.before.slice(0, -1) + "1";
-  // The state of one M2 store installation as M2 PR-3's uninstall, suspension and disconnect
-  // paths will write it (sim: 0026's shopify_record_guard admits only unlinked -> linked, so
-  // the edit runs with that trigger disabled). `unlinked` clears the link reference; `linked`
-  // restores the installation's own link and link time. Returns the state that
-  // work_store_installations reports.
+  // The state of one M2 store installation as M2 PR-3's uninstall and suspension paths
+  // write it (sim: the lab moves an installation back and forth between states, which no
+  // path does, so the edit runs with shopify_record_guard disabled; M2 PR-3's end columns
+  // are set as its paths set them, so 0034's store_installations_end CHECK holds).
+  // `unlinked` clears the link reference; `linked` restores the installation's own link and
+  // link time. Returns the state that work_store_installations reports.
   const linkedRows = new Map();
   const storeState = (installation, status) => {
     if (!linkedRows.has(installation))
@@ -309,7 +310,7 @@ INSERT INTO morrow_identity.organization_signups VALUES(${literal(P.A.principal)
     const linked = linkedRows.get(installation);
     const keep = status !== "unlinked";
     db.sql(`BEGIN; ALTER TABLE morrow_identity.store_installations DISABLE TRIGGER shopify_record_guard;
-UPDATE morrow_identity.store_installations SET status=${literal(status)},revision=revision+1,updated_at=greatest(${ms},updated_at),link_id=${keep ? literal(linked.link_id) : "NULL"},linked_at=${keep ? literal(linked.linked_at) + "::timestamptz" : "NULL"} WHERE id=${literal(installation)};
+UPDATE morrow_identity.store_installations SET status=${literal(status)},revision=revision+1,updated_at=greatest(${ms},updated_at),link_id=${keep ? literal(linked.link_id) : "NULL"},linked_at=${keep ? literal(linked.linked_at) + "::timestamptz" : "NULL"},suspended_at=${status === "suspended" ? `greatest(${ms},created_at)` : "NULL"},suspended_reason=${status === "suspended" ? "'disconnected'" : "NULL"},uninstalled_at=${status === "uninstalled" ? `greatest(${ms},created_at)` : "NULL"} WHERE id=${literal(installation)};
 ALTER TABLE morrow_identity.store_installations ENABLE TRIGGER shopify_record_guard; COMMIT;`);
     return last(
       db.sql(
@@ -1486,6 +1487,8 @@ INSERT INTO morrow_work.delegation_hops VALUES(${literal(O)},${literal(W)},${lit
   }
 
   // -------------------------------------------------------------------------
+  // M2 PR-3: one unredacted catalog proposal of S, kept for the last phase's shop/redact.
+  let redactLater = null;
   phase("proposals");
   {
     // A review policy, then catalog Proposal@2 rows owner-inserted (the submit definer is
@@ -1741,6 +1744,8 @@ INSERT INTO morrow_work.proposals(organization_id,workspace_id,id,revision,famil
         ),
       { redacted, parameters },
     );
+    redactLater = catalogProposal();
+    check("P6:a_second_proposal_for_shop_redact", insert(redactLater, true).ok);
   }
 
   // -------------------------------------------------------------------------
@@ -2645,6 +2650,82 @@ ALTER TABLE morrow_work.agent_releases ENABLE TRIGGER append_only; COMMIT;`);
     activateHolders,
   );
 
+  // -------------------------------------------------------------------------
+  // M2 PR-3: shop/redact from the connector's login (no session): the broker's login records
+  // the delivery, the connector's applier ends the installation, empties that store's proposal
+  // parameters through the revised helper (parameters_redact_for_store in the connector's
+  // redaction context) and completes the privacy request once the token's destruction is
+  // recorded. Another store's redaction leaves S's parameters untouched.
+  phase("shop_redact");
+  {
+    const installationOf = (store) =>
+      db.rows(
+        `SELECT id::text AS id,app_key,shop_domain,shop_id FROM morrow_identity.store_installations WHERE store_id=${literal(store)}`,
+      )[0];
+    const redactStore = (store, webhookId) => {
+      const i = installationOf(store);
+      const inbox = last(
+        db.sql(
+          `SELECT inbox_id FROM morrow_vault.shopify_webhook_record(${literal(i.app_key)},${literal(i.shop_domain)},'shop/redact',${literal(webhookId)},'2026-10',${literal(JSON.stringify({ shopId: i.shop_id }))});`,
+          { user: "morrow_vault_broker" },
+        ),
+      );
+      const apply = () =>
+        last(
+          db.sql(
+            `SELECT outcome||'|'||credential FROM morrow_work.connector_inbox_apply(${literal(inbox)});`,
+            { user: "morrow_connector_ingress" },
+          ),
+        );
+      const first = apply();
+      const destroyed = last(
+        db.sql(`SELECT morrow_vault.shopify_credential_destroy(${literal(i.id)},'uninstalled');`, {
+          user: "morrow_vault_broker",
+        }),
+      );
+      const second = apply();
+      const request = db.rows(
+        `SELECT status,evidence FROM morrow_identity.privacy_requests WHERE inbox_id=${literal(inbox)}`,
+      )[0];
+      return { first, destroyed, second, request, installation: i };
+    };
+    const fresh = () =>
+      db.rows(
+        `SELECT canonical<>'{}' AND redacted_at IS NULL AS content,digest FROM morrow_work.proposal_parameters WHERE id=${literal(redactLater.parametersId)}`,
+      )[0];
+    const before = fresh();
+    const other = redactStore("store_other", "lab-redact-other");
+    const afterOther = fresh();
+    const own = redactStore(S, "lab-redact-own");
+    const afterOwn = fresh();
+    const evidence = own.request?.evidence;
+    const rowsOf = (table) => evidence?.handlers.find((h) => h.table === table)?.rows;
+    check(
+      "P6:shop_redact_empties_only_its_stores_parameters",
+      before?.content === true &&
+        other.first === "pending|pending" &&
+        other.second === "applied|destroyed" &&
+        other.request?.status === "completed" &&
+        afterOther?.content === true &&
+        own.first.startsWith("pending|") &&
+        ["destroyed", "already_destroyed"].includes(own.destroyed) &&
+        own.second === "applied|destroyed" &&
+        own.request?.status === "completed" &&
+        afterOwn?.content === false &&
+        afterOwn.digest === before.digest &&
+        rowsOf("morrow_work.proposal_parameters") >= 2 &&
+        evidence?.kind === "shop_redacted" &&
+        JSON.stringify(evidence.outstanding) === "[]" &&
+        count(
+          `SELECT count(*) FROM morrow_identity.store_installations WHERE store_id=${literal(S)} AND status='uninstalled' AND redacted_at IS NOT NULL AND shop_domain LIKE 'redacted-%'`,
+        ) === 1 &&
+        count(
+          `SELECT count(*) FROM morrow_vault.credentials WHERE subject_id=${literal(SI)} AND status='active'`,
+        ) === 0,
+      { before, other, afterOther, own, afterOwn },
+    );
+  }
+
   // Every agents request logged exactly one fixed line.
   check(
     "W1:one_fixed_log_line_per_request",
@@ -2690,7 +2771,7 @@ async function main() {
       "Synthetic owner-seeded fixtures in an isolated local engine; no hosted database, Neon transport, provider or merchant data.",
       "The agents handler runs in Node over a psql connector logged in as morrow_api_worker, not in workerd over the Neon transport.",
       "The store installation (M2 PR-2's tables, read through work_store_installations) and the store-link and model-default grants are owner-seeded; M5 PR-1's billing facts reader runs over fixture facts, since a lease step has no billing read.",
-      "Shapes marked sim (a stop inserted with stop_guard disabled, a membership deactivated with its triggers disabled, grant and installation edits as the owner, a store installation set unlinked, suspended or uninstalled with shopify_record_guard disabled until M2 PR-3 writes those states) stand in for states no API path reaches.",
+      "Shapes marked sim (a stop inserted with stop_guard disabled, a membership deactivated with its triggers disabled, grant and installation edits as the owner, a store installation moved between unlinked, suspended, uninstalled and back to linked with shopify_record_guard disabled, M2 PR-3's end columns set as its paths set them) stand in for states no API path reaches.",
       "The founder's signup row (organization_signups) is owner-seeded; lab:shopify-install K4 and L16 prove that M2's link issues the store-link template only to the founding principal.",
       "Work envelopes, delegation hops and catalog proposals are owner-inserted; their writers (run admission and the agent submit definer) are M3 PR-2's.",
     ],

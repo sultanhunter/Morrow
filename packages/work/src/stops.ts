@@ -20,9 +20,10 @@ import {
 //   its KillSwitchRecord commit together. `planStopAiWork` is that middle step; its
 //   command and definer land with the installation records (M3 PR-1, spine §10), since
 //   an installation stop names an installation that only "Enable Listings agent" creates.
-// - System and operator stops write StopRecord@1: the app/uninstalled connection stop
-//   (M2 PR-3 writes it through the connector's definer) and the platform stop of the
-//   owner's script (0020 platform_stop_set/_lift).
+// - System and operator stops write StopRecord@1: the app/uninstalled and
+//   app/scopes_update connection stops (M2 PR-3 writes them through the connector's
+//   applier, morrow_work.connector_inbox_apply, with exactly these codes and reasons) and
+//   the platform stop of the owner's script (0020 platform_stop_set/_lift).
 // - A stop revokes its matching active leases in the same statement (0020 stop_guard);
 //   `stopBlocks` is the TypeScript twin of morrow_work.stop_active.
 // Agents never set or lift a stop; they may only propose one.
@@ -34,6 +35,8 @@ export const stopReasonCodes = Object.freeze({
   disconnect: "human_disconnect",
   /** The app/uninstalled webhook's connection stop (system). */
   uninstalled: "shopify_app_uninstalled",
+  /** The app/scopes_update webhook's connection stop when the scopes changed (system). */
+  scopesChanged: "shopify_scopes_changed",
   /** Fixed by 0020's platform_stop_set and platform_stop_lift (operator). */
   platformStop: "operator_platform_stop",
   platformLift: "operator_platform_lift",
@@ -179,21 +182,32 @@ export function stopAiWorkRecord(
   return JSON.parse(JSON.stringify(record)) as Current_KillSwitchRecord;
 }
 
+/** The system stops' fixed reasons (the connector's applier writes exactly these). */
+export const systemStopReasons = Object.freeze({
+  shopify_app_uninstalled: "The Shopify app was uninstalled from the store.",
+  shopify_scopes_changed: "The Shopify app's access scopes changed.",
+} as const);
 /**
  * The system's connection stop for an app/uninstalled webhook (ADR-0022 items 13-15):
  * every lease on the connection is revoked, and its StopRecord@1 is a system record.
+ * M2 PR-3: the same stop with its own reason when app/scopes_update reports scopes that are
+ * no longer exactly the app's (the installation is suspended until a reinstall, M6).
  */
-export function uninstallConnectionStop(target: {
-  readonly organizationId: string;
-  readonly workspaceId: string;
-  readonly storeId: string;
-  readonly connectionId: string;
-}): StopControlPlan {
+export function uninstallConnectionStop(
+  target: {
+    readonly organizationId: string;
+    readonly workspaceId: string;
+    readonly storeId: string;
+    readonly connectionId: string;
+  },
+  reasonCode: keyof typeof systemStopReasons = stopReasonCodes.uninstalled,
+): StopControlPlan {
   if (
     !target ||
     ![target.organizationId, target.workspaceId, target.storeId, target.connectionId].every((v) =>
       exact(recordId, v),
-    )
+    ) ||
+    !Object.hasOwn(systemStopReasons, reasonCode)
   )
     throw inputInvalid();
   return Object.freeze({
@@ -203,8 +217,8 @@ export function uninstallConnectionStop(target: {
     storeId: target.storeId,
     targetId: target.connectionId,
     setBy: Object.freeze({ kind: "system" }),
-    reasonCode: stopReasonCodes.uninstalled,
-    reason: "The Shopify app was uninstalled from the store.",
+    reasonCode,
+    reason: systemStopReasons[reasonCode],
   });
 }
 
