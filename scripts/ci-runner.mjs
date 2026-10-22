@@ -1,25 +1,31 @@
 // The self-hosted runner that runs ci.yml on the owner's Mac (ADR-0014, amendment of
 // 2026-10-22; docs/development/ci.md, "Self-hosted runner on the owner's Mac"). The owner
 // runs it; agents never run `up` or `down`.
-//   up [--instance=2]      pull the pinned images; register the runner unless its
-//                          registration is still valid (one registration token, kept in
-//                          memory and written only to the stdin of a one-off
-//                          `docker compose run`); start the stack; wait until GitHub lists
-//                          the runner online with exactly the expected labels; then set
-//                          the repository variable MORROW_CI_RUNS_ON
-//   status [--instance=2]  the runners' GitHub status, the stack's containers, the variable
+//   up [--instance=2]      refuse unless Docker Desktop's File sharing is narrowed and
+//                          workflows from fork pull requests stay off; pull the pinned
+//                          images; register the runner unless its registration is still
+//                          valid (one registration token, kept in memory and written only
+//                          to the stdin of a one-off `docker compose run`); start the stack;
+//                          wait until GitHub lists the runner online with exactly the
+//                          expected labels; then set the repository variable MORROW_CI_RUNS_ON
+//   status [--instance=2]  the runners' GitHub status, the stack's containers, the variable,
+//                          Docker Desktop's File sharing
 //   pause                  delete MORROW_CI_RUNS_ON, so ci.yml goes back to GitHub-hosted
-//                          runners; the runners stay registered and running
+//                          runners, then stop both stacks: the runners go offline but keep
+//                          their registration and volumes
 //   down [--instance=2]    delete MORROW_CI_RUNS_ON (kept while the other instance is
-//                          online), stop the stack, delete the runner from GitHub, then
-//                          remove the stack's containers, network and volumes
+//                          online), stop the stack, delete the runner from GitHub (which
+//                          revokes its key), then remove the stack's containers, network
+//                          and volumes
+// `pause` and `down` change the variable before they check Docker: it needs only gh, so a
+// broken or quit Docker Desktop never keeps ci.yml waiting for an offline runner.
 // Every argument is fixed: no caller-supplied path, name, label, repository or token.
 // Children run without a shell and with a reduced environment; their output is parsed
 // with closed parsers and never relayed, except the last lines of a failed registration
 // with the token removed. The output is statuses only.
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, posix } from "node:path";
 import { pathToFileURL } from "node:url";
 import { repositoryRoot } from "./artifacts.mjs";
 
@@ -48,6 +54,7 @@ export const variableValue = JSON.stringify(ciRunner.labels);
 const githubUrl = "https://github.com/" + ciRunner.repository;
 const runnersPath = `repos/${ciRunner.repository}/actions/runners`;
 const variablePath = `repos/${ciRunner.repository}/actions/variables/${ciRunner.variable}`;
+const forkPath = `repos/${ciRunner.repository}/actions/permissions/fork-pr-workflows-private-repos`;
 const registrationFiles = Object.freeze([".runner", ".credentials", ".credentials_rsaparams"]);
 const registrationCheck =
   registrationFiles
@@ -194,6 +201,61 @@ export function redactedTail(text, token) {
     .map((line) => line.slice(0, 200));
 }
 
+// Docker Desktop shares these host folders with its Linux VM, readable and writable with
+// the owner's permissions, and any CI job reaches that VM through the privileged dind
+// (ADR-0014, amendment of 2026-10-22, risk (b)). Without the setting, Docker Desktop shares
+// its defaults: /Users, /Volumes, /private, /tmp and /var/folders. `up` accepts only a list
+// in which no folder is or holds the home folder or /Volumes; none is, holds or lies inside
+// the checkout or a temporary folder (/tmp, where agents keep their worktrees, and
+// /var/folders); and none lies inside ~/Library or a dot entry of the home folder
+// (~/.config, ~/.ssh, the shell files). Returns null or the refusal code.
+export const dockerSettingsFile = "Library/Group Containers/group.com.docker/settings-store.json";
+export function hostShareProblem(text, { home, root }) {
+  // APFS is case-insensitive; /tmp, /var and /etc link into /private; /System/Volumes/Data
+  // is the data volume behind /.
+  const canonical = (path) => {
+    if (typeof path !== "string" || !path.startsWith("/")) return null;
+    const value =
+      posix
+        .normalize(path)
+        .toLowerCase()
+        .replace(/\/+$/, "")
+        .replace(/^\/system\/volumes\/data(?=\/|$)/, "") || "/";
+    return /^\/(?:tmp|var|etc)(?:\/|$)/.test(value) ? "/private" + value : value;
+  };
+  const inside = (path, folder) =>
+    folder === "/" || path === folder || path.startsWith(folder + "/");
+  const homePath = canonical(home);
+  const rootPath = canonical(root);
+  if (text === null || homePath === null || homePath === "/" || rootPath === null)
+    return "CI_RUNNER_HOST_SHARE_UNKNOWN";
+  let settings;
+  try {
+    settings = JSON.parse(String(text));
+  } catch {
+    return "CI_RUNNER_HOST_SHARE_UNKNOWN";
+  }
+  if (settings === null || typeof settings !== "object" || Array.isArray(settings))
+    return "CI_RUNNER_HOST_SHARE_UNKNOWN";
+  const list = settings.FilesharingDirectories ?? settings.filesharingDirectories;
+  if (list === undefined) return "CI_RUNNER_HOST_SHARE_TOO_BROAD";
+  if (!Array.isArray(list)) return "CI_RUNNER_HOST_SHARE_UNKNOWN";
+  const held = [homePath, "/volumes"];
+  const apart = [rootPath, "/private/tmp", "/private/var/folders"];
+  for (const entry of list) {
+    const path = canonical(entry);
+    if (path === null) return "CI_RUNNER_HOST_SHARE_UNKNOWN";
+    if (
+      held.some((folder) => inside(folder, path)) ||
+      apart.some((folder) => inside(folder, path) || inside(path, folder))
+    )
+      return "CI_RUNNER_HOST_SHARE_TOO_BROAD";
+    const first = inside(path, homePath) ? path.slice(homePath.length + 1).split("/")[0] : "";
+    if (first.startsWith(".") || first === "library") return "CI_RUNNER_HOST_SHARE_TOO_BROAD";
+  }
+  return null;
+}
+
 const outputLimit = 4 << 20;
 // One child, no shell. stdin carries `input` when given and is closed otherwise; output is
 // captured, never inherited.
@@ -253,8 +315,19 @@ export function childEnvironments(source = process.env) {
 }
 export function createTools({ root = repositoryRoot, source = process.env } = {}) {
   const env = childEnvironments(source);
+  const home = source.HOME ?? "";
   return Object.freeze({
     root,
+    home,
+    // Docker Desktop's own settings file: no secret in it. null when it cannot be read.
+    readDockerSettings: () => {
+      if (!home.startsWith("/")) return null;
+      try {
+        return readFileSync(join(home, dockerSettingsFile), "utf8");
+      } catch {
+        return null;
+      }
+    },
     gh: (args, { timeoutMs } = {}) => runChild("gh", args, { cwd: root, env: env.gh, timeoutMs }),
     docker: (args, { input, timeoutMs } = {}) =>
       runChild("docker", args, { cwd: root, env: env.docker, input, timeoutMs }),
@@ -271,14 +344,10 @@ export async function runCiRunner(
   if (!target) throw new CiRunnerError(usage);
   const other = ciRunner.instances[instance === 1 ? 2 : 1];
   const composePath = join(tools.root, ciRunner.composeFile);
-  const compose = (...rest) => [
-    "compose",
-    "--file",
-    composePath,
-    "--project-name",
-    target.project,
-    ...rest,
-  ];
+  const composeFor =
+    (project) =>
+    (...rest) => ["compose", "--file", composePath, "--project-name", project, ...rest];
+  const compose = composeFor(target.project);
 
   const gh = async (args, code, options) => {
     const result = await tools.gh(args, options);
@@ -341,10 +410,40 @@ export async function runCiRunner(
       throw new CiRunnerError("CI_RUNNER_DOCKER_NOT_DOCKER_DESKTOP_ARM64");
     await dockerOk(["compose", "version", "--short"], "CI_RUNNER_DOCKER_COMPOSE_UNAVAILABLE");
   };
+  // `pause` and `down` call this after the variable is settled, so a Docker failure says
+  // what is left to do instead of leaving ci.yml on a runner that may be offline.
+  const checkDockerAfterVariable = async () => {
+    try {
+      await checkDocker();
+    } catch (error) {
+      write(
+        `docker: ${error?.code ?? "CI_RUNNER_DOCKER_UNAVAILABLE"}; the variable is settled, the stack is unchanged: run \`${command}\` again once Docker Desktop runs`,
+      );
+      throw error;
+    }
+  };
+  const shareProblem = () =>
+    hostShareProblem(tools.readDockerSettings(), { home: tools.home, root: tools.root });
+  const sharesNarrowed = "narrowed (no home, /Volumes, temporary or checkout folder)";
+  // While the runner is online, any workflow run of this repository can reach it (risk (a)).
+  const checkForkWorkflows = async () => {
+    const text = await gh(["api", forkPath], "CI_RUNNER_GH_FORK_SETTING_FAILED");
+    let value;
+    try {
+      value = JSON.parse(text);
+    } catch {
+      throw new CiRunnerError("CI_RUNNER_GH_OUTPUT_INVALID");
+    }
+    if (value?.run_workflows_from_fork_pull_requests !== false)
+      throw new CiRunnerError("CI_RUNNER_FORK_PR_WORKFLOWS_ON");
+  };
   const checkGh = () => gh(["auth", "status", "--hostname", "github.com"], "CI_RUNNER_GH_AUTH");
-  const containers = async () =>
+  const containers = async (project = target.project) =>
     parseContainers(
-      await dockerOk(compose("ps", "--all", "--format", "json"), "CI_RUNNER_DOCKER_PS_FAILED"),
+      await dockerOk(
+        composeFor(project)("ps", "--all", "--format", "json"),
+        "CI_RUNNER_DOCKER_PS_FAILED",
+      ),
     );
   const describeContainers = (rows) =>
     `stack ${target.project}: ` +
@@ -362,12 +461,31 @@ export async function runCiRunner(
     );
   };
 
+  // GitHub cannot keep a repository runner to one workflow, so deleting the variable is not
+  // enough: an online runner still takes any job that names its labels (risk (a)).
   if (command === "pause") {
     await checkGh();
     const deleted = await deleteVariable();
     write(
-      `${ciRunner.variable}: ${deleted ? "deleted" : "already unset"}; ci.yml runs on GitHub-hosted runners. The Mac runners stay registered; \`up\` sets the variable again.`,
+      `${ciRunner.variable}: ${deleted ? "deleted" : "already unset"}; ci.yml runs on GitHub-hosted runners`,
     );
+    for (const runner of await listRunners())
+      if (runner.busy) write(`runner ${runner.name}: was busy; its job ends unfinished`);
+    await checkDockerAfterVariable();
+    for (const instance of Object.values(ciRunner.instances)) {
+      if ((await containers(instance.project)).length === 0) {
+        write(`stack ${instance.project}: no containers`);
+        continue;
+      }
+      await dockerOk(
+        composeFor(instance.project)("stop", "--timeout", "30"),
+        "CI_RUNNER_DOCKER_STOP_FAILED",
+        { timeoutMs: 180000 },
+      );
+      write(
+        `stack ${instance.project}: stopped; ${instance.name} is offline and keeps its registration and volumes (GitHub deletes a runner offline for 14 days); \`up\` starts it again, \`down\` revokes it`,
+      );
+    }
     return;
   }
 
@@ -377,6 +495,7 @@ export async function runCiRunner(
     const runners = await listRunners();
     if (runners.length === 0) write("runners: none registered");
     for (const runner of runners) write(describeRunner(runner));
+    write(`docker file sharing: ${shareProblem() ?? sharesNarrowed}`);
     try {
       await checkDocker();
     } catch (error) {
@@ -394,6 +513,11 @@ export async function runCiRunner(
     await checkGh();
     await checkDocker();
     write("docker: Docker Desktop, linux/aarch64");
+    const problem = shareProblem();
+    if (problem) throw new CiRunnerError(problem);
+    write(`docker file sharing: ${sharesNarrowed}`);
+    await checkForkWorkflows();
+    write("fork pull requests: run no workflows in this repository");
     await dockerOk(
       compose("--profile", "register", "pull", "--quiet"),
       "CI_RUNNER_DOCKER_PULL_FAILED",
@@ -527,7 +651,6 @@ export async function runCiRunner(
 
   if (command === "down") {
     await checkGh();
-    await checkDocker();
     const before = await listRunners();
     const otherOnline = before.some(
       (runner) => runner.name === other.name && runner.status === "online",
@@ -539,6 +662,7 @@ export async function runCiRunner(
       );
     const busy = before.find((runner) => runner.name === target.name && runner.busy);
     if (busy) write(`runner ${target.name}: was busy; its job ends unfinished`);
+    await checkDockerAfterVariable();
     await dockerOk(compose("stop", "--timeout", "30"), "CI_RUNNER_DOCKER_STOP_FAILED", {
       timeoutMs: 180000,
     });

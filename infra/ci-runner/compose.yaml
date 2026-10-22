@@ -17,6 +17,8 @@
 #   the token the operator script writes to its stdin, then keeps the registration in the
 #   `registration` volume, so a restart needs no new token.
 # No host bind mount, no host Docker socket, no published port and no secret in this file.
+# dind is privileged, so a job can still reach Docker Desktop's VM and every host folder
+# Docker Desktop shares: `up` requires a narrowed File sharing list (ADR-0014 risk (b)).
 # Images are pinned by digest; the tag is for readers.
 name: morrow-ci-runner
 services:

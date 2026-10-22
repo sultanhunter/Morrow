@@ -6,6 +6,8 @@ import {
   childEnvironments,
   ciRunner,
   createTools,
+  dockerSettingsFile,
+  hostShareProblem,
   parseArguments,
   parseContainers,
   parseRegistration,
@@ -26,6 +28,9 @@ const composePath = join(repositoryRoot, ciRunner.composeFile);
 const runnersPath = `repos/${ciRunner.repository}/actions/runners`;
 const variablePath = `repos/${ciRunner.repository}/actions/variables/${ciRunner.variable}`;
 const hostedLabels = ["self-hosted", "Linux", "ARM64", "morrow-mac"];
+const forkPath = `repos/${ciRunner.repository}/actions/permissions/fork-pr-workflows-private-repos`;
+const home = "/Users/owner";
+const narrowShares = JSON.stringify({ FilesharingDirectories: [home + "/Projects/other"] });
 
 // A small world: the repository variable, GitHub's runner list, each project's
 // registration volume and containers, and every call made.
@@ -38,6 +43,9 @@ function world({
   labels = hostedLabels,
   registerFails = false,
   staleOnce = false,
+  shares = narrowShares,
+  forkWorkflows = false,
+  dockerDown = false,
 } = {}) {
   const state = {
     variable,
@@ -48,6 +56,7 @@ function world({
     polls: 0,
     nextId: 100,
     staleOnce,
+    dockerDown,
   };
   const ok = (stdout = "") => ({ status: 0, stdout, stderr: "" });
   const fail = (stderr = "") => ({ status: 1, stdout: "", stderr });
@@ -56,6 +65,8 @@ function world({
     Object.values(ciRunner.instances).find((instance) => instance.project === project).name;
   const tools = {
     root: repositoryRoot,
+    home,
+    readDockerSettings: () => shares,
     async gh(args) {
       state.calls.push({ tool: "gh", args: [...args] });
       const [first, ...rest] = args;
@@ -75,6 +86,15 @@ function world({
           }),
         );
       }
+      if (first === "api" && args[1] === forkPath)
+        return ok(
+          JSON.stringify({
+            run_workflows_from_fork_pull_requests: forkWorkflows,
+            send_write_tokens_to_workflows: false,
+            send_secrets_and_variables: false,
+            require_approval_for_fork_pr_workflows: false,
+          }),
+        );
       if (first === "api" && args[1] === variablePath)
         return state.variable === null
           ? fail("gh: Not Found (HTTP 404)")
@@ -122,7 +142,7 @@ function world({
     },
     async docker(args, { input } = {}) {
       state.calls.push({ tool: "docker", args: [...args], input });
-      if (args[0] === "info") return ok(docker + "\n");
+      if (args[0] === "info") return state.dockerDown ? fail("Cannot connect") : ok(docker + "\n");
       if (args[0] === "inspect") {
         const stale = state.staleOnce;
         state.staleOnce = false;
@@ -265,6 +285,8 @@ test("up registers once, keeps the token off argv and output, and sets the varia
   assert.equal(state.variable, variableValue);
   assert.deepEqual(lines, [
     "docker: Docker Desktop, linux/aarch64",
+    "docker file sharing: narrowed (no home, /Volumes, temporary or checkout folder)",
+    "fork pull requests: run no workflows in this repository",
     "images: the pinned digests are present",
     "registration: registered morrow-mac-1 (id 100)",
     "stack morrow-ci-runner: dind running healthy, runner running",
@@ -349,6 +371,33 @@ test("up refuses any Docker other than Docker Desktop on arm64 before asking Git
   }
 });
 
+test("up refuses broad Docker Desktop file sharing and fork pull request workflows before any token or pull", async () => {
+  const cases = [
+    [JSON.stringify({ AutoStart: false }), "CI_RUNNER_HOST_SHARE_TOO_BROAD"],
+    [
+      JSON.stringify({ FilesharingDirectories: ["/Users/owner/.config/morrow"] }),
+      "CI_RUNNER_HOST_SHARE_TOO_BROAD",
+    ],
+    [null, "CI_RUNNER_HOST_SHARE_UNKNOWN"],
+  ];
+  for (const [shares, code] of cases) {
+    const setup = world({ shares });
+    await assert.rejects((await run(["up"], setup)).promise, { code });
+    assert.ok(
+      !setup.state.calls.some((call) => call.args[2] === "POST" || call.args[5] === "--profile"),
+    );
+    assert.ok(!setup.state.calls.some((call) => call.args[1] === forkPath));
+  }
+  const fork = world({ forkWorkflows: true });
+  await assert.rejects((await run(["up"], fork)).promise, {
+    code: "CI_RUNNER_FORK_PR_WORKFLOWS_ON",
+  });
+  assert.ok(
+    !fork.state.calls.some((call) => call.args[2] === "POST" || call.args[5] === "--profile"),
+  );
+  assert.equal(fork.state.variable, null);
+});
+
 test("up recreates a runner left in a restarted dind's old network namespace", async () => {
   const setup = world({ staleOnce: true });
   const { promise, lines } = await run(["up"], setup);
@@ -365,18 +414,62 @@ test("up recreates a runner left in a restarted dind's old network namespace", a
   assert.ok(lines.includes("runner network: was stale, runner recreated"));
 });
 
-test("pause deletes the variable only when it is set and touches nothing else", async () => {
-  const set = world({ variable: variableValue });
-  const first = await run(["pause"], set);
-  await first.promise;
-  assert.equal(set.state.variable, null);
-  assert.ok(first.lines[0].startsWith("MORROW_CI_RUNS_ON: deleted;"));
-  assert.ok(!set.state.calls.some((call) => call.tool === "docker"));
-  const unset = world();
+test("pause deletes the variable, then stops every stack it finds and keeps their registration", async () => {
+  const setup = world();
   await (
-    await run(["pause"], unset)
+    await run(["up"], setup)
   ).promise;
-  assert.ok(!unset.state.calls.some((call) => call.args[1] === "delete"));
+  const { state } = setup;
+  state.calls.length = 0;
+  const { promise, lines } = await run(["pause"], setup);
+  await promise;
+  assert.equal(state.variable, null);
+  const del = index(state, (c) => c.args[0] === "variable" && c.args[1] === "delete");
+  const stops = state.calls.filter((c) => c.args[5] === "stop");
+  assert.deepEqual(
+    stops.map((c) => c.args.slice(4)),
+    [["morrow-ci-runner", "stop", "--timeout", "30"]],
+  );
+  assert.ok(0 <= del && del < state.calls.indexOf(stops[0]));
+  // Offline, still registered: no deregistration, no volume removal, no token.
+  assert.ok(
+    !state.calls.some((c) => ["DELETE", "POST"].includes(c.args[2]) || c.args[5] === "down"),
+  );
+  assert.deepEqual(
+    state.runners.map((runner) => [runner.name, runner.status]),
+    [["morrow-mac-1", "offline"]],
+  );
+  assert.deepEqual(state.registrations["morrow-ci-runner"], { id: 100, name: "morrow-mac-1" });
+  assert.equal(lines[0], "MORROW_CI_RUNS_ON: deleted; ci.yml runs on GitHub-hosted runners");
+  assert.ok(lines[1].startsWith("stack morrow-ci-runner: stopped; morrow-mac-1 is offline"));
+  assert.equal(lines[2], "stack morrow-ci-runner-2: no containers");
+  // Already unset and nothing running: nothing to delete or stop.
+  const empty = world();
+  await (
+    await run(["pause"], empty)
+  ).promise;
+  assert.ok(!empty.state.calls.some((c) => c.args[1] === "delete" || c.args[5] === "stop"));
+});
+
+test("pause and down settle the variable first, even when Docker Desktop is unavailable", async () => {
+  for (const argv of [["pause"], ["down"]]) {
+    const setup = world();
+    await (
+      await run(["up"], setup)
+    ).promise;
+    setup.state.dockerDown = true;
+    setup.state.calls.length = 0;
+    const { promise, lines } = await run(argv, setup);
+    await assert.rejects(promise, { code: "CI_RUNNER_DOCKER_UNAVAILABLE" });
+    assert.ok(setup.state.calls.some((c) => c.args[0] === "variable" && c.args[1] === "delete"));
+    assert.equal(setup.state.variable, null, argv[0]);
+    // The stack and the registration are untouched; the output says what is left.
+    assert.ok(!setup.state.calls.some((c) => c.args[2] === "DELETE" || c.args[0] === "compose"));
+    assert.equal(
+      lines.at(-1),
+      `docker: CI_RUNNER_DOCKER_UNAVAILABLE; the variable is settled, the stack is unchanged: run \`${argv[0]}\` again once Docker Desktop runs`,
+    );
+  }
 });
 
 test("down deletes the variable first, then stops, deregisters and removes the volumes", async () => {
@@ -437,6 +530,7 @@ test("status reads the variable, the runners and the stack, and changes nothing"
   assert.deepEqual(lines, [
     "MORROW_CI_RUNS_ON: set: ci.yml runs on the Mac runners",
     "runner morrow-mac-1: online, idle, labels as expected",
+    "docker file sharing: narrowed (no home, /Volumes, temporary or checkout folder)",
     "stack morrow-ci-runner: dind running healthy, runner running",
   ]);
   for (const call of setup.state.calls)
@@ -549,4 +643,74 @@ test("the parsers accept only closed shapes", () => {
     true,
   );
   assert.deepEqual(redactedTail(`a\n${token}\n\u0007b\n`, token), ["a", "[redacted]", "b"]);
+});
+
+test("only a narrowed Docker Desktop file sharing list passes, whatever its spelling", () => {
+  const root = "/Users/owner/Desktop/Morrow";
+  const check = (list, extra = {}) =>
+    hostShareProblem(JSON.stringify({ FilesharingDirectories: list, ...extra }), { home, root });
+  assert.equal(dockerSettingsFile, "Library/Group Containers/group.com.docker/settings-store.json");
+  for (const list of [
+    [],
+    [home + "/Projects/other", "/Volumes/External/data", "/opt/data"],
+    [home + "/Projects/config"],
+  ])
+    assert.equal(check(list), null, JSON.stringify(list));
+  // Docker Desktop's defaults, each of them, and the folders that hold the home folder, the
+  // checkout, the temporary folders or /Volumes, in any spelling.
+  for (const entry of [
+    "/Users",
+    "/Volumes",
+    "/private",
+    "/tmp",
+    "/var/folders",
+    "/",
+    "/users/OWNER/",
+    "//Users/owner",
+    home + "/Projects/..",
+    "/System/Volumes/Data",
+    "/System/Volumes/Data/Users",
+    "/private/var",
+    "/var/folders/ab/xyz/T",
+    "/private/tmp/scratch",
+    "/tmp/claude-501",
+    "/Users/owner/Desktop",
+    root,
+    root + "/.git/hooks",
+    home + "/.config",
+    home + "/.config/morrow/staging",
+    home + "/.ssh",
+    home + "/.zshrc",
+    home + "/Library",
+    home + "/library/LaunchAgents",
+  ])
+    assert.equal(check([home + "/Projects/other", entry]), "CI_RUNNER_HOST_SHARE_TOO_BROAD", entry);
+  // The older lower-case key counts too; an absent key means Docker Desktop's defaults.
+  assert.equal(
+    hostShareProblem(JSON.stringify({ filesharingDirectories: ["/Users"] }), { home, root }),
+    "CI_RUNNER_HOST_SHARE_TOO_BROAD",
+  );
+  assert.equal(
+    hostShareProblem(JSON.stringify({ AutoStart: false }), { home, root }),
+    "CI_RUNNER_HOST_SHARE_TOO_BROAD",
+  );
+  // Unreadable, malformed, relative entries or an unusable home folder: refused.
+  for (const [text, options] of [
+    [null, { home, root }],
+    ["not json", { home, root }],
+    ["[]", { home, root }],
+    ["null", { home, root }],
+    [JSON.stringify({ FilesharingDirectories: "/Users/owner/x" }), { home, root }],
+    [JSON.stringify({ FilesharingDirectories: ["Projects"] }), { home, root }],
+    [JSON.stringify({ FilesharingDirectories: [7] }), { home, root }],
+    [JSON.stringify({ FilesharingDirectories: [] }), { home: "", root }],
+    [JSON.stringify({ FilesharingDirectories: [] }), { home: "/", root }],
+  ])
+    assert.equal(hostShareProblem(text, options), "CI_RUNNER_HOST_SHARE_UNKNOWN", String(text));
+  // The real tools read the settings file under HOME and nothing else.
+  assert.equal(createTools({ source: { PATH: "", HOME: "" } }).readDockerSettings(), null);
+  assert.equal(
+    createTools({ source: { PATH: "", HOME: "/nonexistent-morrow-ci-test" } }).readDockerSettings(),
+    null,
+  );
 });

@@ -26,8 +26,9 @@ concurrency:
 # the layout.
 # Every job runs on `ubuntu-24.04` unless the repository variable MORROW_CI_RUNS_ON holds a
 # JSON label list: `npm run ci:runner -- up` sets it to the owner's Mac runner, and `pause`
-# or `down` deletes it (ADR-0014, amendment of 2026-10-22). Only this workflow reads it, and
-# this workflow names no secret, so no secret reaches that runner.
+# or `down` deletes it and takes the runner offline (ADR-0014, amendment of 2026-10-22). Only
+# this workflow reads it, and it names no secret, so GitHub sends that runner no secret; the
+# runner's own exposure (shared host folders, its registration key) is in that amendment.
 jobs:
   # Writes no report, so it has no scan, upload or clean-tree steps.
   scope:

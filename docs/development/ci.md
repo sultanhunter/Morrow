@@ -143,7 +143,9 @@ GitHub-hosted Actions minutes ran out in October and reset on 1 November. On 202
 **How it works.** Every `ci.yml` job has `runs-on: ${{ fromJSON(vars.MORROW_CI_RUNS_ON || '"ubuntu-24.04"') }}`:
 - With the repository variable `MORROW_CI_RUNS_ON` unset, every job runs on `ubuntu-24.04`, as before.
 - With it set to `["self-hosted","linux","arm64","morrow-mac"]`, every job queues for the Mac runner. Job names do not change, so the required `foundation` check is the same.
-- No other workflow reads the variable. `deploy-staging.yml`, `heavy-faults.yml` and `frozen-regressions.yml` stay on GitHub-hosted runners. `ci.yml` names no secret, so no secret reaches the Mac.
+- No other workflow on `main` reads the variable. `deploy-staging.yml`, `heavy-faults.yml` and `frozen-regressions.yml` stay on GitHub-hosted runners.
+- The variable is configuration, not a control. GitHub cannot restrict a repository runner to one workflow. While the runner is online, any workflow in any branch can name its labels and run on it, with or without the variable. `pause` and `down` therefore also take the runner offline.
+- `ci.yml` names no secret, so GitHub sends no secret to the Mac. The Mac's own files are another matter: see File sharing below and the residual risks.
 - Until 1 November, staging deploys run locally with the staging CLI under `staging-card-1`.
 - Self-hosted jobs use no Actions minutes.
 
@@ -152,21 +154,30 @@ The stack is `infra/ci-runner/compose.yaml`: two containers in Docker Desktop, b
 - `runner` is the GitHub runner `morrow-mac-1` (`ghcr.io/actions/actions-runner:2.338.0`, Ubuntu 24.04 arm64, passwordless `sudo` for `playwright install --with-deps`). It shares `dind`'s network namespace, so `127.0.0.1`, published ports and job containers' bridge addresses behave as on a hosted runner. It reaches the daemon at `/var/run/docker.sock`, the endpoint the `pgwire` and `ui` labs require.
 - Both mount one named volume at `/home/runner/_work` (checkouts, `_tool`, `_temp`). A `docker run --volume <path under _work>` therefore resolves inside `dind`. There is no host bind mount and no host Docker socket.
 - Before each job, a job-started hook (`ACTIONS_RUNNER_HOOK_JOB_STARTED`) removes every container and network left in the runner's own daemon, for example by a cancelled job, so each job starts as on a fresh hosted runner. Images stay as a cache. The checkout is cleaned by `actions/checkout` and `_temp` by the runner.
-- The runner's registration (`.runner`, `.credentials`, `.credentials_rsaparams`: its own key pair, not a GitHub token) is kept in a named volume, so a Mac reboot or a container restart needs no new token. The runner updates itself.
+- The runner's registration (`.runner`, `.credentials`, `.credentials_rsaparams`) is kept in a named volume, so a container restart needs no new token. After a Mac reboot, the runner comes back once Docker Desktop runs again. Its key pair is a credential that any job can read (see the residual risks), and only `down` revokes it. The runner updates itself.
 - Jobs queue on the one runner, so a full run takes the sum of its job times. On GitHub-hosted runners that sum was about 50 minutes (push run 39498651638); on the Mac it depends on the Mac's load.
+
+**Before the first `up`: narrow Docker Desktop's File sharing.** Any job can reach every host folder that Docker Desktop shares, and can read and write it with your permissions (residual risk (b)). Docker Desktop's default list (`/Users`, `/Volumes`, `/private`, `/tmp`, `/var/folders`) includes `~/.config/morrow`, `~/.ssh`, your shell files, `~/Library/LaunchAgents` and every checkout.
+- In Docker Desktop, open Settings, Resources, File sharing.
+- Remove every entry that Morrow does not need. Morrow's local labs bind-mount no host folder (they pass SQL on stdin), so Morrow needs none. Keep only folders that your other Docker work needs and whose contents you never run or keep secret.
+- Apply. Docker Desktop restarts, so do this while nothing runs in Docker.
+- `up` reads Docker Desktop's settings file (`~/Library/Group Containers/group.com.docker/settings-store.json`). It refuses with `CI_RUNNER_HOST_SHARE_TOO_BROAD` while any shared folder is or contains your home folder or `/Volumes`. It also refuses when a shared folder is, contains or lies inside the checkout, `/tmp` (where agents keep their worktrees) or `/var/folders`, or lies inside `~/Library` or a dot entry of your home folder. That includes Docker Desktop's defaults. `status` reports the same check.
+- Workflows from fork pull requests must stay disabled for this repository (today they are). `up` refuses with `CI_RUNNER_FORK_PR_WORKFLOWS_ON` otherwise.
 
 **Commands.** The owner runs these; agents never run `up` or `down`.
 
 ```sh
 npm run ci:runner -- up       # pull, register if needed, start, wait until online, set MORROW_CI_RUNS_ON
-npm run ci:runner -- status   # the variable, the runners on GitHub, the containers
-npm run ci:runner -- pause    # delete MORROW_CI_RUNS_ON: ci.yml goes back to GitHub-hosted runners
-npm run ci:runner -- down     # delete the variable, stop, deregister, remove containers and volumes
+npm run ci:runner -- status   # the variable, the runners on GitHub, File sharing, the containers
+npm run ci:runner -- pause    # delete MORROW_CI_RUNS_ON, stop both stacks: runners offline, still registered
+npm run ci:runner -- down     # delete the variable, stop, deregister (revokes the key), remove containers and volumes
 ```
 
 - `up` asks GitHub for a registration token only when the runner is not registered yet. The token stays in memory and reaches `config.sh` only on the stdin of a one-off `docker compose run --rm`: never argv, a file, a stored container configuration or output.
 - `up` sets the variable only after GitHub lists the runner online with exactly those labels.
-- `up` is safe to rerun. Rerun it when `status` reports a stale runner network (Docker restarted `dind` alone). Run it while the runner is idle: a changed image pin recreates the containers.
+- `up` is safe to rerun. Rerun it when `status` reports a stale runner network (Docker restarted `dind` alone), or after `pause`. Run it while the runner is idle: a changed image pin recreates the containers.
+- `pause` and `down` delete the variable before they check Docker, because the variable needs only `gh`. If Docker Desktop is not running, they still delete it, then stop with the Docker error; run them again once Docker Desktop runs.
+- `pause` keeps the registration and the volumes. GitHub deletes a runner that has been offline for 14 days; `up` then registers it again.
 
 **Adding a second runner.** `npm run ci:runner -- up --instance=2` starts a second, separate stack (`morrow-ci-runner-2`, runner `morrow-mac-2`) with its own daemon and volumes and the same labels, so two jobs run at once. `status --instance=2` and `down --instance=2` act on it. `down` keeps the variable while the other runner is online.
 
@@ -176,15 +187,15 @@ npm run ci:runner -- down     # delete the variable, stop, deregister, remove co
 - Disk inside Docker Desktop: about 2.3 GB of images, plus 2–4 GB of volumes (job images, the checkout and `node_modules`, Node in `_tool`, and Playwright's Chromium).
 - `down` removes everything except the two images.
 
-**Open pull requests** switch only once their branch contains this `ci.yml` (merge or rebase on `main`). Older heads still ask for `ubuntu-24.04`.
+**Open pull requests** switch on their next `pull_request` event (push a commit, or close and reopen), because GitHub reads `ci.yml` from the pull request's merge commit with `main`. Re-running a run created before this change keeps `ubuntu-24.04` and gets no runner until the hosted minutes reset; push or reopen instead. A pull request with a merge conflict runs nothing until the conflict is resolved.
 
-**Back to GitHub-hosted runners on 1 November.** Run `npm run ci:runner -- down`, or `pause` to keep the runner as a fallback. With the variable deleted, every job runs on `ubuntu-24.04` again and nothing in the repository changes. A job that was queued for the Mac before the variable was deleted keeps its labels. If no Mac runner is online, it waits until GitHub cancels it after 24 hours; rerun it.
+**Back to GitHub-hosted runners on 1 November.** Run `npm run ci:runner -- down`. `pause` deletes the variable and stops the runners, but it keeps the registration key and the volumes until `down`, so use it only for a short break. With the variable deleted, every job runs on `ubuntu-24.04` again and nothing in the repository changes. A job that was queued for the Mac before the variable was deleted keeps its labels. If no Mac runner is online, it waits until GitHub cancels it after 24 hours; rerun it.
 
 **Residual risks** (ADR-0014, amendment of 2026-10-22):
-- Anyone, and any GitHub App, with write access can run code on the Mac, inside the container.
-- The privileged `dind` can in principle reach Docker Desktop's VM and the host folders that Docker Desktop shares.
-- CI results depend on the Mac's integrity.
-- Timing checks may flake when the Mac is loaded; rerun once.
+- (a) Anyone, and any GitHub App, with write access can run code on the Mac, inside the container, by pushing a branch. This includes a branch that adds its own workflow naming the runner's labels, as long as the runner is online.
+- (b) Through the privileged `dind`, any job can take root in Docker Desktop's Linux VM. It can then read and write every host folder that Docker Desktop shares, with your permissions, which is why `up` requires a narrowed File sharing list. It also reaches whatever else Docker Desktop exposes to its VM, the Mac's network services and the local network. A dedicated Linux VM with no host mounts (Lima or colima with mounts disabled) would remove the shared-folder path. It is not adopted, because it needs new software on the Mac.
+- (c) CI results depend on the Mac's integrity. A job can tamper with the long-lived runner, its daemon and its `docker`, `work` and `registration` volumes. It can also copy the runner's registration key and run a listener as `morrow-mac-1` elsewhere, even after its author loses write access. That listener receives later `ci.yml` jobs and can report `foundation` results. Restarts, `up` and `pause` keep the key and the volumes. Only `down` revokes the key and clears the volumes. After removing anyone's write access, or on any suspicion, run `npm run ci:runner -- down` and then `up`. A just-in-time ephemeral runner, with a new key for every job, is the stronger alternative. It is not adopted, because a process holding a GitHub credential would have to create a registration for every job.
+- (d) Timing checks may flake when the Mac is loaded; rerun once.
 
 ## Running it locally
 

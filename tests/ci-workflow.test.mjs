@@ -1024,8 +1024,9 @@ test("the staging runner lab is in pg-http and runs once in CI, on the http leg"
 
 // ADR-0014, amendment of 2026-10-22: ci.yml alone may run on the owner's Mac runner, chosen
 // by the repository variable MORROW_CI_RUNS_ON (unset: GitHub-hosted ubuntu-24.04). It names
-// no secret and no environment, so no secret can reach that runner; the staging deploy, the
-// heavy faults and the frozen replay stay on GitHub-hosted runners.
+// no secret and no environment, so GitHub sends that runner no secret; the staging deploy, the
+// heavy faults and the frozen replay stay on GitHub-hosted runners. This pins main's files
+// only: GitHub cannot keep a branch's own workflow off an online runner (risk (a)).
 test("only ci.yml can run on the Mac runner, chosen by MORROW_CI_RUNS_ON, and it names no secret", () => {
   for (const file of workflowFiles)
     for (const [id, job] of Object.entries(workflows[file].jobs))
