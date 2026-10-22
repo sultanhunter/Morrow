@@ -1,6 +1,6 @@
 # ADR-0023 MVP redefinition: a lean, full-featured workspace where a shop's people and AI agents run the business together
 
-- Status: Accepted 2026-10-23 (owner decisions in chat; see Approval). Decisions 1 to 10 were approved with their recommended options ("yes to all recommended", Q12). Decision 11 (specialists) and billing option A, which amends decision 5 and the embedded part of decision 2, were approved the same day ("yes to both, go with option A and specialists", Q14).
+- Status: Decisions accepted 2026-10-23 (owner decisions in chat; see Approval). Decisions 1 to 10 were approved with their recommended options ("yes to all recommended", Q12). Decision 11 (specialists) and billing option A, which amends decision 5 and the embedded part of decision 2, were approved the same day ("yes to both, go with option A and specialists", Q14). The rest of this record is written from those answers; the owner's acceptance of the record as written is pending (Tier 3; see Approval, "Scope of the approval").
 - Date: 2026-10-23 (drafted 2026-10-22; revised 2026-10-23 for the approvals, the owner's addition to decision 1, decision 11 and billing option A)
 - Supersedes:
   - ADR-0021 item 1 (the invite-only listings beta as the launch target);
@@ -10,7 +10,7 @@
   - the CLAUDE.md constraint "MVP fast track (ADR-0021): launch the invite-only product-listings beta in `docs/plan/mvp.md` first".
 - Amends:
   - ADR-0001, as refined by ADR-0021: the launch plan is this record with `docs/plan/mvp.md`; once the project graph lands, its feature, agent, track and gate nodes carry the plan and `mvp.md` becomes generated (decision 10). `build-plan.md` stays the long-term plan of record;
-  - the CLAUDE.md constraint "No embedded domain workspace in this release": the standalone workspace stays the product, with a minimal embedded home in the Shopify admin (decision 2);
+  - the CLAUDE.md standalone-workspace constraint: it adds a minimal embedded home in the Shopify admin (setup, connection status, plan, pending approvals); "No embedded domain workspace in this release" stays (decision 2, as option A amends it);
   - ADR-0015: Shopify App Pricing is the only billing route at launch; the Stripe route stays built and switched off (decision 5);
   - ADR-0011 Q1 and ADR-0022, item by item, only through the companion records listed below, each before its dependent code.
 - Refines: ADR-0002 and ADR-0003 (process, decision 10).
@@ -20,7 +20,7 @@
   - ADR-0010 and ADR-0020 (tenancy and the migration administrator);
   - ADR-0014 (merge authority and the trunk);
   - any security invariant (see "Security invariants that do not change").
-- Affects: CLAUDE.md (the settled constraints; session step 1 once the graph command merges); `docs/plan/mvp.md`; the launch-order notes of `docs/plan/build-plan.md`; `docs/progress/STATUS.md`; `docs/briefs/mvp-architecture.md` and the M2 to M5 briefs (their beta framing; their designs are reused); `docs/decisions/providers.json` (through the companion records).
+- Affects: CLAUDE.md (the settled constraints; session step 1 once the graph command merges; the intro, session step 3 and the Delivery flow's PR rule once the owner approves their wording, see Consequences); `docs/plan/mvp.md`; the launch-order notes of `docs/plan/build-plan.md`; `docs/progress/STATUS.md`; `docs/briefs/mvp-architecture.md` and the M2 to M5 briefs (their beta framing; their designs are reused); `docs/decisions/providers.json` (through the companion records).
 - Number: an earlier draft for testing on the owner's live store used the number ADR-0023. It was never committed, and decision 2 supersedes it.
 
 ## Context
@@ -101,7 +101,7 @@ Morrow launches as a paid, lean but full-featured AI workspace where a Shopify s
    - A ledger, an orphan sweep and reconciliation before any retry. If E2B is off, computer tools answer `computer_unavailable`, Analyst and Inventory use TypeScript fallbacks, and uploads wait.
    - Next, after launch: a lasting paused workspace per agent, and allowlisted public web access through Morrow's own proxy, never sign-ins.
    - Hobby for staging, Pro at launch. If E2B is not qualified at launch, the owner chooses between the TypeScript fallbacks and holding launch; never automatic.
-   - E2B's written answers (the message was sent on 2026-10-23) block adapter code only.
+   - E2B's written answers (the questions were sent right after Q12, at about 18:41Z on 2026-10-22) block adapter code only.
 7. **Agent loop and model.** Approved 2026-10-23 with the recommended option (Q12).
    - A multi-turn loop with tool use, generalising `ListingsRunWorkflow` into one `AgentRunWorkflow`. Each tool call is its own durable step with the effective-authority check and a credit reservation. This changes `ModelCall@1` and ADR-0022 decision item 10 ("never sent: tools"), through the Agent loop and model companion record.
    - Each agent gets a model profile from the catalogue, set by the Owner or an Admin at install. This replaces the per-run model choice of ADR-0022 decision item 16; the versioned catalogue stays.
@@ -141,7 +141,7 @@ Morrow launches as a paid, lean but full-featured AI workspace where a Shopify s
 
 ### What stays
 
-- **From ADR-0021:** item 2, the production-grade architecture (Worker boundaries; Neon with FORCE RLS and restricted roles; versioned contracts and generated validators; one gateway; digest-bound approvals; the credit ledger; reconcile-before-retry); item 3, the security invariants unchanged; item 5, the lighter process, as decision 10 refines it; item 4's last sentence (the 18 packages, 80 parent tasks and 73 acceptance IDs are not the launch gate).
+- **From ADR-0021:** item 2, the production-grade architecture (Worker boundaries; Neon with FORCE RLS and restricted roles; versioned contracts and generated validators; one gateway; digest-bound approvals; the credit ledger; reconcile-before-retry); item 3, the security invariants unchanged; item 5, the lighter process, as decision 10 refines it; item 4's last sentence (the 18 packages, 80 parent tasks and 73 acceptance IDs are not the launch gate); its Consequences on the trimmed P04.T01i PR-B: card effect E11 stays suspended, and the rollback half of AC05, the hosted kill-race drill (AC14's hosted part), the keyring, rotation and rollback drills (AC15 to AC17) and the p95 report (AC19) stay past launch.
 - **From ADR-0022:** decision items 1 and 2 (the listings capabilities and the contract additions, the store `ResourceRef` and `StopRecord@1` among them); item 3, except the Coordinator in code (the store resource, the templates, installation grants and agent records); items 6 to 9 (the connector hostname, broker trust model v1, the executor logins, leases for background work); item 10's provider-neutral port, its no-fallback rule and Claude as the model provider; item 11's per-run and per-day USD caps, as a concept with new values; item 15 (the stops); item 16's versioned model catalogue; summary item 14 (one "Approve and apply" button for a solo owner, still two server commands).
 - **From the owner's decisions of 2026-10-22 (Q1):** decisions 2 to 5, 7 to 9 and 11 to 14. "Disconnect store", the stale-run sweep, the removed-model (404) alert, the maintenance sweep and the 48-hour fallback are approved and still to be built; they go on the tracks. Decision 1 (CI on the owner's Mac) was overtaken when the owner made the repository public (Q7, Q9); CI runs on GitHub-hosted runners. Decision 6 is replaced by decision 5, and decision 10 by decision 2.
 - **The merge train** landed as built, with a merge commit per PR (#37, #39 to #44). Until a companion record replaces an item, the code on `main` keeps following the ADR-0022 item it was built under, on development stores and staging only.
@@ -166,7 +166,7 @@ Each companion is material under ADR-0002 and gets its own short ADR, at most tw
 | Proactive authority | Mandates (tables, 90-day expiry, renew, revoke, notices, hand-over); the installation as the requester of a proactive run; the editor as a proposal's author; one typed confirmation per solo batch; the 4-hour "approval waiting" email; expired drafts drafted again (amends ADR-0011 Q1) | Authority |
 | Shopify public app | Distribution; the embedded home and session-token identity with its CSP; expiring-token custody; required and optional scopes; Level 1 and Level 2 requests (amends ADR-0022 decision items 4, 5 and 14) | Security, credential custody, public contracts, merchant data |
 | Billing and price | Shopify App Pricing with Morrow-enforced caps (the Billing API only if Shopify agrees); credits only after a confirmed usage record; the rate card; the plan price; the Stripe route kept off (amends ADR-0022 decision items 11 and 12, refines ADR-0015) | Money |
-| Agent loop and model | The multi-turn loop with tool use (changes `ModelCall@1`); per-agent model profiles; SpecialistSpec@1, child runs and the workspace's specialist model profile (amends ADR-0022 decision items 10 and 16) | Public contracts |
+| Agent loop and model | The multi-turn loop with tool use (changes `ModelCall@1`); per-agent model profiles; the model-based Coordinator with one level of specialists; SpecialistSpec@1, child runs and the workspace's specialist model profile (amends the Coordinator bullet of ADR-0022 decision item 3, deterministic code and one hop, and decision items 10 and 16) | Public contracts |
 | Specialist authority | The run-scoped installation kind; the Start document and transaction; Start replacing stage-and-activate for run-scoped installations; the SQL grant issuer for the Specialist ceiling; the one 24-hour clock; workspace-level rules binding specialists; the read filters | Authority, spend, public contracts |
 | Runtime and E2B | Per-run sandboxes; rules in code; uploads; the lasting workspace as the next step; E2B's written answers | Provider, security, retention |
 | Email | Inbound by forwarding; the outbound vendor (Resend), idempotency and status; support replies only | Provider, external messages |
@@ -193,6 +193,10 @@ Each keeps its owning tests.
 ## Consequences
 
 - **CLAUDE.md** changes three settled-constraint lines with this record: the MVP constraint, the standalone-and-embedded line, and a billing line. Session step 1 changes when the graph command merges. Its security invariants do not change.
+- **CLAUDE.md lines known to be stale.** Decision 10 (Q12) and option A (Q14) approved only the CLAUDE.md edits above, so three more lines stay as written until the owner approves new wording (with this record's pull request, or on the first weekly decision sheet). Until then, where they differ, this record and decision 10 govern:
+  - the intro's "one standalone web workspace and a thin Shopify connector" leaves out the minimal embedded home (decision 2);
+  - session step 3's "(ADR-0021, MVP fast track)": the launch plan is this record with `docs/plan/mvp.md`. Proposed: "(ADR-0023, which replaced ADR-0021's listings beta)";
+  - the Delivery flow's "one feature-sized PR per brief or packet": decision 10 sets one brief per track and small PRs behind default-off switches, stacks at most two deep, stacked PRs merged with a merge commit. Proposed: that rule, keeping "each PR changes observable behaviour or retires a named risk", with a change behind a default-off switch counting as observable.
 - **`docs/plan/mvp.md`** is rewritten as the launch plan: scope, agents and specialists, tracks, gates, dates and cut rules. `build-plan.md` keeps its text and gains launch-order notes pointing here.
 - **Planning dates,** from week 0 on Monday 2026-10-26:
   - week-4 checkpoint (G11) by Wednesday 2026-11-25: one agent, one proposal and one gateway apply on a development store, shown in a demo. If missed, Marketing, the computer forecast and specialists are cut at once;
@@ -219,7 +223,7 @@ Each keeps its owning tests.
 - **Billing option B, Shopify only with the Stripe code deleted** (decision 5 as first approved). Gives up ADR-0015's split for no saving now.
 - **Billing option C, both routes live at launch.** The most work: the Stripe India invitation, tax filing as the seller, refunds and disputes, and more review risk.
 - **Billing option D, a free app with everyone on Stripe** (Q13). Needs a written exemption Shopify is unlikely to give.
-- **No specialists at launch.** Simpler, but drops the owner's "one main agent and sub-agents" idea (Q12). It stays the fallback if a slip rule fires.
+- **No specialists at launch.** Simpler, but drops the owner's idea of "one main agent and then other sub agetns" (Q12). It stays the fallback if a slip rule fires.
 - **A standing specialist principal per workspace.** A new authority shape that shares grants across runs and needs kernel edits. Rejected for run-scoped installations.
 - **Auto-started specialists.** Every run spends credits; a person starts every one at launch.
 - **A skill registry with search and skill tools at launch.** Not needed for 12 skills. Later, for a large library.
@@ -253,8 +257,13 @@ The owner's statements in chat, verbatim. Dates are IST: Q1 to Q11 on 2026-10-22
 
 What these approve:
 - **Q11** is the direction: drop the beta; launch a lean, full-featured MVP.
-- **Q12** approves decisions 1 to 10, each with its recommended option, and the replacement of the earlier approvals this record lists under "What stays" and "What is dropped". "send the e2b message": the questions were sent to E2B support on 2026-10-23 (`docs/evidence/live/2026-10-23-e2b-support-questions.md`). The question about sub-agents is recorded as the owner's addition to decision 1.
-- **Q14** approves decision 11 with every recommended part, and billing option A: decision 5 becomes Shopify App Pricing with Morrow-enforced caps, with M5's Stripe code kept off and ADR-0015's split retained; decision 2's embedded part becomes the minimal embedded home; and CLAUDE.md keeps the standalone workspace as the product, allows the minimal embedded home and adds the billing split. Q14 also accepts this record.
+- **Q12** approves decisions 1 to 10, each with its recommended option, and the replacement of the earlier approvals listed in the working paper the owner read, which this record restates under "What stays" and "What is dropped". "send the e2b message": the questions were sent to E2B support right after Q12, at about 18:41Z on 2026-10-22, 00:11 IST on 2026-10-23 (`docs/evidence/live/2026-10-22-e2b-support-questions.md`). The question about sub-agents is recorded as the owner's addition to decision 1.
+- **Q14** approves decision 11 with every recommended part, and billing option A: decision 5 becomes Shopify App Pricing with Morrow-enforced caps, with M5's Stripe code kept off and ADR-0015's split retained; decision 2's embedded part becomes the minimal embedded home; and CLAUDE.md keeps the standalone workspace as the product, allows the minimal embedded home and adds the billing split.
 - **Q2 to Q4** chose the runtime and its provider, which decision 6 shapes. **Q5** keeps the planning date and relies on parallel tracks, which the merge lane then limits. **Q1** carries the 2026-10-22 decisions listed under "What stays". **Q6 to Q9** are recorded in `docs/evidence/live/2026-10-22-github-public-and-ci-runner.md` and ADR-0014 item 8.
+
+Scope of the approval:
+- **Decided by the answers:** the direction (Q11); decisions 1 to 10 with their recommended options, the replacements of earlier approvals and the CLAUDE.md edits that decision 10 names (Q12); decision 11 with every recommended part, and billing option A with the CLAUDE.md edits it names (Q14).
+- **Written from them:** this record's wording, including the decision bullets drawn from the working papers, "What stays" and "What is dropped", the companion-record table, the planning dates and the exact CLAUDE.md wording. These restate or apply the answers; where they differ, the answers govern.
+- **Pending:** the owner's acceptance of this record as written (Tier 3; asked as "Approve ADR-0023 as written?", with the answer and its date quoted here), and the wording of the stale CLAUDE.md lines named under Consequences.
 
 What this record does not approve: the code that depends on a companion record, which waits for that record; the first use of any provider or production effect, which keeps its per-action approval or card; and the owner's store as an install, which waits for App Review approval and the live-store ADR.

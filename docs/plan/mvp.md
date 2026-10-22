@@ -1,6 +1,6 @@
 # Morrow MVP: the launch plan (ADR-0023)
 
-This is the launch plan. [ADR-0023](../decisions/adr/ADR-0023-mvp-redefinition.md) (accepted 2026-10-23) records the owner's decisions behind it and supersedes ADR-0021's invite-only listings beta. `build-plan.md` stays the long-term roadmap and structure; where it differs on launch scope or order, this file and ADR-0023 win until launch. When the project graph lands (ADR-0023 decision 10), its feature, agent, track and gate nodes carry this plan and this file becomes generated from them.
+This is the launch plan. [ADR-0023](../decisions/adr/ADR-0023-mvp-redefinition.md) (its decisions approved by the owner on 2026-10-23) records the owner's decisions behind it and supersedes ADR-0021's invite-only listings beta. `build-plan.md` stays the long-term roadmap and structure; where it differs on launch scope or order, this file and ADR-0023 win until launch. When the project graph lands (ADR-0023 decision 10), its feature, agent, track and gate nodes carry this plan and this file becomes generated from them.
 
 Planning date: **public launch on Monday 2027-03-01**, in a range from mid-February (one clean App Review) to April 2027 (several rounds). Week 0 (W0) starts on Monday 2026-10-26.
 
@@ -76,13 +76,15 @@ Interfaces first: each track's first PR is its contract with a fake, merged in W
 
 The critical path: T0, then T1 and T2, then T4, then T12, then T17's simulated week, then submission and App Review. T8, T13 and T15 must be ready for submission. The merge lane, not coding, sets the pace: about four to six merges a day.
 
+The beta's former milestones, still cited in its briefs and code comments (`git show cbccb3a:docs/plan/mvp.md`), map to the tracks: M1 (staging live) to G2 and T1; M2 (Shopify connect) to T8; M3 (Listings agent) to T4 and T12; M4 (approve and apply) to T3 and T7; M5 (billing) to T13; M6 (beta readiness: the deletion path, production, legal pages, reconnect) to T14, T15, T8 and G9.
+
 ## Serial gates
 
 1. **G1, W0:** the owner's decisions. Done 2026-10-23 for decisions 1 to 11 and billing option A; companion records follow on the weekly sheet.
-2. **G2, W0 to W2:** the merge train lands, then one migrate. Done 2026-10-23 (ledger 38, deployed); the owner's first staging sign-in remains.
+2. **G2, W0 to W2:** the merge train lands, with `staging:migrate` after each merge that carries migrations. Done 2026-10-23 (ledger 38, deployed); the owner's first staging sign-in remains.
 3. **G3, W0:** the owner creates the Shopify Partner account, the public app record and two or three development stores with generated orders, customers and stock. Every Shopify test waits on it.
 4. **G4, W0:** an Anthropic staging key with a monthly spend limit; live evals need it by W3.
-5. **G5, W0 to W3:** E2B's written answers to the questions sent on 2026-10-23. They block adapter code only.
+5. **G5, W0 to W3:** E2B's written answers to the questions sent just after midnight IST on 2026-10-23 (`docs/evidence/live/2026-10-22-e2b-support-questions.md`). They block adapter code only.
 6. **G6, W1:** standing staging card 2, before `staging-card-1` ends on 2026-11-18.
 7. **G7, W1:** the email vendor and the sending domain's DNS.
 8. **G8, W1 to W2:** written questions to Shopify Partner support: the embedded home for a standalone workspace, and usage charges for credits.
@@ -125,4 +127,4 @@ The critical path: T0, then T1 and T2, then T4, then T12, then T17's simulated w
 
 ## Not at launch
 
-Automatic apply; lasting or paused agent computers, browsers and VM network access; the Chief of Staff and CMO; the agent builder and third-party or merchant-written agents and skills; "Keep this specialist", Member-started, auto-started or scheduled specialists; refunds, cancellations, order edits, fulfilment writes, prices, inventory quantity writes, theme writes and ad spend; Klaviyo, Meta, Google, Gorgias, Gmail, Slack and Drive; other upload types, rich editors, SSO and SCIM, multi-store, embeddings and a graph database; `read_all_orders`; soak and fault labs. Each stays in `build-plan.md` as the post-launch roadmap.
+Automatic apply; lasting or paused agent computers, browsers and VM network access; the Chief of Staff and CMO; the agent builder and third-party or merchant-written agents and skills; "Keep this specialist", Member-started, auto-started or scheduled specialists; refunds, cancellations, order edits, fulfilment writes, prices, inventory quantity writes, theme writes and ad spend; Klaviyo, Meta, Google, Gorgias, Gmail, Slack and Drive; other upload types, rich editors, SSO and SCIM, multi-store, embeddings and a graph database; `read_all_orders`; soak and fault labs; the elaborate staging tooling: rollback guards, the hosted kill-race, keyring, rotation and rollback drills and the p95 report (P04.T01i AC05's rollback half, AC14's hosted part, AC15 to AC17 and AC19; card effect E11 stays suspended). Each stays in `build-plan.md` as the post-launch roadmap.

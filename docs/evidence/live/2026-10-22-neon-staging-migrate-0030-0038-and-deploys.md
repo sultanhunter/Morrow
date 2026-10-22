@@ -1,4 +1,4 @@
-# 2026-10-23 Neon and Cloudflare: staging migrations 0030–0038 and deploys (merge train 2–7)
+# 2026-10-22 Neon and Cloudflare: staging migrations 0030–0038 and deploys (merge train 2–7)
 
 - **Approval.**
   - Staging card `staging-card-1`: effect E3 for `staging:migrate` on the `staging` branch after a green `foundation` on the `main` tip; effect E10 for `STAGING_SCHEMA_HEAD`, which `migrate` publishes; and effect E1 for the continuous deploys from `main` (flag on) and their reruns.

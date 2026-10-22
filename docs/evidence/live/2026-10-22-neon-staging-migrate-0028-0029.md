@@ -1,4 +1,4 @@
-# 2026-10-23 Neon: staging migrations 0028–0029 applied (M5 billing)
+# 2026-10-22 Neon: staging migrations 0028–0029 applied (M5 billing)
 
 - **Approval.** Staging card `staging-card-1`: effect E3 for `staging:migrate` on the `staging` branch after a green `foundation` on the `main` tip, effect E10 for `STAGING_SCHEMA_HEAD`, and effect E1 for the continuous deploy. The merge itself was under ADR-0014: PR #37, merged by Claude on its exact green head `5401325`.
 - **Exact action.** `npm run staging:migrate` from the local `main` checkout at `7484df2` (#37's merge commit), right after `main`'s `foundation` push run 39840134758 succeeded (2026-10-22 UTC; 2026-10-23 IST).
