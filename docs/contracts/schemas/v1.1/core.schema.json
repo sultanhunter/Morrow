@@ -5850,6 +5850,442 @@
         "effort"
       ],
       "additionalProperties": false
+    },
+    "ListingProductId": {
+      "description": "A product of a connected Shopify store as Morrow names it (ADR-0022 item 1): product:<numeric GID tail>.",
+      "type": "string",
+      "pattern": "^product:[1-9][0-9]{0,19}$"
+    },
+    "ListingFieldPath": {
+      "description": "One of the five listing FieldPaths of the catalog.content capabilities (ADR-0022 item 1). The set is fixed by the capability catalogue, not by a model catalogue.",
+      "enum": [
+        "descriptionHtml",
+        "seo.description",
+        "seo.title",
+        "tags",
+        "title"
+      ]
+    },
+    "ListingFieldPaths": {
+      "description": "A run's or a draft's listing fields: 1-5 distinct FieldPaths.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ListingFieldPath"
+      },
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true
+    },
+    "ListingSeo": {
+      "description": "A product's SEO title and description, as drafted: both strings (spine section 7: both are sent when either changes).",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 70
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 320
+        }
+      },
+      "required": [
+        "title",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "ListingTags": {
+      "description": "A product's tags as drafted: at most 50 distinct tags of 1-64 characters.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "maxItems": 50,
+      "uniqueItems": true
+    },
+    "ListingDraft": {
+      "description": "ListingDraft@1 (ADR-0022 item 2; M3 PR-2): the model's proposed listing for exactly one product, the product it names and only the fields it changes. Sent to the model as the strict output schema ListingDraft_v1 (generated from this definition: every field required and nullable, no length keywords) and validated again with this definition, its HTML sanitised and its fields restricted to the run's in code. It is untrusted model output: it never names a capability, store, price or model.",
+      "type": "object",
+      "properties": {
+        "productId": {
+          "$ref": "#/$defs/ListingProductId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "descriptionHtml": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "seo": {
+          "$ref": "#/$defs/ListingSeo"
+        },
+        "tags": {
+          "$ref": "#/$defs/ListingTags"
+        }
+      },
+      "required": [
+        "productId"
+      ],
+      "additionalProperties": false
+    },
+    "ListingSnapshot": {
+      "description": "One product's listing fields as read from the store (spine sections 7 and 8): the content-addressed snapshot whose digest is a proposal target's expectedSourceRevision. Store content (90 days; deleted at shop/redact).",
+      "type": "object",
+      "properties": {
+        "productId": {
+          "$ref": "#/$defs/ListingProductId"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "descriptionHtml": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "seo": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 65536
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 65536
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "title",
+            "description"
+          ],
+          "additionalProperties": false
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 65536
+          },
+          "maxItems": 250,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "productId",
+        "title",
+        "descriptionHtml",
+        "seo",
+        "tags"
+      ],
+      "additionalProperties": false
+    },
+    "CatalogContentSet": {
+      "description": "The change of one product in a CatalogContentChangeSet@1: exactly the fields of its target (title, descriptionHtml, the SEO pair, tags), within the spine section 7 bounds. There is no free-text note.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "descriptionHtml": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "seo": {
+          "$ref": "#/$defs/ListingSeo"
+        },
+        "tags": {
+          "$ref": "#/$defs/ListingTags"
+        }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
+    "CatalogContentChangeSet": {
+      "description": "CatalogContentChangeSet@1 (ADR-0022 item 2; spine section 7): the parameters of one catalog.content.publish Proposal@2, one item per target in target order, each the exact change of its product. Stored as the proposal's parameters artifact (emptied, digest kept, at shop/redact).",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "targetIndex": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 99
+              },
+              "productId": {
+                "$ref": "#/$defs/ListingProductId"
+              },
+              "set": {
+                "$ref": "#/$defs/CatalogContentSet"
+              }
+            },
+            "required": [
+              "targetIndex",
+              "productId",
+              "set"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "storeId",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "CoordinatorRoute": {
+      "description": "CoordinatorRoute@1 (ADR-0022 items 2 and 3; M3 PR-2): the route the built-in Coordinator (deterministic code in the beta) writes for one run: ids only. Stored with its run; a model-based Coordinator writes the same record later.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "dispatcher": {
+          "const": "builtin_coordinator"
+        },
+        "specialist": {
+          "const": "morrow.listings"
+        },
+        "organizationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "workspaceId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "runId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "taskId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "childTaskId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "installationId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "storeId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "connectionId": {
+          "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+        },
+        "products": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ListingProductId"
+          },
+          "minItems": 1,
+          "maxItems": 25,
+          "uniqueItems": true
+        },
+        "fields": {
+          "$ref": "#/$defs/ListingFieldPaths"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "dispatcher",
+        "specialist",
+        "organizationId",
+        "workspaceId",
+        "runId",
+        "taskId",
+        "childTaskId",
+        "installationId",
+        "storeId",
+        "connectionId",
+        "products",
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "ModelCall": {
+      "description": "ModelCall@1 (ADR-0022 items 2 and 10; M3 PR-2): one call of the provider-neutral model gateway (the broker's modelRespond). Closed: it names no provider, provider model ID, model selection, catalogue version, token limit or price; the broker reads the selection and catalogue version from the run its lease names, so a call that names one fails validation before any request. It carries the merchant's request text, the run's fields and exactly one product as read, and the fence keys of the attempt (product index, attempt 1-2, sequence of a resend after a throttle).",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "purpose": {
+          "const": "listing_draft"
+        },
+        "productIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 24
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "request": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "fields": {
+          "$ref": "#/$defs/ListingFieldPaths"
+        },
+        "product": {
+          "$ref": "#/$defs/ListingSnapshot"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "purpose",
+        "productIndex",
+        "attempt",
+        "sequence",
+        "request",
+        "fields",
+        "product"
+      ],
+      "additionalProperties": false
+    },
+    "ModelResult": {
+      "description": "ModelResult@1 (ADR-0022 items 2 and 10; M3 PR-2): the gateway's provider-neutral result. completed carries the structurally checked output (the caller still validates it as ListingDraft@1); incomplete, refusal, invalid_output and uncertain counted an attempt; spend_limit and provider_error end the run; not_sent (with retryAfterMs when the provider asked to wait) and input_over_cap generated nothing. It never names a provider, provider request ID, provider model ID or raw stop reason: traceRef is an opaque reference to the run manifest's call entry, where the broker records them.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "outcome": {
+          "enum": [
+            "completed",
+            "incomplete",
+            "refusal",
+            "invalid_output",
+            "spend_limit",
+            "provider_error",
+            "uncertain",
+            "not_sent",
+            "input_over_cap"
+          ]
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListingDraft"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "inputTokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000000
+                },
+                "outputTokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000000
+                }
+              },
+              "required": [
+                "inputTokens",
+                "outputTokens"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "traceRef": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "model_call"
+                },
+                "id": {
+                  "$ref": "urn:morrow:contracts:core:v1#/$defs/Id"
+                }
+              },
+              "required": [
+                "kind",
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retryAfterMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 120000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "outcome",
+        "output",
+        "usage",
+        "traceRef",
+        "retryAfterMs"
+      ],
+      "additionalProperties": false
     }
   }
 }
