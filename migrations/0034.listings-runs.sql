@@ -947,7 +947,10 @@ END $$;
 -- products whose drafts were proposed (never above the reservation; nothing proposed
 -- releases them); the status moves along the named edge; the envelope and hop are revoked;
 -- the run's event is appended. The caller holds the run's lock and has closed every open
--- call. Outcomes: ended (with the status and the credits settled), invalid.
+-- call. The lock order everywhere is the workspace stream, then the run, then the rest
+-- (each API command's prelude takes the stream first): the stream is taken here before
+-- any credit or cost row (a no-op when the caller already holds it). Outcomes: ended (with
+-- the status and the credits settled), invalid.
 CREATE FUNCTION morrow_work.run_end(p_org text,p_ws text,p_run_id text,p_status text,p_actor text,p_guard text,p_reason text)
 RETURNS TABLE(outcome text,status text,credits_settled text)
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
@@ -961,6 +964,7 @@ BEGIN
  END IF;
  IF EXISTS(SELECT 1 FROM morrow_work.run_model_calls x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.run_id=p_run_id
    AND x.status='started') THEN RAISE EXCEPTION 'WORK_RUN_CALL_OPEN'; END IF;
+ PERFORM 1 FROM morrow_work.workspace_streams w WHERE w.organization_id=p_org AND w.workspace_id=p_ws FOR UPDATE;
  v_now:=date_trunc('milliseconds',clock_timestamp());
  FOR p IN SELECT x.product_index,x.status FROM morrow_work.run_products x WHERE x.organization_id=p_org AND x.workspace_id=p_ws
    AND x.run_id=p_run_id AND x.status IN ('pending','in_progress') ORDER BY x.product_index LOOP
@@ -994,7 +998,6 @@ BEGIN
   WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=r.envelope_id AND x.revoked_at IS NULL;
  UPDATE morrow_work.delegation_hops x SET revoked_at=greatest(v_now,x.created_at)
   WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=r.hop_id AND x.revoked_at IS NULL;
- PERFORM 1 FROM morrow_work.workspace_streams w WHERE w.organization_id=p_org AND w.workspace_id=p_ws FOR UPDATE;
  PERFORM morrow_work.append_event(p_org,p_ws,r.requester_principal_id,r.requester_membership_id,'run.status_changed','run',p_run_id,
   r.revision+1,r.task_id,jsonb_build_object('from',r.status,'to',p_status,'reason',p_reason),'run:'||p_run_id,v_now);
  RETURN QUERY SELECT 'ended'::text,p_status,s.credits_settled;
@@ -1006,8 +1009,11 @@ END $$;
 -- its credits settle at the products proposed, and it moves to cancelled through the
 -- work_service edges (queued: no_submitted_effects; running: submitted_effects_reconciled).
 -- p_requester null closes every stale run of the workspace (before an admission); a
--- principal closes only the runs it requested (the reconcile command). At most 25 runs per
--- call, oldest first. Returns the number closed.
+-- principal closes only the runs it requested (the reconcile command). The caller holds the
+-- workspace stream (its prelude); a run whose lock is held (a live step, or the broker
+-- closing a call) is skipped rather than waited for, so the stream holder never waits on a
+-- run, and the next close takes it; a run taken is rechecked under its lock. At most 25 runs
+-- per call, oldest first. Returns the number closed.
 CREATE FUNCTION morrow_work.runs_close_stale(p_org text,p_ws text,p_requester text) RETURNS integer
 LANGUAGE plpgsql SET search_path=pg_catalog,morrow_work,pg_temp AS $$
 DECLARE r record; c record; v_closed integer:=0; e record;
@@ -1018,7 +1024,13 @@ BEGIN
     AND (l.status<>'active' OR l.expires_at<=pg_catalog.clock_timestamp())
     AND (p_requester IS NULL OR x.requester_principal_id::text=p_requester)
    ORDER BY x.created_at,x.id LIMIT 25 LOOP
-  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.run',p_org,p_ws,r.id)::text,0));
+  IF NOT pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.run',p_org,p_ws,r.id)::text,0)) THEN
+   CONTINUE;
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM morrow_work.runs x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.id=r.id
+    AND x.status IN ('queued','running')) THEN
+   CONTINUE;
+  END IF;
   FOR c IN SELECT x.id::text AS id FROM morrow_work.run_model_calls x WHERE x.organization_id=p_org AND x.workspace_id=p_ws AND x.run_id=r.id
     AND x.status='started' LOOP
    PERFORM morrow_work.run_fence_close_uncertain(p_org,p_ws,c.id);
@@ -1302,7 +1314,10 @@ END $$;
 -- ---------------------------------------------------------------------------
 -- Runtime definers: SECURITY DEFINER, owned by the command role, EXECUTE for
 -- morrow_runtime_executor only; the tenant and the run come only from the entered run
--- lease (the run is the lease's subject). Each mutating definer takes the run's lock.
+-- lease (the run is the lease's subject). Each mutating definer takes the run's lock; the
+-- three that append an event or settle (run_start, submit_agent_proposal, run_finish) take
+-- the workspace stream first, as every API command's prelude does (stream, then run, then
+-- the rest), so a run step never waits on the stream while holding what a command waits on.
 -- The entered lease's run, locked: shared by the runtime definers below.
 -- Starts the entered lease's run: queued -> running (runtime, current_lease_and_grants), the
 -- lease marked started, the event appended. A running run is returned as it stands, a
@@ -1323,6 +1338,7 @@ BEGIN
    NULL::text,NULL::text,NULL::text,NULL::text;
   RETURN;
  END IF;
+ PERFORM 1 FROM morrow_work.workspace_streams w WHERE w.organization_id=l.organization_id AND w.workspace_id=l.workspace_id FOR UPDATE;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.run',l.organization_id,l.workspace_id,l.subject_id)::text,0));
  SELECT x.* INTO r FROM morrow_work.runs x WHERE x.organization_id=l.organization_id AND x.workspace_id=l.workspace_id AND x.id=l.subject_id
   AND x.lease_id=l.lease_id;
@@ -1336,7 +1352,6 @@ BEGIN
   UPDATE morrow_work.runs x SET status='running',status_actor='runtime',status_guard='current_lease_and_grants',started_at=greatest(v_now,x.created_at),
    revision=x.revision+1,updated_at=greatest(v_now,x.updated_at) WHERE x.organization_id=r.organization_id AND x.workspace_id=r.workspace_id AND x.id=r.id;
   PERFORM morrow_work.lease_mark_started();
-  PERFORM 1 FROM morrow_work.workspace_streams w WHERE w.organization_id=r.organization_id AND w.workspace_id=r.workspace_id FOR UPDATE;
   PERFORM morrow_work.append_event(r.organization_id,r.workspace_id,r.requester_principal_id,r.requester_membership_id,'run.status_changed','run',
    r.id,r.revision+1,r.task_id,jsonb_build_object('from','queued','to','running','reason',NULL),'run:'||r.id,v_now);
   v_outcome:='started';
@@ -1659,6 +1674,7 @@ BEGIN
  v_id:=d->>'id'; v_parameters_id:=d#>>'{parametersRef,id}';
  SELECT * INTO l FROM morrow_work.current_lease();
  IF NOT FOUND OR l.kind<>'run' THEN RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN; END IF;
+ PERFORM 1 FROM morrow_work.workspace_streams w WHERE w.organization_id=l.organization_id AND w.workspace_id=l.workspace_id FOR UPDATE;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.run',l.organization_id,l.workspace_id,l.subject_id)::text,0));
  SELECT x.* INTO r FROM morrow_work.runs x WHERE x.organization_id=l.organization_id AND x.workspace_id=l.workspace_id AND x.id=l.subject_id
   AND x.lease_id=l.lease_id;
@@ -1690,7 +1706,6 @@ BEGIN
    'capabilityIds','["catalog.content.publish"]'::jsonb,'resourceId',NULL))) q;
  IF NOT FOUND OR NOT f.membership_active OR NOT f.principal_active THEN RETURN QUERY SELECT 'denied'::text,NULL::text; RETURN; END IF;
  v_org_revision:=f.policy_revision;
- PERFORM 1 FROM morrow_work.workspace_streams w WHERE w.organization_id=r.organization_id AND w.workspace_id=r.workspace_id FOR UPDATE;
  v_now:=morrow_work.db_now();
  IF v_created<date_trunc('milliseconds',transaction_timestamp()) OR v_created>v_now THEN RETURN QUERY SELECT 'invalid'::text,NULL::text; RETURN; END IF;
  SELECT x.revision::bigint AS revision,x.digest::text AS digest,x.rules INTO pol FROM morrow_work.review_policies x
@@ -1780,6 +1795,7 @@ BEGIN
  END IF;
  SELECT * INTO l FROM morrow_work.current_lease();
  IF NOT FOUND OR l.kind<>'run' THEN RETURN QUERY SELECT 'denied'::text,NULL::text,NULL::text; RETURN; END IF;
+ PERFORM 1 FROM morrow_work.workspace_streams w WHERE w.organization_id=l.organization_id AND w.workspace_id=l.workspace_id FOR UPDATE;
  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(pg_catalog.jsonb_build_array('morrow.work.run',l.organization_id,l.workspace_id,l.subject_id)::text,0));
  SELECT x.* INTO r FROM morrow_work.runs x WHERE x.organization_id=l.organization_id AND x.workspace_id=l.workspace_id AND x.id=l.subject_id
   AND x.lease_id=l.lease_id;
