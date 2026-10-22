@@ -231,6 +231,29 @@ export async function admissionAllowed(
   return true;
 }
 const randomUuid = () => crypto.randomUUID();
+// The admission's reply body, the same for a new run and a replay of its recorded result:
+// ids, the selection and counts, numbers as numbers.
+function admittedBody(result: Record<string, unknown>) {
+  const count = (v: unknown) => {
+    const n = typeof v === "string" ? Number(v) : v;
+    if (typeof n !== "number" || !Number.isSafeInteger(n) || n < 0)
+      throw new WorkContextUnavailable();
+    return n;
+  };
+  const id = (v: unknown) => {
+    if (typeof v !== "string") throw new WorkContextUnavailable();
+    return v;
+  };
+  return {
+    runId: id(result.runId),
+    status: id(result.status),
+    childTaskId: id(result.childTaskId),
+    productCount: count(result.productCount),
+    creditsReserved: count(result.creditsReserved),
+    catalogueVersion: count(result.catalogueVersion),
+    selection: { model: id(result.model), effort: id(result.effort) },
+  };
+}
 
 async function admit(
   tx: WorkTx,
@@ -242,7 +265,11 @@ async function admit(
   const body = prepared.parsed as AdmitBody;
   const a = await context(tx, g);
   const replay = await begin(tx, g, prepared);
-  if (replay) return replay;
+  if (replay)
+    return {
+      ...replay,
+      body: { ...admittedBody(replay.body), replayed: true },
+    };
   const taskId = g.params.taskId!;
   const O = a.actor.organizationId;
   const W = a.resource.workspaceId;
@@ -350,7 +377,11 @@ async function admit(
     randomUuid(),
     listingsWorkflowVersion,
   ]);
-  return { status: 201, body: { ...result, defaulted: resolved.defaulted }, outcome: "applied" };
+  return {
+    status: 201,
+    body: admittedBody(result),
+    outcome: "applied",
+  };
 }
 
 async function reconcile(

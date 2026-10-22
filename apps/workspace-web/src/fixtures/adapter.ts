@@ -15,6 +15,9 @@ import {
   type Page,
   type PortMethod,
   type QuestionView,
+  type RunAdmittedView,
+  type RunDetailView,
+  type RunView,
   type TaskView,
   type WorkspacePort,
 } from "@morrow/workspace-ui";
@@ -161,6 +164,10 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
     revision: null as number | null,
     canRevise: true,
   };
+  // M3 PR-2 fixture runs: an admitted run drafts at once (the fixture has no Workflow);
+  // product:13 is "too long" and fails, as an input over the cap would.
+  const runs: RunDetailView[] = [];
+  const runId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
   return {
     session: {
       startSignIn: () => reply("session.startSignIn", () => ok({ navigateTo: "/" })),
@@ -467,6 +474,104 @@ export function createFixtureAdapter(scenario: ScenarioName): WorkspacePort {
             revision: listings.revision,
           });
         }),
+    },
+    runs: {
+      admit: (id, taskId, c) =>
+        command<RunAdmittedView>("runs.admit", c, () => {
+          if (!ws(id) || !task(taskId)) return notFound;
+          if (c.body.storeId !== fixtureStore.storeId || !storeLinked())
+            return { kind: "not_found" };
+          if (listings.installationId === null || listings.status !== "active")
+            return {
+              kind: "conflict",
+              recheck: false,
+              message: "The Listings agent is not enabled for this store.",
+            };
+          const key = c.body.selection ?? {
+            model: modelDefault.model,
+            effort: modelDefault.effort,
+          };
+          const entry = fixtureCatalogue.find(
+            (e) => e.model === key.model && e.effort === key.effort,
+          );
+          if (!entry) return { kind: "invalid", field: null };
+          if (!modelDefault.canRevise && entry.creditsPerProduct > modelDefault.ceiling)
+            return {
+              kind: "denied",
+              message: "That model or effort is above your workspace's limit.",
+              reference: null,
+            };
+          if (c.body.products.length > entry.runProductLimit)
+            return {
+              kind: "conflict",
+              recheck: false,
+              message: "Too many products for this model and effort.",
+            };
+          created += 1;
+          const products = c.body.products.map((productId, index) => {
+            const failed = productId === "product:13";
+            return {
+              index,
+              productId,
+              status: failed ? "failed" : "drafted",
+              attempts: failed ? 0 : 1,
+              failureCode: failed ? "input_over_cap" : null,
+              proposalId: failed ? null : `proposal-${created}`,
+              flags: failed
+                ? null
+                : { newUrls: 0, newEmails: 0, newPhones: 0, tagsAdded: 0, tagsRemoved: 0 },
+            };
+          });
+          const drafted = products.filter((p) => p.status === "drafted").length;
+          const run: RunView = {
+            runId: runId(created),
+            taskId,
+            storeId: c.body.storeId,
+            status: drafted > 0 ? "succeeded" : "failed",
+            endedReason: drafted > 0 ? null : "nothing_drafted",
+            selection: { model: entry.model, effort: entry.effort },
+            creditsPerProduct: entry.creditsPerProduct,
+            productCount: products.length,
+            fields: [...c.body.fields],
+            productsDrafted: drafted,
+            productsFailed: products.length - drafted,
+            createdAt: at(),
+            endedAt: at(),
+          };
+          runs.unshift({
+            run,
+            credits: {
+              reserved: products.length * entry.creditsPerProduct,
+              settled: drafted * entry.creditsPerProduct,
+              status: drafted > 0 ? "settled" : "released",
+            },
+            usage: { attempts: drafted, inputTokens: 900 * drafted, outputTokens: 300 * drafted },
+            products,
+            interrupted: false,
+          });
+          return ok({
+            runId: run.runId,
+            childTaskId: runId(1000 + created),
+            productCount: products.length,
+            creditsReserved: products.length * entry.creditsPerProduct,
+            selection: run.selection,
+          });
+        }),
+      listOfTask: (id, taskId) =>
+        reply<readonly RunView[]>("runs.listOfTask", () =>
+          ws(id) && task(taskId)
+            ? ok(runs.filter((r) => r.run.taskId === taskId).map((r) => r.run))
+            : notFound,
+        ),
+      get: (id, runIdValue) =>
+        reply<RunDetailView>("runs.get", () => {
+          const found = runs.find((r) => r.run.runId === runIdValue);
+          return ws(id) && found ? ok(found) : notFound;
+        }),
+      reconcile: (id, c) =>
+        command<{ readonly closed: number }>("runs.reconcile", c, () =>
+          ws(id) ? ok({ closed: 0 }) : notFound,
+        ),
     },
     models: {
       list: (id) =>

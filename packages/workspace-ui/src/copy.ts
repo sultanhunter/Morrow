@@ -265,6 +265,7 @@ export const copy = {
       cancel: "cancelling a question",
       agent: "a change to the Listings agent",
       model_default: "the default model",
+      run: "a Listings run",
     },
     body: (kind: string) =>
       `A change you started earlier (${kind}) may have been saved. Check Work before creating it again.`,
@@ -353,6 +354,114 @@ export const copy = {
       high: "High",
     } as Readonly<Record<string, string>>,
   },
+  // M3 PR-2: Ask (a Listings run on picked products) and the task's Runs tab.
+  ask: {
+    title: "Ask",
+    intro:
+      "Ask the Listings agent to draft better listings for products you pick. It only proposes changes; you review and approve each one, and nothing is published in this build.",
+    request: "What should change?",
+    requestHint:
+      "Up to 8,192 characters. The agent treats product text as data, never as instructions.",
+    store: "Store",
+    noStores: "Connect a store and enable the Listings agent for it first.",
+    products: "Products",
+    productsHint:
+      "One product per line, as its Shopify product number or product:<number>. Up to 25. A product picker arrives with the catalog in a later build.",
+    fields: "Fields to improve",
+    fieldsHint: "SEO title and description are drafted together.",
+    seoPair: "SEO title and description",
+    model: "Model and effort",
+    modelDefault: (label: string) => `Workspace default (${label})`,
+    modelNotAllowed: "above your ceiling",
+    estimate: (credits: number, products: number) =>
+      `Reserves up to ${credits} ${credits === 1 ? "credit" : "credits"} for ${products} ${products === 1 ? "product" : "products"}. Only products drafted are charged; the rest is returned.`,
+    overLimit: (limit: number) => `This model and effort allow up to ${limit} products per run.`,
+    invalidProducts: "Each line must be a product number or product:<number>, without repeats.",
+    submit: "Start drafting",
+    starting: "Starting…",
+    goalCriterion: "Listing drafts ready for review",
+    stepGoal: "Creating the goal",
+    stepTask: "Creating the task",
+    stepRun: "Starting the run",
+    started: "Drafting started. Opening the task…",
+    refusals: {
+      unavailable: "AI drafting isn't available yet. Nothing was reserved.",
+    },
+  },
+  runs: {
+    tab: "Runs",
+    empty: "No runs on this task yet.",
+    run: (n: number) => `Run ${n}`,
+    selection: (model: string, effort: string) => `${model} · ${effort}`,
+    progress: (drafted: number, failed: number, total: number) =>
+      `${drafted} drafted · ${failed} failed · ${total} products`,
+    showDetails: "Show details",
+    hideDetails: "Hide details",
+    creditsReserved: (n: number) => `${n} ${n === 1 ? "credit" : "credits"} reserved`,
+    creditsSettled: (n: number) => `${n} ${n === 1 ? "credit" : "credits"} charged`,
+    creditsReleased: "Credits returned",
+    usage: (attempts: number, input: number, output: number) =>
+      `${attempts} model ${attempts === 1 ? "call" : "calls"} · ${input} input and ${output} output tokens`,
+    product: "Product",
+    attempts: (n: number) => `${n} ${n === 1 ? "attempt" : "attempts"}`,
+    proposal: "In a proposal for review",
+    flags: (f: {
+      newUrls: number;
+      newEmails: number;
+      newPhones: number;
+      tagsAdded: number;
+      tagsRemoved: number;
+    }) =>
+      [
+        f.newUrls ? `${f.newUrls} new ${f.newUrls === 1 ? "link" : "links"}` : null,
+        f.newEmails ? `${f.newEmails} new ${f.newEmails === 1 ? "email" : "emails"}` : null,
+        f.newPhones
+          ? `${f.newPhones} new ${f.newPhones === 1 ? "phone number" : "phone numbers"}`
+          : null,
+        f.tagsAdded ? `${f.tagsAdded} ${f.tagsAdded === 1 ? "tag" : "tags"} added` : null,
+        f.tagsRemoved ? `${f.tagsRemoved} ${f.tagsRemoved === 1 ? "tag" : "tags"} removed` : null,
+      ]
+        .filter((x) => x !== null)
+        .join(" · "),
+    interrupted:
+      "This run was stopped or ran out of time before it finished. Close it to return its unused credits.",
+    reconcile: "Close and return credits",
+    reconciled: (n: number) =>
+      n === 0
+        ? "Nothing to close."
+        : `${n} ${n === 1 ? "run" : "runs"} closed; unused credits returned.`,
+    endedReasons: {
+      breaker: "Stopped after three products in a row failed",
+      unrecovered_cost_cap: "Stopped: this period's limit for failed products is reached",
+      spend_limit: "Stopped: the AI provider's spending limit is reached",
+      provider_error: "Stopped: the AI provider returned an error",
+      cost_overflow: "Stopped: the run's AI cost limit is reached",
+      reservation_exhausted: "Stopped: the run's reservation is used up",
+      time_budget: "Stopped: the run ran out of time",
+      delegation_denied: "Stopped: the agent's permission changed",
+      entitlement: "Stopped: the workspace's plan isn't active",
+      broker_held: "Stopped: AI drafting became unavailable",
+      read_unavailable: "Stopped: the store couldn't be read",
+      nothing_drafted: "No product could be drafted",
+      stopped: "Stopped by Stop AI work",
+      lease_ended: "Closed after it ran out of time",
+    } as Readonly<Record<string, string>>,
+    failureCodes: {
+      validation: "The draft didn't pass the checks",
+      product_mismatch: "The draft named another product",
+      incomplete: "The draft was cut off",
+      refusal: "The model declined",
+      invalid_output: "The model's answer wasn't valid",
+      uncertain: "The model's answer was lost",
+      input_over_cap: "The product is too long to draft",
+      read_failed: "The product couldn't be read",
+      too_large: "The product is too large",
+      provider_error: "The AI provider returned an error",
+      spend_limit: "The AI provider's spending limit is reached",
+      reservation_exhausted: "The run's reservation is used up",
+      interrupted: "The run was stopped while drafting it",
+    } as Readonly<Record<string, string>>,
+  },
   leave: {
     title: "Leave this page?",
     body: "Unsent text will be lost.",
@@ -382,6 +491,20 @@ export const copy = {
       cancelled: "Cancelled",
     },
     question: { open: "Open", answered: "Answered", cancelled: "Cancelled", expired: "Expired" },
+    run: {
+      queued: "Queued",
+      running: "Drafting",
+      succeeded: "Done",
+      failed: "Ended",
+      cancelled: "Closed",
+    },
+    runProduct: {
+      pending: "Waiting",
+      in_progress: "Drafting",
+      drafted: "Drafted",
+      failed: "Failed",
+      skipped: "Skipped",
+    },
     installation: {
       unlinked: "Not linked",
       linked: "Connected",

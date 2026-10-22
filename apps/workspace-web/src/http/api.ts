@@ -48,6 +48,12 @@ import {
   decodeModels,
   isModelKey,
 } from "./agents-decoders";
+import {
+  decodeReconciled,
+  decodeRunAdmitted,
+  decodeRunDetail,
+  decodeRunsOfTask,
+} from "./runs-decoders";
 
 export type HttpRequest =
   | { readonly method: "GET"; readonly path: string }
@@ -96,6 +102,22 @@ const revision = (value: unknown) =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 const text = (value: unknown, max: number) =>
   typeof value === "string" && value.length >= 1 && value.length <= max && !value.includes("\0");
+// M3 PR-2: a run's products, fields and run id as the runs routes accept them.
+const runIdPattern = /^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+const runProducts = (value: unknown) =>
+  Array.isArray(value) &&
+  value.length >= 1 &&
+  value.length <= 25 &&
+  value.every((p) => typeof p === "string" && /^product:[1-9][0-9]{0,19}$/.test(p)) &&
+  new Set(value).size === value.length;
+const listingFieldPaths = ["descriptionHtml", "seo.description", "seo.title", "tags", "title"];
+const runFields = (value: unknown) =>
+  Array.isArray(value) &&
+  value.length >= 1 &&
+  value.length <= 5 &&
+  value.every((f) => typeof f === "string" && listingFieldPaths.includes(f)) &&
+  new Set(value).size === value.length &&
+  value.includes("seo.title") === value.includes("seo.description");
 
 /** Every request this adapter can send; `null` means refused before sending. */
 export const requests = {
@@ -319,6 +341,54 @@ export const requests = {
       return null;
     const body = JSON.stringify({ model, effort, maxCreditsPerProduct, expectedRevision });
     return { method: "PUT", path: `/workspace/${ws}/settings/model-default`, body, key: c.key };
+  },
+  // M3 PR-2: the runs routes under /workspace/:ws/work. The admission body is exactly
+  // {storeId, products, fields, selection}; selection is opaque catalogue keys or null.
+  admitRun(
+    ws: string,
+    taskId: string,
+    c: Command<{
+      storeId: string;
+      products: readonly string[];
+      fields: readonly string[];
+      selection: { readonly model: string; readonly effort: string } | null;
+    }>,
+  ): HttpRequest | null {
+    const { storeId, products, fields, selection } = c.body;
+    if (!ids(ws, taskId, storeId) || !runProducts(products) || !runFields(fields)) return null;
+    if (
+      selection !== null &&
+      !(
+        typeof selection === "object" &&
+        Object.keys(selection).sort().join() === "effort,model" &&
+        isModelKey(selection.model) &&
+        isModelKey(selection.effort)
+      )
+    )
+      return null;
+    const request = post(
+      workPath(ws, "tasks", taskId, "runs"),
+      {
+        storeId,
+        products: [...products],
+        fields: [...fields].sort(),
+        selection: selection === null ? null : { model: selection.model, effort: selection.effort },
+      },
+      c.key,
+      byteLimits.work,
+    );
+    return request && request.key !== null ? request : null;
+  },
+  runsOfTask: (ws: string, taskId: string) =>
+    ids(ws, taskId) ? get(workPath(ws, "tasks", taskId, "runs")) : null,
+  run: (ws: string, runId: string) =>
+    ids(ws) && typeof runId === "string" && runIdPattern.test(runId)
+      ? get(workPath(ws, "runs", runId))
+      : null,
+  reconcileRuns(ws: string, c: Command<Record<string, never>>) {
+    if (!ids(ws) || Object.keys(c.body).length !== 0) return null;
+    const request = post(workPath(ws, "runs-reconcile"), {}, c.key, byteLimits.work);
+    return request && request.key !== null ? request : null;
   },
 } as const;
 
@@ -553,6 +623,30 @@ export function createHttpPort(options: HttpPortOptions): WorkspacePort {
         "agents.listingsStop",
         (ws: string, storeId: string, c: Command<{ reason: string }>) =>
           command(requests.listingsStop(ws, storeId, c), decodeListingsChange),
+      ),
+    },
+    runs: {
+      admit: gated(
+        "runs.admit",
+        (
+          ws: string,
+          taskId: string,
+          c: Command<{
+            storeId: string;
+            products: readonly string[];
+            fields: readonly string[];
+            selection: { readonly model: string; readonly effort: string } | null;
+          }>,
+        ) => command(requests.admitRun(ws, taskId, c), decodeRunAdmitted),
+      ),
+      listOfTask: gated("runs.listOfTask", (ws: string, taskId: string) =>
+        read(requests.runsOfTask(ws, taskId), (b) => decodeRunsOfTask(b, taskId)),
+      ),
+      get: gated("runs.get", (ws: string, runId: string) =>
+        read(requests.run(ws, runId), (b) => decodeRunDetail(b, runId)),
+      ),
+      reconcile: gated("runs.reconcile", (ws: string, c: Command<Record<string, never>>) =>
+        command(requests.reconcileRuns(ws, c), decodeReconciled),
       ),
     },
     models: {
