@@ -7,6 +7,7 @@
   - The plan's Package 3 rule that enforced repository protection must exist before merging release code.
 - Amended: item 4, 2026-10-19 (P03.T04f OQ-1). See Amendments.
 - Amended: item 5, 2026-10-19 (ADR-0019), with a third-party GitHub access exception the same day. See Amendments.
+- Amended: item 1 and CI runners, 2026-10-22 (`ci.yml` on a self-hosted runner on the owner's Mac). See Amendments.
 
 ## Context
 
@@ -64,3 +65,23 @@ The mitigation "every other app, token, deploy key and collaborator is removed b
 - Before the first staging deploy, the ChatGPT Codex Connector GitHub App is suspended and the classic token "AppForge Github Actions" (`repo` and `workflow`, no expiry) is deleted. The owner performs both, because GitHub's sudo re-authentication stopped Claude's attempt to suspend the app.
 
 Owner decision, 2026-10-19, in chat: "Suspend Codex + revoke old token (Recommended)" (the question and option are quoted in ADR-0019, Amendments).
+
+### 2026-10-22: `ci.yml` on a self-hosted runner on the owner's Mac
+
+The GitHub-hosted Actions minutes for October were used up, and they reset on 1 November. Until then the `foundation` check could not run, so nothing could merge.
+
+Owner decision, 2026-10-22, in chat: "for CI lets use our mac".
+
+1. **Location.** The runner runs in Docker Desktop on the owner's Mac (Apple silicon). It is the container `morrow-mac-1`, with an optional second runner `morrow-mac-2`, and each runner has its own privileged Docker-in-Docker daemon (`infra/ci-runner/compose.yaml`). The owner starts, pauses and removes it with `npm run ci:runner` (`docs/development/ci.md`, "Self-hosted runner on the owner's Mac").
+2. **Only `ci.yml` uses it,** and only while the repository variable `MORROW_CI_RUNS_ON` is set. Deleting the variable returns every job to `ubuntu-24.04` with no repository change. `deploy-staging.yml`, `heavy-faults.yml` and `frozen-regressions.yml` stay on GitHub-hosted runners. `tests/ci-workflow.test.mjs` pins all of this.
+3. **No secret reaches it.** `ci.yml` names no secret and no environment, and its token has `contents: read` only. The runner holds only its own registration. The registration token is used once by the owner's script, reaches the one-off registration container only on stdin, and is never stored or printed.
+4. **Deploys stay hosted or local.** `deploy-staging.yml` is unchanged and stays on GitHub-hosted runners. Until the minutes reset, staging deploys run locally with the staging CLI under `staging-card-1`.
+5. **Item 1.** While the variable is set, the `foundation` check reported from the Mac counts as "the hosted `foundation` check" of item 1. It is the same workflow and the same required check, run on another machine. A pull request merged on such a run says so.
+
+Residual risks, accepted while the runner is registered:
+- (a) Anyone, and any GitHub App, with write access to the repository can run code on the Mac, inside the runner container, by pushing a branch. Recommendation: remove write access from the third-party GitHub Apps that keep it under the item 5 exception (AWS Connector, Codemagic, DigitalOcean, Expo, Netlify, Render and Vercel).
+- (b) The inner daemon is privileged. A job can in principle use it to reach Docker Desktop's Linux VM and the host folders that Docker Desktop shares (Settings, Resources, File sharing). Like any container, it can also reach the Mac's own network services and the local network.
+- (c) CI results now depend on the Mac's integrity. A compromised Mac, or a job that tampers with the long-lived runner or its daemon, can change the results of later runs.
+- (d) Timing checks may flake when the Mac is loaded. Rerun once before debugging.
+
+Switching back: on 1 November, run `npm run ci:runner -- down`, or `pause` to keep the runner as a fallback.

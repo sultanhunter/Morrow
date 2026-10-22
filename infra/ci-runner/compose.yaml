@@ -1,0 +1,140 @@
+# The self-hosted GitHub Actions runner that runs ci.yml on the owner's Mac while the
+# repository variable MORROW_CI_RUNS_ON is set (ADR-0014, amendment of 2026-10-22).
+# Start, pause and stop it only with `npm run ci:runner -- <up|status|pause|down>`
+# (scripts/ci-runner.mjs); docs/development/ci.md, "Self-hosted runner on the owner's Mac".
+#
+# - dind: a privileged Docker daemon of its own, the only daemon a CI job reaches. It has
+#   no TCP listener: its socket is in the `socket` volume, owned by group 123 (the docker
+#   group of the runner image).
+# - runner: the GitHub runner. It joins dind's network namespace, so 127.0.0.1, ports that
+#   job containers publish and their bridge addresses behave as on a hosted runner, and it
+#   reaches the daemon at /var/run/docker.sock, the only endpoint the pgwire and ui labs
+#   accept.
+# - Both mount the `work` volume at the runner's work directory (checkouts, _tool, _temp)
+#   at the same path, so a job's `docker run --volume <path under _work>` resolves inside
+#   dind. Nothing else is shared.
+# - register: a one-off (`docker compose run --rm register`) that registers the runner with
+#   the token the operator script writes to its stdin, then keeps the registration in the
+#   `registration` volume, so a restart needs no new token.
+# No host bind mount, no host Docker socket, no published port and no secret in this file.
+# Images are pinned by digest; the tag is for readers.
+name: morrow-ci-runner
+services:
+  dind:
+    image: docker:29.8.2-dind@sha256:1e08cdb63405ca788aea94ef35b792d1e299607c667d33d7bcbcae1fd2611ced
+    privileged: true
+    restart: unless-stopped
+    command:
+      - dockerd
+      - --host=unix:///run/morrow-docker/docker.sock
+      - --group=123
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    volumes:
+      - docker:/var/lib/docker
+      - work:/home/runner/_work
+      - socket:/run/morrow-docker
+    healthcheck:
+      test:
+        - CMD
+        - docker
+        - --host=unix:///run/morrow-docker/docker.sock
+        - version
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+  runner:
+    image: ghcr.io/actions/actions-runner:2.338.0@sha256:4ffadc0002b2581327e06101fc8c06cd189232baf79fe561fac9caeb76f5e807
+    restart: unless-stopped
+    init: true
+    network_mode: service:dind
+    depends_on:
+      dind:
+        condition: service_healthy
+    shm_size: 1gb
+    stop_grace_period: 30s
+    environment:
+      ACTIONS_RUNNER_HOOK_JOB_STARTED: /home/runner/morrow-job-started.sh
+    volumes:
+      - work:/home/runner/_work
+      - socket:/run/morrow-docker
+      - registration:/morrow/registration
+    entrypoint:
+      - /bin/bash
+      - -euc
+    command:
+      - |
+        sudo -n chown runner:runner /home/runner/_work
+        sudo -n ln -sfn /run/morrow-docker/docker.sock /var/run/docker.sock
+        # Before each job, as a fresh hosted runner would be: this runner's own daemon serves
+        # one job at a time, so whatever is left in it (a cancelled job's containers and
+        # networks) belongs to no running job. Images stay as a cache.
+        cat > /home/runner/morrow-job-started.sh <<'HOOK'
+        #!/bin/bash
+        set -eu
+        containers="$$(docker ps --all --quiet)"
+        if [ -n "$$containers" ]; then docker rm --force --volumes $$containers > /dev/null; fi
+        docker network prune --force > /dev/null
+        echo "morrow-ci-runner: job containers and networks cleared"
+        HOOK
+        chmod 0755 /home/runner/morrow-job-started.sh
+        for file in .runner .credentials .credentials_rsaparams; do
+          if [ ! -s "/morrow/registration/$$file" ]; then
+            echo "MORROW_CI_RUNNER_NOT_REGISTERED: run npm run ci:runner -- up" >&2
+            exit 64
+          fi
+          cp "/morrow/registration/$$file" "/home/runner/$$file"
+        done
+        exec ./run.sh
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+  register:
+    image: ghcr.io/actions/actions-runner:2.338.0@sha256:4ffadc0002b2581327e06101fc8c06cd189232baf79fe561fac9caeb76f5e807
+    profiles:
+      - register
+    restart: "no"
+    volumes:
+      - registration:/morrow/registration
+    entrypoint:
+      - /bin/bash
+      - -euc
+    command:
+      - |
+        umask 077
+        sudo -n chown runner:runner /morrow/registration
+        sudo -n chmod 0700 /morrow/registration
+        case "$${MORROW_CI_RUNNER_NAME:-}" in
+          morrow-mac-1 | morrow-mac-2) ;;
+          *)
+            echo "MORROW_CI_RUNNER_NAME_INVALID" >&2
+            exit 64
+            ;;
+        esac
+        # The token arrives on stdin, so it is in no argv and in no container configuration
+        # that Docker stores; config.sh reads it from ACTIONS_RUNNER_INPUT_TOKEN and removes
+        # that variable from its own environment.
+        IFS= read -r ACTIONS_RUNNER_INPUT_TOKEN || true
+        export ACTIONS_RUNNER_INPUT_TOKEN
+        if [ -z "$$ACTIONS_RUNNER_INPUT_TOKEN" ]; then
+          echo "MORROW_CI_RUNNER_TOKEN_MISSING" >&2
+          exit 64
+        fi
+        ./config.sh --unattended --replace --url https://github.com/sultanhunter/Morrow \
+          --name "$$MORROW_CI_RUNNER_NAME" --labels morrow-mac --work _work
+        for file in .runner .credentials .credentials_rsaparams; do
+          cp "/home/runner/$$file" "/morrow/registration/$$file"
+        done
+        echo "MORROW_CI_RUNNER_REGISTERED"
+volumes:
+  docker:
+  work:
+  socket:
+  registration:

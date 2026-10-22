@@ -57,6 +57,7 @@ Answered 2026-10-21: (1) "Accept for staging (Recommended)": the per-isolate ing
 
 ## Pending owner actions
 
+- **CI on the Mac (2026-10-22, "for CI lets use our mac"):** run `npm run ci:runner -- up` from a checkout of `claude/ci-self-hosted-runner` (registers `morrow-mac-1`, sets `MORROW_CI_RUNS_ON`; `down` on 1 November), and consider removing the third-party GitHub Apps' write access (ADR-0014, amendment of 2026-10-22).
 - **Now, metadata only:** run `ls ~/.config/morrow/staging/tmp` in your own terminal and tell Claude whether `broker-secrets.json` or `api-secrets.json` is listed (or Claude runs `staging:secrets-status`, E9, which reports a leftover as `transient_present` without printing it). `deploy --first` unlinks both but ignores a failed unlink, and the broker file holds all fourteen broker secrets. D9 step 11(d) removes any leftover.
 - **Before the CI deploy:** confirm the GitHub `staging` environment secret `CLOUDFLARE_API_TOKEN` is set (D9 step 7(b); no record yet, `2026-10-19-github-staging-environment.md` has it not set); Claude can read the secret's name (E9).
 - Delete the local `cloudflare-ci-token` and `cloudflare-operator-token.old-*` files. The remaining D9 items as listed on 2026-10-20 (the Neon `cool-butterfly-64820147` deletion, the Global API Key change, a new WorkOS key revoking old ones, `tmutil addexclusion ~/.config/morrow`). Optional under E3: one read of Neon's reveal-password endpoint for a SQL-set probe role.

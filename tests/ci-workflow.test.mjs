@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { listUnitFiles, runTests } from "../scripts/run-tests.mjs";
+import { ciRunner, variableValue } from "../scripts/ci-runner.mjs";
 
 // Structural checks of the GitHub workflows and the npm scripts they reach. They replace
 // the workflow assertions of the retired CI evidence collector: hardening settings,
@@ -48,6 +49,9 @@ const labsOutsideCi = (name) =>
 // The P14.T01a `ui` job installs Chromium and runs 214 browser checks (172 state cases and
 // 21 keyboard walks at two widths) plus the journey lab.
 const timeoutLimit = (id) => (id === "ui" ? 20 : 15);
+// Every ci.yml job runs on GitHub-hosted ubuntu-24.04 unless the repository variable
+// MORROW_CI_RUNS_ON holds the Mac runner's label list (ADR-0014, amendment of 2026-10-22).
+const ciRunsOn = "${{ fromJSON(vars.MORROW_CI_RUNS_ON || '\"ubuntu-24.04\"') }}";
 
 // Parses the YAML subset these workflows use: block maps and sequences, plain, quoted and
 // flow-sequence scalars, `|`/`>-` block scalars and comments.
@@ -115,6 +119,9 @@ function parseWorkflow(text) {
       if (/^[A-Za-z0-9_.-]+:(\s|$)/.test(content)) {
         lines[index] = { raw: " ".repeat(indent + 2) + content, indent: indent + 2 };
         out.push(map(indent + 2));
+      } else if (/^[|>][-+]?$/.test(content)) {
+        index++;
+        out.push(blockScalar(content, indent));
       } else {
         index++;
         out.push(scalar(content));
@@ -187,6 +194,15 @@ test("the YAML subset parser reads nested maps, sequences, flow lists and block 
     },
   );
   assert.throws(() => parseWorkflow("a: 1\na: 2\n"), /WORKFLOW_YAML_DUPLICATE_KEY/);
+  // A block scalar as a sequence item (the runner stack's shell scripts).
+  assert.deepEqual(
+    parseWorkflow(
+      ["command:", "  - /bin/bash", "  - |", "    echo one", "    # kept", "  - last", ""].join(
+        "\n",
+      ),
+    ),
+    { command: ["/bin/bash", "echo one\n# kept\n", "last"] },
+  );
 });
 
 test("every workflow pins actions by commit, never persists credentials and never continues on error", () => {
@@ -250,10 +266,10 @@ test("every upload is gated on a passing secret scan of what it uploads", () => 
 // The hardened step sequence every report-writing job shares: checkout, setup-node from
 // .nvmrc, the artifacts directory outside the checkout, a locked install, the job body, an
 // always-run secret scan, an upload gated on that scan and the clean-tree gate.
-function assertHardenedSteps(id, job) {
+function assertHardenedSteps(id, job, runsOn = "ubuntu-24.04") {
   const jobSteps = steps(job);
   const at = (predicate) => jobSteps.findIndex(predicate);
-  assert.equal(job["runs-on"], "ubuntu-24.04", id);
+  assert.equal(job["runs-on"], runsOn, id);
   if (job.strategy?.matrix) assert.equal(job.strategy["fail-fast"], false, id);
   assert.ok(uses(jobSteps[0], "actions/checkout"), id);
   const setup = at((s) => uses(s, "actions/setup-node"));
@@ -291,7 +307,7 @@ test("every ci.yml job shares the hardened step sequence and foundation needs ev
       .sort(),
   );
   assert.equal(foundation.if, "always()");
-  assert.equal(foundation["runs-on"], "ubuntu-24.04");
+  assert.equal(foundation["runs-on"], ciRunsOn);
   assert.equal(foundation["timeout-minutes"], 5);
   assert.equal(steps(foundation).length, 1);
   // LABS names every lab job's result, so a new job cannot pass `foundation` unseen.
@@ -309,7 +325,7 @@ test("every ci.yml job shares the hardened step sequence and foundation needs ev
       Number.isInteger(job["timeout-minutes"]) && job["timeout-minutes"] <= timeoutLimit(id),
       id,
     );
-    assertHardenedSteps(id, job);
+    assertHardenedSteps(id, job, ciRunsOn);
   }
   // `checks` runs on every event; every other report-writing job runs only on a full run.
   assert.equal(jobs.checks.needs, undefined);
@@ -340,7 +356,7 @@ test("ci.yml runs on every pull request, on push to main and by hand, without pa
   // runs on every event, so every `foundation` decision rests on a recorded scope result.
   const { scope } = ci.jobs;
   assert.equal(scope.if, undefined);
-  assert.equal(scope["runs-on"], "ubuntu-24.04");
+  assert.equal(scope["runs-on"], ciRunsOn);
   assert.equal(scope["timeout-minutes"], 5);
   assert.equal(scope.needs, undefined);
   assert.deepEqual(scope.outputs, { full: "${{ steps.decide.outputs.full }}" });
@@ -1004,4 +1020,138 @@ test("the staging runner lab is in pg-http and runs once in CI, on the http leg"
     ["matrix.leg == 'http'"],
   );
   assert.ok(ci.jobs.foundation.needs.includes("postgres"));
+});
+
+// ADR-0014, amendment of 2026-10-22: ci.yml alone may run on the owner's Mac runner, chosen
+// by the repository variable MORROW_CI_RUNS_ON (unset: GitHub-hosted ubuntu-24.04). It names
+// no secret and no environment, so no secret can reach that runner; the staging deploy, the
+// heavy faults and the frozen replay stay on GitHub-hosted runners.
+test("only ci.yml can run on the Mac runner, chosen by MORROW_CI_RUNS_ON, and it names no secret", () => {
+  for (const file of workflowFiles)
+    for (const [id, job] of Object.entries(workflows[file].jobs))
+      assert.equal(job["runs-on"], file === "ci.yml" ? ciRunsOn : "ubuntu-24.04", `${file} ${id}`);
+  for (const file of workflowFiles)
+    assert.equal(workflowText(file).includes(ciRunner.variable), file === "ci.yml", file);
+  const text = workflowText("ci.yml");
+  assert.deepEqual([...new Set(text.match(/\bvars\.[A-Za-z_]+/g))], ["vars.MORROW_CI_RUNS_ON"]);
+  assert.ok(!/\bsecrets\.|\bgithub\.token\b|GITHUB_TOKEN|ACTIONS_RUNNER_INPUT_/.test(text));
+  assert.deepEqual(ci.permissions, { contents: "read" });
+  for (const [id, job] of Object.entries(ci.jobs)) {
+    assert.equal(job.environment, undefined, id);
+    assert.equal(job.container, undefined, id);
+    assert.equal(job.services, undefined, id);
+  }
+  // Unset, the expression falls back to exactly today's runner.
+  const fallback = /^\$\{\{ fromJSON\(vars\.MORROW_CI_RUNS_ON \|\| '(.*)'\) \}\}$/.exec(ciRunsOn);
+  assert.equal(JSON.parse(fallback[1]), "ubuntu-24.04");
+  // Set, it selects only a self-hosted runner carrying every one of these labels.
+  assert.equal(variableValue, '["self-hosted","linux","arm64","morrow-mac"]');
+  assert.deepEqual(JSON.parse(variableValue), [...ciRunner.labels]);
+});
+
+// infra/ci-runner/compose.yaml: the Docker-in-Docker daemon CI jobs reach, and the runner
+// in its network namespace. No host bind mount, host socket, published port or secret.
+test("the Mac runner stack shares only named volumes, pins its images and keeps the token off argv", () => {
+  const text = readFileSync(new URL("../" + ciRunner.composeFile, import.meta.url), "utf8");
+  const stack = parseWorkflow(text);
+  assert.equal(stack.name, ciRunner.instances[1].project);
+  assert.deepEqual(Object.keys(stack.services).sort(), ["dind", "register", "runner"]);
+  assert.deepEqual(stack.volumes, { docker: null, work: null, socket: null, registration: null });
+  const { dind, runner, register } = stack.services;
+  const mounts = (service) =>
+    Object.fromEntries(
+      service.volumes.map((entry) => {
+        const [source, target, ...rest] = entry.split(":");
+        assert.deepEqual(rest, [], entry);
+        assert.ok(Object.hasOwn(stack.volumes, source), `${entry} must mount a named volume`);
+        return [target, source];
+      }),
+    );
+  assert.deepEqual(mounts(dind), {
+    "/var/lib/docker": "docker",
+    "/home/runner/_work": "work",
+    "/run/morrow-docker": "socket",
+  });
+  assert.deepEqual(mounts(runner), {
+    "/home/runner/_work": "work",
+    "/run/morrow-docker": "socket",
+    "/morrow/registration": "registration",
+  });
+  assert.deepEqual(mounts(register), { "/morrow/registration": "registration" });
+  // Every key each service may set (and `logging`); anything else fails.
+  const shared = ["image", "restart", "volumes", "logging"];
+  const allowed = {
+    dind: [...shared, "privileged", "command", "environment", "healthcheck"],
+    runner: [
+      ...shared,
+      "init",
+      "network_mode",
+      "depends_on",
+      "shm_size",
+      "stop_grace_period",
+      "environment",
+      "entrypoint",
+      "command",
+    ],
+    register: [...shared, "profiles", "entrypoint", "command"],
+  };
+  for (const [id, service] of Object.entries(stack.services)) {
+    assert.deepEqual(
+      Object.keys(service).filter((key) => !allowed[id].includes(key)),
+      [],
+      `${id}: no ports, env_file, secrets, extra_hosts, devices, capabilities or host modes`,
+    );
+    assert.match(
+      service.image,
+      /^(?:docker:\d+\.\d+\.\d+-dind|ghcr\.io\/actions\/actions-runner:\d+\.\d+\.\d+)@sha256:[0-9a-f]{64}$/,
+      id,
+    );
+  }
+  // dind: privileged, a unix socket only (no TCP listener), owned by the runner's docker group.
+  assert.equal(dind.privileged, true);
+  assert.deepEqual(dind.command, [
+    "dockerd",
+    "--host=unix:///run/morrow-docker/docker.sock",
+    "--group=123",
+  ]);
+  assert.deepEqual(dind.environment, { DOCKER_TLS_CERTDIR: "" });
+  assert.ok(!/tcp:\/\/|:2375|:2376|docker\.sock:/.test(text));
+  assert.equal(dind.restart, "unless-stopped");
+  // runner: dind's network namespace, after a healthy daemon; the socket at the one path
+  // the pgwire and ui labs accept; registration copied in, then the runner itself.
+  assert.equal(runner.privileged, undefined);
+  assert.equal(runner.network_mode, "service:dind");
+  assert.deepEqual(runner.depends_on, { dind: { condition: "service_healthy" } });
+  assert.equal(runner.restart, "unless-stopped");
+  assert.equal(runner.image, register.image);
+  assert.deepEqual(runner.entrypoint, ["/bin/bash", "-euc"]);
+  // Each job starts with an empty inner daemon (a cancelled job's containers are gone).
+  const hook = "/home/runner/morrow-job-started.sh";
+  assert.deepEqual(runner.environment, { ACTIONS_RUNNER_HOOK_JOB_STARTED: hook });
+  const [start] = runner.command;
+  assert.ok(start.includes("sudo -n ln -sfn /run/morrow-docker/docker.sock /var/run/docker.sock"));
+  assert.ok(start.includes("for file in .runner .credentials .credentials_rsaparams; do"));
+  assert.ok(start.trimEnd().endsWith("exec ./run.sh"));
+  assert.ok(start.includes(`cat > ${hook} <<'HOOK'\n#!/bin/bash\nset -eu\n`));
+  // Compose reads `$$` as a literal `$`, so the hook gets its own shell variables.
+  assert.ok(start.includes("docker rm --force --volumes $$containers > /dev/null"));
+  assert.ok(start.indexOf(`chmod 0755 ${hook}`) < start.indexOf("exec ./run.sh"));
+  // register: a one-off behind a profile. The token arrives only on stdin, which the script
+  // exports for config.sh: never argv (no --token), never the stored container environment.
+  assert.deepEqual(register.profiles, ["register"]);
+  assert.equal(register.restart, "no");
+  assert.equal(register.environment, undefined);
+  const [script] = register.command;
+  assert.ok(script.includes("IFS= read -r ACTIONS_RUNNER_INPUT_TOKEN || true\n"));
+  assert.ok(script.indexOf("export ACTIONS_RUNNER_INPUT_TOKEN") < script.indexOf("./config.sh"));
+  assert.ok(!/--token|--pat\b/.test(text));
+  assert.ok(script.includes(`--url https://github.com/${ciRunner.repository} \\`));
+  const custom = ciRunner.labels.filter(
+    (label) => !["self-hosted", "linux", "arm64"].includes(label),
+  );
+  assert.ok(script.includes(`--labels ${custom.join(",")} --work _work`));
+  const names = Object.values(ciRunner.instances).map((instance) => instance.name);
+  assert.ok(script.includes(`  ${names.join(" | ")}) ;;`));
+  // The runner updates itself: GitHub stops sending jobs to an outdated runner.
+  assert.ok(!text.includes("disableupdate"));
 });
